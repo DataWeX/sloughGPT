@@ -1,0 +1,392 @@
+"""
+Slos Router - Personality/soul management endpoints
+
+Encapsulates router state in ``SloRouterState`` dataclass rather than module-level
+mutable globals. Actual soul state lives in ``SloManager`` singleton.
+"""
+from dataclasses import dataclass
+from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
+from typing import Optional, Any
+from pydantic import BaseModel
+import json, asyncio, numpy as np
+
+router = APIRouter(prefix="/souls", tags=["souls"])
+
+
+@dataclass
+class SloRouterState:
+    """Encapsulated state for the souls router.
+
+    Current soul tracking and model references. The real soul state
+    lives in SloManager; this is a thin cache for switch operations.
+    """
+    current_soul: Any = None
+    main_model: Any = None
+    main_tokenizer: Any = None
+
+
+state = SloRouterState()
+
+
+def _load_slough_model(checkpoint_path, tie_weights=True):
+    """Load a SloughGPTModel from a .slo file using SloNet import.
+
+    Auto-detects config (vocab, hidden, n_blocks) from state dict keys.
+
+    Returns:
+        SloughGPTModel with weights loaded.
+
+    Side effects:
+        - Reads .slo file from disk
+    """
+    from domains.inference import load_soul
+
+    soul, sd = load_soul(checkpoint_path)
+    if isinstance(sd, dict) and "tok_emb.weight" not in sd:
+        sd = sd.get("weights", sd)
+        if not isinstance(sd, dict):
+            sd = sd.state_dict() if hasattr(sd, 'state_dict') else {}
+
+    vocab = sd["tok_emb.weight"].shape[0]
+    hidden = sd["tok_emb.weight"].shape[1]
+    n_blocks = max(int(k.split(".")[1]) for k in sd if k.startswith("blocks.")) + 1
+
+    n_head = 8
+    q_w = sd.get("blocks.0.attn.q_proj.weight")
+    if q_w is None:
+        q_w = sd.get("blocks.0.q_proj.weight")
+    if q_w is not None:
+        head_dim = hidden // 8
+        if head_dim > 0:
+            detected_heads = q_w.shape[0] // head_dim
+            if detected_heads >= 1:
+                n_head = detected_heads
+
+    intermediate_size = 4 * hidden // 2
+    for key in sd:
+        if "mlp.w1.weight" in key:
+            w1_shape = sd[key].shape
+            if len(w1_shape) >= 2:
+                intermediate_size = w1_shape[0]
+            break
+
+    model = SloughGPTModel(
+        vocab_size=vocab,
+        n_embed=hidden,
+        n_layer=n_blocks,
+        n_head=n_head,
+        dropout=0.0,
+        tie_weights=tie_weights,
+        block_size=128,
+        intermediate_size=intermediate_size,
+    )
+
+    model.load_state_dict(sd, strict=False)
+    return model
+
+
+class SwitchRequest(BaseModel):
+    name: str
+    checkpoint_name: Optional[str] = None
+
+
+class SloChatRequest(BaseModel):
+    checkpoint_name: str
+    prompt: str
+    max_new_tokens: int = 100
+    temperature: float = 0.8
+    top_p: float = 0.9
+
+
+@router.post("/chat")
+async def soul_chat(req: SloChatRequest):
+    """Chat using a SloughGPTModel checkpoint (PyTorch-trained transformer).
+
+    Loads the .slo file (PyTorch ZIP format), creates a SloughGPTModel with matching
+    config, loads weights, and streams generated tokens autoregressively.
+
+    Falls back to SloNet (NumPy) for checkpoints that don't match SloughGPTModel.
+    """
+    try:
+        from domains.slolib.gpu import get_accelerator
+
+        acc = get_accelerator()
+        repo_root = _get_repo_root()
+        checkpoint_file = repo_root / "models" / "auto-training" / (req.checkpoint_name + ".slo")
+
+        if not checkpoint_file.exists():
+            checkpoint_file = repo_root / "models" / (req.checkpoint_name + ".slo")
+
+        if not checkpoint_file.exists():
+            return {"error": f"Checkpoint not found: {req.checkpoint_name}"}
+
+        # Load checkpoint into SloughGPTModel
+        model = _load_slough_model(checkpoint_file)
+
+        chars = list(" abcdefghijklmnopqrstuvwxyz0123456789.,!?'-")
+        stoi = {c: i for i, c in enumerate(chars)}
+        itos = {i: c for i, c in enumerate(chars)}
+
+        def encode(t):
+            return [stoi.get(c.lower(), 0) for c in t]
+
+        def decode(ids):
+            return "".join(itos.get(i, "?") for i in ids)
+
+        enc_prompt = encode(req.prompt)
+        if len(enc_prompt) > 128:
+            enc_prompt = enc_prompt[:128]
+
+        async def stream():
+            temperature = max(0.1, req.temperature)
+            top_p = max(0.1, min(1.0, req.top_p))
+
+            generated = list(enc_prompt)
+
+            for _ in range(req.max_new_tokens):
+                seq = np.array([generated[-128:]], dtype=np.int64)
+
+                logits_arr, _ = model.forward(seq, targets=None)
+                logit_row = logits_arr[0, -1, :] / temperature
+
+                if top_p < 1.0:
+                    sorted_idx = np.argsort(-logit_row)
+                    sorted_vals = logit_row[sorted_idx]
+                    probs_sorted = np.exp(sorted_vals - sorted_vals.max())
+                    probs_sorted = probs_sorted / probs_sorted.sum()
+                    cumsum = np.cumsum(probs_sorted)
+                    mask = cumsum > top_p
+                    mask[1:] = mask[:-1]
+                    mask[0] = False
+                    indices_to_remove = sorted_idx[mask]
+                    logit_row[indices_to_remove] = -1e9
+
+                max_val = logit_row.max()
+                probs = np.exp(logit_row - max_val)
+                probs = probs / (probs.sum() + 1e-10)
+                probs = np.where(np.isfinite(probs), probs, np.ones_like(probs) / probs.size)
+                probs = probs / (probs.sum() + 1e-10)
+                next_tok = int(np.random.choice(len(probs), p=probs))
+
+                generated.append(next_tok)
+                token_text = decode([next_tok])
+
+                if token_text.strip():
+                    yield f"data: {json.dumps({'token': token_text, 'done': False})}\n\n"
+
+                if next_tok == 0:
+                    break
+
+                await asyncio.sleep(0)
+
+            yield f"data: {json.dumps({'token': '', 'done': True})}\n\n"
+
+        return StreamingResponse(stream(), media_type="text/event-stream")
+
+    except Exception as e:
+        import traceback
+
+        traceback.print_exc()
+        return {"error": str(e)}
+
+
+def _soul_tensor(data):
+    """Create a SloNet Tensor from numpy array."""
+    from domains.training.slonet import Tensor
+    if hasattr(data, 'data') and isinstance(getattr(data, 'data', None), np.ndarray):
+        return data
+    if not isinstance(data, np.ndarray):
+        data = np.array(data, dtype=np.float32)
+    elif data.dtype != np.float32:
+        data = np.array(data, dtype=np.float32)
+    else:
+        data = np.array(data, copy=True)
+    return Tensor(data)
+
+
+def _get_repo_root():
+    from pathlib import Path
+    return Path(__file__).resolve().parents[4]
+
+
+@router.post("/switch")
+async def switch_soul(
+    req: SwitchRequest,
+    checkpoint_name: Optional[str] = None,
+):
+    """Switch to a different soul and update ContextCore system prompt.
+
+    If checkpoint_name is provided, also loads the corresponding checkpoint
+    weights into the main chat model (baby model → inference engine).
+    """
+    try:
+        from domains.inference.slo_manager import get_slo_manager
+
+        manager = get_slo_manager()
+        result = manager.switch_soul(req.name)
+
+        # Sync soul to ContextCore system prompt (best-effort)
+        soul_info = manager.get_soul(req.name)
+        if soul_info:
+            try:
+                from domains.infrastructure.context_core import get_context_core
+                ctx_core = get_context_core()
+                if ctx_core:
+                    soul_prompt = _build_soul_system_prompt(soul_info)
+                    ctx_core.set_system_prompt(soul_prompt)
+            except Exception:
+                pass
+
+        # Load checkpoint into main model if requested
+        if req.checkpoint_name:
+            loaded = _load_checkpoint_into_model(req.checkpoint_name)
+            result["checkpoint_loaded"] = loaded
+
+        if result.get("success") and soul_info and soul_info.path:
+            try:
+                from domains.core.soul import SloEngine
+                engine = SloEngine(device="cpu")
+                soul = engine.load_soul(soul_info.path)
+                state.current_soul = soul
+            except Exception:
+                pass
+
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def _load_checkpoint_into_model(checkpoint_name: str) -> dict:
+    """Load an auto-train checkpoint's weights into the main model/global state."""
+    try:
+        import sys
+        main_mod = sys.modules.get("__main__")
+        if main_mod is None:
+            return {"status": "no_main_module"}
+
+        checkpoints_dir = getattr(main_mod, "_REPO_ROOT", None) / "models" / "auto-training"
+        if checkpoints_dir is None:
+            return {"status": "no_repo_root"}
+
+        checkpoint_file = checkpoints_dir / checkpoint_name
+        if not checkpoint_file.exists():
+            return {"status": "not_found", "path": str(checkpoint_file)}
+
+        # Use SloNet import for .slo files
+        from domains.training.slonet import import_from_sou
+        soul_net = import_from_sou(str(checkpoint_file))
+        soul_meta = soul_net.soul_signature()
+        model_state = soul_net.state_dict()
+
+        # Try to load into baby model (auto-train model)
+        baby = getattr(main_mod, "_auto_train_baby_model", None)
+        if baby is not None:
+            baby.load_state_dict(model_state, strict=False)
+            return {
+                "status": "loaded_into_baby",
+                "name": checkpoint_name,
+                "soul": soul_meta.get("soul_name", "unknown"),
+                "steps": soul_meta.get("step", 0),
+            }
+
+        # Try to load into main model
+        main_m = getattr(main_mod, "model", None)
+        if main_m is not None and isinstance(main_m, dict):
+            main_m["model"].load_state_dict(model_state, strict=False)
+            return {"status": "loaded_into_main", "name": checkpoint_name}
+
+        return {"status": "no_target_model"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+def _build_soul_system_prompt(soul_info) -> str:
+    """Build system prompt from soul personality traits."""
+    traits = soul_info.description or soul_info.name
+    warmth = soul_info.personality.get("warmth", 0.5)
+    creativity = soul_info.personality.get("creativity", 0.5)
+    curiosity = soul_info.personality.get("curiosity", 0.5)
+    confidence = soul_info.personality.get("confidence", 0.5)
+    soul_traits = ", ".join(soul_info.traits) if soul_info.traits else "balanced"
+
+    return f"""You are {soul_info.name}. {traits}
+
+Personality: warmth={warmth:.1f}, creativity={creativity:.1f}, curiosity={curiosity:.1f}, confidence={confidence:.1f}
+Reasoning approach: {soul_traits}
+Be yourself — let your personality shape how you respond."""
+
+
+@router.get("")
+async def list_souls():
+    """
+    List all available souls with name, description, and traits.
+
+    Returns:
+        dict with ``souls`` (list) and ``current_soul`` (name string or None)
+
+    Side effects:
+        - calls SloManager.list_souls() and get_current_soul()
+    """
+    try:
+        from domains.inference.slo_manager import get_slo_manager
+        manager = get_slo_manager()
+        souls = manager.list_souls()
+        current = manager.get_current_soul()
+        return {
+            "souls": [
+                {
+                    "name": s.name,
+                    "path": s.path,
+                    "description": s.description,
+                    "personality": getattr(s, "personality", {}),
+                    "traits": getattr(s, "traits", []),
+                }
+                for s in souls
+            ],
+            "current_soul": current.name if current else None,
+        }
+    except Exception as e:
+        return {"souls": [], "current_soul": None, "error": str(e)}
+
+
+@router.get("/current")
+async def get_current_soul():
+    """
+    Get the currently active soul's name, path, description, and traits.
+
+    Returns:
+        dict with name, path, description, traits
+
+    Side effects:
+        - calls SloManager.get_current_soul()
+    """
+    try:
+        from domains.inference.slo_manager import get_slo_manager
+        manager = get_slo_manager()
+        current = manager.get_current_soul()
+        if current:
+            return {"name": current.name, "path": current.path, "description": current.description,
+                    "personality": getattr(current, "personality", {}),
+                    "traits": getattr(current, "traits", [])}
+        return {"name": None}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.get("/stats")
+async def get_soul_stats():
+    """
+    Get soul manager statistics (counts, last switch time, etc.).
+
+    Returns:
+        dict with soul manager stats
+
+    Side effects:
+        - calls SloManager.get_stats()
+    """
+    try:
+        from domains.inference.slo_manager import get_slo_manager
+        return get_slo_manager().get_stats()
+    except Exception as e:
+        return {"error": str(e)}

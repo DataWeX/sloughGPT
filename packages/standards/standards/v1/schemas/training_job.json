@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sloughgpt.local/standards/v1/training_job.json",
+  "title": "SloughGPT Training Job v1",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "job_id": { "type": "string" },
+    "name": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "running", "succeeded", "failed", "cancelled"]
+    },
+    "dataset_ref": {
+      "type": "object",
+      "required": ["dataset_id", "version"],
+      "properties": {
+        "dataset_id": { "type": "string" },
+        "version": { "type": "string" },
+        "manifest_uri": {
+          "type": "string",
+          "description": "Path or URL to dataset_manifest.json"
+        }
+      }
+    },
+    "model_spec": {
+      "type": "object",
+      "properties": {
+        "base_model": { "type": "string" },
+        "adapter": { "type": "string", "enum": ["full", "lora", "none"], "default": "full" },
+        "checkpoint_in": { "type": "string" },
+        "output_format": {
+          "type": "array",
+          "items": { "type": "string", "enum": [".pt", ".pth", ".safetensors", "gguf"] }
+        }
+      }
+    },
+    "hyperparameters": {
+      "type": "object",
+      "properties": {
+        "epochs": { "type": "integer", "minimum": 1 },
+        "batch_size": { "type": "integer", "minimum": 1 },
+        "learning_rate": { "type": "number", "exclusiveMinimum": 0 },
+        "max_steps": { "type": "integer", "minimum": 1 },
+        "warmup_steps": { "type": "integer", "minimum": 0 },
+        "block_size": { "type": "integer", "minimum": 1 },
+        "n_embed": { "type": "integer", "minimum": 1 },
+        "n_layer": { "type": "integer", "minimum": 1 },
+        "n_head": { "type": "integer", "minimum": 1 },
+        "log_interval": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50000,
+          "description": "Steps between train-loss / progress callbacks (tracked HTTP jobs; aligns with TrainingRequest.log_interval)"
+        },
+        "eval_interval": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000,
+          "description": "Steps between eval loss runs (tracked HTTP jobs; aligns with TrainingRequest.eval_interval)"
+        }
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "properties": {
+        "checkpoint_dir": { "type": "string" },
+        "registry_model_id": { "type": "string" }
+      }
+    },
+    "gates": {
+      "type": "object",
+      "properties": {
+        "eval_suite_ids": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "require_pass_to_register": { "type": "boolean", "default": true }
+      }
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": ["schema_version", "job_id", "name", "status", "dataset_ref"]
+}

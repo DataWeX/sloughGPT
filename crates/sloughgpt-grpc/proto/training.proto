@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package sloughgpt;
+
+service TrainingService {
+  rpc TrainStep(TrainStepRequest) returns (TrainStepResponse);
+  rpc GetWeights(GetWeightsRequest) returns (GetWeightsResponse);
+  rpc LoadWeights(LoadWeightsRequest) returns (LoadWeightsResponse);
+  rpc SaveCheckpoint(SaveCheckpointRequest) returns (SaveCheckpointResponse);
+  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+message TrainStepRequest {
+  repeated int32 batch = 1;
+  repeated int32 targets = 2;
+}
+
+message TrainStepResponse {
+  float loss = 1;
+  float learning_rate = 2;
+  int32 step = 3;
+}
+
+message GetWeightsRequest {}
+
+message GetWeightsResponse {
+  map<string, WeightTensor> weights = 1;
+}
+
+message WeightTensor {
+  repeated float data = 1;
+  repeated int64 shape = 2;
+}
+
+message LoadWeightsRequest {
+  map<string, WeightTensor> weights = 1;
+}
+
+message LoadWeightsResponse {
+  bool success = 1;
+}
+
+message SaveCheckpointRequest {
+  string path = 1;
+}
+
+message SaveCheckpointResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetConfigRequest {}
+
+message GetConfigResponse {
+  int32 vocab_size = 1;
+  int32 embedding_dim = 2;
+  int32 num_layers = 3;
+  int32 num_heads = 4;
+  int32 head_dim = 5;
+  int32 hidden_dim = 6;
+  int32 batch_size = 7;
+  int32 seq_len = 8;
+  float learning_rate = 9;
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  bool healthy = 1;
+  string version = 2;
+}

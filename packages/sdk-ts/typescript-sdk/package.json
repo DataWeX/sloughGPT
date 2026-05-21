@@ -1,0 +1,55 @@
+{
+  "name": "@sloughgpt/typescript-sdk",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "TypeScript SDK for SloughGPT API - works in browser, Node.js, and React Native",
+  "main": "dist/client.js",
+  "types": "dist/client.d.ts",
+  "module": "dist/client.js",
+  "exports": {
+    ".": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js",
+      "require": "./dist/client.js"
+    },
+    "./react": {
+      "types": "./dist/useSloughGPT.d.ts",
+      "import": "./dist/useSloughGPT.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc",
+    "build:bun": "bun run build",
+    "watch": "tsc --watch",
+    "clean": "rm -rf dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "ci": "npm run lint && npm run build && npm test",
+    "install:bun": "bun install",
+    "install:yarn": "yarn install"
+  },
+  "keywords": ["sloughgpt", "ai", "llm", "typescript", "react", "react-native"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iamtowbee/sloughGPT.git",
+    "directory": "packages/sdk-ts/typescript-sdk"
+  },
+  "homepage": "https://github.com/iamtowbee/sloughGPT/tree/main/packages/sdk-ts/typescript-sdk",
+  "bugs": {
+    "url": "https://github.com/iamtowbee/sloughGPT/issues"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "peerDependencies": {
+    "react": ">=17.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  }
+}

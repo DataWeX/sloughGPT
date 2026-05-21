@@ -1,0 +1,16 @@
+# Python SDK only (sloughgpt-sdk from packages/sdk-py).
+# Build from repository root: docker build -f infra/docker/Dockerfile.sdk -t sloughgpt/sdk:latest .
+
+FROM python:3.11-slim
+
+LABEL maintainer="SloughGPT"
+LABEL description="SloughGPT Python SDK"
+
+WORKDIR /app
+
+COPY packages/sdk-py/sloughgpt_sdk /app/sloughgpt_sdk
+
+RUN pip install --no-cache-dir /app/sloughgpt_sdk
+
+ENTRYPOINT ["sloughgpt-cli"]
+CMD ["--help"]

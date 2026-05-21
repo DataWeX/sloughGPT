@@ -1,0 +1,32 @@
+{
+  "name": "@sloughgpt/tui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Terminal UI for SloughGPT (Ink + TypeScript SDK)",
+  "type": "module",
+  "bin": {
+    "sloughgpt-tui": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "npx tsc",
+    "start": "node dist/cli.js",
+    "dev": "npx tsc && node dist/cli.js",
+    "lint": "npx tsc --noEmit",
+    "test": "npx vitest run",
+    "ci": "npm run lint && npm run test && npm run build"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@sloughgpt/typescript-sdk": "file:../sdk-ts/typescript-sdk",
+    "ink": "^5.0.1",
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.3",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

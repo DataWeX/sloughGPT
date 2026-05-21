@@ -1,0 +1,77 @@
+# SloughGPT Configuration
+
+# Model architecture
+model:
+  name: "sloughgpt"
+  soul_name: null  # optional; trainer / train --api job name (default: name)
+  vocab_size: null  # Auto-detect from data
+  n_embed: 256
+  n_layer: 6
+  n_head: 8
+  block_size: 128
+  dropout: 0.1
+
+# Data
+data:
+  dataset: "shakespeare"
+  data_path: "datasets/shakespeare/input.txt"
+  val_split: 0.1
+
+# Training
+training:
+  epochs: 10
+  batch_size: 64
+  learning_rate: 1e-3
+  weight_decay: 0.01
+  gradient_clip: 1.0
+  gradient_accumulation_steps: 1
+  min_lr: 1.0e-5
+  warmup_steps: 500
+  scheduler: "cosine"  # cosine, linear, constant
+  log_interval: 10    # progress logs (matches SloughGPTTrainer / TrainingRequest defaults)
+  eval_interval: 100  # eval frequency
+  max_steps: null      # optional step cap; CLI --max-steps overrides merge; omit = epochs-only
+  use_mixed_precision: true
+  mixed_precision_dtype: bf16  # fp16 | bf16
+
+# LoRA
+lora:
+  enabled: false
+  rank: 8
+  alpha: 16
+  dropout: 0.05
+  target_modules: ["c_attn", "c_proj", "c_fc"]
+
+# Quantization
+quantization:
+  enabled: false
+  bits: 8  # 8 or 4
+
+# Checkpointing
+# Native step_*.pt under trainer_dir embed stoi/itos/chars for cli.py eval
+# (docs/policies/CONTRIBUTING.md — Checkpoint vocabulary).
+checkpoint:
+  save_every: 5
+  keep_last: 3
+  save_dir: "models"
+  trainer_dir: "checkpoints"
+  trainer_interval: 1000
+  save_best_only: false
+  max_checkpoints: 5
+  export_format: sou  # cli.py train post-run save (sou|safetensors|...)
+
+# Tracking (Weights & Biases / MLflow)
+# CLI: `tracking.enabled: true`, `pip install -e ".[wandb]"`, set `WANDB_API_KEY` (or `WANDB_MODE=offline`).
+# Logs train/eval metrics from SloughGPTTrainer when enabled.
+# API server (optional): `SLOUGHGPT_WANDB_TRAINING=1` for POST /training/start jobs;
+# `SLOUGHGPT_WANDB_SERVER=1` for HTTP + inference aggregates on a long-lived run.
+tracking:
+  enabled: false
+  backend: "wandb"  # wandb, mlflow, or none
+  project: "sloughgpt"
+  entity: null
+  log_every: 10
+
+# Device
+device:
+  type: "auto"  # auto, cpu, mps, cuda

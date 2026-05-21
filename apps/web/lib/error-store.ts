@@ -1,0 +1,114 @@
+'use client'
+
+import { create } from 'zustand'
+
+export type ErrorSeverity = 'error' | 'warning' | 'info'
+
+export interface AppError {
+  id: string
+  title: string
+  message: string
+  severity: ErrorSeverity
+  source?: string
+  timestamp: number
+  dismissible?: boolean
+}
+
+function extractErrorMessage(err: unknown): string {
+  if (typeof err === 'string') return err
+  if (err instanceof Error) return err.message
+  if (err && typeof err === 'object') {
+    const e = err as Record<string, unknown>
+    if (typeof e.message === 'string') return e.message
+    if (typeof e.error === 'string') return e.error
+    if (typeof e.detail === 'string') return e.detail
+    if (typeof e.msg === 'string') return e.msg
+    try { return JSON.stringify(err).slice(0, 300) } catch { return 'Unknown error' }
+  }
+  return String(err)
+}
+
+function extractErrorTitle(err: unknown): string {
+  if (err && typeof err === 'object') {
+    const e = err as Record<string, unknown>
+    if (typeof e.title === 'string') return e.title
+    const msg = extractErrorMessage(e)
+    if (msg.includes('404') || msg.includes('Not Found')) return 'Not Found'
+    if (msg.includes('401') || msg.includes('Unauthorized')) return 'Unauthorized'
+    if (msg.includes('403') || msg.includes('Forbidden')) return 'Forbidden'
+    if (msg.includes('500')) return 'Server Error'
+    if (msg.includes('timeout') || msg.includes('Timeout')) return 'Timeout'
+    if (msg.includes('network') || msg.includes('Network') || msg.includes('fetch')) return 'Network Error'
+    if (msg.includes('CORS') || msg.includes('cors')) return 'CORS Error'
+    if (msg.includes('ECONNREFUSED')) return 'Connection Refused'
+  }
+  if (err instanceof Error) {
+    const n = err.name
+    if (n === 'TypeError') return 'Type Error'
+    if (n === 'ReferenceError') return 'Reference Error'
+    if (n === 'SyntaxError') return 'Syntax Error'
+    return n
+  }
+  return 'Error'
+}
+
+function getSeverity(err: unknown, explicitSev?: ErrorSeverity): ErrorSeverity {
+  if (explicitSev) return explicitSev
+  const msg = extractErrorMessage(err).toLowerCase()
+  if (msg.includes('not found') || msg.includes('404')) return 'warning'
+  if (msg.includes('unauthorized') || msg.includes('401')) return 'warning'
+  if (msg.includes('forbidden') || msg.includes('403')) return 'warning'
+  if (msg.includes('timeout')) return 'warning'
+  if (msg.includes('network') || msg.includes('cors') || msg.includes('connection')) return 'warning'
+  return 'error'
+}
+
+interface ErrorStore {
+  errors: AppError[]
+  addError: (err: unknown, opts?: { source?: string; title?: string; severity?: ErrorSeverity; dismissible?: boolean }) => string
+  dismissError: (id: string) => void
+  clearErrors: () => void
+  getErrors: () => AppError[]
+  hasErrors: () => boolean
+}
+
+export const useErrorStore = create<ErrorStore>((set, get) => ({
+  errors: [],
+
+  addError: (err, opts = {}) => {
+    const id = `err_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+    const { source, severity: sev, dismissible = true } = opts
+    const title = opts.title || extractErrorTitle(err)
+    const message = extractErrorMessage(err)
+
+    const error: AppError = {
+      id,
+      title,
+      message,
+      severity: getSeverity(err, sev),
+      source,
+      timestamp: Date.now(),
+      dismissible,
+    }
+
+    set(prev => ({ errors: [error, ...prev.errors].slice(0, 20) }))
+    console.debug('[ErrorStore] Added error:', title, message, source)
+    return id
+  },
+
+  dismissError: (id) => {
+    set(prev => ({ errors: prev.errors.filter(e => e.id !== id) }))
+  },
+
+  clearErrors: () => {
+    set({ errors: [] })
+  },
+
+  getErrors: () => get().errors,
+
+  hasErrors: () => get().errors.length > 0,
+}))
+
+export function addGlobalError(err: unknown, source?: string) {
+  return useErrorStore.getState().addError(err, { source })
+}

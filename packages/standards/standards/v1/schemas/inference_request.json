@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sloughgpt.local/standards/v1/inference_request.json",
+  "title": "SloughGPT Inference Request v1",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "trace_id": {
+      "type": "string",
+      "description": "End-to-end correlation id; client-supplied or server-generated."
+    },
+    "tenant_id": {
+      "type": "string",
+      "description": "Tenant / org namespace for isolation and policy."
+    },
+    "model_id": {
+      "type": "string",
+      "description": "Registered model or artifact identifier."
+    },
+    "task_type": {
+      "type": "string",
+      "enum": [
+        "clinical_assist",
+        "clinical_summarization",
+        "synthetic_patient_generation",
+        "medical_rag_qa",
+        "code_completion",
+        "code_rag_qa",
+        "general_generate",
+        "general_chat"
+      ],
+      "description": "Selects prompts, output validation, and default safety profile."
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["generate", "chat", "structured"],
+      "default": "generate"
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["clinical_strict", "standard", "internal_dev", "code_only"],
+          "default": "standard"
+        },
+        "policy_bundle": {
+          "type": "string",
+          "description": "Optional named policy set (e.g. path or registry id to YAML bundle)."
+        }
+      }
+    },
+    "output_schema_ref": {
+      "type": "string",
+      "description": "URI or registry id for JSON Schema when mode=structured."
+    },
+    "retrieval": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "vector_store_id": { "type": "string" },
+        "top_k": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "filters": { "type": "object" }
+      }
+    },
+    "input": {
+      "type": "object",
+      "description": "Mode-specific body; aligns with existing API fields.",
+      "properties": {
+        "prompt": { "type": "string" },
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["role", "content"],
+            "properties": {
+              "role": { "type": "string" },
+              "content": { "type": "string" }
+            }
+          }
+        },
+        "context": { "type": "string" }
+      }
+    },
+    "generation": {
+      "type": "object",
+      "description": "Sampling / decoding; maps to GenerateRequest / ChatRequest extras.",
+      "properties": {
+        "max_new_tokens": { "type": "integer", "minimum": 1 },
+        "temperature": { "type": "number", "minimum": 0 },
+        "top_p": { "type": "number", "minimum": 0, "maximum": 1 },
+        "top_k": { "type": "integer", "minimum": 0 },
+        "repetition_penalty": { "type": "number", "minimum": 0 },
+        "seed": { "type": "integer" }
+      }
+    }
+  },
+  "required": ["task_type"]
+}

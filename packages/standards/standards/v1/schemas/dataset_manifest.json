@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sloughgpt.local/standards/v1/dataset_manifest.json",
+  "title": "SloughGPT Dataset Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "dataset_id": { "type": "string" },
+    "version": {
+      "type": "string",
+      "description": "Semver or content hash."
+    },
+    "domain": {
+      "type": "string",
+      "enum": ["medical", "code", "mixed", "general"]
+    },
+    "display_name": { "type": "string" },
+    "description": { "type": "string" },
+    "pii_policy": {
+      "type": "string",
+      "enum": ["none_expected", "may_contain_phi", "synthetic_only", "deidentified"]
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["type", "uri"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["local_path", "github", "s3", "https", "huggingface"]
+          },
+          "uri": { "type": "string" },
+          "commit_sha": {
+            "type": "string",
+            "description": "Required for github when reproducibility is required."
+          },
+          "license_spdx": { "type": "string" },
+          "include_glob": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "exclude_glob": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "language_allowlist": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "transformations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "version"],
+        "properties": {
+          "name": { "type": "string" },
+          "version": { "type": "string" },
+          "config": { "type": "object", "additionalProperties": true }
+        }
+      }
+    },
+    "splits": {
+      "type": "object",
+      "properties": {
+        "train": { "type": "string" },
+        "validation": { "type": "string" },
+        "test": { "type": "string" },
+        "split_hash": { "type": "string" }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "properties": {
+        "parent_manifests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["dataset_id", "version"],
+            "properties": {
+              "dataset_id": { "type": "string" },
+              "version": { "type": "string" }
+            }
+          }
+        },
+        "created_at": { "type": "string", "format": "date-time" },
+        "created_by": { "type": "string" }
+      }
+    }
+  },
+  "required": ["schema_version", "dataset_id", "version", "domain", "pii_policy", "sources"]
+}

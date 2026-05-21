@@ -1,0 +1,29 @@
+# SloughGPT Safety Policy Bundle — code / GitHub-derived workloads (example)
+schema_version: "1.0"
+bundle_id: code_default_v1
+
+policies:
+  - id: secret_scan_output
+    scope: output
+    domains: [code_completion, code_rag_qa]
+    safety_levels: [standard, internal_dev, code_only]
+    classifier: code_secret_scanner_v1
+    action: block
+    config:
+      patterns: [aws_access_key, github_pat, private_key_pem]
+
+  - id: license_notice
+    scope: output
+    domains: [code_completion, code_rag_qa]
+    safety_levels: [code_only, internal_dev]
+    classifier: always
+    action: require_disclaimer
+    config:
+      template: "Generated code may be incorrect or nonportable; run tests and SAST before merge."
+
+  - id: malicious_code_heuristic
+    scope: output
+    domains: [code_completion]
+    safety_levels: [standard, internal_dev, code_only]
+    classifier: code_toxic_patterns_v1
+    action: warn

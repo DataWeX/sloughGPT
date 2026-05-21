@@ -1,0 +1,76 @@
+{
+  "name": "sloughgpt-web",
+  "version": "3.0.0",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iamtowbee/sloughGPT.git",
+    "directory": "apps/web"
+  },
+  "homepage": "https://github.com/iamtowbee/sloughGPT/tree/main/apps/web",
+  "bugs": {
+    "url": "https://github.com/iamtowbee/sloughGPT/issues"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "clean": "rm -rf .next",
+    "dev": "next dev",
+    "dev:clean": "npm run clean && next dev",
+    "dev:restart": "lsof -ti :3000 | xargs kill -9 2>/dev/null; npm run dev",
+    "build": "next build",
+    "build:clean": "npm run clean && node ./scripts/next-build-retry.mjs",
+    "start": "next start",
+    "dev:e2e": "next dev -p 3010",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "cypress run",
+    "e2e:open": "cypress open",
+    "e2e:ci": "start-server-and-test \"npm run dev:e2e\" http://localhost:3010 \"cypress run --config baseUrl=http://localhost:3010\"",
+    "ci": "npm run lint && npm run typecheck && npm run test && npm run build:clean",
+    "ci:e2e": "npm run build:clean && npm run e2e:ci"
+  },
+  "dependencies": {
+    "@radix-ui/react-alert-dialog": "^1.1.15",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
+    "@radix-ui/react-label": "^2.1.8",
+    "@radix-ui/react-separator": "^1.1.8",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@radix-ui/react-switch": "^1.2.6",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "@sloughgpt/strui": "file:../../packages/strui",
+    "axios": "^1.16.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "dexie": "^4.4.2",
+    "lucide-react": "^1.16.0",
+    "next": "^14.0.0",
+    "next-auth": "^4.24.13",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "recharts": "^2.5.0",
+    "tailwind-merge": "^3.5.0",
+    "tailwindcss-animate": "^1.0.7",
+    "zustand": "^4.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@webgpu/types": "^0.1.70",
+    "autoprefixer": "^10.0.0",
+    "cypress": "^14.0.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.0",
+    "postcss": "^8.0.0",
+    "start-server-and-test": "^2.0.8",
+    "tailwindcss": "^3.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  }
+}

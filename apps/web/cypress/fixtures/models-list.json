@@ -1,0 +1,12 @@
+{
+  "models": [
+    {
+      "id": "gpt2",
+      "name": "GPT-2",
+      "source": "huggingface",
+      "description": "Fixture model",
+      "size_mb": 500,
+      "tags": ["causal-lm"]
+    }
+  ]
+}

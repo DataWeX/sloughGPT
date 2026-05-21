@@ -1,0 +1,42 @@
+# SloughGPT test image — mirrors .github/workflows/reusable-ci-core.yml test job.
+# Build from repository root: docker build -f infra/docker/Dockerfile.test -t sloughgpt:test .
+
+FROM python:3.10-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    SLOUGHGPT_ENV="testing" \
+    SLOUGHGPT_LOG_LEVEL="DEBUG" \
+    TESTING="true" \
+    DATABASE_URL="sqlite:///:memory:" \
+    CACHE_TYPE="memory"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    git \
+    libpq-dev \
+    libssl-dev \
+    libffi-dev \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Full tree (editable install + tests need packages/, apps/, root cli.)
+COPY . .
+
+RUN pip install --upgrade pip && \
+    pip install torch --index-url https://download.pytorch.org/whl/cpu && \
+    pip install transformers fastapi uvicorn pydantic httpx numpy scipy psutil && \
+    pip install pytest pytest-cov pytest-asyncio && \
+    pip install -e .
+
+# Same selection as reusable-ci-core.yml
+CMD ["python", "-m", "pytest", \
+    "tests/test_quantization.py", "tests/test_optimizations.py", "tests/test_benchmarking.py", \
+    "tests/test_inference.py", "tests/test_api.py", "tests/test_server_main_api.py", \
+    "tests/test_server_settings.py", "tests/test_security.py", \
+    "-v", "--tb=short", \
+    "--ignore=tests/test_core.py", "--ignore=tests/server/", "--ignore=tests/cli/", \
+    "--ignore=tests/web/", "--ignore=tests/ml/"]

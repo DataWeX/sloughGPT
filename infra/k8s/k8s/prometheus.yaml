@@ -1,0 +1,110 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: sloughgpt-api-monitor
+  namespace: sloughgpt
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: sloughgpt-api
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 15s
+    scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+    - sloughgpt
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: sloughgpt-model-monitor
+  namespace: sloughgpt
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: sloughgpt-model-server
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 15s
+    scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+    - sloughgpt
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: sloughgpt-api-pod-monitor
+  namespace: sloughgpt
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: sloughgpt-api
+  podMetricsEndpoints:
+  - port: metrics
+    path: /metrics
+    interval: 15s
+  namespaceSelector:
+    matchNames:
+    - sloughgpt
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: sloughgpt-alerts
+  namespace: sloughgpt
+  labels:
+    release: prometheus
+spec:
+  groups:
+  - name: sloughgpt.rules
+    rules:
+    - alert: SloughGPTAPIHighLatency
+      expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="sloughgpt-api"}[5m])) > 2
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "SloughGPT API high latency"
+        description: "API latency P95 is above 2 seconds for more than 5 minutes"
+    - alert: SloughGPTAPIErrorRate
+      expr: rate(http_requests_total{job="sloughgpt-api", status=~"5.."}[5m]) > 0.01
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "SloughGPT API high error rate"
+        description: "API error rate is above 1%"
+    - alert: SloughGPTModelServerDown
+      expr: up{job="sloughgpt-model-server"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "SloughGPT model server is down"
+        description: "Model server has been unreachable for more than 1 minute"
+    - alert: SloughGPTHighGPUMemory
+      expr: gpu_memory_used_bytes / gpu_memory_total_bytes > 0.9
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "SloughGPT GPU memory usage high"
+        description: "GPU memory usage is above 90%"
+    - alert: SloughGPTModelLoadingSlow
+      expr: histogram_quantile(0.95, rate(model_loading_seconds_bucket[5m])) > 60
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "SloughGPT model loading is slow"
+        description: "Model loading P95 latency is above 60 seconds"

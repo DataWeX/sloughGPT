@@ -1,0 +1,72 @@
+# Dataset Configuration for SloGPT Multi-Dataset Training
+# Use this file to define multiple datasets and their mixing ratios
+
+datasets:
+  # Web text dataset
+  - name: "webtext"
+    sources:
+      - "data/web_content.txt"
+      - "data/articles/"
+    recursive: true
+    streaming: false
+    weight: 0.4
+    description: "Web articles and content"
+    
+  # Code dataset  
+  - name: "code"
+    sources:
+      - "repositories/python_code/"
+      - "repositories/javascript_code/"
+    recursive: true
+    streaming: true
+    weight: 0.3
+    description: "Source code from multiple repositories"
+    
+  # Documentation dataset
+  - name: "docs"
+    sources:
+      - "documentation/api_docs.md"
+      - "documentation/user_guides/"
+    recursive: true
+    streaming: false
+    weight: 0.2
+    description: "Technical documentation"
+    
+  # Custom domain dataset
+  - name: "domain_specific"
+    sources:
+      - "domain_data/research_papers.pdf"
+      - "domain_data/notes.txt"
+    recursive: false
+    streaming: false
+    weight: 0.1
+    description: "Domain-specific research and notes"
+
+# Training configuration
+training:
+  # Multi-dataset mixing ratios (can override individual weights)
+  mixing_ratios:
+    webtext: 0.4
+    code: 0.3
+    docs: 0.2
+    domain_specific: 0.1
+    
+  # Global settings
+  batch_size: 32
+  learning_rate: 3e-4
+  max_iters: 10000
+  
+# Dataset preprocessing options
+preprocessing:
+  # Text cleaning
+  remove_extra_whitespace: true
+  normalize_line_endings: true
+  min_line_length: 10
+  
+  # Tokenization
+  vocab_size: 50000
+  special_tokens:
+    - "<pad>"
+    - "<unk>"
+    - "<bos>"
+    - "<eos>"

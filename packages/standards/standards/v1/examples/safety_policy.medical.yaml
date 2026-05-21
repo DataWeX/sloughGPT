@@ -1,0 +1,38 @@
+# SloughGPT Safety Policy Bundle — medical (example, not legal/clinical advice)
+schema_version: "1.0"
+bundle_id: medical_default_v1
+
+policies:
+  - id: phi_scan_input
+    scope: input
+    domains: [clinical_assist, clinical_summarization, medical_rag_qa, synthetic_patient_generation]
+    safety_levels: [clinical_strict, standard]
+    classifier: phi_scanner_v1
+    action: block
+    config:
+      regions: [us_hipaa_hint] # hook: map to your DLP provider
+
+  - id: phi_scan_output
+    scope: output
+    domains: [clinical_assist, clinical_summarization, medical_rag_qa, synthetic_patient_generation]
+    safety_levels: [clinical_strict, standard]
+    classifier: phi_scanner_v1
+    action: redact
+
+  - id: require_disclaimer_clinical
+    scope: output
+    domains: [clinical_assist, medical_rag_qa]
+    safety_levels: [clinical_strict, standard]
+    classifier: always
+    action: require_disclaimer
+    config:
+      template: "Not medical advice; verify with a licensed professional and institutional policy."
+
+  - id: citations_medical_rag
+    scope: output
+    domains: [medical_rag_qa]
+    safety_levels: [clinical_strict, standard]
+    classifier: rag_citation_coverage_v1
+    action: warn
+    config:
+      min_citations: 1

@@ -1,0 +1,36 @@
+---
+description: File, symbol, and API naming conventions for SloughGPT (Python, TypeScript, REST)
+alwaysApply: true
+---
+
+# Naming conventions
+
+## Python (`server/`, `domains/`, `sloughgpt_sdk/`, `tests/`)
+
+- **Modules and packages**: `snake_case` (`dataset_manifest.py`, `train_pipeline.py`). One primary class or `main` per module when it helps discovery.
+- **Public functions / methods / variables**: `snake_case`. **Constants**: `UPPER_SNAKE_CASE`.
+- **Classes / Pydantic models**: `PascalCase` (`TrainingRequest`, `SloughGPTTrainer`).
+- **Private helpers**: leading underscore (`_resolve_training_inputs`, `_build_training_start_payload`).
+- **Test files**: `test_<area>_<focus>.py` with `test_*` functions (`test_train_resolve_manifest_happy_path`).
+- **Avoid**: abbreviations unless universal (`id`, `url`, `api`); names like `data2`, `handle_stuff`.
+
+## TypeScript / React (`web/`)
+
+- **Components** (files and exports): `PascalCase` (`TrainingPage.tsx`, `AppLayout`).
+- **Hooks**: `use` + `PascalCase` segment in camelCase (`useAuthStore`).
+- **Functions, variables, object keys** in TS/JS: `camelCase` (`inferV1`, `getTrainingJobs`, `maxStepsInput`).
+- **Types / interfaces**: `PascalCase` (`StandardInferRequest`, `TrainDatasetRef`).
+- **Route segments**: follow Next.js app router conventions; keep folder names lowercase with hyphens only if you add marketing routes (this app mostly uses lowercase single segments).
+- **Env vars**: `SCREAMING_SNAKE`, prefixed e.g. `NEXT_PUBLIC_` for browser.
+
+## HTTP / JSON (API contracts)
+
+- **URL paths**: lowercase, words separated by single `/`; use **kebab-case** only if you add multi-word paths (existing API uses **snake_case** query/body fields where aligned with Python, e.g. `manifest_uri`, `dataset_ref`).
+- **JSON fields**: match **Pydantic** / OpenAPI names (`learning_rate`, not `learningRate`) for server-owned schemas. The **web** client should send the same keys the server expects.
+- **Headers**: treat as case-insensitive; use canonical spelling in docs (`X-SloughGPT-Standard`, `Authorization`).
+
+## Cross-language mapping
+
+- Same concept, idiomatic per language: Python `infer_v1` ↔ TypeScript `inferV1`; Python `list_training_jobs` ↔ TS `getTrainingJobs` (verbs may differ but behavior should be obvious).
+
+When adding new endpoints, names should read naturally in logs, metrics (`sloughgpt_*`), and the Standards doc tree (`standards/v1/...`).

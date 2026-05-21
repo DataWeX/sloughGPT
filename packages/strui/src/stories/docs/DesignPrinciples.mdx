@@ -1,0 +1,69 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Docs/Design principles" />
+
+<div className="str-safe-x mx-auto max-w-3xl space-y-10 py-4 text-left">
+  <header className="space-y-3 border-b border-border pb-8">
+    <p className="text-xs font-bold uppercase tracking-[0.22em] text-primary">strui</p>
+    <h1 className="sl-h1">Design principles</h1>
+    <p className="text-base leading-relaxed text-muted-foreground">
+      strui follows patterns common to production design systems: <strong className="text-foreground">inclusive defaults</strong>,{' '}
+      <strong className="text-foreground">token-driven UI</strong>, and <strong className="text-foreground">testable surfaces</strong> in Storybook (Accessibility addon, viewport toolbar).
+    </p>
+  </header>
+
+  <section className="space-y-3">
+    <h2 className="sl-h2">Accessibility (WCAG-aligned)</h2>
+    <ul className="list-inside list-disc space-y-2 text-sm text-muted-foreground">
+      <li>
+        <strong className="text-foreground">Target:</strong> WCAG 2.2 Level AA for text contrast and interactive components where we control color tokens.
+      </li>
+      <li>
+        <strong className="text-foreground">Keyboard:</strong> Radix primitives handle focus trapping for overlays; tab order follows DOM order. Prefer native <code className="font-mono text-xs">button</code> / links for actions.
+      </li>
+      <li>
+        <strong className="text-foreground">Focus visible:</strong> Use the shared focus ring pattern (<code className="font-mono text-xs">--ring</code> / <code className="font-mono text-xs">focus-visible</code>) — never remove focus outlines without a replacement.
+      </li>
+      <li>
+        <strong className="text-foreground">Not color-only:</strong> Pair status colors with text or icons (e.g. job status, health badges).
+      </li>
+      <li>
+        <strong className="text-foreground">Storybook:</strong> Open the <strong className="text-foreground">Accessibility</strong> panel per story to run automated checks; fix violations before shipping.
+      </li>
+    </ul>
+  </section>
+
+  <section className="space-y-3 border-t border-border pt-8">
+    <h2 className="sl-h2">Layout & spacing</h2>
+    <p className="text-sm leading-relaxed text-muted-foreground">
+      Tailwind’s spacing scale is based on a <strong className="text-foreground">4px</strong> grid (<code className="font-mono text-xs">1 = 0.25rem</code>). Prefer{' '}
+      <strong className="text-foreground">consistent steps</strong> (<code className="font-mono text-xs">p-4</code>, <code className="font-mono text-xs">gap-3</code>) over arbitrary pixel values. Use{' '}
+      <strong className="text-foreground">max-width</strong> containers (<code className="font-mono text-xs">max-w-*</code>) for readable line length on large screens.
+    </p>
+  </section>
+
+  <section className="space-y-3 border-t border-border pt-8">
+    <h2 className="sl-h2">Responsive & viewports</h2>
+    <p className="text-sm leading-relaxed text-muted-foreground">
+      Build <strong className="text-foreground">mobile-first</strong>: default styles, then <code className="font-mono text-xs">sm:</code> (640px), <code className="font-mono text-xs">md:</code> (768px), <code className="font-mono text-xs">lg:</code> (1024px), etc. In Storybook, use the{' '}
+      <strong className="text-foreground">viewport</strong> toolbar to preview Tailwind breakpoints and common devices.
+    </p>
+  </section>
+
+  <section className="space-y-3 border-t border-border pt-8">
+    <h2 className="sl-h2">Motion</h2>
+    <p className="text-sm leading-relaxed text-muted-foreground">
+      Prefer short transitions (<code className="font-mono text-xs">duration-200</code>, <code className="font-mono text-xs">ease-smooth</code>). Respect{' '}
+      <code className="font-mono text-xs">prefers-reduced-motion</code>: decorative animations (e.g. typing dots) disable when the user requests reduced motion.
+    </p>
+  </section>
+
+  <section className="space-y-3 border-t border-border pt-8">
+    <h2 className="sl-h2">Content & semantics</h2>
+    <ul className="list-inside list-disc space-y-2 text-sm text-muted-foreground">
+      <li>Use headings in order (<code className="font-mono text-xs">h1</code> → <code className="font-mono text-xs">h2</code> → …) for document structure.</li>
+      <li>Label form controls (<code className="font-mono text-xs">aria-label</code> or visible <code className="font-mono text-xs">Label</code>).</li>
+      <li>Reserve <code className="font-mono text-xs">sl-muted</code> for secondary copy; keep body text on <code className="font-mono text-xs">text-foreground</code> for readability.</li>
+    </ul>
+  </section>
+</div>

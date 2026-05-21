@@ -1,0 +1,73 @@
+# Shared lint + core pytest suite for CI and CI/CD workflows.
+name: Reusable CI core
+
+on:
+  workflow_call:
+    inputs:
+      upload_test_artifact:
+        description: Upload tests/ directory as a workflow artifact after pytest
+        type: boolean
+        default: false
+
+env:
+  PYTHON_VERSION: "3.10"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements.txt
+            apps/api/server/requirements.txt
+
+      - name: Install lint tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ruff
+
+      # Full-tree ruff is noisy; smoke-check syntax / import-resolution issues on maintained paths.
+      - name: Run Ruff (smoke)
+        run: ruff check tests/ apps/cli/ apps/tui/ apps/api/server/ train_sloughgpt.py packages/core-py/domains/training/checkpoint_utils.py packages/core-py/domains/training/wandb_helpers.py packages/core-py/domains/training/trainer_protocol.py packages/core-py/domains/ops/ --select E9,F63,F7,F82
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements.txt
+            apps/api/server/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install transformers fastapi uvicorn pydantic httpx numpy scipy psutil
+          python -m pip install pytest pytest-cov pytest-asyncio
+          python -m pip install -e .
+
+      - name: Run core tests
+        run: |
+          python -m pytest tests/test_quantization.py tests/test_optimizations.py tests/test_benchmarking.py tests/test_inference.py tests/test_api.py tests/test_server_main_api.py tests/test_server_settings.py tests/test_security.py tests/test_checkpoint_utils.py tests/test_config.py tests/test_domains_errors.py tests/test_wandb_helpers.py tests/test_trainer_protocol.py tests/test_train_sloughgpt_generate_text.py tests/test_train_sloughgpt_resume.py tests/test_sloughgpt_trainer_smoke.py tests/test_sloughgpt_trainer_resume.py tests/test_sloughgpt_trainer_progress_callback.py tests/test_cli_train_export_stem.py tests/test_cli_train_api_payload.py tests/test_training_router_kwds.py tests/test_training_schemas.py tests/test_lm_eval_char.py tests/test_cli_local_soul_candidates.py tests/test_soul_engine_conversation.py tests/test_repo_root_package_json.py tests/test_sloughgpt_colab_notebook.py tests/test_tui_phase1.py -v --tb=short --ignore=tests/test_core.py --ignore=tests/server/ --ignore=tests/cli/ --ignore=tests/web/ --ignore=tests/ml/
+
+      - name: train_sloughgpt.py CLI smoke
+        run: python3 train_sloughgpt.py --help
+
+      - name: Upload test results
+        if: ${{ inputs.upload_test_artifact && always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: tests/

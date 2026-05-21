@@ -1,0 +1,175 @@
+'use client'
+
+export const dynamic = 'force-dynamic'
+
+import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Textarea } from '@/components/ui/textarea'
+import { Slider, ToggleGroup } from '@/components/ui/form'
+import { useToastStore } from '@/lib/toast-store'
+import { useSettings, useUpdateSettings } from '@/lib/store'
+import { useApiHealth } from '@/hooks/useApiHealth'
+import Link from 'next/link'
+
+export default function SettingsPage() {
+  const settings = useSettings()
+  const updateSettings = useUpdateSettings()
+  const addToast = useToastStore(s => s.addToast)
+  const { state: apiHealth } = useApiHealth()
+
+  const clearChat = () => {
+    localStorage.removeItem('sloughgpt_messages')
+    localStorage.removeItem('sloughgpt_chat_sessions')
+    localStorage.removeItem('sloughgpt_current_session')
+    addToast('Chat history cleared', 'success')
+  }
+
+  return (
+    <div className="sl-page mx-auto max-w-4xl">
+      <AppRouteHeader left={<AppRouteHeaderLead title="Settings" />} />
+
+      <div className="space-y-4">
+        {/* Appearance */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Appearance</CardTitle>
+            <CardDescription>Theme preference</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ToggleGroup
+              value={settings.theme}
+              onChange={(v) => updateSettings({ theme: v as 'light' | 'dark' | 'system' })}
+              options={[
+                { value: 'light', label: 'Light' },
+                { value: 'dark', label: 'Dark' },
+                { value: 'system', label: 'System' },
+              ]}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Chat defaults */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Chat defaults</CardTitle>
+            <CardDescription>Default model and generation settings</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <Slider
+                label="Temperature"
+                value={settings.defaultTemp}
+                onChange={(v) => updateSettings({ defaultTemp: v })}
+                min={0}
+                max={2}
+                step={0.1}
+              />
+              <Slider
+                label="Max tokens"
+                value={settings.defaultMaxTokens}
+                onChange={(v) => updateSettings({ defaultMaxTokens: v })}
+                min={50}
+                max={1000}
+                step={50}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Memory */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Memory</CardTitle>
+            <CardDescription>Custom instructions included with every prompt</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              className="min-h-[120px]"
+              placeholder="e.g., You are a helpful coding assistant. Keep responses concise..."
+              value={settings.customContext}
+              onChange={(e) => updateSettings({ customContext: e.target.value })}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Tokenizer */}
+        <Link href="/tokenizer" className="block">
+          <Card className="cursor-pointer hover:border-primary/30 transition-colors">
+            <CardHeader>
+              <CardTitle className="text-base">Tokenizer</CardTitle>
+              <CardDescription>Byte-pair encoding — explore vocab, tokens, merges</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
+        {/* System health */}
+        <Link href="/monitoring" className="block">
+          <Card className="cursor-pointer hover:border-primary/30 transition-colors">
+            <CardHeader>
+              <CardTitle className="text-base">System health</CardTitle>
+              <CardDescription>Backend status and resource usage</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-3 text-sm">
+                <div className={`w-2 h-2 rounded-full ${
+                  apiHealth === null ? 'bg-warning' :
+                  apiHealth === 'offline' ? 'bg-destructive' :
+                  'bg-success'
+                }`} />
+                <span>{
+                  apiHealth === null ? 'Connecting...' :
+                  apiHealth === 'offline' ? 'API unreachable' :
+                  apiHealth.model_loaded ? `${apiHealth.model_type} loaded` :
+                  'Online, no model loaded'
+                }</span>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        {/* Danger zone */}
+        <Card className="border-destructive/30">
+          <CardHeader>
+            <CardTitle className="text-base text-destructive">Danger zone</CardTitle>
+            <CardDescription>Irreversible actions</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Clear chat history</p>
+                <p className="text-xs text-muted-foreground">Removes all saved conversations from this browser</p>
+              </div>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button type="button" variant="destructive" size="sm">Clear</Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Clear all chat history?</AlertDialogTitle>
+                    <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={clearChat} className="bg-destructive text-destructive-foreground">Clear</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "dataset_id": "local_demo_corpus",
+  "version": "1.0.0",
+  "domain": "general",
+  "display_name": "Local demo (input.txt next to manifest)",
+  "description": "Minimal manifest for char-level training: splits.train points at one UTF-8 text file.",
+  "pii_policy": "none_expected",
+  "sources": [
+    {
+      "type": "local_path",
+      "uri": "./input.txt"
+    }
+  ],
+  "transformations": [],
+  "splits": {
+    "train": "input.txt"
+  },
+  "lineage": {
+    "parent_manifests": [],
+    "created_at": "2026-03-25T12:00:00Z",
+    "created_by": "example"
+  }
+}

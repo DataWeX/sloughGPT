@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package sloughgpt;
+
+service InferenceService {
+  rpc Forward(ForwardRequest) returns (ForwardResponse);
+  rpc StreamingForward(StreamingForwardRequest) returns (stream StreamingForwardResponse);
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+message ForwardRequest {
+  repeated int32 tokens = 1;
+  bool use_cache = 2;
+}
+
+message ForwardResponse {
+  repeated float logits = 1;
+  int32 next_token = 2;
+  float latency_ms = 3;
+}
+
+message StreamingForwardRequest {
+  repeated int32 tokens = 1;
+}
+
+message StreamingForwardResponse {
+  int32 token = 1;
+  bool is_final = 2;
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  bool healthy = 1;
+  string version = 2;
+}

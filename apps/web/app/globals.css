@@ -1,0 +1,725 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Local fonts - served from /public/fonts */
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 400;
+  src: url('/fonts/Outfit-400.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 500;
+  src: url('/fonts/Outfit-500.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 600;
+  src: url('/fonts/Outfit-600.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 700;
+  src: url('/fonts/Outfit-700.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  src: url('/fonts/JetBrainsMono-400.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  src: url('/fonts/JetBrainsMono-500.ttf') format('truetype');
+  font-display: swap;
+}
+
+/*
+ * SloughGPT — Noir Violet
+ * A warm, sophisticated palette with rich violet primary + warm terracotta accents.
+ * Light: warm cream paper with subtle violet tint.
+ * Dark: deep charcoal-violet with vibrant lilac accents.
+ * html.light / html.dark + theme-* accent chips (ThemeProvider).
+ */
+
+:root {
+  /* App shell — sidebar + main column (rem-relative to root font size) */
+  --app-mobile-header-h: 3.25rem;
+  --sidebar-width: 15.75rem;
+  /* Chat column max width — ~80ch at default scale; scales with font */
+  --chat-thread-max: min(100%, 48rem);
+  color-scheme: light;
+
+  /* Light — warm cream paper with violet undertone */
+  --background: 248 246 252;
+  --foreground: 25 22 36;
+  --card: 255 255 255;
+  --card-foreground: 25 22 36;
+  --popover: 255 255 255;
+  --popover-foreground: 25 22 36;
+  --primary: 124 82 196;
+  --primary-foreground: 250 248 255;
+  --secondary: 237 232 248;
+  --secondary-foreground: 42 37 55;
+  --muted: 244 242 248;
+  --muted-foreground: 130 122 150;
+  --accent: 236 145 95;
+  --accent-foreground: 250 248 255;
+  --ring: 124 82 196;
+  --border: 228 224 242;
+  --input: 228 224 242;
+  --radius: 6px;
+  --success: 52 176 125;
+  --warning: 236 168 60;
+  --destructive: 220 80 90;
+  --destructive-foreground: 250 248 255;
+  --chart-1: 124 82 196;
+  --chart-2: 52 176 125;
+  --chart-3: 236 145 95;
+  --chart-4: 90 150 220;
+  --chart-5: 220 80 90;
+}
+
+html.dark {
+  color-scheme: dark;
+  --background: 17 15 24;
+  --foreground: 238 234 248;
+  --card: 28 25 38;
+  --card-foreground: 238 234 248;
+  --popover: 32 29 44;
+  --popover-foreground: 238 234 248;
+  --primary: 192 170 244;
+  --primary-foreground: 25 22 36;
+  --secondary: 50 44 68;
+  --secondary-foreground: 238 234 248;
+  --muted: 38 34 52;
+  --muted-foreground: 150 140 172;
+  --accent: 240 176 130;
+  --accent-foreground: 25 22 36;
+  --ring: 192 170 244;
+  --border: 52 46 72;
+  --input: 52 46 72;
+  --success: 72 192 140;
+  --warning: 240 192 80;
+  --destructive: 235 100 110;
+  --destructive-foreground: 25 22 36;
+  --chart-1: 192 170 244;
+  --chart-2: 72 192 140;
+  --chart-3: 240 176 130;
+  --chart-4: 100 165 240;
+  --chart-5: 235 100 110;
+}
+
+* {
+  border-color: rgb(var(--border));
+}
+
+.shadow-primary {
+  box-shadow: inset 3px 0 0 0 rgb(var(--primary)) !important;
+}
+
+body {
+  color: rgb(var(--foreground));
+  background: rgb(var(--background));
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Matches @sloughgpt/strui — fewer accidental grey flashes on iOS tap targets. */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@layer components {
+  .sl-shell-main {
+    background-color: rgb(var(--background));
+    background-image: 
+      radial-gradient(ellipse at 15% 0%, color-mix(in srgb, rgb(var(--primary)) 10%, transparent) 0%, transparent 45%),
+      radial-gradient(ellipse at 85% 100%, color-mix(in srgb, rgb(var(--accent)) 12%, transparent) 0%, transparent 50%);
+    box-shadow: inset 1px 0 0 color-mix(in srgb, rgb(var(--border)) 65%, transparent);
+  }
+
+  .sl-page {
+    @apply min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4 md:p-6 text-foreground;
+    background-color: rgb(var(--background));
+    background-image: 
+      radial-gradient(ellipse at 20% 0%, color-mix(in srgb, rgb(var(--primary)) 8%, transparent) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, color-mix(in srgb, rgb(var(--accent)) 12%, transparent) 0%, transparent 50%);
+  }
+
+  /**
+   * Chat message list — flat notebook canvas (matches @sloughgpt/strui).
+   * `.str-chat-thread` is applied by strui `ChatThread`; `.sl-chat-thread` is legacy/alternate hook.
+   */
+  .sl-chat-thread,
+  .str-chat-thread {
+    scroll-padding-bottom: 1.25rem;
+    background-color: rgb(var(--background));
+  }
+
+  /**
+   * Chat history column — flat wash + one edge line (no lattice gradient:
+   * avoids banding / “striped blocks” next to the thread).
+   */
+  .sl-chat-rail {
+    border-right: 1px solid color-mix(in srgb, rgb(var(--border)) 58%, transparent);
+    background-color: color-mix(in srgb, rgb(var(--background)) 88%, rgb(var(--muted)) 12%);
+    box-shadow: none;
+  }
+
+  .dark .sl-chat-rail {
+    background-color: color-mix(in srgb, rgb(var(--card)) 72%, transparent);
+    border-right-color: color-mix(in srgb, rgb(var(--border)) 55%, transparent);
+  }
+
+  /**
+   * Chat toolbar — compact status notes (flat wash + inset bar + mono label;
+   * same language as sidebar nav rows / dialog section headers).
+   */
+  .sl-chat-toolbar-note {
+    @apply rounded-lg border border-border/70 text-left transition-colors duration-200 ease-smooth;
+    background-color: color-mix(in srgb, rgb(var(--background)) 82%, rgb(var(--muted)) 18%);
+    padding: 0.5rem 0.625rem 0.5rem 0.75rem;
+  }
+
+  .dark .sl-chat-toolbar-note {
+    background-color: color-mix(in srgb, rgb(var(--card)) 78%, transparent);
+    border-color: color-mix(in srgb, rgb(var(--border)) 75%, transparent);
+  }
+
+  .sl-chat-toolbar-note--hint {
+    box-shadow: inset 3px 0 0 0 color-mix(in srgb, rgb(var(--primary)) 50%, transparent);
+  }
+
+  .sl-chat-toolbar-note--warn {
+    box-shadow: inset 3px 0 0 0 color-mix(in srgb, rgb(var(--warning)) 72%, transparent);
+  }
+
+  .sl-chat-toolbar-note--err {
+    box-shadow: inset 3px 0 0 0 color-mix(in srgb, rgb(var(--destructive)) 58%, transparent);
+  }
+
+  .sl-chat-toolbar-note__label {
+    @apply mb-1 font-mono text-[10px] uppercase tracking-wider text-foreground/55;
+  }
+
+  .sl-chat-inline-code {
+    @apply rounded-md border border-border/80 px-1 py-px font-mono text-[0.6875rem] text-foreground;
+    background-color: color-mix(in srgb, rgb(var(--muted)) 42%, transparent);
+  }
+
+  /** Monitoring SYS.LOG — subtle scanlines + primary wash (matches shell “lattice” look) */
+  .sl-log-feed {
+    background-color: color-mix(in srgb, rgb(var(--card)) 88%, rgb(var(--muted)));
+    background-image:
+      linear-gradient(180deg, color-mix(in srgb, rgb(var(--primary)) 7%, transparent) 0%, transparent 42%),
+      repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 22px,
+        color-mix(in srgb, rgb(var(--border)) 28%, transparent) 22px,
+        color-mix(in srgb, rgb(var(--border)) 28%, transparent) 23px
+      );
+  }
+
+    .sl-card {
+      @apply rounded-lg border border-border text-card-foreground shadow-sm transition-all duration-200 ease-smooth;
+      background-color: color-mix(in srgb, rgb(var(--card)) 96%, transparent);
+    }
+
+    .sl-card-solid {
+      @apply rounded-lg border border-border bg-card text-card-foreground shadow-sm transition-all duration-200 ease-smooth;
+    }
+
+  /* Typography hierarchy: h1 > h2 > subtitle > body > caption */
+  /* Use these utility classes everywhere for consistency */
+  
+  /* Headings */
+  .sl-h1 {
+    @apply text-2xl md:text-3xl font-semibold tracking-tight text-foreground;
+  }
+
+  .sl-h2 {
+    @apply text-lg font-semibold text-foreground;
+  }
+
+  /* Text utilities - use these in components */
+  .sl-text-title {
+    @apply text-lg font-semibold text-foreground;
+  }
+
+  .sl-text-subtitle {
+    @apply text-base font-medium text-foreground;
+  }
+
+  .sl-text-body {
+    @apply text-sm text-foreground;
+  }
+
+  .sl-text-caption {
+    @apply text-xs text-muted-foreground;
+  }
+
+  /* Shorthand aliases */
+  .sl-subtitle { @apply text-base font-medium text-foreground; }
+  .sl-body { @apply text-sm text-foreground; }
+  .sl-caption { @apply text-xs text-muted-foreground; }
+  .sl-muted { @apply text-muted-foreground text-sm; }
+
+  /* Label: form labels, small caps */
+  .sl-label {
+    @apply block text-xs font-medium text-muted-foreground mb-1.5 uppercase tracking-wider;
+  }
+
+  /* Input field */
+  .sl-input {
+    @apply w-full rounded-lg border border-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors duration-200 ease-smooth focus:outline-none;
+    background-color: color-mix(in srgb, rgb(var(--card)) 88%, rgb(var(--muted)));
+  }
+
+  .sl-input:focus-visible {
+    border-color: rgb(var(--ring));
+    box-shadow: 0 0 0 3px color-mix(in srgb, rgb(var(--ring)) 20%, transparent);
+  }
+
+  .sl-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 ease-smooth disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98];
+  }
+
+  .sl-btn-primary {
+    @apply sl-btn bg-primary text-primary-foreground shadow-sm hover:opacity-90;
+  }
+
+  .sl-btn-secondary {
+    @apply sl-btn bg-secondary text-secondary-foreground border border-border hover:bg-muted;
+  }
+
+  .sl-btn-ghost {
+    @apply sl-btn bg-transparent text-muted-foreground hover:text-foreground;
+  }
+
+  .sl-btn-ghost:hover {
+    background-color: color-mix(in srgb, rgb(var(--muted)) 55%, transparent);
+  }
+
+  .sl-code {
+    @apply font-mono text-sm rounded-md border border-border px-2 py-0.5 text-foreground;
+    background-color: color-mix(in srgb, rgb(var(--muted)) 50%, transparent);
+  }
+
+  /**
+   * Typing indicator dots — synced with @sloughgpt/strui TypingIndicator (str-dot-*).
+   * Uses rgb(var(--primary)) to match web token triples.
+   */
+  .str-dot {
+    height: 0.5rem;
+    width: 0.5rem;
+    border-radius: 9999px;
+    background-color: color-mix(in srgb, rgb(var(--primary)) 60%, transparent);
+    animation: str-dot-bounce 1.2s ease-in-out infinite;
+  }
+  .str-dot-2 {
+    animation-delay: 0.15s;
+  }
+  .str-dot-3 {
+    animation-delay: 0.3s;
+  }
+}
+
+/* ── Toast ────────────────────────────────────────────── */
+.sl-toast-container {
+  @apply fixed right-3 z-50 flex flex-col gap-2;
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+}
+
+.sl-toast {
+  @apply relative flex cursor-pointer flex-col overflow-hidden border text-sm rounded-lg;
+  max-width: 22rem;
+  min-width: 16rem;
+  border-color: color-mix(in srgb, rgb(var(--border)) 65%, transparent);
+  background-color: color-mix(in srgb, rgb(var(--card)) 96%, rgb(var(--muted)));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-lg);
+  animation: sl-toast-in 0.3s cubic-bezier(0.21, 1.02, 0.73, 1) both;
+  pointer-events: auto;
+}
+
+.sl-toast:hover {
+  box-shadow: var(--shadow-xl);
+}
+
+.sl-toast--exit {
+  animation: sl-toast-out 0.2s ease-in both;
+}
+
+@keyframes sl-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes sl-toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-0.25rem) scale(0.96);
+  }
+}
+
+.sl-toast__bar {
+  @apply absolute left-0 top-0 h-full w-[3px];
+}
+
+.sl-toast__body {
+  @apply flex items-start gap-2.5 px-3 py-2.5;
+}
+
+.sl-toast__icon {
+  @apply mt-0.5 h-4 w-4 shrink-0;
+}
+
+.sl-toast__message {
+  @apply flex-1 text-sm leading-snug;
+  color: color-mix(in srgb, rgb(var(--foreground)) 92%, transparent);
+}
+
+.sl-toast__verbose {
+  @apply ml-0.5 inline text-[10px] underline opacity-55 hover:opacity-100 transition-opacity;
+}
+
+.sl-toast__close {
+  @apply -mr-1 -mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md opacity-40 hover:opacity-100 hover:bg-muted/50 transition-all;
+}
+
+.sl-toast__verbose-block {
+  @apply border-t px-3 pb-2 pt-1.5 text-[10px] leading-tight overflow-x-auto max-h-20;
+  border-color: color-mix(in srgb, rgb(var(--border)) 42%, transparent);
+}
+
+.sl-toast__track {
+  @apply h-[2px] w-full bg-border/30;
+}
+
+.sl-toast__fill {
+  @apply h-full;
+}
+
+@keyframes str-dot-bounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .str-dot {
+    animation: none;
+    opacity: 0.75;
+  }
+  .sl-toast {
+    animation: none;
+  }
+  .sl-toast--exit {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/*
+ * @sloughgpt/strui host utilities — keep in sync with packages/strui/src/styles/globals.css
+ * (ChatThread uses str-safe-x + str-chat-scroll; PromptComposer uses str-safe-bottom + str-touch-target).
+ */
+@layer utilities {
+  .str-min-h-screen {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+  .str-safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .str-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .str-safe-left {
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+  .str-safe-right {
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .str-safe-x {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .str-safe-all {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .str-touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .str-chat-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgb(var(--muted));
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, rgb(var(--primary)) 30%, rgb(var(--border)));
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, rgb(var(--primary)) 55%, rgb(var(--border)));
+}
+
+::-webkit-scrollbar-corner {
+  background: rgb(var(--muted));
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, rgb(var(--primary)) 30%, rgb(var(--border))) rgb(var(--muted));
+}
+
+/* Auto-hide scrollbar — shows on scroll/hover, fades out */
+.custom-scrollbar-area {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.custom-scrollbar-area::-webkit-scrollbar {
+  width: 5px;
+}
+
+.custom-scrollbar-area::-webkit-scrollbar-thumb {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  background: color-mix(in srgb, rgb(var(--primary)) 30%, rgb(var(--border)));
+  border-radius: 9999px;
+}
+
+.custom-scrollbar-area:hover::-webkit-scrollbar-thumb {
+  opacity: 1;
+}
+
+.custom-scrollbar-container {
+  overflow: auto;
+  position: relative;
+}
+
+.custom-scrollbar-container::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.custom-scrollbar-container::-webkit-scrollbar-thumb {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  background: color-mix(in srgb, rgb(var(--primary)) 30%, rgb(var(--border)));
+  border-radius: 9999px;
+}
+
+.custom-scrollbar-container:hover::-webkit-scrollbar-thumb,
+.custom-scrollbar-container.custom-scrollbar-visible::-webkit-scrollbar-thumb {
+  opacity: 1;
+}
+
+::selection {
+  background: color-mix(in srgb, rgb(var(--primary)) 25%, transparent);
+  color: rgb(var(--foreground));
+}
+
+input,
+textarea,
+select {
+  font-size: 14px;
+}
+
+button {
+  font-size: 14px;
+}
+
+/* Accent chips — refined variants (RGB triples for Tailwind /opacity) */
+.theme-blue {
+  --primary: 90 130 220;
+  --ring: 140 176 240;
+}
+.theme-purple {
+  --primary: 155 108 214;
+  --ring: 192 162 238;
+}
+.theme-pink {
+  --primary: 218 130 170;
+  --ring: 238 178 206;
+}
+.theme-red {
+  --primary: 230 120 130;
+  --ring: 242 172 180;
+}
+.theme-orange {
+  --primary: 236 155 90;
+  --ring: 244 194 144;
+}
+.theme-green {
+  --primary: 72 178 130;
+  --ring: 134 210 174;
+}
+.theme-teal {
+  --primary: 72 166 200;
+  --ring: 134 202 228;
+}
+
+/* Shadow design tokens — layered depth system */
+:root {
+  --shadow-sm: 0 1px 2px rgba(25, 22, 36, 0.06);
+  --shadow-md: 0 4px 12px rgba(25, 22, 36, 0.08);
+  --shadow-lg: 0 8px 30px rgba(25, 22, 36, 0.10);
+  --shadow-xl: 0 16px 48px rgba(25, 22, 36, 0.14);
+}
+html.dark {
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.45);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+
+/**
+ * Shell navigation — light: opaque pastel lattice (matches main column, readable on busy UIs).
+ * Dark: glass (blur + translucent card) to sit on deep plum-gray.
+ */
+
+/*
+ * Pixel-perfect spacing reference:
+ * 
+ * Touch targets: h-11 (44px) minimum — Apple HIG / Material
+ * Buttons: h-9 (36px), h-10 (40px), h-11 (44px), h-12 (48px)
+ * Icons: h-6 w-6 (24px), h-8 w-8 (32px), h-10 w-10 (40px)
+ * Gaps: gap-1 (4px), gap-2 (8px), gap-3 (12px), gap-4 (16px)
+ * Padding: px-2 py-1 (8px/4px), px-3 py-1.5 (12px/6px), px-4 py-2 (16px/8px)
+ * Border radius: 0 (sharp), rounded-md, rounded-lg, rounded-xl
+ *
+ * rounded-none: 0px — nav links, sidebar, inputs (default)
+ * rounded-md: 4px — buttons, small cards
+ * rounded-lg: 8px — cards, panels, modals
+ * rounded-xl: 12px — chat bubbles (AI)
+ * rounded-2xl: 16px — large chat bubbles
+ * 
+ * Custom: 
+ *   min-h-[2.25rem] = 36px (nav links)
+ *   min-h-[3.25rem] = 52px (headers)
+ *   min-h-[60px] = 60px (textareas)
+ */
+
+/*
+ * sl-hover-primary: accent color hover state
+ */
+.sl-hover-primary {
+  background-color: transparent;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.sl-hover-primary:hover {
+  background-color: rgb(var(--secondary));
+  color: rgb(var(--primary));
+}
+
+.dark .sl-hover-primary:hover {
+  background-color: color-mix(in srgb, rgb(var(--secondary)) 60%, transparent);
+}
+
+.sl-sidebar-surface {
+  background-color: color-mix(in srgb, rgb(var(--background)) 96%, rgb(var(--card)) 4%);
+  background-image: 
+    radial-gradient(ellipse at 30% -10%, color-mix(in srgb, rgb(var(--primary)) 8%, transparent) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 110%, color-mix(in srgb, rgb(var(--accent)) 7%, transparent) 0%, transparent 40%);
+  border-right: 1px solid color-mix(in srgb, rgb(var(--border)) 70%, transparent);
+  box-shadow: 2px 0 24px -12px color-mix(in srgb, rgb(var(--foreground)) 6%, transparent);
+}
+
+.dark .sl-sidebar-surface {
+  background-color: color-mix(in srgb, rgb(var(--background)) 94%, rgb(var(--card)) 6%);
+  background-image: 
+    radial-gradient(ellipse at 30% -10%, color-mix(in srgb, rgb(var(--primary)) 10%, transparent) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 110%, color-mix(in srgb, rgb(var(--accent)) 8%, transparent) 0%, transparent 40%);
+  border-right: 1px solid color-mix(in srgb, rgb(var(--border)) 70%, transparent);
+  box-shadow: 2px 0 24px -8px rgba(0, 0, 0, 0.3);
+}
+
+.sl-mobile-header {
+  background-color: rgb(var(--background));
+  background-image: 
+    radial-gradient(ellipse at 20% 0%, color-mix(in srgb, rgb(var(--primary)) 8%, transparent) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 100%, color-mix(in srgb, rgb(var(--accent)) 10%, transparent) 0%, transparent 50%);
+  border-bottom: 1px solid color-mix(in srgb, rgb(var(--border)) 35%, transparent);
+}
+
+.dark .sl-mobile-header {
+  background-color: rgb(var(--background));
+  background-image: 
+    radial-gradient(ellipse at 20% 0%, color-mix(in srgb, rgb(var(--primary)) 8%, transparent) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 100%, color-mix(in srgb, rgb(var(--accent)) 10%, transparent) 0%, transparent 50%);
+  border-bottom: 1px solid color-mix(in srgb, rgb(var(--border)) 50%, transparent);
+}
+
+.gradient-bg {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, rgb(var(--primary)) 85%, white) 0%,
+    color-mix(in srgb, rgb(var(--accent)) 70%, rgb(var(--primary))) 100%
+  );
+}
+
+.sl-hover-primary {
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+.sl-hover-primary:hover {
+  background-color: color-mix(in srgb, rgb(var(--primary)) 12%, transparent);
+  color: rgb(var(--primary));
+}
+.sl-hover-primary:hover:not([class*="border"]) {
+  border-color: color-mix(in srgb, rgb(var(--primary)) 30%, transparent);
+}
+
+.dark .sl-hover-primary:hover {
+  background-color: color-mix(in srgb, rgb(var(--primary)) 18%, transparent);
+}
