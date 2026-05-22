@@ -37,6 +37,7 @@ from . import tokenizer
 from . import labs
 from . import learner
 from . import self_train
+from . import errors as error_logger
 
 __all__ = [
     "auth", "auto_train", "models", "inference",
@@ -45,7 +46,7 @@ __all__ = [
     "ratelimit", "workflow", "experiments", "personalities", "benchmark",
     "user_adapters", "vector", "registry",
     "session", "meta_weights", "lora_eval", "companion", "multimodal",
-    "tokenizer", "labs", "learner", "self_train",
+    "tokenizer", "labs", "learner", "self_train", "error_logger",
 ]
 
 def get_all_routers() -> list[APIRouter]:
@@ -61,4 +62,5 @@ def get_all_routers() -> list[APIRouter]:
         session.router, meta_weights.router, lora_eval.router,
         companion.router, multimodal.router, tokenizer.router, labs.router,
         learner.router, self_train.router,
+        error_logger.router,
     ]

@@ -1,6 +1,7 @@
 """
 Health Controller - Business logic for system health
 """
+import json
 from typing import Dict, Any, Tuple, Optional
 import psutil
 from datetime import datetime
@@ -88,7 +89,7 @@ class HealthController:
                 "device_type": acc.device_type,
                 "vram_gb": round(acc.vram_gb(), 2),
                 "tier": acc.compute_tier,
-                "memory_hint": acc.memory_hint(),
+                "memory_hint": json.dumps(acc.memory_hint()),
             }
         except Exception:
             gpu_info = {"backend": "unknown", "error": str(Exception)}

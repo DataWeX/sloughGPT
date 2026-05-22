@@ -20,14 +20,15 @@ import { sessionController } from '@/lib/session-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 
 function Greeting() {
-  const h = new Date().getHours()
-  let greeting: string
-  if (h < 5) { greeting = 'Burning the midnight oil' }
-  else if (h < 12) { greeting = 'Good morning' }
-  else if (h < 14) { greeting = 'Good afternoon' }
-  else if (h < 18) { greeting = 'Good afternoon' }
-  else if (h < 22) { greeting = 'Good evening' }
-  else { greeting = 'Late night vibes' }
+  const [greeting, setGreeting] = useState('Hello')
+  useEffect(() => {
+    const h = new Date().getHours()
+    if (h < 5) setGreeting('Burning the midnight oil')
+    else if (h < 12) setGreeting('Good morning')
+    else if (h < 18) setGreeting('Good afternoon')
+    else if (h < 22) setGreeting('Good evening')
+    else setGreeting('Late night vibes')
+  }, [])
   return <span>{greeting}</span>
 }
 

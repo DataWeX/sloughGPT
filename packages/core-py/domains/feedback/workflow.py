@@ -454,7 +454,7 @@ class FeedbackWorkflowManager:
         """Run adapter aggregation and log the result.
 
         Calls the per‑user LoRA store to merge the top‑k adapters into a
-        single `.slo` checkpoint, runs the evaluation pipeline, and updates the
+        single `.soul` checkpoint, runs the evaluation pipeline, and updates the
         workflow stats. Errors are caught and logged so the scheduler never
         crashes.
         """

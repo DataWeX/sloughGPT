@@ -84,4 +84,29 @@ export const multimodalController = {
     fd.append('file', file)
     return apiPost('/multimodal/transcribe', fd, { raw: true })
   },
+
+  async generateImage(prompt: string, steps: number = 20, guidanceScale: number = 7.5): Promise<{ status: string; image: string; prompt: string }> {
+    const fd = new FormData()
+    fd.append('prompt', prompt)
+    fd.append('steps', String(steps))
+    fd.append('guidance_scale', String(guidanceScale))
+    return apiPost('/multimodal/generate-image', fd, { raw: true })
+  },
+
+  async getGenerationStatus(): Promise<{ models_loaded: boolean; capabilities: Record<string, boolean | string> }> {
+    return apiGet('/multimodal/generation-status')
+  },
+
+  async processVideo(file: File, numFrames: number = 16): Promise<{ status: string; caption: string; num_frames: number }> {
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('num_frames', String(numFrames))
+    return apiPost('/multimodal/process-video', fd, { raw: true })
+  },
+
+  async synthesizeSpeech(text: string): Promise<{ status: string; audio: string; text: string; duration_sec: number }> {
+    const fd = new FormData()
+    fd.append('text', text)
+    return apiPost('/multimodal/synthesize-speech', fd, { raw: true })
+  },
 }

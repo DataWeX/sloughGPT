@@ -143,6 +143,14 @@ export function IconDownload({ className = 'w-4 h-4' }: IconProps) {
   )
 }
 
+export function IconAlert({ className = navSize }: IconProps) {
+  return (
+    <svg className={`${base} ${className}`} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M12 9v4m0 4h.01M10.29 3.86l-8.3 14.4a1.7 1.7 0 0 0 1.5 2.54h16.92a1.7 1.7 0 0 0 1.5-2.54l-8.3-14.4a1.7 1.7 0 0 0-3.32 0z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 export function IconUpload({ className = 'w-4 h-4' }: IconProps) {
   return (
     <svg className={`${base} ${className}`} viewBox="0 0 24 24" fill="none" aria-hidden>

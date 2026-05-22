@@ -48,7 +48,7 @@ VOCAB = len(CHAR_SET)
 
 LEARNER_STATE_DIR = Path("data/learner")
 LEARNER_STATE_DIR.mkdir(parents=True, exist_ok=True)
-STATE_PATH = LEARNER_STATE_DIR / "continual.slo"
+STATE_PATH = LEARNER_STATE_DIR / "continual.soul"
 
 TRAIN_SEQ_LEN = 32
 TRAIN_BATCH_SIZE = 8
@@ -171,7 +171,7 @@ class ContinualLearner:
         return net
 
     def _save_checkpoint(self):
-        """Save learner model to disk as .slo."""
+        """Save learner model to disk as .soul."""
         STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
         export_to_sou(self.net, str(STATE_PATH))
         logger.info(f"Saved learner checkpoint ({STATE_PATH.stat().st_size / 1024:.0f} KB)")
@@ -475,7 +475,7 @@ class ContinualLearner:
         }
 
     def deploy(self, name: Optional[str] = None) -> dict:
-        """Export the learner's SloTransformer as a deployable .slo file.
+        """Export the learner's SloTransformer as a deployable .soul file.
 
         Args:
             name: optional checkpoint name (default: ``learner-step-{N}``)
@@ -489,7 +489,7 @@ class ContinualLearner:
         name = name or f"learner-{safe}-step-{step}"
         deploy_dir = Path(str(Path.home() / ".local" / "share" / "sloughgpt" / "souls"))
         deploy_dir.mkdir(parents=True, exist_ok=True)
-        path = str(deploy_dir / f"{name}.slo")
+        path = str(deploy_dir / f"{name}.soul")
         export_to_sou(self.net, path)
         loss = self.current_loss
         return {

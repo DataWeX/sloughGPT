@@ -98,7 +98,7 @@ export function MessageBubble({
     >
       <div
         className={cn(
-          "relative rounded-2xl px-3 py-2.5 text-xs sm:px-4 sm:py-3 max-w-[85%] sm:max-w-[75%] transition-all duration-200 leading-relaxed",
+          "relative rounded-2xl px-3 py-2.5 text-xs sm:px-4 sm:py-3 max-w-[40%] transition-all duration-200 leading-relaxed",
           role === 'user'
             ? 'bg-primary text-primary-foreground rounded-br-sm shadow-md'
             : 'bg-card text-foreground rounded-bl-sm border border-border/60 shadow-sm hover:shadow-md',

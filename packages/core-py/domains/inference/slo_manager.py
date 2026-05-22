@@ -58,21 +58,22 @@ class SloManager:
         self._load_preference()
 
     def _scan_souls(self) -> None:
-        """Scan for available .slo and .slo files."""
+        """Scan for available .slo (personality profiles) and .soul (checkpoint) files."""
         self._souls_cache.clear()
 
         if not self.slos_dir.exists():
             logger.warning(f"Slos directory not found: {self.slos_dir}")
             return
 
-        # Find binary .slo files
-        for sou_path in glob.glob(str(self.slos_dir / "*.slo")):
-            try:
-                soul_info = self._parse_soul_info(sou_path)
-                if soul_info:
-                    self._souls_cache[soul_info.name] = soul_info
-            except Exception as e:
-                logger.debug(f"Failed to parse soul {sou_path}: {e}")
+        # Find personality profiles (.slo) and checkpoint files (.soul)
+        for ext in ("*.slo", "*.soul"):
+            for sou_path in glob.glob(str(self.slos_dir / ext)):
+                try:
+                    soul_info = self._parse_soul_info(sou_path)
+                    if soul_info:
+                        self._souls_cache[soul_info.name] = soul_info
+                except Exception as e:
+                    logger.debug(f"Failed to parse soul {sou_path}: {e}")
 
         # Find text .slo profile files in souls/ subdirectory
         soul_candidates = [self.slos_dir / "souls"]
@@ -97,10 +98,10 @@ class SloManager:
     def _parse_soul_info(self, sou_path: str) -> Optional[SloInfo]:
         """Parse soul file for metadata.
 
-        Handles both binary .slo files (SOUL magic + JSON config header)
-        and plain-text .slo files (via SouParser).
+        Handles both binary .soul files (SOUL magic + JSON config header + weights)
+        and plain-text .slo personality profiles (via SouParser).
         """
-        # ── Binary .slo format: SOUL + version + config_len + JSON_config ──
+        # ── Binary .soul format: SOUL + version + config_len + JSON_config ──
         try:
             with open(sou_path, "rb") as f:
                 header = f.read(4)
@@ -131,9 +132,9 @@ class SloManager:
                         traits=list(traits) if isinstance(traits, (list, tuple)) else [],
                     )
         except Exception:
-            pass  # Not a binary .slo file, try text format below
+            pass  # Not a binary .soul file, try text format below
 
-        # ── Plain-text .slo profile — parse via SouParser ──
+        # ── Plain-text .slo personality profile — parse via SouParser ──
         try:
             from .slo_format import SouParser
             with open(sou_path, "r", encoding="utf-8") as f:
@@ -228,7 +229,7 @@ class SloManager:
         Register a new soul file.
 
         Args:
-            path: Path to .slo file
+            path: Path to .soul file
             name: Optional custom name
 
         Returns:

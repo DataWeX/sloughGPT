@@ -136,8 +136,8 @@ models/*.gguf
 models/*.safetensors
 models/**/*.sou
 models/**/*.sou.meta.json
-models/**/*.slo
-models/**/*.slo.meta.json
+models/**/*.soul
+models/**/*.soul.meta.json
 models/gpt2_*
 models/vocab.json
 models/merges.txt
@@ -168,7 +168,7 @@ models/gpt2-finetuned-chat/checkpoint-70/model.safetensors
 
 # Model checkpoint files (large, regenerable)
 models/**/*.sou
-models/**/*.slo
+models/**/*.soul
 models/**/*.pt
 models/**/checkpoint-*/
 models/auto-training/
@@ -187,7 +187,7 @@ datasets/
 # Large regenerable binaries
 *.pt.sou
 *.sou
-*.slo
+*.soul
 *.gguf
 *.bin
 *.db

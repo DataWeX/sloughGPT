@@ -105,15 +105,14 @@ class MultimodalManager:
             except Exception:
                 pass
 
-        # Pre-train on synthetic seed images if engine is fresh
+        # Pre-train on synthetic seed images in background (non-blocking)
         if self._multimodal_engine is not None and not getattr(self._multimodal_engine, '_trained', False):
-            try:
-                _pretrain_on_seed_images(self)
-            except Exception as e:
-                logger.warning("Seed pre-training failed (non-critical): %s", e)
+            import threading
+            t = threading.Thread(target=_pretrain_on_seed_images, args=(self,), daemon=True)
+            t.start()
 
         self._initialized = True
-        logger.info("Multimodal initialized")
+        logger.info("Multimodal initialized (seed training running in background)")
 
     def _count_trained_images(self) -> int:
         """Estimate training count from saved state."""

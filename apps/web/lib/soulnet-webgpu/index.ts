@@ -7,7 +7,7 @@
  * Example:
  *   import { createSoulEngine } from '@/lib/soulnet-webgpu'
  *
- *   const engine = await createSoulEngine('/models/friendly.sou', {
+ *   const engine = await createSoulEngine('/models/friendly.soul', {
  *     embedDim: 256, hiddenDim: 512, vocabSize: 50, numLayers: 2
  *   })
  *   for await (const token of engine.generate('hello', 100)) {

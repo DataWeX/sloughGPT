@@ -260,7 +260,7 @@ class Quantizer:
 
 
 class SouModelQuantizer:
-    """Model quantizer for .slo models."""
+    """Model quantizer for .soul models."""
     
     def __init__(self, quantization_type: QuantizationType = QuantizationType.Q4_K):
         self.quantizer = Quantizer(quantization_type)

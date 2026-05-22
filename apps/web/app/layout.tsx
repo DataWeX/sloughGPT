@@ -6,6 +6,7 @@ import { Providers } from './Providers'
 import { MODE_STORAGE_KEY, THEME_IDS, THEME_STORAGE_KEY } from '@/lib/theme-storage'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { SuppressDevOverlay } from '@/components/SuppressDevOverlay'
+import { ErrorReporterInit } from '@/components/ErrorReporterInit'
 
 const outfit = Outfit({
   subsets: ['latin'],
@@ -41,9 +42,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${outfit.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
-      <body className="font-sans antialiased">
+      <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootstrapInline }} />
+      </head>
+      <body className="font-sans antialiased" suppressHydrationWarning>
         <SuppressDevOverlay />
+        <ErrorReporterInit />
         <ErrorBoundary>
           <Providers>{children}</Providers>
         </ErrorBoundary>

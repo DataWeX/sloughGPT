@@ -4,6 +4,7 @@ import asyncio
 import datetime
 import logging
 from typing import List, Optional
+import numpy as np
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Form
 from domains.multimodal import get_multimodal_manager
@@ -279,3 +280,167 @@ async def _run_batch_training(mgr, image_sources: list):
 
     _background_job["running"] = False
     _background_job["finished_at"] = datetime.datetime.now().isoformat()
+
+
+# ── Text-to-Image Generation ───────────────────────────────────────────────
+
+@router.post("/generate-image")
+async def generate_image(prompt: str = Form(...), steps: int = Form(20), 
+                        guidance_scale: float = Form(7.5), width: int = Form(224),
+                        height: int = Form(224)):
+    """Generate an image from text prompt using latent diffusion."""
+    try:
+        from domains.multimodal.diffusion import LatentDiffusionModel
+        from domains.multimodal.vae import SloVAE
+        from domains.multimodal.text_encoder import TextEncoder
+        import base64
+        from PIL import Image
+        import io
+        
+        # Initialize models (lazy load)
+        if not hasattr(generate_image, "_vae"):
+            generate_image._vae = SloVAE(latent_dim=64)
+            generate_image._diffusion = LatentDiffusionModel(latent_dim=64)
+            generate_image._text_encoder = TextEncoder(vocab_size=4096, embed_dim=256)
+        
+        vae = generate_image._vae
+        diffusion = generate_image._diffusion
+        text_encoder = generate_image._text_encoder
+        
+        # Encode text
+        text_embeddings = text_encoder.encode_text([prompt])
+        
+        # Sample latents
+        latents = diffusion.sample(text_embeddings, num_steps=steps, 
+                                  guidance_scale=guidance_scale)
+        
+        # Decode to image
+        image_np = vae.decode(latents)
+        
+        # Convert to PIL and then to base64
+        # image_np is (1, 3, 224, 224) in [0, 1]
+        image_np = np.clip(image_np[0].transpose(1, 2, 0), 0, 1)
+        image_np = (image_np * 255).astype(np.uint8)
+        img = Image.fromarray(image_np)
+        
+        # Convert to base64
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        img_base64 = base64.b64encode(buffer.getvalue()).decode()
+        
+        return {
+            "status": "success",
+            "image": f"data:image/png;base64,{img_base64}",
+            "prompt": prompt,
+            "steps": steps,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
+
+
+@router.get("/generation-status")
+async def get_generation_status():
+    """Get status of text-to-image generation models."""
+    has_models = hasattr(generate_image, "_vae")
+    return {
+        "models_loaded": has_models,
+        "capabilities": {
+            "text_to_image": True,
+            "image_to_image": False,
+            "inpainting": False,
+        } if has_models else {
+            "text_to_image": "loading",
+            "image_to_image": False,
+            "inpainting": False,
+        }
+    }
+
+
+# ── Video Processing ───────────────────────────────────────────────────────
+
+@router.post("/process-video")
+async def process_video(file: UploadFile = File(...), num_frames: int = Form(16)):
+    """Process video and generate caption."""
+    try:
+        from domains.multimodal.video import VideoProcessor
+        from domains.multimodal import get_multimodal_manager
+        import tempfile
+        import os
+        
+        # Save uploaded video temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
+            content = await file.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+        
+        try:
+            # Initialize video processor
+            processor = VideoProcessor(max_frames=num_frames)
+            
+            # Extract frames
+            frames = processor.extract_frames(tmp_path, num_frames)
+            
+            # Get vision encoder from multimodal manager
+            mgr = get_multimodal_manager()
+            engine = getattr(mgr, "_multimodal_engine", None)
+            if engine is None:
+                raise HTTPException(status_code=500, detail="Multimodal engine not initialized")
+            
+            # Encode video
+            video_embedding = processor.encode_video(frames, engine.vision)
+            
+            # Generate caption (using first frame for now)
+            first_frame = frames[0].reshape(1, 224, 224, 3)
+            caption = engine.generate(first_frame, max_len=20, temperature=0.8)
+            
+            return {
+                "status": "success",
+                "caption": caption.text,
+                "num_frames": len(frames),
+                "video_embedding_shape": list(video_embedding.data.shape),
+            }
+        finally:
+            os.unlink(tmp_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Video processing failed: {str(e)}")
+
+
+# ── Text-to-Speech ─────────────────────────────────────────────────────────
+
+@router.post("/synthesize-speech")
+async def synthesize_speech(text: str = Form(...)):
+    """Synthesize speech from text."""
+    try:
+        from domains.multimodal.tts import TTSEngine
+        import base64
+        import io
+        import wave
+        
+        # Initialize TTS engine
+        if not hasattr(synthesize_speech, "_tts"):
+            synthesize_speech._tts = TTSEngine()
+        
+        tts = synthesize_speech._tts
+        
+        # Generate waveform
+        waveform = tts.text_to_waveform(text)
+        
+        # Convert to WAV format
+        buffer = io.BytesIO()
+        with wave.open(buffer, 'wb') as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)  # 16-bit
+            wf.setframerate(tts.sample_rate)
+            wf.writeframes((waveform * 32767).astype(np.int16).tobytes())
+        
+        # Convert to base64
+        audio_base64 = base64.b64encode(buffer.getvalue()).decode()
+        
+        return {
+            "status": "success",
+            "audio": f"data:audio/wav;base64,{audio_base64}",
+            "text": text,
+            "duration_sec": len(waveform) / tts.sample_rate,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)}")

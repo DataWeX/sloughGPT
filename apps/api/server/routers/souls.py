@@ -30,7 +30,7 @@ state = SloRouterState()
 
 
 def _load_slough_model(checkpoint_path, tie_weights=True):
-    """Load a SloughGPTModel from a .slo file using SloNet import.
+    """Load a SloughGPTModel from a .soul file using SloNet import.
 
     Auto-detects config (vocab, hidden, n_blocks) from state dict keys.
 
@@ -38,7 +38,7 @@ def _load_slough_model(checkpoint_path, tie_weights=True):
         SloughGPTModel with weights loaded.
 
     Side effects:
-        - Reads .slo file from disk
+        - Reads .soul file from disk
     """
     from domains.inference import load_soul
 
@@ -103,7 +103,7 @@ class SloChatRequest(BaseModel):
 async def soul_chat(req: SloChatRequest):
     """Chat using a SloughGPTModel checkpoint (PyTorch-trained transformer).
 
-    Loads the .slo file (PyTorch ZIP format), creates a SloughGPTModel with matching
+    Loads the .soul file (PyTorch ZIP format), creates a SloughGPTModel with matching
     config, loads weights, and streams generated tokens autoregressively.
 
     Falls back to SloNet (NumPy) for checkpoints that don't match SloughGPTModel.
@@ -113,10 +113,9 @@ async def soul_chat(req: SloChatRequest):
 
         acc = get_accelerator()
         repo_root = _get_repo_root()
-        checkpoint_file = repo_root / "models" / "auto-training" / (req.checkpoint_name + ".slo")
-
+        checkpoint_file = repo_root / "models" / "auto-training" / (req.checkpoint_name + ".soul")
         if not checkpoint_file.exists():
-            checkpoint_file = repo_root / "models" / (req.checkpoint_name + ".slo")
+            checkpoint_file = repo_root / "models" / (req.checkpoint_name + ".soul")
 
         if not checkpoint_file.exists():
             return {"error": f"Checkpoint not found: {req.checkpoint_name}"}
@@ -273,7 +272,7 @@ def _load_checkpoint_into_model(checkpoint_name: str) -> dict:
         if not checkpoint_file.exists():
             return {"status": "not_found", "path": str(checkpoint_file)}
 
-        # Use SloNet import for .slo files
+        # Use SloNet import for .soul files
         from domains.training.slonet import import_from_sou
         soul_net = import_from_sou(str(checkpoint_file))
         soul_meta = soul_net.soul_signature()

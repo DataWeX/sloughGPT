@@ -340,9 +340,9 @@ def cmd_quick(args):
     printer.key_value("Prompt", args.prompt)
     printer.key_value("Generated", f"{args.prompt}{text[:100]}...")
 
-    output_base = args.output.replace(".pt", "").replace(".safetensors", "").replace(".slo", "")
+    output_base = args.output.replace(".pt", "").replace(".safetensors", "").replace(".soul", "")
     trainer.save(output_base, format="sou")
-    printer.success(f"Saved: {output_base}.slo")
+    printer.success(f"Saved: {output_base}.soul")
 
 
 def cmd_eval(args):

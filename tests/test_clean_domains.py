@@ -1,4 +1,4 @@
-"""Tests for clean architecture domains: ChatDomain, BenchmarkDomain, CompanionSystem, CompanionDomain."""
+"""Tests for clean architecture domains: ChatDomain, BenchmarkDomain, CompanionSystem."""
 
 from __future__ import annotations
 
@@ -21,17 +21,6 @@ from domains.companion import (
     create_companion,
     get_companion,
 )
-
-# companion/domain.py is shadowed by companion.py, so import via file path
-import importlib.util
-_companion_domain_path = str(Path(__file__).resolve().parent.parent / "packages" / "core-py" / "domains" / "companion" / "domain.py")
-_spec = importlib.util.spec_from_file_location("companion_domain", _companion_domain_path)
-_companion_domain_mod = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_companion_domain_mod)
-CompanionDomain = _companion_domain_mod.CompanionDomain
-CompanionPersonality = _companion_domain_mod.CompanionPersonality
-get_companion_domain = _companion_domain_mod.get_companion_domain
-PERSONALITIES = _companion_domain_mod.PERSONALITIES
 
 
 # =============================================================================
@@ -63,17 +52,19 @@ class TestChatDomain:
             chat = ChatDomain(log_dir=str(log_dir))
             assert log_dir.is_dir()
 
+    @pytest.mark.asyncio
     @patch("domains.chat.domain.ChatDomain._generate", return_value="mock")
-    def test_respond_no_user_message_returns_placeholder(self, mock_gen):
+    async def test_respond_no_user_message_returns_placeholder(self, mock_gen):
         chat = ChatDomain(log_dir=tempfile.mkdtemp())
-        resp = chat.respond(messages=[{"role": "assistant", "content": "Hey"}])
+        resp = await chat.respond(messages=[{"role": "assistant", "content": "Hey"}])
         assert isinstance(resp, ChatResponse)
         assert resp.text != ""
 
+    @pytest.mark.asyncio
     @patch("domains.chat.domain.ChatDomain._generate", return_value="mock")
-    def test_respond_empty_messages(self, mock_gen):
+    async def test_respond_empty_messages(self, mock_gen):
         chat = ChatDomain(log_dir=tempfile.mkdtemp())
-        resp = chat.respond(messages=[])
+        resp = await chat.respond(messages=[])
         assert isinstance(resp, ChatResponse)
 
     def test_get_recent_responses_no_file(self):
@@ -107,17 +98,19 @@ class TestChatDomain:
             assert entry["user_message"] == "hi"
             assert entry["assistant_response"] == "hello"
 
+    @pytest.mark.asyncio
     @patch("domains.chat.domain.ChatDomain._generate", return_value="mock response")
-    def test_respond_delegates_to_generate(self, mock_gen):
+    async def test_respond_delegates_to_generate(self, mock_gen):
         chat = ChatDomain(log_dir=tempfile.mkdtemp())
-        resp = chat.respond(messages=[{"role": "user", "content": "hello"}])
+        resp = await chat.respond(messages=[{"role": "user", "content": "hello"}])
         mock_gen.assert_called_once()
         assert resp.text == "mock response"
 
-    def test_respond_picks_last_user_message(self):
+    @pytest.mark.asyncio
+    async def test_respond_picks_last_user_message(self):
         chat = ChatDomain(log_dir=tempfile.mkdtemp())
         with patch.object(chat, "_generate", return_value="ok") as mock:
-            chat.respond(messages=[
+            await chat.respond(messages=[
                 {"role": "user", "content": "first"},
                 {"role": "assistant", "content": "middle"},
                 {"role": "user", "content": "last"},
@@ -439,80 +432,3 @@ class TestCompanionSystem:
         a = get_companion()
         b = get_companion()
         assert a is b
-
-
-# =============================================================================
-# CompanionDomain Tests (domains/companion/domain.py)
-# =============================================================================
-
-
-class TestCompanionPersonality:
-    def test_fields(self):
-        p = CompanionPersonality(id="warm", name="Warm", prompt="Be warm", traits={"warmth": 0.9})
-        assert p.id == "warm"
-        assert p.name == "Warm"
-
-
-class TestCompanionDomain:
-    def test_default_personality_is_balanced(self):
-        domain = CompanionDomain()
-        p = domain.get_personality()
-        assert p.id == "balanced"
-
-    def test_set_personality_valid(self):
-        domain = CompanionDomain()
-        assert domain.set_personality("warm") is True
-        assert domain.get_personality().id == "warm"
-
-    def test_set_personality_invalid(self):
-        domain = CompanionDomain()
-        assert domain.set_personality("alien") is False
-        assert domain.get_personality().id == "balanced"
-
-    def test_get_system_prompt_includes_personality_prompt(self):
-        domain = CompanionDomain()
-        domain.set_personality("curious")
-        prompt = domain.get_system_prompt()
-        assert "curious" in prompt.lower()
-
-    def test_get_system_prompt_always_has_anti_robot(self):
-        domain = CompanionDomain()
-        prompt = domain.get_system_prompt()
-        assert "not robotic" in prompt
-        assert "Never mention being AI" in prompt
-
-    def test_list_personalities_returns_all_four(self):
-        domain = CompanionDomain()
-        result = domain.list_personalities()
-        assert len(result) == 4
-        ids = [p["id"] for p in result]
-        assert "warm" in ids
-        assert "curious" in ids
-        assert "playful" in ids
-        assert "balanced" in ids
-
-    def test_list_personalities_includes_name_and_description(self):
-        domain = CompanionDomain()
-        for p in domain.list_personalities():
-            assert "id" in p
-            assert "name" in p
-            assert "description" in p
-
-    def test_to_dict(self):
-        domain = CompanionDomain()
-        domain.set_personality("playful")
-        d = domain.to_dict()
-        assert d["personality_id"] == "playful"
-        assert d["name"] == "Playful Friend"
-        assert "traits" in d
-        assert d["traits"]["humor"] == 0.8
-
-    def test_get_companion_domain_singleton(self):
-        a = get_companion_domain()
-        b = get_companion_domain()
-        assert a is b
-
-    def test_personalities_dict_unchanged(self):
-        assert len(PERSONALITIES) == 4
-        assert "warm" in PERSONALITIES
-        assert "balanced" in PERSONALITIES

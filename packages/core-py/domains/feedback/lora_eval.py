@@ -484,16 +484,16 @@ class LoRAEvaluator:
         output_sou: Optional[str] = None,
     ) -> str:
         """
-        Convert an aggregated LoRA .npz adapter into a .slo checkpoint.
+        Convert an aggregated LoRA .npz adapter into a .soul checkpoint.
 
         Args:
             adapter_npz: Path to the .npz adapter file
             soul_name: Name for this soul
             eval_delta: Delta metrics from before/after eval
-            output_sou: Output path (defaults to sibling .slo of .npz)
+            output_sou: Output path (defaults to sibling .soul of .npz)
 
         Returns:
-            Path to the exported .slo file
+            Path to the exported .soul file
         """
         from domains.inference import (
             SloProfile, PersonalityCore, GenerationParams,
@@ -566,7 +566,7 @@ class LoRAEvaluator:
         )
 
         if output_sou is None:
-            output_sou = str(Path(adapter_npz).with_suffix(".slo"))
+            output_sou = str(Path(adapter_npz).with_suffix(".soul"))
 
         from domains.inference import save_soul
         from domains.training.slonet import SloNet
@@ -593,7 +593,7 @@ class LoRAEvaluator:
         )
 
         save_soul(net, output_sou)
-        print(f"[LoRAEval] Exported .slo checkpoint: {output_sou}")
+        print(f"[LoRAEval] Exported .soul checkpoint: {output_sou}")
         return output_sou
 
     def get_history(self, limit: int = 20) -> List[EvalResult]:

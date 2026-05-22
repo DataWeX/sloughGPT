@@ -11,7 +11,7 @@ from domains.inference.slo_manager import SloManager, SloInfo
 
 
 def _make_binary_sou(tmpdir: str, name: str, traits: Optional[List[str]] = None) -> str:
-    """Create a minimal binary .slo file for testing."""
+    """Create a minimal binary .soul file for testing."""
     config = {
         "name": name,
         "description": f"{name} test soul",
@@ -20,7 +20,7 @@ def _make_binary_sou(tmpdir: str, name: str, traits: Optional[List[str]] = None)
         "behavior": {"reasoning_approach": "balanced"},
     }
     config_bytes = json.dumps(config).encode("utf-8")
-    path = os.path.join(tmpdir, f"{name}.slo")
+    path = os.path.join(tmpdir, f"{name}.soul")
     with open(path, "wb") as f:
         f.write(b"SOUL")
         f.write(struct.pack("<I", 2))  # version
@@ -49,8 +49,8 @@ TAG {name},test
 
 def _make_text_soul(tmpdir: str, name: str, warmth: float = 0.5,
                     approach: str = "balanced") -> str:
-    """Create a plain-text .slo profile file for testing."""
-    path = os.path.join(tmpdir, f"{name}.slo")
+    """Create a plain-text .soul profile file for testing."""
+    path = os.path.join(tmpdir, f"{name}.soul")
     content = _TEXT_SOUL_TPL.format(
         name=name,
         desc=f"{name} test personality",
@@ -65,7 +65,7 @@ def _make_text_soul(tmpdir: str, name: str, warmth: float = 0.5,
 
 
 class TestSoulManagerBinary:
-    """Tests for SloManager with binary .slo files."""
+    """Tests for SloManager with binary .soul files."""
 
     def test_list_souls_binary(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -122,7 +122,7 @@ class TestSoulManagerBinary:
 
 
 class TestSoulManagerTextProfiles:
-    """Tests for SloManager with plain-text .slo profile files."""
+    """Tests for SloManager with plain-text .soul profile files."""
 
     def test_list_souls_text(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -130,7 +130,7 @@ class TestSoulManagerTextProfiles:
             os.makedirs(souls_dir)
             _make_text_soul(souls_dir, "zen")
             _make_text_soul(souls_dir, "fuego")
-            # SloManager looks for .slo in souls/ subdir of souls_dir
+            # SloManager looks for .soul in souls/ subdir of souls_dir
             sm = SloManager(souls_dir=tmp)
             souls = sm.list_souls()
             names = {s.name for s in souls}
@@ -161,7 +161,7 @@ class TestSoulManagerTextProfiles:
             assert info.personality["creativity"] == 0.6
 
     def test_hybrid_binary_and_text(self):
-        """SloManager should discover both .slo and .slo files."""
+        """SloManager should discover both .soul and .soul files."""
         with tempfile.TemporaryDirectory() as tmp:
             _make_binary_sou(tmp, "bin1")
             souls_dir = os.path.join(tmp, "souls")

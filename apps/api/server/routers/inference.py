@@ -359,7 +359,7 @@ class LoadSoulRequest(BaseModel):
 
 @router.post("/load-soul")
 async def load_soul(request: LoadSoulRequest):
-    """Load a .slo Slo Unit file into SloEngine."""
+    """Load a .soul Soul Unit file into SloEngine."""
     try:
         from pathlib import Path
         import sys
@@ -496,15 +496,20 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
                     })
 
                 full_response = ""
-                async for token in provider.chat_stream(
-                    provider_messages,
-                    max_tokens=req.max_tokens,
-                    temperature=req.temperature,
-                ):
-                    if token:
-                        full_response += token
-                        yield sse_token("chat", token)
-                yield sse_token("chat", "", done=True)
+                try:
+                    async for token in provider.chat_stream(
+                        provider_messages,
+                        max_tokens=req.max_tokens,
+                        temperature=req.temperature,
+                    ):
+                        if token:
+                            full_response += token
+                            yield sse_token("chat", token)
+                    yield sse_token("chat", "", done=True)
+                except Exception as e:
+                    logger.error("Provider chat_stream error: %s", e, exc_info=True)
+                    yield sse_error("chat", "ERROR", f"Generation failed: {e}")
+                    return
             else:
                 # Fallback: direct HF model (no provider pipeline)
                 from controllers.models import get_models_controller
@@ -535,25 +540,39 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
                 )
 
                 def run_generation():
-                    ctrl._hf_model.generate(
-                        input_ids=input_ids_tensor,
-                        max_new_tokens=req.max_tokens,
-                        temperature=req.temperature,
-                        do_sample=req.temperature > 0,
-                        pad_token_id=ctrl._tokenizer.eos_token_id,
-                        streamer=streamer,
-                    )
+                    try:
+                        with torch.no_grad():
+                            ctrl._hf_model.generate(
+                                input_ids=input_ids_tensor,
+                                max_new_tokens=req.max_tokens,
+                                temperature=req.temperature,
+                                do_sample=req.temperature > 0,
+                                pad_token_id=ctrl._tokenizer.eos_token_id,
+                                streamer=streamer,
+                            )
+                    except Exception as e:
+                        logger.error("HF model.generate error: %s", e, exc_info=True)
+                        raise
 
                 thread = Thread(target=run_generation)
                 thread.start()
 
                 full_response = ""
-                for text in streamer:
-                    if text:
-                        full_response += text
-                        yield sse_token("chat", text)
+                try:
+                    for text in streamer:
+                        if text:
+                            full_response += text
+                            yield sse_token("chat", text)
 
-                thread.join()
+                    thread.join(timeout=120)
+                    if thread.is_alive():
+                        logger.warning("Generation thread timed out after 120s")
+                        yield sse_error("chat", "ERROR", "Generation timed out")
+                        return
+                except Exception as e:
+                    logger.error("Streaming error: %s", e, exc_info=True)
+                    yield sse_error("chat", "ERROR", f"Streaming failed: {e}")
+                    return
 
                 yield sse_token("chat", "", done=True)
             

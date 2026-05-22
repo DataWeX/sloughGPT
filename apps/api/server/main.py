@@ -16,6 +16,11 @@ _SERVER_ROOT = Path(__file__).resolve().parent
 _CORE_PY_ROOT = _REPO_ROOT / "packages" / "core-py"
 
 
+# Project-local HuggingFace cache (models/hf-cache/ instead of ~/.cache/huggingface/)
+_HF_CACHE = _REPO_ROOT / "models" / "hf-cache"
+_HF_CACHE.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("HF_HOME", str(_HF_CACHE))
+
 for _p in (_SERVER_ROOT, _CORE_PY_ROOT, _REPO_ROOT):
     _s = str(_p)
     if _s not in sys.path:
@@ -103,7 +108,7 @@ logger.info(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load default HF weights in-process when ``SLOUGHGPT_AUTOLOAD_MODEL`` is set (default: ``gpt2``)."""
+    """Load default HF weights in-process when ``SLOUGHGPT_AUTOLOAD_MODEL`` is set (default: ``TinyLlama``)."""
     try:
         await asyncio.to_thread(_autoload_hf_model_at_startup)
     except Exception as e:
@@ -179,6 +184,34 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def request_timeout_middleware(request: Request, call_next):
+    """
+    Enforce a maximum request duration to prevent hung requests from
+    blocking the event loop and making the server appear offline.
+
+    Streaming endpoints (chat, auto-train) are excluded since they
+    hold the connection open intentionally.
+    """
+    import asyncio
+
+    # Skip timeout for streaming endpoints
+    path = request.url.path
+    if any(path.startswith(p) for p in ["/chat/stream", "/auto-train/stream", "/session/", "/generate/stream"]):
+        return await call_next(request)
+
+    # 60-second timeout for regular requests
+    try:
+        return await asyncio.wait_for(call_next(request), timeout=60.0)
+    except asyncio.TimeoutError:
+        logger.warning("Request timed out: %s %s", request.method, request.url.path)
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=504,
+            content={"error": "Request timed out", "path": request.url.path},
+        )
 
 
 @app.exception_handler(HTTPException)
@@ -611,13 +644,28 @@ class LoadModelRequest(BaseModel):
     device: Optional[str] = "auto"
 
 
-def _load_hf_model_core(request: LoadModelRequest) -> Dict[str, Any]:
-    """Load HuggingFace weights using ModelsController's safe loader (shared by autoload and inline load)."""
+def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> Dict[str, Any]:
+    """Load HuggingFace weights using ModelsController's safe loader (shared by autoload and inline load).
+
+    Args:
+        use_slonet: If True, load into SloTransformer (pure NumPy) instead of PyTorch.
+    """
 
     try:
         from controllers.models import get_models_controller
         ctrl = get_models_controller()
-        result = ctrl.load_model(request.model_id, request.device or "auto")
+        result = ctrl.load_model(request.model_id, request.device or "auto", use_slonet=use_slonet)
+
+        if use_slonet:
+            server_state.model_type = request.model_id
+            return {
+                "status": "loaded",
+                "model": request.model_id,
+                "mode": "slonet",
+                "device": "cpu",
+                "effective_device": "cpu",
+                "model_type": request.model_id,
+            }
 
         model = getattr(ctrl, "_hf_model", None)
         tokenizer = getattr(ctrl, "_tokenizer", None)
@@ -664,7 +712,7 @@ def _load_hf_model_core(request: LoadModelRequest) -> Dict[str, Any]:
             "mode": request.mode or "local",
             "device": request.device,
             "effective_device": effective,
-            "model_type": server_state.model_type or "gpt2",
+            "model_type": server_state.model_type or "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
         }
     except Exception as e:
         return {"status": "error", "error": str(e)}
@@ -681,25 +729,29 @@ def _autoload_hf_model_at_startup() -> None:
     """
     Load default inference weights without a manual ``POST /models/load``.
 
-    - ``SLOUGHGPT_AUTOLOAD_MODEL``: HuggingFace model id (default: ``gpt2``). Set to empty to skip.
+    - ``SLOUGHGPT_AUTOLOAD_MODEL``: HuggingFace model id (default: ``Qwen2.5-0.5B-Instruct``). Set to empty to skip.
     - ``SLOUGHGPT_AUTOLOAD_DEVICE``: passed through to the loader (default: ``auto``).
+    - ``SLOUGHGPT_USE_SLONET``: If set to ``1`` or ``true``, loads into SloTransformer
+      (pure NumPy) instead of PyTorch. Recommended for stability.
     """
-    raw = os.environ.get("SLOUGHGPT_AUTOLOAD_MODEL", "gpt2-medium").strip()
+    raw = os.environ.get("SLOUGHGPT_AUTOLOAD_MODEL", "Qwen/Qwen2.5-0.5B-Instruct").strip()
     if not raw:
         logger.info("SLOUGHGPT_AUTOLOAD_MODEL is empty; skipping startup autoload")
         return
     if server_state.model is not None:
         return
     device = (os.environ.get("SLOUGHGPT_AUTOLOAD_DEVICE") or "auto").strip() or "auto"
+    use_slonet = os.environ.get("SLOUGHGPT_USE_SLONET", "0").strip().lower() in ("1", "true", "yes")
     req = LoadModelRequest(model_id=raw, mode="local", device=device)
-    result = _load_hf_model_core(req)
+    result = _load_hf_model_core(req, use_slonet=use_slonet)
     if result.get("status") == "error":
         logger.warning("Startup autoload failed for %s: %s", raw, result.get("error"))
     else:
         logger.info(
-            "Startup autoload ok: model_id=%s effective_device=%s",
+            "Startup autoload ok: model_id=%s effective_device=%s mode=%s",
             raw,
             result.get("effective_device"),
+            "slonet" if use_slonet else "pytorch",
         )
 
 
@@ -743,6 +795,53 @@ def _start_health_monitor() -> None:
         logger.warning("Failed to start health monitor: %s", e)
 
 
+def _start_watchdog() -> None:
+    """Start the health watchdog that auto-recovers from server crashes."""
+    try:
+        from domains.infrastructure.watchdog import get_watchdog
+
+        enabled = os.environ.get("SLOUGHGPT_WATCHDOG", "true").lower() == "true"
+        if not enabled:
+            logger.info("SLOUGHGPT_WATCHDOG is false; skipping watchdog startup")
+            return
+
+        watchdog = get_watchdog()
+
+        def _check_health() -> bool:
+            """Quick health check — model loaded and providers registered."""
+            try:
+                if server_state.model is None:
+                    return False
+                from domains.models.provider import get_provider
+                router = get_provider("default")
+                return router is not None
+            except Exception:
+                return False
+
+        def _recover() -> bool:
+            """Attempt to recover by reloading the autoload model."""
+            try:
+                import gc
+                import torch
+                # Clear any stale state
+                gc.collect()
+                if torch.backends.mps.is_available():
+                    torch.mps.empty_cache()
+                # Reload model
+                _autoload_hf_model_at_startup()
+                return server_state.model is not None
+            except Exception as e:
+                logger.error("Recovery failed: %s", e)
+                return False
+
+        watchdog.set_health_check_fn(_check_health)
+        watchdog.set_recovery_fn(_recover)
+        watchdog.start(poll_interval=15, max_failures=3)
+        logger.info("Health watchdog started (poll=15s, max_failures=3)")
+    except Exception as e:
+        logger.warning("Failed to start watchdog: %s", e)
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="SloughGPT API Server")
@@ -752,18 +851,38 @@ if __name__ == "__main__":
         default=os.environ.get("SLOUGHGPT_RELOAD", "").lower() in ("1", "true", "yes"),
         help="Enable auto-reload on file changes (default: $SLOUGHGPT_RELOAD or false)",
     )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        help="Port to bind (default: 8000, falls back to next available)",
+    )
     args, _ = parser.parse_known_args()
+
+    # Kill orphan processes on port 8000 to avoid port conflicts
+    import subprocess
+    try:
+        orphans = subprocess.check_output(["lsof", "-ti", ":8000"], timeout=5).decode().strip().split()
+        for pid in orphans:
+            if pid and pid != str(os.getpid()):
+                os.kill(int(pid), 9)
+                logger.warning(f"Killed orphan process {pid} on port 8000")
+    except Exception:
+        pass
 
     import uvicorn
 
     raw_port = os.environ.get("SLOUGHGPT_API_PORT", "").strip()
-    if raw_port:
+    if args.port:
+        port = args.port
+    elif raw_port:
         port = int(raw_port)
     else:
         port = find_available_port(8000)
 
     _start_feedback_workflow()
     _start_health_monitor()
+    _start_watchdog()
     logger.info("Starting SloughGPT server on port %d... (reload=%s)", port, args.reload)
 
     uvicorn_kw = dict(

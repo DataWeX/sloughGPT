@@ -4,7 +4,7 @@ Auto-Train Router - Unified Teacher-Student Training Pipeline
 Follows TrainingSequence: GENERATE_DATA → DISTILL → TRAIN → EVALUATE → DEPLOY → COMPLETE
 
 Uses GPT2 as teacher to generate training pairs, SloNet (NumPy) as student to learn.
-Exports checkpoints as .slo (SloughGPT Slo Unit) — self-contained model + identity.
+Exports checkpoints as .soul (SloughGPT Soul Unit) — self-contained model + identity.
 No PyTorch dependency for student training — pure NumPy via SloNet.
 
 Encapsulates router state in ``AutoTrainState`` dataclass rather than 7 module-level
@@ -158,9 +158,9 @@ def _build_soul_prompt(soul_name: str) -> str:
 
 
 def _load_soul_profile(soul_name: str) -> dict:
-    """Load personality traits from existing .slo file."""
+    """Load personality traits from existing .soul file."""
     try:
-        for sou_path in (REPO_ROOT / "models").glob("*.slo"):
+        for sou_path in (REPO_ROOT / "models").glob("*.soul"):
             if soul_name.lower() in sou_path.stem.lower():
                 from domains.inference import load_soul
                 soul_obj, _ = load_soul(str(sou_path))
@@ -192,7 +192,7 @@ def _export_soul(
     epochs: int,
 ) -> tuple[str, dict]:
     """
-    Export trained SloNet as a .slo file with full soul profile.
+    Export trained SloNet as a .soul file with full soul profile.
 
     Args:
         student_tokenizer: SloBPE tokenizer (or legacy dict)
@@ -274,7 +274,7 @@ def _export_soul(
         },
     )
 
-    ckpt_name = f"{soul_name}_{int(time.time())}.slo"
+    ckpt_name = f"{soul_name}_{int(time.time())}.soul"
     ckpt_path = CHECKPOINTS_DIR / ckpt_name
 
     slonet_path = student_net._sou_path if hasattr(student_net, "_sou_path") and student_net._sou_path else None
@@ -291,12 +291,12 @@ def _export_soul(
 
     save_soul(student_net, str(ckpt_path), soul_profile=soul_profile)
 
-    meta_path = ckpt_path.with_suffix(".slo.meta.json")
+    meta_path = ckpt_path.with_suffix(".soul.meta.json")
     with open(meta_path, "w") as f:
         json.dump(soul_profile.to_dict(), f, indent=2, default=str)
 
     # Keep only the best checkpoint per soul — delete all worse ones.
-    all_soul_ckpts = sorted(CHECKPOINTS_DIR.glob(f"{soul_name}_*.slo"), key=lambda p: p.stat().st_mtime)
+    all_soul_ckpts = sorted(CHECKPOINTS_DIR.glob(f"{soul_name}_*.soul"), key=lambda p: p.stat().st_mtime)
     if len(all_soul_ckpts) > 1:
         best_loss = float("inf")
         best_ckpt = None
@@ -309,7 +309,7 @@ def _export_soul(
         for c in all_soul_ckpts:
             if c.name != best_ckpt.name:
                 c.unlink(missing_ok=True)
-                meta = c.with_suffix(".slo.meta.json")
+                meta = c.with_suffix(".soul.meta.json")
                 meta.unlink(missing_ok=True)
                 autotrain_logger.info(f"Pruned checkpoint: {c.name}")
         # If the new checkpoint was pruned, report the kept one instead
@@ -348,7 +348,7 @@ def _get_soul_traits(soul) -> dict:
 SOU_MAGIC = b"\x00SL\x0E"
 
 def _read_slo_json_header(path: Path) -> dict:
-    """Read only the JSON metadata header from a .slo file without loading full weights."""
+    """Read only the JSON metadata header from a .soul file without loading full weights."""
     try:
         raw = path.read_bytes()
         if raw[:4] != SOU_MAGIC:
@@ -360,14 +360,14 @@ def _read_slo_json_header(path: Path) -> dict:
         return {}
 
 def _load_soul_meta(ckpt_file: Path) -> dict:
-    """Read checkpoint metadata from .slo.meta.json, falling back to .slo JSON header."""
+    """Read checkpoint metadata from .soul.meta.json, falling back to .soul JSON header."""
     meta_file = ckpt_file.with_suffix(ckpt_file.suffix + ".meta.json")
     if meta_file.exists():
         try:
             return json.loads(meta_file.read_text())
         except Exception:
             pass
-    if ckpt_file.suffix == ".slo":
+    if ckpt_file.suffix == ".soul":
         return _read_slo_json_header(ckpt_file)
     if ckpt_file.suffix == ".pt":
         # Try the .pt.meta.json sidecar written on previous load
@@ -381,15 +381,15 @@ def _load_soul_meta(ckpt_file: Path) -> dict:
 
 
 def _load_soul(name: str) -> dict:
-    """Load soul metadata from a .slo or .pt file. Prefers .slo.meta.json to avoid reading 80MB .slo files."""
+    """Load soul metadata from a .soul or .pt file. Prefers .soul.meta.json to avoid reading 80MB .soul files."""
     ckpt_file = CHECKPOINTS_DIR / name
     if not ckpt_file.exists():
-        if name.endswith(".slo"):
+        if name.endswith(".soul"):
             ckpt_file = CHECKPOINTS_DIR / name
         elif name.endswith(".pt"):
             ckpt_file = CHECKPOINTS_DIR / name
         else:
-            for ext in (".slo", ".pt"):
+            for ext in (".soul", ".pt"):
                 candidate = CHECKPOINTS_DIR / (name + ext)
                 if candidate.exists():
                     ckpt_file = candidate
@@ -425,9 +425,9 @@ def _load_soul(name: str) -> dict:
                if k in meta and meta[k]},
         }
 
-    # No .meta.json — fall back to loading the full .slo (slow, rare)
+    # No .meta.json — fall back to loading the full .soul (slow, rare)
     try:
-        if ckpt_file.suffix == ".slo":
+        if ckpt_file.suffix == ".soul":
             from domains.inference import load_soul
             soul, _ = load_soul(str(ckpt_file))
             return {
@@ -475,12 +475,12 @@ def _load_soul(name: str) -> dict:
 
 
 def _load_lora_soul(name: str) -> Optional[dict]:
-    """Load soul metadata from a LoRA .slo checkpoint in the user_adapters directory."""
+    """Load soul metadata from a LoRA .soul checkpoint in the user_adapters directory."""
     from domains.inference import load_soul
 
     for lora_dir in (LORA_DIR, CHECKPOINTS_DIR):
-        for ext in ("", ".slo"):
-            if not name.endswith(".slo"):
+        for ext in ("", ".soul"):
+            if not name.endswith(".soul"):
                 candidate = lora_dir / (name + ext)
             else:
                 candidate = lora_dir / name
@@ -524,11 +524,11 @@ def _load_checkpoint_into_model(name: str):
     
     autotrain_logger.info(f"Looking for checkpoint: {name}")
     autotrain_logger.info(f"CHECKPOINTS_DIR: {CHECKPOINTS_DIR}")
-    autotrain_logger.info(f"Files in dir: {list(CHECKPOINTS_DIR.glob('*.slo'))[:3]}")
+    autotrain_logger.info(f"Files in dir: {list(CHECKPOINTS_DIR.glob('*.soul'))[:3]}")
     
-    for ext in ("", ".slo", ".pt"):
+    for ext in ("", ".soul", ".pt"):
         candidate = CHECKPOINTS_DIR / name
-        if not (str(name).endswith(".slo") or str(name).endswith(".pt")):
+        if not (str(name).endswith(".soul") or str(name).endswith(".pt")):
             candidate = CHECKPOINTS_DIR / (name + ext)
         autotrain_logger.info(f"Trying candidate: {candidate}, exists: {candidate.exists()}")
         if candidate.exists():
@@ -556,7 +556,7 @@ def _load_checkpoint_into_model(name: str):
                     param_idx += 1
 
                 autotrain_logger.info(
-                    f"Loaded .slo weights into SloNet: {candidate.name} "
+                    f"Loaded .soul weights into SloNet: {candidate.name} "
                     f"({loaded} ok, {skipped} skipped)"
                 )
                 return imported
@@ -620,7 +620,7 @@ async def start(req: StartRequest):
             from domains.training.tokenizer import SloBPE
             ckpt_path = CHECKPOINTS_DIR / req.checkpoint_name
             if not ckpt_path.exists():
-                ckpt_path = CHECKPOINTS_DIR / (req.checkpoint_name + ".slo")
+                ckpt_path = CHECKPOINTS_DIR / (req.checkpoint_name + ".soul")
             if ckpt_path.exists():
                 loaded = import_from_sou(str(ckpt_path))
                 state.student_net = loaded
@@ -978,7 +978,7 @@ async def stream():
                 status="working",
                 data={},
                 meta={"step": to_python(step)},
-                message="Exporting SloNet to .slo format...",
+                message="Exporting SloNet to .soul format...",
             )
 
             state.student_net.system_prompt = system_prompt
@@ -1017,11 +1017,11 @@ async def stream():
 
 @router.get("/checkpoints")
 async def list_checkpoints():
-    """List all saved .slo checkpoints and LoRA adapters with soul metadata."""
+    """List all saved .soul checkpoints and LoRA adapters with soul metadata."""
     checkpoints = []
     seen = set()
 
-    for ext in ("*.slo", "*.pt"):
+    for ext in ("*.soul", "*.pt"):
         for f in sorted(CHECKPOINTS_DIR.glob(ext), key=lambda p: p.stat().st_mtime, reverse=True):
             if f.name in seen:
                 continue
@@ -1030,7 +1030,7 @@ async def list_checkpoints():
             if info:
                 checkpoints.append(info)
 
-    for npz in sorted(LORA_DIR.glob("*.slo"), key=lambda p: p.stat().st_mtime, reverse=True):
+    for npz in sorted(LORA_DIR.glob("*.soul"), key=lambda p: p.stat().st_mtime, reverse=True):
         if npz.name not in seen:
             seen.add(npz.name)
             info = _load_lora_soul(npz.name)
@@ -1042,11 +1042,11 @@ async def list_checkpoints():
 
 @router.delete("/checkpoints/{name}")
 async def delete_checkpoint(name: str):
-    """Delete a checkpoint (.slo or .pt)."""
+    """Delete a checkpoint (.soul or .pt)."""
     base = CHECKPOINTS_DIR / name
 
     deleted = []
-    for candidate in [base, base.with_suffix(".slo" if not name.endswith(".slo") else ".pt")]:
+    for candidate in [base, base.with_suffix(".soul" if not name.endswith(".soul") else ".pt")]:
         if candidate.exists():
             candidate.unlink()
             deleted.append(candidate.name)
@@ -1070,19 +1070,19 @@ async def load_checkpoint(name: str):
     if imported is not None:
         from domains.inference import load_soul
         soul_name = name
-        if not (name.endswith(".slo") or name.endswith(".pt")):
-            for candidate in [CHECKPOINTS_DIR / (name + ".slo"), CHECKPOINTS_DIR / (name + ".pt")]:
+        if not (name.endswith(".soul") or name.endswith(".pt")):
+            for candidate in [CHECKPOINTS_DIR / (name + ".soul"), CHECKPOINTS_DIR / (name + ".pt")]:
                 if candidate.exists():
                     soul_name = candidate.name
                     break
         elif name.endswith(".pt"):
-            soul_name = name.replace(".pt", ".slo")
+            soul_name = name.replace(".pt", ".soul")
         else:
             soul_name = name
 
-        for ext in ("", ".slo", ".pt"):
+        for ext in ("", ".soul", ".pt"):
             cp = CHECKPOINTS_DIR / name
-            if not (str(name).endswith(".slo") or str(name).endswith(".pt")):
+            if not (str(name).endswith(".soul") or str(name).endswith(".pt")):
                 cp = CHECKPOINTS_DIR / (name + ext)
             if cp.exists():
                 try:
@@ -1117,10 +1117,10 @@ async def load_checkpoint(name: str):
 
 @router.get("/checkpoints/{name}/download")
 async def download_checkpoint(name: str):
-    """Download a checkpoint .slo file for local (WebGPU) inference."""
+    """Download a checkpoint .soul file for local (WebGPU) inference."""
     for d in (CHECKPOINTS_DIR, LORA_DIR):
         fp = d / name
-        if fp.exists() and fp.suffix in (".slo", ".pt"):
+        if fp.exists() and fp.suffix in (".soul", ".pt"):
             return FileResponse(str(fp), media_type="application/octet-stream", filename=name)
     raise HTTPException(status_code=404, detail="Checkpoint not found")
 

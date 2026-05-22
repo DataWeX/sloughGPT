@@ -20,14 +20,22 @@ export function useGlobalShortcuts() {
       const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
       const ctrl = e.ctrlKey || e.metaKey
 
+      // If shortcuts dialog is open, close it before a non-? shortcut action
+      const shortcutsOpen = () => document.querySelector('[data-shortcuts-open]')
+      const closeIfOpen = () => {
+        if (shortcutsOpen()) window.dispatchEvent(new CustomEvent('toggle-shortcuts'))
+      }
+
       if (ctrl && !e.shiftKey && !e.altKey) {
         if (NAV_SHORTCUTS[e.key]) {
           e.preventDefault()
+          closeIfOpen()
           router.push(NAV_SHORTCUTS[e.key])
           return
         }
         if (e.key === 'n') {
           e.preventDefault()
+          closeIfOpen()
           window.dispatchEvent(new CustomEvent('new-chat'))
           return
         }
@@ -35,12 +43,14 @@ export function useGlobalShortcuts() {
 
       if (ctrl && e.shiftKey && e.key === 'F') {
         e.preventDefault()
+        closeIfOpen()
         window.dispatchEvent(new CustomEvent('search-conversations'))
         return
       }
 
       if (!isInput && e.key === '?' && !ctrl) {
         e.preventDefault()
+        // `?` toggles the dialog itself — no closeIfOpen needed, toggle-shortcuts handles it
         window.dispatchEvent(new CustomEvent('toggle-shortcuts'))
       }
     }

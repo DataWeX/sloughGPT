@@ -830,11 +830,11 @@ def _walk_replace(obj, fn):
 
 
 def _is_sou_file(f):
-    """Check if a file path has a .slo extension."""
+    """Check if a file path has a .soul extension."""
     if isinstance(f, str):
-        return f.endswith(".slo")
+        return f.endswith(".soul")
     if hasattr(f, "name"):
-        return f.name.endswith(".slo")
+        return f.name.endswith(".soul")
     return False
 
 
@@ -850,7 +850,7 @@ def _is_npz_file(f):
 def save(obj, f, **kw):
     """Save an object to disk.
 
-    - ``SloNet`` models → ``.slo`` format.
+    - ``SloNet`` models → ``.soul`` format.
     - Dicts containing tensors/numpy arrays → pickle-based ``.pt`` / ``.npz``.
     - Everything else → JSON.
     """
@@ -883,7 +883,7 @@ def save(obj, f, **kw):
 def load(f, **kw):
     """Load an object previously saved by :func:`save`.
 
-    Auto-detects format by file extension (``.slo`` → SloNet model,
+    Auto-detects format by file extension (``.soul`` → SloNet model,
     ``.pt`` / ``.npz`` → pickle with tensors, else → JSON).
     ``map_location`` and other keyword arguments are accepted (for API
     compatibility with ``torch.load``) but ignored — no GPU mapping is

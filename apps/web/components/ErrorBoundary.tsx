@@ -4,6 +4,7 @@ import { Component, ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { IconAlert } from '@/components/ui'
 import { addGlobalError } from '@/lib/error-store'
+import { useToastStore } from '@/lib/toast-store'
 
 interface Props {
   children: ReactNode
@@ -15,6 +16,21 @@ interface State {
   error?: Error
 }
 
+// Errors that should NOT trigger full-page error handler
+const NON_FATAL_ERROR_PATTERNS = [
+  /resizeobserver/i,
+  /hydration/i,
+  /suppresshydrationwarning/i,
+  /aborterror/i,
+  /cancelled/i,
+  /network error/i,
+  /fetch failed/i,
+]
+
+function isNonFatalError(error: Error): boolean {
+  return NON_FATAL_ERROR_PATTERNS.some(pattern => pattern.test(error.message))
+}
+
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props)
@@ -22,6 +38,16 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
+    // Don't trigger full-page error for non-fatal errors
+    if (isNonFatalError(error)) {
+      // Log to toast instead
+      try {
+        useToastStore.getState().addToast(error.message, 'error')
+      } catch {
+        // Toast store might not be initialized
+      }
+      return { hasError: false, error }
+    }
     return { hasError: true, error }
   }
 
@@ -72,6 +98,11 @@ export class ErrorBoundary extends Component<Props, State> {
 export function useErrorHandler() {
   return (error: Error) => {
     console.error('Error:', error)
-    throw error
+    // Show as toast for non-fatal errors
+    if (isNonFatalError(error)) {
+      useToastStore.getState().addToast(error.message, 'error')
+    } else {
+      throw error
+    }
   }
 }

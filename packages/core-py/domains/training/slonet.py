@@ -651,6 +651,11 @@ def gelu(x):
     return t
 
 
+def silu_np(d: np.ndarray) -> np.ndarray:
+    """NumPy-only SiLU (no Tensor wrapping)."""
+    return d * (1 / (1 + np.exp(-d)))
+
+
 def silu(x):
     d = x.data if isinstance(x, Tensor) else x
     s = 1 / (1 + np.exp(-d))
@@ -1032,8 +1037,18 @@ class SloEmbedding(SloLayer):
         self.soul_traits = {"curiosity": 0.5, "warmth": 0.5}
 
     def forward_numpy(self, indices: np.ndarray) -> np.ndarray:
+        # Handle both 2D and 3D inputs
+        # 2D: (batch, seq_len) - standard format
+        # 3D: (batch, seq_len, 1) - after expansion
         if indices.ndim == 3:
-            indices = np.squeeze(indices, axis=1)
+            # Only squeeze if the axis is actually size 1
+            if indices.shape[1] == 1:
+                indices = indices.squeeze(axis=1)
+            elif indices.shape[2] == 1:
+                indices = indices.squeeze(axis=2)
+            else:
+                # Reshape 3D to 2D by flattening last two dims
+                indices = indices.reshape(indices.shape[0], -1)
         clipped = np.clip(indices.astype(int), 0, self.num_embeddings - 1)
         return np.take(self.weight.data, clipped, axis=0).reshape(indices.shape[0], indices.shape[1], self.embedding_dim)
 
@@ -1131,12 +1146,28 @@ class SloLSTM(SloLayer):
         logits_2d = _reshape(logits, (1, self.vocab_size))
         return logits_2d, (Tensor(h.data.reshape(hd), requires_grad=False), Tensor(c.data.reshape(hd), requires_grad=False))
 
-    def forward_numpy(self, x: np.ndarray, hidden=None, adapter=None) -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
-        """NumPy-only forward pass — no Tensor overhead. Pre-computes all input gates."""
-        xd = x
-        if xd.ndim == 3:
-            xd = np.squeeze(xd, axis=1)
-        embeds = self.embedding.forward_numpy(xd)
+    def forward_numpy(self, x: np.ndarray, hidden=None, adapter=None, skip_embed=False) -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+        """NumPy-only forward pass — no Tensor overhead. Pre-computes all input gates.
+        
+        Args:
+            x: input — either integer token IDs (1D = (seq_len,) or 2D = (B, T)) or
+               pre-embedded features (2D = (T, feat) or 3D = (B, T, feat)) when skip_embed=True
+            hidden: optional (h, c) state tuple
+            adapter: optional LoRA adapter
+            skip_embed: if True, treat x as pre-embedded features instead of token IDs
+        """
+        if skip_embed:
+            if x.ndim == 2:
+                xd = x[np.newaxis, :, :]  # (T, feat) → (1, T, feat)
+            elif x.ndim == 3:
+                xd = x  # (B, T, feat)
+            else:
+                xd = x.reshape(1, 1, -1)  # (feat,) → (1, 1, feat)
+            embeds = xd
+        else:
+            # Token ID mode: handle 1D (seq_len,) and 2D (B, T) input
+            xd = x.reshape(1, -1) if x.ndim == 1 else x
+            embeds = self.embedding.forward_numpy(xd)
         hd = self.hidden_dim
         all_igates = embeds @ self.W_ih.weight.data.T
         W_hh_T = self.W_hh.weight.data.T
@@ -1791,16 +1822,22 @@ class SloCrossAttention(SloLayer):
 
 
 class SloFeedForward(SloLayer):
-    def __init__(self, d_model: int, dim_ff: int, name=""):
+    def __init__(self, d_model: int, dim_ff: int, name="", activation: str = "gelu"):
         super().__init__(name or f"FF{d_model}")
         self.w1 = SloLinear(d_model, dim_ff, name=name + "_w1")
         self.w2 = SloLinear(dim_ff, d_model, name=name + "_w2")
         self.w3 = SloLinear(d_model, dim_ff, name=name + "_w3")
-        self.act = gelu
+        self.act_name = activation
+        if activation == "silu":
+            self.act = silu
+            self.act_np = silu_np
+        else:
+            self.act = gelu
+            self.act_np = gelu_np
         self.soul_traits = {"creativity": 0.5, "confidence": 0.5}
 
     def forward_numpy(self, x: np.ndarray) -> np.ndarray:
-        return self.w2.forward_numpy(gelu_np(self.w1.forward_numpy(x)) * self.w3.forward_numpy(x))
+        return self.w2.forward_numpy(self.act_np(self.w1.forward_numpy(x)) * self.w3.forward_numpy(x))
 
     def forward(self, x: Tensor) -> Tensor:
         return self.w2.forward(self.act(self.w1.forward(x)) * self.w3.forward(x))
@@ -2479,11 +2516,14 @@ def export_to_sou(net: SloNet, path: str, include_weights=True) -> str:
         "created_at": net._created_at, "step": net._step,
     }
     json_bytes = json.dumps(_sanitize(metadata), allow_nan=False).encode()
+    # Pad JSON to 4-byte boundary so Float32Array offsets are aligned in WebGPU
+    padding = (4 - len(json_bytes) % 4) % 4
     with open(path, "wb") as f:
         f.write(SOU_MAGIC)
         f.write(struct.pack("<I", SOU_VERSION))
-        f.write(struct.pack("<I", len(json_bytes)))
+        f.write(struct.pack("<I", len(json_bytes) + padding))
         f.write(json_bytes)
+        f.write(b"\x00" * padding)
         if include_weights:
             # SloTransformer saves named state dict for proper reloading
             if hasattr(net, "state_dict") and isinstance(net, SloTransformer):
@@ -2503,25 +2543,30 @@ def import_from_sou(path: str) -> SloNet:
         raw = f.read()
 
     if raw[:4] != SOU_MAGIC:
-        raise ValueError("Invalid .slo: bad magic")
+        raise ValueError("Invalid .soul: bad magic")
 
     version = struct.unpack("<I", raw[4:8])[0]
     json_len = struct.unpack("<I", raw[8:12])[0]
-    meta = json.loads(raw[12:12+json_len].decode())
+    # Strip null padding bytes that were added for 4-byte alignment
+    meta_bytes = raw[12:12+json_len].rstrip(b"\x00")
+    meta = json.loads(meta_bytes.decode())
 
     weights = {}
     lineage = meta.get("lineage", meta.get("base_model", "slonet"))
     soul_name = meta.get("soul_name", meta.get("name", "Slo"))
     system_prompt = meta.get("system_prompt", "")
 
+    # Weight data starts after aligned JSON section
+    weight_offset = 12 + json_len
+
     # Check if weights are JSON (SloNet format) or PyTorch ZIP
-    pk_pos = raw.find(b"PK", 12 + json_len)
+    pk_pos = raw.find(b"PK", weight_offset)
     if pk_pos > 0:
         weights = _load_pytorch_zip_weights(raw[pk_pos:])
         if weights:
             lineage = "slolib-pytorch"
     else:
-        rem = raw[12+json_len:]
+        rem = raw[weight_offset:]
         if len(rem) >= 4:
             wl = struct.unpack("<I", rem[:4])[0]
             if 0 < wl <= len(rem) - 4:
@@ -2550,6 +2595,7 @@ def import_from_sou(path: str) -> SloNet:
             soul_traits=meta.get("soul_traits", {}),
         )
         net.system_prompt = system_prompt
+        net.metadata = md
         net._created_at = meta.get("created_at", time.strftime("%Y-%m-%dT%H:%M:%SZ"))
         net._step = meta.get("step", 0)
         if weights:
@@ -2639,7 +2685,7 @@ def _load_pytorch_zip_weights(zip_data: bytes) -> Dict[str, np.ndarray]:
 
 def souls_from_directory(dir_path) -> List[SloNet]:
     souls = []
-    for p in Path(dir_path).glob("*.slo"):
+    for p in Path(dir_path).glob("*.soul"):
         try: souls.append(import_from_sou(str(p)))
         except: pass
     return souls
@@ -2675,7 +2721,7 @@ def train_char_lstm_from_gpt(gpt_fn, soul_name="Slo", epochs=10, temperature=0.8
                 loss = cross_entropy(lg, y.reshape(-1))
                 loss.backward(); opt.step(net.parameters())
                 if on_step: on_step(ep*len(topics)+topics.index(topic), loss.data[()], ep)
-    export_to_sou(net, f"models/auto-training/{soul_name}_{int(time.time())}.slo")
+    export_to_sou(net, f"models/auto-training/{soul_name}_{int(time.time())}.soul")
     return net
 
 
@@ -2773,9 +2819,22 @@ class SloTransformer(SloNet):
                 return l
         return self.layers[-2]
 
-    @property
-    def lm_head(self) -> SloLinear:
-        return self.layers[-1]
+    def _tie_weights(self):
+        """Tie the language model head weights to the token embeddings.
+        This mirrors the common practice of weight tying in many transformer
+        language models (e.g., GPT‑2, Qwen). If the shapes match we copy the
+        embedding matrix into the lm_head weight and zero the lm_head bias.
+        """
+        try:
+            if self.tok_emb.weight.shape == self.lm_head.weight.shape:
+                # Copy the embedding weights directly
+                self.lm_head.weight.data = self.tok_emb.weight.data.copy()
+                # Zero bias if present
+                if self.lm_head.bias is not None:
+                    self.lm_head.bias = Tensor(np.zeros_like(self.lm_head.bias.data), requires_grad=False)
+        except Exception as e:
+            # Fail silently – tying is optional and should not break loading
+            print(f"[SloTransformer] weight tying error: {e}")
 
     def clear_kv_cache(self):
         self._kv_caches = [None] * self.n_layer
@@ -2898,7 +2957,10 @@ class SloTransformer(SloNet):
 
     def _named_parameters(self, prefix="") -> List[Tuple[str, Tensor]]:
         named = []
-        layer_names = ["tok_emb", "emb_drop"] + [f"blocks.{i}" for i in range(self.n_layer)] + ["norm", "lm_head"]
+        layer_names = ["tok_emb"]
+        if len(self.layers) > 2 + self.n_layer and isinstance(self.layers[1], SloDropout):
+            layer_names.append("emb_drop")
+        layer_names += [f"blocks.{i}" for i in range(self.n_layer)] + ["norm", "lm_head"]
         for lname, layer in zip(layer_names, self.layers):
             if isinstance(layer, SloEmbedding):
                 named.append((f"{prefix}{lname}.weight", layer.weight))
@@ -2938,10 +3000,11 @@ class SloTransformer(SloNet):
                     loaded.add(clean)
             else:
                 alt = clean.replace(".weight", ".weight")
-                for lname, layer in zip(
-                    ["tok_emb", "emb_drop"] + [f"blocks.{i}" for i in range(self.n_layer)] + ["norm", "lm_head"],
-                    self.layers
-                ):
+                alt_layer_names = ["tok_emb"]
+                if len(self.layers) > 2 + self.n_layer and isinstance(self.layers[1], SloDropout):
+                    alt_layer_names.append("emb_drop")
+                alt_layer_names += [f"blocks.{i}" for i in range(self.n_layer)] + ["norm", "lm_head"]
+                for lname, layer in zip(alt_layer_names, self.layers):
                     if isinstance(layer, SloLinear) and not isinstance(layer, type(None)):
                         if clean.endswith(".weight") and clean.replace(".weight", "") == lname:
                             arr_2d = arr.reshape(layer.weight.data.shape)
@@ -2971,20 +3034,34 @@ class SloTransformer(SloNet):
 
 
 def _named_mha(prefix: str, mha: SloMultiHeadAttention) -> List[Tuple[str, Tensor]]:
-    return [
+    named = [
         (f"{prefix}.q_proj.weight", mha.W_q.weight),
         (f"{prefix}.k_proj.weight", mha.W_k.weight),
         (f"{prefix}.v_proj.weight", mha.W_v.weight),
         (f"{prefix}.o_proj.weight", mha.W_o.weight),
     ]
+    if mha.W_q.use_bias:
+        named.append((f"{prefix}.q_proj.bias", mha.W_q.bias))
+    if mha.W_k.use_bias:
+        named.append((f"{prefix}.k_proj.bias", mha.W_k.bias))
+    if mha.W_v.use_bias:
+        named.append((f"{prefix}.v_proj.bias", mha.W_v.bias))
+    return named
 
 
 def _named_ff(prefix: str, ff: SloFeedForward) -> List[Tuple[str, Tensor]]:
-    return [
+    named = [
         (f"{prefix}.w1.weight", ff.w1.weight),
         (f"{prefix}.w2.weight", ff.w2.weight),
         (f"{prefix}.w3.weight", ff.w3.weight),
     ]
+    if ff.w1.use_bias:
+        named.append((f"{prefix}.w1.bias", ff.w1.bias))
+    if ff.w2.use_bias:
+        named.append((f"{prefix}.w2.bias", ff.w2.bias))
+    if ff.w3.use_bias:
+        named.append((f"{prefix}.w3.bias", ff.w3.bias))
+    return named
 
 
 def _named_transformer_block(prefix: str, block: SloTransformerBlock) -> List[Tuple[str, Tensor]]:
@@ -3030,7 +3107,7 @@ def train_soul_transformer(gpt_fn, soul_name="Slo", epochs=10, temperature=0.8, 
                 opt.step(net.parameters())
                 if on_step:
                     on_step(ep * len(topics) + topics.index(topic), loss.data[()], ep)
-    export_to_sou(net, f"models/auto-training/{soul_name}_{int(time.time())}.slo")
+    export_to_sou(net, f"models/auto-training/{soul_name}_{int(time.time())}.soul")
     return net
 
 

@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { inferenceHealthLabel, useApiHealth } from '@/hooks/useApiHealth'
 import {
   IconActivity,
+  IconAlert,
   IconChat,
   IconClose,
   IconCompare,
@@ -28,6 +29,7 @@ const navItems = [
   { path: '/knowledge', key: 'nav.knowledge', Icon: IconSearch },
   { path: '/compare', key: 'nav.compare', Icon: IconCompare },
   { path: '/monitoring', key: 'nav.monitoring', Icon: IconActivity },
+  { path: '/errors', key: 'nav.errors', Icon: IconAlert },
   { path: '/settings', key: 'nav.settings', Icon: IconSettings },
 ] as const
 
@@ -49,12 +51,26 @@ export function Sidebar({ variant = 'desktop', onNavigate, onClose }: SidebarPro
   const isDrawer = variant === 'drawer'
   const { state: apiHealth } = useApiHealth()
   const { locale, setLocale, t } = useLocale()
+  const [unreadErrors, setUnreadErrors] = useState(0)
 
   const apiStatusDot = useMemo(() => {
     if (apiHealth === null) return 'bg-muted-foreground'
     if (apiHealth === 'offline') return 'bg-destructive'
     return apiHealth.model_loaded ? 'bg-success' : 'bg-warning'
   }, [apiHealth])
+
+  useEffect(() => {
+    const fetchUnread = async () => {
+      try {
+        const { errorController } = await import('@/lib/error-controller')
+        const count = await errorController.getUnreadCount()
+        setUnreadErrors(count)
+      } catch { /* server down */ }
+    }
+    fetchUnread()
+    const id = setInterval(fetchUnread, 10000)
+    return () => clearInterval(id)
+  }, [])
 
   const apiStatusShort = useMemo(() => {
     if (apiHealth === null) return t('common.connecting')
@@ -141,7 +157,12 @@ export function Sidebar({ variant = 'desktop', onNavigate, onClose }: SidebarPro
                       className={cn(NAV_ICON, active ? 'opacity-100' : 'opacity-90 dark:opacity-80')}
                       aria-hidden
                     />
-                    {t(item.key)}
+                    <span className="flex-1 truncate">{t(item.key)}</span>
+                    {item.key === 'nav.errors' && unreadErrors > 0 && (
+                      <span className="inline-flex items-center justify-center min-w-[1.125rem] h-[1.125rem] rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground px-1 leading-none">
+                        {unreadErrors > 99 ? '99+' : unreadErrors}
+                      </span>
+                    )}
                   </Link>
                 </li>
               )

@@ -65,11 +65,25 @@ export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcuts
   useEffect(() => {
     if (open !== undefined) {
       setIsOpen(open)
+      if (typeof window !== 'undefined') {
+        if (open) {
+          document.body.dataset.shortcutsOpen = 'true'
+        } else {
+          delete document.body.dataset.shortcutsOpen
+        }
+      }
     }
   }, [open])
   
   const handleOpenChange = (newOpen: boolean) => {
     setIsOpen(newOpen)
+    if (typeof window !== 'undefined') {
+      if (newOpen) {
+        document.body.dataset.shortcutsOpen = 'true'
+      } else {
+        delete document.body.dataset.shortcutsOpen
+      }
+    }
     onOpenChange?.(newOpen)
   }
   

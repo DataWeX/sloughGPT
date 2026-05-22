@@ -225,7 +225,7 @@ class SloNetBenchmark:
             net.layers[1].zero_grad()
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            path = tmpdir + "/test.slo"
+            path = tmpdir + "/test.soul"
             save_soul(net, path, SloProfile(name="test_export", version="1.0"))
             imported = import_from_sou(path)
 

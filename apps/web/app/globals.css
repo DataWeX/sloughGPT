@@ -345,20 +345,31 @@ html {
 }
 
 .sl-toast {
-  @apply relative flex cursor-pointer flex-col overflow-hidden border text-sm rounded-lg;
+  @apply relative flex cursor-pointer flex-col overflow-hidden border text-sm;
   max-width: 22rem;
   min-width: 16rem;
-  border-color: color-mix(in srgb, rgb(var(--border)) 65%, transparent);
-  background-color: color-mix(in srgb, rgb(var(--card)) 96%, rgb(var(--muted)));
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: var(--shadow-lg);
+  border-radius: 10px;
+  border-color: color-mix(in srgb, rgb(var(--border)) 50%, transparent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, rgb(var(--card)) 98%, rgb(var(--muted))) 0%,
+    color-mix(in srgb, rgb(var(--card)) 92%, rgb(var(--muted))) 100%
+  );
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.04),
+    0 6px 16px rgba(0,0,0,0.08),
+    0 12px 32px rgba(0,0,0,0.06);
   animation: sl-toast-in 0.3s cubic-bezier(0.21, 1.02, 0.73, 1) both;
   pointer-events: auto;
 }
 
 .sl-toast:hover {
-  box-shadow: var(--shadow-xl);
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.04),
+    0 8px 24px rgba(0,0,0,0.12),
+    0 16px 48px rgba(0,0,0,0.08);
 }
 
 .sl-toast--exit {
@@ -396,20 +407,22 @@ html {
 }
 
 .sl-toast__icon {
-  @apply mt-0.5 h-4 w-4 shrink-0;
+  @apply mt-0.5 h-4 w-4 shrink-0 flex items-center justify-center;
+  font-size: 15px;
 }
 
 .sl-toast__message {
-  @apply flex-1 text-sm leading-snug;
+  @apply flex-1 text-sm leading-snug font-medium;
   color: color-mix(in srgb, rgb(var(--foreground)) 92%, transparent);
 }
 
 .sl-toast__verbose {
   @apply ml-0.5 inline text-[10px] underline opacity-55 hover:opacity-100 transition-opacity;
+  text-underline-offset: 2px;
 }
 
 .sl-toast__close {
-  @apply -mr-1 -mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md opacity-40 hover:opacity-100 hover:bg-muted/50 transition-all;
+  @apply -mr-1 -mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md opacity-40 hover:opacity-100 hover:bg-muted/60 transition-all;
 }
 
 .sl-toast__verbose-block {
@@ -418,11 +431,11 @@ html {
 }
 
 .sl-toast__track {
-  @apply h-[2px] w-full bg-border/30;
+  @apply h-[2px] w-full bg-border/20;
 }
 
 .sl-toast__fill {
-  @apply h-full;
+  @apply h-full rounded-full transition-[width] duration-100 ease-linear;
 }
 
 @keyframes str-dot-bounce {

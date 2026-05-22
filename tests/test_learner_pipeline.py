@@ -193,7 +193,7 @@ class TestLearnerPipeline:
         with (
             patch.object(ContinualLearner, "_background_loop", lambda self: None),
             patch.object(ContinualLearner, "_save_checkpoint", lambda self: None),
-            patch("domains.learner.continual.STATE_PATH", tmp_path / "continual.slo"),
+            patch("domains.learner.continual.STATE_PATH", tmp_path / "continual.soul"),
         ):
             l = ContinualLearner()
             l._running = False
@@ -312,7 +312,7 @@ class TestFullPipeline:
         with (
             patch.object(ContinualLearner, "_background_loop", lambda self: None),
             patch.object(ContinualLearner, "_save_checkpoint", lambda self: None),
-            patch("domains.learner.continual.STATE_PATH", Path(tempfile.mkdtemp()) / "continual.slo"),
+            patch("domains.learner.continual.STATE_PATH", Path(tempfile.mkdtemp()) / "continual.soul"),
         ):
             learner = ContinualLearner()
             try:
@@ -331,7 +331,7 @@ class TestFullPipeline:
         with (
             patch.object(ContinualLearner, "_background_loop", lambda self: None),
             patch.object(ContinualLearner, "_save_checkpoint", lambda self: None),
-            patch("domains.learner.continual.STATE_PATH", Path(tempfile.mkdtemp()) / "continual.slo"),
+            patch("domains.learner.continual.STATE_PATH", Path(tempfile.mkdtemp()) / "continual.soul"),
         ):
             learner = ContinualLearner()
             try:

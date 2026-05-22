@@ -65,6 +65,7 @@ interface ChatToolPanelProps {
   availableModels: string[]
   currentModel: string
   onSelectModel: (model: string) => void
+  modelInfoMap?: Record<string, { cached?: boolean; size_gb?: number }>
   // Personality
   souls: { name: string; traits?: string[]; description?: string }[]
   currentSoulName?: string
@@ -98,6 +99,7 @@ export function ChatToolPanel({
   availableModels,
   currentModel,
   onSelectModel,
+  modelInfoMap,
   souls,
   currentSoulName,
   onSwitchSoul,
@@ -409,7 +411,7 @@ export function ChatToolPanel({
                         <div className="text-sm font-medium">{learnerInfo.train_steps_completed}</div>
                       </div>
                     </div>
-                    {learnerInfo.current_loss !== undefined && (
+                    {learnerInfo.current_loss != null && (
                       <div className="p-2 rounded bg-muted/30 border border-border/40">
                         <div className="text-[10px] text-muted-foreground">Current loss</div>
                         <div className="text-sm font-medium font-mono">{learnerInfo.current_loss.toFixed(4)}</div>
@@ -482,58 +484,72 @@ export function ChatToolPanel({
 
             {activeTab === 'checkpoints' && (
               <div className="space-y-2">
-                {/* Soul personality switcher */}
+                {/* Personality section */}
                 {souls.length > 0 && (
-                  <div className="space-y-1">
-                    <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Personality</div>
-                    {souls.map(s => (
-                      <button
-                        key={s.name}
-                        onClick={() => onSwitchSoul?.(s.name)}
-                        className={cn(
-                          'w-full text-left px-2 py-1.5 rounded text-xs transition-colors flex items-center justify-between',
-                          currentSoulName === s.name ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted',
-                        )}
-                      >
-                        <span>{s.name}</span>
-                        {currentSoulName === s.name && <IconCheck className="h-3 w-3 shrink-0" />}
-                      </button>
-                    ))}
+                  <div className="rounded-lg border border-border/40 bg-muted/10">
+                    <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider px-2.5 py-1.5 border-b border-border/30">Personality</div>
+                    <div className="max-h-28 overflow-y-auto p-1.5 space-y-0.5">
+                      {souls.map(s => (
+                        <button
+                          key={s.name}
+                          onClick={() => onSwitchSoul?.(s.name)}
+                          className={cn(
+                            'w-full text-left px-2 py-1 rounded text-xs transition-colors flex items-center justify-between',
+                            currentSoulName === s.name ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted/80',
+                          )}
+                        >
+                          <span>{s.name}</span>
+                          {currentSoulName === s.name && <IconCheck className="h-3 w-3 shrink-0" />}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
 
-                {/* Model selector */}
-                <div className="space-y-1 pt-1 border-t border-border/30">
-                  <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Backend Model</div>
-                  {availableModels.map(m => (
-                    <button
-                      key={m}
-                      onClick={() => onSelectModel(m)}
-                      className={cn(
-                        'w-full text-left px-2 py-1.5 rounded text-xs transition-colors flex items-center justify-between font-mono',
-                        currentModel === m ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted',
-                      )}
-                    >
-                      <span className="truncate">{m}</span>
-                      {currentModel === m && <IconCheck className="h-3 w-3 shrink-0" />}
-                    </button>
-                  ))}
+                {/* Model section */}
+                <div className="rounded-lg border border-border/40 bg-muted/10">
+                  <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider px-2.5 py-1.5 border-b border-border/30">Backend Model</div>
+                  <div className="max-h-28 overflow-y-auto p-1.5 space-y-0.5">
+                    {availableModels.length === 0 ? (
+                      <div className="px-2 py-3 text-[10px] text-muted-foreground text-center">No models available</div>
+                    ) : availableModels.map(m => {
+                      const info = modelInfoMap?.[m]
+                      const sizeLabel = info?.size_gb ? `${info.size_gb.toFixed(2)} GB` : ''
+                      return (
+                        <button
+                          key={m}
+                          onClick={() => onSelectModel(m)}
+                          className={cn(
+                            'w-full text-left px-2 py-1 rounded text-xs transition-colors flex items-center justify-between font-mono',
+                            currentModel === m ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted/80',
+                          )}
+                          title={`${m}${sizeLabel ? ` — ${sizeLabel}` : ''}`}
+                        >
+                          <span className="truncate">{m.includes('/') ? m.split('/').pop() : m}</span>
+                          <span className="text-[10px] text-muted-foreground/60 ml-1 shrink-0">{sizeLabel}</span>
+                          {currentModel === m && <IconCheck className="h-3 w-3 shrink-0 ml-1" />}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
 
-                {/* Checkpoints */}
-                {checkpoints.length > 0 && (
-                  <div className="space-y-1 pt-1 border-t border-border/30">
-                    <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider flex items-center justify-between">
-                      <span>Checkpoints</span>
-                      <span className="text-[9px] font-normal normal-case">{checkpoints.length} saved</span>
-                    </div>
-                    {checkpoints.map(ckpt => (
+                {/* Checkpoints section */}
+                <div className="rounded-lg border border-border/40 bg-muted/10">
+                  <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider px-2.5 py-1.5 border-b border-border/30 flex items-center justify-between">
+                    <span>Checkpoints</span>
+                    {checkpoints.length > 0 && <span className="text-[9px] font-normal normal-case">{checkpoints.length} saved</span>}
+                  </div>
+                  <div className="max-h-36 overflow-y-auto p-1.5 space-y-0.5">
+                    {checkpoints.length === 0 ? (
+                      <div className="px-2 py-3 text-[10px] text-muted-foreground text-center">No checkpoints yet</div>
+                    ) : checkpoints.map(ckpt => (
                       <button
                         key={ckpt.name}
                         onClick={() => onLoadCheckpoint?.(ckpt.name)}
                         className={cn(
                           'w-full text-left px-2 py-1.5 rounded text-xs transition-colors',
-                          ckpt.is_loaded ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted',
+                          ckpt.is_loaded ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted/80',
                         )}
                       >
                         <div className="flex items-center justify-between">
@@ -541,27 +557,27 @@ export function ChatToolPanel({
                             <span className="truncate">{ckpt.name}</span>
                             {ckpt.is_loaded && <IconCheck className="h-3 w-3 shrink-0" />}
                           </div>
-                          <div className="flex items-center gap-1 shrink-0 ml-1">
-                            {ckpt.eval_verdict && (
-                              <span className={cn(
-                                'text-[9px] px-1 py-0 rounded',
-                                ckpt.eval_verdict === 'PASS' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning',
-                              )}>
-                                {ckpt.eval_verdict}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
-                          {ckpt.loss !== undefined && <span>loss {ckpt.loss.toFixed(4)}</span>}
-                          {ckpt.traits && ckpt.traits.length > 0 && (
-                            <span className="truncate">{ckpt.traits.join(' · ')}</span>
+                          {ckpt.eval_verdict && (
+                            <span className={cn(
+                              'text-[9px] px-1 py-0 rounded shrink-0 ml-1',
+                              ckpt.eval_verdict === 'PASS' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning',
+                            )}>
+                              {ckpt.eval_verdict}
+                            </span>
                           )}
                         </div>
+                        {(ckpt.loss != null || (ckpt.traits && ckpt.traits.length > 0)) && (
+                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+                            {ckpt.loss != null && <span>loss {ckpt.loss.toFixed(4)}</span>}
+                            {ckpt.traits && ckpt.traits.length > 0 && (
+                              <span className="truncate">{ckpt.traits.join(' · ')}</span>
+                            )}
+                          </div>
+                        )}
                       </button>
                     ))}
                   </div>
-                )}
+                </div>
               </div>
             )}
           </div>

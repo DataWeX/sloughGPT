@@ -12,8 +12,8 @@ class TestLocalSoulCandidates(unittest.TestCase):
     def test_newest_non_default_first_when_no_canonical(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             d = Path(td)
-            a = d / "older.slo"
-            b = d / "newer.slo"
+            a = d / "older.soul"
+            b = d / "newer.soul"
             a.write_text("x", encoding="utf-8")
             b.write_text("y", encoding="utf-8")
             os.utime(a, (10, 10))
@@ -23,9 +23,9 @@ class TestLocalSoulCandidates(unittest.TestCase):
     def test_canonical_first_then_newest_others(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             d = Path(td)
-            a = d / "older.slo"
-            b = d / "newer.slo"
-            default = d / "sloughgpt.slo"
+            a = d / "older.soul"
+            b = d / "newer.soul"
+            default = d / "sloughgpt.soul"
             a.write_text("x", encoding="utf-8")
             b.write_text("y", encoding="utf-8")
             default.write_text("z", encoding="utf-8")

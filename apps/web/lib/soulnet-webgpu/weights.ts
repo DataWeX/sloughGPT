@@ -94,6 +94,7 @@ export function inferArch(buffer: ArrayBuffer): SoulNetArch {
   }
   const version = view.getUint32(4, true)
   const jsonLen = view.getUint32(8, true)
+  // Data starts immediately after JSON metadata
   let offset = 12 + jsonLen
 
   function readSizes(): Record<string, number> {
@@ -106,7 +107,9 @@ export function inferArch(buffer: ArrayBuffer): SoulNetArch {
         offset += nl
         const count = view.getUint32(offset, true); offset += 4
         sizes[name] = count
-        offset += count * 4
+        // Align before skipping float32 data
+        const alignedOffset = (offset + 3) & ~3
+        offset = alignedOffset + count * 4
       }
     } else {
       const wl = view.getUint32(offset, true); offset += 4
@@ -144,6 +147,7 @@ export function inferArch(buffer: ArrayBuffer): SoulNetArch {
 /** Parse a .sou file into metadata + flat weight arrays.
 
     Supports v2 (JSON weights) and v3 (binary float32) formats.
+    Handles 4-byte alignment for Float32Array offsets (WebGPU requirement).
 
     @param buffer - raw .sou file bytes
     @returns parsed checkpoint with metadata and weights dict
@@ -162,7 +166,10 @@ export function parseSou(buffer: ArrayBuffer): SoulCheckpoint {
   const metaStr = new TextDecoder().decode(new Uint8Array(buffer, 12, jsonLen))
   const metadata: SoulMetadata = JSON.parse(metaStr)
 
+  // Data starts immediately after JSON metadata (no padding in v3 format).
+  // Individual Float32Array views handle alignment internally.
   let offset = 12 + jsonLen
+
   const weights: SoulWeights = {}
   let totalElements = 0
 
@@ -173,7 +180,9 @@ export function parseSou(buffer: ArrayBuffer): SoulCheckpoint {
       const name = new TextDecoder().decode(new Uint8Array(buffer, offset, nameLen))
       offset += nameLen
       const count = view.getUint32(offset, true); offset += 4
-      const arr = new Float32Array(buffer, offset, count)
+      // Ensure offset is 4-byte aligned before creating Float32Array
+      const alignedOffset = (offset + 3) & ~3
+      const arr = new Float32Array(buffer, alignedOffset, count)
       weights[name as `p${number}`] = new Float32Array(arr)
       totalElements += count
       offset += count * 4

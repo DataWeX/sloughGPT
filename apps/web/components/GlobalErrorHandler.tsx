@@ -4,6 +4,28 @@ import { useEffect, useRef } from 'react'
 import { useErrorStore } from '@/lib/error-store'
 import { useToastStore } from '@/lib/toast-store'
 
+// Errors that should NOT trigger full-page error handler
+const NON_FATAL_ERROR_PATTERNS = [
+  /resizeobserver/i,
+  /hydration/i,
+  /suppresshydrationwarning/i,
+  /react-hydration-error/i,
+  /text content does not match server-rendered/i,
+  /aborterror/i,
+  /cancelled/i,
+  /network error/i,
+  /fetch failed/i,
+  /failed to fetch/i,
+  /loadable/i,
+  /chunk/i,
+  /next-router/i,
+  /useRouter/i,
+]
+
+function isNonFatalError(message: string): boolean {
+  return NON_FATAL_ERROR_PATTERNS.some(pattern => pattern.test(message))
+}
+
 function extractStackInfo(error: ErrorEvent | PromiseRejectionEvent): { file: string; line: number; col: number; stack: string } {
   let file = ''
   let line = 0
@@ -53,8 +75,16 @@ export function GlobalErrorHandler() {
     initialized.current = true
 
     const handleError = (event: ErrorEvent) => {
-      const { file, line, col, stack } = extractStackInfo(event)
       const message = event.message || 'Unknown error'
+      
+      // Non-fatal errors: show as toast only, don't add to error store
+      if (isNonFatalError(message)) {
+        addToast(message, 'info')
+        event.preventDefault()
+        return
+      }
+
+      const { file, line, col, stack } = extractStackInfo(event)
       const source = file ? `${file}:${line}:${col}` : 'client'
 
       addError(event.error || event, { source, title: 'Runtime Error' })
@@ -72,9 +102,17 @@ export function GlobalErrorHandler() {
     }
 
     const handleRejection = (event: PromiseRejectionEvent) => {
-      const { file, line, col, stack } = extractStackInfo(event)
       const reason = event.reason
       const message = reason instanceof Error ? reason.message : typeof reason === 'string' ? reason : 'Unhandled Promise Rejection'
+      
+      // Non-fatal errors: show as toast only
+      if (isNonFatalError(message)) {
+        addToast(message, 'info')
+        event.preventDefault()
+        return
+      }
+
+      const { file, line, col, stack } = extractStackInfo(event)
       const source = file ? `${file}:${line}:${col}` : 'client'
 
       addError(reason || event, { source, title: 'Unhandled Rejection' })

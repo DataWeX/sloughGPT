@@ -5,7 +5,9 @@ import { useApiHealth } from '@/hooks/useApiHealth'
 import { API_CHAT_ENDPOINT, PUBLIC_API_URL } from '@/lib/config'
 import type { Conversation } from '@/lib/session-controller'
 import { agentsController } from '@/lib/agents-controller'
+import { AGENTS, type AgentDef } from '@/lib/agents'
 import { modelController } from '@/lib/model-controller'
+import { startDownload, getDownloadStatus } from '@/lib/download-controller'
 import { chatController } from '@/lib/chat-controller'
 import { generationConfigController } from '@/lib/generation-config-controller'
 import { sessionController } from '@/lib/session-controller'
@@ -16,9 +18,10 @@ import { useFeedbackStore } from '@/lib/feedback-store'
 import { useErrorStore } from '@/lib/error-store'
 import { useToastStore } from '@/lib/toast-store'
 import { devDebug } from '@/lib/dev-log'
+import { isMeteredConnection, connectionLabel, getNetworkInfo } from '@/lib/network'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { IconSearch, IconX, IconChevronDown, IconCheck, IconSettings, IconHeart, IconRefresh, IconDownload } from '@/components/ui'
+import { IconSearch, IconX, IconChevronDown, IconCheck, IconSettings, IconHeart, IconRefresh, IconAlert, IconMore, IconModel } from '@/components/ui'
 import { Cpu, Server } from 'lucide-react'
 import {
   ChatSettings,
@@ -31,6 +34,7 @@ import {
   type ImageAttachment,
 } from '@/components/chat'
 import { ChatToolPanel } from '@/components/chat/ChatToolPanel'
+import { VoiceChatMode } from '@/components/chat/VoiceChatMode'
 import { ConversationSearch } from '@/components/chat/ConversationSearch'
 import { SoulNetWebGPU, SoulTransformerWebGPU, inferArch } from '@/lib/soulnet-webgpu'
 
@@ -110,11 +114,13 @@ export default function ChatPage() {
     return messages.filter(m => m.content.toLowerCase().includes(q)).map(m => m.id)
   }, [messages, searchQuery])
   const matchCount = matchIds.length
-  const [model, setModel] = useState('gpt2')
+  const [model, setModel] = useState('')
   const [souls, setSouls] = useState<Soul[]>([])
   const [temperature, setTemperature] = useState(0.8)
   const [maxTokens, setMaxTokens] = useState(200)
   const [availableModels, setAvailableModels] = useState<string[]>([])
+  const [modelInfoMap, setModelInfoMap] = useState<Record<string, { cached?: boolean; size_gb?: number }>>({})
+  const [downloadProgress, setDownloadProgress] = useState<Record<string, { percentage: number; status: string }>>({})
   const [currentError, setCurrentError] = useState<ReturnType<typeof getErrorInfo> | null>(null)
   const [images, setImages] = useState<ImageAttachment[]>([])
   const [sessionSaved, setSessionSaved] = useState(false)
@@ -127,7 +133,8 @@ export default function ChatPage() {
   const [useLocalEngine, setUseLocalEngine] = useState(false)
   const [localEngineLoading, setLocalEngineLoading] = useState(false)
   const [localArchInfo, setLocalArchInfo] = useState<string | null>(null)
-  const [localModelUrl, setLocalModelUrl] = useState('/models/test.bin.sou')
+  const [localModelUrl, setLocalModelUrl] = useState('')
+  const [loadingModel, setLoadingModel] = useState<string | null>(null)
   const [learnerInfo, setLearnerInfo] = useState<{
     total_tokens_ingested: number
     train_steps_completed: number
@@ -142,12 +149,13 @@ export default function ChatPage() {
   const [visionCaps, setVisionCaps] = useState<MultimodalCapabilities | null>(null)
   const [visionCaptionHistory, setVisionCaptionHistory] = useState<string[]>([])
   const [visionVocabSize, setVisionVocabSize] = useState<number | undefined>(undefined)
-  const [agents, setAgents] = useState<Array<{ id: string; name: string; description: string; instructions: string }>>([])
+  const [agents, setAgents] = useState<AgentDef[]>([])
   const [currentAgent, setCurrentAgent] = useState<{ id: string; name: string; description?: string; instructions: string } | null>(null)
 
   const [checkpoints, setCheckpoints] = useState<Array<{ name: string; loss?: number; traits?: string[]; is_loaded?: boolean; eval_verdict?: string }>>([])
   const [currentCheckpoint, setCurrentCheckpoint] = useState<string | undefined>(undefined)
   const [toolPanelOpen, setToolPanelOpen] = useState(true)
+  const [voiceMode, setVoiceMode] = useState(false)
   const { state: health, refresh: refreshHealth } = useApiHealth()
   const { recordFeedback, fetchStats, fetchAdapterStats } = useFeedbackStore()
   const engineRef = useRef<SoulNetWebGPU | SoulTransformerWebGPU | null>(null)
@@ -158,6 +166,7 @@ export default function ChatPage() {
   const sessionCreatedRef = useRef(false)
   const messagesRef = useRef<ChatMessage[]>([])
   const loadingRef = useRef<AbortController | null>(null)
+  const skipMeteredWarningRef = useRef(false)
   const streamStartRef = useRef<number>(0)
   const handleRegenerateRef = useRef<() => Promise<void>>(null as unknown as () => Promise<void>)
   const newChatRef = useRef<() => void>(null as unknown as () => void)
@@ -250,9 +259,18 @@ export default function ChatPage() {
     // Fetch initial feedback stats
     fetchStats()
     fetchAdapterStats()
+    // Sync model from health if loaded
+    if (health && health !== 'offline' && health.model_loaded && health.model_type) {
+      setModel(health.model_type)
+    }
     // Fetch available models
     modelController.list().then((models) => {
       setAvailableModels(models.map(m => m.id))
+      const infoMap: Record<string, { cached?: boolean; size_gb?: number }> = {}
+      models.forEach(m => {
+        infoMap[m.id] = { cached: m.cached, size_gb: m.size_gb }
+      })
+      setModelInfoMap(infoMap)
     }).catch(() => {})
     // Fetch generation config from server
     generationConfigController.get().then((config) => {
@@ -267,15 +285,37 @@ export default function ChatPage() {
         if (found) setCurrentSoul(found)
       }
     }).catch(() => {})
-    // Fetch agents list
-    agentsController.list().then((data) => {
-      setAgents(data)
-      const savedAgentId = localStorage.getItem('sloughgpt_current_agent')
-      if (savedAgentId) {
-        const found = data.find(a => a.id === savedAgentId)
-        if (found) setCurrentAgent({ id: found.id, name: found.name, instructions: found.instructions })
+    // Fetch agents list (merge local AGENTS with any backend agents)
+    agentsController.list().then((data: AgentDef[]) => {
+      const localAgents = Object.values(AGENTS)
+      // Use backend agents if available, otherwise fall back to local
+      const merged = data && data.length > 0 ? data : localAgents
+      setAgents(merged)
+      const savedAgentId = localStorage.getItem('sloughgpt_current_agent') || 'general'
+      const found = merged.find(a => a.id === savedAgentId)
+      if (found) {
+        setCurrentAgent({
+          id: found.id,
+          name: found.name,
+          description: found.description || '',
+          instructions: found.instructions || '',
+        })
       }
-    }).catch(() => {})
+    }).catch(() => {
+      // Fallback to local agents
+      const localAgents = Object.values(AGENTS)
+      setAgents(localAgents)
+      const savedAgentId = localStorage.getItem('sloughgpt_current_agent') || 'general'
+      const found = localAgents.find(a => a.id === savedAgentId)
+      if (found) {
+        setCurrentAgent({
+          id: found.id,
+          name: found.name,
+          description: found.description || '',
+          instructions: found.instructions || '',
+        })
+      }
+    })
     // Fetch available .sou checkpoints for local (WebGPU) inference
     soulsController.listCheckpoints().then(({ checkpoints: ckpts }) => {
       setCheckpoints((ckpts || []).map((c: Checkpoint) => ({
@@ -368,8 +408,10 @@ const MAX_STORAGE_MESSAGES = 40
             content: m.content,
             timestamp: new Date(),
           }))
-          // Simple concat (remote first) – duplicates can be de‑duplicated later if needed
-          setMessages([...remoteChatMsgs, ...filteredMessages])
+          // Merge remote + local, deduplicating by content+role
+          const seen = new Set(remoteChatMsgs.map(m => `${m.role}:${m.content}`))
+          const uniqueLocal = filteredMessages.filter(m => !seen.has(`${m.role}:${m.content}`))
+          setMessages([...remoteChatMsgs, ...uniqueLocal])
         } catch {
             // Fallback to just local DB messages if remote fetch fails
             setMessages(filteredMessages)
@@ -399,22 +441,28 @@ const MAX_STORAGE_MESSAGES = 40
     if (engineRef.current || engineLoadingRef.current) return true
     if (!navigator.gpu) {
       showToast('WebGPU not available in this browser', 'error')
+      devDebug('WebGPU unavailable', { navigator_gpu: false })
       return false
     }
     engineLoadingRef.current = true
     setLocalEngineLoading(true)
     try {
-      // Backend paths (auto-train, etc.) need the API base URL prepended
+      if (!localModelUrl) throw new Error('No .soul file URL configured')
       const url = localModelUrl.startsWith('/auto-train/') || localModelUrl.startsWith('/sou/')
         ? `${PUBLIC_API_URL}${localModelUrl}`
         : localModelUrl
+      devDebug('Fetching model for local engine', { url })
       const resp = await fetch(url)
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      if (!resp.ok) throw new Error(`HTTP ${resp.status} from ${url}`)
       const buf = await resp.arrayBuffer()
+      if (buf.byteLength > 500 * 1024 * 1024) {
+        throw new Error(`Model too large for browser (${(buf.byteLength / 1024 / 1024).toFixed(0)}MB). Max: 500MB`)
+      }
+      devDebug('Model fetched', { size_bytes: buf.byteLength })
       const arch = inferArch(buf)
+      devDebug('Inferred architecture', arch)
 
       if (arch.archType === 'transformer') {
-        // Use SoulTransformerWebGPU
         const engine = new SoulTransformerWebGPU()
         await engine.init()
         const numLayers = arch.numLayers
@@ -444,7 +492,9 @@ const MAX_STORAGE_MESSAGES = 40
       }
       return true
     } catch (err) {
-      showToast('Failed to load local engine', 'error')
+      const msg = err instanceof Error ? err.message : 'unknown error'
+      showToast(`Failed to load local engine: ${msg}`, 'error')
+      devDebug('Local engine init failed', { error: msg, url: localModelUrl })
       return false
     } finally {
       engineLoadingRef.current = false
@@ -751,12 +801,29 @@ const MAX_STORAGE_MESSAGES = 40
     
     devDebug('Sending message', { model, maxTokens, temperature, messageCount: messages.length + 1 })
 
-    // Get soul-based system prompt + agent instructions
-    let systemPrompt = currentSoul?.description || currentSoul?.name || ''
-    if (currentAgent) {
-      const agentInstr = `[Agent: ${currentAgent.name}]\n${currentAgent.instructions}`
-      systemPrompt = systemPrompt ? `${systemPrompt}\n\n${agentInstr}` : agentInstr
+    // Build system prompt: Model + Soul + Agent
+    // Model = neural network (base capabilities)
+    // Soul = personality traits (emotional/behavioral style)
+    // Agent = role/expertise (task-specific instructions)
+    const parts: string[] = []
+    
+    // Soul provides personality context
+    if (currentSoul) {
+      parts.push(`[Personality: ${currentSoul.name}]`)
+      if (currentSoul.description) parts.push(currentSoul.description)
+      if (currentSoul.traits && currentSoul.traits.length > 0) {
+        parts.push(`Traits: ${currentSoul.traits.join(', ')}`)
+      }
     }
+    
+    // Agent provides role and expertise
+    if (currentAgent) {
+      parts.push(`[Role: ${currentAgent.name}]`)
+      if (currentAgent.description) parts.push(currentAgent.description)
+      if (currentAgent.instructions) parts.push(currentAgent.instructions)
+    }
+    
+    const systemPrompt = parts.join('\n\n')
     
     // Save to IndexedDB immediately (crash recovery)
     const messagesWithNew = [...messagesRef.current, userMessage, assistantMessage]
@@ -1054,22 +1121,94 @@ const sidebarConversations: Conversation[] = (Array.isArray(sessions) ? sessions
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="h-7 px-2.5 font-mono text-xs gap-1.5 rounded-lg border border-transparent hover:border-border/50">
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-success shrink-0" />
-                    <span className="truncate max-w-[48px] sm:max-w-[64px]">{model}</span>
+                    <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${
+                      loadingModel ? 'bg-warning animate-pulse' :
+                      model ? (loading ? 'bg-warning animate-pulse' : 'bg-success') :
+                      'bg-muted-foreground/30'
+                    }`} />
+                    <span className="truncate max-w-[48px] sm:max-w-[64px]" title={loadingModel || model || 'Select a model to load'}>
+                      {loadingModel
+                        ? (loadingModel.includes('/') ? loadingModel.split('/').pop() : loadingModel)
+                        : model
+                          ? (model.includes('/') ? model.split('/').pop() : model)
+                          : 'Select model'}
+                    </span>
                     <IconChevronDown className="h-2.5 w-2.5 opacity-40 shrink-0" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[140px]">
-                  {availableModels.map((m) => (
-                    <DropdownMenuItem key={m} onSelect={() => setModel(m)} className="justify-between font-mono text-xs">
-                      <span className="truncate">{m}</span>
-                      {m === model && <IconCheck className="h-3 w-3 text-primary shrink-0" />}
-                    </DropdownMenuItem>
-                  ))}
+                <DropdownMenuContent align="end" className="min-w-[200px] max-h-[300px] overflow-y-auto">
+                  {loadingModel && (
+                    <div className="h-0.5 bg-muted rounded-full mx-2 mb-1 overflow-hidden shrink-0">
+                      <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: '60%' }} />
+                    </div>
+                  )}
+                  {availableModels.map((m) => {
+                    const info = modelInfoMap[m]
+                    const isCached = info?.cached
+                    const sizeLabel = info?.size_gb ? `${info.size_gb.toFixed(2)} GB` : ''
+                    const isLoaded = m === model
+                    const isLoading = m === loadingModel
+                    return (
+                      <DropdownMenuItem
+                        key={m}
+                        onSelect={async () => {
+                          if (m === model || loadingModel) return
+                          setLoadingModel(m)
+                          if (isCached) {
+                            showToast(`Loading ${m}...`, 'info')
+                            try {
+                              const result = await modelController.load(m)
+                              await refreshHealth()
+                              setModel(m)
+                              showToast(`Model ready: ${m} (${result.device || 'cpu'})`, 'success')
+                            } catch (err) {
+                              showToast(`Failed to load ${m}: ${err instanceof Error ? err.message : 'unknown error'}`, 'error')
+                            } finally {
+                              setLoadingModel(null)
+                            }
+                          } else {
+                            // Confirm before downloading uncached model
+                            const sizeText = info?.size_gb ? `${info.size_gb.toFixed(1)} GB` : '? GB'
+                            const modelName = m.includes('/') ? m.split('/').pop() : m
+                            if (!window.confirm(`Download ${modelName} (${sizeText}) from HuggingFace?`)) {
+                              setLoadingModel(null); return
+                            }
+                            showToast(`Downloading ${m}...`, 'info')
+                            try {
+                              await startDownload(m, info?.size_gb ? Math.round(info.size_gb * 1024 * 1024 * 1024) : 0)
+                              await modelController.load(m)
+                              await refreshHealth()
+                              setModel(m)
+                              showToast(`Model ready: ${m}`, 'success')
+                            } catch (err) {
+                              showToast(`Failed: ${err instanceof Error ? err.message : 'unknown'}`, 'error')
+                            } finally {
+                              setLoadingModel(null)
+                            }
+                          }
+                        }}
+                        disabled={isLoading}
+                        className="font-mono text-xs"
+                        title={`${m}${isCached ? ' (cached)' : ' (download)'}${sizeLabel ? ` — ${sizeLabel}` : ''}`}
+                      >
+                        <span className="truncate flex-1">{m.includes('/') ? m.split('/').pop() : m}</span>
+                        <span className="text-[10px] text-muted-foreground/60 ml-1 shrink-0">{sizeLabel}</span>
+                        {isLoading ? (
+                          <IconRefresh className="h-3 w-3 animate-spin shrink-0 text-warning ml-1" />
+                        ) : isLoaded ? (
+                          <IconCheck className="h-3 w-3 shrink-0 text-success ml-1" />
+                        ) : isCached ? (
+                          <span className="text-[9px] text-muted-foreground/40 px-1 ml-1 border border-border/30 rounded leading-none">cached</span>
+                        ) : (
+                          <svg className="h-2.5 w-2.5 shrink-0 text-muted-foreground/40 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+                        )}
+                      </DropdownMenuItem>
+                    )
+                  })}
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* Combined soul pill (clickable = dropdown) */}
+              {/* Soul pill (personality) */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="h-7 px-2.5 text-xs gap-1.5 rounded-full bg-primary/8 text-primary hover:bg-primary/15 border border-primary/15" title={currentSoul?.traits?.join(', ')}>
@@ -1095,7 +1234,41 @@ const sidebarConversations: Conversation[] = (Array.isArray(sessions) ? sessions
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* Server/Local toggle */}
+              {/* Agent selector (role/expertise) */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-7 px-2.5 text-xs gap-1.5 rounded-lg border border-border/40 hover:border-border/60" title={currentAgent?.description}>
+                    <span className="text-sm shrink-0">{currentAgent?.id === 'coder' ? '💻' : currentAgent?.id === 'writer' ? '✍️' : currentAgent?.id === 'researcher' ? '🔬' : currentAgent?.id === 'analyst' ? '📊' : '💬'}</span>
+                    <span className="truncate max-w-[48px] sm:max-w-[64px]">{currentAgent?.name || 'Role'}</span>
+                    <IconChevronDown className="h-2.5 w-2.5 opacity-40 shrink-0" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[180px]">
+                  {agents.map((a) => (
+                    <DropdownMenuItem
+                      key={a.id}
+                      onSelect={() => {
+                        setCurrentAgent({ id: a.id, name: a.name, description: a.description || '', instructions: a.instructions || '' })
+                        localStorage.setItem('sloughgpt_current_agent', a.id)
+                        showToast(`Switched to ${a.name}`, 'info')
+                      }}
+                      className="justify-between text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">{a.id === 'coder' ? '💻' : a.id === 'writer' ? '✍️' : a.id === 'researcher' ? '🔬' : a.id === 'analyst' ? '📊' : '💬'}</span>
+                        <div>
+                          <div>{a.name}</div>
+                          <div className="text-[10px] text-muted-foreground">{a.description}</div>
+                        </div>
+                      </div>
+                      {currentAgent?.id === a.id && <IconCheck className="h-3 w-3 text-primary shrink-0" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Server/Local toggle — only show if a .soul URL is configured */}
+              {localModelUrl && (
               <Button
                 variant={useLocalEngine ? 'default' : 'ghost'}
                 size="sm"
@@ -1105,10 +1278,22 @@ const sidebarConversations: Conversation[] = (Array.isArray(sessions) ? sessions
                   if (useLocalEngine) {
                     setUseLocalEngine(false)
                     setLocalArchInfo(null)
+                    showToast('Switched to server inference', 'info')
+                    devDebug('Switched to server mode')
                   } else if (engineRef.current) {
                     setUseLocalEngine(true)
-                  } else if (await initLocalEngine()) {
-                    setUseLocalEngine(true)
+                    showToast(`Local GPU ready (${localArchInfo})`, 'success')
+                    devDebug('Switched to local mode', { arch: localArchInfo })
+                  } else {
+                    showToast('Loading local engine...', 'info')
+                    devDebug('Attempting local engine init', { url: localModelUrl })
+                    if (await initLocalEngine()) {
+                      setUseLocalEngine(true)
+                      showToast(`Local GPU ready (${localArchInfo})`, 'success')
+                    } else {
+                      showToast('Local engine failed — check .soul file URL', 'error')
+                      devDebug('Local engine init failed')
+                    }
                   }
                 }}
                 title={localEngineLoading ? 'Loading local engine...' : localArchInfo ? `Local GPU (${localArchInfo})` : useLocalEngine ? 'Running locally on GPU' : 'Running on server'}
@@ -1117,35 +1302,35 @@ const sidebarConversations: Conversation[] = (Array.isArray(sessions) ? sessions
                 {localEngineLoading ? (
                   <IconRefresh className="h-3 w-3 animate-spin" />
                 ) : useLocalEngine ? <Cpu className="h-3 w-3" /> : <Server className="h-3 w-3" />}
-                <span>{localEngineLoading ? 'Loading' : useLocalEngine ? 'Local' : 'Server'}</span>
+                <span className="hidden sm:inline">{localEngineLoading ? 'Loading' : useLocalEngine ? 'Local' : 'Server'}</span>
               </Button>
+              )}
 
-              {/* Export */}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2.5 text-xs gap-1.5 rounded-lg"
-                onClick={() => exportConversationAsMarkdown(messages)}
-                disabled={messages.length === 0}
-                title="Export conversation as markdown"
-              >
-                <IconDownload className="h-3 w-3" />
-                <span className="hidden sm:inline">Export</span>
-              </Button>
-
-              {/* Tools panel toggle */}
-              <Button
-                variant={toolPanelOpen ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-7 px-2.5 text-xs gap-1.5 rounded-lg"
-                onClick={() => setToolPanelOpen(prev => !prev)}
-                aria-expanded={toolPanelOpen}
-                aria-controls="chat-tool-panel"
-                title="Toggle tools panel"
-              >
-                <IconSettings className="h-3 w-3" />
-                <span className="hidden sm:inline">Tools</span>
-              </Button>
+              {/* More menu (Export + Tools) */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-7 px-2.5 text-xs gap-1.5 rounded-lg" aria-label="More options">
+                    <IconMore className="h-3.5 w-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[160px]">
+                  <DropdownMenuItem onSelect={() => setVoiceMode(true)}>
+                    <svg className="mr-2 h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+                      <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+                    </svg>
+                    Voice Mode
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setToolPanelOpen(prev => !prev)}>
+                    <IconSettings className="mr-2 h-4 w-4" />
+                    Tools Panel
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => exportConversationAsMarkdown(messages)} disabled={messages.length === 0}>
+                    <IconDownload className="mr-2 h-4 w-4" />
+                    Export Markdown
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
 
@@ -1297,6 +1482,17 @@ const sidebarConversations: Conversation[] = (Array.isArray(sessions) ? sessions
         visionCaptionHistory={visionCaptionHistory}
         visionVocabSize={visionVocabSize}
       />
+
+      {/* Voice Chat Mode overlay */}
+      {voiceMode && (
+        <VoiceChatMode
+          onMessage={async (text) => {
+            setInput(text)
+            await sendMessage(text)
+          }}
+          onClose={() => setVoiceMode(false)}
+        />
+      )}
     </div>
   )
 }

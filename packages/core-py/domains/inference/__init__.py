@@ -1,7 +1,7 @@
 """
 SloughGPT Inference Module
 
-.slo Slo Unit format — the living identity format for trained AI models.
+.soul Soul Unit format — the living identity format for trained AI models.
 
 Eager exports (lightweight, no torch): SloProfile, save_soul, load_soul, etc.
 Lazy exports (torch-dependent): load_model, InferenceEngine, QType, etc.

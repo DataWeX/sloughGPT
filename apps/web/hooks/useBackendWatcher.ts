@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react'
 import { modelController } from '@/lib/model-controller'
 import { useToastStore } from '@/lib/toast-store'
 
-const POLL_INTERVAL = 3000
+const POLL_INTERVAL = 2000
 
 /**
  * Polls the backend health endpoint.
@@ -45,7 +45,8 @@ export function useBackendWatcher() {
       }
     }
 
-    timeout = setTimeout(check, POLL_INTERVAL)
+    // First check immediately, then poll
+    check()
     return () => {
       cancelled = true
       clearTimeout(timeout)

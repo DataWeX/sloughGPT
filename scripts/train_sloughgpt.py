@@ -119,7 +119,7 @@ def _save_model(
     final_train_loss: float = 0.0,
     training_dataset: str = "",
 ):
-    """Save model in standard format(s) with optional .slo soul profile."""
+    """Save model in standard format(s) with optional .soul soul profile."""
     os.makedirs(os.path.dirname(base_path) or ".", exist_ok=True)
 
     meta = metadata or {}
@@ -144,7 +144,7 @@ def _save_model(
                 dataset_signature="",
                 tags=["sloughgpt", "trained", "soul"],
             )
-            path = base_path + ".slo"
+            path = base_path + ".soul"
             save_soul(model, path, soul_profile=soul)
             saved_paths.append(path)
             print(f"  -> Slo profile created and exported to {path}")
@@ -756,7 +756,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--export_sou",
         action="store_true",
-        help="Also export as .slo Slo Unit (self-contained model + soul profile)",
+        help="Also export as .soul Soul Unit (self-contained model + soul profile)",
     )
     parser.add_argument(
         "--soul_name",

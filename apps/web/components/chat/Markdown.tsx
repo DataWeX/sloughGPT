@@ -10,7 +10,7 @@ interface MarkdownProps {
 
 function InlineCode({ children }: { children: string }) {
   return (
-    <code className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[0.875em]">
+    <code className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[0.875em] break-all">
       {children}
     </code>
   )
@@ -104,7 +104,7 @@ function parseMarkdown(text: string): React.ReactNode[] {
         else break
       }
       nodes.push(
-        <blockquote key={key++} className="border-l-2 border-primary/30 pl-3 my-2 text-sm text-muted-foreground italic">
+        <blockquote key={key++} className="border-l-2 border-primary/30 pl-3 my-2 text-sm text-muted-foreground italic break-words">
           {bqLines.join('\n')}
         </blockquote>
       )
@@ -150,7 +150,7 @@ function parseMarkdown(text: string): React.ReactNode[] {
     }
 
     // Regular paragraph
-    nodes.push(<p key={key++} className="text-sm leading-relaxed mb-1">{parseInline(line)}</p>)
+    nodes.push(    <p key={key++} className="text-sm leading-relaxed mb-1 break-words">{parseInline(line)}</p>)
     i++
   }
 
@@ -238,7 +238,7 @@ export function Markdown({ content, className }: MarkdownProps) {
   const rendered = useMemo(() => parseMarkdown(content), [content])
 
   return (
-    <div className={cn("space-y-0", className)}>
+    <div className={cn("space-y-0 break-words", className)}>
       {rendered}
     </div>
   )

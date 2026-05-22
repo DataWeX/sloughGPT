@@ -538,11 +538,11 @@ class PerUserLoRAStore:
                     f.write(evaluator.compare_with_report(baseline, with_adapter))
                 print(f"[PerUserLoRA] Eval report saved: {report_path}")
 
-                # Export as .slo checkpoint so it appears in model catalog
+                # Export as .soul checkpoint so it appears in model catalog
                 try:
                     from domains.inference import save_soul
 
-                    sou_path = self.store_path / f"{output_name}.slo"
+                    sou_path = self.store_path / f"{output_name}.soul"
                     evaluator.export_adapter_as_sou(
                         adapter_npz=str(output_path),
                         soul_name=output_name,
@@ -550,9 +550,9 @@ class PerUserLoRAStore:
                         output_sou=str(sou_path),
                     )
                     result["sou_checkpoint"] = str(sou_path)
-                    print(f"[PerUserLORA] .slo checkpoint exported: {sou_path}")
+                    print(f"[PerUserLORA] .soul checkpoint exported: {sou_path}")
                 except Exception as e2:
-                    print(f"[PerUserLoRA] .slo export skipped: {e2}")
+                    print(f"[PerUserLoRA] .soul export skipped: {e2}")
 
             except Exception as e:
                 import traceback

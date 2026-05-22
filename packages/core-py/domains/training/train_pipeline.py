@@ -1072,7 +1072,7 @@ class SloughGPTTrainer:
                 lineage="sloughgpt",
                 tags=["sloughgpt", "trained", "soul"],
             )
-            output_path = path + ".slo"
+            output_path = path + ".soul"
             save_soul(self.model, output_path, soul_profile=soul)
         elif format == "safetensors":
             from domains.training.export import export_to_safetensors

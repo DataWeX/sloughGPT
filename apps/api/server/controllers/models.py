@@ -31,11 +31,20 @@ class ModelsController:
     def _resolve_device(self, device: str) -> str:
         """Resolve device string for PyTorch model placement.
 
-        Always returns "cpu" for reliability. MPS (Apple Silicon) is avoided
-        because KV cache accumulates across requests, leading to OOM crashes
-        after ~10 sequential inferences on 8 GB systems.
+        Forces CPU on 8GB Macs — MPS hits the 6.8GB limit after a few
+        generations due to KV cache accumulation in float32. The MPS
+        monitor is kept for reference but device resolution always
+        prefers CPU for stability.
         """
-        return "cpu"
+        if device is None or device == "auto":
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    return "cuda"
+            except Exception:
+                pass
+            return "cpu"
+        return device
     
     def _find_model_path(self, model_id: str) -> Optional[Path]:
         """Find model file by ID"""
@@ -94,10 +103,39 @@ class ModelsController:
         
         return models
     
-    def _load_hf_model(self, model_id: str, device: str) -> Dict[str, Any]:
-        """Load a HuggingFace model (delegates to infrastructure model_loader for MPS/BFloat16 safety)"""
+    def _load_hf_model(self, model_id: str, device: str, use_slonet: bool = False) -> Dict[str, Any]:
+        """Load a HuggingFace model.
+
+        When ``use_slonet=True``, loads weights into SloTransformer (pure NumPy)
+        instead of PyTorch. No PyTorch dependency at inference time.
+        """
         if model_id.endswith('.gguf') or model_id.startswith('/'):
             return self._load_gguf_model(model_id, device)
+
+        import state as server_state
+        server_state.model_type = model_id
+
+        if use_slonet:
+            logger.info("Loading %s into SloTransformer (pure NumPy)...", model_id)
+            try:
+                from domains.models.provider import setup_providers
+                setup_providers(
+                    None, None,
+                    hf_model_id=model_id,
+                    slonet_hf_id=model_id,
+                )
+                logger.info("SloNet provider registered: %s", model_id)
+            except Exception as e:
+                logger.error("Failed to register SloNet provider for %s: %s", model_id, e)
+                raise
+
+            return {
+                "model_id": model_id,
+                "type": "slonet",
+                "device": "cpu",
+                "total_parameters": 0,
+                "tokenizer_type": "SloNetChatProvider",
+            }
 
         try:
             from domains.infrastructure.model_loader import load_hf_model as safe_load
@@ -111,10 +149,8 @@ class ModelsController:
             total_params = sum(p.numel() for p in model.parameters())
 
             # Update server_state so health endpoints reflect the active model
-            import state as server_state
             server_state.model = model
             server_state.tokenizer = tokenizer
-            server_state.model_type = model_id
 
             # Create InferenceEngine for the new model so the inference-engine
             # provider (which is preferred over hf-default) works with current weights.
@@ -196,14 +232,20 @@ class ModelsController:
             logger.error(f"Failed to load GGUF model {model_path}: {e}")
             raise
     
-    def load_model(self, model_id: str, device: str = "auto", quantize: Optional[str] = None) -> Dict[str, Any]:
-        """Load a model into memory (local or HuggingFace)"""
+    def load_model(self, model_id: str, device: str = "auto", quantize: Optional[str] = None,
+                    use_slonet: bool = False) -> Dict[str, Any]:
+        """Load a model into memory (local or HuggingFace).
+
+        Args:
+            use_slonet: If True, load weights into SloTransformer (pure NumPy)
+                        instead of PyTorch. No PyTorch at inference time.
+        """
         resolved_device = self._resolve_device(device)
         
         # Treat any model_id as a HuggingFace model first.
         # Falls back to local file if HuggingFace loading fails.
         try:
-            result = self._load_hf_model(model_id, resolved_device)
+            result = self._load_hf_model(model_id, resolved_device, use_slonet=use_slonet)
             self._current_model = model_id
             self._current_device = resolved_device
             self._loaded_at = datetime.now()

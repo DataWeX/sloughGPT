@@ -20,6 +20,61 @@ class DatasetType(Enum):
     CODE = "code"
     CONVERSATION = "conversation"
     INSTRUCTION = "instruction"
+    AUDIO_TEXT = "audio_text"
+    IMAGE_TEXT = "image_text"
+    VIDEO_TEXT = "video_text"
+    MULTIMODAL = "multimodal"
+
+
+def detect_dataset_type(path: str) -> DatasetType:
+    """Auto-detect dataset type by sampling file contents.
+    
+    Scans first 10 lines of each file to determine modality.
+    
+    Args:
+        path: Path to dataset file or directory
+        
+    Returns:
+        Detected DatasetType
+    """
+    from pathlib import Path
+    import json
+    
+    p = Path(path)
+    if p.is_dir():
+        files = list(p.glob("*.jsonl")) + list(p.glob("*.json")) + list(p.glob("*.txt"))
+        if not files:
+            return DatasetType.TEXT
+        return detect_dataset_type(str(files[0]))
+    
+    text = p.read_text(encoding="utf-8", errors="replace")[:2000]
+    
+    # Check if JSON/JSONL
+    if p.suffix in (".jsonl", ".json"):
+        lines = text.strip().split("\n")
+        for line in lines[:10]:
+            try:
+                record = json.loads(line)
+                keys = set(record.keys())
+                if "audio" in keys or "speech" in keys or "wav" in keys:
+                    return DatasetType.AUDIO_TEXT
+                if "image" in keys or "jpg" in keys or "png" in keys:
+                    return DatasetType.IMAGE_TEXT
+                if "instruction" in keys and "response" in keys:
+                    return DatasetType.INSTRUCTION
+                if "conversation" in keys or "messages" in keys:
+                    return DatasetType.CONVERSATION
+            except (json.JSONDecodeError, ValueError):
+                continue
+    
+    # Check for code (contains common programming keywords)
+    import re
+    code_patterns = ["def ", "class ", "import ", "function ", "const ", "fn "]
+    code_lines = sum(1 for pat in code_patterns if pat in text)
+    if code_lines >= 3:
+        return DatasetType.CODE
+    
+    return DatasetType.TEXT
 
 
 class DataFormat(Enum):
@@ -38,7 +93,10 @@ class DatasetConfig:
 
 
 class DatasetManager:
-    """Unified dataset manager for multiple dataset types."""
+    """Unified dataset manager for multiple dataset types.
+    
+    Auto-categorizes datasets by modality so you only load what's needed.
+    """
 
     def __init__(self) -> None:
         self.logger = logging.getLogger("sloughgpt.training.datasets")
@@ -46,7 +104,11 @@ class DatasetManager:
 
     def register_dataset(self, config: DatasetConfig) -> None:
         self.datasets[config.name] = config
-        self.logger.info(f"Registered: {config.name}")
+        self.logger.info(f"Registered: {config.name} ({config.dataset_type.value})")
+
+    def list_by_type(self, dtype: DatasetType) -> List[DatasetConfig]:
+        """List all datasets of a given type."""
+        return [d for d in self.datasets.values() if d.dataset_type == dtype]
 
     def load_dataset(self, name: str) -> List[Dict[str, Any]]:
         config = self.datasets.get(name)
@@ -71,6 +133,64 @@ class DatasetManager:
             for line in f:
                 if line.strip():
                     yield json.loads(line)
+
+    def scan_directory(self, directory: str = "datasets") -> int:
+        """Auto-discover and register all datasets in a directory.
+        
+        Scans each subdirectory for .txt, .jsonl, .json files and auto-detects
+        the dataset type by sampling content. Skips already-registered datasets.
+        
+        Args:
+            directory: Root datasets directory
+            
+        Returns:
+            Number of newly registered datasets
+        """
+        from pathlib import Path
+        
+        base = Path(directory)
+        if not base.exists():
+            self.logger.warning(f"Directory not found: {directory}")
+            return 0
+        
+        count = 0
+        for entry in sorted(base.iterdir()):
+            if not entry.is_dir() or entry.name.startswith("_"):
+                continue
+            
+            if entry.name in self.datasets:
+                continue
+            
+            # Find data files
+            files = list(entry.glob("*.txt")) + list(entry.glob("*.jsonl")) + list(entry.glob("*.json"))
+            if not files:
+                continue
+            
+            path = str(files[0])
+            dtype = detect_dataset_type(path)
+            fmt = DataFormat.JSONL if path.endswith(".jsonl") else DataFormat.JSON if path.endswith(".json") else DataFormat.JSON
+            
+            config = DatasetConfig(
+                name=entry.name,
+                dataset_type=dtype,
+                data_format=fmt,
+                path=path,
+            )
+            self.datasets[entry.name] = config
+            count += 1
+            self.logger.info(f"  [{dtype.value:>12}] {entry.name} ({files[0].name})")
+        
+        return count
+
+    def summarize(self) -> Dict[str, List[str]]:
+        """Get a modality-grouped summary of all registered datasets."""
+        summary = {}
+        for name, cfg in self.datasets.items():
+            t = cfg.dataset_type.value
+            if t not in summary:
+                summary[t] = []
+            summary[t].append(name)
+        return summary
 
 
 # ============== Preprocessing Types ==============

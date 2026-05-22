@@ -38,7 +38,7 @@ class ModelsScreen(Screen):
             return []
         entries = []
         for f in sorted(models_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
-            if f.suffix in (".slo", ".pt", ".pth", ".safetensors"):
+            if f.suffix in (".soul", ".pt", ".pth", ".safetensors"):
                 size = f.stat().st_size
                 size_str = f"{size / 1024 / 1024:.1f} MB" if size > 1024 * 1024 else f"{size / 1024:.1f} KB"
                 entries.append({"name": f.name, "size": size_str, "suffix": f.suffix})
@@ -68,7 +68,7 @@ class ModelsScreen(Screen):
             table.add_column("Name", style=Color.WHITE)
             table.add_column("Size", style=Color.MUTED, width=10)
             table.add_column("Type", style=Color.MUTED, width=12)
-            type_labels = {".slo": "Slo", ".pt": "PyTorch", ".pth": "PyTorch", ".safetensors": "SafeTensors"}
+            type_labels = {".soul": "Soul", ".pt": "PyTorch", ".pth": "PyTorch", ".safetensors": "SafeTensors"}
             for e in entries:
                 table.add_row(e["name"], e["size"], type_labels.get(e["suffix"], e["suffix"]))
             CONSOLE.print(table)

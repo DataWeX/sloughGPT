@@ -66,6 +66,7 @@ const translations: Record<Locale, Translations> = {
     'nav.knowledge': 'Knowledge',
     'nav.compare': 'Compare',
     'nav.monitoring': 'System Health',
+    'nav.errors': 'Error Monitor',
     'nav.settings': 'Settings',
 
     // Home page
@@ -227,6 +228,7 @@ const translations: Record<Locale, Translations> = {
     'nav.knowledge': 'Conocimiento',
     'nav.compare': 'Comparar',
     'nav.monitoring': 'Estado del Sistema',
+    'nav.errors': 'Monitor de Errores',
     'nav.settings': 'Configuración',
 
     'home.title': 'Inicio',
@@ -377,6 +379,7 @@ const translations: Record<Locale, Translations> = {
     'nav.knowledge': 'Connaissances',
     'nav.compare': 'Comparer',
     'nav.monitoring': 'Santé du Système',
+    'nav.errors': 'Monitoring d\'Erreurs',
     'nav.settings': 'Paramètres',
     'home.title': 'Accueil',
     'home.subtitle.connecting': 'Connexion...',
@@ -526,6 +529,7 @@ const translations: Record<Locale, Translations> = {
     'nav.knowledge': 'Wissen',
     'nav.compare': 'Vergleichen',
     'nav.monitoring': 'Systemzustand',
+    'nav.errors': 'Fehlerüberwachung',
     'nav.settings': 'Einstellungen',
     'home.title': 'Startseite',
     'home.subtitle.connecting': 'Verbinde...',
@@ -675,6 +679,7 @@ const translations: Record<Locale, Translations> = {
     'nav.knowledge': '知识',
     'nav.compare': '对比',
     'nav.monitoring': '系统状态',
+    'nav.errors': '错误监控',
     'nav.settings': '设置',
     'home.title': '首页',
     'home.subtitle.connecting': '连接中...',

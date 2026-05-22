@@ -130,7 +130,9 @@ def load_hf_model(model_id: str, device: Optional[str] = None):
 
     # ── check HF cache before downloading ──────────────────────────────
     cache_id = model_id.replace("/", "--")
-    cache_dir = Path.home() / ".cache" / "huggingface" / "hub" / f"models--{cache_id}"
+    # Check project-local cache first, then global cache
+    hf_home = os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))
+    cache_dir = Path(hf_home) / "hub" / f"models--{cache_id}"
     if cache_dir.exists():
         logger.info("%s found in local cache (%s)", model_id, cache_dir)
     else:
@@ -138,10 +140,18 @@ def load_hf_model(model_id: str, device: Optional[str] = None):
 
     logger.info("Loading %s → %s (float32)", model_id, resolved)
 
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    # Monkey-patch Mistral regex check that tries remote even in offline mode
+    try:
+        import transformers.tokenization_utils_base as _tub
+        _tub._patch_mistral_regex = lambda cls, name: cls
+    except Exception:
+        pass
+
+    tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
-        dtype=torch.float32,
+        torch_dtype=torch.float32,
+        local_files_only=True,
     )
 
     if resolved == "mps":

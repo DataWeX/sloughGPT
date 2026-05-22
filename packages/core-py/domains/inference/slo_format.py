@@ -1,10 +1,10 @@
 """
-.slo - SloughGPT Slo Unit Format
+.soul - SloughGPT Soul Unit Format
 
-The living identity format for trained AI models. Every .slo file is self-contained:
+The living identity format for trained AI models. Every .soul file is self-contained:
 model weights + soul profile + training metadata — no PyTorch dependency required.
 
-Format: SOUL + version + config_len + JSON_config + [state_len + JSON_state_dict]
+Format: SOUL + version + config_len + JSON_config + [state_len + JSON state_dict]
 
 Trademark (c) 2026 SloughGPT. All rights reserved.
 """
@@ -24,7 +24,7 @@ from pathlib import Path
 SOU_MAGIC = b"SOUL"
 SOU_VERSION = 2
 SOU_VERSION_V3 = 3
-SOU_TRADEMARK = "SloughGPT Slo Unit (.slo) - Trademark (c) 2026 SloughGPT"
+SOU_TRADEMARK = "SloughGPT Soul Unit (.soul) - Trademark (c) 2026 SloughGPT"
 
 
 def _soul_json_sanitize(obj: Any) -> Any:
@@ -511,7 +511,7 @@ def save_soul(
     soul_profile: Optional[SloProfile] = None,
     weights_only: bool = False,
 ) -> str:
-    """Export model to .slo format (binary: header + config + JSON weights).
+    """Export model to .soul format (binary: header + config + JSON weights).
 
     Uses pure Python/numpy binary format — no PyTorch dependency.
 
@@ -525,8 +525,8 @@ def save_soul(
         output_path (for chaining)
 
     Side effects:
-        - Writes .slo binary file
-        - Writes .slo.meta.json companion file with readable metadata
+        - Writes .soul binary file
+        - Writes .soul.meta.json companion file with readable metadata
         - Creates parent directories if missing
     """
 
@@ -580,12 +580,12 @@ def save_soul(
 
 
 def load_soul(sou_path: str):
-    """Load a .slo file and return (SloProfile, state_dict).
+    """Load a .soul file and return (SloProfile, state_dict).
 
     Reads v1/v2 (JSON weights) and v3 (binary float32) formats.
 
     Args:
-        sou_path: path to .slo file
+        sou_path: path to .soul file
 
     Returns:
         (SloProfile, state_dict) where state_dict maps param names → numpy arrays.
@@ -600,7 +600,7 @@ def load_soul(sou_path: str):
     with open(sou_path, "rb") as f:
         magic = f.read(4)
         if magic != SOU_MAGIC:
-            raise ValueError(f"Invalid .slo file: {sou_path} (magic={magic!r})")
+            raise ValueError(f"Invalid .soul file: {sou_path} (magic={magic!r})")
 
         version = struct.unpack("<I", f.read(4))[0]
         config_len = struct.unpack("<I", f.read(4))[0]
@@ -648,7 +648,7 @@ def write_v3_sou(
     metadata: dict,
     state_dict: dict,
 ) -> str:
-    """Write a v3 binary .slo file (raw float32 weights, 82% smaller than v2 JSON).
+    """Write a v3 binary .soul file (raw float32 weights, 82% smaller than v2 JSON).
 
     v3 format:
       [4 bytes] SOU_MAGIC = b"SOUL"                                      (line_break)

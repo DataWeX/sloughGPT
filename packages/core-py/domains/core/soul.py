@@ -69,7 +69,7 @@ class SloEngine:
 
     The soul is NOT optional. Every model IS a soul. This is baked in:
     - When you load ANY model, it gets wrapped in a SloEngine with a soul
-    - When you train ANY model, it ALWAYS outputs a .slo file
+    - When you train ANY model, it ALWAYS outputs a .soul file
     - When you generate, the soul's traits drive EVERYTHING
 
     Architecture:
@@ -218,7 +218,7 @@ class SloEngine:
         return self._model is not None
 
     def load_soul(self, sou_path: str) -> SloProfile:
-        """Load a .slo Slo Unit file. Loads BOTH soul AND model weights."""
+        """Load a .soul Slo Unit file. Loads BOTH soul AND model weights."""
         soul, state_dict = load_soul(sou_path)
 
         model = ModelLoader._load_sou(sou_path, self._device)
@@ -810,9 +810,9 @@ class SloEngine:
         return "".join([chr(int(t) % 256) for t in tokens.flatten()])
 
     def save_soul(self, output_path: str) -> str:
-        """Save the soul as a .slo file with model weights. Slo is ALWAYS saved."""
+        """Save the soul as a .soul file with model weights. Soul is ALWAYS saved."""
         if self._model is None:
-            raise ValueError("No model loaded - cannot save .slo without a model")
+            raise ValueError("No model loaded - cannot save .soul without a model")
 
         save_soul(self._model, output_path, soul_profile=self._soul, weights_only=False)
 

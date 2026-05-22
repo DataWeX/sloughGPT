@@ -9,7 +9,7 @@
  * Usage:
  *   const engine = new SoulNetWebGPU()
  *   await engine.init()
- *   await engine.load('/models/friendly.sou', {
+ *   await engine.load('/models/friendly.soul', {
  *     embedDim: 256, hiddenDim: 512, vocabSize: 50, numLayers: 2
  *   })
  *   for await (const chunk of engine.generate('hello', 100)) {

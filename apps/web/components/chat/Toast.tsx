@@ -30,15 +30,19 @@ const EXIT_MS = 250
 const successEmojis = ['✨', '🎉', '⭐', '👏', '💪', '🌟', '🎯', '✅']
 
 function ToastIcon({ type, className }: { type: ToastType; className?: string }) {
-  const [emoji] = useState(() => successEmojis[Math.floor(Math.random() * successEmojis.length)])
+  const [emoji, setEmoji] = useState('✨')
 
-  if (type === 'success') {
-    return <span className={cn('text-sm', className)}>{emoji}</span>
-  }
-  if (type === 'error') {
-    return <span className={cn('text-sm', className)}>😕</span>
-  }
-  return <span className={cn('text-sm', className)}>💡</span>
+  useEffect(() => {
+    if (type === 'success') {
+      setEmoji(successEmojis[Math.floor(Math.random() * successEmojis.length)])
+    } else if (type === 'error') {
+      setEmoji('😕')
+    } else {
+      setEmoji('💡')
+    }
+  }, [type])
+
+  return <span className={cn('text-sm', className)}>{emoji}</span>
 }
 
 function ToastItem({ toast, onDismiss }: ToastItemProps) {

@@ -159,7 +159,7 @@ def learn_train():
 
 @router.post("/deploy")
 def learn_deploy(name: Optional[str] = None):
-    """Export the learner's SloTransformer as a deployable .slo file.
+    """Export the learner's SloTransformer as a deployable .soul file.
 
     Args:
         name: optional checkpoint name

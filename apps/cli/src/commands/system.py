@@ -65,7 +65,7 @@ def cmd_status(args):
 
         models_dir = Path("models")
         if models_dir.exists():
-            models = list(models_dir.rglob("*.pt")) + list(models_dir.rglob("*.pth")) + list(models_dir.rglob("*.slo"))
+            models = list(models_dir.rglob("*.pt")) + list(models_dir.rglob("*.pth")) + list(models_dir.rglob("*.soul"))
             printer.status("Models", f"{len(models)} found", "ok")
         else:
             printer.status("Models", "Directory not found", "error")

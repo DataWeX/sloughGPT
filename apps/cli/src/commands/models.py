@@ -20,7 +20,7 @@ def cmd_models(args):
     printer.header("Available Models")
 
     # Slo files
-    printer.section("Slo Files (.slo)")
+    printer.section("Soul Files (.soul)")
     soul_files = _local_soul_candidate_paths(models_dir)
     if soul_files:
         rows = []
@@ -106,14 +106,19 @@ def _cmd_models_info(args):
 
 
 def _cmd_models_download(args):
-    """Download a HuggingFace model."""
+    """Download a HuggingFace model with progress tracking."""
+    import sys
+    import time
+    from pathlib import Path
+
     printer.header("Download Model")
     printer.key_value("Model ID", args.model_id)
     printer.blank()
 
     try:
-        from domains.training.huggingface import download_model
         from domains.training.huggingface.model_map import get_model_info
+        from domains.infrastructure.download_manager import get_download_manager
+        import asyncio
 
         info = get_model_info(args.model_id)
         if info:
@@ -123,9 +128,56 @@ def _cmd_models_download(args):
             printer.key_value("Context", str(info.context_length))
             printer.blank()
 
-        printer.step("Downloading...")
-        cache_dir = download_model(args.model_id)
-        printer.success(f"Downloaded to: {cache_dir}")
+        mgr = get_download_manager()
+
+        if mgr.is_cached(args.model_id):
+            printer.success(f"Model already cached: {args.model_id}")
+            return
+
+        printer.step("Starting download...")
+
+        def _render_progress(progress_dict):
+            status = progress_dict.get("status", "")
+            pct = progress_dict.get("percentage", 0)
+            speed = progress_dict.get("speed_mb_per_sec", 0)
+            eta = progress_dict.get("eta_seconds", 0)
+            current_file = progress_dict.get("current_file", "")
+            downloaded_gb = progress_dict.get("bytes_downloaded", 0) / (1024 ** 3)
+            total_gb = progress_dict.get("total_bytes", 0) / (1024 ** 3)
+
+            bar_width = 40
+            filled = int(bar_width * min(pct, 100) / 100)
+            bar = "█" * filled + "░" * (bar_width - filled)
+
+            sys.stdout.write("\r")
+            sys.stdout.write(f"  [{bar}] {pct:5.1f}%  {downloaded_gb:.2f}/{total_gb:.2f} GB  {speed:.1f} MB/s")
+            if eta > 0:
+                sys.stdout.write(f"  ETA: {int(eta)}s")
+            if current_file:
+                sys.stdout.write(f"\n  ↳ {current_file}")
+            sys.stdout.flush()
+
+        async def _do_download():
+            mgr.on_progress(args.model_id, _render_progress)
+            result = await mgr.download(args.model_id)
+            return result
+
+        result = asyncio.run(_do_download())
+        sys.stdout.write("\n\n")
+
+        if result.get("status") == "complete":
+            printer.success(f"Downloaded in {result.get('elapsed_seconds', '?')}s → {result.get('cache_dir', '')}")
+        elif result.get("status") == "failed":
+            printer.error(f"Download failed: {result.get('error', 'unknown error')}")
+        elif result.get("status") == "cancelled":
+            printer.warn("Download cancelled")
+    except KeyboardInterrupt:
+        printer.warn("Download interrupted by user")
+        try:
+            from domains.infrastructure.download_manager import get_download_manager
+            get_download_manager().cancel(args.model_id)
+        except Exception:
+            pass
     except Exception as e:
         printer.error(f"Download failed: {e}")
 
@@ -285,7 +337,7 @@ def cmd_export_cli(args):
 
 
 def cmd_soul(args):
-    """Load, inspect, or create .slo files."""
+    """Load, inspect, or create .soul files."""
     if args.load:
         import requests
 
@@ -515,7 +567,7 @@ def register(subparsers):
     # Slo
     soul_parser = subparsers.add_parser(
         "soul",
-        help="Manage .slo files",
+        help="Manage .soul files",
     )
     soul_parser.add_argument("--load", "-l", metavar="PATH", help="Load soul via API")
     soul_parser.add_argument("--info", "-i", metavar="PATH", help="Inspect soul file")

@@ -32,7 +32,7 @@ class InferenceConfig:
 
 
 class SouModelLoader:
-    """Loader for .slo Slo Unit files."""
+    """Loader for .soul Soul Unit files."""
 
     def __init__(self, sou_file: Union[str, SloProfile]):
         if isinstance(sou_file, str):
@@ -94,7 +94,7 @@ class SouModelLoader:
 
 
 class SouInferenceEngine:
-    """Inference engine for .slo models."""
+    """Inference engine for .soul models."""
 
     def __init__(self, loader: SouModelLoader):
         self.loader = loader
@@ -155,7 +155,7 @@ class SouInferenceEngine:
 
 
 def load_model(sou_file: str, quantize: Optional[str] = None):
-    """Load model from .slo file."""
+    """Load model from .soul file."""
     loader = SouModelLoader(sou_file)
     loader.load_model()
 

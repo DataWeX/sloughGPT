@@ -26,9 +26,8 @@ export interface ModelInfo {
 
 export interface ModelLoadResponse {
   status: string
-  model: string
-  model_type?: string
-  effective_device?: string
+  model_id?: string
+  device?: string
   error?: string
 }
 

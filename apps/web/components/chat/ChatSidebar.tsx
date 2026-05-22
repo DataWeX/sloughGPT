@@ -3,7 +3,8 @@
 import { useState, useCallback, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { IconChat, IconPin, IconStar, IconMore, IconEdit, IconCopy, IconTrash } from '@/components/ui'
+import { IconChat, IconPin, IconStar, IconMore, IconEdit, IconCopy, IconTrash, IconMenu } from '@/components/ui'
+import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { ChatSidebarHeader } from './ChatSidebarHeader'
 import {
   DropdownMenu,
@@ -185,6 +186,7 @@ export function ChatSidebar({
   onOpenConversationSearch,
 }: ChatSidebarProps) {
   const [searchQuery, setSearchQuery] = useState('')
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   const starredCount = conversations.filter(c => c.starred).length
 
@@ -208,12 +210,50 @@ export function ChatSidebar({
     }
   }, [onStarConversation, onPinConversation, onDuplicateConversation, onDeleteConversation])
 
+  if (collapsed) {
+    return (
+      <aside className="hidden lg:flex flex-col w-12 border-r border-border bg-background h-full overflow-hidden">
+        <ChatSidebarHeader
+          collapsed
+          searchQuery=""
+          onSearchChange={() => {}}
+          onToggleCollapse={onToggleCollapse}
+          onNewChat={onNewChat}
+          starredCount={0}
+        />
+        <div className="flex-1 min-h-0 overflow-y-auto p-1.5 space-y-1">
+          {filtered.slice(0, 15).map(c => (
+            <div
+              key={c.id}
+              onClick={() => c.id !== currentConversationId && onLoadConversation?.(c.id)}
+              className={cn(
+                "flex items-center justify-center w-8 h-8 mx-auto rounded-full cursor-pointer transition-all",
+                c.id === currentConversationId
+                  ? "bg-primary/20 ring-2 ring-primary"
+                  : "bg-muted/50 hover:bg-muted"
+              )}
+              title={c.name}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onLoadConversation?.(c.id) } }}
+            >
+              <span className="text-xs font-medium text-muted-foreground">
+                {c.name?.charAt(0)?.toUpperCase() || '?'}
+              </span>
+            </div>
+          ))}
+        </div>
+      </aside>
+    )
+  }
+
   return (
+    <>
     <aside className="hidden lg:flex flex-col w-56 sm:w-64 lg:w-72 border-r border-border bg-background h-full overflow-hidden">
       <ChatSidebarHeader
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        collapsed={collapsed}
+        collapsed={false}
         onToggleCollapse={onToggleCollapse}
         onNewChat={onNewChat}
         starredCount={starredCount}
@@ -221,17 +261,116 @@ export function ChatSidebar({
         className="sticky top-0 z-10"
       />
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-1.5 space-y-0.5">
+      <div className="flex-1 min-h-0 overflow-y-auto p-1.5 space-y-1.5">
         {filtered.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-6 px-2">
             {searchQuery ? 'No matches' : 'No conversations yet'}
           </p>
-        ) : filtered.map(c => (
-          <ConvItem key={c.id} c={c} isActive={c.id === currentConversationId}
-            onAction={handleAction} onClick={() => c.id !== currentConversationId && onLoadConversation?.(c.id)}
-            onRename={(id, name) => onRenameConversation?.(id, name)} />
-        ))}
+        ) : (
+          <>
+            {filtered.filter(c => c.pinned).length > 0 && (
+              <div>
+                <div className="text-[10px] text-muted-foreground/60 font-medium uppercase tracking-wider px-2 py-1">Pinned</div>
+                {filtered.filter(c => c.pinned).map(c => (
+                  <ConvItem key={c.id} c={c} isActive={c.id === currentConversationId}
+                    onAction={handleAction} onClick={() => c.id !== currentConversationId && onLoadConversation?.(c.id)}
+                    onRename={(id, name) => onRenameConversation?.(id, name)} />
+                ))}
+              </div>
+            )}
+            {filtered.filter(c => !c.pinned && c.starred).length > 0 && (
+              <div>
+                <div className="text-[10px] text-muted-foreground/60 font-medium uppercase tracking-wider px-2 py-1">Starred</div>
+                {filtered.filter(c => !c.pinned && c.starred).map(c => (
+                  <ConvItem key={c.id} c={c} isActive={c.id === currentConversationId}
+                    onAction={handleAction} onClick={() => c.id !== currentConversationId && onLoadConversation?.(c.id)}
+                    onRename={(id, name) => onRenameConversation?.(id, name)} />
+                ))}
+              </div>
+            )}
+            {filtered.filter(c => !c.pinned && !c.starred).length > 0 && (
+              <div>
+                <div className="text-[10px] text-muted-foreground/60 font-medium uppercase tracking-wider px-2 py-1">Recent</div>
+                {filtered.filter(c => !c.pinned && !c.starred).map(c => (
+                  <ConvItem key={c.id} c={c} isActive={c.id === currentConversationId}
+                    onAction={handleAction} onClick={() => c.id !== currentConversationId && onLoadConversation?.(c.id)}
+                    onRename={(id, name) => onRenameConversation?.(id, name)} />
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
     </aside>
+
+      {/* Mobile: floating hamburger + sheet drawer */}
+      <div className="lg:hidden">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="fixed top-2.5 left-2.5 z-40 h-7 w-7 p-0 rounded-lg"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Open conversations"
+        >
+          <IconMenu className="h-4 w-4" />
+        </Button>
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetContent side="left" className="flex flex-col w-64 sm:w-72">
+            <ChatSidebarHeader
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              collapsed={false}
+              onNewChat={() => { onNewChat(); setMobileOpen(false) }}
+              starredCount={starredCount}
+              onOpenConversationSearch={onOpenConversationSearch}
+              className="sticky top-0 z-10 shrink-0"
+            />
+            <div className="flex-1 min-h-0 overflow-y-auto p-1.5 space-y-1.5">
+              {filtered.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-6 px-2">
+                  {searchQuery ? 'No matches' : 'No conversations yet'}
+                </p>
+              ) : (
+                <>
+                  {filtered.filter(c => c.pinned).length > 0 && (
+                    <div>
+                      <div className="text-[10px] text-muted-foreground/60 font-medium uppercase tracking-wider px-2 py-1">Pinned</div>
+                      {filtered.filter(c => c.pinned).map(c => (
+                        <ConvItem key={c.id} c={c} isActive={c.id === currentConversationId}
+                          onAction={(action, conv) => { handleAction(action, conv); if (action === 'delete') setMobileOpen(false) }}
+                          onClick={() => { if (c.id !== currentConversationId) onLoadConversation?.(c.id); setMobileOpen(false) }}
+                          onRename={(id, name) => onRenameConversation?.(id, name)} />
+                      ))}
+                    </div>
+                  )}
+                  {filtered.filter(c => !c.pinned && c.starred).length > 0 && (
+                    <div>
+                      <div className="text-[10px] text-muted-foreground/60 font-medium uppercase tracking-wider px-2 py-1">Starred</div>
+                      {filtered.filter(c => !c.pinned && c.starred).map(c => (
+                        <ConvItem key={c.id} c={c} isActive={c.id === currentConversationId}
+                          onAction={(action, conv) => { handleAction(action, conv); if (action === 'delete') setMobileOpen(false) }}
+                          onClick={() => { if (c.id !== currentConversationId) onLoadConversation?.(c.id); setMobileOpen(false) }}
+                          onRename={(id, name) => onRenameConversation?.(id, name)} />
+                      ))}
+                    </div>
+                  )}
+                  {filtered.filter(c => !c.pinned && !c.starred).length > 0 && (
+                    <div>
+                      <div className="text-[10px] text-muted-foreground/60 font-medium uppercase tracking-wider px-2 py-1">Recent</div>
+                      {filtered.filter(c => !c.pinned && !c.starred).map(c => (
+                        <ConvItem key={c.id} c={c} isActive={c.id === currentConversationId}
+                          onAction={(action, conv) => { handleAction(action, conv); if (action === 'delete') setMobileOpen(false) }}
+                          onClick={() => { if (c.id !== currentConversationId) onLoadConversation?.(c.id); setMobileOpen(false) }}
+                          onRename={(id, name) => onRenameConversation?.(id, name)} />
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+    </>
   )
 }

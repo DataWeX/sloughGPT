@@ -1,5 +1,5 @@
 """
-End-to-end test for SloTransformer: train → export .slo → load → generate.
+End-to-end test for SloTransformer: train → export .soul → load → generate.
 Verifies the full pipeline works without PyTorch dependency.
 """
 import pytest
@@ -60,7 +60,7 @@ def test_soultransformer_forward_backward():
 
 
 def test_soultransformer_train_export_load_generate():
-    """Full pipeline: train, export .slo, load via provider, generate."""
+    """Full pipeline: train, export .soul, load via provider, generate."""
     from domains.training.slonet import SloTransformer, SloAdam, cross_entropy, tensor
 
     vocab = 50
@@ -100,12 +100,12 @@ def test_soultransformer_train_export_load_generate():
     # Full convergence requires fixing MHA backward. Skip strict convergence check.
     assert np.isfinite(final_loss), f"Loss went NaN"
 
-    # Export to .slo
+    # Export to .soul
     from domains.training.export import export_to_sou
     from domains.inference.slo_format import SloProfile, PersonalityCore
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        sou_path = os.path.join(tmpdir, "test_e2e.slo")
+        sou_path = os.path.join(tmpdir, "test_e2e.soul")
         profile = SloProfile(
             name="test_e2e",
             version="1.0",
@@ -118,7 +118,7 @@ def test_soultransformer_train_export_load_generate():
         model.metadata["steps"] = len(losses)
         model.metadata["avg_loss"] = float(np.mean(losses[-5:]))
         export_to_sou(model, sou_path, profile)
-        assert os.path.exists(sou_path), f".slo not created: {sou_path}"
+        assert os.path.exists(sou_path), f".soul not created: {sou_path}"
 
         # Load via SloTransformerProvider
         from domains.models.provider import SloTransformerProvider

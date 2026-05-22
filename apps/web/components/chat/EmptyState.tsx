@@ -83,7 +83,7 @@ export function EmptyState({ hasModel, onSuggestionClick }: EmptyStateProps) {
 
       <div className="space-y-2">
         <p className="text-base font-semibold text-foreground">
-          {hasModel ? greeting + '!' : t('common.starting')}
+          {hasModel ? (greeting || 'Ready') + '!' : t('common.starting')}
         </p>
         <p className="text-sm text-muted-foreground max-w-[260px]">
           {hasModel

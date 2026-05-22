@@ -1072,13 +1072,13 @@ def export_to_sou(
     soul_profile: Any = None,
     weights_only: bool = False,
 ) -> str:
-    """Export model to .slo Slo Unit format.
+    """Export model to .soul Slo Unit format.
 
     Self-contained model with living soul personality and characteristics.
 
     Args:
         model: SloughGPT model to export
-        output_path: Path for output file (.slo)
+        output_path: Path for output file (.soul)
         soul_profile: Optional soul profile with personality traits
         weights_only: Export weights only (no soul data)
 
@@ -1128,6 +1128,7 @@ def export_all_formats(
         - PyTorch (.torch) - legacy format
         - ONNX (.onnx) - cross-platform
         - GGUF Q4_K_M (.gguf) - mobile (llama.rn)
+        - Slo Unit (.soul) - SloughGPT self-contained + personality
 
     Args:
         config: Export configuration
@@ -1139,7 +1140,8 @@ def export_all_formats(
     Note:
         SafeTensors is the recommended format as it's safe, fast,
         and widely supported. The .torch format is included for
-        backward compatibility.
+        backward compatibility. The .soul format includes personality
+        data and living soul metadata.
     """
     output = _replace_ext(config.output_path, ".safetensors")
     export_to_safetensors(model, output, config.metadata)
@@ -1160,6 +1162,10 @@ def export_all_formats(
         results["gguf_q4_k_m"] = output
     except ImportError as e:
         logger.warning(f"GGUF export skipped: {e}")
+
+    output = _replace_ext(config.output_path, ".soul")
+    export_to_sou(model, output, soul_profile=config.metadata)
+    results["sou"] = output
 
 
 def export_model(
@@ -1318,7 +1324,7 @@ def export_model(
                     lineage="sloughgpt",
                     **({"lineage": config.metadata["lineage"]} if config.metadata and "lineage" in config.metadata else {}),
                 )
-                output = _replace_ext(config.output_path, ".slo")
+                output = _replace_ext(config.output_path, ".soul")
                 export_to_sou(model, output, soul_profile=soul)
                 results["sou"] = output
 
@@ -1362,7 +1368,7 @@ def list_export_formats() -> Dict[str, str]:
         "gguf_q8_0": "GGUF Q8_0 (.gguf) - high quality, larger size",
         "torch": "PyTorch (.pt) - training checkpoint",
         "torchscript": "TorchScript (.torchscript.pt) - PyTorch C++ inference",
-        "sou": "Slo Unit (.slo) - SloughGPT self-contained + personality",
+        "sou": "Slo Unit (.soul) - SloughGPT self-contained + personality",
         "all": "Export all formats at once",
     }
 

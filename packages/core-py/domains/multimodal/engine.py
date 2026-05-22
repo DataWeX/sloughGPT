@@ -4,6 +4,7 @@ Multimodal Engine — Vision + Text understanding.
 No external downloads. Everything learned from scratch.
 """
 
+import os
 from typing import List, Tuple, Optional
 from dataclasses import dataclass
 import logging
@@ -281,20 +282,9 @@ class MultimodalEngine:
         # Load decoder weights
         d_idx = 0
         for p in engine.decoder.parameters():
-            if f"decoder_{d_idx}" in data:
-                p.data = data[f"decoder_{d_idx}"]
-            d_idx += 1
-            key = f"vision_{v_idx}"
-            if key in data:
-                p.data[:] = data[key]
-            v_idx += 1
-
-        decoder_params = engine.decoder.parameters()
-        d_idx = 0
-        for p in decoder_params:
             key = f"decoder_{d_idx}"
             if key in data:
-                p.data[:] = data[key]
+                p.data = data[key]
             d_idx += 1
 
         logger.info(f"Multimodal engine loaded from {path}")
@@ -374,6 +364,7 @@ class VisionEncoder:
 
     def __init__(self, embed_dim=256, n_heads=8, n_layers=4):
         self.embed_dim = embed_dim
+        self.n_heads = n_heads
         self.patch_dim = 3 * self.PATCH_SIZE * self.PATCH_SIZE  # 3 * 16 * 16 = 768
         self.num_patches = (self.IMAGE_SIZE // self.PATCH_SIZE) ** 2  # 14*14 = 196
         self.cls_token = Tensor(np.random.randn(1, 1, embed_dim).astype(np.float32) * 0.02, requires_grad=True)
@@ -690,8 +681,8 @@ def contrastive_step(engine: MultimodalEngine, img_np: np.ndarray, buffer: Repla
 
     loss = contrastive_loss(embed1, embed2, negatives, temperature=0.5)
     loss.backward()
-    engine.vision.optimizer.step(engine.vision.model.parameters())
-    for p in engine.vision.model.parameters():
+    engine.vision.optimizer.step(engine.vision.parameters())
+    for p in engine.vision.parameters():
         p.grad = None
 
     return float(loss.data)

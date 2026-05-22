@@ -1,8 +1,9 @@
 """
-Convert ZIP-format .slo checkpoints to v3 binary for WebGPU inference.
+Convert ZIP-format .soul checkpoints to v3 binary for WebGPU inference.
 
-Usage:
-    PYTHONPATH=packages/core-py python scripts/convert_checkpoint.py path/to/model.slo [output.slo]
+Usage::
+
+    PYTHONPATH=packages/core-py python scripts/convert_checkpoint.py path/to/model.soul [output.soul]
 """
 
 from __future__ import annotations
@@ -20,11 +21,11 @@ from domains.inference import write_v3_sou
 
 
 def convert(inpath: str, outpath: str | None = None) -> str:
-    """Load a .slo checkpoint (any format) and write as v3 binary.
+    """Load a .soul checkpoint (any format) and write as v3 binary.
 
     Args:
-        inpath: path to any .slo file (JSON, ZIP/PyTorch, or v3)
-        outpath: destination path (default: ``<basename>.bin.slo``)
+        inpath: path to any .soul file (JSON, ZIP/PyTorch, or v3)
+        outpath: destination path (default: ``<basename>.bin.soul``)
 
     Returns:
         path to the written v3 file

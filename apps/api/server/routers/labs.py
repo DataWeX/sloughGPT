@@ -371,9 +371,9 @@ async def labs_token_probs(req: TokenProbRequest):
 
 @router.post("/import")
 async def labs_import(file: UploadFile = File(...)):
-    """Import a .slo checkpoint file via multipart upload.
+    """Import a .soul checkpoint file via multipart upload.
 
-    Saves the uploaded .slo to the auto-training checkpoints directory
+    Saves the uploaded .soul to the auto-training checkpoints directory
     and loads it into the current model.
     """
     try:
@@ -384,9 +384,9 @@ async def labs_import(file: UploadFile = File(...)):
         if len(data) < 4:
             return {"error": "File too small or empty"}
 
-        name = file.filename or f"imported_{int(__import__('time').time())}.slo"
-        if not name.endswith(".slo"):
-            name += ".slo"
+        name = file.filename or f"imported_{int(__import__('time').time())}.soul"
+        if not name.endswith(".soul"):
+            name += ".soul"
 
         dest = CHECKPOINTS_DIR / name
         dest.write_bytes(data)
