@@ -1326,7 +1326,7 @@ const sidebarConversations: Conversation[] = (Array.isArray(sessions) ? sessions
                     Tools Panel
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => exportConversationAsMarkdown(messages)} disabled={messages.length === 0}>
-                    <IconDownload className="mr-2 h-4 w-4" />
+                    <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 11l5 5 5-5M12 4v12" /></svg>
                     Export Markdown
                   </DropdownMenuItem>
                 </DropdownMenuContent>
