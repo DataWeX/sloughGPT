@@ -31,7 +31,7 @@ pydantic-settings>=2.1.0
 
 # Async
 aiofiles>=23.2.0
-aiohttp>=3.8.0
+aiohttp>=3.13.5
 
 # Authentication
 PyJWT>=2.8.0
