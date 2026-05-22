@@ -35,7 +35,7 @@ aiohttp>=3.8.0
 
 # Authentication
 PyJWT>=2.8.0
-python-multipart>=0.0.6
+python-multipart>=0.0.20
 
 # CLI/UI
 click>=8.1.0
