@@ -27,7 +27,7 @@ uvicorn[standard]>=0.24.0
 starlette>=0.27.0
 httpx>=0.25.0
 pydantic>=2.5.0
-pydantic-settings>=2.1.0
+pydantic-settings>=2.11.0
 
 # Async
 aiofiles>=23.2.0
