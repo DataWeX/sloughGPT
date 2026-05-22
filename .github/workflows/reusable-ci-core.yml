@@ -67,7 +67,7 @@ jobs:
 
       - name: Upload test results
         if: ${{ inputs.upload_test_artifact && always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: tests/
