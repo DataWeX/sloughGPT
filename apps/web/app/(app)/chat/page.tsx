@@ -35,6 +35,7 @@ import {
 } from '@/components/chat'
 import { ChatToolPanel } from '@/components/chat/ChatToolPanel'
 import { VoiceChatMode } from '@/components/chat/VoiceChatMode'
+import { ModelDropdown } from '@/components/chat/ModelDropdown'
 import { ConversationSearch } from '@/components/chat/ConversationSearch'
 import { SoulNetWebGPU, SoulTransformerWebGPU, inferArch } from '@/lib/soulnet-webgpu'
 
@@ -1056,8 +1057,8 @@ const sidebarConversations: Conversation[] = (Array.isArray(sessions) ? sessions
         />
 
         <div className="flex flex-col flex-1 min-h-0 min-w-0 max-w-full overflow-hidden">
-          {/* Chat header */}
-          <div className="lg:sticky lg:top-0 z-10 flex items-center justify-end lg:justify-center px-3 py-2 border-b border-border/40 shrink-0 bg-background/80 backdrop-blur-sm gap-2">
+          {/* Chat header — fixed to top, never scrolls */}
+          <div className="z-10 flex items-center justify-end lg:justify-center px-3 py-2 border-b border-border/40 shrink-0 bg-background/80 backdrop-blur-sm gap-2">
             {/* Search */}
             <div className="flex items-center gap-2 min-w-0">
               <div className="relative w-36 sm:w-44">
@@ -1118,95 +1119,49 @@ const sidebarConversations: Conversation[] = (Array.isArray(sessions) ? sessions
             {/* Actions */}
             <div className="flex items-center gap-1 sm:gap-1.5">
               {/* Model + status */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-7 px-2.5 font-mono text-xs gap-1.5 rounded-lg border border-transparent hover:border-border/50">
-                    <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${
-                      loadingModel ? 'bg-warning animate-pulse' :
-                      model ? (loading ? 'bg-warning animate-pulse' : 'bg-success') :
-                      'bg-muted-foreground/30'
-                    }`} />
-                    <span className="truncate max-w-[48px] sm:max-w-[64px]" title={loadingModel || model || 'Select a model to load'}>
-                      {loadingModel
-                        ? (loadingModel.includes('/') ? loadingModel.split('/').pop() : loadingModel)
-                        : model
-                          ? (model.includes('/') ? model.split('/').pop() : model)
-                          : 'Select model'}
-                    </span>
-                    <IconChevronDown className="h-2.5 w-2.5 opacity-40 shrink-0" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[200px] max-h-[300px] overflow-y-auto">
-                  {loadingModel && (
-                    <div className="h-0.5 bg-muted rounded-full mx-2 mb-1 overflow-hidden shrink-0">
-                      <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: '60%' }} />
-                    </div>
-                  )}
-                  {availableModels.map((m) => {
-                    const info = modelInfoMap[m]
-                    const isCached = info?.cached
-                    const sizeLabel = info?.size_gb ? `${info.size_gb.toFixed(2)} GB` : ''
-                    const isLoaded = m === model
-                    const isLoading = m === loadingModel
-                    return (
-                      <DropdownMenuItem
-                        key={m}
-                        onSelect={async () => {
-                          if (m === model || loadingModel) return
-                          setLoadingModel(m)
-                          if (isCached) {
-                            showToast(`Loading ${m}...`, 'info')
-                            try {
-                              const result = await modelController.load(m)
-                              await refreshHealth()
-                              setModel(m)
-                              showToast(`Model ready: ${m} (${result.device || 'cpu'})`, 'success')
-                            } catch (err) {
-                              showToast(`Failed to load ${m}: ${err instanceof Error ? err.message : 'unknown error'}`, 'error')
-                            } finally {
-                              setLoadingModel(null)
-                            }
-                          } else {
-                            // Confirm before downloading uncached model
-                            const sizeText = info?.size_gb ? `${info.size_gb.toFixed(1)} GB` : '? GB'
-                            const modelName = m.includes('/') ? m.split('/').pop() : m
-                            if (!window.confirm(`Download ${modelName} (${sizeText}) from HuggingFace?`)) {
-                              setLoadingModel(null); return
-                            }
-                            showToast(`Downloading ${m}...`, 'info')
-                            try {
-                              await startDownload(m, info?.size_gb ? Math.round(info.size_gb * 1024 * 1024 * 1024) : 0)
-                              await modelController.load(m)
-                              await refreshHealth()
-                              setModel(m)
-                              showToast(`Model ready: ${m}`, 'success')
-                            } catch (err) {
-                              showToast(`Failed: ${err instanceof Error ? err.message : 'unknown'}`, 'error')
-                            } finally {
-                              setLoadingModel(null)
-                            }
-                          }
-                        }}
-                        disabled={isLoading}
-                        className="font-mono text-xs"
-                        title={`${m}${isCached ? ' (cached)' : ' (download)'}${sizeLabel ? ` — ${sizeLabel}` : ''}`}
-                      >
-                        <span className="truncate flex-1">{m.includes('/') ? m.split('/').pop() : m}</span>
-                        <span className="text-[10px] text-muted-foreground/60 ml-1 shrink-0">{sizeLabel}</span>
-                        {isLoading ? (
-                          <IconRefresh className="h-3 w-3 animate-spin shrink-0 text-warning ml-1" />
-                        ) : isLoaded ? (
-                          <IconCheck className="h-3 w-3 shrink-0 text-success ml-1" />
-                        ) : isCached ? (
-                          <span className="text-[9px] text-muted-foreground/40 px-1 ml-1 border border-border/30 rounded leading-none">cached</span>
-                        ) : (
-                          <svg className="h-2.5 w-2.5 shrink-0 text-muted-foreground/40 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
-                        )}
-                      </DropdownMenuItem>
-                    )
-                  })}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <ModelDropdown
+                availableModels={availableModels}
+                currentModel={model}
+                loadingModel={loadingModel}
+                generating={loading}
+                modelInfoMap={modelInfoMap}
+                onSelectModel={async (m) => {
+                  if (m === model || loadingModel) return
+                  setLoadingModel(m)
+                  const info = modelInfoMap[m]
+                  if (info?.cached) {
+                    showToast(`Loading ${m}...`, 'info')
+                    try {
+                      const result = await modelController.load(m)
+                      await refreshHealth()
+                      setModel(m)
+                      showToast(`Model ready: ${m} (${result.device || 'cpu'})`, 'success')
+                    } catch (err) {
+                      showToast(`Failed to load ${m}: ${err instanceof Error ? err.message : 'unknown error'}`, 'error')
+                    } finally {
+                      setLoadingModel(null)
+                    }
+                  } else {
+                    const sizeText = info?.size_gb ? `${info.size_gb.toFixed(1)} GB` : '? GB'
+                    const modelName = m.includes('/') ? m.split('/').pop() : m
+                    if (!window.confirm(`Download ${modelName} (${sizeText}) from HuggingFace?`)) {
+                      setLoadingModel(null); return
+                    }
+                    showToast(`Downloading ${m}...`, 'info')
+                    try {
+                      await startDownload(m, info?.size_gb ? Math.round(info.size_gb * 1024 * 1024 * 1024) : 0)
+                      await modelController.load(m)
+                      await refreshHealth()
+                      setModel(m)
+                      showToast(`Model ready: ${m}`, 'success')
+                    } catch (err) {
+                      showToast(`Failed: ${err instanceof Error ? err.message : 'unknown'}`, 'error')
+                    } finally {
+                      setLoadingModel(null)
+                    }
+                  }
+                }}
+              />
 
               {/* Soul pill (personality) */}
               <DropdownMenu>

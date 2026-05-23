@@ -52,16 +52,22 @@ def _get_hf_model_size_gb(model_id: str) -> Optional[float]:
     # 3. Known verified sizes (safetensors on disk)
     known_sizes_gb = {
         "gpt2": 0.52,
+        "openai-community/gpt2": 0.52,
         "gpt2-medium": 1.48,
+        "openai-community/gpt2-medium": 1.48,
         "gpt2-large": 3.15,
+        "openai-community/gpt2-large": 3.15,
         "gpt2-xl": 6.18,
+        "openai-community/gpt2-xl": 6.18,
         "distilgpt2": 0.34,
+        "distilbert/distilgpt2": 0.34,
         "EleutherAI/gpt-neo-125M": 0.52,
         "EleutherAI/gpt-neo-1.3B": 5.4,
         "EleutherAI/gpt-j-6B": 24.6,
         "microsoft/phi-2": 5.4,
-        "TinyLlama/TinyLlama-1.1B-Chat-v1.0": 4.4,
         "microsoft/Phi-3-mini-128k-instruct": 7.6,
+        "microsoft/Phi-3.5-mini-instruct": 7.6,
+        "TinyLlama/TinyLlama-1.1B-Chat-v1.0": 4.4,
         "Qwen/Qwen2-0.5B-Instruct": 1.2,
         "Qwen/Qwen2.5-0.5B-Instruct": 1.2,
         "Qwen/Qwen2.5-1.5B-Instruct": 3.4,
@@ -72,8 +78,21 @@ def _get_hf_model_size_gb(model_id: str) -> Optional[float]:
         "meta-llama/Llama-3.1-8B-Instruct": 16.1,
         "google/gemma-2b": 4.8,
         "google/gemma-7b": 16.8,
+        "HuggingFaceH4/zephyr-7b-beta": 14.2,
+        "mistralai/Mistral-7B-v0.1": 14.2,
+        "bigscience/bloom-560m": 2.1,
+        "bigscience/bloom-1b7": 6.6,
+        "facebook/opt-125m": 0.48,
+        "facebook/opt-350m": 1.4,
+        "Salesforce/codegen-350M-mono": 1.4,
+        "Salesforce/codegen-2B-mono": 7.8,
     }
-    return known_sizes_gb.get(model_id)
+    # Try full model_id first, then short name (after `/`)
+    size = known_sizes_gb.get(model_id)
+    if size is not None:
+        return size
+    short = model_id.split("/")[-1] if "/" in model_id else model_id
+    return known_sizes_gb.get(short)
 
 
 @router.get("", response_model=List[ModelInfo])

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { IconX, IconBrain, IconEye, IconHeart, IconSettings, IconDocument, IconModel, IconCheck, IconRefresh } from '@/components/ui'
+import { ModelDropdown } from './ModelDropdown'
 import { cn } from '@/lib/cn'
 import { KNOWLEDGE_STORAGE_KEY } from '@/lib/config'
 
@@ -507,32 +508,13 @@ export function ChatToolPanel({
                 )}
 
                 {/* Model section */}
-                <div className="rounded-lg border border-border/40 bg-muted/10">
-                  <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider px-2.5 py-1.5 border-b border-border/30">Backend Model</div>
-                  <div className="max-h-28 overflow-y-auto p-1.5 space-y-0.5">
-                    {availableModels.length === 0 ? (
-                      <div className="px-2 py-3 text-[10px] text-muted-foreground text-center">No models available</div>
-                    ) : availableModels.map(m => {
-                      const info = modelInfoMap?.[m]
-                      const sizeLabel = info?.size_gb ? `${info.size_gb.toFixed(2)} GB` : ''
-                      return (
-                        <button
-                          key={m}
-                          onClick={() => onSelectModel(m)}
-                          className={cn(
-                            'w-full text-left px-2 py-1 rounded text-xs transition-colors flex items-center justify-between font-mono',
-                            currentModel === m ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted/80',
-                          )}
-                          title={`${m}${sizeLabel ? ` — ${sizeLabel}` : ''}`}
-                        >
-                          <span className="truncate">{m.includes('/') ? m.split('/').pop() : m}</span>
-                          <span className="text-[10px] text-muted-foreground/60 ml-1 shrink-0">{sizeLabel}</span>
-                          {currentModel === m && <IconCheck className="h-3 w-3 shrink-0 ml-1" />}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
+                <ModelDropdown
+                  variant="panel"
+                  availableModels={availableModels}
+                  currentModel={currentModel}
+                  onSelectModel={onSelectModel}
+                  modelInfoMap={modelInfoMap}
+                />
 
                 {/* Checkpoints section */}
                 <div className="rounded-lg border border-border/40 bg-muted/10">
