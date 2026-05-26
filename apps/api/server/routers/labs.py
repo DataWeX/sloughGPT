@@ -632,8 +632,7 @@ async def labs_train_on_feedback(req: TrainOnFeedbackRequest):
 
 # ── Shell / Terminal ───────────────────────────────────────────────────
 
-import subprocess
-import os
+import os, shlex, subprocess
 
 _shell_cwd: str = os.getcwd()
 _blocked_prefixes = [
@@ -682,9 +681,9 @@ async def labs_exec(req: ExecRequest):
             return {"error": f"cd: {str(e)}", "cwd": _shell_cwd}
 
     try:
+        cmd_list = shlex.split(cmd)
         result = subprocess.run(
-            cmd,
-            shell=True,
+            cmd_list,
             capture_output=True,
             text=True,
             timeout=15,
