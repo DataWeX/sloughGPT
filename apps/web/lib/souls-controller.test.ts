@@ -49,18 +49,18 @@ describe('soulsController.getCurrent', () => {
 describe('soulsController.switch', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('POSTs to /souls/switch with name', async () => {
+  it('POSTs to /souls/switch/{name} with name in path', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'ok' })
 
     await soulsController.switch('friendly')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/souls/switch', { name: 'friendly' })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/souls/switch/friendly', {})
   })
 
-  it('includes checkpoint_name when provided', async () => {
+  it('includes checkpoint_name in body when provided', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'ok' })
 
     await soulsController.switch('friendly', 'v2')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/souls/switch', { name: 'friendly', checkpoint_name: 'v2' })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/souls/switch/friendly', { checkpoint_name: 'v2' })
   })
 })
 

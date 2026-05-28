@@ -117,7 +117,14 @@ export const tokenizerController = {
     return apiPost<AnalysisResponse>('/tokenizer/analyze', { texts })
   },
 
-  async trainShakespeare(vocabSize = 512): Promise<any> {
-    return apiPost<any>('/tokenizer/train-shakespeare', { vocab_size: vocabSize })
+  async trainTokenizer(vocabSize = 512, texts?: string[]): Promise<any> {
+    const body: Record<string, unknown> = { vocab_size: vocabSize }
+    if (texts) body.texts = texts
+    return apiPost<any>('/tokenizer/train', body)
+  },
+
+  /** @deprecated Use trainTokenizer() */
+  async train(vocabSize = 512, texts?: string[]): Promise<any> {
+    return apiPost<any>('/tokenizer/train', { vocab_size: vocabSize, texts })
   },
 }

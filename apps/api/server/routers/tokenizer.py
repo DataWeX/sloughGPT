@@ -156,17 +156,24 @@ async def get_merges(limit: int = 30):
     return {"merges": result, "total": len(merges)}
 
 
-class TrainShakespeareRequest(BaseModel):
+class TrainTokenizerRequest2(BaseModel):
     vocab_size: int = 512
+    texts: list[str] = []
 
-@router.post("/train-shakespeare")
-async def train_on_shakespeare(req: TrainShakespeareRequest):
-    url = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
-    text = urllib.request.urlopen(url).read().decode("utf-8")
-    lines = [line.strip() for line in text.split("\n") if line.strip()]
+@router.post("/train")
+async def train_tokenizer(req: TrainTokenizerRequest2):
+    """
+    Train the BPE tokenizer on provided text corpus or download default Shakespeare data.
+    """
+    if req.texts:
+        lines = req.texts
+    else:
+        url = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
+        text = urllib.request.urlopen(url).read().decode("utf-8")
+        lines = [line.strip() for line in text.split("\n") if line.strip()][:2000]
     mgr = get_tokenizer_manager()
-    mgr.train(lines[:2000], vocab_size=req.vocab_size, min_frequency=3)
-    return {"status": "trained", "corpus_size": len(lines[:2000]), "stats": mgr.stats()}
+    mgr.train(lines, vocab_size=req.vocab_size, min_frequency=3)
+    return {"status": "trained", "corpus_size": len(lines), "stats": mgr.stats()}
 
 
 @router.get("/sample")
