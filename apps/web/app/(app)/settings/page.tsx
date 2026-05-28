@@ -30,10 +30,15 @@ export default function SettingsPage() {
   const { state: apiHealth } = useApiHealth()
 
   const clearChat = () => {
-    localStorage.removeItem('sloughgpt_messages')
-    localStorage.removeItem('sloughgpt_chat_sessions')
-    localStorage.removeItem('sloughgpt_current_session')
+    localStorage.removeItem('man_messages')
+    localStorage.removeItem('man_chat_sessions')
+    localStorage.removeItem('man_current_session')
     addToast('Chat history cleared', 'success')
+  }
+
+  const resetAllSettings = () => {
+    localStorage.removeItem('man_settings')
+    window.location.reload()
   }
 
   return (
@@ -104,6 +109,16 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
+        {/* Knowledge base */}
+        <Link href="/knowledge" className="block">
+          <Card className="cursor-pointer hover:border-primary/30 transition-colors">
+            <CardHeader>
+              <CardTitle className="text-base">Knowledge base</CardTitle>
+              <CardDescription>Store, edit, and browse facts the AI can reference</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
         {/* Tokenizer */}
         <Link href="/tokenizer" className="block">
           <Card className="cursor-pointer hover:border-primary/30 transition-colors">
@@ -129,8 +144,8 @@ export default function SettingsPage() {
                   'bg-success'
                 }`} />
                 <span>{
-                  apiHealth === null ? 'Connecting...' :
-                  apiHealth === 'offline' ? 'API unreachable' :
+                  apiHealth === null ? 'Connecting…' :
+                  apiHealth === 'offline' ? 'Server offline' :
                   apiHealth.model_loaded ? `${apiHealth.model_type} loaded` :
                   'Online, no model loaded'
                 }</span>
@@ -167,6 +182,33 @@ export default function SettingsPage() {
                 </AlertDialogContent>
               </AlertDialog>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Reset all settings */}
+        <Card className="border-destructive/30">
+          <CardHeader>
+            <CardTitle className="text-base text-destructive">Reset all settings</CardTitle>
+            <CardDescription>Restore all settings to their defaults</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button type="button" variant="destructive" size="sm">Reset</Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Reset all settings?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will clear your theme preference, default model settings, and custom instructions. Chat history is not affected.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={resetAllSettings} className="bg-destructive text-destructive-foreground">Reset</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </CardContent>
         </Card>
       </div>

@@ -127,8 +127,7 @@ export default function LoginPage() {
           </p>
           <Separator />
           <p className="text-center text-xs text-muted-foreground">
-            Default admin: <span className="font-mono text-foreground">admin</span> /{' '}
-            <span className="font-mono text-foreground">admin123</span>
+            Local app — no authentication required in development mode
           </p>
         </CardFooter>
       </Card>

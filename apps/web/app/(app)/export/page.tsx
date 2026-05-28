@@ -6,10 +6,23 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui'
-import { modelController } from '@/lib/model-controller'
+import { modelController, type HealthStatus } from '@/lib/model-controller'
 import { apiGet, apiPost } from '@/lib/http-client'
 
 type ExportFormat = 'sou' | 'pytorch' | 'onnx' | 'gguf'
+
+interface ExportResponse {
+  status: string
+  format: string
+  files?: string[]
+  error?: string
+}
+
+interface TextExportResponse {
+  status: string
+  pairs_count: number
+  filepath: string
+}
 
 export default function ExportPage() {
   const [formats, setFormats] = useState<string[]>([])
@@ -19,7 +32,7 @@ export default function ExportPage() {
   const [exporting, setExporting] = useState(false)
   const [exportResult, setExportResult] = useState<string | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
-  const [health, setHealth] = useState<any>(null)
+  const [health, setHealth] = useState<HealthStatus | null>(null)
   const [pageLoaded, setPageLoaded] = useState(false)
   const [textExportCount, setTextExportCount] = useState(100)
   const [textExportResult, setTextExportResult] = useState<string | null>(null)
@@ -52,7 +65,7 @@ export default function ExportPage() {
     setExportResult(null)
     setExportError(null)
     try {
-      const res = await apiPost<{ status: string; format: string; files?: string[]; error?: string }>('/models/export', {
+      const res = await apiPost<ExportResponse>('/models/export', {
         output_path: outputPath,
         format: selectedFormat,
         include_tokenizer: includeTokenizer,
@@ -62,8 +75,8 @@ export default function ExportPage() {
       } else {
         setExportResult(`Exported as ${res.format}: ${res.files?.join(', ') || 'done'}`)
       }
-    } catch (e: any) {
-      setExportError(e.message || 'Export failed')
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : 'Export failed')
     }
     setExporting(false)
   }
@@ -72,13 +85,13 @@ export default function ExportPage() {
     setTextExportBusy(true)
     setTextExportResult(null)
     try {
-      const res = await apiPost<{ status: string; pairs_count: number; filepath: string }>('/training/export-text', {
+      const res = await apiPost<TextExportResponse>('/training/export-text', {
         min_quality: 0,
         target_count: textExportCount,
       })
       setTextExportResult(`${res.pairs_count} pairs exported to ${res.filepath}`)
-    } catch (e: any) {
-      setTextExportResult(`Error: ${e.message}`)
+    } catch (e) {
+      setTextExportResult(`Error: ${e instanceof Error ? e.message : 'Export failed'}`)
     }
     setTextExportBusy(false)
   }
