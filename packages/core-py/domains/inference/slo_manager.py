@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 import logging
 
-logger = logging.getLogger("sloughgpt.soul_manager")
+logger = logging.getLogger("man.soul_manager")
 
 
 @dataclass
@@ -75,7 +75,7 @@ class SloManager:
                 except Exception as e:
                     logger.debug(f"Failed to parse soul {sou_path}: {e}")
 
-        # Find text .slo profile files in souls/ subdirectory
+        # Find text profile files in souls/ subdirectory (both .slo and .soul)
         soul_candidates = [self.slos_dir / "souls"]
         # Try to resolve from this file's location to repo root
         for p in Path(__file__).resolve().parents:
@@ -85,13 +85,14 @@ class SloManager:
                 break
         for candidate in soul_candidates:
             if candidate.exists():
-                for soul_path in glob.glob(str(candidate / "*.slo")):
-                    try:
-                        soul_info = self._parse_soul_info(soul_path)
-                        if soul_info and soul_info.name not in self._souls_cache:
-                            self._souls_cache[soul_info.name] = soul_info
-                    except Exception as e:
-                        logger.debug(f"Failed to parse soul profile {soul_path}: {e}")
+                for ext in ("*.slo", "*.soul"):
+                    for soul_path in glob.glob(str(candidate / ext)):
+                        try:
+                            soul_info = self._parse_soul_info(soul_path)
+                            if soul_info and soul_info.name not in self._souls_cache:
+                                self._souls_cache[soul_info.name] = soul_info
+                        except Exception as e:
+                            logger.debug(f"Failed to parse soul profile {soul_path}: {e}")
 
         logger.info(f"Found {len(self._souls_cache)} souls")
 
@@ -295,6 +296,66 @@ class SloManager:
             "souls_dir": str(self.slos_dir),
             "available_souls": [s.name for s in self._souls_cache.values()],
         }
+
+    def get_trait_weights(self) -> Dict[str, Any]:
+        """
+        Read trait weight attributes from the currently active soul file,
+        overlaid with live values from the context manager TraitWeightsConfig.
+
+        Returns a dict with personality, cognition, and emotion trait groups
+        showing each trait's current weight (0.0–1.0). These configure the
+        context managers — like a player card in a sports game.
+
+        Always returns the full trait structure. Without a soul, returns
+        TraitWeightsConfig defaults (0.5) overlaid with any feedback-driven
+        changes.
+        """
+        soul = self.get_current_soul()
+
+        # Always start with canonical defaults from TRAIT_SCHEMA
+        from domains.context.managers import TRAIT_SCHEMA
+
+        result = {
+            group: {t: 0.5 for t in traits}
+            for group, traits in TRAIT_SCHEMA.items()
+        }
+
+        # Override with soul file's personality if loaded
+        if soul:
+            if soul.personality:
+                for k, v in soul.personality.items():
+                    if k in result.get("personality", {}):
+                        result["personality"][k] = v
+
+            # Read metadata from the .slo/.soul file
+            try:
+                with open(soul.path, "rb") as f:
+                    magic = f.read(4)
+                    if magic in (b"SOUL",):
+                        meta_len = struct.unpack("<I", f.read(4))[0]
+                        meta = json.loads(f.read(meta_len))
+                        for group in ("personality", "cognition", "emotion"):
+                            if group in meta:
+                                for k, v in meta[group].items():
+                                    if k in result.get(group, {}):
+                                        result[group][k] = v
+            except Exception:
+                pass
+
+        # Overlay live values from TraitWeightsConfig (feedback-driven)
+        try:
+            from domains.context.managers import get_trait_config
+            config = get_trait_config()
+            live = config.all()
+            for group in ("personality", "cognition", "emotion"):
+                if group in live:
+                    for k, v in live[group].items():
+                        if k in result.get(group, {}):
+                            result[group][k] = v
+        except Exception:
+            pass
+
+        return result
 
 
 # Global manager instance
