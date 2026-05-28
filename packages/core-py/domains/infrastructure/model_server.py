@@ -24,6 +24,14 @@ from typing import Any, Optional, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
+# Pre-import torch at module level so background threads don't pay the
+# ~5s cold-import cost (Metal Performance Shaders loading on macOS).
+try:
+    import torch
+    _TORCH_AVAILABLE = True
+except ImportError:
+    _TORCH_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -277,8 +285,10 @@ class ModelServer:
             logger.warning("ModelServer[%s]: warmup failed: %s", self.model_id, e)
 
     def _check_device(self) -> None:
+        if not _TORCH_AVAILABLE:
+            self._device = "unknown"
+            return
         try:
-            import torch
             if hasattr(self._model_ref, "device"):
                 self._device = str(self._model_ref.device)
             elif hasattr(self._model_ref, "parameters"):
@@ -491,7 +501,8 @@ class ModelServer:
             result["elapsed_ms"] = round((time.time() - start) * 1000, 1)
             return result
 
-        import torch
+        if not _TORCH_AVAILABLE:
+            raise RuntimeError("torch is required for synchronous generation")
 
         with self._lock:
             model = self._model_ref

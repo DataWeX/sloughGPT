@@ -392,9 +392,13 @@ class TestWarmup:
         fail_model = MockModel(fail_on_call=True)
         server = ModelServer(fail_model, tokenizer, model_id="fail-warmup")
         import time
-        time.sleep(1.0)
-        assert not server._warmup_completed
-        assert server._warmup_error is not None
+        deadline = time.time() + 15.0
+        while time.time() < deadline:
+            if server._warmup_error is not None:
+                break
+            time.sleep(0.2)
+        assert not server._warmup_completed, "warmup should not have completed"
+        assert server._warmup_error is not None, f"expected warmup error, got None (completed={server._warmup_completed})"
         # Warmup failure triggers circuit breaker → status is DEGRADED
         # (this is correct: the model is unhealthy)
         assert server.status == ModelStatus.DEGRADED
