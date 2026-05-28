@@ -20,13 +20,11 @@ import time
 import gc
 import os
 from threading import Lock, Thread, Event
-from typing import Any, Optional, Callable, Awaitable, TypeVar, Generic
+from typing import Any, Optional, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
 logger = logging.getLogger(__name__)
-
-T = TypeVar("T")
 
 
 class ModelStatus(Enum):

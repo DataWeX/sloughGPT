@@ -29,6 +29,7 @@ for _name in _ATOMIC_NAMES:
 
 # Plain fields (set once at startup)
 torch_available: bool = False
+_torch_available: bool = False  # backward compat alias
 training_active: bool = False
 _self_train_proc: Optional[Any] = None
 
