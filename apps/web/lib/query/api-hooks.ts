@@ -115,7 +115,7 @@ export function useLearnerSearch() {
   const invalidate = useInvalidate()
   return useMutation(
     (params: { query: string; max_results?: number }) =>
-      fetch(`/learn/search?query=${encodeURIComponent(params.query)}&max_results=${params.max_results ?? 5}`, { method: 'POST' }).then(r => r.json()),
+      fetch('/learn/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: params.query, max_results: params.max_results ?? 5 }) }).then(r => r.json()),
     {
       onSuccess: () => {
         invalidate('learner-status')

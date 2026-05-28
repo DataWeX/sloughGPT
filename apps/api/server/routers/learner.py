@@ -17,8 +17,12 @@ from fastapi import APIRouter, Query
 router = APIRouter(prefix="/learn", tags=["learner"])
 
 
+class LearnSearchRequest(BaseModel):
+    query: str
+    max_results: int = 5
+
 @router.post("/search")
-def learn_search(query: str = Query(...), max_results: int = 5):
+def learn_search(req: LearnSearchRequest):
     """Search web, fetch full articles, store facts, and fine-tune.
 
     Args:
@@ -30,7 +34,7 @@ def learn_search(query: str = Query(...), max_results: int = 5):
     """
     from domains.learner import get_learner
     learner = get_learner()
-    result = learner.search_and_learn(query, max_results)
+    result = learner.search_and_learn(req.query, req.max_results)
     status = learner.status()
     return {
         "status": "ok",
