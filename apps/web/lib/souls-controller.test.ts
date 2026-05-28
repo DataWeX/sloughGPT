@@ -14,9 +14,6 @@ import { setupApiMocks, apiClient } from './__test-helper'
 setupApiMocks()
 
 import { soulsController } from './souls-controller'
-import { apiClient as _mockedClient } from './http-client'
-
-const mockedClient = _mockedClient as unknown as { post: ReturnType<typeof vi.fn> }
 
 describe('soulsController.list', () => {
   beforeEach(() => { vi.clearAllMocks() })
@@ -53,17 +50,17 @@ describe('soulsController.switch', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('POSTs to /souls/switch with name', async () => {
-    mockedClient.post.mockResolvedValue({ data: {} })
+    apiClient.apiPost.mockResolvedValue({ status: 'ok' })
 
     await soulsController.switch('friendly')
-    expect(mockedClient.post).toHaveBeenCalledWith('/souls/switch', null, { params: { name: 'friendly' } })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/souls/switch', { name: 'friendly' })
   })
 
   it('includes checkpoint_name when provided', async () => {
-    mockedClient.post.mockResolvedValue({ data: {} })
+    apiClient.apiPost.mockResolvedValue({ status: 'ok' })
 
     await soulsController.switch('friendly', 'v2')
-    expect(mockedClient.post).toHaveBeenCalledWith('/souls/switch', null, { params: { name: 'friendly', checkpoint_name: 'v2' } })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/souls/switch', { name: 'friendly', checkpoint_name: 'v2' })
   })
 })
 
@@ -83,10 +80,10 @@ describe('soulsController.loadCheckpoint', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('POSTs to /auto-train/checkpoints/{name}/load', async () => {
-    mockedClient.post.mockResolvedValue({ data: { status: 'loaded', name: 'v1', soul: 'friendly' } })
+    apiClient.apiPost.mockResolvedValue({ status: 'loaded', name: 'v1', soul: 'friendly' })
 
     const result = await soulsController.loadCheckpoint('v1')
     expect(result.status).toBe('loaded')
-    expect(mockedClient.post).toHaveBeenCalledWith('/auto-train/checkpoints/v1/load')
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/auto-train/checkpoints/v1/load')
   })
 })

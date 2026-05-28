@@ -9,7 +9,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 import logging
 
-logger = logging.getLogger("sloughgpt.multimodal.text_encoder")
+logger = logging.getLogger("man.multimodal.text_encoder")
 
 from domains.training.slonet import (
     Tensor, SloNet, SloEmbedding, SloTransformerBlock, SloLayerNorm, SloLinear,
@@ -86,13 +86,27 @@ class TextEncoder:
         """
         Encode raw text strings to embeddings.
         
+        Auto-trains the tokenizer on first use with a default vocabulary
+        so manual train_tokenizer() is never needed.
+        
         Args:
             texts: List of text strings
         Returns:
             embeddings: (B, seq_len, embed_dim) numpy array
         """
         if not self.tokenizer._built:
-            raise RuntimeError("Tokenizer not trained. Call train_tokenizer() first.")
+            default_texts = [
+                "the cat sat on the mat", "a quick brown fox jumps over the lazy dog",
+                "hello world how are you today", "this is a test sentence for training",
+                "the sky is blue and the grass is green", "i love to learn new things",
+                "what is the meaning of life", "the sun rises in the east",
+                "one two three four five six seven eight nine ten",
+                "machine learning is fun and interesting", "please generate an image of",
+                "a beautiful landscape with mountains and trees",
+                "portrait of a person with blue eyes", "still life with fruit and flowers",
+                "abstract art with geometric shapes and bright colors",
+            ]
+            self.tokenizer.train(default_texts)
         
         # Tokenize and pad
         token_lists = [self.tokenizer.encode(t) for t in texts]

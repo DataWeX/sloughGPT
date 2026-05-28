@@ -2,7 +2,7 @@
  * Souls Controller — axios-based API for personality management.
  */
 
-import { apiGet, apiPost, apiClient } from './http-client'
+import { apiGet, apiPost, apiDelete } from './http-client'
 
 export interface Soul {
   name: string
@@ -36,6 +36,7 @@ export interface Checkpoint {
   bleu_delta?: number
   tokenizer_type?: string
   vocab_size?: number
+  training_dataset?: string
 }
 
 export interface SoulsResponse {
@@ -62,9 +63,9 @@ export const soulsController = {
   },
 
   async switch(name: string, checkpointName?: string): Promise<void> {
-    const params: Record<string, string> = { name }
-    if (checkpointName) params.checkpoint_name = checkpointName
-    await apiClient.post('/souls/switch', null, { params })
+    const body: Record<string, string> = { name }
+    if (checkpointName) body.checkpoint_name = checkpointName
+    await apiPost('/souls/switch', body)
   },
 
   async listCheckpoints(): Promise<CheckpointsResponse> {
@@ -72,6 +73,53 @@ export const soulsController = {
   },
 
   async loadCheckpoint(name: string): Promise<{ status: string; name: string; soul?: string; loss?: number; steps?: number; traits?: Record<string, number>; path?: string }> {
-    return apiClient.post(`/auto-train/checkpoints/${encodeURIComponent(name)}/load`).then(r => r.data)
+    return apiPost<{ status: string; name: string; soul?: string; loss?: number; steps?: number; traits?: Record<string, number>; path?: string }>(`/auto-train/checkpoints/${encodeURIComponent(name)}/load`)
+  },
+
+  // ── Trait Weights ──
+
+  async getTraitWeights(): Promise<{
+    personality: Record<string, number>
+    cognition: Record<string, number>
+    emotion: Record<string, number>
+  }> {
+    return apiGet('/souls/weights')
+  },
+
+  // ── Weight Snapshots ──
+
+  async getModes(): Promise<{
+    personality: { label: string; confidence: number; scores?: Record<string, number> }
+    memory: { label: string; confidence: number; capacity?: number; scores?: Record<string, number> }
+    style: { label: string; confidence: number; scores?: Record<string, number> }
+    task: { label: string; confidence: number; scores?: Record<string, number> }
+  }> {
+    return apiGet('/souls/weights/modes')
+  },
+
+  async listWeightSnapshots(): Promise<{ name: string; saved_at?: string; label?: string }[]> {
+    const res = await apiGet<{ snapshots: { name: string; saved_at?: string; label?: string }[] }>('/souls/weights/snapshots')
+    return res.snapshots
+  },
+
+  async saveWeightSnapshot(name: string): Promise<string> {
+    const res = await apiPost<{ status: string; path: string }>(
+      `/souls/weights/snapshot/${encodeURIComponent(name)}`
+    )
+    return res.path
+  },
+
+  async loadWeightSnapshot(name: string): Promise<number> {
+    const res = await apiPost<{ status: string; traits_loaded: number }>(
+      `/souls/weights/snapshot/${encodeURIComponent(name)}/load`
+    )
+    return res.traits_loaded
+  },
+
+  async deleteWeightSnapshot(name: string): Promise<boolean> {
+    const res = await apiDelete<{ deleted: boolean }>(
+      `/souls/weights/snapshot/${encodeURIComponent(name)}`
+    )
+    return res.deleted
   },
 }
