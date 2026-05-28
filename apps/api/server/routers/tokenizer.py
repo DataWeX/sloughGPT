@@ -9,7 +9,7 @@ import urllib.request
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from domains.training.tokenizer_manager import get_tokenizer_manager
@@ -20,6 +20,7 @@ class TrainTokenizerRequest(BaseModel):
     vocab_size: int = 512
     min_frequency: int = 2
     lowercase: bool = True
+    pretokenizer: str = "gpt2"
 
 
 class TokenizeRequest(BaseModel):
@@ -30,6 +31,10 @@ class DetokenizeRequest(BaseModel):
     ids: list[int]
 
 
+class AnalyzeRequest(BaseModel):
+    texts: list[str]
+
+
 router = APIRouter(prefix="/tokenizer", tags=["tokenizer"])
 
 
@@ -38,7 +43,6 @@ def _require_trained():
     if not mgr.is_trained():
         mgr.borrow_from_autotrain()
     if not mgr.is_trained():
-        # Auto-train a minimal default tokenizer so it always works
         mgr.train(
             ["the quick brown fox jumps over the lazy dog", "hello world", "machine learning"],
             vocab_size=256, min_frequency=1, lowercase=True,
@@ -51,10 +55,10 @@ async def train_tokenizer(req: TrainTokenizerRequest):
     stats = mgr.train(req.texts, vocab_size=req.vocab_size, min_frequency=req.min_frequency, lowercase=req.lowercase)
     return {
         "vocab_size": stats["vocab_size"],
-        "base_chars": stats["base_chars"],
-        "merged_subwords": stats["merged_subwords"],
+        "base_chars": stats.get("base_chars", stats.get("subwords", 0)),
+        "merged_subwords": stats.get("merged_subwords", stats.get("subwords", 0)),
         "special_tokens": stats["special_tokens"],
-        "total_merges": stats["total_merges_learned"],
+        "total_merges": stats.get("total_merges_learned", stats.get("total_merges", 0)),
     }
 
 
@@ -65,11 +69,47 @@ async def get_tokenizer_stats():
     stats = mgr.stats()
     return {
         "vocab_size": stats["vocab_size"],
-        "base_chars": stats["base_chars"],
-        "merged_subwords": stats["merged_subwords"],
+        "base_chars": stats.get("base_chars", 0),
+        "merged_subwords": stats.get("merged_subwords", stats.get("subwords", 0)),
         "special_tokens": stats["special_tokens"],
         "total_merges": stats.get("total_merges", stats.get("total_merges_learned", 0)),
+        "trained": stats.get("trained", True),
     }
+
+
+class PretokenizeRequest(BaseModel):
+    text: str
+
+
+class DecomposeRequest(BaseModel):
+    text: str
+
+
+@router.post("/pretokenize")
+async def pretokenize_text(req: PretokenizeRequest):
+    """Show how text splits into pretokens before BPE encoding."""
+    _require_trained()
+    mgr = get_tokenizer_manager()
+    return mgr.show_pretokenization(req.text)
+
+
+@router.post("/decompose")
+async def decompose_token(req: DecomposeRequest):
+    """Show a token's merge tree decomposition."""
+    _require_trained()
+    mgr = get_tokenizer_manager()
+    try:
+        return mgr.decompose_token(req.text)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/analyze")
+async def analyze_corpus(req: AnalyzeRequest):
+    """Compute token frequency and compression stats on a corpus."""
+    _require_trained()
+    mgr = get_tokenizer_manager()
+    return mgr.analyze_corpus(req.texts)
 
 
 @router.post("/tokenize")
@@ -78,7 +118,7 @@ async def tokenize_text(req: TokenizeRequest):
     mgr = get_tokenizer_manager()
     ids = mgr.tokenize(req.text)
     tok = mgr.get_tokenizer()
-    tokens = [tok.itos[i] for i in ids]
+    tokens = [tok.itos.get(i, "<?>") for i in ids]
     return {"tokens": tokens, "ids": ids}
 
 
@@ -106,16 +146,26 @@ async def get_vocab(limit: int = 50, offset: int = 0):
 async def get_merges(limit: int = 30):
     _require_trained()
     tok = get_tokenizer_manager().get_tokenizer()
-    return {"merges": tok.merges[:limit], "total": len(tok.merges)}
+    merges = getattr(tok, "merges", [])
+    result = []
+    for i, m in enumerate(merges[:limit]):
+        if isinstance(m, tuple) and len(m) == 2:
+            result.append({"index": i, "left": m[0], "right": m[1], "token": m[0] + m[1]})
+        else:
+            result.append({"index": i, "left": str(m), "right": "", "token": str(m)})
+    return {"merges": result, "total": len(merges)}
 
+
+class TrainShakespeareRequest(BaseModel):
+    vocab_size: int = 512
 
 @router.post("/train-shakespeare")
-async def train_on_shakespeare(vocab_size: int = 512):
+async def train_on_shakespeare(req: TrainShakespeareRequest):
     url = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
     text = urllib.request.urlopen(url).read().decode("utf-8")
     lines = [line.strip() for line in text.split("\n") if line.strip()]
     mgr = get_tokenizer_manager()
-    mgr.train(lines[:2000], vocab_size=vocab_size, min_frequency=3)
+    mgr.train(lines[:2000], vocab_size=req.vocab_size, min_frequency=3)
     return {"status": "trained", "corpus_size": len(lines[:2000]), "stats": mgr.stats()}
 
 
@@ -131,6 +181,6 @@ async def get_tokenization_sample():
     results = []
     for word in sample_words:
         ids = tok.encode(word)
-        tokens = [tok.itos[i] for i in ids]
+        tokens = [tok.itos.get(i, "<?>") for i in ids]
         results.append({"word": word, "ids": ids, "tokens": tokens, "count": len(ids)})
     return {"samples": results}

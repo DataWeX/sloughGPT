@@ -63,9 +63,9 @@ export const soulsController = {
   },
 
   async switch(name: string, checkpointName?: string): Promise<void> {
-    const body: Record<string, string> = { name }
+    const body: Record<string, string> = {}
     if (checkpointName) body.checkpoint_name = checkpointName
-    await apiPost('/souls/switch', body)
+    await apiPost(`/souls/switch/${encodeURIComponent(name)}`, body)
   },
 
   async listCheckpoints(): Promise<CheckpointsResponse> {

@@ -1,11 +1,3 @@
-/**
- * Tokenizer Controller — tokenizer stats, tokenize/detokenize, vocab, merges.
- *
- * Usage:
- *   import { tokenizerController } from '@/lib/tokenizer-controller'
- *   const stats = await tokenizerController.getStats()
- */
-
 import { apiGet, apiPost } from './http-client'
 
 export interface TokenizerStats {
@@ -21,10 +13,6 @@ export interface TokenizeResult {
   ids: number[]
 }
 
-export interface DetokenizeResult {
-  text: string
-}
-
 export interface VocabEntry {
   id: number
   token: string
@@ -38,8 +26,15 @@ export interface VocabResponse {
   limit: number
 }
 
+export interface MergeEntry {
+  index: number
+  left: string
+  right: string
+  token: string
+}
+
 export interface MergeResponse {
-  merges: string[]
+  merges: MergeEntry[]
   total: number
 }
 
@@ -50,8 +45,39 @@ export interface SampleWord {
   count: number
 }
 
-export interface SampleResponse {
-  samples: SampleWord[]
+export interface PretokenizeSegment {
+  text: string
+  char_count: number
+  pct: number
+}
+
+export interface PretokenizeResponse {
+  pretokens: string[]
+  segments: PretokenizeSegment[]
+  count: number
+}
+
+export interface DetokenizeResponse {
+  text: string
+}
+
+export interface DecomposeResponse {
+  token: string
+  id: number
+  type: string
+  merge_path: { left: string; right: string; into: string }[]
+  depth: number
+  base_chars: string[]
+}
+
+export interface AnalysisResponse {
+  total_chars: number
+  total_tokens: number
+  compression_ratio: number
+  unique_tokens: number
+  vocab_utilization: number
+  top_tokens: { id: number; token: string; count: number; pct: number }[]
+  rare_tokens: { id: number; token: string; count: number }[]
 }
 
 export const tokenizerController = {
@@ -63,8 +89,8 @@ export const tokenizerController = {
     return apiPost<TokenizeResult>('/tokenizer/tokenize', { text })
   },
 
-  async detokenize(ids: number[]): Promise<DetokenizeResult> {
-    return apiPost<DetokenizeResult>('/tokenizer/detokenize', { ids })
+  async detokenize(ids: number[]): Promise<DetokenizeResponse> {
+    return apiPost<DetokenizeResponse>('/tokenizer/detokenize', { ids })
   },
 
   async getVocab(limit = 50, offset = 0): Promise<VocabResponse> {
@@ -75,11 +101,23 @@ export const tokenizerController = {
     return apiGet<MergeResponse>(`/tokenizer/merges?limit=${limit}`)
   },
 
-  async getSamples(): Promise<SampleResponse> {
-    return apiGet<SampleResponse>('/tokenizer/sample')
+  async getSamples(): Promise<{ samples: SampleWord[] }> {
+    return apiGet('/tokenizer/sample')
+  },
+
+  async pretokenize(text: string): Promise<PretokenizeResponse> {
+    return apiPost<PretokenizeResponse>('/tokenizer/pretokenize', { text })
+  },
+
+  async decomposeToken(token: string): Promise<DecomposeResponse> {
+    return apiPost<DecomposeResponse>('/tokenizer/decompose', { text: token })
+  },
+
+  async analyzeCorpus(texts: string[]): Promise<AnalysisResponse> {
+    return apiPost<AnalysisResponse>('/tokenizer/analyze', { texts })
   },
 
   async trainShakespeare(vocabSize = 512): Promise<any> {
-    return apiPost<any>(`/tokenizer/train-shakespeare?vocab_size=${vocabSize}`)
+    return apiPost<any>('/tokenizer/train-shakespeare', { vocab_size: vocabSize })
   },
 }

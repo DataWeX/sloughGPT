@@ -27,7 +27,7 @@ from training.webhooks import (
 )
 from training.job_store import get_job_store
 
-logger = logging.getLogger("sloughgpt")
+logger = logging.getLogger("man")
 
 router = APIRouter(tags=["training"])
 
@@ -344,11 +344,7 @@ async def start_training(request: TrainingRequest):
                 },
             )
 
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.create_task(notify_async())
-        else:
-            loop.run_until_complete(notify_async())
+        asyncio.create_task(notify_async())
     except Exception:
         pass
 
@@ -900,8 +896,11 @@ async def get_webhook_stats():
     return store.get_stats()
 
 
+class TestWebhookRequest(BaseModel):
+    url: str
+
 @router.post("/training/webhooks/test")
-async def test_webhook(url: str):
+async def test_webhook(req: TestWebhookRequest):
     """
     Send a test notification to a URL.
 
@@ -911,7 +910,7 @@ async def test_webhook(url: str):
 
     # Register temporary webhook for test
     webhook_id = store.register(
-        url=url,
+        url=req.url,
         events=TRAINING_EVENTS,
         description="Temporary test webhook",
     )

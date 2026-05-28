@@ -31,12 +31,39 @@ export interface Webhook {
   events: string[]
 }
 
+export interface AutoTrainStartRequest {
+  algo?: string
+  dataset_id?: string
+  soul_name?: string
+  epochs?: number
+  learning_rate?: number
+  teacher_model?: string
+  temperature?: number
+  source_text?: string
+  checkpoint_name?: string
+}
+
+export interface AutoTrainStartResponse {
+  status: string
+  teacher?: string
+  student?: string
+  soul?: string
+  epochs?: number
+}
+
 export interface WebhookStats {
   total: number
   success_rate: number
 }
 
 export const trainingJobsController = {
+  async startAutoTrain(params?: AutoTrainStartRequest): Promise<AutoTrainStartResponse> {
+    return apiPost<AutoTrainStartResponse>('/auto-train/start', params ?? null)
+  },
+
+  async stopAutoTrain(): Promise<void> {
+    await apiPost('/auto-train/stop')
+  },
   async list(): Promise<TrainingJob[]> {
     const data = await apiGet<{ jobs: TrainingJob[] }>('/training/jobs')
     return data.jobs || []
@@ -114,7 +141,7 @@ export const trainingJobsController = {
 
   // Webhooks
   async testWebhook(url: string): Promise<unknown> {
-    return apiPost(`/training/webhooks/test?url=${encodeURIComponent(url)}`)
+    return apiPost('/training/webhooks/test', { url })
   },
 
   // Training status
@@ -135,10 +162,9 @@ export const trainingJobsController = {
   },
 
   async downloadTrainingJob(jobId: string): Promise<Blob> {
-    const { apiClient } = await import('./http-client')
+    const { PUBLIC_API_URL } = await import('./config')
     const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
-    const baseUrl = apiClient.defaults.baseURL || 'http://localhost:8000'
-    const res = await fetch(`${baseUrl}/training/export/${jobId}`, {
+    const res = await fetch(`${PUBLIC_API_URL}/training/export/${jobId}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
     if (!res.ok) throw new Error(`Export failed (${res.status})`)
