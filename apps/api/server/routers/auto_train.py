@@ -12,6 +12,7 @@ mutable globals.
 """
 
 from dataclasses import dataclass, field
+import threading
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse, FileResponse
@@ -43,7 +44,11 @@ class AutoTrainState:
 
 
 state = AutoTrainState()
+_auto_train_cancel_event: Optional[threading.Event] = None
 from pathlib import Path
+
+class _AutoTrainCancelled(Exception):
+    """Raised inside the auto-train worker thread when user requests cancel."""
 
 router = APIRouter(prefix="/auto-train", tags=["training"])
 
@@ -462,7 +467,11 @@ async def start_turbo(req: TurboStartRequest):
 
 @router.post("/stop")
 async def stop():
+    global _auto_train_cancel_event
     state.running = False
+    if _auto_train_cancel_event is not None:
+        _auto_train_cancel_event.set()
+        return {"status": "cancelling", "message": "Cancelling auto-training"}
     return {"status": "stopped"}
 
 
@@ -495,6 +504,7 @@ async def stream():
 
     def _training_worker():
         """Run UnifiedTrainingPipeline in executor thread."""
+        global _auto_train_cancel_event
         from domains.training.unified_pipeline import (
             UnifiedTrainingPipeline, UnifiedTrainingConfig,
         )
@@ -521,15 +531,18 @@ async def stream():
         )
 
         pipeline = UnifiedTrainingPipeline(cfg)
+        _auto_train_cancel_event = threading.Event()
 
         def _on_progress(progress):
+            if _auto_train_cancel_event is not None and _auto_train_cancel_event.is_set():
+                raise _AutoTrainCancelled("Training cancelled by user")
             sse = progress.to_sse_event(stream_name="auto-train")
             sse_str = "data: " + json.dumps(sse) + "\n\n"
             _enqueue(sse_str)
 
         try:
             state.running = True
-            result = pipeline.run(on_progress=_on_progress)
+            result = pipeline.run(on_progress=_on_progress, cancel_event=_auto_train_cancel_event)
 
             if result.get("status") == "completed":
                 ckpt = result.get("checkpoint", "")
@@ -539,12 +552,20 @@ async def stream():
                     "Auto-train complete: checkpoint=%s final_loss=%s steps=%d",
                     ckpt, fl, ts,
                 )
+            elif result.get("cancelled"):
+                autotrain_logger.info("Auto-train cancelled by user")
+                _enqueue(sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled"))
             else:
                 autotrain_logger.warning("Auto-train result: %s", result.get("status"))
 
+        except _AutoTrainCancelled:
+            autotrain_logger.info("Auto-train cancelled by user")
+            _enqueue(sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled"))
         except Exception as e:
             autotrain_logger.error("Training worker error: %s", e)
             _enqueue(sse_error("auto-train", "FAILED", str(e)))
+        finally:
+            _auto_train_cancel_event = None
 
     async def event_generator():
         worker_task = loop.run_in_executor(None, _training_worker)

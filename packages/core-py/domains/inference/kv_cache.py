@@ -5,7 +5,7 @@ Pre-allocated, position-based KV cache with per-layer tracking.
 Used by InferenceEngine, InferenceOptimizer, and throughput optimization.
 """
 
-from typing import List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 try:
     import torch

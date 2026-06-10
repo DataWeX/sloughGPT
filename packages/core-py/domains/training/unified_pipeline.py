@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -280,25 +281,49 @@ class UnifiedTrainingPipeline:
             self.progress.metrics.update(metrics)
 
     def _emit_progress(self, on_progress: Optional[Callable[[TrainingProgress], None]]):
+        if self._cancel_event is not None and self._cancel_event.is_set():
+            raise KeyboardInterrupt("Training cancelled by user")
         if on_progress:
             on_progress(self.progress)
 
     def run(
         self,
         on_progress: Optional[Callable[[TrainingProgress], None]] = None,
+        cancel_event: Optional[threading.Event] = None,
     ) -> Dict[str, Any]:
         """Run the full pipeline through all enabled phases.
 
         Args:
             on_progress: Called after each phase transition with current progress.
+            cancel_event: Optional threading.Event — if set, pipeline raises
+                ``KeyboardInterrupt`` during the next progress emission to abort.
 
         Returns:
             Dict with keys: status, message, model_path, final_loss, total_steps,
             phases, elapsed, checkpoint, metrics
         """
+        self._cancel_event = cancel_event
         self._start_time = time.time()
         logger.info("Starting unified pipeline: method=%s, data=%s", self._method, self.config.data_path)
 
+        try:
+            return self._run_body(on_progress)
+        except KeyboardInterrupt:
+            elapsed = time.time() - self._start_time
+            self._update_progress(
+                "complete",
+                status="complete",
+                message=f"Training cancelled after {elapsed:.1f}s",
+                metrics={"cancelled": True, "elapsed": elapsed},
+            )
+            self._emit_progress(on_progress)
+            logger.info("Pipeline cancelled after %.1fs", elapsed)
+            return {"status": "cancelled", "cancelled": True, "elapsed": elapsed, "message": "Training cancelled by user"}
+
+    def _run_body(
+        self,
+        on_progress: Optional[Callable[[TrainingProgress], None]] = None,
+    ) -> Dict[str, Any]:
         # --- initialize TrainingStatusTracker ---
         try:
             from domains.training.status import TrainingStatusTracker, CompletionStatus
@@ -717,7 +742,7 @@ class UnifiedTrainingPipeline:
             if on_progress:
                 on_progress(self.progress)
 
-        # Wrap the progress callback
+        # Wrap the progress callback and cancel event
         original_train = trainer.train
 
         def _patched_train(*args, **kwargs):
@@ -725,6 +750,7 @@ class UnifiedTrainingPipeline:
                 *args,
                 **kwargs,
                 progress_callback=_slonet_progress,
+                cancel_event=self._cancel_event,
             )
 
         trainer.train = _patched_train

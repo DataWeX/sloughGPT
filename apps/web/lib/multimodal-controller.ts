@@ -128,4 +128,18 @@ export const multimodalController = {
       auto_caption: autoCaption,
     })
   },
+
+  async vlmInference(imageBase64: string, prompt?: string): Promise<{ text: string; tokens_generated: number; elapsed_ms: number }> {
+    return apiPost('/vlm/generate', {
+      image_base64: imageBase64,
+      prompt: prompt || 'Describe this image in detail.',
+      max_new_tokens: 256,
+      temperature: 0.7,
+      top_p: 0.9,
+    })
+  },
+
+  async getVLMStatus(): Promise<{ loaded: boolean; model?: string; vision_encoder?: string; llm?: string }> {
+    return apiGet('/vlm/status')
+  },
 }

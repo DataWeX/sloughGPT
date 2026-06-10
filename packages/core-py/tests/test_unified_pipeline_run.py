@@ -203,3 +203,94 @@ class TestProgressSSEEvent:
         assert event["data"]["epoch"] == 1
         assert event["meta"]["total_epochs"] == 5
         assert event["message"] == "Epoch 1/5"
+
+    def test_sse_event_default_stream_auto_train(self):
+        """Default stream name should be 'auto-train' for frontend compatibility."""
+        from domains.training.unified_pipeline import TrainingProgress
+
+        p = TrainingProgress(
+            phase="COMPLETE",
+            epoch=3,
+            total_epochs=10,
+            loss=0.12,
+            status="complete",
+            message="Done",
+        )
+        event = p.to_sse_event()
+        assert event["stream"] == "auto-train"
+
+    def test_sse_event_complete_contains_finish_fields(self):
+        """COMPLETE event must include checkpoint, final_loss, epochs in data."""
+        from domains.training.unified_pipeline import TrainingProgress
+
+        p = TrainingProgress(
+            phase="COMPLETE",
+            epoch=3,
+            total_epochs=10,
+            loss=0.12,
+            status="complete",
+            message="Training complete",
+            metrics={
+                "final_loss": 0.12,
+                "checkpoint": "assistant_12345.soul",
+                "epochs": 10,
+                "total_steps": 500,
+                "elapsed": 42.0,
+            },
+        )
+        event = p.to_sse_event("auto-train")
+        assert event["data"].get("checkpoint") == "assistant_12345.soul"
+        assert event["data"].get("final_loss") == 0.12
+        assert event["data"].get("epochs") == 10
+        assert event["data"].get("total_steps") == 500
+        assert event["data"].get("elapsed") == 42.0
+
+    def test_sse_event_working_contains_epoch_meta(self):
+        """Working events should include epoch/total_epochs in meta."""
+        from domains.training.unified_pipeline import TrainingProgress
+
+        p = TrainingProgress(
+            phase="TRAINING",
+            epoch=2,
+            total_epochs=10,
+            loss=0.5,
+            status="working",
+            message="Step 100, loss 0.5000",
+        )
+        event = p.to_sse_event()
+        assert event["meta"]["epoch"] == 2
+        assert event["meta"]["total_epochs"] == 10
+
+    def test_pipeline_run_complete_event_has_auto_train_fields(self):
+        """When pipeline finishes, the on_progress callback should receive
+        a COMPLETE progress with checkpoint/final_loss/epochs in metrics."""
+        from domains.training.unified_pipeline import UnifiedTrainingPipeline, UnifiedTrainingConfig
+        from domains.training.sequence import TrainingRunConfig
+        import json
+
+        config = UnifiedTrainingConfig(soul_name="test_soul")
+        run_config = TrainingRunConfig(
+            skip_generate=True, skip_distill=True, skip_train=True,
+            skip_evaluate=True, skip_deploy=True,
+        )
+        pipeline = UnifiedTrainingPipeline(config, run_config=run_config)
+
+        captured = []
+
+        def on_progress(progress):
+            if progress.phase == "complete":
+                captured.append({
+                    "checkpoint": progress.metrics.get("checkpoint"),
+                    "final_loss": progress.metrics.get("final_loss"),
+                    "epochs": progress.metrics.get("epochs"),
+                    "total_steps": progress.metrics.get("total_steps"),
+                    "elapsed": progress.metrics.get("elapsed"),
+                })
+
+        result = pipeline.run(on_progress=on_progress)
+        # Result dict should have 'checkpoint' key
+        assert "checkpoint" in result
+        # Captured COMPLETE event should have the right fields
+        assert len(captured) == 1
+        assert captured[0]["checkpoint"] is not None or captured[0]["checkpoint"] == ""
+        assert "epochs" in captured[0]

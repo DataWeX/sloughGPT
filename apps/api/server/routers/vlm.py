@@ -308,6 +308,9 @@ async def analyze_pdf(req: PDFAnalysisRequest):
     Returns:
         Analysis text (or per-page results).
     """
+    from pathlib import Path as _Path
+    if not _Path(req.pdf_path).exists():
+        raise HTTPException(status_code=404, detail=f"PDF not found: {req.pdf_path}")
     try:
         from domains.inference.pdf_vlm import PDFVLMProcessor
         p = PDFVLMProcessor(max_pages=10)
@@ -328,7 +331,7 @@ async def analyze_pdf(req: PDFAnalysisRequest):
             )
             return {"status": "ok", "analysis": text}
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"PDF not found: {req.pdf_path}")
+        raise HTTPException(status_code=404, detail="VLM checkpoint not found. Train a VLM model first via /vlm/train.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -354,6 +357,9 @@ async def analyze_pdf_upload(
         tmp_path.write_bytes(content)
 
         from domains.inference.pdf_vlm import PDFVLMProcessor
+        from pathlib import Path as _P
+        if not _P(tmp_path).exists():
+            raise HTTPException(status_code=400, detail="Failed to save uploaded PDF")
         p = PDFVLMProcessor(max_pages=10)
         if per_page:
             results = p.analyze_pages(
@@ -371,6 +377,8 @@ async def analyze_pdf_upload(
                 temperature=temperature,
             )
             return {"status": "ok", "analysis": text}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="VLM checkpoint not found. Train a VLM model first via /vlm/train.")
     finally:
         if tmp_path.exists():
             tmp_path.unlink()

@@ -33,6 +33,12 @@ export default function MultimodalPage() {
   const [transcript, setTranscript] = useState<string | null>(null)
   const [synthesizing, setSynthesizing] = useState(false)
   const [synthText, setSynthText] = useState('')
+  const [vlmInferring, setVlmInferring] = useState(false)
+  const [vlmOutput, setVlmOutput] = useState<string | null>(null)
+  const [vlmPrompt, setVlmPrompt] = useState('Describe this image in detail.')
+  const [vlmLoaded, setVlmLoaded] = useState(false)
+  const vlmImageInputRef = useRef<HTMLInputElement>(null)
+  const [vlmImageBase64, setVlmImageBase64] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const batchFileInputRef = useRef<HTMLInputElement>(null)
   const audioInputRef = useRef<HTMLInputElement>(null)
@@ -40,14 +46,16 @@ export default function MultimodalPage() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [c, r, s] = await Promise.all([
+      const [c, r, s, vlmStatus] = await Promise.all([
         multimodalController.getCapabilities(),
         multimodalController.getTrainingReport().catch(() => null),
         multimodalController.getTrainingStatus().catch(() => null),
+        multimodalController.getVLMStatus().catch(() => ({ loaded: false })),
       ])
       setCaps(c)
       setReport(r)
       setTrainStatus(s)
+      setVlmLoaded(vlmStatus.loaded)
     } catch {
       addToast('Failed to load multimodal data', 'error')
     } finally {
@@ -208,12 +216,42 @@ export default function MultimodalPage() {
     }
   }
 
+  const handleVLMImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      setVlmImageBase64(dataUrl)
+      addToast(`Selected "${file.name}"`, 'info')
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleVLMInfer = async () => {
+    if (!vlmImageBase64) { addToast('Select an image first', 'error'); return }
+    setVlmInferring(true)
+    setVlmOutput(null)
+    try {
+      const base64 = vlmImageBase64.split(',')[1] || vlmImageBase64
+      const result = await multimodalController.vlmInference(base64, vlmPrompt)
+      setVlmOutput(result.text)
+      addToast(`Generated ${result.tokens_generated} tokens in ${(result.elapsed_ms / 1000).toFixed(1)}s`, 'success')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'VLM inference failed'
+      addToast(msg, 'error')
+    } finally {
+      setVlmInferring(false)
+    }
+  }
+
   const capList: { label: string; ok: boolean }[] = caps ? [
     { label: 'Speech-to-text', ok: caps.speech_to_text },
     { label: 'Image captioning', ok: caps.image_caption },
     { label: 'Vision model', ok: !!caps.vision_model },
     { label: 'Speech model', ok: !!caps.speech_model },
     { label: 'Trained', ok: caps.trained },
+    { label: 'VLM loaded', ok: vlmLoaded },
   ] : []
 
   return (
@@ -430,6 +468,67 @@ export default function MultimodalPage() {
                 >
                   {creatingDataset ? 'Creating…' : 'Create dataset'}
                 </Button>
+              </CardContent>
+            </Card>
+
+            {/* VLM Inference */}
+            <Card>
+              <CardHeader><CardTitle className="text-base">VLM Inference</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Test a loaded VLM model with an image and text prompt.
+                  {vlmLoaded ? (
+                    <span className="text-success ml-1">VLM is loaded.</span>
+                  ) : (
+                    <span className="text-muted-foreground ml-1">Train a VLM on the Training page first.</span>
+                  )}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() => vlmImageInputRef.current?.click()}
+                    disabled={!vlmLoaded || vlmInferring}
+                  >
+                    <IconUpload className="h-3.5 w-3.5 mr-1" />
+                    {vlmImageBase64 ? 'Change image' : 'Select image'}
+                  </Button>
+                  <input
+                    ref={vlmImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleVLMImageSelect}
+                  />
+                </div>
+                {vlmImageBase64 && (
+                  <div className="flex items-center gap-2">
+                    <img src={vlmImageBase64} alt="Selected" className="h-16 w-16 rounded object-cover border border-border/50" />
+                    <span className="text-xs text-muted-foreground">Image selected for inference</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={vlmPrompt}
+                    onChange={e => setVlmPrompt(e.target.value)}
+                    placeholder="Describe this image in detail..."
+                    className="h-8 text-xs flex-1"
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs shrink-0"
+                    onClick={handleVLMInfer}
+                    disabled={!vlmLoaded || !vlmImageBase64 || vlmInferring}
+                  >
+                    {vlmInferring ? 'Generating…' : 'Generate'}
+                  </Button>
+                </div>
+                {vlmOutput && (
+                  <div className="rounded-md border border-border/40 bg-muted/30 p-3 text-xs leading-relaxed max-h-48 overflow-y-auto">
+                    {vlmOutput}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
