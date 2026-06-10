@@ -195,3 +195,4 @@ datasets/
 
 # Monorepo duplicates
 packages/apps/apps/
+.opencode/tmp/
