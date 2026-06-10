@@ -67,7 +67,7 @@ export const modelController = {
 
   async getHealth(): Promise<HealthStatus | null> {
     try {
-      return await apiGet<HealthStatus>('/health')
+      return await apiGet<HealthStatus>('/health', undefined, { silent: true })
     } catch { return null }
   },
 
@@ -79,13 +79,13 @@ export const modelController = {
 
   async status(): Promise<ModelStatus> {
     try {
-      const data = await apiGet<{ model_loaded?: boolean; model_type?: string; device?: string }>('/health')
+      const data = await apiGet<{ model_loaded?: boolean; model_type?: string; device?: string }>('/health', undefined, { silent: true })
       return {
         loaded: data.model_loaded ?? false,
         model_type: data.model_type ?? null,
         device: data.device ?? null,
       }
-    } catch (e) {
+    } catch {
       return { loaded: false, model_type: null, device: null }
     }
   },
@@ -99,8 +99,8 @@ export const modelController = {
     }
   },
 
-  async loadModelPath(modelPath: string): Promise<Record<string, unknown>> {
-    return apiPost<Record<string, unknown>>('/models/load', { model_path: modelPath })
+  async loadModelPath(modelPath: string): Promise<ModelLoadResponse> {
+    return this.load(modelPath, 'cpu')
   },
 
   async unloadModel(modelId: string): Promise<Record<string, unknown>> {
@@ -112,6 +112,10 @@ export const modelController = {
     if (!status.loaded) return false
     if (modelId && status.model_type !== modelId) return false
     return true
+  },
+
+  async loadVLM(modelDir: string, modelId = 'vlm'): Promise<{ status: string; model_id: string; type: string; vision_encoder?: string; llm?: string }> {
+    return apiPost(`/models/vlm-load?model_dir=${encodeURIComponent(modelDir)}&model_id=${encodeURIComponent(modelId)}`)
   },
 }
 

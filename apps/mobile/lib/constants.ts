@@ -1,0 +1,81 @@
+export const colors = {
+  light: {
+    background: '#F8F6FC',
+    foreground: '#191624',
+    card: '#FFFFFF',
+    cardForeground: '#191624',
+    popover: '#FFFFFF',
+    popoverForeground: '#191624',
+    primary: '#7C52C4',
+    primaryForeground: '#FAF8FF',
+    secondary: '#EDE8F8',
+    secondaryForeground: '#2A2537',
+    muted: '#F4F2F8',
+    mutedForeground: '#827A96',
+    accent: '#EC915F',
+    accentForeground: '#FAF8FF',
+    destructive: '#DC505A',
+    destructiveForeground: '#FAF8FF',
+    success: '#34B07D',
+    warning: '#ECA83C',
+    border: '#E4E0F2',
+    input: '#E4E0F2',
+    ring: '#7C52C4',
+  },
+  dark: {
+    background: '#110F18',
+    foreground: '#EEEAF8',
+    card: '#1C1926',
+    cardForeground: '#EEEAF8',
+    popover: '#201D2C',
+    popoverForeground: '#EEEAF8',
+    primary: '#C0AAF4',
+    primaryForeground: '#191624',
+    secondary: '#322C44',
+    secondaryForeground: '#EEEAF8',
+    muted: '#262234',
+    mutedForeground: '#968CAC',
+    accent: '#F0B082',
+    accentForeground: '#191624',
+    destructive: '#EB646E',
+    destructiveForeground: '#191624',
+    success: '#48C08C',
+    warning: '#F0C050',
+    border: '#342E48',
+    input: '#342E48',
+    ring: '#C0AAF4',
+  },
+} as const
+
+export const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+  '2xl': 32,
+  '3xl': 48,
+} as const
+
+export const borderRadius = {
+  none: 0,
+  sm: 4,
+  DEFAULT: 8,
+  md: 8,
+  lg: 12,
+  xl: 16,
+  '2xl': 24,
+  full: 9999,
+} as const
+
+export const fontSize = {
+  xs: 10,
+  sm: 12,
+  base: 14,
+  lg: 16,
+  xl: 18,
+  '2xl': 24,
+  '3xl': 30,
+} as const
+
+export const touchTarget = 44

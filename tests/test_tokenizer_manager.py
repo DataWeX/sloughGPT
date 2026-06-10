@@ -153,6 +153,12 @@ class TestTokenizerManager:
 
     def test_borrow_from_autotrain_no_state(self):
         mgr = TokenizerManager.get_instance()
+        mgr.reset()
+        # Reset auto-train state if the module has been imported (avoids cross-test pollution
+        # from tests that call POST /auto-train/start and leave state.student_tokenizer set)
+        import sys as _sys
+        if 'routers.auto_train' in _sys.modules:
+            _sys.modules['routers.auto_train'].state.student_tokenizer = None
         result = mgr.borrow_from_autotrain()
         assert result is False
 

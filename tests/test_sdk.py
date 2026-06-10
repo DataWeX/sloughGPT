@@ -628,6 +628,10 @@ class TestNewSDKMethods(unittest.TestCase):
         self.assertTrue(hasattr(client, 'start_training'))
         self.assertTrue(hasattr(client, 'get_training_status'))
         self.assertTrue(hasattr(client, 'list_training_jobs'))
+        self.assertTrue(hasattr(client, 'delete_training_job'))
+        self.assertTrue(hasattr(client, 'stop_training'))
+        self.assertTrue(hasattr(client, 'pause_training'))
+        self.assertTrue(hasattr(client, 'resume_training'))
 
     def test_async_client_exported(self):
         """AsyncSloughGPTClient is public API (README lists it)."""
@@ -712,6 +716,260 @@ class TestNewSDKMethods(unittest.TestCase):
         
         self.assertTrue(hasattr(client, 'get_personalities'))
         self.assertTrue(hasattr(client, 'set_personality'))
+
+
+
+class TestNewSDKEndpoints(unittest.TestCase):
+    """Integration tests for all new SDK endpoints (mocked HTTP)."""
+
+    def setUp(self):
+        self.client_patcher = patch('requests.Session.request')
+        self.mock_request = self.client_patcher.start()
+        self.mock_response = MagicMock()
+        self.mock_response.ok = True
+        self.mock_response.status_code = 200
+        self.mock_response.json.return_value = {}
+        self.mock_request.return_value = self.mock_response
+
+    def tearDown(self):
+        self.client_patcher.stop()
+
+    def _client(self):
+        from sloughgpt_sdk import SloughGPTClient
+        return SloughGPTClient()
+
+    def _assert_called(self, method, path):
+        self.assertEqual(len(self.mock_request.call_args_list), 1,
+                         f"Expected 1 call, got {len(self.mock_request.call_args_list)}")
+        args, kwargs = self.mock_request.call_args
+        self.assertEqual(args[0], method, f"Expected method {method}, got {args[0]}")
+        url = str(args[1])
+        self.assertIn(path, url, f"Path {path} not in URL {url}")
+        self.assertIn('timeout', kwargs)
+        self.assertIn('verify', kwargs)
+
+    # === Souls ===
+
+    def test_list_souls(self):
+        self._client().list_souls()
+        self._assert_called('GET', '/souls')
+
+    def test_get_current_soul(self):
+        self._client().get_current_soul()
+        self._assert_called('GET', '/souls/current')
+
+    def test_switch_soul(self):
+        self._client().switch_soul('friendly')
+        self._assert_called('POST', '/souls/switch/friendly')
+
+    def test_switch_soul_with_checkpoint(self):
+        self._client().switch_soul('friendly', 'ckpt-v2')
+        self._assert_called('POST', '/souls/switch/friendly')
+        call_body = self.mock_request.call_args[1].get('json', {})
+        self.assertEqual(call_body.get('checkpoint_name'), 'ckpt-v2')
+
+    # === Knowledge ===
+
+    def test_list_knowledge(self):
+        self._client().list_knowledge()
+        self._assert_called('GET', '/knowledge')
+
+    def test_add_knowledge(self):
+        self._client().add_knowledge('Paris is capital', 'geo')
+        self._assert_called('POST', '/knowledge')
+
+    def test_delete_knowledge(self):
+        self._client().delete_knowledge('k1')
+        self._assert_called('DELETE', '/knowledge/k1')
+
+    def test_search_knowledge(self):
+        self._client().search_knowledge('paris')
+        self._assert_called('GET', '/knowledge/search')
+
+    def test_get_knowledge_stats(self):
+        self._client().get_knowledge_stats()
+        self._assert_called('GET', '/knowledge/stats')
+
+    def test_get_knowledge_topics(self):
+        self._client().get_knowledge_topics()
+        self._assert_called('GET', '/knowledge/topics')
+
+    def test_ingest_knowledge_url(self):
+        self._client().ingest_knowledge_url('https://example.com')
+        self._assert_called('POST', '/knowledge/ingest-url')
+
+    # === Tokenizer ===
+
+    def test_get_tokenizer_stats(self):
+        self._client().get_tokenizer_stats()
+        self._assert_called('GET', '/tokenizer/stats')
+
+    def test_tokenize(self):
+        self._client().tokenize('hello world')
+        self._assert_called('POST', '/tokenizer/tokenize')
+
+    def test_train_tokenizer(self):
+        self._client().train_tokenizer('training text', 32000)
+        self._assert_called('POST', '/tokenizer/train')
+
+    # === System ===
+
+    def test_get_system_metrics(self):
+        self._client().get_system_metrics()
+        self._assert_called('GET', '/system/metrics')
+
+    def test_get_system_info(self):
+        self._client().get_system_info()
+        self._assert_called('GET', '/system/info')
+
+    def test_get_system_disk(self):
+        self._client().get_system_disk()
+        self._assert_called('GET', '/system/disk')
+
+    # === Companion ===
+
+    def test_get_companion_prompt(self):
+        self._client().get_companion_prompt()
+        self._assert_called('GET', '/companion/prompt')
+
+    def test_list_companion_presets(self):
+        self._client().list_companion_presets()
+        self._assert_called('GET', '/companion/presets')
+
+    # === Generation endpoints ===
+
+    def test_generate_uses_inference_path(self):
+        self._client().generate('hello')
+        self._assert_called('POST', '/inference/generate')
+
+    def test_generate_stream_uses_inference_path(self):
+        self.mock_response.iter_lines.return_value = []
+        list(self._client().generate_stream('hello'))
+        self._assert_called('POST', '/inference/generate/stream')
+
+    # === Training Control ===
+
+    def test_stop_training(self):
+        self._client().stop_training()
+        self._assert_called('POST', '/training/control/stop')
+
+    def test_pause_training(self):
+        self._client().pause_training()
+        self._assert_called('POST', '/training/control/pause')
+
+    def test_resume_training(self):
+        self._client().resume_training()
+        self._assert_called('POST', '/training/control/resume')
+
+    def test_delete_training_job(self):
+        self._client().delete_training_job('job-1')
+        self._assert_called('DELETE', '/training/jobs/job-1')
+
+    def test_get_training_recovery_stats(self):
+        self._client().get_training_recovery_stats()
+        self._assert_called('GET', '/recovery/stats')
+
+    # === Auto-Train ===
+
+    def test_start_auto_train(self):
+        self._client().start_auto_train({'soul': 'friendly'})
+        self._assert_called('POST', '/auto-train/start')
+
+    def test_stop_auto_train(self):
+        self._client().stop_auto_train()
+        self._assert_called('POST', '/auto-train/stop')
+
+    def test_get_auto_train_status(self):
+        self._client().get_auto_train_status()
+        self._assert_called('GET', '/auto-train/status')
+
+    def test_list_auto_train_checkpoints(self):
+        self._client().list_auto_train_checkpoints()
+        self._assert_called('GET', '/auto-train/checkpoints')
+
+    def test_delete_auto_train_checkpoint(self):
+        self._client().delete_auto_train_checkpoint('ckpt-1')
+        self._assert_called('DELETE', '/auto-train/checkpoints/ckpt-1')
+
+    def test_load_auto_train_checkpoint(self):
+        self._client().load_auto_train_checkpoint('ckpt-1')
+        self._assert_called('POST', '/auto-train/checkpoints/ckpt-1/load')
+
+    # === Feedback / Workflow ===
+
+    def test_record_feedback(self):
+        self._client().record_feedback('s1', 'm1', 1)
+        self._assert_called('POST', '/feedback/workflow-record')
+
+    def test_get_feedback_stats(self):
+        self._client().get_feedback_stats()
+        self._assert_called('GET', '/feedback/stats/summary')
+
+    def test_get_workflow_status(self):
+        self._client().get_workflow_status()
+        self._assert_called('GET', '/workflow/status')
+
+    # === Sessions ===
+
+    def test_save_session_context(self):
+        self._client().save_session_context('sess-1', {'ctx': 'data'})
+        self._assert_called('POST', '/session/sess-1/context')
+
+    def test_get_session_messages(self):
+        self._client().get_session_messages('sess-1')
+        self._assert_called('GET', '/session/sess-1/messages')
+
+    # === Models ===
+
+    def test_unload_model(self):
+        self._client().unload_model()
+        self._assert_called('POST', '/models/unload')
+
+    def test_get_current_model(self):
+        self._client().get_current_model()
+        self._assert_called('GET', '/models/current')
+
+    # === Datasets ===
+
+    def test_import_dataset_local(self):
+        self._client().import_dataset_local('/path', 'ds')
+        self._assert_called('POST', '/datasets/import/local')
+
+    def test_import_dataset_github(self):
+        self._client().import_dataset_github('user/repo', 'ds')
+        self._assert_called('POST', '/datasets/import/github')
+
+    def test_import_dataset_url(self):
+        self._client().import_dataset_url('https://example.com', 'ds')
+        self._assert_called('POST', '/datasets/import/url')
+
+    # === Benchmark ===
+
+    def test_get_benchmark_metrics(self):
+        self._client().get_benchmark_metrics()
+        self._assert_called('GET', '/benchmark/metrics')
+
+    def test_get_benchmark_stats(self):
+        self._client().get_benchmark_stats()
+        self._assert_called('GET', '/benchmark/stats')
+
+    # === Security ===
+
+    def test_get_audit_log(self):
+        self._client().get_audit_log()
+        self._assert_called('GET', '/security/audit')
+
+    # === Detailed Health ===
+
+    def test_detailed_health(self):
+        self._client().detailed_health()
+        self._assert_called('GET', '/health/detailed')
+
+    # === Set personality uses companion endpoint ===
+
+    def test_set_personality_uses_companion(self):
+        self._client().set_personality('friendly')
+        self._assert_called('POST', '/companion/personality')
 
 
 if __name__ == "__main__":

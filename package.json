@@ -6,7 +6,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "dev:stack": "concurrently -n api,web -c cyan,magenta \"env SLOUGHGPT_API_PORT=8000 SLOUGHGPT_RELOAD=1 python3 apps/api/server/main.py\" \"npm run dev --prefix apps/web\"",
+    "dev:stack": "concurrently -n api,web -c cyan,magenta \"env MAN_API_PORT=8000 MAN_RELOAD=1 python3 apps/api/server/main.py\" \"npm run dev --prefix apps/web\"",
     "test:repo-root": "python3 -m pytest tests/test_repo_root_package_json.py -q"
   },
   "devDependencies": {

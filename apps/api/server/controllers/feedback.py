@@ -6,6 +6,27 @@ from datetime import datetime
 from pathlib import Path
 import json
 import uuid
+import logging
+
+logger = logging.getLogger("man.controllers.feedback")
+
+
+def _trigger_hf_dpo():
+    """Run HF DPO in background thread using the active model."""
+    try:
+        import state as server_state
+        model = getattr(server_state, "model", None)
+        tokenizer = getattr(server_state, "tokenizer", None)
+        if model is None or tokenizer is None:
+            return
+        from domains.feedback.hf_dpo import HFDPOTrainer
+        trainer = HFDPOTrainer(model=model, tokenizer=tokenizer)
+        pairs = trainer.prepare_dpo_pairs()
+        if len(pairs) >= 2:
+            result = trainer.train(pairs=pairs)
+            logger.info("HF DPO background: %s (pairs=%d)", result.get("status"), len(pairs))
+    except Exception as e:
+        logger.debug("HF DPO background skipped: %s", e)
 
 
 class FeedbackController:
@@ -97,6 +118,12 @@ class FeedbackController:
                     rating=rating,
                     quality_score=1.0 if rating == "thumbs_up" else 0.0,
                 )
+
+        # Trigger HF DPO in background on thumbs-down
+        if rating == "thumbs_down":
+            import threading
+            t = threading.Thread(target=_trigger_hf_dpo, daemon=True)
+            t.start()
 
         return {
             "status": "recorded",

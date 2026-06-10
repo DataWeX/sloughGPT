@@ -18,7 +18,7 @@ from enum import Enum
 from contextlib import contextmanager
 import threading
 
-logger = logging.getLogger("sloughgpt.experiments")
+logger = logging.getLogger("man.experiments")
 
 
 class ExperimentStatus(Enum):

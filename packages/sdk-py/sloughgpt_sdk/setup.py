@@ -11,7 +11,7 @@ with open(readme_path, "r", encoding="utf-8") as fh:
 
 setup(
     name="sloughgpt-sdk",
-    version="1.0.0",
+    version="1.1.0",
     author="SloughGPT",
     author_email="dev@sloughgpt.ai",
     description="Python SDK for SloughGPT API",

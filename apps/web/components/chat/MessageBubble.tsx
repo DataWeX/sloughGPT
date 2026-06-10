@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState, useRef } from 'react'
 import { cn } from '@/lib/cn'
 import { Button } from '@/components/ui/button'
 import { Markdown } from './Markdown'
@@ -26,6 +26,11 @@ export interface MessageBubbleProps {
 
 function formatTime(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date
+  const now = new Date()
+  const diffMs = now.getTime() - d.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  if (diffMins < 1) return 'just now'
+  if (diffMins < 60) return `${diffMins}m ago`
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
@@ -40,7 +45,7 @@ function highlightText(text: string, query: string): (string | JSX.Element)[] {
   )
 }
 
-export function MessageBubble({ 
+export const MessageBubble = memo(function MessageBubble({ 
   content, 
   role, 
   timestamp, 
@@ -59,6 +64,7 @@ export function MessageBubble({
   const [isVisible, setIsVisible] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(content)
+  const bubbleRef = useRef<HTMLDivElement>(null)
   
   useEffect(() => {
     setIsVisible(true)
@@ -68,6 +74,13 @@ export function MessageBubble({
     setDisplayContent(content)
     setEditContent(content)
   }, [content])
+
+  // Auto-scroll streaming content into view
+  useEffect(() => {
+    if (isStreaming && bubbleRef.current) {
+      bubbleRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }
+  }, [content, isStreaming])
 
   const handleEditSave = () => {
     if (editContent.trim() && onEdit && messageId) {
@@ -88,23 +101,32 @@ export function MessageBubble({
   return (
     <div
       id={messageId ? `msg-${messageId}` : undefined}
+      ref={bubbleRef}
       className={cn(
-        "flex flex-col transition-all duration-300 ease-out group",
+        "flex flex-col transition-all duration-300 ease-out",
         isVisible 
           ? "opacity-100 translate-y-0" 
-          : "opacity-0 translate-y-2",
+          : "opacity-0 translate-y-3",
         role === 'user' ? 'items-end' : 'items-start'
       )}
     >
       <div
         className={cn(
-          "relative rounded-2xl px-3 py-2.5 text-xs sm:px-4 sm:py-3 max-w-[40%] transition-all duration-200 leading-relaxed",
+          "relative rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3 max-w-[85%] sm:max-w-[70%] lg:max-w-[60%] transition-all duration-200 leading-relaxed",
           role === 'user'
-            ? 'bg-primary text-primary-foreground rounded-br-sm shadow-md'
-            : 'bg-card text-foreground rounded-bl-sm border border-border/60 shadow-sm hover:shadow-md',
-          isStreaming && role === 'assistant' && "cursor-wait"
+            ? 'bg-primary text-primary-foreground rounded-br-sm shadow-sm'
+            : 'bg-card text-foreground rounded-bl-sm border border-border/40 shadow-sm',
+          isStreaming && role === 'assistant' && "ring-1 ring-primary/10"
         )}
       >
+        {/* role indicator */}
+        <span className={cn(
+          "text-[10px] font-medium tracking-wide uppercase mb-1 block",
+          role === 'user' ? 'text-primary-foreground/60 text-right' : 'text-muted-foreground/50'
+        )}>
+          {role === 'user' ? 'You' : 'Assistant'}
+        </span>
+
         {images && images.length > 0 && (
           <div className={cn(
             "flex gap-2 mb-3 flex-wrap",
@@ -124,12 +146,12 @@ export function MessageBubble({
         {hasContent && (
           role === 'assistant' ? (
             searchQuery && content.toLowerCase().includes(searchQuery.toLowerCase()) ? (
-              <p className="whitespace-pre-wrap break-words leading-relaxed">{highlightText(content, searchQuery)}</p>
+              <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">{highlightText(content, searchQuery)}</p>
             ) : (
-              <article className="leading-relaxed" aria-label={`${role} message`}>
+              <article className="leading-relaxed text-sm" aria-label={`${role} message`}>
                 <Markdown content={displayContent} />
                 {isStreaming && (
-                  <span className="inline-block ml-1 animate-pulse" aria-hidden="true">▊</span>
+                  <span className="inline-block ml-0.5 animate-pulse text-primary" aria-hidden="true">▊</span>
                 )}
               </article>
             )
@@ -147,7 +169,7 @@ export function MessageBubble({
                 id={`edit-${id}`}
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
-                className="w-full min-h-[60px]"
+                className="w-full min-h-[60px] text-sm bg-background text-foreground"
                 rows={3}
                 autoFocus
                 onKeyDown={(e) => {
@@ -176,7 +198,7 @@ export function MessageBubble({
               </div>
             </form>
           ) : (
-            <p className="whitespace-pre-wrap break-words leading-relaxed">
+            <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">
               {searchQuery ? highlightText(displayContent, searchQuery) : displayContent}
             </p>
           )
@@ -192,8 +214,8 @@ export function MessageBubble({
         
         {showTimestamp && (
           <p className={cn(
-            "mt-1 text-xs opacity-40 font-normal",
-            role === 'user' ? 'text-right' : 'text-left'
+            "mt-1.5 text-[10px] font-normal leading-none",
+            role === 'user' ? 'text-primary-foreground/50 text-right' : 'text-muted-foreground/40'
           )}>
             {formatTime(timestamp)}
           </p>
@@ -220,4 +242,4 @@ export function MessageBubble({
       )}
     </div>
   )
-}
+})

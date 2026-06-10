@@ -2,6 +2,11 @@
 Practical RAG Implementation Guide
 
 Real production patterns for using RAG effectively.
+
+⚠️ The pattern classes below (UserSpecificRAG, TemporalRAG, etc.) are
+design sketches / aspirational templates showing how ProductionRAG could
+be extended. Only ProductionRAG is implemented. These patterns serve as
+reference for future development.
 """
 
 # =============================================================================

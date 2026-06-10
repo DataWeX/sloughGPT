@@ -4,7 +4,8 @@
  * Uses apiClient for REST calls, fetch for SSE streaming.
  */
 
-import { apiPost, apiGet, apiClient } from './http-client'
+import { apiPost, apiGet } from './http-client'
+import { PUBLIC_API_URL } from './config'
 import { useAuthStore } from './auth'
 import { modelController, type ModelStatus } from './model-controller'
 
@@ -77,7 +78,7 @@ export const chatController = {
     const modelStatus = await modelController.status()
     if (!modelStatus.loaded) { yield '[No model loaded]'; return }
 
-    const res = await fetch(`${apiClient.defaults.baseURL}/chat/stream`, {
+    const res = await fetch(`${PUBLIC_API_URL}/chat/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({
@@ -120,7 +121,7 @@ export const chatController = {
   },
 
   async *regenerateStream(sessionId: string, messages: ChatMessage[]): AsyncGenerator<{ token?: string; done?: boolean; error?: string }> {
-    const res = await fetch(`${apiClient.defaults.baseURL}/session/${sessionId}/regenerate`, {
+    const res = await fetch(`${PUBLIC_API_URL}/session/${sessionId}/regenerate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ session_id: sessionId, messages, regenerate: true }),

@@ -18,7 +18,7 @@ interface ConversationDrawerProps {
   onConversationsLoad?: () => void
 }
 
-const STORAGE_KEY = 'sloughgpt_chat_conversations'
+const STORAGE_KEY = 'man_chat_conversations'
 
 export function ConversationDrawer({
   isOpen,

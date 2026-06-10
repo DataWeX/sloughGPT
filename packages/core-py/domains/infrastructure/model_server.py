@@ -316,6 +316,8 @@ class ModelServer:
                                 obj.clear()
                     except Exception:
                         pass
+            import gc
+            gc.collect()
         except Exception:
             pass
 

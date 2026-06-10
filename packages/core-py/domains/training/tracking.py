@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
 
-logger = logging.getLogger("sloughgpt.tracking")
+logger = logging.getLogger("man.tracking")
 
 
 class TrackerBackend(Enum):

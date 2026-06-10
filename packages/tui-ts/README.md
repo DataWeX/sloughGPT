@@ -20,7 +20,7 @@ npm start
 # or: npx sloughgpt-tui   (after npm link / global install from this package)
 ```
 
-- **API URL:** `SLOUGHGPT_API_URL` or `--url http://127.0.0.1:8000` (default port 8000).
+- **API URL:** `MAN_API_URL` or `--url http://127.0.0.1:8000` (default port 8000).
 - **Keys:** set `X-API-Key` via SDK when we add env support (same as web).
 
 ## Keys

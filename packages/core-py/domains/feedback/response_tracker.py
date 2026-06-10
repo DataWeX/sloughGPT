@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import logging
 
-logger = logging.getLogger("sloughgpt.response_tracker")
+logger = logging.getLogger("man.response_tracker")
 
 
 @dataclass

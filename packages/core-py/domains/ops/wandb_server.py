@@ -8,7 +8,7 @@ import os
 import threading
 from typing import Any, Callable, Dict, Optional
 
-logger = logging.getLogger("sloughgpt.wandb.server")
+logger = logging.getLogger("man.wandb.server")
 
 _inference_lock = threading.Lock()
 _inference_total = 0
@@ -84,7 +84,7 @@ async def start_wandb_server_background(
     *,
     extra_metrics: Optional[Callable[[], Dict[str, Any]]] = None,
 ) -> Optional[asyncio.Task]:
-    """Start periodic W&B logging when ``SLOUGHGPT_WANDB_SERVER`` is set. Returns task or ``None``.
+    """Start periodic W&B logging when ``MAN_WANDB_SERVER`` is set. Returns task or ``None``.
 
     ``extra_metrics`` is called in a worker thread each flush (e.g. psutil host snapshot aligned with ``GET /info``).
     """
@@ -95,10 +95,10 @@ async def start_wandb_server_background(
     try:
         import wandb  # noqa: F401
     except ImportError:
-        logger.warning("wandb not installed; set SLOUGHGPT_WANDB_SERVER=0 or pip install wandb")
+        logger.warning("wandb not installed; set MAN_WANDB_SERVER=0 or pip install wandb")
         return None
 
-    interval = float(os.environ.get("SLOUGHGPT_WANDB_SERVER_INTERVAL_SEC", "60"))
+    interval = float(os.environ.get("MAN_WANDB_SERVER_INTERVAL_SEC", "60"))
 
     async def _loop() -> None:
         await asyncio.to_thread(_wandb_init_server_run)

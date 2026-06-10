@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bawl"
+version = "0.4.0"
+description = "Tiny, zero-dependency web crawler — fetch, parse, crawl, store, GUI."
+readme = "README.md"
+license = "MIT"
+authors = [{name = "bawl"}]
+requires-python = ">=3.9"
+keywords = ["crawler", "scraper", "html", "cli", "dataset", "web"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Internet :: WWW/HTTP",
+    "Programming Language :: Python :: 3",
+]
+dependencies = []
+
+[project.scripts]
+bawl = "bawl.cli:entry"
+
+[tool.setuptools.packages.find]
+where = ["src"]

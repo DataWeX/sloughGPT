@@ -17,9 +17,9 @@ import json
 from typing import Dict, Any, Optional
 
 
-BASE_URL = os.environ.get("SLOUGHGPT_INTEGRATION_BASE_URL", "http://localhost:8000")
-TIMEOUT = int(os.environ.get("SLOUGHGPT_INTEGRATION_TIMEOUT", "120"))
-HEALTH_CHECK_TIMEOUT = int(os.environ.get("SLOUGHGPT_INTEGRATION_HEALTH_TIMEOUT", "30"))
+BASE_URL = os.environ.get("MAN_INTEGRATION_BASE_URL", "http://localhost:8000")
+TIMEOUT = int(os.environ.get("MAN_INTEGRATION_TIMEOUT", "120"))
+HEALTH_CHECK_TIMEOUT = int(os.environ.get("MAN_INTEGRATION_HEALTH_TIMEOUT", "30"))
 
 _QUICK_GEN = {"max_new_tokens": 12}
 

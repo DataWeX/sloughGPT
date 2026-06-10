@@ -14,5 +14,5 @@ export async function initVectorStore(): Promise<void> {
 }
 
 if (typeof window !== 'undefined') {
-  ;(window as any).__sloughgpt_ingest_ready = true
+  ;(window as any).__man_ingest_ready = true
 }

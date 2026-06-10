@@ -101,7 +101,7 @@ export function InferenceStatusBar({ health, selectedCatalogId }: Props) {
             <Link href="/models" className="text-primary underline-offset-2 hover:underline">
               Open models
             </Link>{' '}
-            or wait for autoload (<InlineCode>SLOUGHGPT_AUTOLOAD_MODEL</InlineCode>).
+            or wait for autoload (<InlineCode>MAN_AUTOLOAD_MODEL</InlineCode>).
           </p>
         </div>
       ) : null}

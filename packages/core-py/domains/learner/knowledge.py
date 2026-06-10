@@ -32,7 +32,7 @@ from dataclasses import dataclass, field, asdict
 
 import numpy as np
 
-logger = logging.getLogger("sloughgpt.learner.knowledge")
+logger = logging.getLogger("man.learner.knowledge")
 
 KNOWLEDGE_DIR = Path("data/knowledge")
 KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)
@@ -362,6 +362,7 @@ class KnowledgeMemory:
             facts = []
             for r in results:
                 fact = {
+                    "id": r.id,
                     "content": r.text,
                     "topic": r.metadata.get("topic", "general"),
                     "source": r.metadata.get("source", ""),

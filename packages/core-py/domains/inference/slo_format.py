@@ -544,7 +544,7 @@ def save_soul(
 
     with open(output_path, "wb") as f:
         f.write(SOU_MAGIC)
-        f.write(struct.pack("<I", SOU_VERSION))
+        f.write(struct.pack("<I", SOU_VERSION_V3))
         f.write(struct.pack("<I", len(config_json)))
         f.write(config_json.encode("utf-8"))
 
@@ -552,19 +552,24 @@ def save_soul(
             import numpy as np
             if hasattr(model, "state_dict"):
                 state = model.state_dict()
-                serializable = {}
+                params = []
                 for k, v in state.items():
                     if hasattr(v, "numpy"):
-                        arr = v.cpu().numpy()
+                        arr = v.cpu().numpy().astype(np.float32)
                     elif hasattr(v, "detach"):
-                        arr = v.detach().cpu().numpy()
+                        arr = v.detach().cpu().numpy().astype(np.float32)
                     else:
-                        arr = np.asarray(v)
-                    serializable[k] = arr.tolist()
-                state_json = json.dumps(_soul_json_sanitize(serializable), default=str, allow_nan=False)
-                state_bytes = state_json.encode("utf-8")
-                f.write(struct.pack("<I", len(state_bytes)))
-                f.write(state_bytes)
+                        arr = np.asarray(v, dtype=np.float32)
+                    params.append((k, arr))
+                f.write(struct.pack("<I", len(params)))
+                for key, arr in params:
+                    name_bytes = key.encode()
+                    f.write(struct.pack("<I", len(name_bytes)))
+                    f.write(name_bytes)
+                    f.write(struct.pack("<I", arr.ndim))
+                    for dim in arr.shape:
+                        f.write(struct.pack("<I", dim))
+                    f.write(arr.tobytes())
 
     meta_path = output_path + ".meta.json"
     with open(meta_path, "w", encoding="utf-8") as f:
@@ -613,9 +618,13 @@ def load_soul(sou_path: str):
             for _ in range(num_params):
                 name_len = struct.unpack("<I", f.read(4))[0]
                 name = f.read(name_len).decode("utf-8")
-                count = struct.unpack("<I", f.read(4))[0]
+                ndim = struct.unpack("<I", f.read(4))[0]
+                dims = tuple(struct.unpack(f"<{ndim}I", f.read(4 * ndim)))
+                count = 1
+                for d in dims:
+                    count *= d
                 raw = f.read(count * 4)
-                state_dict[name] = np.frombuffer(raw, dtype=np.float32).copy()
+                state_dict[name] = np.frombuffer(raw, dtype=np.float32).copy().reshape(dims)
         elif version >= 1:
             # v1/v2 JSON weight format
             try:

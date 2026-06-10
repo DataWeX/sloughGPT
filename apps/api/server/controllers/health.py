@@ -8,8 +8,18 @@ from datetime import datetime
 
 
 def _get_model_info() -> Tuple[bool, Optional[str]]:
-    """Get model info from models controller or server_state - checks if model is loaded"""
-    # Check models controller first (has full model metadata)
+    """Get model info from registry, controller, or server_state."""
+    # Check ModelRegistry first (most authoritative)
+    try:
+        from domains.infrastructure.model_registry import get_model_registry
+        registry = get_model_registry()
+        health = registry.health_summary()
+        if health["healthy"] and health["default_model"]:
+            return True, health["default_model"]
+    except ImportError:
+        pass
+
+    # Fallback: check models controller
     try:
         from controllers.models import get_models_controller
         ctrl = get_models_controller()
@@ -94,6 +104,15 @@ class HealthController:
         except Exception:
             gpu_info = {"backend": "unknown", "error": str(Exception)}
 
+        # Add ModelRegistry health if available
+        registry_health: Dict[str, Any] = {}
+        try:
+            from domains.infrastructure.model_registry import get_model_registry
+            reg = get_model_registry()
+            registry_health = reg.health_summary()
+        except Exception:
+            pass
+
         return {
             "status": "healthy",
             "uptime_seconds": uptime,
@@ -107,6 +126,7 @@ class HealthController:
             "model_loaded": model_loaded,
             "model_type": model_type,
             "inference": inference_stats,
+            "registry": registry_health,
         }
     
     def get_liveness(self) -> Dict[str, Any]:

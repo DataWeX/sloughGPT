@@ -16,6 +16,7 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 import ctypes
@@ -24,105 +25,137 @@ from typing import Optional, Tuple, Any
 
 import numpy as np
 
+logger = logging.getLogger(__name__)
+
 
 # =============================================================================
 # BACKEND DETECTION
 # =============================================================================
 
 class _MetalAccelerator:
-    """Metal (Apple GPU) accelerator via numpy-compatible arrays.
+    """Metal (Apple GPU) awareness.
 
-    Metal backend converts numpy arrays to metal-friendly formats and uses
-    numpy as the compute engine on CPU, with device-side metadata tracking.
-    For actual Metal compute, apps should use PyTorch or MLX — this backend
-    provides a uniform API so code doesn't need to change between backends.
+    Detects MPS availability but uses numpy for all compute operations.
+    The torch shim handles its own autograd — for real MPS speed,
+    use hf_finetune.py with real PyTorch.
     """
 
     name = "metal"
     device_type = "gpu"
 
     def __init__(self):
-        self._backend = None
         self._available = self._check_metal()
 
     def _check_metal(self) -> bool:
+        """Check if MPS is available via PyTorch, without polluting sys.modules."""
+        import sys
+        saved = sys.path.copy()
+        sys.path = [p for p in sys.path if '/domains/training' not in p]
+        saved_shim = sys.modules.pop('torch', None)
+        for mn in list(sys.modules.keys()):
+            if mn.startswith('torch.'):
+                del sys.modules[mn]
         try:
-            import torch
-            return torch.backends.mps.is_available()
+            import torch as _rt
+            return hasattr(_rt.backends, 'mps') and _rt.backends.mps.is_available()
         except Exception:
-            pass
-
-        # Check for Metal framework on macOS
-        try:
-            import ctypes
-            libc = ctypes.CDLL(None)
-            libc.CGDirectDisplayGetActive.displays = None
-        except:
-            pass
-        return False
+            return False
+        finally:
+            sys.path = saved
+            if saved_shim is not None:
+                sys.modules['torch'] = saved_shim
+            for mn in list(sys.modules.keys()):
+                if mn.startswith('torch.') and mn != 'torch':
+                    del sys.modules[mn]
 
     def is_available(self) -> bool:
         return self._available
 
     def to_device(self, arr: np.ndarray) -> np.ndarray:
-        """Mark array as on Metal device. No actual copy — just metadata."""
-        if not isinstance(arr, np.ndarray):
-            arr = np.asarray(arr, dtype=np.float32)
-        arr = arr.astype(np.float32).copy()
-        arr._gpu_device = "metal"
-        return arr
+        return arr.astype(np.float32).copy()
 
-    def from_device(self, arr: np.ndarray) -> np.ndarray:
-        """No-op — numpy arrays work on CPU regardless of GPU marking."""
-        if hasattr(arr, '_gpu_device'):
-            del arr._gpu_device
-        return arr
+    def from_device(self, arr) -> np.ndarray:
+        return np.asarray(arr)
 
-    def matmul(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
-        """Matrix multiply on CPU (Metal backend)."""
-        return np.matmul(a, b)
+    def matmul(self, a, b):
+        return np.matmul(np.asarray(a), np.asarray(b))
 
-    def add(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
-        return a + b
+    def add(self, a, b):
+        return np.asarray(a) + np.asarray(b)
 
-    def softmax(self, arr: np.ndarray, axis: int = -1) -> np.ndarray:
-        exp_arr = np.exp(arr - np.max(arr, axis=axis, keepdims=True))
-        return exp_arr / np.sum(exp_arr, axis=axis, keepdims=True)
+    def softmax(self, arr, axis: int = -1):
+        a = np.asarray(arr)
+        e = np.exp(a - np.max(a, axis=axis, keepdims=True))
+        return e / e.sum(axis=axis, keepdims=True)
 
-    def gelu(self, arr: np.ndarray) -> np.ndarray:
-        return 0.5 * arr * (1 + np.tanh(np.sqrt(2 / np.pi) * (arr + 0.044715 * arr**3)))
+    def gelu(self, arr):
+        a = np.asarray(arr)
+        return 0.5 * a * (1 + np.tanh(np.sqrt(2 / np.pi) * (a + 0.044715 * a**3)))
 
-    def layernorm(self, arr: np.ndarray, weight: np.ndarray, bias: np.ndarray, eps: float = 1e-5) -> np.ndarray:
-        mean = arr.mean(axis=-1, keepdims=True)
-        var = arr.var(axis=-1, keepdims=True)
-        return ((arr - mean) / np.sqrt(var + eps)) * weight + bias
+    def silu(self, arr):
+        a = np.asarray(arr)
+        return a / (1 + np.exp(-np.clip(a, -500, 500)))
 
-    def attention(self, q: np.ndarray, k: np.ndarray, v: np.ndarray, scale: float = 1.0) -> np.ndarray:
-        scores = np.matmul(q, k.T) * scale
+    def layernorm(self, arr, weight, bias, eps: float = 1e-5):
+        a = np.asarray(arr)
+        mean = a.mean(axis=-1, keepdims=True)
+        var = a.var(axis=-1, keepdims=True)
+        return ((a - mean) / np.sqrt(var + eps)) * np.asarray(weight) + np.asarray(bias)
+
+    def rmsnorm(self, arr, weight, eps: float = 1e-5):
+        a = np.asarray(arr)
+        rms = np.sqrt(np.mean(a**2, axis=-1, keepdims=True) + eps)
+        return (a / rms) * np.asarray(weight)
+
+    def attention(self, q, k, v, scale: float = 1.0):
+        qd = np.asarray(q); kd = np.asarray(k); vd = np.asarray(v)
+        scores = np.matmul(qd, kd.T) * scale
         attn = self.softmax(scores, axis=-1)
-        return np.matmul(attn, v)
+        return np.matmul(attn, vd)
 
-    def conv2d(self, input: np.ndarray, weight: np.ndarray, bias: Optional[np.ndarray],
-               stride: int = 1, padding: int = 0) -> np.ndarray:
-        n, c, h, w = input.shape
-        oc, ic, kh, kw = weight.shape
+    def scaled_dot_attention(self, q, k, v, mask=None, scale=None):
+        qd = np.asarray(q); kd = np.asarray(k); vd = np.asarray(v)
+        if scale is None:
+            scale = 1.0 / np.sqrt(kd.shape[-1])
+        scores = np.matmul(qd, kd.transpose(-2, -1)) * scale
+        if mask is not None:
+            scores = scores + np.asarray(mask)
+        attn = self.softmax(scores, axis=-1)
+        return np.matmul(attn, vd)
 
-        if padding > 0:
-            input = np.pad(input, [(0,0),(0,0),(padding,),(padding,)], mode='constant')
+    def dropout(self, arr, p: float = 0.0):
+        a = np.asarray(arr)
+        if p <= 0: return a
+        mask = np.random.binomial(1, 1 - p, a.shape) / (1 - p)
+        return a * mask
 
-        out_h = (input.shape[2] - kh) // stride + 1
-        out_w = (input.shape[3] - kw) // stride + 1
-        result = np.zeros((n, oc, out_h, out_w), dtype=np.float32)
+    def embedding(self, input_indices, weight):
+        return np.asarray(weight)[np.asarray(input_indices).astype(int)]
 
+    def cross_entropy(self, logits, targets):
+        logits_a = np.asarray(logits); targets_a = np.asarray(targets).astype(int)
+        logits_a -= logits_a.max(axis=-1, keepdims=True)
+        softmax = np.exp(logits_a) / np.exp(logits_a).sum(axis=-1, keepdims=True)
+        batch = np.arange(len(targets_a))
+        return float(-np.log(np.maximum(softmax[batch, targets_a], 1e-10)).mean())
+
+    def conv2d(self, input, weight, bias=None, stride=1, padding=0):
+        return _CPUAccelerator._conv2d_impl(input, weight, bias, stride, padding)
+
+    def max_pool2d(self, input, kernel_size=2, stride=None, padding=0):
+        inp = np.asarray(input); n, c, h, w = inp.shape
+        kh = kernel_size if isinstance(kernel_size, int) else kernel_size[0]
+        kw = kernel_size if isinstance(kernel_size, int) else kernel_size[1]
+        st = stride if stride is not None else kh
+        out_h = (h + 2 * padding - kh) // st + 1; out_w = (w + 2 * padding - kw) // st + 1
+        result = np.zeros((n, c, out_h, out_w), dtype=np.float32)
         for i in range(n):
-            for oc_idx in range(oc):
+            for ci in range(c):
                 for oh in range(out_h):
                     for ow in range(out_w):
-                        ih = oh * stride
-                        iw = ow * stride
-                        patch = input[i, :, ih:ih+kh, iw:iw+kw]
-                        result[i, oc_idx, oh, ow] = np.sum(patch * weight[oc_idx]) + (bias[oc_idx] if bias is not None else 0)
-
+                        ih = oh * st - padding; iw = ow * st - padding
+                        ph = inp[i, ci, max(0,ih):min(h,ih+kh), max(0,iw):min(w,iw+kw)]
+                        if ph.size > 0: result[i, ci, oh, ow] = ph.max()
         return result
 
 

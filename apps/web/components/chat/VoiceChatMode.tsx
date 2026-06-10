@@ -61,6 +61,9 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pulseRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const isListeningRef = useRef(false)
+  const finalTextRef = useRef('')
+  const handleSubmitRef = useRef<(text: string) => Promise<void>>(null!)
+  const stopListeningRef = useRef<() => void>(null!)
 
   // Pulse animation
   useEffect(() => {
@@ -77,8 +80,8 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
     silenceTimerRef.current = setTimeout(() => {
       if (isListeningRef.current && text.trim()) {
-        stopListening()
-        handleSubmit(text.trim())
+        stopListeningRef.current()
+        handleSubmitRef.current(text.trim())
       }
     }, SILENCE_TIMEOUT)
   }, [])
@@ -91,6 +94,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
     }
 
     setFinalText('')
+    finalTextRef.current = ''
     setInterimText('')
     setResponseText('')
     setError(null)
@@ -134,20 +138,21 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
         }
       }
       if (final) {
-        const newFinal = finalText + final
+        const newFinal = finalTextRef.current + final
+        finalTextRef.current = newFinal
         setFinalText(newFinal)
         setInterimText('')
         resetSilenceTimer(newFinal)
       }
       if (interim) {
         setInterimText(interim)
-        resetSilenceTimer(finalText + interim)
+        resetSilenceTimer(finalTextRef.current + interim)
       }
     }
 
     recognitionRef.current = recognition
     recognition.start()
-  }, [finalText, resetSilenceTimer])
+  }, [resetSilenceTimer])
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
@@ -181,6 +186,10 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
       setTimeout(() => startListening(), 500)
     }
   }, [isProcessing, onMessage, startListening])
+
+  // Keep refs in sync with latest callbacks (breaks circular dep in resetSilenceTimer)
+  useEffect(() => { handleSubmitRef.current = handleSubmit }, [handleSubmit])
+  useEffect(() => { stopListeningRef.current = stopListening }, [stopListening])
 
   const handleToggle = useCallback(() => {
     if (isListening) {

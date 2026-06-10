@@ -14,7 +14,7 @@ import numpy as np
 import logging
 from pathlib import Path
 
-logger = logging.getLogger("sloughgpt.multimodal.tts")
+logger = logging.getLogger("man.multimodal.tts")
 
 from domains.training.slonet import (
     Tensor, SloNet, SloEmbedding, SloLSTM, SloLinear, SloLayerNorm,

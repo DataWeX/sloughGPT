@@ -1,0 +1,368 @@
+'use client'
+
+import { useState, useCallback, useRef } from 'react'
+import { trainingJobsController } from '@/lib/controllers'
+import { PUBLIC_API_URL } from '@/lib/config'
+
+export interface TrainingSessionState {
+  phase: string
+  loss: number | null
+  progress: number
+  epoch: number
+  totalEpochs: number
+  message: string
+  startTime: number | null
+  lossHistory: { step: number; loss: number }[]
+  evalResult: string | null
+  finetunedModelPath: string | null
+  finetunedModelLoss: number | null
+  distillCheckpoint: string | null
+  distillFinalLoss: number | null
+  distillEpochs: number | null
+  turboPhase: 'idle' | 'training' | 'complete' | 'error'
+  turboResult: { status: string; final_loss?: number; total_steps?: number; model_path?: string } | null
+  turboError: string | null
+  unifiedModelPath: string | null
+  unifiedFinalLoss: number | null
+  unifiedTotalSteps: number | null
+  unifiedElapsed: number | null
+  vlmOutputDir: string | null
+  vlmSouPath: string | null
+}
+
+export interface UseTrainingSessionReturn extends TrainingSessionState {
+  setPhase: (p: string) => void
+  setLoss: (l: number | null) => void
+  setProgress: (p: number) => void
+  setEpoch: (e: number) => void
+  setTotalEpochs: (t: number) => void
+  setMessage: (m: string) => void
+  setLossHistory: (h: { step: number; loss: number }[]) => void
+  setEvalResult: (r: string | null) => void
+  setFinetunedModelPath: (p: string | null) => void
+  setFinetunedModelLoss: (l: number | null) => void
+  setDistillCheckpoint: (c: string | null) => void
+  setDistillFinalLoss: (l: number | null) => void
+  setDistillEpochs: (e: number | null) => void
+  setTurboPhase: (p: 'idle' | 'training' | 'complete' | 'error') => void
+  setTurboResult: (r: { status: string; final_loss?: number; total_steps?: number; model_path?: string } | null) => void
+  setTurboError: (e: string | null) => void
+  trainingRunning: boolean
+  resetTraining: () => void
+  stopTraining: () => void
+  startSSETraining: (body: Record<string, unknown>, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void, onCheckpointUpdate?: () => void) => void
+  startFineTune: (params: {
+    model: string; dataset: string; epochs: number; batchSize: number; lr: number; useLoRA: boolean
+  }, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void, onComplete?: () => void) => void
+  startVLMTraining: (params: {
+    dataset: string; visionEncoder: string; llm: string; stage1Epochs: number; stage2Epochs: number; useLoRA: boolean
+  }, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void, onComplete?: () => void) => void
+  startTurboTrain: (datasetId: string, config: {
+    epochs: number; lr: number; embed: number; heads: number; layers: number
+  }, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => void
+  turboRunning: boolean
+  startUnifiedTraining: (config: {
+    method?: string; dataset?: string; epochs?: number; batchSize?: number; lr?: number
+    distill?: boolean; useLoRA?: boolean; hfModel?: string; skipGenerate?: boolean
+    skipDistill?: boolean; skipTrain?: boolean; skipEvaluate?: boolean; skipDeploy?: boolean
+  }, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => void
+}
+
+export function useTrainingSession(): UseTrainingSessionReturn {
+  const [phase, setPhase] = useState('idle')
+  const [loss, setLoss] = useState<number | null>(null)
+  const [progress, setProgress] = useState(0)
+  const [epoch, setEpoch] = useState(0)
+  const [totalEpochs, setTotalEpochs] = useState(0)
+  const [message, setMessage] = useState('')
+  const [startTime, setStartTime] = useState<number | null>(null)
+  const [lossHistory, setLossHistory] = useState<{ step: number; loss: number }[]>([])
+  const [evalResult, setEvalResult] = useState<string | null>(null)
+
+  const [finetunedModelPath, setFinetunedModelPath] = useState<string | null>(null)
+  const [finetunedModelLoss, setFinetunedModelLoss] = useState<number | null>(null)
+  const [distillCheckpoint, setDistillCheckpoint] = useState<string | null>(null)
+  const [distillFinalLoss, setDistillFinalLoss] = useState<number | null>(null)
+  const [distillEpochs, setDistillEpochs] = useState<number | null>(null)
+
+  const [turboPhase, setTurboPhase] = useState<'idle' | 'training' | 'complete' | 'error'>('idle')
+  const [turboResult, setTurboResult] = useState<{ status: string; final_loss?: number; total_steps?: number; model_path?: string } | null>(null)
+  const [turboError, setTurboError] = useState<string | null>(null)
+
+  const [unifiedModelPath, setUnifiedModelPath] = useState<string | null>(null)
+  const [unifiedFinalLoss, setUnifiedFinalLoss] = useState<number | null>(null)
+  const [unifiedTotalSteps, setUnifiedTotalSteps] = useState<number | null>(null)
+  const [unifiedElapsed, setUnifiedElapsed] = useState<number | null>(null)
+
+  const [vlmOutputDir, setVlmOutputDir] = useState<string | null>(null)
+  const [vlmSouPath, setVlmSouPath] = useState<string | null>(null)
+
+  const esRef = useRef<EventSource | null>(null)
+
+  const trainingRunning = phase !== 'idle' && phase !== 'complete' && phase !== 'error'
+
+  const resetTraining = useCallback(() => {
+    setFinetunedModelPath(null); setFinetunedModelLoss(null)
+    setDistillCheckpoint(null); setDistillFinalLoss(null); setDistillEpochs(null)
+    setUnifiedModelPath(null); setUnifiedFinalLoss(null); setUnifiedTotalSteps(null); setUnifiedElapsed(null)
+    setVlmOutputDir(null); setVlmSouPath(null)
+    setPhase('idle'); setProgress(0); setLoss(null); setEpoch(0); setTotalEpochs(0)
+    setMessage(''); setLossHistory([]); setEvalResult(null)
+  }, [])
+
+  const stopTraining = useCallback(() => {
+    esRef.current?.close(); esRef.current = null
+    trainingJobsController.stopAutoTrain().catch(() => {})
+    trainingJobsController.stopUnified().catch(() => {})
+    resetTraining()
+  }, [resetTraining])
+
+  const startSSETraining = useCallback((
+    body: Record<string, unknown>,
+    addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
+    onCheckpointUpdate?: () => void,
+  ) => {
+    trainingJobsController.startAutoTrain(body).then(() => {
+      setPhase('TRAINING'); setProgress(0); setLoss(null); setEpoch(0); setTotalEpochs(0)
+      setMessage(''); setLossHistory([]); setEvalResult(null)
+      const es = new EventSource(`${PUBLIC_API_URL}/auto-train/stream`)
+      esRef.current = es
+      es.onmessage = (e) => {
+        try {
+          const env = JSON.parse(e.data)
+          if (env.stream !== 'auto-train') return
+          setPhase(env.phase || 'TRAINING')
+          if (env.data?.loss != null) {
+            setLoss(env.data.loss)
+            setLossHistory(prev => {
+              const last = prev[prev.length - 1]
+              const step = (last?.step ?? 0) + 1
+              return prev.length > 200 ? prev.slice(-200) : [...prev, { step, loss: env.data.loss }]
+            })
+          }
+          if (env.data?.progress != null) setProgress(env.data.progress)
+          if (env.meta?.epoch != null) setEpoch(env.meta.epoch)
+          if (env.meta?.total_epochs != null) setTotalEpochs(env.meta.total_epochs)
+          if (env.message) setMessage(env.message)
+          if (env.data?.eval_report) setEvalResult(env.data.eval_report)
+          if (env.status === 'complete') {
+            es.close(); esRef.current = null
+            if (env.data?.checkpoint) setDistillCheckpoint(env.data.checkpoint)
+            if (env.data?.final_loss != null) setDistillFinalLoss(env.data.final_loss)
+            if (env.data?.epochs != null) setDistillEpochs(env.data.epochs)
+            setPhase('complete')
+            addToast('Training complete', 'success')
+            onCheckpointUpdate?.()
+          }
+          if (env.status === 'error') { es.close(); esRef.current = null; setPhase('error'); addToast('Training failed', 'error') }
+        } catch { /* ignore */ }
+      }
+      let esRetries = 0
+      es.onerror = () => {
+        if (es.readyState === EventSource.CLOSED || esRetries >= 3) {
+          es.close(); esRef.current = null; setPhase('error')
+        } else { esRetries++ }
+      }
+    }).catch(() => addToast('Failed to start training', 'error'))
+  }, [])
+
+  const startFineTune = useCallback((
+    params: { model: string; dataset: string; epochs: number; batchSize: number; lr: number; useLoRA: boolean },
+    addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
+    onComplete?: () => void,
+  ) => {
+    setFinetunedModelPath(null); setFinetunedModelLoss(null)
+    trainingJobsController.startHFFineTune({
+      model: params.model,
+      dataset: params.dataset,
+      name: `${params.model}-${Date.now()}`,
+      epochs: params.epochs,
+      batch_size: params.batchSize,
+      learning_rate: params.lr,
+      use_lora: params.useLoRA,
+      lora_rank: 8,
+    }).then(resp => {
+      const jobId = resp.job_id
+      addToast(resp.message || 'Fine-tune queued', 'info')
+      setPhase('TRAINING'); setProgress(0); setTotalEpochs(params.epochs)
+      const pollId = setInterval(async () => {
+        try {
+          const resp2 = await fetch(`${PUBLIC_API_URL}/training/jobs`)
+          const jobs = await resp2.json()
+          const myJob = (jobs || []).find((j: { id: string }) => j.id === jobId)
+          if (!myJob) { clearInterval(pollId); return }
+          if (myJob.status === 'completed') {
+            clearInterval(pollId)
+            setPhase('complete'); setProgress(100)
+            setFinetunedModelPath(myJob.result?.model_path || '')
+            setFinetunedModelLoss(myJob.result?.final_loss || myJob.loss || null)
+            addToast('Fine-tune complete', 'success')
+            onComplete?.()
+          } else if (myJob.status === 'failed') {
+            clearInterval(pollId); setPhase('error')
+            addToast(myJob.error || 'Fine-tune failed', 'error')
+          } else if (myJob.loss != null) {
+            setLoss(myJob.loss); setProgress(myJob.progress || 0); setEpoch(myJob.current_epoch || 0)
+          }
+        } catch { clearInterval(pollId) }
+      }, 3000)
+      setTimeout(() => clearInterval(pollId), 300000)
+    }).catch(() => addToast('Failed to start fine-tune', 'error'))
+  }, [])
+
+  const startVLMTraining = useCallback((
+    params: { dataset: string; visionEncoder: string; llm: string; stage1Epochs: number; stage2Epochs: number; useLoRA: boolean },
+    addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
+    onComplete?: () => void,
+  ) => {
+    setFinetunedModelPath(null); setFinetunedModelLoss(null)
+    trainingJobsController.startVLMTrain({
+      dataset: params.dataset,
+      vision_encoder: params.visionEncoder,
+      llm: params.llm,
+      stage1_epochs: params.stage1Epochs,
+      stage2_epochs: params.stage2Epochs,
+      use_lora: params.useLoRA,
+      name: `vlm-${params.dataset}-${Date.now()}`,
+    }).then(resp => {
+      const jobId = resp.job_id
+      addToast(resp.message || 'VLM training queued', 'info')
+      setPhase('TRAINING'); setProgress(0); setTotalEpochs(params.stage1Epochs + params.stage2Epochs)
+      const pollId = setInterval(async () => {
+        try {
+          const resp2 = await fetch(`${PUBLIC_API_URL}/training/jobs`)
+          const jobs = await resp2.json()
+          const myJob = (jobs || []).find((j: { id: string }) => j.id === jobId)
+          if (!myJob) { clearInterval(pollId); return }
+          if (myJob.status === 'completed') {
+            clearInterval(pollId); setPhase('complete'); setProgress(100)
+            setFinetunedModelPath(myJob.model_path || '')
+            setFinetunedModelLoss(myJob.loss || null)
+            setVlmOutputDir(myJob.output_dir || null)
+            setVlmSouPath(myJob.sou_path || null)
+            addToast('VLM training complete', 'success')
+            onComplete?.()
+          } else if (myJob.status === 'failed') {
+            clearInterval(pollId); setPhase('error')
+            addToast(myJob.error || 'VLM training failed', 'error')
+          } else if (myJob.loss != null) {
+            setLoss(myJob.loss); setProgress(myJob.progress || 0); setEpoch(myJob.current_epoch || 0)
+            setMessage(myJob.stage || '')
+          }
+        } catch { clearInterval(pollId) }
+      }, 3000)
+      setTimeout(() => clearInterval(pollId), 600000)
+    }).catch(() => addToast('Failed to start VLM training', 'error'))
+  }, [])
+
+  const startTurboTrain = useCallback((
+    datasetId: string,
+    config: { epochs: number; lr: number; embed: number; heads: number; layers: number },
+    addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
+  ) => {
+    setTurboPhase('training'); setTurboResult(null); setTurboError(null)
+    trainingJobsController.startTurboTrain({
+      dataset_id: datasetId,
+      epochs: config.epochs,
+      learning_rate: config.lr,
+      n_embed: config.embed,
+      n_head: config.heads,
+      n_encoder_layers: config.layers,
+      n_decoder_layers: config.layers,
+    }).then(result => {
+      if (result.status === 'error') {
+        setTurboError(result.message || 'Training failed'); setTurboPhase('error')
+      } else {
+        setTurboResult(result); setTurboPhase('complete')
+        addToast('Turbo training complete!', 'success')
+      }
+    }).catch((e: any) => {
+      setTurboError(e?.message || 'Training request failed'); setTurboPhase('error')
+    })
+  }, [])
+
+  const startUnifiedTraining = useCallback((
+    config: {
+      method?: string; dataset?: string; epochs?: number; batchSize?: number; lr?: number
+      distill?: boolean; useLoRA?: boolean; hfModel?: string; skipGenerate?: boolean
+      skipDistill?: boolean; skipTrain?: boolean; skipEvaluate?: boolean; skipDeploy?: boolean
+    },
+    addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
+  ) => {
+    setUnifiedModelPath(null); setUnifiedFinalLoss(null); setUnifiedTotalSteps(null); setUnifiedElapsed(null)
+    trainingJobsController.startUnified({
+      method: config.method,
+      data_path: config.dataset,
+      dataset_name: config.dataset,
+      epochs: config.epochs ?? 5,
+      batch_size: config.batchSize ?? 64,
+      learning_rate: config.lr ?? 1e-3,
+      distill: config.distill ?? false,
+      use_lora: config.useLoRA ?? true,
+      lora_rank: 8,
+      hf_model_name: config.hfModel,
+      skip_generate: config.skipGenerate,
+      skip_distill: config.skipDistill,
+      skip_train: config.skipTrain,
+      skip_evaluate: config.skipEvaluate,
+      skip_deploy: config.skipDeploy,
+    }).then(() => {
+      setPhase('GENERATE_DATA'); setProgress(0); setLoss(null); setEpoch(0); setTotalEpochs(0)
+      setMessage(''); setLossHistory([]); setEvalResult(null)
+      const es = new EventSource(`${PUBLIC_API_URL}/training/unified-stream`)
+      esRef.current = es
+      es.onmessage = (e) => {
+        try {
+          const env = JSON.parse(e.data)
+          if (env.stream !== 'unified-train') return
+          setPhase(env.phase || 'TRAIN')
+          if (env.data?.loss != null) {
+            setLoss(env.data.loss)
+            setLossHistory(prev => {
+              const last = prev[prev.length - 1]
+              const step = (last?.step ?? 0) + 1
+              return prev.length > 200 ? prev.slice(-200) : [...prev, { step, loss: env.data.loss }]
+            })
+          }
+          if (env.data?.progress != null) setProgress(env.data.progress)
+          if (env.meta?.epoch != null) setEpoch(env.meta.epoch)
+          if (env.meta?.total_epochs != null) setTotalEpochs(env.meta.total_epochs)
+          if (env.message) setMessage(env.message)
+          if (env.data?.eval_report) setEvalResult(env.data.eval_report)
+          if (env.status === 'complete') {
+            es.close(); esRef.current = null
+            if (env.data?.model_path) setUnifiedModelPath(env.data.model_path)
+            if (env.data?.final_loss != null) setUnifiedFinalLoss(env.data.final_loss)
+            if (env.data?.total_steps != null) setUnifiedTotalSteps(env.data.total_steps)
+            if (env.data?.elapsed != null) setUnifiedElapsed(env.data.elapsed)
+            setPhase('complete')
+            addToast('Unified training complete', 'success')
+          }
+          if (env.status === 'error') { es.close(); esRef.current = null; setPhase('error'); addToast(env.message || 'Unified training failed', 'error') }
+        } catch { /* ignore */ }
+      }
+      let esRetries = 0
+      es.onerror = () => {
+        if (es.readyState === EventSource.CLOSED || esRetries >= 3) {
+          es.close(); esRef.current = null; setPhase('error')
+        } else { esRetries++ }
+      }
+    }).catch(() => addToast('Failed to start unified training', 'error'))
+  }, [])
+
+  return {
+    phase, loss, progress, epoch, totalEpochs, message, startTime, lossHistory, evalResult,
+    finetunedModelPath, finetunedModelLoss, distillCheckpoint, distillFinalLoss, distillEpochs,
+    turboPhase, turboResult, turboError,
+    unifiedModelPath, unifiedFinalLoss, unifiedTotalSteps, unifiedElapsed,
+    vlmOutputDir, vlmSouPath,
+    setPhase, setLoss, setProgress, setEpoch, setTotalEpochs, setMessage,
+    setLossHistory, setEvalResult,
+    setFinetunedModelPath, setFinetunedModelLoss,
+    setDistillCheckpoint, setDistillFinalLoss, setDistillEpochs,
+    setTurboPhase, setTurboResult, setTurboError,
+    trainingRunning, turboRunning: turboPhase === 'training',
+    resetTraining, stopTraining,
+    startSSETraining, startFineTune, startVLMTraining, startTurboTrain, startUnifiedTraining,
+  }
+}

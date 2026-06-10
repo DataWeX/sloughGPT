@@ -21,6 +21,8 @@ from rich.live import Live
 from rich.layout import Layout
 from rich.align import Align
 from rich.box import Box, ROUNDED, HEAVY, SIMPLE
+from rich.panel import Panel as RichPanel
+from rich.table import Table
 
 
 CONSOLE = Console()

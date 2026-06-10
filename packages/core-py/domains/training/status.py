@@ -286,9 +286,14 @@ class TrainingStatusTracker:
         return self.report
     
     def save_report(self, path: str):
-        """Save report to JSON."""
+        """Save report to JSON (converts enums to their values)."""
+        def _serialize(obj):
+            if isinstance(obj, Enum):
+                return obj.value
+            raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+
         with open(path, 'w') as f:
-            json.dump(asdict(self.report), f, indent=2)
+            json.dump(asdict(self.report), f, indent=2, default=_serialize)
     
     @classmethod
     def load_report(cls, path: str) -> "TrainingStatusTracker":

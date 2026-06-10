@@ -28,7 +28,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from contextlib import contextmanager
 
-logger = logging.getLogger("sloughgpt")
+logger = logging.getLogger("man")
 
 
 # ============ Security & Safety ============
@@ -523,7 +523,7 @@ def get_runner() -> ToolRunner:
 
 __all__ = [
     "Agent",
-    "AgentConfig", 
+    "AgentConfig",
     "ToolRunner",
     "ToolCapability",
     "ToolDefinition",
@@ -532,4 +532,22 @@ __all__ = [
     "SecurityBoundary",
     "get_agent",
     "get_runner",
+    "MultiAgentOrchestrator",
+    "SpecializedAgent",
+    "AgentTask",
+    "TaskStatus",
+    "get_orchestrator",
+    "reset_orchestrator",
 ]
+
+
+# Lazy import multi-agent components
+def __getattr__(name: str) -> Any:
+    if name in ("MultiAgentOrchestrator", "SpecializedAgent", "AgentTask",
+                 "TaskStatus", "get_orchestrator", "reset_orchestrator"):
+        from .multi import (MultiAgentOrchestrator, SpecializedAgent,
+                            AgentTask, TaskStatus,
+                            get_orchestrator, reset_orchestrator)
+        globals().update(locals())
+        return globals()[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

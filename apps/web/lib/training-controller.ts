@@ -56,6 +56,53 @@ export interface WebhookStats {
   success_rate: number
 }
 
+export interface TrainingBuild {
+  name: string
+  build_type: 'auto-train' | 'lora' | 'hf-finetune' | 'hf-finetuned-dir' | 'vlm'
+  job_id?: string
+  model?: string
+  dataset?: string
+  loss?: number | null
+  epochs?: number | null
+  model_path?: string
+  size_mb?: number
+  model_type?: string
+  training_dataset?: string
+  created_at?: string
+  finished_at?: string
+  soul?: string
+  traits?: Record<string, number>
+  verdict?: string
+}
+
+export interface TurboTrainStartRequest {
+  method?: 'transformer'
+  dataset_id?: string
+  data_path?: string
+  epochs?: number
+  batch_size?: number
+  learning_rate?: number
+  vocab_size?: number
+  n_embed?: number
+  n_head?: number
+  n_encoder_layers?: number
+  n_decoder_layers?: number
+  dim_feedforward?: number
+  dropout?: number
+  max_src_len?: number
+  max_tgt_len?: number
+}
+
+export interface TurboTrainResponse {
+  status: string
+  model_path?: string
+  method?: string
+  final_loss?: number
+  total_steps?: number
+  epochs?: number
+  message?: string
+}
+
 export const trainingJobsController = {
   async startAutoTrain(params?: AutoTrainStartRequest): Promise<AutoTrainStartResponse> {
     return apiPost<AutoTrainStartResponse>('/auto-train/start', params ?? null)
@@ -64,6 +111,15 @@ export const trainingJobsController = {
   async stopAutoTrain(): Promise<void> {
     await apiPost('/auto-train/stop')
   },
+
+  async stopUnified(): Promise<void> {
+    await apiPost('/training/unified-stop')
+  },
+
+  async startTurboTrain(params?: TurboTrainStartRequest): Promise<TurboTrainResponse> {
+    return apiPost<TurboTrainResponse>('/auto-train/start-turbo', params ?? null)
+  },
+
   async list(): Promise<TrainingJob[]> {
     const data = await apiGet<{ jobs: TrainingJob[] }>('/training/jobs')
     return data.jobs || []
@@ -72,6 +128,11 @@ export const trainingJobsController = {
   async listCheckpoints(): Promise<Checkpoint[]> {
     const data = await apiGet<{ checkpoints: Checkpoint[] }>('/auto-train/checkpoints')
     return data.checkpoints || []
+  },
+
+  async listBuilds(): Promise<TrainingBuild[]> {
+    const data = await apiGet<{ builds: TrainingBuild[] }>('/training/builds')
+    return data.builds || []
   },
 
   async get(id: string): Promise<TrainingJob | null> {
@@ -94,6 +155,39 @@ export const trainingJobsController = {
     lora_rank?: number
   }): Promise<TrainingStatus> {
     return apiPost<TrainingStatus>('/training/start', params)
+  },
+
+  async startHFFineTune(params: {
+    model: string
+    dataset: string
+    name?: string
+    epochs?: number
+    batch_size?: number
+    learning_rate?: number
+    use_lora?: boolean
+    lora_rank?: number
+    max_seq_length?: number
+  }): Promise<{ job_id: string; status: string; message: string }> {
+    return apiPost('/training/hf-start', params)
+  },
+
+  async startVLMTrain(params: {
+    dataset: string
+    vision_encoder?: string
+    llm?: string
+    connector_hidden_dim?: number
+    max_seq_length?: number
+    stage1_epochs?: number
+    stage2_epochs?: number
+    stage1_lr?: number
+    stage2_lr?: number
+    batch_size?: number
+    use_lora?: boolean
+    lora_rank?: number
+    freeze_vision?: boolean
+    name?: string
+  }): Promise<{ job_id: string; status: string; message: string }> {
+    return apiPost('/training/vlm-start', params)
   },
 
   async stop(id: string): Promise<void> {
@@ -170,6 +264,85 @@ export const trainingJobsController = {
     if (!res.ok) throw new Error(`Export failed (${res.status})`)
     return res.blob()
   },
+
+  // ---------------------------------------------------------------------------
+  // Unified Pipeline
+  // ---------------------------------------------------------------------------
+
+  async startUnified(config: UnifiedStartConfig): Promise<{ status: string }> {
+    return apiPost('/training/unified-start', config)
+  },
+
+  async *streamUnified(): AsyncGenerator<UnifiedStreamEvent> {
+    const { PUBLIC_API_URL } = await import('./config')
+    const res = await fetch(`${PUBLIC_API_URL}/training/unified-stream`)
+    if (!res.ok || !res.body) throw new Error(`Stream error (${res.status})`)
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const event = JSON.parse(line.slice(6))
+            yield event as UnifiedStreamEvent
+          } catch { /* skip malformed */ }
+        }
+      }
+    }
+  },
+}
+
+export interface UnifiedStartConfig {
+  method?: string
+  data_path?: string
+  dataset_name?: string
+  output_dir?: string
+  epochs?: number
+  batch_size?: number
+  learning_rate?: number
+  weight_decay?: number
+  warmup_steps?: number
+  distill?: boolean
+  temperature?: number
+  hf_model_name?: string
+  vocab_size?: number
+  n_embed?: number
+  n_layer?: number
+  n_head?: number
+  block_size?: number
+  checkpoint_dir?: string
+  skip_generate?: boolean
+  skip_distill?: boolean
+  skip_train?: boolean
+  skip_evaluate?: boolean
+  skip_deploy?: boolean
+  use_lora?: boolean
+  lora_rank?: number
+}
+
+export interface UnifiedStreamEvent {
+  stream: string
+  phase: string
+  status: string
+  data?: {
+    loss?: number
+    progress?: number
+    epoch?: number
+    step?: number
+    final_loss?: number
+    total_steps?: number
+    elapsed?: number
+    model_path?: string
+    error?: string
+  }
+  meta?: Record<string, unknown>
+  message?: string
 }
 
 export const trainingController = trainingJobsController

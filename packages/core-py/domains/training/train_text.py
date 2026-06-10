@@ -36,7 +36,7 @@ try:
 except ImportError:
     _RICH = False
 
-logger = logging.getLogger("sloughgpt.train_text")
+logger = logging.getLogger("man.train_text")
 
 
 def _log_info(msg: str):

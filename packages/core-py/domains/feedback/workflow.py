@@ -118,7 +118,11 @@ class FeedbackWorkflowManager:
         Record feedback and trigger automatic updates.
 
         This is the main entry point - records feedback and
-        automatically updates all learning systems.
+        automatically updates all learning systems:
+        1. Meta weights (abstract quality scoring)
+        2. Trait weights (context manager configuration)
+        3. LoRA updater (online model adaptation)
+        4. Per-user adapter store
         """
         feedback_id = self.meta_manager.record_feedback(
             user_message=user_message,
@@ -128,6 +132,18 @@ class FeedbackWorkflowManager:
             quality_score=quality_score,
             user_id=user_id,
         )
+
+        # ── Trait weight update (context manager config) ──
+        try:
+            from domains.context.managers import get_trait_config
+            config = get_trait_config()
+            config.update_from_feedback(
+                rating=rating,
+                user_message=user_message,
+                response=assistant_response,
+            )
+        except Exception:
+            pass
 
         self.lora_updater.add_feedback(
             prompt=user_message,
@@ -233,7 +249,7 @@ class FeedbackWorkflowManager:
         """
         import logging
         import numpy as np
-        logger = logging.getLogger("sloughgpt.feedback")
+        logger = logging.getLogger("man.feedback")
 
         net = getattr(self, '_model', None)
         tok = getattr(self, '_tokenizer', None)
@@ -353,7 +369,7 @@ class FeedbackWorkflowManager:
         """
         import logging
         import numpy as np
-        logger = logging.getLogger("sloughgpt.feedback")
+        logger = logging.getLogger("man.feedback")
 
         net = getattr(self, '_model', None)
         tok = getattr(self, '_tokenizer', None)
@@ -459,7 +475,7 @@ class FeedbackWorkflowManager:
         crashes.
         """
         import logging
-        logger = logging.getLogger("sloughgpt.feedback")
+        logger = logging.getLogger("man.feedback")
         try:
             # Use defaults: top‑k 10, min_feedback_count 5, run_eval=True
             result = self.lora_store.aggregate_best_adapters()
@@ -474,7 +490,7 @@ class FeedbackWorkflowManager:
         import logging
         import numpy as np
         from pathlib import Path
-        logger = logging.getLogger("sloughgpt.feedback")
+        logger = logging.getLogger("man.feedback")
 
         net = getattr(self, '_model', None)
         tok = getattr(self, '_tokenizer', None)
@@ -602,7 +618,7 @@ class FeedbackWorkflowManager:
         abort the workflow.
         """
         import logging
-        logger = logging.getLogger("sloughgpt.feedback")
+        logger = logging.getLogger("man.feedback")
         now = time.time()
         # Aggregation
         if now - self._last_aggregate_time >= self.config.aggregate_interval_minutes * 60:
@@ -672,7 +688,7 @@ class FeedbackWorkflowManager:
         also triggered on individual thumbs‑down events.
         """
         import logging
-        logger = logging.getLogger("sloughgpt.feedback")
+        logger = logging.getLogger("man.feedback")
         try:
             self._maybe_dpo_train()
             self._stats["dpo_train_steps"] = self._stats.get("dpo_train_steps", 0) + 1

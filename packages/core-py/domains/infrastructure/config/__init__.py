@@ -33,7 +33,7 @@ class ConfigurationManager(BaseComponent):
 
     def __init__(self) -> None:
         super().__init__("configuration_manager")
-        self.logger = logging.getLogger(f"sloughgpt.{self.component_name}")
+        self.logger = logging.getLogger(f"man.{self.component_name}")
 
         # Configuration storage
         self.configurations: Dict[str, ConfigurationItem] = {}
@@ -284,7 +284,7 @@ class ConfigurationManager(BaseComponent):
 
     async def _load_environment_variables(self) -> None:
         """Load configuration from environment variables"""
-        env_prefix = "SLOUGHGPT_"
+        env_prefix = "MAN_"
 
         for key, value in os.environ.items():
             if key.startswith(env_prefix):

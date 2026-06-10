@@ -19,7 +19,7 @@ from domains.training.slonet import (
     zeros, randn, _matmul, SloAdam,
 )
 
-logger = logging.getLogger("sloughgpt.lora")
+logger = logging.getLogger("man.lora")
 
 
 def _to_np(x):

@@ -47,7 +47,7 @@
 }
 
 /*
- * SloughGPT — Noir Violet
+ * Man — Noir Violet
  * A warm, sophisticated palette with rich violet primary + warm terracotta accents.
  * Light: warm cream paper with subtle violet tint.
  * Dark: deep charcoal-violet with vibrant lilac accents.
@@ -136,7 +136,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Matches @sloughgpt/strui — fewer accidental grey flashes on iOS tap targets. */
+/* Matches @man/strui — fewer accidental grey flashes on iOS tap targets. */
 html {
   -webkit-tap-highlight-color: transparent;
 }
@@ -159,7 +159,7 @@ html {
   }
 
   /**
-   * Chat message list — flat notebook canvas (matches @sloughgpt/strui).
+   * Chat message list — flat notebook canvas (matches @man/strui).
    * `.str-chat-thread` is applied by strui `ChatThread`; `.sl-chat-thread` is legacy/alternate hook.
    */
   .sl-chat-thread,
@@ -319,7 +319,7 @@ html {
   }
 
   /**
-   * Typing indicator dots — synced with @sloughgpt/strui TypingIndicator (str-dot-*).
+   * Typing indicator dots — synced with @man/strui TypingIndicator (str-dot-*).
    * Uses rgb(var(--primary)) to match web token triples.
    */
   .str-dot {
@@ -466,7 +466,7 @@ html {
 }
 
 /*
- * @sloughgpt/strui host utilities — keep in sync with packages/strui/src/styles/globals.css
+ * @man/strui host utilities — keep in sync with packages/strui/src/styles/globals.css
  * (ChatThread uses str-safe-x + str-chat-scroll; PromptComposer uses str-safe-bottom + str-touch-target).
  */
 @layer utilities {

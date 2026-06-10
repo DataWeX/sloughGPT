@@ -3,6 +3,10 @@ Production RAG Architecture - Visual Guide
 
 This module demonstrates what a production-grade RAG system looks like
 and how all components work together.
+
+⚠️ Some features shown below (Pinecone, Weaviate, Qdrant integrations) are
+aspirational. The actual ProductionRAG class uses in-memory n-gram embedding
+and hybrid retrieval (BM25 + embedding). External vector DB support is planned.
 """
 
 # =============================================================================

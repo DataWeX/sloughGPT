@@ -9,7 +9,9 @@ def _tensor(x):
     import sys
     T = sys.modules.get("torch")
     if T is not None and hasattr(T, "Tensor"):
-        return T.Tensor(x) if not hasattr(x, "data") else x
+        if isinstance(x, T.Tensor):
+            return x
+        return T.Tensor(x)
     return x
 
 

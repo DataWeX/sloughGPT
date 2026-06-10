@@ -5,4 +5,4 @@ export const PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localho
 export const API_CHAT_ENDPOINT = `${PUBLIC_API_URL}/chat/stream`
 
 /** localStorage key for user-injected knowledge snippets */
-export const KNOWLEDGE_STORAGE_KEY = 'sloughgpt_injected_knowledge'
+export const KNOWLEDGE_STORAGE_KEY = 'man_injected_knowledge'

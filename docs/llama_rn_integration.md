@@ -2,17 +2,19 @@
 
 This guide explains how to export SloughGPT models for use with [llama.rn](https://github.com/nicktasios/llama.rn), a React Native library for running GGUF-format language models on mobile devices.
 
-Run **`python`** / **`python3`** examples from the **repository root** (where **`cli.py`** and **`train_sloughgpt.py`** live) after `python3 -m pip install -e ".[dev]"` (or `python3 -m pip install -e .`).
+Run **`python3`** examples from the **repository root** after `python3 -m pip install -e ".[dev]"`.
 
 ## Quick Start
 
 ```bash
 # Export a model in GGUF format optimized for mobile
-python3 cli.py export models/sloughgpt.safetensors -f gguf_q4_k_m --quantize Q4_K_M
+python3 cli.py export models/sloughgpt.safetensors -f gguf
 
-# Or with the training script (writes GGUF per --save_path / defaults)
-python3 train_sloughgpt.py --save_format gguf --save_quantized Q4_K_M
+# Or fine-tune a HuggingFace model and export
+python3 apps/api/server/training/router.py  # via POST /training/hf-start (see docs/routers.md)
 ```
+
+**Note:** `cli.py export` is the legacy GGUF export path. For HuggingFace models, use the training endpoint.
 
 ## Supported Quantization Formats
 
@@ -90,48 +92,11 @@ for await (const chunk of session.prompt('Tell me a story', {
 
 ## Model Export Options
 
-### From CLI
+### Export CLI
 
 ```bash
-# Q4_K_M (recommended for most devices)
-python3 cli.py export models/sloughgpt.safetensors -f gguf_q4_k_m --quantize Q4_K_M
-
-# Q5_K_M (higher quality)
-python3 cli.py export models/sloughgpt.safetensors -f gguf_q5_k_m --quantize Q5_K_M
-
-# Q8_0 (near-perfect quality)
-python3 cli.py export models/sloughgpt.safetensors -f gguf_q8_0 --quantize Q8_0
-
-# FP16 (development only - very large)
-python3 cli.py export models/sloughgpt.safetensors -f gguf_fp16 --quantize F16
-```
-
-### From Training Script
-
-```bash
-python3 train_sloughgpt.py \
-  --data datasets/shakespeare/input.txt \
-  --epochs 10 \
-  --save_format gguf \
-  --save_quantized Q4_K_M \
-  --save_path models/sloughgpt-mobile
-```
-
-### Programmatic Export
-
-```python
-from domains.training.export import export_to_gguf
-
-# Load your trained model
-model = SloughGPTModel.from_pretrained('models/sloughgpt.safetensors')
-
-# Export to GGUF with Q4_K_M quantization
-export_to_gguf(
-    model,
-    'models/sloughgpt-q4_k_m.gguf',
-    quantization='Q4_K_M',
-    architecture='llama',  # Use llama architecture for llama.rn compatibility
-)
+# Export a model in GGUF format
+python3 cli.py export models/sloughgpt.safetensors -f gguf
 ```
 
 ## Platform-Specific Notes
@@ -215,6 +180,4 @@ For a 7B parameter model:
 
 ## Next Steps
 
-- See [Export Documentation](EXPORT.md) for all export options
-- See [Model Format Guide](MODEL_FORMATS.md) for format comparison
 - Check [llama.rn GitHub](https://github.com/nicktasios/llama.rn) for latest updates

@@ -18,5 +18,5 @@ Training routes and shared schemas live alongside **`main.py`** (e.g. **`trainin
 
 Install: `pip install -e ".[wandb]"` from the repo root. Common env vars: `WANDB_API_KEY`, `WANDB_PROJECT` (default `sloughgpt`), `WANDB_ENTITY`, `WANDB_MODE` (`online` / `offline` / `disabled`).
 
-- **`SLOUGHGPT_WANDB_TRAINING=1`** — log **`POST /training/start`** jobs (hyperparameters + trainer metrics via `SloughGPTTrainer`).
-- **`SLOUGHGPT_WANDB_SERVER=1`** — long-lived run logging HTTP totals (`server/http_requests_total`, `server/http_latency_mean_ms`), batched inference stats from **`POST /chat`** / **`POST /inference/generate`**, and host snapshots (`host/cpu_percent`, `host/memory_percent`, `server/process_rss_bytes`) aligned with **`GET /info`**. Interval: **`SLOUGHGPT_WANDB_SERVER_INTERVAL_SEC`** (default `60`). Optional run name: **`WANDB_SERVER_RUN_NAME`**.
+- **`MAN_WANDB_TRAINING=1`** — log **`POST /training/start`** jobs (hyperparameters + trainer metrics via `SloughGPTTrainer`).
+- **`MAN_WANDB_SERVER=1`** — long-lived run logging HTTP totals (`server/http_requests_total`, `server/http_latency_mean_ms`), batched inference stats from **`POST /chat`** / **`POST /inference/generate`**, and host snapshots (`host/cpu_percent`, `host/memory_percent`, `server/process_rss_bytes`) aligned with **`GET /info`**. Interval: **`MAN_WANDB_SERVER_INTERVAL_SEC`** (default `60`). Optional run name: **`WANDB_SERVER_RUN_NAME`**.

@@ -19,7 +19,7 @@ from typing import Optional
 from pathlib import Path
 from dataclasses import dataclass, asdict
 
-logger = logging.getLogger("sloughgpt.learner.filter")
+logger = logging.getLogger("man.learner.filter")
 
 FILTER_CONFIG_PATH = Path("data/knowledge/filter_config.json")
 

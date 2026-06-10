@@ -11,7 +11,7 @@ interface Translations {
 const translations: Record<Locale, Translations> = {
   en: {
     // Common
-    'app.name': 'SloughGPT',
+    'app.name': 'Man',
     'app.console': 'Console',
     'common.connecting': 'Connecting...',
     'common.starting': 'Starting...',
@@ -58,13 +58,15 @@ const translations: Record<Locale, Translations> = {
     'sidebar.language': 'Language',
     'sidebar.signOut': 'Sign out',
     'sidebar.close': 'Close menu',
-    'sidebar.home': 'SloughGPT home',
+    'sidebar.home': 'Man home',
 
     // Nav
     'nav.chat': 'Chat',
+    'nav.conversations': 'Conversations',
+    'nav.compare': 'Compare',
     'nav.models': 'Models',
     'nav.knowledge': 'Knowledge',
-    'nav.compare': 'Compare',
+    'nav.multimodal': 'Multimodal',
     'nav.monitoring': 'System Health',
     'nav.errors': 'Error Monitor',
     'nav.settings': 'Settings',
@@ -98,7 +100,7 @@ const translations: Record<Locale, Translations> = {
     'chat.modelNotLoaded': 'No model loaded',
     'chat.empty.title': 'Start a conversation',
     'chat.empty.desc': 'Type a message below to begin chatting with the loaded model.',
-    'chat.suggestion.chat': 'What is SloughGPT?',
+    'chat.suggestion.chat': 'What is Man?',
     'chat.suggestion.train': 'How do I train a model?',
     'chat.suggestion.soul': 'What is a soul?',
     'chat.suggestion.models': 'What models are available?',
@@ -179,7 +181,7 @@ const translations: Record<Locale, Translations> = {
   },
 
   es: {
-    'app.name': 'SloughGPT',
+    'app.name': 'Man',
     'app.console': 'Consola',
     'common.connecting': 'Conectando...',
     'common.starting': 'Iniciando...',
@@ -222,11 +224,13 @@ const translations: Record<Locale, Translations> = {
     'sidebar.language': 'Idioma',
     'sidebar.signOut': 'Cerrar sesión',
     'sidebar.close': 'Cerrar menú',
-    'sidebar.home': 'Inicio SloughGPT',
+    'sidebar.home': 'Inicio Man',
     'nav.chat': 'Chat',
+    'nav.conversations': 'Conversaciones',
+    'nav.compare': 'Comparar',
     'nav.models': 'Modelos',
     'nav.knowledge': 'Conocimiento',
-    'nav.compare': 'Comparar',
+    'nav.multimodal': 'Multimodal',
     'nav.monitoring': 'Estado del Sistema',
     'nav.errors': 'Monitor de Errores',
     'nav.settings': 'Configuración',
@@ -257,7 +261,7 @@ const translations: Record<Locale, Translations> = {
     'chat.modelNotLoaded': 'Sin modelo cargado',
     'chat.empty.title': 'Inicia una conversación',
     'chat.empty.desc': 'Escribe un mensaje para empezar a chatear con el modelo cargado.',
-    'chat.suggestion.chat': '¿Qué es SloughGPT?',
+    'chat.suggestion.chat': '¿Qué es Man?',
     'chat.suggestion.train': '¿Cómo entreno un modelo?',
     'chat.suggestion.soul': '¿Qué es un alma?',
     'chat.suggestion.models': '¿Qué modelos están disponibles?',
@@ -330,7 +334,7 @@ const translations: Record<Locale, Translations> = {
   },
 
   fr: {
-    'app.name': 'SloughGPT',
+    'app.name': 'Man',
     'app.console': 'Console',
     'common.connecting': 'Connexion...',
     'common.starting': 'Démarrage...',
@@ -373,11 +377,13 @@ const translations: Record<Locale, Translations> = {
     'sidebar.language': 'Langue',
     'sidebar.signOut': 'Déconnexion',
     'sidebar.close': 'Fermer le menu',
-    'sidebar.home': 'Accueil SloughGPT',
+    'sidebar.home': 'Accueil Man',
     'nav.chat': 'Chat',
+    'nav.conversations': 'Conversations',
+    'nav.compare': 'Comparer',
     'nav.models': 'Modèles',
     'nav.knowledge': 'Connaissances',
-    'nav.compare': 'Comparer',
+    'nav.multimodal': 'Multimodal',
     'nav.monitoring': 'Santé du Système',
     'nav.errors': 'Monitoring d\'Erreurs',
     'nav.settings': 'Paramètres',
@@ -407,7 +413,7 @@ const translations: Record<Locale, Translations> = {
     'chat.modelNotLoaded': 'Aucun modèle chargé',
     'chat.empty.title': 'Démarrer une conversation',
     'chat.empty.desc': 'Tapez un message pour commencer à discuter.',
-    'chat.suggestion.chat': 'Qu\'est-ce que SloughGPT?',
+    'chat.suggestion.chat': 'Qu\'est-ce que Man?',
     'chat.suggestion.train': 'Comment entraîner un modèle?',
     'chat.suggestion.soul': 'Qu\'est-ce qu\'une âme?',
     'chat.suggestion.models': 'Quels modèles sont disponibles?',
@@ -480,7 +486,7 @@ const translations: Record<Locale, Translations> = {
   },
 
   de: {
-    'app.name': 'SloughGPT',
+    'app.name': 'Man',
     'app.console': 'Konsole',
     'common.connecting': 'Verbinde...',
     'common.starting': 'Starte...',
@@ -523,11 +529,13 @@ const translations: Record<Locale, Translations> = {
     'sidebar.language': 'Sprache',
     'sidebar.signOut': 'Abmelden',
     'sidebar.close': 'Menü schließen',
-    'sidebar.home': 'SloughGPT Startseite',
+    'sidebar.home': 'Man Startseite',
     'nav.chat': 'Chat',
+    'nav.conversations': 'Unterhaltungen',
+    'nav.compare': 'Vergleichen',
     'nav.models': 'Modelle',
     'nav.knowledge': 'Wissen',
-    'nav.compare': 'Vergleichen',
+    'nav.multimodal': 'Multimodal',
     'nav.monitoring': 'Systemzustand',
     'nav.errors': 'Fehlerüberwachung',
     'nav.settings': 'Einstellungen',
@@ -557,7 +565,7 @@ const translations: Record<Locale, Translations> = {
     'chat.modelNotLoaded': 'Kein Modell geladen',
     'chat.empty.title': 'Gespräch beginnen',
     'chat.empty.desc': 'Gib eine Nachricht ein, um mit dem Modell zu chatten.',
-    'chat.suggestion.chat': 'Was ist SloughGPT?',
+    'chat.suggestion.chat': 'Was ist Man?',
     'chat.suggestion.train': 'Wie trainiere ich ein Modell?',
     'chat.suggestion.soul': 'Was ist eine Seele?',
     'chat.suggestion.models': 'Welche Modelle gibt es?',
@@ -630,7 +638,7 @@ const translations: Record<Locale, Translations> = {
   },
 
   zh: {
-    'app.name': 'SloughGPT',
+    'app.name': 'Man',
     'app.console': '控制台',
     'common.connecting': '连接中...',
     'common.starting': '启动中...',
@@ -673,11 +681,13 @@ const translations: Record<Locale, Translations> = {
     'sidebar.language': '语言',
     'sidebar.signOut': '退出登录',
     'sidebar.close': '关闭菜单',
-    'sidebar.home': 'SloughGPT 首页',
+    'sidebar.home': 'Man 首页',
     'nav.chat': '聊天',
+    'nav.conversations': '会话',
+    'nav.compare': '比较',
     'nav.models': '模型',
     'nav.knowledge': '知识',
-    'nav.compare': '对比',
+    'nav.multimodal': '多模态',
     'nav.monitoring': '系统状态',
     'nav.errors': '错误监控',
     'nav.settings': '设置',
@@ -707,7 +717,7 @@ const translations: Record<Locale, Translations> = {
     'chat.modelNotLoaded': '未加载模型',
     'chat.empty.title': '开始对话',
     'chat.empty.desc': '输入消息开始与已加载模型对话。',
-    'chat.suggestion.chat': '什么是 SloughGPT？',
+    'chat.suggestion.chat': '什么是 Man？',
     'chat.suggestion.train': '如何训练模型？',
     'chat.suggestion.soul': '什么是灵魂？',
     'chat.suggestion.models': '有哪些可用模型？',
@@ -789,7 +799,7 @@ interface LocaleContextType {
 
 const LocaleContext = createContext<LocaleContextType | undefined>(undefined)
 
-const LOCALE_KEY = 'sloughgpt_locale'
+const LOCALE_KEY = 'man_locale'
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(() => {

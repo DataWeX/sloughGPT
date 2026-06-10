@@ -31,7 +31,7 @@ describe('systemController.getMetrics', () => {
     const result = await systemController.getMetrics()
     expect(result.cpu_percent).toBe(12.3)
     expect(result.memory_total_gb).toBe(16.0)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/system/metrics')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/system/metrics', undefined, { silent: true })
   })
 })
 
@@ -50,7 +50,7 @@ describe('systemController.getInfo', () => {
     apiClient.apiGet.mockResolvedValue(mockInfo)
     const result = await systemController.getInfo()
     expect(result.processor).toBe('Apple M2')
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/system/info')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/system/info', undefined, { silent: true })
   })
 })
 
@@ -62,7 +62,7 @@ describe('systemController.getDisk', () => {
     apiClient.apiGet.mockResolvedValue(mockDisk)
     const result = await systemController.getDisk()
     expect(result.percent).toBe(24)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/system/disk')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/system/disk', undefined, { silent: true })
   })
 })
 
@@ -83,6 +83,6 @@ describe('systemController.getDetailedHealth', () => {
     const result = await systemController.getDetailedHealth()
     expect(result.model_loaded).toBe(true)
     expect(result.inference?.inference_count).toBe(42)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/health/detailed')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/health/detailed', undefined, { silent: true })
   })
 })

@@ -28,7 +28,7 @@ export { SectionHeader, SectionList, SectionBox, SectionScroll } from './section
 export { StatCard, KpiGrid, ListRow, ListSection, EmptyCard, Skeleton, LoadingDots } from './display'
 
 // Icons
-export { IconSearch, IconPlus, IconChevronDown, IconChevronRight, IconMenu, IconX, IconCheck, IconChat, IconStar, IconPin, IconClock, IconSettings, IconCopy, IconRefresh, IconTrash, IconEdit, IconMessage, IconSend, IconUser, IconHome, IconFolder, IconDocument, IconDownload, IconUpload, IconModel, IconHeart, IconBrain, IconThumbUp, IconThumbDown, IconInfo, IconAlert, IconCheckCircle, IconError, IconEye, IconFilter, IconSort, IconMore } from './icons'
+export { IconSearch, IconPlus, IconChevronLeft, IconChevronDown, IconChevronRight, IconMenu, IconX, IconCheck, IconChat, IconStar, IconPin, IconClock, IconSettings, IconCopy, IconRefresh, IconTrash, IconEdit, IconMessage, IconSend, IconUser, IconHome, IconFolder, IconDocument, IconDownload, IconUpload, IconModel, IconHeart, IconBrain, IconThumbUp, IconThumbDown, IconInfo, IconAlert, IconCheckCircle, IconError, IconEye, IconFilter, IconSort, IconMore } from './icons'
 
 // Form
 export { Slider, RangeSlider, Toggle, FieldGroup, ToggleGroup, Tabs } from './form'

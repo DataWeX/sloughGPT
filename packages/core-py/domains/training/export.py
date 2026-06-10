@@ -112,7 +112,7 @@ if TYPE_CHECKING:
 
 from dataclasses import dataclass, field, asdict
 
-logger = logging.getLogger("sloughgpt.export")
+logger = logging.getLogger("man.export")
 
 
 @dataclass

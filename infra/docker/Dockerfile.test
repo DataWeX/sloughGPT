@@ -5,8 +5,8 @@ FROM python:3.10-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    SLOUGHGPT_ENV="testing" \
-    SLOUGHGPT_LOG_LEVEL="DEBUG" \
+    MAN_ENV="testing" \
+    MAN_LOG_LEVEL="DEBUG" \
     TESTING="true" \
     DATABASE_URL="sqlite:///:memory:" \
     CACHE_TYPE="memory"

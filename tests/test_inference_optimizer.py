@@ -188,7 +188,7 @@ class TestInferenceOptimizer:
     def test_generate(self, dummy_model, inference_config):
         """Test generation."""
         import sys
-        if not os.environ.get("SLOUGHGPT_USE_TORCH_SHIM"):
+        if not os.environ.get("MAN_USE_TORCH_SHIM"):
             pytest.skip("compat torch not loaded; optimizer uses compat but test uses real torch")
         from domains.inference.optimizer import InferenceOptimizer
 
@@ -265,7 +265,7 @@ class TestInferenceBenchmark:
 
     def test_run_benchmark(self, dummy_model, inference_config):
         """Test benchmark execution."""
-        if not os.environ.get("SLOUGHGPT_USE_TORCH_SHIM"):
+        if not os.environ.get("MAN_USE_TORCH_SHIM"):
             pytest.skip("compat torch not loaded; optimizer uses compat but test uses real torch")
         from domains.inference.optimizer import InferenceOptimizer, InferenceBenchmark
 

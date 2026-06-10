@@ -12,7 +12,7 @@ from typing import Any, Optional, Dict
 from datetime import datetime
 import logging
 
-logger = logging.getLogger("sloughgpt.training")
+logger = logging.getLogger("man.training")
 
 
 class TrainingState(str, Enum):

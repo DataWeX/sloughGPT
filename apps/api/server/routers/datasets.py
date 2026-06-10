@@ -361,6 +361,16 @@ async def update_dataset(dataset_id: str, req: DatasetUpdate):
     return DatasetInfo(**dataset)
 
 
+@router.delete("/{dataset_id}")
+async def delete_dataset(dataset_id: str):
+    """Delete a dataset"""
+    ctrl = get_datasets_controller()
+    ok = ctrl.delete_dataset(dataset_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    return {"status": "deleted", "dataset_id": dataset_id}
+
+
 @router.post("/{dataset_id}/versions", response_model=VersionCreateResponse)
 async def create_version(dataset_id: str):
     """Create a timestamped snapshot of a dataset."""

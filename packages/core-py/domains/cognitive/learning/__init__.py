@@ -16,7 +16,7 @@ class LearningOptimizer(BaseComponent):
 
     def __init__(self) -> None:
         super().__init__("learning_optimizer")
-        self.logger = logging.getLogger(f"sloughgpt.{self.component_name}")
+        self.logger = logging.getLogger(f"man.{self.component_name}")
 
         # Learning state
         self.learning_sessions = []

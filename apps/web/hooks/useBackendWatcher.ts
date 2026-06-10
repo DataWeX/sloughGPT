@@ -1,55 +1,51 @@
 'use client'
-
 import { useEffect, useRef } from 'react'
-import { modelController } from '@/lib/model-controller'
-import { useToastStore } from '@/lib/toast-store'
+import { useApiMonitor } from '@/lib/api-monitor-store'
+import { PUBLIC_API_URL } from '@/lib/config'
 
-const POLL_INTERVAL = 2000
+const POLL_INTERVAL = 3000
+const REQUEST_TIMEOUT = 3000
 
-/**
- * Polls the backend health endpoint.
- * When the server is detected as back online after a disconnection,
- * the page is automatically reloaded so the UI picks up any API changes.
- * Shows a notification before reloading.
- */
 export function useBackendWatcher() {
+  const setStatus = useApiMonitor((s) => s.setStatus)
   const wasOffline = useRef(false)
 
   useEffect(() => {
     let cancelled = false
-    let timeout: ReturnType<typeof setTimeout>
+    let timer: ReturnType<typeof setTimeout>
 
     const check = async () => {
       if (cancelled) return
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT)
+
       try {
-        const health = await modelController.getHealth()
-        // Health returned successfully -> server is up
+        const res = await fetch(`${PUBLIC_API_URL}/health`, {
+          signal: controller.signal,
+          cache: 'no-store',
+        })
+        clearTimeout(timeout)
+        if (!res.ok) throw new Error(String(res.status))
+
         if (wasOffline.current) {
-          // Server just came back after being offline – reload
-          useToastStore.getState().addToast(
-            'Backend reconnected — reloading page…',
-            'info',
-          )
-          setTimeout(() => {
-            if (!cancelled) window.location.reload()
-          }, 1500)
-          return
+          wasOffline.current = false
+          setStatus('connected')
+        } else {
+          setStatus('connected')
         }
-        wasOffline.current = false
       } catch {
-        // Server is offline / unreachable
+        clearTimeout(timeout)
         wasOffline.current = true
+        setStatus('reloading')
       }
-      if (!cancelled) {
-        timeout = setTimeout(check, POLL_INTERVAL)
-      }
+
+      if (!cancelled) timer = setTimeout(check, POLL_INTERVAL)
     }
 
-    // First check immediately, then poll
     check()
     return () => {
       cancelled = true
-      clearTimeout(timeout)
+      clearTimeout(timer)
     }
-  }, [])
+  }, [setStatus])
 }

@@ -5,11 +5,17 @@ import subprocess
 import sys
 import os
 import time
+import signal
+import threading
 from pathlib import Path
+from collections import deque
 from typing import Optional
 
 from core.printer import printer
 from utils.formatting import format_time
+
+
+_LOG_BUF = 500  # max lines kept per panel
 
 
 def _kill_port(port: int):
@@ -37,102 +43,215 @@ def _check_api_ready(port: int) -> bool:
         return False
 
 
+def _read_stream(stream, lines: deque, stop: threading.Event):
+    """Read lines from a subprocess stream into a deque until stop is set."""
+    try:
+        for line in iter(stream.readline, ""):
+            if stop.is_set():
+                break
+            if line:
+                lines.append(line.rstrip("\n\r"))
+            else:
+                break
+    except ValueError:
+        pass
+    finally:
+        stream.close()
+
+
+def _repo_root() -> Path:
+    """Get the repository root from this file's location."""
+    return Path(__file__).resolve().parent.parent.parent.parent.parent
+
+
 def cmd_dev(args):
-    """Start API and Web servers in development mode."""
-    from ..cli import _chat_repository_root
-
-    root = _chat_repository_root()
+    """Start API and Web servers with a live TUI dashboard."""
+    root = _repo_root()
     model = getattr(args, "model", None) or os.environ.get("SLOUGHGT_MODEL_PATH", "")
-
-    printer.header("Starting Development Servers")
-    printer.key_value("Repository", str(root))
-    if model:
-        printer.key_value("Model", model)
-
     api_port = getattr(args, "port", 8000)
     web_port = getattr(args, "web_port", 3000)
     watch_web = getattr(args, "watch_web", False)
 
-    # Find python with torch
-    import sys as _sys
-    python = Path(_sys.executable)
+    status = {"api": "starting", "web": "starting", "api_ready": False, "web_ready": False}
+    api_lines: deque = deque(maxlen=_LOG_BUF)
+    web_lines: deque = deque(maxlen=_LOG_BUF)
 
-    # Kill existing processes
+    # Kill existing
     printer.step("Stopping existing servers...")
-    _kill_port(api_port)
-    _kill_port(web_port)
-    time.sleep(1)
+    for port in [api_port, web_port]:
+        _kill_port(port)
+    time.sleep(0.5)
 
-    # Start API
-    printer.step(f"Starting API server on port {api_port}...")
+    # ── Start API ────────────────────────────────────────
+    printer.step(f"Starting API on port {api_port}...")
     env = os.environ.copy()
     if model:
         env["SLOUGHGT_MODEL_PATH"] = model
 
+    python = Path(sys.executable)
     api_proc = subprocess.Popen(
         [str(python), "-m", "uvicorn", "apps.api.server.main:app",
          "--host", "0.0.0.0", "--port", str(api_port), "--reload"],
         cwd=str(root),
         env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
     )
 
-    # Wait for API
-    for i in range(30):
-        if _check_api_ready(api_port):
-            printer.success(f"API ready → http://localhost:{api_port}")
-            break
-        time.sleep(1)
-    else:
-        printer.error("API failed to become ready")
-        sys.exit(1)
+    stop_event = threading.Event()
+    api_thread = threading.Thread(
+        target=_read_stream, args=(api_proc.stdout, api_lines, stop_event), daemon=True
+    )
+    api_thread.start()
 
-    # Start Web
-    printer.step(f"Starting Web server on port {web_port}...")
+    # ── Start Web ────────────────────────────────────────
+    printer.step(f"Starting Web on port {web_port}...")
     web_cwd = root / "apps/web"
-    web_proc = subprocess.Popen(
-        ["npm", "run", "dev"],
-        cwd=str(web_cwd),
+
+    if watch_web:
+        web_proc = subprocess.Popen(
+            ["npx", "nodemon", "--watch", "app", "--watch", "components",
+             "--watch", "lib", "--watch", "hooks", "-e", "ts,tsx,js,jsx",
+             "npm", "run", "dev"],
+            cwd=str(web_cwd),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    else:
+        web_proc = subprocess.Popen(
+            ["npm", "run", "dev"],
+            cwd=str(web_cwd),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+
+    web_thread = threading.Thread(
+        target=_read_stream, args=(web_proc.stdout, web_lines, stop_event), daemon=True
+    )
+    web_thread.start()
+
+    # ── Wait for readiness (async poll) ──────────────────
+    def _poll_services():
+        for _ in range(90):
+            if status["api_ready"] and status["web_ready"]:
+                break
+            if not status["api_ready"] and _check_api_ready(api_port):
+                status["api_ready"] = True
+                status["api"] = "ready"
+            if not status["web_ready"] and _check_port(web_port):
+                status["web_ready"] = True
+                status["web"] = "ready"
+            time.sleep(0.5)
+
+    poll_thread = threading.Thread(target=_poll_services, daemon=True)
+    poll_thread.start()
+
+    # ── TUI Dashboard ────────────────────────────────────
+    from core.tui import DevDashboard, TabConfig
+
+    dashboard = DevDashboard(
+        title="SloughGPT Dev Server",
+        tabs=[
+            TabConfig("api", "API", api_lines, port=api_port, url_path="/docs"),
+            TabConfig("web", "Web", web_lines, port=web_port),
+        ],
+        info={
+            "Repository": str(root),
+            "Model": model or "default",
+            "Python": str(python),
+        },
     )
 
-    # Wait for Web
-    for i in range(60):
-        if _check_port(web_port):
-            printer.success(f"Web ready → http://localhost:{web_port}")
-            break
-        time.sleep(1)
-    else:
-        printer.warning("Web may not have started")
+    shutdown = [False]
 
-    printer.blank()
-    printer.header("SloughGPT Running")
-    printer.key_value("API", f"http://localhost:{api_port}")
-    printer.key_value("Web", f"http://localhost:{web_port}")
-    printer.key_value("Docs", f"http://localhost:{api_port}/docs")
-    printer.blank()
-    printer.info("Press Ctrl+C to stop")
+    def _stop_check() -> bool:
+        if shutdown[0]:
+            return True
+        dashboard.set_status("api", status["api"])
+        dashboard.set_status("web", status["web"])
+        if status["api"] == "error" and status["web"] == "error":
+            return True
+        return False
+
+    def _signal_handler(sig, frame):
+        shutdown[0] = True
+
+    signal.signal(signal.SIGINT, _signal_handler)
+    signal.signal(signal.SIGTERM, _signal_handler)
 
     try:
-        input()
-    except (KeyboardInterrupt, EOFError):
-        pass
+        dashboard.serve(stop_check=_stop_check)
+    finally:
+        stop_event.set()
+        _cleanup(api_proc, web_proc, api_port, web_port)
+        _print_summary(api_lines, web_lines, status)
 
-    printer.step("Shutting down...")
-    api_proc.terminate()
-    web_proc.terminate()
+
+def _cleanup(api_proc, web_proc, api_port, web_port):
+    """Terminate both subprocesses and free ports."""
+    for proc in [api_proc, web_proc]:
+        if proc and proc.poll() is None:
+            try:
+                proc.terminate()
+                proc.wait(timeout=3)
+            except Exception:
+                try:
+                    proc.kill()
+                    proc.wait(timeout=2)
+                except Exception:
+                    pass
+    _kill_port(api_port)
+    _kill_port(web_port)
+
+
+def _print_summary(api_lines, web_lines, status):
+    """Print a clean shutdown summary to the normal console."""
+    printer.blank()
+    printer.header("Dev Server Stopped")
+
+    st = status.get("api", "error")
+    color = "green" if st == "ready" else "red"
+    printer.status("API Server", f"http://localhost:{8000}", color if color == "green" else "error")
+
+    st = status.get("web", "error")
+    color = "green" if st == "ready" else "red"
+    printer.status("Web Server", f"http://localhost:{3000}", color if color == "green" else "error")
+
+    printer.blank()
+    printer.info(f"API logs: {len(api_lines)} lines")
+    printer.info(f"Web logs: {len(web_lines)} lines")
     printer.success("Done")
 
 
 def cmd_serve(args):
-    """Start lightweight HTTP inference server."""
+    """Start HTTP inference server.
+
+    Default: starts the full FastAPI server (all endpoints) plus the
+    Next.js web frontend on port 3000.
+
+    With ``--lightweight``: starts a minimal HTTP server (``/health``, ``/generate``)
+    suitable for CLI testing only.
+    """
+    lightweight = getattr(args, "lightweight", False)
+
+    if not lightweight:
+        # ── Full FastAPI server + web frontend ──────────────────────
+        _cmd_api_and_web(args)
+        return
+
+    # ── Lightweight HTTP server for CLI testing ─────────────────────
     import json
+    import atexit
     from http.server import HTTPServer, BaseHTTPRequestHandler
     import torch
 
-    printer.header("Starting Inference Server")
+    printer.header("Starting Lightweight Inference Server")
     printer.key_value("Host", f"{args.host}:{args.port}")
 
     model_path = args.model or "models/sloughgpt.pt"
-    model = None
     stoi = {}
     itos = {}
 
@@ -154,7 +273,11 @@ def cmd_serve(args):
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(json.dumps({"status": "ok", "model": "sloughgpt"}).encode())
+                self.wfile.write(json.dumps({
+                    "status": "ok",
+                    "model": "sloughgpt",
+                    "model_loaded": model_path != "models/sloughgpt.pt",
+                }).encode())
             else:
                 self.send_response(404)
                 self.end_headers()
@@ -181,17 +304,143 @@ def cmd_serve(args):
 
         def log_message(self, format, *args):
             printer.info(f"{args[0]}")
-
-    printer.info(f"Server ready on http://{args.host}:{args.port}")
-    printer.info("Press Ctrl+C to stop")
-
     server = HTTPServer((args.host, args.port), Handler)
     try:
+        printer.info(f"Server ready on http://{args.host}:{args.port}")
+        printer.info("Press Ctrl+C to stop")
         server.serve_forever()
     except KeyboardInterrupt:
         print()
         printer.info("Server stopped")
         server.shutdown()
+
+
+def _cmd_api_and_web(args):
+    """Start full FastAPI server + Next.js web frontend."""
+    root = _repo_root()
+    api_port = getattr(args, "port", 8000)
+    web_port = 3000
+
+    # Kill existing processes on these ports
+    _kill_port(api_port)
+    _kill_port(web_port)
+    time.sleep(0.5)
+
+    printer.header("Starting SloughGPT — API + Web")
+    printer.key_value("API", f"http://{args.host}:{api_port}")
+    printer.key_value("Web", f"http://localhost:{web_port}")
+
+    # ── Build env with model overrides ──────────────────────────
+    env = os.environ.copy()
+    model = getattr(args, "model", None) or os.environ.get("SLOUGHGT_MODEL_PATH", "")
+    if model:
+        env["SLOUGHGT_MODEL_PATH"] = model
+    # Pass through training-relevant env vars
+    for k in ("MAN_AUTOLOAD_MODEL", "MAN_API_PORT", "HF_TOKEN"):
+        if k in os.environ:
+            env[k] = os.environ[k]
+
+    # ── Stream buffers ──────────────────────────────────────────
+    api_lines: deque = deque(maxlen=_LOG_BUF)
+    web_lines: deque = deque(maxlen=_LOG_BUF)
+    stop_event = threading.Event()
+
+    # ── Start FastAPI server ─────────────────────────────────────
+    python = Path(sys.executable)
+    api_proc = subprocess.Popen(
+        [str(python), "-m", "uvicorn", "apps.api.server.main:app",
+         "--host", args.host, "--port", str(api_port)],
+        cwd=str(root),
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    api_thread = threading.Thread(
+        target=_read_stream, args=(api_proc.stdout, api_lines, stop_event), daemon=True
+    )
+    api_thread.start()
+
+    # ── Start Web frontend ───────────────────────────────────────
+    web_root = root / "apps" / "web"
+    web_env = {
+        **env,
+        "PORT": str(web_port),
+        "NEXT_PUBLIC_API_URL": f"http://{args.host}:{api_port}",
+    }
+    standalone_dir = web_root / ".next" / "standalone"
+    if standalone_dir.is_dir() and (standalone_dir / "server.js").is_file():
+        web_proc = subprocess.Popen(
+            ["node", "server.js"],
+            cwd=str(standalone_dir),
+            env=web_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    else:
+        web_proc = subprocess.Popen(
+            ["npm", "run", "dev"],
+            cwd=str(web_root),
+            env=web_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    web_thread = threading.Thread(
+        target=_read_stream, args=(web_proc.stdout, web_lines, stop_event), daemon=True
+    )
+    web_thread.start()
+
+    # ── Wait for readiness ───────────────────────────────────────
+    printer.step("Waiting for API to be ready...")
+    for i in range(90):
+        if _check_api_ready(api_port):
+            break
+        time.sleep(1)
+    else:
+        printer.error("API failed to start within 90s")
+        printer.info("Last API output:")
+        for l in list(api_lines)[-20:]:
+            printer.info(f"  | {l}")
+        _cleanup(api_proc, web_proc, api_port, web_port)
+        return
+
+    printer.success("API ready")
+    printer.step("Waiting for web frontend...")
+    for i in range(60):
+        if _check_port(web_port):
+            break
+        time.sleep(1)
+
+    printer.info(f"API:     http://{args.host}:{api_port}")
+    printer.info(f"Web UI:  http://localhost:{web_port}")
+    printer.info("Press Ctrl+C to stop")
+
+    # ── Signal handlers for clean shutdown ──────────────────────
+    shutdown = [False]
+
+    def _sig_handler(sig, frame):
+        if shutdown[0]:
+            return
+        shutdown[0] = True
+        print()
+        printer.info("Shutting down...")
+        stop_event.set()
+        _cleanup(api_proc, web_proc, api_port, web_port)
+        printer.success("Stopped")
+
+    signal.signal(signal.SIGINT, _sig_handler)
+    signal.signal(signal.SIGTERM, _sig_handler)
+
+    try:
+        api_proc.wait()
+    except KeyboardInterrupt:
+        if not shutdown[0]:
+            shutdown[0] = True
+            stop_event.set()
+            _cleanup(api_proc, web_proc, api_port, web_port)
+            printer.success("Stopped")
 
 
 def cmd_health(args):
@@ -437,8 +686,7 @@ def register(subparsers):
     docker_sub = docker_parser.add_subparsers(dest="docker_cmd", metavar="SUBCOMMAND")
 
     def _docker_compose_file():
-        from ..cli import _chat_repository_root
-        return _chat_repository_root() / "infra" / "docker" / "docker-compose.yml"
+        return _repo_root() / "infra" / "docker" / "docker-compose.yml"
 
     def _docker_action(action: str, a):
         import subprocess

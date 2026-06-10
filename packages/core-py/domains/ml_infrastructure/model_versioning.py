@@ -21,7 +21,7 @@ from dataclasses import dataclass, field, asdict
 from enum import Enum
 import threading
 
-logger = logging.getLogger("sloughgpt.model_registry")
+logger = logging.getLogger("man.model_registry")
 
 
 class ModelStage(Enum):

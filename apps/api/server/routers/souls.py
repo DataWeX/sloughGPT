@@ -9,7 +9,9 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from typing import Optional, Any
 from pydantic import BaseModel
-import json, asyncio, numpy as np
+import json, asyncio, numpy as np, logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/souls", tags=["souls"])
 
@@ -247,9 +249,11 @@ async def switch_soul(
                 from domains.core.soul import SloEngine
                 engine = SloEngine(device="cpu")
                 soul = engine.load_soul(soul_info.path)
-                state.current_soul = soul
-            except Exception:
-                pass
+                import state as server_state
+                server_state.current_soul = soul
+                server_state.soul_engine = engine
+            except Exception as exc:
+                logger.warning("Failed to set soul engine: %s", exc)
 
         return result
     except Exception as e:
@@ -349,6 +353,66 @@ async def list_souls():
         return {"souls": [], "current_soul": None, "error": str(e)}
 
 
+@router.get("/weights")
+async def get_trait_weights():
+    """
+    Get the current trait weight attributes from the active model checkpoint.
+
+    Returns a stat-card of personality, cognition, and emotion trait values
+    (each 0.0–1.0), like a player's attributes in a sports game. These
+    weights are read from the soul/checkpoint file and overlaid with any
+    LoRA-adapted adjustments from feedback.
+
+    Returns:
+        dict with ``personality``, ``cognition``, ``emotion`` trait groups,
+        or empty dicts if no soul is active.
+
+    Side effects:
+        - calls SloManager.get_trait_weights()
+    """
+    try:
+        from domains.inference.slo_manager import get_slo_manager
+        manager = get_slo_manager()
+        weights = manager.get_trait_weights()
+        return weights
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.get("/weights/modes")
+async def get_trait_modes():
+    """
+    Return the active manager mode for each of the 4 context managers
+    (Personality, Memory, Style, Task) derived from current trait weights.
+
+    Each mode is a label + confidence score computed from weighted trait
+    composites, treating trait values as config for engineered context
+    steering — NOT direct model parameter modification.
+
+    Returns:
+        dict with keys ``personality``, ``memory``, ``style``, ``task``,
+        each containing ``label``, ``confidence``, ``scores``, and
+        manager-specific fields (e.g. ``capacity`` for memory).
+
+    Side effects:
+        - reads current TraitWeightsConfig
+    """
+    try:
+        from domains.context.managers import (
+            get_trait_config, PersonalityManager, MemoryManager,
+            StyleManager, TaskManager,
+        )
+        config = get_trait_config()
+        return {
+            "personality": PersonalityManager(config).get_mode(),
+            "memory": MemoryManager(config).get_mode(),
+            "style": StyleManager(config).get_mode(),
+            "task": TaskManager(config).get_mode(),
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @router.get("/current")
 async def get_current_soul():
     """
@@ -369,6 +433,94 @@ async def get_current_soul():
                     "personality": getattr(current, "personality", {}),
                     "traits": getattr(current, "traits", [])}
         return {"name": None}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.get("/weights/snapshots")
+async def list_weight_snapshots():
+    """
+    List saved trait weight snapshots.
+
+    Returns:
+        list of snapshot names (sorted)
+
+    Side effects:
+        - calls TraitWeightsConfig.list_snapshots()
+    """
+    try:
+        from domains.context.managers import get_trait_config
+        config = get_trait_config()
+        return {"snapshots": config.list_snapshots()}
+    except Exception as e:
+        return {"snapshots": [], "error": str(e)}
+
+
+@router.post("/weights/snapshot/{name}")
+async def save_weight_snapshot(name: str):
+    """
+    Save current trait weights as a named snapshot.
+
+    Args:
+        name: snapshot label
+
+    Returns:
+        dict with ``path`` to saved snapshot
+
+    Side effects:
+        - writes snapshot JSON to disk
+    """
+    try:
+        from domains.context.managers import get_trait_config
+        config = get_trait_config()
+        path = config.save_snapshot(name)
+        return {"status": "saved", "path": path}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.post("/weights/snapshot/{name}/load")
+async def load_weight_snapshot(name: str):
+    """
+    Load trait weights from a named snapshot.
+
+    Args:
+        name: snapshot label
+
+    Returns:
+        dict with ``traits_loaded`` count
+
+    Side effects:
+        - overwrites current trait weights with snapshot values
+    """
+    try:
+        from domains.context.managers import get_trait_config
+        config = get_trait_config()
+        count = config.load_snapshot(name)
+        return {"status": "loaded", "traits_loaded": count}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.delete("/weights/snapshot/{name}")
+async def delete_weight_snapshot(name: str):
+    """
+    Delete a trait weight snapshot.
+
+    Args:
+        name: snapshot label
+
+    Returns:
+        dict with ``deleted`` bool
+
+    Side effects:
+        - removes snapshot file from disk
+    """
+    try:
+        from domains.context.managers import get_trait_config
+        config = get_trait_config()
+        ok = config.delete_snapshot(name)
+        return {"deleted": ok}
     except Exception as e:
         return {"error": str(e)}
 

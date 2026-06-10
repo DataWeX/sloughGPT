@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from abc import ABC
 from enum import Enum
 
-logger = logging.getLogger("sloughgpt.callbacks")
+logger = logging.getLogger("man.callbacks")
 
 
 class CallbackOrder(Enum):

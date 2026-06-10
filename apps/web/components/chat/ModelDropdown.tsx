@@ -15,6 +15,18 @@ interface ModelInfo {
   size_gb?: number
 }
 
+interface DownloadProgressData {
+  percentage: number
+  status: string
+  speed_mb_per_sec?: number
+  eta_seconds?: number
+  total_bytes?: number
+  bytes_downloaded?: number
+  current_file?: string
+  files_completed?: number
+  files_total?: number
+}
+
 interface ModelDropdownProps {
   availableModels: string[]
   currentModel: string
@@ -24,6 +36,7 @@ interface ModelDropdownProps {
   generating?: boolean
   variant?: 'dropdown' | 'panel'
   panelTitle?: string
+  downloadProgress?: Record<string, DownloadProgressData>
 }
 
 function shortModelName(m: string): string {
@@ -43,6 +56,7 @@ export function ModelDropdown({
   generating,
   variant = 'dropdown',
   panelTitle = 'Backend Model',
+  downloadProgress = {},
 }: ModelDropdownProps) {
   const isLoading = (m: string) => m === loadingModel
   const isLoaded = (m: string) => m === currentModel
@@ -82,6 +96,8 @@ export function ModelDropdown({
     )
   }
 
+  const dlProgress = loadingModel ? downloadProgress[loadingModel] : undefined
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -94,6 +110,7 @@ export function ModelDropdown({
           ) : (
             <span className={cn(
               'inline-block h-1.5 w-1.5 rounded-full shrink-0',
+              loadingModel && dlProgress?.status === 'downloading' ? 'bg-warning animate-pulse' :
               loadingModel ? 'bg-warning animate-pulse' :
               currentModel ? 'bg-success' : 'bg-muted-foreground/30'
             )} />
@@ -101,10 +118,51 @@ export function ModelDropdown({
           <span className="truncate max-w-[48px] sm:max-w-[64px]" title={loadingModel || currentModel || 'Select a model to load'}>
             {loadingModel ? shortModelName(loadingModel) : currentModel ? shortModelName(currentModel) : 'Select model'}
           </span>
+          {dlProgress?.status === 'downloading' && (
+            <>
+              {dlProgress.eta_seconds != null && dlProgress.eta_seconds > 0 && (
+                <span className="text-[9px] text-muted-foreground shrink-0 hidden sm:inline">{Math.round(dlProgress.eta_seconds)}s</span>
+              )}
+              <span className={cn("text-[10px] font-medium shrink-0 tabular-nums", dlProgress.percentage > 0 ? "text-warning" : "text-muted-foreground")}>
+                {dlProgress.percentage > 0 ? `${dlProgress.percentage.toFixed(0)}%` : '...'}
+              </span>
+            </>
+          )}
           <IconChevronDown className="h-2.5 w-2.5 opacity-40 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[200px] max-h-[300px] overflow-y-auto">
+        {loadingModel && dlProgress?.status === 'downloading' && (
+          <div className="px-3 pt-2 pb-1.5 space-y-1">
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-warning rounded-full transition-all duration-500"
+                style={{ width: `${Math.max(2, dlProgress.percentage || 0)}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+              <span className="tabular-nums">
+                {dlProgress.percentage?.toFixed(0) || '0'}%
+              </span>
+              {dlProgress.speed_mb_per_sec != null && dlProgress.speed_mb_per_sec > 0 && (
+                <span className="tabular-nums">{dlProgress.speed_mb_per_sec.toFixed(1)} MB/s</span>
+              )}
+              {dlProgress.eta_seconds != null && dlProgress.eta_seconds > 0 && (
+                <span className="tabular-nums">{Math.round(dlProgress.eta_seconds)}s left</span>
+              )}
+            </div>
+            {dlProgress.current_file && (
+              <div className="text-[9px] text-muted-foreground/60 truncate max-w-[220px]" title={dlProgress.current_file}>
+                {dlProgress.current_file.split('/').pop()}
+              </div>
+            )}
+            {dlProgress.files_total != null && dlProgress.files_total > 1 && (
+              <div className="text-[9px] text-muted-foreground/40 tabular-nums">
+                {dlProgress.files_completed || 0} / {dlProgress.files_total} files
+              </div>
+            )}
+          </div>
+        )}
         {loadingModel && (
           <div className="h-0.5 bg-muted rounded-full mx-2 mb-1 overflow-hidden shrink-0">
             <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: '60%' }} />
@@ -114,6 +172,7 @@ export function ModelDropdown({
           const info = modelInfoMap[m]
           const isCached = info?.cached
           const sl = sizeLabel(info)
+          const modelDl = downloadProgress[m]
           return (
             <DropdownMenuItem
               key={m}
@@ -124,7 +183,11 @@ export function ModelDropdown({
             >
               <span className="truncate flex-1">{shortModelName(m)}</span>
               <span className="text-[10px] text-muted-foreground/60 ml-1 shrink-0">{sl}</span>
-              {isLoading(m) ? (
+              {isLoading(m) && modelDl?.status === 'downloading' ? (
+                <span className="text-[9px] text-warning font-medium ml-1 shrink-0 tabular-nums">
+                  {modelDl.percentage > 0 ? `${modelDl.percentage.toFixed(0)}%` : '...'}
+                </span>
+              ) : isLoading(m) ? (
                 <IconRefresh className="h-3 w-3 animate-spin shrink-0 text-warning ml-1" />
               ) : isLoaded(m) ? (
                 <IconCheck className="h-3 w-3 shrink-0 text-success ml-1" />

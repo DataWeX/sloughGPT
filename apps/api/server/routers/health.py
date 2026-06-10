@@ -10,6 +10,7 @@ from schemas.health import (
     ReadinessResponse
 )
 from controllers.health import get_health_controller
+from startup_progress import STARTUP_PHASE
 
 router = APIRouter(prefix="/health", tags=["health"])
 
@@ -40,6 +41,13 @@ async def detailed_health():
     """Detailed health with system metrics"""
     ctrl = get_health_controller()
     return ctrl.get_detailed_health()
+
+
+@router.get("/startup-progress")
+async def startup_progress():
+    """Return current server startup phase so the frontend can show
+    meaningful progress during the 90s PyTorch cold-import window."""
+    return STARTUP_PHASE
 
 
 @router.get("/model")

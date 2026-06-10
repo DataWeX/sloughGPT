@@ -6,6 +6,7 @@ import { userAdaptersController } from './user-adapters-controller'
 import type { FeedbackStats, WorkflowStatus } from './feedback-controller'
 import type { UserAdapterStats } from './user-adapters-controller'
 import { useErrorStore, addGlobalError } from './error-store'
+import { useApiMonitor } from './api-monitor-store'
 
 interface FeedbackState {
   stats: FeedbackStats | null
@@ -47,6 +48,7 @@ export const useFeedbackStore = create<FeedbackState>()((set, get) => ({
       return true
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Failed to record feedback'
+      if (useApiMonitor.getState().status === 'reloading') return false
       addGlobalError(err, 'Feedback')
       set({ isLoading: false, error })
       return false
@@ -58,6 +60,7 @@ export const useFeedbackStore = create<FeedbackState>()((set, get) => ({
       const stats = await feedbackController.getFeedbackStats()
       set({ stats })
     } catch (err) {
+      if (useApiMonitor.getState().status === 'reloading') return
       const msg = (err as { message?: string }).message || String(err)
       if (msg.includes('404') || msg.includes('Not Found')) return
       useErrorStore.getState().addError(err, { source: 'Feedback Stats' })
@@ -69,6 +72,7 @@ export const useFeedbackStore = create<FeedbackState>()((set, get) => ({
       const adapterStats = await userAdaptersController.list()
       set({ adapterStats })
     } catch (err) {
+      if (useApiMonitor.getState().status === 'reloading') return
       const msg = (err as { message?: string }).message || String(err)
       if (msg.includes('404') || msg.includes('Not Found')) return
       useErrorStore.getState().addError(err, { source: 'User Adapters' })
@@ -80,6 +84,7 @@ export const useFeedbackStore = create<FeedbackState>()((set, get) => ({
       const workflowStatus = await feedbackController.getWorkflowStatus()
       set({ workflowStatus })
     } catch (err) {
+      if (useApiMonitor.getState().status === 'reloading') return
       const msg = (err as { message?: string }).message || String(err)
       if (msg.includes('404') || msg.includes('Not Found')) return
       useErrorStore.getState().addError(err, { source: 'Workflow Status' })

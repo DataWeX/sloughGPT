@@ -36,7 +36,7 @@ GradScaler = torch.cuda.amp.GradScaler
 autocast = torch.cuda.amp.autocast
 nn = torch.nn
 
-logger = logging.getLogger("sloughgpt.optimized_pipeline")
+logger = logging.getLogger("man.optimized_pipeline")
 
 
 # =============================================================================

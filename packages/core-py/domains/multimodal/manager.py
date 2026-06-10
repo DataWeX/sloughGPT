@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 import logging
 import numpy as np
 
-logger = logging.getLogger("sloughgpt.multimodal.manager")
+logger = logging.getLogger("man.multimodal.manager")
 
 from .speech import (
     TranscriptionResult,
@@ -59,6 +59,7 @@ class MultimodalManager:
         self._learning_count = 0
         self._replay_buffer = ReplayBuffer(capacity=200)
         self._caption_history: list = []
+        self._accuracy_history: list = []
 
     def initialize(
         self,
@@ -207,9 +208,10 @@ class MultimodalManager:
         self,
         image,
         prompt: str = "",
+        ground_truth: Optional[str] = None,
     ) -> ImageCaption:
         """
-        Generate caption for image. Fully self-supervised learning.
+        Generate caption for image. Supports self-supervised and supervised learning.
 
         Each call runs a three-part training loop:
         1. Contrastive step — vision encoder learns meaningful embeddings
@@ -219,7 +221,8 @@ class MultimodalManager:
            from the image embedding; also samples diverse past pairs
            from the replay buffer to prevent mode collapse
 
-        The model improves autonomously with every image — no labels needed.
+        When ground_truth is provided, uses it as the training target
+        instead of self-generated text, and computes BLEU accuracy.
         """
         if self._multimodal_engine is None:
             self._multimodal_engine = get_multimodal_engine(embed_dim=256, hidden_dim=512)
@@ -236,13 +239,27 @@ class MultimodalManager:
             # Step 2: Get image embedding & generate/select caption
             embed = engine.vision.forward(img_np)
 
-            if self._learning_count < 10:
-                raw_text = self._pick_seed_caption(embed.data)
-            else:
+            # Supervised mode: use ground truth as target
+            if ground_truth and ground_truth.strip():
+                raw_text = ground_truth.strip()
+                # Still generate to compute accuracy
                 result = engine.generate(img_np, max_len=16, temperature=0.8)
-                raw_text = result.text.strip()
-                if not raw_text or len(raw_text.split()) < 2:
+                generated_text = result.text.strip()
+                # Compute BLEU accuracy
+                from domains.feedback.lora_eval import BLEUScorer
+                accuracy = BLEUScorer.score(generated_text, raw_text)
+                self._accuracy_history.append(accuracy)
+                logger.debug(f"Supervised training: BLEU={accuracy:.2f}")
+            else:
+                # Self-supervised mode
+                if self._learning_count < 10:
                     raw_text = self._pick_seed_caption(embed.data)
+                else:
+                    result = engine.generate(img_np, max_len=16, temperature=0.8)
+                    raw_text = result.text.strip()
+                    if not raw_text or len(raw_text.split()) < 2:
+                        raw_text = self._pick_seed_caption(embed.data)
+                accuracy = 0.0
 
             # Step 3: Train decoder — current image
             try:
@@ -280,7 +297,8 @@ class MultimodalManager:
             return ImageCaption(
                 text=raw_text,
                 confidence=confidence,
-                tags=["vision", "learned"],
+                tags=["vision", "learned"] if not ground_truth else ["vision", "supervised"],
+                accuracy=accuracy,
             )
         except Exception as e:
             logger.error(f"MultimodalEngine caption error: {e}")

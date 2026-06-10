@@ -256,11 +256,10 @@ class ModelsController:
                 "device": resolved_device,
                 "loaded_at": self._loaded_at.isoformat(),
             }
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("HF load failed for %s, trying local path: %s", model_id, e)
 
         # Try local model
-        logger.info("HF load failed or model not found; trying local path: %s", model_id)
         model_path = self._find_model_path(model_id)
         if model_path is None:
             return {
@@ -395,12 +394,11 @@ class ModelsController:
         self._is_inferencing = False
         self._total_tokens_generated += tokens_generated
     
-    def list_hf_models(self, q: Optional[str] = None) -> List[str]:
+    def list_hf_models(self, q: Optional[str] = None) -> List[Dict[str, Any]]:
         """Search HuggingFace Hub for causal LM models.
 
-        Queries the HuggingFace Hub API (``api-inference.huggingface.co``) for
-        ``text-generation`` models sorted by monthly downloads. Falls back to a
-        curated list if the API is unreachable.
+        Returns list of dicts with model_id, parameters (approx), vocab_size.
+        Falls back to curated list if the API is unreachable.
         """
         import os
         token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
@@ -419,11 +417,21 @@ class ModelsController:
             resp = requests.get(url, params=params, headers=headers, timeout=10)
             if resp.status_code == 200:
                 data = resp.json()
-                models = [
-                    m["id"] for m in data
-                    if isinstance(m, dict) and m.get("id")
-                    and m.get("pipeline_tag") in ("text-generation", "text2text-generation")
-                ]
+                models = []
+                for m in data:
+                    if not isinstance(m, dict) or not m.get("id"):
+                        continue
+                    pid = m.get("id")
+                    if m.get("pipeline_tag") not in ("text-generation", "text2text-generation"):
+                        continue
+                    config = m.get("config") or {}
+                    params = m.get("num_parameters", 0) or self._estimate_params(pid)
+                    vocab_size = (config.get("vocab_size") if isinstance(config, dict) else None) or 0
+                    models.append({
+                        "model_id": pid,
+                        "parameters": params,
+                        "vocab_size": vocab_size,
+                    })
                 if models:
                     return models
         except Exception:
@@ -431,21 +439,46 @@ class ModelsController:
 
         # Fallback: curated list sorted by capability (chat-tuned first)
         curated = [
-            "microsoft/Phi-3.5-mini-instruct",
-            "Qwen/Qwen2.5-1.5B-Instruct",
-            "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-            "microsoft/phi-2",
-            "microsoft/Phi-3-mini-128k-instruct",
-            "Qwen/Qwen2-0.5B-Instruct",
-            "gpt2-xl",
-            "gpt2-large",
-            "gpt2-medium",
-            "gpt2",
-            "distilgpt2",
+            ("microsoft/Phi-3.5-mini-instruct", 3820000000, 32064),
+            ("Qwen/Qwen2.5-1.5B-Instruct", 1540000000, 151936),
+            ("TinyLlama/TinyLlama-1.1B-Chat-v1.0", 1100000000, 32000),
+            ("microsoft/phi-2", 2700000000, 51200),
+            ("microsoft/Phi-3-mini-128k-instruct", 3820000000, 32064),
+            ("Qwen/Qwen2-0.5B-Instruct", 465000000, 151936),
+            ("gpt2-xl", 1558000000, 50257),
+            ("gpt2-large", 774000000, 50257),
+            ("gpt2-medium", 355000000, 50257),
+            ("gpt2", 124000000, 50257),
+            ("distilgpt2", 82000000, 50257),
         ]
         if q:
-            return [m for m in curated if q.lower() in m.lower()]
-        return curated
+            return [{"model_id": m, "parameters": p, "vocab_size": v} for m, p, v in curated if q.lower() in m.lower()]
+        return [{"model_id": m, "parameters": p, "vocab_size": v} for m, p, v in curated]
+
+    @staticmethod
+    @staticmethod
+    def _estimate_params(model_id: str) -> int:
+        """Estimate parameter count from model ID string."""
+        m = model_id.lower()
+        if any(x in m for x in ("13b", "12b")):
+            return 13000000000
+        if "7b" in m:
+            return 7000000000
+        if "3b" in m:
+            return 3000000000
+        if any(x in m for x in ("2.7b", "2b8")):
+            return 2700000000
+        if "1.5b" in m:
+            return 1500000000
+        if "1b" in m:
+            return 1000000000
+        if any(x in m for x in ("0.5b", "500m")):
+            return 500000000
+        if "350m" in m:
+            return 350000000
+        if "125m" in m:
+            return 125000000
+        return 0
 
 
 _models_controller: Optional[ModelsController] = None

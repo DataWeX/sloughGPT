@@ -119,3 +119,86 @@ describe('multimodalController.getTrainingStatus', () => {
     expect(s.progress_pct).toBe(0)
   })
 })
+
+describe('multimodalController.trainBatchFromDir', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('POSTs /multimodal/train-batch with dataset_path', async () => {
+    apiClient.apiPost.mockResolvedValue({
+      status: 'started',
+      job_id: 'batch_20260101_120000',
+      total_images: 42,
+    })
+
+    const result = await multimodalController.trainBatchFromDir('/path/to/images')
+    expect(result.status).toBe('started')
+    expect(result.total_images).toBe(42)
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/multimodal/train-batch', expect.any(FormData), { raw: true })
+  })
+})
+
+describe('multimodalController.createVLMDataset', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('POSTs /multimodal/vlm-dataset with config', async () => {
+    apiClient.apiPost.mockResolvedValue({
+      status: 'created',
+      dataset: 'my-dataset',
+      path: '/repo/datasets/my-dataset/corpus.jsonl',
+      entries: 15,
+      auto_captioned: true,
+    })
+
+    const result = await multimodalController.createVLMDataset('my-dataset', '/data/images')
+    expect(result.status).toBe('created')
+    expect(result.entries).toBe(15)
+    expect(result.auto_captioned).toBe(true)
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/multimodal/vlm-dataset', {
+      name: 'my-dataset',
+      image_dir: '/data/images',
+      caption_prompt: 'Describe this image in detail.',
+      auto_caption: true,
+    })
+  })
+
+  it('allows custom caption prompt', async () => {
+    apiClient.apiPost.mockResolvedValue({
+      status: 'created',
+      dataset: 'custom-dataset',
+      path: '/repo/datasets/custom-dataset/corpus.jsonl',
+      entries: 5,
+      auto_captioned: false,
+    })
+
+    const result = await multimodalController.createVLMDataset('custom-dataset', '/path', 'What do you see?', false)
+    expect(result.entries).toBe(5)
+    expect(result.auto_captioned).toBe(false)
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/multimodal/vlm-dataset', {
+      name: 'custom-dataset',
+      image_dir: '/path',
+      caption_prompt: 'What do you see?',
+      auto_caption: false,
+    })
+  })
+})
+
+describe('modelController.loadVLM', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('POSTs /models/vlm-load with query params', async () => {
+    const { modelController } = await import('./model-controller')
+    apiClient.apiPost.mockResolvedValue({
+      status: 'loaded',
+      model_id: 'vlm',
+      type: 'vlm',
+      vision_encoder: 'google/siglip-base-patch16-224',
+      llm: 'Qwen/Qwen2.5-0.5B-Instruct',
+    })
+
+    const result = await modelController.loadVLM('/path/to/vlm-dir', 'my-vlm')
+    expect(result.status).toBe('loaded')
+    expect(result.type).toBe('vlm')
+    expect(result.vision_encoder).toContain('siglip')
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/models/vlm-load?model_dir=%2Fpath%2Fto%2Fvlm-dir&model_id=my-vlm')
+  })
+})

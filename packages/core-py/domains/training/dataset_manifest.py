@@ -12,14 +12,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 
 class ManifestError(ValueError):
     """Invalid or unusable dataset manifest for training."""
 
 
-def load_manifest(path: str | Path) -> Dict[str, Any]:
+def load_manifest(path: Union[str, Path]) -> Dict[str, Any]:
     """Load and minimally validate a v1 dataset manifest."""
     p = Path(path)
     if not p.is_file():
@@ -51,7 +51,7 @@ def _glob_train_files(pattern: str, base_dir: Path) -> List[Path]:
     return [base_dir / pattern]
 
 
-def resolve_training_data_path(manifest_path: str | Path) -> Tuple[Path, Dict[str, Any]]:
+def resolve_training_data_path(manifest_path: Union[str, Path]) -> Tuple[Path, Dict[str, Any]]:
     """
     Return (path_to_utf8_text_file, manifest_dict).
 

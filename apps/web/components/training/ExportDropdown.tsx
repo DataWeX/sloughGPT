@@ -36,7 +36,7 @@ export function ExportDropdown({ jobId, checkpoint }: ExportDropdownProps) {
 
   const formats = [
     { id: 'pt', name: 'PyTorch (.pt)', desc: 'Standard PyTorch format' },
-    { id: 'sou', name: 'Soul (.soul)', desc: 'SloughGPT with personality' },
+    { id: 'sou', name: 'Soul (.soul)', desc: 'Man with personality' },
     { id: 'safetensors', name: 'SafeTensors', desc: 'Safe, memory-mapped' },
     { id: 'onnx', name: 'ONNX (.onnx)', desc: 'Cross-platform inference' },
     { id: 'gguf', name: 'GGUF', desc: 'Mobile/embedded (llama.cpp)' },

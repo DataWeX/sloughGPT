@@ -13,6 +13,13 @@ from typing import Any, Dict
 
 import click
 
+# Ensure both CLI core and core-py domains are on the path
+_CLI_DIR = Path(__file__).resolve().parent
+_CORE_PY_DIR = _CLI_DIR.parent.parent.parent / "packages" / "core-py"
+for _p in [_CLI_DIR, str(_CORE_PY_DIR)]:
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
+
 from core.version import format_version_display
 from core.printer import printer
 
@@ -89,8 +96,8 @@ def _apply_optimized_train_preset(config, args) -> bool:
 
 
 def _ns(**kwargs) -> SimpleNamespace:
-    """Build a SimpleNamespace, dropping None values."""
-    return SimpleNamespace(**{k: v for k, v in kwargs.items() if v is not None})
+    """Build a SimpleNamespace from keyword arguments."""
+    return SimpleNamespace(**kwargs)
 
 
 # ── Docker helpers ────────────────────────────────────────────────────
@@ -217,6 +224,31 @@ def tui(ctx):
     tui_main(["--host", args.host, "--port", str(args.port)])
 
 
+@cli.command(help="Launch interactive shell REPL")
+@click.option("--command", "-c", help="Run a single command and exit")
+@click.pass_context
+def shell(ctx, command):
+    """Launch the SloughGPT interactive shell REPL."""
+    from domains.shell.repl import ShellREPL
+    from domains.shell.kernel import DaitRuntime
+
+    os = DaitRuntime()
+    repl = ShellREPL(os)
+    if command:
+        commands, is_bg, should_time = repl._parse_pipeline(command)
+        if is_bg:
+            repl._execute_background(command.rstrip("& ").strip())
+        elif len(commands) > 1:
+            repl._execute_pipeline(commands, should_time=should_time)
+        else:
+            expanded = repl._expand_alias(command)
+            out = repl._execute_single(expanded, "")
+            if out:
+                click.echo(out, nl=False)
+    else:
+        repl.run()
+
+
 @cli.command(help="Generate shell completion script")
 @click.argument("shell", type=click.Choice(["bash", "zsh", "fish"]), default="bash")
 def completion(shell):
@@ -289,13 +321,14 @@ def dev(ctx, model, web_port, watch_web):
     cmd_dev(args)
 
 
-@cli.command(help="Lightweight HTTP inference server")
+@cli.command(help="Start HTTP inference server (with --web: full FastAPI + frontend)")
 @click.option("--host", default="localhost", help="Bind address", show_default=True)
-@click.option("--port", default=8080, type=int, help="Listen port", show_default=True)
+@click.option("--port", default=8000, type=int, help="API port", show_default=True)
 @click.option("--model", metavar="PATH", help="Model to preload")
-def serve(host, port, model):
+@click.option("--web", is_flag=True, help="Start full FastAPI server + Next.js web UI on port 3000")
+def serve(host, port, model, web):
     from commands.dev import cmd_serve
-    args = _ns(host=host, port=port, model=model)
+    args = _ns(host=host, port=port, model=model, web=web)
     cmd_serve(args)
 
 

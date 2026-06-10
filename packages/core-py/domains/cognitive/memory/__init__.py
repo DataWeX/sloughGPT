@@ -53,7 +53,7 @@ class MemoryManager(BaseComponent, IMemoryManager):
 
     def __init__(self) -> None:
         super().__init__("memory_manager")
-        self.logger = logging.getLogger(f"sloughgpt.{self.component_name}")
+        self.logger = logging.getLogger(f"man.{self.component_name}")
 
         # Memory stores
         self.episodic_memory: Dict[str, Memory] = {}

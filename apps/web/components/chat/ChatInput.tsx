@@ -15,11 +15,10 @@ export interface ChatInputProps {
   images?: ImageAttachment[]
   onAddImage?: (dataUrl: string) => void
   onRemoveImage?: (id: string) => void
-  streamingStats?: {
-    tokens: number
-    timeElapsed: number
-    tokensPerSecond: number
-  }
+  onAudioTranscript?: (text: string) => void
+  onGeneratedImage?: (dataUrl: string, prompt: string) => void
+  onPDFAnalysis?: (analysis: string, filename: string) => void
+  onPDFError?: (error: string) => void
 }
 
 export function ChatInput({ 
@@ -32,7 +31,10 @@ export function ChatInput({
   images = [],
   onAddImage,
   onRemoveImage,
-  streamingStats,
+  onAudioTranscript,
+  onGeneratedImage,
+  onPDFAnalysis,
+  onPDFError,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -74,26 +76,22 @@ export function ChatInput({
 
   return (
     <section 
-      className="shrink-0 border-t border-border/40 bg-background/80 backdrop-blur-sm px-3 py-3 sm:px-4 sm:py-3"
+      className="shrink-0 bg-background/95 backdrop-blur-sm px-3 sm:px-4 pb-3"
       style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
     >
-      <div className="mx-auto max-w-2xl space-y-2">
-        {streamingStats && loading && (
-          <div className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-muted/50 text-xs text-muted-foreground shadow-sm" role="status" aria-live="polite">
-            <div className="flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-              <span>Generating</span>
-            </div>
-            <div className="flex items-center gap-2 font-mono" aria-live="off">
-              <span>{streamingStats.tokens}t</span>
-              <span>{streamingStats.timeElapsed}s</span>
-              <span>{streamingStats.tokensPerSecond}/s</span>
+      <div className="mx-auto max-w-2xl">
+        {loading && (
+          <div className="flex justify-center pb-1.5" role="status" aria-live="polite">
+            <div className="flex gap-[3px] items-center">
+              <span className="w-1 h-1 rounded-full bg-primary/60 animate-bounce [animation-delay:0ms]" />
+              <span className="w-1 h-1 rounded-full bg-primary/60 animate-bounce [animation-delay:150ms]" />
+              <span className="w-1 h-1 rounded-full bg-primary/60 animate-bounce [animation-delay:300ms]" />
             </div>
           </div>
         )}
 
         {images.length > 0 && (
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap pb-2">
             {images.map((img) => (
               <ImagePreview 
                 key={img.id} 
@@ -104,21 +102,23 @@ export function ChatInput({
           </div>
         )}
         
-        <div className="flex items-center justify-center">
-          <ChatInputRow
-            value={value}
-            onChange={onChange}
-            onSend={handleSend}
-            onStop={onStop}
-            loading={loading}
-            disabled={isDisabled}
-            placeholder={placeholder}
-            textareaRef={textareaRef}
-            onImage={handleAddImage}
-            onTranscript={handleVoiceTranscript}
-            hasContent={hasContent}
-          />
-        </div>
+        <ChatInputRow
+          value={value}
+          onChange={onChange}
+          onSend={handleSend}
+          onStop={onStop}
+          loading={loading}
+          disabled={isDisabled}
+          placeholder={placeholder}
+          textareaRef={textareaRef}
+          onImage={handleAddImage}
+          onTranscript={handleVoiceTranscript}
+          onAudioTranscript={onAudioTranscript}
+          onGeneratedImage={onGeneratedImage}
+          onPDFAnalysis={onPDFAnalysis}
+          onPDFError={onPDFError}
+          hasContent={hasContent}
+        />
       </div>
     </section>
   )

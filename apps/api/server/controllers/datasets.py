@@ -34,22 +34,40 @@ class DatasetsController:
             has_corpus = corpus_file.exists()
             size = corpus_file.stat().st_size if has_corpus else (input_file.stat().st_size if input_file.exists() else 0)
             num_samples = 0
-            if has_corpus:
+            if has_corpus and size < 1_000_000:
                 try:
                     with open(corpus_file) as f:
                         num_samples = sum(1 for _ in f)
                 except Exception:
                     pass
-            
+
+            # Detect VLM dataset from metadata marker
+            vlm_meta_path = d / ".vlm_metadata.json"
+            if vlm_meta_path.exists():
+                try:
+                    vlm_meta = json.loads(vlm_meta_path.read_text())
+                    dataset_type = "vlm"
+                except Exception:
+                    dataset_type = "corpus" if has_corpus else "text"
+            else:
+                dataset_type = "corpus" if has_corpus else "text"
+
             dataset = {
                 "id": d.name,
                 "name": d.name.replace("_", " ").title(),
                 "path": str(d),
-                "type": "corpus" if has_corpus else "text",
+                "type": dataset_type,
                 "size_bytes": size,
                 "size_formatted": f"{size / 1024:.1f} KB" if size > 0 else "Empty",
                 "num_samples": num_samples,
             }
+
+            # Attach VLM metadata if present
+            if vlm_meta_path.exists() and dataset_type == "vlm":
+                try:
+                    dataset["vlm_metadata"] = json.loads(vlm_meta_path.read_text())
+                except Exception:
+                    pass
             
             # Filters
             if q and q.lower() not in d.name.lower() and q.lower() not in dataset["name"].lower():

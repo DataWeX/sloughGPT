@@ -1,4 +1,4 @@
-import { apiClient } from './http-client'
+import { apiGet, apiPost } from './http-client'
 
 export interface DownloadProgress {
   model_id: string
@@ -17,20 +17,37 @@ export interface DownloadProgress {
   cached?: boolean
 }
 
+export interface VerifyResult {
+  status: 'verified' | 'corrupt' | 'not_cached' | 'error'
+  model_id: string
+  verified: boolean
+  missing_files?: string[]
+  missing_files_count?: number
+  size_on_disk?: string
+  error?: string
+}
+
 export async function startDownload(modelId: string, totalBytesHint = 0) {
-  return apiClient.post('/models/download', { model_id: modelId, total_bytes_hint: totalBytesHint })
+  return apiPost('/models/download', { model_id: modelId, total_bytes_hint: totalBytesHint })
 }
 
 export async function getDownloadStatus(modelId: string): Promise<DownloadProgress> {
-  const { data } = await apiClient.get(`/models/download/${encodeURIComponent(modelId)}`)
-  return data as DownloadProgress
+  return apiGet<DownloadProgress>(`/models/download/${encodeURIComponent(modelId)}`)
 }
 
 export async function listDownloads(): Promise<Record<string, DownloadProgress>> {
-  const { data } = await apiClient.get('/models/downloads')
-  return (data as { downloads: Record<string, DownloadProgress> }).downloads
+  const res = await apiGet<{ downloads: Record<string, DownloadProgress> }>('/models/downloads')
+  return res.downloads
 }
 
 export async function cancelDownload(modelId: string) {
-  return apiClient.post(`/models/download/${encodeURIComponent(modelId)}/cancel`)
+  return apiPost(`/models/download/${encodeURIComponent(modelId)}/cancel`)
+}
+
+export async function verifyDownload(modelId: string): Promise<VerifyResult> {
+  return apiPost<VerifyResult>(`/models/download/${encodeURIComponent(modelId)}/verify`)
+}
+
+export async function retryDownload(modelId: string): Promise<{ status: string }> {
+  return apiPost<{ status: string }>(`/models/download/${encodeURIComponent(modelId)}/retry`)
 }

@@ -41,7 +41,7 @@ export const API_DOC_ENDPOINTS: ApiDocEndpoint[] = [
     method: 'POST',
     path: '/v1/infer',
     description:
-      'SloughGPT Standard v1 inference envelope. Optional header X-SloughGPT-Standard: 1. See standards/SLOUGHGPT_STANDARD_V1.md.',
+      'Man Standard v1 inference envelope. Optional header X-Man-Standard: 1. See standards/MAN_STANDARD_V1.md.',
     body: [
       { field: 'mode', type: "'generate' | 'chat' | 'structured'", required: true },
       { field: 'task_type', type: 'string', required: false },
@@ -200,7 +200,7 @@ export const API_DOC_ENDPOINTS: ApiDocEndpoint[] = [
   {
     method: 'GET',
     path: '/metrics/prometheus',
-    description: 'Prometheus text exposition format (HTTP + SloughGPT metrics when enabled)',
+    description: 'Prometheus text exposition format (HTTP + Man metrics when enabled)',
   },
   {
     method: 'GET',
@@ -255,11 +255,6 @@ export const API_DOC_ENDPOINTS: ApiDocEndpoint[] = [
     path: '/benchmark/perplexity',
     description: 'Calculate model perplexity on inline text.' + BENCHMARK_PERPLEXITY_VOCAB_NOTE,
     body: [{ field: 'text', type: 'string', required: true }],
-  },
-  {
-    method: 'GET',
-    path: '/benchmark/compare',
-    description: 'Compare quantization levels',
   },
   {
     method: 'POST',

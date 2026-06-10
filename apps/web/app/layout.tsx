@@ -21,7 +21,7 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'SloughGPT - Enterprise AI',
+  title: 'Man - AI Platform',
   description: 'Enterprise-grade AI framework with production-ready ML infrastructure',
   icons: { icon: '/favicon.svg' },
 }

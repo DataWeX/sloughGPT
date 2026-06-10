@@ -152,7 +152,7 @@ class LoggingInterceptor:
     """Log requests and responses."""
     
     def __init__(self, logger: Optional[logging.Logger] = None, level: int = logging.INFO):
-        self.logger = logger or logging.getLogger("sloughgpt_sdk.http")
+        self.logger = logger or logging.getLogger("man_sdk.http")
         self.level = level
     
     def __call__(self, context: RequestContext) -> RequestContext:

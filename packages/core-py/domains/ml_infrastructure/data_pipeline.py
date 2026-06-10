@@ -21,7 +21,7 @@ from enum import Enum
 from abc import ABC, abstractmethod
 import numpy as np
 
-logger = logging.getLogger("sloughgpt.pipeline")
+logger = logging.getLogger("man.pipeline")
 
 
 class DataType(Enum):

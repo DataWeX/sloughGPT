@@ -14,7 +14,7 @@ from datetime import datetime
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-logger = logging.getLogger("sloughgpt.errors")
+logger = logging.getLogger("man.errors")
 
 router = APIRouter(prefix="/errors", tags=["errors"])
 
@@ -82,11 +82,17 @@ async def log_errors(batch: ErrorBatch, request: Request):
 
 
 @router.get("/recent")
-async def get_recent_errors(limit: int = 50):
-    """Return the most recent client errors (newest first)."""
+async def get_recent_errors(limit: int = 50, offset: int = 0):
+    """Return paginated client errors (newest first)."""
+    total = len(_error_buffer)
+    start = max(0, total - offset - limit)
+    end = max(0, total - offset)
     return {
-        "errors": list(reversed(_error_buffer[-limit:])),
+        "errors": list(reversed(_error_buffer[start:end])),
         "unread_count": _error_count_since_clear,
+        "total": total,
+        "offset": offset,
+        "limit": limit,
     }
 
 

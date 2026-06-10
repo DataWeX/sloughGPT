@@ -5,7 +5,7 @@ High-performance local inference using llama.cpp with GGUF models.
 GPU Support:
 - Auto-detects GPU capability (Metal/CUDA)
 - Falls back to CPU when GPU is too slow or unavailable
-- Supports high-end GPU switching via SLOUGHGPT_FORCE_GPU env var
+- Supports high-end GPU switching via MAN_FORCE_GPU env var
 """
 
 import os
@@ -112,7 +112,7 @@ def _detect_metal_gpu() -> Optional[GPUInfo]:
             timeout=5,
         )
         total_ram_gb = int(result.stdout.strip()) / (1024**3)
-    except:
+    except Exception:
         total_ram_gb = 0
 
     machine = platform.machine()
@@ -141,7 +141,7 @@ def _detect_metal_gpu() -> Optional[GPUInfo]:
                     vram_mb = 4096
                 elif "x8" in output:
                     vram_mb = 4096
-        except:
+        except Exception:
             pass
 
         if has_amd_gpu:
@@ -178,7 +178,7 @@ def _detect_metal_gpu() -> Optional[GPUInfo]:
             text=True,
             timeout=5,
         ).stdout.strip()
-    except:
+    except Exception:
         cpubrand = "Unknown"
 
     for chip, name in gpu_names.items():
@@ -259,14 +259,14 @@ def auto_select_backend(model_size_gb: float = 1.5) -> int:
     Returns:
         Number of GPU layers to use (0 = CPU only)
     """
-    force_gpu = os.environ.get("SLOUGHGPT_FORCE_GPU", "").lower()
+    force_gpu = os.environ.get("MAN_FORCE_GPU", "").lower()
     if force_gpu in ("1", "true", "yes"):
-        logger.info("Force GPU enabled via SLOUGHGPT_FORCE_GPU")
+        logger.info("Force GPU enabled via MAN_FORCE_GPU")
         return 99
 
-    force_cpu = os.environ.get("SLOUGHGPT_FORCE_CPU", "").lower()
+    force_cpu = os.environ.get("MAN_FORCE_CPU", "").lower()
     if force_cpu in ("1", "true", "yes"):
-        logger.info("Force CPU enabled via SLOUGHGPT_FORCE_CPU")
+        logger.info("Force CPU enabled via MAN_FORCE_CPU")
         return 0
 
     gpu = detect_gpu()
@@ -317,7 +317,7 @@ class LlamaInferenceConfig:
             if Path(self.model_path).exists():
                 try:
                     model_size_gb = Path(self.model_path).stat().st_size / (1024**3)
-                except:
+                except Exception:
                     pass
             self.n_gpu_layers = auto_select_backend(model_size_gb)
 
@@ -724,7 +724,7 @@ class OllamaInferenceEngine:
         try:
             resp = requests.get(f"{self.base_url}/api/tags", timeout=5)
             return resp.status_code == 200
-        except:
+        except Exception:
             return False
 
     def list_models(self) -> List[str]:
@@ -734,7 +734,7 @@ class OllamaInferenceEngine:
             if resp.status_code == 200:
                 data = resp.json()
                 return [m["name"] for m in data.get("models", [])]
-        except:
+        except Exception:
             pass
         return []
 
@@ -811,7 +811,7 @@ class LlamaCLIInferenceEngine:
             if Path(model_path).exists():
                 try:
                     model_size_gb = Path(model_path).stat().st_size / (1024**3)
-                except:
+                except Exception:
                     pass
             self.n_gpu_layers = auto_select_backend(model_size_gb)
         else:

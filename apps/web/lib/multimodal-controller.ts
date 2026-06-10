@@ -28,6 +28,9 @@ export interface TrainingReport {
   unique_captions: number
   diversity_ratio: number
   trained: boolean
+  accuracy_history: number[]
+  mean_accuracy: number
+  last_accuracy: number
 }
 
 export interface TrainingStatus {
@@ -65,17 +68,24 @@ export const multimodalController = {
     return apiGet<TrainingStatus>('/multimodal/training-status')
   },
 
-  async trainImage(dataUrl: string, fileName?: string): Promise<{ status: string; caption: string; confidence: number; images_learned: number }> {
+  async trainImage(dataUrl: string, fileName?: string, label?: string): Promise<{ status: string; caption: string; confidence: number; images_learned: number; accuracy: number; supervised: boolean }> {
     const blob = await dataUrlToBlob(dataUrl)
     const file = new File([blob], fileName || 'upload.png', { type: blob.type || 'image/png' })
     const fd = new FormData()
     fd.append('file', file)
+    if (label) fd.append('label', label)
     return apiPost('/multimodal/train', fd, { raw: true })
   },
 
   async trainBatch(files: File[]): Promise<{ status: string; job_id: string; total_images: number }> {
     const fd = new FormData()
     for (const f of files) fd.append('files', f)
+    return apiPost('/multimodal/train-batch', fd, { raw: true })
+  },
+
+  async trainBatchFromDir(datasetPath: string): Promise<{ status: string; job_id: string; total_images: number }> {
+    const fd = new FormData()
+    fd.append('dataset_path', datasetPath)
     return apiPost('/multimodal/train-batch', fd, { raw: true })
   },
 
@@ -108,5 +118,14 @@ export const multimodalController = {
     const fd = new FormData()
     fd.append('text', text)
     return apiPost('/multimodal/synthesize-speech', fd, { raw: true })
+  },
+
+  async createVLMDataset(name: string, imageDir: string, captionPrompt?: string, autoCaption = true): Promise<{ status: string; dataset: string; path: string; entries: number; auto_captioned: boolean }> {
+    return apiPost('/multimodal/vlm-dataset', {
+      name,
+      image_dir: imageDir,
+      caption_prompt: captionPrompt || 'Describe this image in detail.',
+      auto_caption: autoCaption,
+    })
   },
 }

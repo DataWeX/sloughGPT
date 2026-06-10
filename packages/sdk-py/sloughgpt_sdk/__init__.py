@@ -16,7 +16,7 @@ Usage:
     # sloughgpt-cli generate "Hello"
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __author__ = "SloughGPT"
 __email__ = "dev@sloughgpt.ai"
 __url__ = "https://github.com/iamtowbee/sloughGPT"

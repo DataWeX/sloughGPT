@@ -14,6 +14,7 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _SERVER_ROOT = Path(__file__).resolve().parent
 _CORE_PY_ROOT = _REPO_ROOT / "packages" / "core-py"
+_SGLOADER_ROOT = _REPO_ROOT / "packages" / "downcraft"
 
 
 # Project-local HuggingFace cache (models/hf-cache/ instead of ~/.cache/huggingface/)
@@ -21,7 +22,7 @@ _HF_CACHE = _REPO_ROOT / "models" / "hf-cache"
 _HF_CACHE.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("HF_HOME", str(_HF_CACHE))
 
-for _p in (_SERVER_ROOT, _CORE_PY_ROOT, _REPO_ROOT):
+for _p in (_SERVER_ROOT, _CORE_PY_ROOT, _SGLOADER_ROOT, _REPO_ROOT):
     _s = str(_p)
     if _s not in sys.path:
         sys.path.insert(0, _s)
@@ -65,12 +66,38 @@ import json
 import asyncio
 import time
 import logging
+import coloredlogs
 from domains.errors import SloughGPTDomainError
+from domains.infrastructure.model_registry import get_model_registry
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("sloughgpt")
+coloredlogs.install(
+    level=logging.INFO,
+    fmt="%(asctime)s %(levelname)-8s %(name)s %(message)s",
+    datefmt="%H:%M:%S",
+    field_styles={
+        "asctime": {"color": "white", "faint": True},
+        "levelname": {"bold": True},
+        "name": {"color": "cyan", "faint": True},
+    },
+    level_styles={
+        "DEBUG": {"color": "cyan", "faint": True},
+        "INFO": {"color": "green", "bold": False},
+        "WARNING": {"color": "yellow", "bold": True},
+        "ERROR": {"color": "red", "bold": True},
+        "CRITICAL": {"color": "red", "bold": True, "background": "white"},
+    },
+)
+logger = logging.getLogger("man")
 
 _PROCESS_START_MONOTONIC = time.monotonic()
+
+from startup_progress import STARTUP_PHASE
+
+# Suppress noisy urllib3 NotOpenSSLWarning (LibreSSL on macOS is fine for dev)
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="urllib3")
+warnings.filterwarnings("ignore", message=".*urllib3 v2 only supports OpenSSL.*")
+warnings.filterwarnings("ignore", message=".*NotOpenSSLWarning.*")
 
 
 # ============ Production Configuration ============
@@ -108,11 +135,11 @@ logger.info(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load default HF weights in-process when ``SLOUGHGPT_AUTOLOAD_MODEL`` is set (default: ``TinyLlama``)."""
-    try:
-        await asyncio.to_thread(_autoload_hf_model_at_startup)
-    except Exception as e:
-        logger.warning("Startup model autoload failed: %s", e, exc_info=True)
+    """Load default HF weights in background when ``MAN_AUTOLOAD_MODEL`` is set (default: ``Qwen2.5-0.5B-Instruct``)."""
+    STARTUP_PHASE.update(phase="loading_model", step=1, message="Loading model weights...")
+    logger.info("Startup phase 1/6: loading model")
+    model_load_task = asyncio.create_task(asyncio.to_thread(_autoload_hf_model_at_startup))
+    STARTUP_PHASE.update(phase="wandb_server", step=2, message="Starting W&B metrics server...")
     wandb_server_task: Optional[asyncio.Task] = None
     try:
         from domains.ops.wandb_server import start_wandb_server_background
@@ -139,6 +166,7 @@ async def lifespan(app: FastAPI):
         )
     except Exception as e:
         logger.warning("W&B server background task did not start: %s", e)
+    STARTUP_PHASE.update(phase="multimodal", step=3, message="Initializing multimodal engine...")
     try:
         speech_server = os.environ.get("SPEECH_SERVER", "").lower() in ("1", "true", "yes")
         if speech_server:
@@ -151,7 +179,24 @@ async def lifespan(app: FastAPI):
             logger.info("Multimodal initialized (browser ASR only)")
     except Exception as e:
         logger.warning("Multimodal initialization failed: %s", e)
+    STARTUP_PHASE.update(phase="model_registry", step=5, message="Initializing model registry...")
+    registry = get_model_registry()
+    logger.info("Model registry initialized")
+
+    # Wait up to 120s for model load to complete before declaring ready
+    try:
+        await asyncio.wait_for(model_load_task, timeout=120.0)
+    except asyncio.TimeoutError:
+        logger.info("Model load still in progress — server will accept requests, model loads when ready")
+    except Exception as e:
+        logger.warning("Model autoload failed: %s", e)
+
+    STARTUP_PHASE.update(phase="ready", step=6, message="Server ready")
+    logger.info("Startup complete")
     yield
+    # Shutdown: unregister all models
+    registry.reset_metrics()
+    logger.info("Model registry reset on shutdown")
     try:
         from training.job_store import get_job_store
         store = get_job_store()
@@ -199,7 +244,7 @@ async def request_timeout_middleware(request: Request, call_next):
 
     # Skip timeout for streaming endpoints
     path = request.url.path
-    if any(path.startswith(p) for p in ["/chat/stream", "/auto-train/stream", "/session/", "/generate/stream"]):
+    if any(path.startswith(p) for p in ["/chat/stream", "/auto-train/stream", "/session/", "/generate/stream", "/models/load", "/inference/generate", "/chat"]):
         return await call_next(request)
 
     # 60-second timeout for regular requests
@@ -224,7 +269,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         "path": str(request.url.path),
         "detail": detail,
     }
-    if os.environ.get("SLOUGHGPT_DEBUG", "").lower() in ("1", "true"):
+    if os.environ.get("MAN_DEBUG", "").lower() in ("1", "true"):
         import traceback
         extra["traceback"] = traceback.format_exc()
     audit_logger.log(
@@ -241,6 +286,32 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     )
 
 
+@app.exception_handler(Exception)
+async def root_exception_handler(request: Request, exc: Exception):
+    """Catch-all that prevents any unhandled exception from crashing the process.
+
+    Returns a JSON 503 with error detail instead of raising an internal server error.
+    Also records the failure in the ModelRegistry circuit breaker if applicable.
+    """
+    logger.error("Unhandled %s: %s on %s %s", type(exc).__name__, exc, request.method, request.url.path)
+    try:
+        registry = get_model_registry()
+        health = registry.health_summary()
+        degraded_models = [m["model_id"] for m in health.get("models", []) if m.get("status") == "degraded"]
+        if degraded_models:
+            logger.warning("Degraded models: %s", degraded_models)
+    except Exception:
+        pass
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": f"Internal error: {type(exc).__name__}",
+            "detail": str(exc),
+            "path": request.url.path,
+        },
+    )
+
+
 @app.exception_handler(SloughGPTDomainError)
 async def domain_exception_handler(request: Request, exc: SloughGPTDomainError):
     """Map core ``domains`` errors to JSON with verbose context."""
@@ -251,7 +322,7 @@ async def domain_exception_handler(request: Request, exc: SloughGPTDomainError):
         "error": str(exc),
         "code": exc.code,
     }
-    if os.environ.get("SLOUGHGPT_DEBUG", "").lower() in ("1", "true"):
+    if os.environ.get("MAN_DEBUG", "").lower() in ("1", "true"):
         import traceback
         extra["traceback"] = traceback.format_exc()
     audit_logger.log(
@@ -280,7 +351,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         "path": str(request.url.path),
         "status_code": 500,
     }
-    if os.environ.get("SLOUGHGPT_DEBUG", "").lower() in ("1", "true"):
+    if os.environ.get("MAN_DEBUG", "").lower() in ("1", "true"):
         extra["traceback"] = tb
     logger.error("Unhandled exception on %s %s:\n%s", request.method, request.url.path, tb)
     audit_logger.log(
@@ -645,76 +716,85 @@ class LoadModelRequest(BaseModel):
 
 
 def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> Dict[str, Any]:
-    """Load HuggingFace weights using ModelsController's safe loader (shared by autoload and inline load).
-
-    Args:
-        use_slonet: If True, load into SloTransformer (pure NumPy) instead of PyTorch.
     """
+    Load HuggingFace model via ModelsController.
 
+    Notes:
+      - ``_load_hf_model()`` inside the controller already creates the InferenceEngine,
+        calls ``setup_providers()``, and injects into ChatDomain.
+      - This function only adds ModelRegistry registration + server_state updates.
+    """
     try:
         from controllers.models import get_models_controller
         ctrl = get_models_controller()
         result = ctrl.load_model(request.model_id, request.device or "auto", use_slonet=use_slonet)
 
+        if result.get("status") == "error":
+            logger.warning("Failed to load model %s: %s", request.model_id, result.get("error"))
+            return result
+
         if use_slonet:
             server_state.model_type = request.model_id
-            return {
-                "status": "loaded",
-                "model": request.model_id,
-                "mode": "slonet",
-                "device": "cpu",
-                "effective_device": "cpu",
-                "model_type": request.model_id,
-            }
+            return result
 
         model = getattr(ctrl, "_hf_model", None)
         tokenizer = getattr(ctrl, "_tokenizer", None)
 
-        if model is not None and tokenizer is not None:
-            server_state.model = model
-            server_state.tokenizer = tokenizer
-            server_state.model_type = request.model_id
-
-            inference_engine = None
-            try:
-                from domains.inference.engine import InferenceEngine
-                inference_engine = InferenceEngine(
-                    model=model,
-                    tokenizer=tokenizer,
-                    device=model.device if hasattr(model, 'device') else "cpu",
-                )
-            except Exception as e:
-                logger.warning("Failed to create InferenceEngine: %s", e)
-
-            try:
-                from domains.models.provider import setup_providers
-                setup_providers(model, tokenizer, hf_model_id=request.model_id, inference_engine=inference_engine)
-            except Exception as e:
-                logger.warning("Failed to set up model providers: %s", e)
-
-            try:
-                from domains.chat.domain import get_chat_domain
-                cd = get_chat_domain()
-                if inference_engine is not None:
-                    cd.set_engine(inference_engine)
-                else:
-                    cd.set_engine(None)
-            except Exception as e:
-                logger.warning("Failed to inject engine into ChatDomain: %s", e)
-        else:
+        if model is None or tokenizer is None:
             return {"status": "error", "error": "Model loaded but model/tokenizer not available"}
 
-        effective = _inference_engine_device_str(model) if model is not None else None
+        server_state.model = model
+        server_state.tokenizer = tokenizer
+        server_state.model_type = request.model_id
 
+        # Auto-load knowledge adapter
+        try:
+            from domains.infrastructure.knowledge_weight_integrator import load_knowledge_adapter, get_adapter_status
+            status = get_adapter_status()
+            if status.get("adapter_exists"):
+                model = load_knowledge_adapter(model, device="cpu", merge=True)
+                server_state.model = model
+                logger.info("Knowledge adapter merged (%d facts)", status.get("fact_count", 0))
+        except Exception as e:
+            logger.warning("Knowledge adapter load skipped: %s", e)
+
+        # Register with ModelRegistry (the only step _load_hf_model does NOT do)
+        try:
+            from domains.infrastructure.model_registry import get_model_registry
+            registry = get_model_registry()
+            registry.register(
+                model_id=request.model_id,
+                model=model,
+                tokenizer=tokenizer,
+                make_default=True,
+                max_concurrent=1,
+                generate_timeout=120.0,
+            )
+            # Re-register HF provider so it uses the ModelServer for
+            # lifecycle-managed generation (semaphore, timeout, circuit breaker).
+            from domains.models.provider import register_provider, HFModelProvider
+            model_server = registry.get(request.model_id)
+            provider = HFModelProvider(
+                model, tokenizer,
+                model_id_str=request.model_id,
+                model_server=model_server,
+            )
+            register_provider("hf-default", provider)
+            logger.info("hf-default provider re-registered with ModelServer: %s", request.model_id)
+        except Exception as e:
+            logger.warning("Failed to register with ModelRegistry: %s", e)
+
+        effective = _inference_engine_device_str(model)
         return {
             "status": "loaded",
             "model": request.model_id,
             "mode": request.mode or "local",
-            "device": request.device,
+            "device": result.get("device", request.device),
             "effective_device": effective,
-            "model_type": server_state.model_type or "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+            "model_type": server_state.model_type or request.model_id,
         }
     except Exception as e:
+        logger.error("_load_hf_model_core failed: %s", e, exc_info=True)
         return {"status": "error", "error": str(e)}
 
 
@@ -729,19 +809,20 @@ def _autoload_hf_model_at_startup() -> None:
     """
     Load default inference weights without a manual ``POST /models/load``.
 
-    - ``SLOUGHGPT_AUTOLOAD_MODEL``: HuggingFace model id (default: ``Qwen2.5-0.5B-Instruct``). Set to empty to skip.
-    - ``SLOUGHGPT_AUTOLOAD_DEVICE``: passed through to the loader (default: ``auto``).
-    - ``SLOUGHGPT_USE_SLONET``: If set to ``1`` or ``true``, loads into SloTransformer
+    - ``MAN_AUTOLOAD_MODEL``: HuggingFace model id (default: ``Qwen2.5-0.5B-Instruct``). Set to empty to skip.
+    - ``MAN_AUTOLOAD_DEVICE``: passed through to the loader (default: ``auto``).
+    - ``MAN_USE_SLONET``: If set to ``1`` or ``true``, loads into SloTransformer
       (pure NumPy) instead of PyTorch. Recommended for stability.
     """
-    raw = os.environ.get("SLOUGHGPT_AUTOLOAD_MODEL", "Qwen/Qwen2.5-0.5B-Instruct").strip()
-    if not raw:
-        logger.info("SLOUGHGPT_AUTOLOAD_MODEL is empty; skipping startup autoload")
+    raw = os.environ.get("MAN_AUTOLOAD_MODEL", "Qwen/Qwen2.5-0.5B-Instruct").strip()
+    if not raw or raw.lower() in ("false", "0", "none", "no", "off", "disable"):
+        logger.info("MAN_AUTOLOAD_MODEL=%r — skipping startup autoload", raw)
+        server_state.autoload_skipped = True
         return
     if server_state.model is not None:
         return
-    device = (os.environ.get("SLOUGHGPT_AUTOLOAD_DEVICE") or "auto").strip() or "auto"
-    use_slonet = os.environ.get("SLOUGHGPT_USE_SLONET", "0").strip().lower() in ("1", "true", "yes")
+    device = (os.environ.get("MAN_AUTOLOAD_DEVICE") or "auto").strip() or "auto"
+    use_slonet = os.environ.get("MAN_USE_SLONET", "0").strip().lower() in ("1", "true", "yes")
     req = LoadModelRequest(model_id=raw, mode="local", device=device)
     result = _load_hf_model_core(req, use_slonet=use_slonet)
     if result.get("status") == "error":
@@ -760,9 +841,9 @@ def _start_feedback_workflow() -> None:
     try:
         from domains.feedback import get_feedback_workflow
 
-        auto_start = os.environ.get("SLOUGHGPT_AUTO_WORKFLOW", "true").lower() == "true"
+        auto_start = os.environ.get("MAN_AUTO_WORKFLOW", "true").lower() == "true"
         if not auto_start:
-            logger.info("SLOUGHGPT_AUTO_WORKFLOW is false; skipping workflow startup")
+            logger.info("MAN_AUTO_WORKFLOW is false; skipping workflow startup")
             return
 
         workflow = get_feedback_workflow()
@@ -778,12 +859,12 @@ def _start_health_monitor() -> None:
     try:
         from domains.feedback.model_health import get_health_monitor
 
-        enabled = os.environ.get("SLOUGHGPT_HEALTH_MONITOR", "true").lower() == "true"
+        enabled = os.environ.get("MAN_HEALTH_MONITOR", "true").lower() == "true"
         if not enabled:
-            logger.info("SLOUGHGPT_HEALTH_MONITOR is false; skipping health monitor startup")
+            logger.info("MAN_HEALTH_MONITOR is false; skipping health monitor startup")
             return
 
-        interval = int(os.environ.get("SLOUGHGPT_HEALTH_INTERVAL", "300"))
+        interval = int(os.environ.get("MAN_HEALTH_INTERVAL", "300"))
         monitor = get_health_monitor()
         thread = monitor.start_auto_monitoring(interval_seconds=interval)
         thread.name = "health-monitor"
@@ -800,16 +881,24 @@ def _start_watchdog() -> None:
     try:
         from domains.infrastructure.watchdog import get_watchdog
 
-        enabled = os.environ.get("SLOUGHGPT_WATCHDOG", "true").lower() == "true"
+        enabled = os.environ.get("MAN_WATCHDOG", "true").lower() == "true"
         if not enabled:
-            logger.info("SLOUGHGPT_WATCHDOG is false; skipping watchdog startup")
+            logger.info("MAN_WATCHDOG is false; skipping watchdog startup")
             return
+
+        import time
+        _startup_time = time.time()
+        _WATCHDOG_GRACE_SECS = 120
 
         watchdog = get_watchdog()
 
         def _check_health() -> bool:
             """Quick health check — model loaded and providers registered."""
             try:
+                if time.time() - _startup_time < _WATCHDOG_GRACE_SECS:
+                    return True
+                if server_state.training_active:
+                    return True
                 if server_state.model is None:
                     return False
                 from domains.models.provider import get_provider
@@ -825,11 +914,13 @@ def _start_watchdog() -> None:
                 import torch
                 # Clear any stale state
                 gc.collect()
-                if torch.backends.mps.is_available():
+                if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                     torch.mps.empty_cache()
-                # Reload model
+                # Reload model — _autoload_hf_model_at_startup reads MAN_AUTOLOAD_MODEL
+                # from environment; if unset it defaults to Qwen2.5-0.5B-Instruct
                 _autoload_hf_model_at_startup()
-                return server_state.model is not None
+                import state as srv_state
+                return srv_state.model is not None
             except Exception as e:
                 logger.error("Recovery failed: %s", e)
                 return False
@@ -844,18 +935,25 @@ def _start_watchdog() -> None:
 
 if __name__ == "__main__":
     import argparse
+    import atexit
     parser = argparse.ArgumentParser(description="SloughGPT API Server")
     parser.add_argument(
         "--reload",
         action="store_true",
-        default=os.environ.get("SLOUGHGPT_RELOAD", "").lower() in ("1", "true", "yes"),
-        help="Enable auto-reload on file changes (default: $SLOUGHGPT_RELOAD or false)",
+        default=os.environ.get("MAN_RELOAD", "").lower() in ("1", "true", "yes"),
+        help="Enable auto-reload on file changes (default: $MAN_RELOAD or false)",
     )
     parser.add_argument(
         "--port",
         type=int,
         default=None,
         help="Port to bind (default: 8000, falls back to next available)",
+    )
+    parser.add_argument(
+        "--web",
+        action="store_true",
+        default=os.environ.get("MAN_WEB", "").lower() in ("1", "true", "yes"),
+        help="Serve web frontend alongside API (default: $MAN_WEB or false)",
     )
     args, _ = parser.parse_known_args()
 
@@ -872,7 +970,7 @@ if __name__ == "__main__":
 
     import uvicorn
 
-    raw_port = os.environ.get("SLOUGHGPT_API_PORT", "").strip()
+    raw_port = os.environ.get("MAN_API_PORT", "").strip()
     if args.port:
         port = args.port
     elif raw_port:
@@ -884,6 +982,39 @@ if __name__ == "__main__":
     _start_health_monitor()
     _start_watchdog()
     logger.info("Starting SloughGPT server on port %d... (reload=%s)", port, args.reload)
+
+    # ── Web frontend (optional) ────────────────────────────────
+    web_proc = None
+    if args.web:
+        web_root = _REPO_ROOT / "apps" / "web"
+        standalone_dir = web_root / ".next" / "standalone"
+        web_port = find_available_port(3000)
+        web_env = {**os.environ, "PORT": str(web_port)}
+
+        if standalone_dir.is_dir() and (standalone_dir / "server.js").is_file():
+            # Run standalone Next.js server (needs Node.js runtime for SSR)
+            logger.info("Starting built web frontend on http://localhost:%d", web_port)
+            web_proc = subprocess.Popen(
+                ["node", "server.js"],
+                cwd=str(standalone_dir),
+                env=web_env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+        else:
+            # Spawn Next.js dev server
+            logger.info("No standalone build found — spawning Next.js dev server on http://localhost:%d", web_port)
+            web_proc = subprocess.Popen(
+                ["npm", "run", "dev"],
+                cwd=str(web_root),
+                env=web_env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+
+    # Clean up web subprocess on exit
+    if web_proc:
+        atexit.register(lambda p=web_proc: (p.terminate(), p.wait(timeout=5)) if p.poll() is None else None)
 
     uvicorn_kw = dict(
         app=app,

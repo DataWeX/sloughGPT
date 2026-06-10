@@ -15,9 +15,9 @@ def test_flatten_for_wandb_config_nested_dataclass():
 
 
 def test_wandb_training_env_flag(monkeypatch):
-    monkeypatch.delenv("SLOUGHGPT_WANDB_TRAINING", raising=False)
+    monkeypatch.delenv("MAN_WANDB_TRAINING", raising=False)
     assert wandb_training_enabled_from_env() is False
-    monkeypatch.setenv("SLOUGHGPT_WANDB_TRAINING", "1")
+    monkeypatch.setenv("MAN_WANDB_TRAINING", "1")
     assert wandb_training_enabled_from_env() is True
 
 

@@ -14,7 +14,7 @@ from typing import Dict, Optional
 from dataclasses import dataclass
 import logging
 
-logger = logging.getLogger("sloughgpt.pruning")
+logger = logging.getLogger("man.pruning")
 
 
 @dataclass

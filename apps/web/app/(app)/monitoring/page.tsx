@@ -7,66 +7,12 @@ import { Button } from '@/components/ui/button'
 import { ProgressBar } from '@/components/ui'
 import { StatCard, KpiGrid } from '@/components/ui/display'
 import { systemController, type DetailedHealth, type SystemMetrics, type SystemInfo, type DiskUsage, type GPUInfo } from '@/lib/system-controller'
+import { knowledgeController } from '@/lib/knowledge-controller'
 import { useLocale } from '@/hooks/useLocale'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-
-function formatUptime(seconds: number): string {
-  const d = Math.floor(seconds / 86400)
-  const h = Math.floor((seconds % 86400) / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h ${m}m`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function GpuCard({ gpu }: { gpu?: GPUInfo }) {
-  if (!gpu) return null
-  return (
-    <Card>
-      <CardHeader><CardTitle className="text-base">GPU</CardTitle></CardHeader>
-      <CardContent className="space-y-2 text-sm">
-        <div className="flex justify-between"><span className="text-muted-foreground">Backend</span><span>{gpu.backend}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Device</span><span>{gpu.device_type}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">VRAM</span><span>{gpu.vram_gb} GB</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Tier</span><span>{gpu.tier}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Memory hint</span><span className="text-xs max-w-[180px] text-right">{gpu.memory_hint}</span></div>
-      </CardContent>
-    </Card>
-  )
-}
-
-function DiskCard({ disk }: { disk?: DiskUsage }) {
-  if (!disk) return null
-  const pct = Math.round(disk.percent)
-  return (
-    <Card>
-      <CardHeader><CardTitle className="text-base">Disk</CardTitle></CardHeader>
-      <CardContent className="space-y-3">
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>{disk.used_gb.toFixed(1)} GB used</span>
-          <span>{disk.total_gb.toFixed(1)} GB total</span>
-        </div>
-        <ProgressBar value={pct} max={100} />
-        <p className="text-xs text-muted-foreground">{disk.free_gb.toFixed(1)} GB free</p>
-      </CardContent>
-    </Card>
-  )
-}
-
-function ServerInfoCard({ info }: { info?: SystemInfo }) {
-  if (!info) return null
-  return (
-    <Card>
-      <CardHeader><CardTitle className="text-base">Server</CardTitle></CardHeader>
-      <CardContent className="space-y-2 text-sm">
-        <div className="flex justify-between"><span className="text-muted-foreground">Platform</span><span>{info.platform} {info.platform_release}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Architecture</span><span>{info.architecture}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">CPU cores</span><span>{info.cpu_count}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Processor</span><span className="text-xs max-w-[200px] text-right truncate" title={info.processor}>{info.processor || '—'}</span></div>
-      </CardContent>
-    </Card>
-  )
-}
+import { PUBLIC_API_URL } from '@/lib/config'
+import { formatUptime } from '@/lib/chat-utils'
+import { GpuCard, DiskCard, ServerInfoCard } from '@/components/monitoring/SystemInfoCards'
 
 export default function SystemHealthPage() {
   const { t } = useLocale()
@@ -76,6 +22,15 @@ export default function SystemHealthPage() {
   const [disk, setDisk] = useState<DiskUsage | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [knowledgeStats, setKnowledgeStats] = useState<{ total_items: number; topic_count: number; avg_importance: number; searchable: boolean } | null>(null)
+  const [adapterStatus, setAdapterStatus] = useState<{ adapter_exists: boolean; fact_count: number; total_facts_available: number } | null>(null)
+  const [benchQuality, setBenchQuality] = useState<{
+    status: string; total_responses: number; coherence_score: number; quality_score: number;
+    repetition_rate: number; avg_length: number; empty_rate: number;
+  } | null>(null)
+  const [benchStats, setBenchStats] = useState<{ total: number; avg_tokens: number; models: string[] } | null>(null)
+  const [dpoStatus, setDpoStatus] = useState<{ status: string; last_run: string | null; accepted_count: number; rejected_count: number; result: any } | null>(null)
+  const [vlmStatus, setVlmStatus] = useState<{ vlm_loaded: boolean; training: { status: string } } | null>(null)
   const historyRef = useRef<Array<{ time: string; cpu: number; mem: number }>>([])
   const MAX_HISTORY = 30
 
@@ -83,16 +38,28 @@ export default function SystemHealthPage() {
     if (showRefreshing) setRefreshing(true)
     setError(null)
     try {
-      const [d, m, i, di] = await Promise.all([
+      const [d, m, i, di, ks, as, bq, bs, ds, vs] = await Promise.all([
         systemController.getDetailedHealth(),
         systemController.getMetrics(),
         systemController.getInfo(),
         systemController.getDisk(),
+        knowledgeController.stats(),
+        knowledgeController.getAdapterStatus().catch(() => null),
+        fetch(`${PUBLIC_API_URL}/benchmark/quality`).then(r => r.json()).catch(() => null),
+        fetch(`${PUBLIC_API_URL}/benchmark/stats`).then(r => r.json()).catch(() => null),
+        fetch(`${PUBLIC_API_URL}/vlm/dpo/status`).then(r => r.json()).catch(() => null),
+        fetch(`${PUBLIC_API_URL}/vlm/status`).then(r => r.json()).catch(() => null),
       ])
       setDetailed(d)
       setMetrics(m)
       setInfo(i)
       setDisk(di)
+      setKnowledgeStats(ks)
+      setAdapterStatus(as)
+      setBenchQuality(bq)
+      setBenchStats(bs)
+      setDpoStatus(ds)
+      setVlmStatus(vs)
       // Append to rolling history
       if (m) {
         const h = historyRef.current
@@ -204,6 +171,99 @@ export default function SystemHealthPage() {
             </KpiGrid>
           </CardContent>
         </Card>
+
+        {/* Knowledge Base */}
+        <Card>
+          <CardHeader><CardTitle className="text-base">Knowledge Base</CardTitle></CardHeader>
+          <CardContent>
+            <KpiGrid columns={4}>
+              <StatCard label="Items" value={knowledgeStats ? knowledgeStats.total_items.toString() : '...'} />
+              <StatCard label="Topics" value={knowledgeStats ? knowledgeStats.topic_count.toString() : '...'} />
+              <StatCard label="Avg Importance" value={knowledgeStats ? knowledgeStats.avg_importance.toFixed(2) : '...'} />
+              <StatCard
+                label="Adapter"
+                value={!adapterStatus ? '...' : adapterStatus.adapter_exists ? 'Trained' : 'Not trained'}
+                icon={
+                  <span className={`inline-block w-2 h-2 rounded-full ${!adapterStatus ? 'bg-warning' : adapterStatus.adapter_exists ? 'bg-success' : 'bg-muted-foreground/50'}`} />
+                }
+              />
+            </KpiGrid>
+            {adapterStatus && adapterStatus.adapter_exists && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Trained on {adapterStatus.fact_count} facts ({adapterStatus.total_facts_available} available)
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Model Quality */}
+        {benchQuality && benchQuality.status === 'ok' && (
+          <Card>
+            <CardHeader><CardTitle className="text-base">Model Quality</CardTitle></CardHeader>
+            <CardContent>
+              <KpiGrid columns={4}>
+                <StatCard label="Coherence" value={benchQuality.coherence_score.toFixed(2)} icon={
+                  <span className={`inline-block w-2 h-2 rounded-full ${benchQuality.coherence_score > 0.7 ? 'bg-success' : benchQuality.coherence_score > 0.4 ? 'bg-warning' : 'bg-destructive'}`} />
+                } />
+                <StatCard label="Quality Score" value={benchQuality.quality_score.toFixed(2)} icon={
+                  <span className={`inline-block w-2 h-2 rounded-full ${benchQuality.quality_score > 0.7 ? 'bg-success' : benchQuality.quality_score > 0.4 ? 'bg-warning' : 'bg-destructive'}`} />
+                } />
+                <StatCard label="Responses" value={benchQuality.total_responses.toString()} />
+                <StatCard label="Repetition" value={`${(benchQuality.repetition_rate * 100).toFixed(1)}%`} />
+              </KpiGrid>
+              <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+                <span>Avg length: {benchQuality.avg_length.toFixed(1)} words</span>
+                <span>Empty rate: {(benchQuality.empty_rate * 100).toFixed(1)}%</span>
+                {benchStats && <span>Avg tokens: {benchStats.avg_tokens.toFixed(0)}</span>}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* DPO / VLM Training */}
+        {dpoStatus || vlmStatus ? (
+          <Card>
+            <CardHeader><CardTitle className="text-base">Model Training (DPO + VLM)</CardTitle></CardHeader>
+            <CardContent>
+              <KpiGrid columns={4}>
+                <StatCard
+                  label="DPO Status"
+                  value={dpoStatus ? dpoStatus.status : '...'}
+                  icon={
+                    <span className={`inline-block w-2 h-2 rounded-full ${!dpoStatus ? 'bg-warning' : dpoStatus.status === 'running' ? 'bg-warning' : dpoStatus.status === 'completed' ? 'bg-success' : dpoStatus.status === 'error' ? 'bg-destructive' : 'bg-muted-foreground/50'}`}
+                    />
+                  }
+                />
+                <StatCard
+                  label="DPO Accepted"
+                  value={dpoStatus ? dpoStatus.accepted_count.toString() : '...'}
+                />
+                <StatCard
+                  label="DPO Rejected"
+                  value={dpoStatus ? dpoStatus.rejected_count.toString() : '...'}
+                />
+                <StatCard
+                  label="VLM Loaded"
+                  value={vlmStatus ? (vlmStatus.vlm_loaded ? 'Yes' : 'No') : '...'}
+                  icon={
+                    <span className={`inline-block w-2 h-2 rounded-full ${!vlmStatus ? 'bg-warning' : vlmStatus.vlm_loaded ? 'bg-success' : 'bg-muted-foreground/50'}`}
+                    />
+                  }
+                />
+              </KpiGrid>
+              {vlmStatus?.training && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  VLM training: {vlmStatus.training.status}
+                </p>
+              )}
+              {dpoStatus?.last_run && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Last DPO: {dpoStatus.last_run}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        ) : null}
 
         {/* Real-time chart */}
         {historyRef.current.length > 1 && (

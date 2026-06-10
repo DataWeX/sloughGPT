@@ -26,28 +26,27 @@ class TestAutoTrainStart:
         """POST /auto-train/start should start a training session."""
         response = client.post(
             "/auto-train/start",
-            json={"teacher_model": "gpt2", "temperature": 0.8, "epochs": 1}
+            json={"teacher_model": "gpt2", "temperature": 0.8, "epochs": 1, "source_text": "hello world"}
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "started"
-        assert data["teacher"] == "gpt2"
+        assert data["status"] == "ready"
 
     def test_start_twice_should_warn(self, client, mock_hf_models):
         """Starting twice should work (replaces prior session)."""
         r1 = client.post(
             "/auto-train/start",
-            json={"teacher_model": "gpt2"}
+            json={"teacher_model": "gpt2", "source_text": "hello"}
         )
         assert r1.status_code == 200
 
         r2 = client.post(
             "/auto-train/start",
-            json={"teacher_model": "gpt2"}
+            json={"teacher_model": "gpt2", "source_text": "world"}
         )
         assert r2.status_code == 200
         data = r2.json()
-        assert data["status"] == "started"
+        assert data["status"] == "ready"
 
 
 class TestAutoTrainStop:

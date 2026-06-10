@@ -188,7 +188,8 @@ class EfficientLayer:
                     module.in_features,
                     module.out_features,
                 )
-            except:
+            except Exception:
+                logger.warning("Quantized linear not available, using fallback", exc_info=True)
                 pass
 
         return module
@@ -219,7 +220,8 @@ class EfficientLayer:
 
                 with torch.nn.attention.sdpa_kernel(SDPBackend.FLASH_ATTENTION):
                     return F.scaled_dot_product_attention(query, key, value)
-            except:
+            except Exception:
+                logger.warning("Flash attention not available, using standard attention", exc_info=True)
                 pass
 
         # Fallback to standard attention
@@ -333,7 +335,7 @@ class EfficientInference:
         if self.config.use_compile:
             try:
                 model = torch.compile(model, mode="reduce-overhead")
-            except:
+            except Exception:
                 logger.warning("torch.compile not available, skipping")
 
         self.quantized_model = model

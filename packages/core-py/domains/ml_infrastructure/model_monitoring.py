@@ -18,7 +18,7 @@ from enum import Enum
 from collections import defaultdict, deque
 import numpy as np
 
-logger = logging.getLogger("sloughgpt.monitoring")
+logger = logging.getLogger("man.monitoring")
 
 
 class MonitorStatus(Enum):

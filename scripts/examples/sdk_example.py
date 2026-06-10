@@ -44,26 +44,6 @@ def example_chat(client):
     print(f"Assistant: {result.message.content}")
 
 
-def example_batch(client):
-    """Batch generation example."""
-    print("\n=== Batch Generation ===")
-    
-    prompts = [
-        "Hello, how are you?",
-        "What is Python?",
-        "Tell me a fact about space.",
-    ]
-    
-    result = client.batch_generate(prompts, max_new_tokens=50)
-    print(f"Processed {result.total_prompts} prompts")
-    print(f"Successful: {result.successful}")
-    print(f"Failed: {result.failed}")
-    
-    for i, r in enumerate(result.results):
-        print(f"\n{i+1}. Prompt: {prompts[i][:30]}...")
-        print(f"   Response: {r.generated_text[:50]}...")
-
-
 def example_streaming(client):
     """Streaming generation example."""
     print("\n=== Streaming Generation ===")
@@ -134,9 +114,87 @@ def example_system_info(client):
         print(f"  GPU: {info.cuda.get('device', 'N/A')}")
 
 
+def example_souls(client):
+    """List and switch souls."""
+    print("\n=== Souls ===")
+    try:
+        souls = client.list_souls()
+        for s in souls:
+            print(f"  - {s.get('name')}: {s.get('description', '')[:60]}")
+        current = client.get_current_soul()
+        print(f"  Current: {current.get('name', 'default')}")
+    except Exception as e:
+        print(f"  Souls not available: {e}")
+
+
+def example_knowledge(client):
+    """List knowledge base."""
+    print("\n=== Knowledge ===")
+    try:
+        items = client.list_knowledge()
+        if items:
+            for k in items[:3]:
+                print(f"  - {k.get('content', '')[:60]}")
+        else:
+            print("  (empty)")
+        topics = client.get_knowledge_topics()
+        print(f"  Topics: {topics}")
+    except Exception as e:
+        print(f"  Knowledge not available: {e}")
+
+
+def example_tokenizer(client):
+    """Check tokenizer stats."""
+    print("\n=== Tokenizer ===")
+    try:
+        stats = client.get_tokenizer_stats()
+        print(f"  Vocab size: {stats.get('vocab_size', '?')}")
+    except Exception as e:
+        print(f"  Tokenizer not available: {e}")
+
+
+def example_system(client):
+    """Get system metrics."""
+    print("\n=== System ===")
+    try:
+        metrics = client.get_system_metrics()
+        print(f"  CPU: {metrics.get('cpu_percent', '?')}%")
+        print(f"  Memory: {metrics.get('memory_percent', '?')}%")
+        print(f"  Disk: {metrics.get('disk_percent', '?')}%")
+        print(f"  Uptime: {metrics.get('uptime_seconds', '?')}s")
+    except Exception as e:
+        print(f"  System metrics not available: {e}")
+
+
+def example_workflow(client):
+    """Check workflow status."""
+    print("\n=== Workflow ===")
+    try:
+        wf = client.get_workflow_status()
+        print(f"  Status: {wf.get('status', '?')}")
+        print(f"  Active: {wf.get('active', '?')}")
+        print(f"  Feedback count: {wf.get('feedback_count', '?')}")
+    except Exception as e:
+        print(f"  Workflow not available: {e}")
+
+
+def example_auto_train(client):
+    """List auto-train checkpoints."""
+    print("\n=== Auto-Train ===")
+    try:
+        ckpts = client.list_auto_train_checkpoints()
+        if ckpts:
+            for c in ckpts[:3]:
+                print(f"  - {c.get('name', '?')}")
+        else:
+            print("  (no checkpoints)")
+    except Exception as e:
+        print(f"  Auto-train not available: {e}")
+
+
 def main():
     """Run all examples."""
-    base_url = os.environ.get("SLOUGHGPT_API_URL", "http://localhost:8000")
+    base_url = os.environ.get("MAN_API_URL", "http://localhost:8000")
     print(f"Connecting to: {base_url}")
     
     client = SloughGPTClient(base_url=base_url, timeout=60)
@@ -146,11 +204,16 @@ def main():
         example_system_info(client)
         example_basic_generation(client)
         example_chat(client)
-        example_batch(client)
         example_streaming(client)
         example_models(client)
         example_datasets(client)
         example_metrics(client)
+        example_souls(client)
+        example_knowledge(client)
+        example_tokenizer(client)
+        example_system(client)
+        example_workflow(client)
+        example_auto_train(client)
         
         print("\n=== All examples completed! ===")
         

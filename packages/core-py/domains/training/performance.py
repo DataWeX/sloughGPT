@@ -32,7 +32,7 @@ Dataset = torch.utils.data.Dataset
 F = torch.F
 nn = torch.nn
 
-logger = logging.getLogger("sloughgpt.performance")
+logger = logging.getLogger("man.performance")
 
 
 @dataclass

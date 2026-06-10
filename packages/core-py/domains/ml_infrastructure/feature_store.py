@@ -21,7 +21,7 @@ from enum import Enum
 from collections import defaultdict
 import numpy as np
 
-logger = logging.getLogger("sloughgpt.features")
+logger = logging.getLogger("man.features")
 
 
 class FeatureType(Enum):

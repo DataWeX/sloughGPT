@@ -8,7 +8,7 @@ from typing import Optional, Protocol
 from dataclasses import dataclass
 import logging
 
-logger = logging.getLogger("sloughgpt.speech")
+logger = logging.getLogger("man.speech")
 
 
 @dataclass

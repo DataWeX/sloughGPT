@@ -24,7 +24,7 @@ from enum import Enum
 from abc import ABC, abstractmethod
 import numpy as np
 
-logger = logging.getLogger("sloughgpt.tuning")
+logger = logging.getLogger("man.tuning")
 
 
 class TuneStatus(Enum):

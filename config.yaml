@@ -63,8 +63,8 @@ checkpoint:
 # Tracking (Weights & Biases / MLflow)
 # CLI: `tracking.enabled: true`, `pip install -e ".[wandb]"`, set `WANDB_API_KEY` (or `WANDB_MODE=offline`).
 # Logs train/eval metrics from SloughGPTTrainer when enabled.
-# API server (optional): `SLOUGHGPT_WANDB_TRAINING=1` for POST /training/start jobs;
-# `SLOUGHGPT_WANDB_SERVER=1` for HTTP + inference aggregates on a long-lived run.
+# API server (optional): `MAN_WANDB_TRAINING=1` for POST /training/start jobs;
+# `MAN_WANDB_SERVER=1` for HTTP + inference aggregates on a long-lived run.
 tracking:
   enabled: false
   backend: "wandb"  # wandb, mlflow, or none

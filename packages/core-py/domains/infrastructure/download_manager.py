@@ -1,25 +1,45 @@
 """
-Model Download Manager — tracks HuggingFace download progress.
+Model Download Manager — wraps ``downcraft`` for HuggingFace model downloads
+with cross-session resume, persistent state, and progress tracking.
 
-Provides a singleton `DownloadManager` that:
-  - Starts async downloads with HF Hub progress callbacks
-  - Exposes per-model status (queued, downloading, complete, failed)
-  - Reports bytes_downloaded, total_bytes, speed, eta, percentage
-  - Cleans up completed/failed entries after a TTL
+Delegates all actual HTTP work to ``downcraft`` (generic HTTP downloader
+with Range-header resume).  This module exists only to integrate with the
+existing server API (``DownloadManager`` singleton, progress callbacks, etc.).
 """
 
 import asyncio
 import logging
-import time
+import shutil
 import threading
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-HF_CACHE = Path.home() / ".cache" / "huggingface" / "hub"
+try:
+    from downcraft import downloader as sg_downloader
+    from downcraft import state as sg_state
+    from downcraft.hf_hub import (
+        get_cache_dir,
+        is_download_complete as hf_is_download_complete,
+        list_model_files,
+    )
+except ImportError:
+    logger.warning("downcraft not available — download management disabled")
+    sg_downloader = None
+    sg_state = None
+    def get_cache_dir(model_id: str) -> str:
+        return str(Path.home() / ".cache" / "huggingface" / "hub" / f"models--{model_id.replace('/', '--')}")
+    def hf_is_download_complete(model_id: str, deep_check: bool = False) -> bool:
+        return False
+    def list_model_files(model_id: str) -> List[str]:
+        return []
+
+# Re-export for backward compat
+HF_CACHE_DIR = Path.home() / ".cache" / "huggingface" / "hub"
 
 
 class DownloadStatus(str, Enum):
@@ -64,21 +84,119 @@ class DownloadProgress:
         }
 
 
+# ---------------------------------------------------------------------------
+# Re-export cache health helpers (using downcraft under the hood)
+# ---------------------------------------------------------------------------
+
+def _cache_dir(model_id: str) -> Path:
+    """Get the HF cache directory path for a model."""
+    return get_cache_dir(model_id)
+
+
+def _has_weight_files(cache_dir: Path) -> bool:
+    """Check if a cache dir has any model weight files (safetensors or bin > 1KB)."""
+    for ext in ("*.safetensors", "*.bin"):
+        for f in cache_dir.rglob(ext):
+            try:
+                if f.stat().st_size > 1_000:
+                    return True
+            except OSError:
+                continue
+    return False
+
+
+def _has_incomplete_downloads(cache_dir: Path) -> bool:
+    """Check for in-progress or interrupted download markers."""
+    incomplete = list(cache_dir.rglob("*.incomplete"))
+    if incomplete:
+        return True
+    locks = list(cache_dir.rglob("*.lock"))
+    return len(locks) > 0
+
+
+def _get_snapshot_ref(cache_dir: Path) -> Optional[str]:
+    refs_main = cache_dir / "refs" / "main"
+    if not refs_main.exists():
+        return None
+    try:
+        return refs_main.read_text().strip()
+    except Exception:
+        return None
+
+
+def _has_complete_snapshot(cache_dir: Path) -> bool:
+    commit = _get_snapshot_ref(cache_dir)
+    if not commit:
+        return False
+    snapshot_dir = cache_dir / "snapshots" / commit
+    if not snapshot_dir.exists():
+        return False
+    return _has_weight_files(snapshot_dir)
+
+
+def is_download_complete(model_id: str, deep_check: bool = False) -> bool:
+    """Check if a model is fully downloaded.
+
+    Delegates to ``downcraft.hf_hub.is_download_complete`` for the
+    canonical check (respects ``HF_HOME`` env var and uses proper
+    cache directory resolution).
+
+    Args:
+        model_id: HuggingFace model ID
+        deep_check: If True, verifies every expected weight file exists
+            via Hub API (network call). Skip for batch listing.
+    """
+    return hf_is_download_complete(model_id, deep_check=deep_check)
+
+
+def cleanup_incomplete(model_id: str) -> bool:
+    """Remove an incomplete/partial download from HF cache."""
+    cache_dir = _cache_dir(model_id)
+    if not cache_dir.exists():
+        return False
+    logger.warning("Removing incomplete cache for %s: %s", model_id, cache_dir)
+    shutil.rmtree(str(cache_dir), ignore_errors=True)
+    # Also clean persistent state
+    if sg_state is not None:
+        sg_state.get_state().remove(model_id)
+    return True
+
+
+def list_incomplete_models() -> List[str]:
+    """Scan HF cache and return model IDs with incomplete downloads."""
+    base = Path.home() / ".cache" / "huggingface" / "hub"
+    if not base.exists():
+        return []
+    result = []
+    for entry in sorted(base.iterdir()):
+        if not entry.name.startswith("models--") or not entry.is_dir():
+            continue
+        model_id = entry.name[len("models--"):].replace("--", "/")
+        if _has_incomplete_downloads(entry):
+            result.append(model_id)
+        elif not _has_complete_snapshot(entry) and _has_weight_files(entry):
+            result.append(model_id)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# DownloadManager — wraps downcraft for backward-compatible API
+# ---------------------------------------------------------------------------
+
 class DownloadManager:
     """
-    Singleton that manages concurrent model downloads with progress tracking.
+    Download manager singleton.
 
-    Usage:
-        mgr = get_download_manager()
-        await mgr.download("gpt2")
-        progress = mgr.get_progress("gpt2")
+    Wraps ``downcraft`` to provide the existing server API
+    (``download()``, ``is_cached()``, ``get_progress()``, etc.)
+    with the addition of cross-session resume via persistent state.
     """
 
     def __init__(self):
         self._downloads: Dict[str, DownloadProgress] = {}
         self._lock = threading.Lock()
         self._tasks: Dict[str, asyncio.Task] = {}
-        self._cleanup_ttl = 300  # 5 minutes
+        self._cleanup_ttl = 300
         self._callbacks: Dict[str, list] = {}
 
     def get_progress(self, model_id: str) -> Optional[Dict[str, Any]]:
@@ -99,11 +217,8 @@ class DownloadManager:
             )
 
     def is_cached(self, model_id: str) -> bool:
-        cache_dir = HF_CACHE / f"models--{model_id.replace('/', '--')}"
-        if not cache_dir.exists():
-            return False
-        safetensors_files = list(cache_dir.rglob("*.safetensors"))
-        return len(safetensors_files) > 0
+        """Whether the model is fully cached on disk (survives restart)."""
+        return is_download_complete(model_id)
 
     def cancel(self, model_id: str) -> bool:
         with self._lock:
@@ -113,6 +228,8 @@ class DownloadManager:
                 task = self._tasks.pop(model_id, None)
                 if task and not task.done():
                     task.cancel()
+                if sg_state is not None:
+                    sg_state.get_state().set_status(model_id, "cancelled")
                 return True
             return False
 
@@ -145,32 +262,45 @@ class DownloadManager:
         model_id: str,
         total_bytes_hint: int = 0,
     ) -> Dict[str, Any]:
-        """
-        Download a model from HuggingFace Hub with progress tracking.
+        """Download a HuggingFace model using downcraft (with cross-session resume).
 
-        Args:
-            model_id: HuggingFace model ID (e.g. "gpt2", "Qwen/Qwen2.5-0.5B-Instruct")
-            total_bytes_hint: Optional known total size for progress calculation.
-
-        Returns:
-            Dict with status, cache_dir, and elapsed time.
+        Unlike the old implementation (which cleaned up and restarted on every
+        resume), this delegates to ``downcraft`` which preserves partial
+        downloads across restarts via ``~/.downcraft/state.json``.
         """
-        if self.is_cached(model_id):
+        if is_download_complete(model_id):
             return {"status": "already_cached", "model_id": model_id}
+
+        # Clean up incomplete HF cache markers, then let downcraft resume
+        cache_dir = _cache_dir(model_id)
+        if cache_dir.exists():
+            incomplete = list(cache_dir.rglob("*.incomplete")) + list(cache_dir.rglob("*.lock"))
+            for f in incomplete:
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
 
         if self.is_downloading(model_id):
             return {"status": "already_downloading", "model_id": model_id}
 
+        # Estimate total from Hub API
+        try:
+            files = list_model_files(model_id)
+            total_est = sum(f.size for f in files if not f.is_ignored) or total_bytes_hint
+        except Exception:
+            total_est = total_bytes_hint
+
         self._set_progress(
             model_id,
             status=DownloadStatus.QUEUED,
-            total_bytes=total_bytes_hint,
+            total_bytes=total_est,
             started_at=time.time(),
         )
         self._notify_callbacks(model_id)
 
         loop = asyncio.get_event_loop()
-        task = asyncio.create_task(self._download_worker(model_id, total_bytes_hint))
+        task = asyncio.create_task(self._download_worker(model_id, total_est))
         self._tasks[model_id] = task
 
         try:
@@ -189,60 +319,39 @@ class DownloadManager:
             return {"status": "failed", "model_id": model_id, "error": str(e)}
 
     async def _download_worker(self, model_id: str, total_bytes_hint: int):
-        """Run the actual download in a thread executor with progress callbacks."""
+        """Run the downcraft in a thread executor, updating progress."""
         self._set_progress(model_id, status=DownloadStatus.DOWNLOADING)
         self._notify_callbacks(model_id)
-
         start_time = time.time()
-        bytes_so_far = 0
 
-        def _hf_progress_callback(progress: dict):
-            nonlocal bytes_so_far, start_time
-            # progress has keys: status, completed, total, name, context
-            status = progress.get("status", "")
-            completed = progress.get("completed", 0)
-            total = progress.get("total", 0)
-            filename = progress.get("name", "")
-
-            now = time.time()
-            elapsed = now - start_time
-
-            if total > 0 and total_bytes_hint == 0:
-                self._set_progress(model_id, total_bytes=total)
-
-            if status == "complete":
-                bytes_so_far += completed
-            else:
-                bytes_so_far = completed
-
-            speed = bytes_so_far / elapsed if elapsed > 0 else 0
-            remaining = total - bytes_so_far if total > 0 else 0
-            eta = remaining / speed if speed > 0 else 0
-            pct = (bytes_so_far / total * 100) if total > 0 else 0
-
+        def _progress_cb(mid: str, downloaded: int, total: int, speed: float):
+            pct = (downloaded / total * 100) if total > 0 else 0
             self._set_progress(
-                model_id,
-                bytes_downloaded=bytes_so_far,
-                current_file=filename,
+                mid,
+                bytes_downloaded=downloaded,
+                total_bytes=total,
                 speed_bytes_per_sec=speed,
-                eta_seconds=eta,
                 percentage=pct,
                 status=DownloadStatus.DOWNLOADING,
             )
-            self._notify_callbacks(model_id)
+            self._notify_callbacks(mid)
+
+        def _file_cb(mid: str, fpath: str):
+            self._set_progress(mid, current_file=fpath)
+            self._notify_callbacks(mid)
 
         def _do_download():
-            from huggingface_hub import snapshot_download
-            snapshot_download(
-                repo_id=model_id,
-                cache_dir=str(HF_CACHE.parent),
-                progress_callback=_hf_progress_callback,
+            from downcraft import download_hf_model
+            download_hf_model(
+                model_id,
+                on_progress=_progress_cb,
+                on_file_complete=_file_cb,
             )
 
         await asyncio.to_thread(_do_download)
 
         elapsed = time.time() - start_time
-        cache_dir = HF_CACHE / f"models--{model_id.replace('/', '--')}"
+        cache_dir = _cache_dir(model_id)
         self._set_progress(
             model_id,
             status=DownloadStatus.COMPLETE,
@@ -260,7 +369,6 @@ class DownloadManager:
         }
 
     def cleanup_stale(self, max_age: float = 300):
-        """Remove completed/failed/cancelled entries older than max_age seconds."""
         now = time.time()
         with self._lock:
             stale = []

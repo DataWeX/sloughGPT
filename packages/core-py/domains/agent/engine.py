@@ -24,7 +24,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
-logger = logging.getLogger("sloughgpt.agent")
+logger = logging.getLogger("man.agent")
 
 
 @dataclass

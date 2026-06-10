@@ -31,20 +31,6 @@ Cypress.Commands.add('mockDatasets', () => {
   }).as('datasets')
 })
 
-Cypress.Commands.add('mockCompare', () => {
-  cy.intercept('GET', `${api}/benchmark/compare`, {
-    statusCode: 200,
-    body: {
-      models: [
-        { name: 'gpt2', family: 'gpt', params: '124M', loaded: true, tokens_per_sec: 60, memory_mb: 512, inference_count: 42 },
-        { name: 'gpt2-medium', family: 'gpt', params: '355M', loaded: false, tokens_per_sec: 35, memory_mb: 1536, inference_count: 0 },
-        { name: 'TinyLlama/TinyLlama-1.1B-Chat-v1.0', family: 'llama', params: '1.1B', loaded: false, tokens_per_sec: 15, memory_mb: 2252, inference_count: 0 },
-      ],
-      current_model: 'gpt2',
-    },
-  }).as('compare')
-})
-
 Cypress.Commands.add('mockSystem', () => {
   cy.intercept('GET', `${api}/system/metrics`, {
     statusCode: 200,
@@ -105,7 +91,6 @@ Cypress.Commands.add('mockAll', () => {
   cy.mockHealth()
   cy.mockModels()
   cy.mockDatasets()
-  cy.mockCompare()
   cy.mockSystem()
   cy.mockTokenizer()
   cy.mockExport()

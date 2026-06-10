@@ -4,9 +4,9 @@
  * Catches:
  *   - window.onerror (unhandled exceptions)
  *   - unhandledrejection (unhandled promise rejections)
- *   - React hydration errors (via MutationObserver on <html> attribute changes)
  *
- * Errors are batched and sent every 5s (or immediately on 10th error).
+ * Hydration errors are handled by SuppressDevOverlay (persists to localStorage).
+ * Non-hydration runtime errors are batched and POSTed to /errors/log.
  */
 
 const BATCH_INTERVAL_MS = 5000
@@ -120,6 +120,18 @@ export function initErrorReporter() {
 
   window.addEventListener('error', handleOnError as any)
   window.addEventListener('unhandledrejection', handleRejection as any)
+
+  // Persist critical unhandled errors to localStorage for crash recovery
+  // (hydration errors are handled separately by SuppressDevOverlay)
+  window.addEventListener('error', (event) => {
+    try {
+      const msg = (event as ErrorEvent).message
+      if (!msg || msg.toLowerCase().includes('hydrat') || msg.includes('did not match')) return
+      const stored = JSON.parse(localStorage.getItem('__critical_errors') || '[]')
+      stored.push({ ts: Date.now(), msg: msg.slice(0, 500), type: 'unhandled' })
+      localStorage.setItem('__critical_errors', JSON.stringify(stored.slice(-20)))
+    } catch {}
+  })
 
   // Flush remaining errors on page unload
   window.addEventListener('beforeunload', flush)

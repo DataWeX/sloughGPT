@@ -169,17 +169,6 @@ def test_workflow_trigger_aggregate(client):
     assert data["status"] == "aggregated"
 
 
-def test_training_stats(client):
-    """Test getting training stats."""
-    app, test_client = client
-
-    response = test_client.get("/labs/feedback-stats")
-    assert response.status_code == 200
-    data = response.json()
-    assert "available_dpo_pairs" in data
-    assert "available_sft_examples" in data
-
-
 def test_export_training(client):
     """Test exporting training data via /training/export-text."""
     app, test_client = client

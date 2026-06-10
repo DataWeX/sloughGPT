@@ -12,16 +12,16 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=sqlite:///./sloughgpt.db
-      - SLOUGHGPT_ENV=production
-      - SLOUGHGPT_LOG_LEVEL=INFO
-      - SLOUGHGPT_HOST=0.0.0.0
-      - SLOUGHGPT_PORT=8000
+      - MAN_ENV=production
+      - MAN_LOG_LEVEL=INFO
+      - MAN_HOST=0.0.0.0
+      - MAN_PORT=8000
       - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-sentence_transformers}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-sentence-transformers/all-MiniLM-L6-v2}
       - PINECONE_API_KEY=${PINECONE_API_KEY:-}
       - PINECONE_INDEX=${PINECONE_INDEX:-sloughgpt}
       - PINECONE_ENVIRONMENT=${PINECONE_ENVIRONMENT:-us-east-1}
-      - SLOUGHGPT_AUTO_WORKFLOW=${SLOUGHGPT_AUTO_WORKFLOW:-true}
+      - MAN_AUTO_WORKFLOW=${MAN_AUTO_WORKFLOW:-true}
     volumes:
       - ../../models:/app/models
       - ../../datasets:/app/datasets
@@ -47,8 +47,8 @@ services:
       - "8000:8000"
     environment:
       - CUDA_VISIBLE_DEVICES=0
-      - SLOUGHGPT_ENV=production
-      - SLOUGHGPT_LOG_LEVEL=INFO
+      - MAN_ENV=production
+      - MAN_LOG_LEVEL=INFO
     volumes:
       - ../../models:/app/models
       - ../../datasets:/app/datasets
@@ -77,8 +77,8 @@ services:
       - "8000:8000"
       - "5678:5678"  # Debugger
     environment:
-      - SLOUGHGPT_ENV=development
-      - SLOUGHGPT_LOG_LEVEL=DEBUG
+      - MAN_ENV=development
+      - MAN_LOG_LEVEL=DEBUG
       - DEBUG=true
     volumes:
       - ../../:/app

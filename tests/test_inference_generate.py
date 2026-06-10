@@ -31,6 +31,9 @@ class AsyncIteratorMock:
 @pytest.fixture
 def mock_provider():
     """Mock the provider pipeline to avoid model loading."""
+    import startup_progress
+    startup_progress.STARTUP_PHASE.update(phase="ready", message="Test ready")
+
     provider = MagicMock()
     provider.chat = AsyncMock(return_value="Hello! How are you today?")
     provider.chat_stream = MagicMock(return_value=AsyncIteratorMock(["Hello!", " How", " are", " you?"]))

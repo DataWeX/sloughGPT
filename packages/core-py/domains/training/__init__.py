@@ -99,7 +99,7 @@ class DatasetManager:
     """
 
     def __init__(self) -> None:
-        self.logger = logging.getLogger("sloughgpt.training.datasets")
+        self.logger = logging.getLogger("man.training.datasets")
         self.datasets: Dict[str, DatasetConfig] = {}
 
     def register_dataset(self, config: DatasetConfig) -> None:
@@ -206,7 +206,7 @@ class DataPreprocessor:
     """Unified preprocessing pipeline."""
 
     def __init__(self) -> None:
-        self.logger = logging.getLogger("sloughgpt.training.preprocessing")
+        self.logger = logging.getLogger("man.training.preprocessing")
         self.steps: List[Dict[str, Any]] = []
 
     def add_cleaning(self, text_field: str = "text", lowercase: bool = True) -> "DataPreprocessor":
@@ -267,7 +267,7 @@ class TrainingPipeline:
     """Unified training pipeline."""
 
     def __init__(self, config: PipelineConfig) -> None:
-        self.logger = logging.getLogger("sloughgpt.training.pipelines")
+        self.logger = logging.getLogger("man.training.pipelines")
         self.config = config
         self.stages: List[Dict[str, Any]] = []
 
@@ -317,7 +317,7 @@ class ModelManager:
     """Unified model manager."""
 
     def __init__(self) -> None:
-        self.logger = logging.getLogger("sloughgpt.training.models")
+        self.logger = logging.getLogger("man.training.models")
         self.models: Dict[str, ModelConfig] = {}
 
     def register_model(self, config: ModelConfig) -> None:
@@ -493,6 +493,8 @@ def __getattr__(name):
         "URLImporter": ".data_import",
         "ImportResult": ".data_import",
         "import_data": ".data_import",
+        "TurboTrainer": ".turbo_trainer",
+        "TurboConfig": ".turbo_trainer",
         # Export modules
         "export_model": ".export",
         "ExportConfig": ".export",

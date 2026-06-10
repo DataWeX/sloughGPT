@@ -36,7 +36,7 @@ interface StoredChatSession {
   starred: boolean
 }
 
-export interface PendingMessage {
+interface PendingMessage {
   id: string
   sessionId: string
   content: string
@@ -44,12 +44,12 @@ export interface PendingMessage {
   retries: number
 }
 
-export interface SloughGPTDB extends Dexie {
+interface ManDB extends Dexie {
   sessions: Table<StoredChatSession, string>
   pendingMessages: Table<PendingMessage, string>
 }
 
-const db = new Dexie('SloughGPTDB') as SloughGPTDB
+const db = new Dexie('ManDB') as ManDB
 
 db.version(1).stores({
   sessions: 'id, name, updatedAt, synced',
@@ -154,5 +154,3 @@ export const chatDB = {
     return results.sort((a, b) => b.matches.length - a.matches.length)
   },
 }
-
-export default db

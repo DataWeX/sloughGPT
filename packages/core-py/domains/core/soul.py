@@ -1411,11 +1411,12 @@ class SloEngine:
         vocab_size: int = 512,
         teacher_model=None,
         teacher_tokenizer=None,
+        algo: str = "bpe",
     ) -> Dict[str, Any]:
-        """Train this soul on text data using SloNet + BPE.
+        """Train this soul on text data using SloNet + tokenizer.
 
         This is the primary learning pathway.  It:
-          1. Trains a BPE tokenizer on the texts (via TokenizerManager)
+          1. Trains a BPE or Unigram tokenizer on the texts (via TokenizerManager)
           2. Creates a SloNet with matching vocabulary
           3. Runs the training loop (teacher-guided or self-supervised)
           4. Updates the soul profile with training metrics
@@ -1426,9 +1427,10 @@ class SloEngine:
             soul_name: personality to use
             epochs: number of training epochs
             learning_rate: optimizer learning rate
-            vocab_size: target BPE vocabulary size
+            vocab_size: target vocabulary size
             teacher_model: optional HF teacher model (for distillation)
             teacher_tokenizer: optional HF teacher tokenizer
+            algo: ``"bpe"`` (SloBPE, default) or ``"unigram"`` (SloUnigram)
 
         Returns:
             dict with keys: success, soul_name, epochs, loss, steps, model_type, vocab_size
@@ -1444,12 +1446,15 @@ class SloEngine:
         if not texts:
             return {"success": False, "error": "No training texts provided"}
 
-        # 1. Train BPE tokenizer on the texts
+        # 1. Train tokenizer on the texts (BPE or Unigram)
         mgr = get_tokenizer_manager()
-        mgr.train(texts, vocab_size=vocab_size, min_frequency=2, lowercase=True)
-        bpe = mgr.get_tokenizer()
-        self._tokenizer = bpe
-        logger.info(f"BPE trained: vocab={bpe.vocab_size}, merges={len(bpe.merges)}")
+        algo_kwargs = {}
+        if algo == "unigram":
+            algo_kwargs = {"seed_max_len": 6, "em_iters": 3}
+        mgr.train(texts, vocab_size=vocab_size, min_frequency=2, lowercase=True, algo=algo, **algo_kwargs)
+        tok = mgr.get_tokenizer()
+        self._tokenizer = tok
+        logger.info(f"{algo} tokenizer trained: vocab={tok.vocab_size}")
 
         # 2. Create SloNet with matching vocab
         traits = {}
@@ -1458,8 +1463,8 @@ class SloEngine:
 
         net = SloNet(
             layers=[
-                SloEmbedding(bpe.vocab_size, 256),
-                SloLSTM(bpe.vocab_size, 256, 512, num_layers=2, dropout=0.0),
+                SloEmbedding(tok.vocab_size, 256),
+                SloLSTM(tok.vocab_size, 256, 512, num_layers=2, dropout=0.0),
             ],
             soul_name=soul_name,
             soul_traits=traits,
@@ -1467,7 +1472,7 @@ class SloEngine:
             lineage="soulengine-learned",
         )
         self._model = net
-        logger.info(f"SloNet created: vocab={bpe.vocab_size}")
+        logger.info(f"SloNet created: vocab={tok.vocab_size}")
 
         # 3. Training loop
         optimizer = SloAdam(lr=learning_rate)
@@ -1478,7 +1483,7 @@ class SloEngine:
 
         for epoch in range(epochs):
             for text in texts:
-                input_ids = bpe.encode(text[:128])
+                input_ids = tok.encode(text[:128])
                 if len(input_ids) < 2:
                     continue
 
@@ -1491,9 +1496,9 @@ class SloEngine:
                     x_chunk = input_ids[i : i + chunk_size]
                     y_chunk = input_ids[i + 1 : i + chunk_size + 1]
                     while len(x_chunk) < chunk_size:
-                        x_chunk.append(bpe.pad_id)
+                        x_chunk.append(tok.pad_id)
                     while len(y_chunk) < chunk_size:
-                        y_chunk.append(bpe.pad_id)
+                        y_chunk.append(tok.pad_id)
 
                     x = tensor([[x_chunk]], requires_grad=True)
                     y = tensor([[y_chunk]])
@@ -1518,9 +1523,9 @@ class SloEngine:
         self._soul.metadata["avg_loss"] = round(avg_loss, 6)
         self._soul.metadata["epochs_trained"] = epochs
         self._soul.metadata["training_time_s"] = round(elapsed, 2)
-        self._soul.metadata["vocab_size"] = bpe.vocab_size
-        self._soul.metadata["tokenizer_type"] = "soulbpe"
-        self._soul.metadata["tokenizer_config"] = bpe.to_dict()
+        self._soul.metadata["vocab_size"] = tok.vocab_size
+        self._soul.metadata["tokenizer_type"] = "soultok"
+        self._soul.metadata["tokenizer_config"] = tok.to_dict()
         self._soul.name = soul_name
         self._soul.lineage = "soulengine-learned"
         self._soul.base_model = "slonet-lstm"
@@ -1538,7 +1543,7 @@ class SloEngine:
             "loss": round(avg_loss, 6),
             "loss_history": [round(float(v), 6) for v in loss_history[-20:]],
             "model_type": "slonet-lstm",
-            "vocab_size": bpe.vocab_size,
+            "vocab_size": tok.vocab_size,
             "training_time_s": round(elapsed, 2),
             "tokens_per_sec": round(step / elapsed, 1) if elapsed > 0 else 0,
         }

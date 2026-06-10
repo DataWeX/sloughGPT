@@ -11,7 +11,7 @@ from enum import Enum
 import importlib.util
 import logging
 
-logger = logging.getLogger("sloughgpt.models")
+logger = logging.getLogger("man.models")
 
 
 def _get_nn():

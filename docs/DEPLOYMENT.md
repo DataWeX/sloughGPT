@@ -108,17 +108,11 @@ helm upgrade --install sloughgpt ./infra/k8s/helm/sloughgpt/ -n sloughgpt --crea
 - `POST /generate/stream` - Streaming generation
 - `POST /chat/stream` - Chat completion
 
-### Vector Store
-- `POST /vector/init` - Initialize vector store
-- `GET /vector/stats` - Get statistics
-- `POST /vector/upsert` - Add documents
-- `POST /vector/query` - Semantic search
-- `POST /vector/search` - RAG-style search
-
 ### Model
 - `GET /models` - List models
-- `POST /load` - Load model
-- `GET /soul` - Get soul profile
+- `POST /models/load` - Load model
+- `GET /health` - Health check
+- `GET /health/detailed` - Detailed health with model info
 
 ## Health Checks
 
@@ -135,49 +129,25 @@ curl http://localhost:8000/health/ready
 
 ## Scaling
 
-### Horizontal Scaling
-
 ```bash
-# Scale API replicas
-kubectl scale deployment sloughgpt-api --replicas=3
-
-# Or with Docker Compose
+# Scale API replicas (Docker Compose)
 docker compose -f infra/docker/docker-compose.yml up -d --scale api=3
-```
 
-### Load Balancing
-
-Use Traefik or Nginx as reverse proxy:
-
-```yaml
-# traefik.toml
-[backends.backend1]
-  [[backends.backend1.servers]]
-    url = "http://api1:8000"
-
-[[frontends.frontend1.routes]]
-  rule = "PathPrefix:/"
-  backend = "backend1"
+# Kubernetes
+kubectl scale deployment sloughgpt-api --replicas=3
 ```
 
 ## Security
 
-### Enable Authentication
+### Authentication
 
 ```bash
 # Set in .env
-ENABLE_AUTH=true
-JWT_SECRET_KEY=your-secure-secret
-```
+MAN_JWT_SECRET=your-64-char-secret
 
-### API Keys
-
-```bash
-# Generate API key
-openssl rand -hex 32
-
-# Add to .env
-SLOUGHGPT_API_KEYS=key1,key2
+# Or use API keys
+MAN_API_KEY=your-api-key
+MAN_API_KEYS=key1,key2
 ```
 
 ## Monitoring
@@ -215,35 +185,29 @@ docker stats
 ### Out of Memory
 
 ```bash
-# Reduce batch size
-MODEL_BATCH_SIZE=2
+# Force CPU inference
+MAN_FORCE_CPU=true
 
-# Use quantization
-docker compose --env-file .env.minimal -f infra/docker/docker-compose.yml up -d api
-```
+# Use a smaller model in settings
 
 ### GPU Not Detected
 
 ```bash
-# Check NVIDIA drivers
+# Check NVIDIA drivers (Linux with CUDA)
 nvidia-smi
 
-# Check container GPU access
-docker run --rm --gpus all nvidia/cuda:11.0-base nvidia-smi
+# Mac MPS: use CPU explicitly
+# Inference defaults to CPU on MPS to avoid memory issues
 ```
 
 ## Production Checklist
 
-- [ ] Set secure JWT_SECRET_KEY
-- [ ] Configure API keys
+- [ ] Set secure MAN_JWT_SECRET
+- [ ] Configure API keys (MAN_API_KEY)
 - [ ] Enable HTTPS/SSL
 - [ ] Setup monitoring
 - [ ] Configure backups
 - [ ] Set resource limits
-- [ ] Enable authentication
-- [ ] Configure rate limiting
-- [ ] Setup log aggregation
-- [ ] Test failover
 
 ## Support
 

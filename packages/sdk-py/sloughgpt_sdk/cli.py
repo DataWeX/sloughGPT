@@ -39,12 +39,12 @@ def main():
     
     parser.add_argument(
         "--url", "-u",
-        default=os.environ.get("SLOUGHGPT_API_URL", "http://localhost:8000"),
+        default=os.environ.get("MAN_API_URL", "http://localhost:8000"),
         help="API base URL"
     )
     parser.add_argument(
         "--api-key", "-k",
-        default=os.environ.get("SLOUGHGPT_API_KEY"),
+        default=os.environ.get("MAN_API_KEY"),
         help="API key for authentication"
     )
     parser.add_argument(
@@ -99,9 +99,6 @@ def main():
     
     metrics = subparsers.add_parser("metrics", help="Get API metrics")
     metrics.add_argument("--prometheus", action="store_true", help="Prometheus format")
-    
-    batch = subparsers.add_parser("batch", help="Batch generation")
-    batch.add_argument("prompts", nargs="+", help="List of prompts")
     
     key = subparsers.add_parser("key", help="API key management")
     key_subparsers = key.add_subparsers(dest="key_action", help="Key actions")
@@ -278,27 +275,6 @@ def main():
                     print(f"Cache Hits: {result.cache_hits}")
                     print(f"Cache Misses: {result.cache_misses}")
                     print(f"Avg Response Time: {result.avg_response_time_ms:.2f}ms")
-        
-        elif args.command == "batch":
-            result = client.batch_generate(
-                args.prompts,
-                max_new_tokens=args.max_tokens,
-                temperature=args.temperature,
-            )
-            if args.json:
-                print(format_json({
-                    "total": result.total_prompts,
-                    "successful": result.successful,
-                    "failed": result.failed,
-                    "results": [r.raw_response for r in result.results]
-                }))
-            else:
-                print(f"Processed {result.total_prompts} prompts")
-                print(f"Successful: {result.successful}")
-                print(f"Failed: {result.failed}")
-                for i, r in enumerate(result.results):
-                    print(f"\n{i+1}. {args.prompts[i][:50]}...")
-                    print(f"   {r.generated_text[:100]}...")
         
         elif args.command == "key":
             key_manager = APIKeyManager()

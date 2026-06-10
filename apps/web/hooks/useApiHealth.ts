@@ -52,9 +52,14 @@ export function inferenceHealthLabel(state: ApiHealthSnapshot): string {
  * Uses shared singleton polling to avoid redundant requests.
  */
 export function useApiHealth() {
-  const [state, setState] = useState<ApiHealthSnapshot>(_sharedState)
+  const [state, setState] = useState<ApiHealthSnapshot>(null)
 
   useEffect(() => {
+    // After hydration, sync with the shared state (which may have been
+    // set by a module-level eager fetch already)
+    if (_sharedState !== null) {
+      setState(_sharedState)
+    }
     _startPolling()
     const fn = (s: ApiHealthSnapshot) => setState(s)
     _subscribers.add(fn)

@@ -291,9 +291,9 @@ Located at `packages/core-py/domains/inference/llama_engine.py`:
 
 **Environment Variables:**
 ```bash
-SLOUGHGPT_MODEL_PATH=~/models/model.gguf  # Required
-SLOUGHGPT_FORCE_GPU=1                      # Force GPU
-SLOUGHGPT_FORCE_CPU=1                      # Force CPU
+MAN_MODEL_PATH=~/models/model.gguf  # Required
+MAN_FORCE_GPU=1                      # Force GPU
+MAN_FORCE_CPU=1                      # Force CPU
 ```
 
 ### Server Usage
@@ -301,7 +301,7 @@ SLOUGHGPT_FORCE_CPU=1                      # Force CPU
 ```bash
 # Start server
 cd apps/api/server
-SLOUGHGPT_MODEL_PATH=~/models/llama3.2-1b-q8_0.gguf python simple_server.py
+MAN_MODEL_PATH=~/models/llama3.2-1b-q8_0.gguf python simple_server.py
 
 # Generate
 curl -X POST http://localhost:8000/generate \

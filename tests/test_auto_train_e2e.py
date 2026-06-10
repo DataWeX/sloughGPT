@@ -1,72 +1,117 @@
-import pytest
-import asyncio
+"""
+E2E test for auto-train pipeline — full HTTP round-trip.
+
+Starts a minimal TestClient, calls /auto-train/start with a small
+source_text, streams training progress to completion, then verifies
+a checkpoint was saved and can be loaded.
+"""
 import json
-import time
-from unittest.mock import patch, MagicMock, AsyncMock
+import sys
+import pytest
+from fastapi.testclient import TestClient
+from fastapi import FastAPI
+
+
+def _ensure_paths():
+    for _p in ('packages/core-py', 'apps/api/server'):
+        _full = '/Users/mac/sloughGPT/' + _p
+        if _full not in sys.path:
+            sys.path.insert(0, _full)
+
+
+_ensure_paths()
+
+
+@pytest.fixture(scope='module')
+def client():
+    from routers.auto_train import router, state
+    state.running = False
+    state.config = {}
+    state.teacher_model = None
+    state.teacher_tokenizer = None
+    state.student_net = None
+    state.student_tokenizer = None
+    state.source_lines = []
+
+    app = FastAPI()
+    app.include_router(router)
+    return TestClient(app)
+
+
+def _find_loss(events):
+    """Find any loss value from events (emitted under different keys)."""
+    for e in events:
+        d = e.get("data") or {}
+        for key in ("loss", "avg_loss", "final_loss"):
+            val = d.get(key)
+            if val is not None:
+                return val
+    return None
 
 
 class TestAutoTrainE2E:
-    """E2E tests for auto-training flow with mock LLM."""
+    """Full HTTP round-trip: start -> stream -> complete -> checkpoints."""
 
-    @pytest.mark.anyio
-    async def test_stream_runs_multiple_steps(self):
-        """Test that streaming can run for multiple steps without early stop."""
-        mock_config = {
-            "teacher": "gpt2",
-            "temperature": 0.8,
-            "baby_model_path": "models/auto-training/baby.pt",
-            "learning_rate": 0.01,
-            "max_steps": 10,
-        }
-        
-        events_received = []
-        
-        async def mock_event_generator():
-            for i in range(5):
-                events_received.append({"step": i, "teacher": f"test {i}"})
-                yield f"data: {json.dumps({'step': i, 'teacher': f'test {i}'})}\n\n"
-                await asyncio.sleep(0.01)
-            yield f"data: {json.dumps({'done': True, 'total_turns': 5})}\n\n"
-        
-        # Verify we can iterate the mock generator
-        collected = []
-        async for event in mock_event_generator():
-            collected.append(event)
-        assert len(collected) == 6
+    def test_full_training_cycle(self, client):
+        # 1. Start training with tiny source text
+        resp = client.post("/auto-train/start", json={
+            "source_text": "hello world how are you doing today this is a test",
+            "epochs": 2,
+            "learning_rate": 0.001,
+            "algo": "bpe",
+            "batch_size": 32,
+        })
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] in ("ready", "started")
 
+        # 2. Stream training events to completion
+        with client.stream("GET", "/auto-train/stream") as stream:
+            events = []
+            for chunk in stream.iter_lines():
+                if chunk.startswith("data: "):
+                    events.append(json.loads(chunk[6:]))
+                    if events[-1].get("status") in ("complete", "error"):
+                        break
 
-class TestTrainingLoopDebug:
-    """Debug tests to identify early stop."""
+        assert len(events) > 0, "No SSE events received"
 
-    def test_event_generator_executes_all_steps(self):
-        """Simulate the training loop to see where it stops."""
-        pass
+        terminal = events[-1]
+        if terminal["status"] == "error":
+            pytest.fail(f"Training failed: {terminal.get('message', terminal)}")
 
+        # 3. Verify phase sequence
+        phase_names = [e["phase"] for e in events]
+        assert "TRAINING" in phase_names, f"No TRAINING phase in {phase_names}"
 
-class TestStopCondition:
-    """Tests for early stop detection."""
+        # 4. Verify terminal status is complete
+        assert terminal["status"] == "complete"
+        data = terminal.get("data") or {}
+        assert "checkpoint" in data, f"Missing checkpoint in terminal event: {terminal}"
+        assert "final_loss" in data, f"Missing final_loss: {terminal}"
 
-    def test_stop_flag_causes_early_exit(self):
-        """Test that stop flag being set causes loop exit."""
-        running = True
-        
-        for i in range(100):
-            if not running:
-                break
-            if i > 10:
-                running = False
-        
-        assert i > 10  # exited because flag was set, not because loop ended
+        # 5. Verify some loss value exists somewhere in the stream
+        loss = _find_loss(events)
+        assert loss is not None, "No loss values emitted in any event"
+        assert isinstance(loss, (int, float)) and loss > 0, f"Invalid loss: {loss}"
 
+        # 6. Verify progress values if any
+        progresses = [e["data"]["progress"]
+                      for e in events if e.get("data", {}).get("progress") is not None]
+        for p in progresses:
+            assert 0 <= p <= 100, f"Progress out of range: {p}"
 
-class TestTimeoutHandling:
-    """Tests for timeout detection."""
+        # 7. Verify checkpoint was created
+        resp = client.get("/auto-train/checkpoints")
+        assert resp.status_code == 200
+        checkpoints = resp.json().get("checkpoints", [])
+        assert len(checkpoints) > 0, "No checkpoints created"
 
-    def test_keepalive_ping_frequency(self):
-        """Verify ping is sent every 10 steps."""
-        with patch("json.dumps") as mock_json:
-            pass
+        # 8. Verify checkpoint has expected fields
+        cp = checkpoints[0]
+        assert "name" in cp
+        assert "loss" in cp or "epochs_trained" in cp
 
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+        # 9. Load the checkpoint
+        resp = client.post(f"/auto-train/checkpoints/{cp['name']}/load")
+        assert resp.status_code == 200

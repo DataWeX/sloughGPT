@@ -113,9 +113,9 @@ def main():
     print("\n\n📍 ENVIRONMENT VARIABLES")
     print("-" * 70)
     env_vars = [
-        ("SLOUGHGPT_API_KEY", "API key for authentication"),
-        ("SLOUGHGPT_JWT_SECRET", "Secret for JWT signing"),
-        ("SLOUGHGPT_ENV", "Environment (development/production)"),
+        ("MAN_API_KEY", "API key for authentication"),
+        ("MAN_JWT_SECRET", "Secret for JWT signing"),
+        ("MAN_ENV", "Environment (development/production)"),
         ("RATE_LIMIT_REQUESTS_PER_MINUTE", "Rate limit (default: 60)"),
     ]
     for var, desc in env_vars:

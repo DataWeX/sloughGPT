@@ -93,4 +93,3 @@ describe('tokenizerController.train', () => {
     expect(apiClient.apiPost).toHaveBeenCalledWith('/tokenizer/train', { vocab_size: 1024, texts: undefined })
   })
 })
-})

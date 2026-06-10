@@ -5,11 +5,20 @@
       "template": "Diagnose and fix the most recent CLI error. Read ~/.opencode-error-log.json, identify root cause, and apply the fix.",
       "description": "Diagnose and fix the most recent CLI error using the log monitor",
       "agent": "error-fixer"
+    },
+    "doc-aware": {
+      "template": "Load relevant docs for the given task area (frontend, backend, core, sdk, infra, cli). Read the doc map in .opencode/agents/doc-aware-engineer.md, then load the docs.",
+      "description": "Load relevant project docs before making changes",
+      "agent": "doc-aware-engineer"
     }
   },
   "agent": {
     "error-fixer": {
       "description": "Diagnoses and fixes errors detected in CLI logs. Trigger with 'opencode fix' or when a command fails repeatedly.",
+      "mode": "subagent"
+    },
+    "doc-aware-engineer": {
+      "description": "Reads project manuals and docs before making changes. Trigger with 'opencode doc-aware' or when asked to engineer code with doc context.",
       "mode": "subagent"
     }
   }

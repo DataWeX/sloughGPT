@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from collections import Counter
 import numpy as np
 
-logger = logging.getLogger("sloughgpt.evaluation")
+logger = logging.getLogger("man.evaluation")
 
 
 @dataclass

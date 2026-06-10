@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# SloughGPT CLI wrapper — use instead of `pip install -e .`
+set -e
+DIR="$(cd "$(dirname "$0")" && pwd)"
+exec python3 -m apps.cli.src.cli "$@"

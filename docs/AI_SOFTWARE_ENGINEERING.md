@@ -21,12 +21,12 @@ Refactor direction: **shrink `apps/api/server/main.py`** by moving more `APIRout
 ## Observability and operations
 
 - **Metrics** — `GET /metrics/prometheus` for scrape-friendly series; HTTP middleware for request stats.
-- **Logging** — Use module loggers (`logging.getLogger("sloughgpt")`); avoid `print` in server paths (background training logs exceptions).
+- **Logging** — Use module loggers (`logging.getLogger("man")`); avoid `print` in server paths (background training logs exceptions).
 - **Tracing** — Standard inference carries `trace_id`; propagate in new endpoints and SDK calls where useful.
 
 ## Safety and configuration
 
-- **Secrets** — Loaded via `apps/api/server/settings.py` (`get_security_settings()`): primary API key, JWT secret, optional multi-key list (`SLOUGHGPT_*` env vars; `SLAUGHGPT_*` still honored as legacy fallbacks). Never commit real keys.
+- **Secrets** — Loaded via `apps/api/server/settings.py` (`get_security_settings()`): primary API key, JWT secret, optional multi-key list (`MAN_*` env vars; `SLAUGHGPT_*` still honored as legacy fallbacks). Never commit real keys.
 - **Auth** — Enforce consistently on mutating routes when exposing publicly.
 - **Prompt/PII** — Treat prompts as sensitive data in logs and analytics; document retention if you add persistence.
 

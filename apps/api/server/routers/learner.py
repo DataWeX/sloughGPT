@@ -13,6 +13,7 @@ Flow:
 from __future__ import annotations
 from typing import Optional
 from fastapi import APIRouter, Query
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/learn", tags=["learner"])
 

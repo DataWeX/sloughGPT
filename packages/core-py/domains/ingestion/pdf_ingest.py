@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
 
-logger = logging.getLogger("sloughgpt.pdf_ingest")
+logger = logging.getLogger("man.pdf_ingest")
 
 try:
     from rich.console import Console

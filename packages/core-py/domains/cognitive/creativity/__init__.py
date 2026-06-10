@@ -16,7 +16,7 @@ class CreativityEngine(BaseComponent):
 
     def __init__(self) -> None:
         super().__init__("creativity_engine")
-        self.logger = logging.getLogger(f"sloughgpt.{self.component_name}")
+        self.logger = logging.getLogger(f"man.{self.component_name}")
 
         # Creativity state
         self.idea_pool = []

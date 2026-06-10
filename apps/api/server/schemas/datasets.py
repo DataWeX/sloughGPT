@@ -2,7 +2,7 @@
 Datasets Schemas - Data models for datasets
 """
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 
 class DatasetInfo(BaseModel):
@@ -13,6 +13,7 @@ class DatasetInfo(BaseModel):
     size_bytes: int = 0
     size_formatted: str = "Empty"
     num_samples: int = 0
+    vlm_metadata: Optional[Dict[str, Any]] = None
 
 
 class DatasetCreate(BaseModel):

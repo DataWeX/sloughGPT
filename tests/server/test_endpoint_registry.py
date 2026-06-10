@@ -281,15 +281,6 @@ class TestEndpointRegistry:
         r = client.get("/workflow/status")
         assert r.status_code == 200
 
-    # ── labs (non-GPU subset) ───────────────────────────────────────
-    def test_labs_model_info(self):
-        r = client.get("/labs/model-info")
-        assert r.status_code in {200, 503}
-
-    def test_labs_health(self):
-        r = client.get("/labs/health")
-        assert r.status_code in {200, 503}
-
     # ── meta-weights ────────────────────────────────────────────────
     def test_meta_weights_ping(self):
         r = client.get("/meta-weights/ping")

@@ -373,8 +373,8 @@ Presets.cpu_only()       # CPU training
 # Add to ~/.zshrc or ~/.bashrc (Intel Mac + some GPU stacks)
 export DYLD_INSERT_LIBRARIES=""
 ```
-- **API server** (`apps/api/server/main.py`): disables MPS by default on macOS via `domains.torch_runtime.apply_api_process_torch_env`. To experiment with MPS inference: `SLOUGHGPT_API_ENABLE_MPS=1` (before `import torch`). Linux/CUDA is no longer forced to CPU.
-- **Training DataLoaders**: `domains.torch_runtime.effective_dataloader_num_workers` clamps workers to `0` on macOS (fork + MPS deadlocks). See `packages/core-py/domains/torch_runtime.py` for env vars (`SLOUGHGPT_SKIP_TORCH_ENV`, etc.).
+- **API server** (`apps/api/server/main.py`): disables MPS by default on macOS via `domains.torch_runtime.apply_api_process_torch_env`. To experiment with MPS inference: `MAN_API_ENABLE_MPS=1` (before `import torch`). Linux/CUDA is no longer forced to CPU.
+- **Training DataLoaders**: `domains.torch_runtime.effective_dataloader_num_workers` clamps workers to `0` on macOS (fork + MPS deadlocks). See `packages/core-py/domains/torch_runtime.py` for env vars (`MAN_SKIP_TORCH_ENV`, etc.).
 
 ### Docker not running?
 ```bash

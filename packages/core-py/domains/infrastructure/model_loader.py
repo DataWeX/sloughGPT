@@ -147,12 +147,23 @@ def load_hf_model(model_id: str, device: Optional[str] = None):
     except Exception:
         pass
 
-    tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id,
-        torch_dtype=torch.float32,
-        local_files_only=True,
-    )
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            torch_dtype=torch.float32,
+            local_files_only=True,
+        )
+        logger.info("%s loaded from local cache", model_id)
+    except OSError:
+        logger.info("%s not in cache — downloading from HuggingFace", model_id)
+        tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=False)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            torch_dtype=torch.float32,
+            local_files_only=False,
+        )
+        logger.info("%s downloaded successfully", model_id)
 
     if resolved == "mps":
         model = model.to("mps")
@@ -164,5 +175,7 @@ def load_hf_model(model_id: str, device: Optional[str] = None):
     model.eval()
 
     verify_model_integrity(model, model_id, tokenizer)
+
+    logger.info("Model %s → %s (device=%s)", model_id, resolved, next(model.parameters()).device)
 
     return model, tokenizer, resolved

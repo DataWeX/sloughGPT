@@ -7,6 +7,23 @@ from . import functional
 from . import utils as nn_utils
 
 
+def _to_tensor(x):
+    """Convert nested structures to Tensors."""
+    import sys
+    T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
+    if T is None:
+        return x
+    if isinstance(x, T.Tensor):
+        return x
+    if isinstance(x, (tuple, list)):
+        return type(x)(_to_tensor(v) for v in x)
+    if isinstance(x, dict):
+        return {k: _to_tensor(v) for k, v in x.items()}
+    if isinstance(x, np.ndarray):
+        return T.Tensor(x)
+    return x
+
+
 class Module:
     def __init__(self):
         self._parameters = {}
@@ -15,21 +32,32 @@ class Module:
 
     def __call__(self, *args, **kwargs):
         import sys
-        result = self.forward(*args, **kwargs)
         T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
-        if T is not None and isinstance(result, T.Tensor):
-            return result
-        if T is not None:
-            return T.Tensor(result)
-        return result
+        # Convert numpy inputs to Tensor for autograd
+        args = tuple(T.Tensor(a) if isinstance(a, np.ndarray) else a for a in args)
+        kwargs = {k: T.Tensor(v) if isinstance(v, np.ndarray) else v for k, v in kwargs.items()}
+        result = self.forward(*args, **kwargs)
+        return _to_tensor(result)
 
     def forward(self, *args, **kwargs):
         raise NotImplementedError
 
+    def _collect_params(self, obj, result, recurse, T):
+        if isinstance(obj, Module):
+            if recurse:
+                result.extend(obj.parameters(recurse))
+        elif T is not None and isinstance(obj, T.Tensor) and obj.requires_grad:
+            result.append(obj)
+        elif isinstance(obj, (list, tuple)):
+            for item in obj:
+                self._collect_params(item, result, recurse, T)
+
     def parameters(self, recurse=True):
+        import sys
+        T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
         result = []
         for v in self.__dict__.values():
-            if isinstance(v, Module): result.extend(v.parameters(recurse))
+            self._collect_params(v, result, recurse, T)
         for p in self._parameters.values():
             if p is not None: result.append(p)
         return result
@@ -115,16 +143,21 @@ class Linear(Module):
         import sys
         super().__init__()
         T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
-        self.weight = T.Tensor(np.random.randn(out_features, in_features).astype(np.float32) * math.sqrt(1.0/in_features)) if T else np.random.randn(out_features, in_features).astype(np.float32)
-        self.bias = T.Tensor(np.zeros(out_features, dtype=np.float32)) if T and bias else None
+        scale = math.sqrt(1.0 / in_features)
+        self.weight = T.Tensor(np.random.randn(out_features, in_features).astype(np.float32) * scale, requires_grad=True) if T else np.random.randn(out_features, in_features).astype(np.float32)
+        self.bias = T.Tensor(np.zeros(out_features, dtype=np.float32), requires_grad=True) if T and bias else None
         self.in_features = in_features; self.out_features = out_features
 
     def forward(self, x):
         import sys
-        d = x.data if hasattr(x, 'data') else x
-        out = np.matmul(d, self.weight.data.T if hasattr(self.weight, 'data') else self.weight.T)
+        T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
+        if not isinstance(x, T.Tensor) and hasattr(x, 'data'):
+            x = x.data if not isinstance(x, T.Tensor) else x
+        if not isinstance(x, T.Tensor):
+            x = T.Tensor(x)
+        out = x @ self.weight.T
         if self.bias is not None:
-            out = out + (self.bias.data if hasattr(self.bias, 'data') else self.bias)
+            out = out + self.bias
         return out
 
 
@@ -226,20 +259,55 @@ class Conv1d(Module):
         return result
 
 
+def _embedding_lookup(weight, indices):
+    """Embedding lookup with autograd support.
+    weight: Tensor (vocab, dim)
+    indices: Tensor (...,) of integer indices
+    Returns: Tensor (..., dim)
+    """
+    import sys
+    T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
+    if T is None:
+        T = type(weight)
+    w_req = isinstance(weight, T.Tensor) and weight.requires_grad
+    idx_np = indices.data.astype(np.int64) if isinstance(indices, T.Tensor) else np.asarray(indices, dtype=np.int64)
+    idx_np = np.clip(idx_np, 0, weight.shape[0] - 1)
+    result_data = weight.data[idx_np]
+    out = T.Tensor(result_data, requires_grad=w_req, _children=(weight,) if w_req else ())
+    _vocab = weight.shape[0]; _dim = weight.shape[1]; _idx = idx_np
+    def bk(g):
+        if w_req:
+            if weight.grad is None:
+                weight.grad = T.Tensor(np.zeros((_vocab, _dim), dtype=np.float32))
+            g_np = g.data if isinstance(g, T.Tensor) else np.asarray(g)
+            # Accumulate gradients at each index position
+            flat_idx = _idx.ravel()
+            for i in range(_vocab):
+                mask = (flat_idx == i)
+                if mask.any():
+                    grad_sum = g_np.reshape(-1, _dim)[mask].sum(axis=0)
+                    weight.grad.data[i] += grad_sum
+    out._backward_fn = bk if w_req else None
+    return out
+
+
 class Embedding(Module):
     def __init__(self, num_embeddings, embedding_dim, padding_idx=None, max_norm=None):
         import sys
         super().__init__()
         T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
-        self.weight = T.Tensor(np.random.randn(num_embeddings, embedding_dim).astype(np.float32) * 0.1) if T else np.random.randn(num_embeddings, embedding_dim).astype(np.float32)
+        self.weight = T.Tensor(np.random.randn(num_embeddings, embedding_dim).astype(np.float32) * 0.1, requires_grad=True) if T else np.random.randn(num_embeddings, embedding_dim).astype(np.float32)
         self.num_embeddings = num_embeddings; self.embedding_dim = embedding_dim
         self.padding_idx = padding_idx
 
     def forward(self, x):
-        wd = self.weight.data if hasattr(self.weight, 'data') else self.weight
-        idx = x.data.astype(int).flatten() if hasattr(x, 'data') else x.astype(int).flatten()
-        idx = np.clip(idx, 0, self.num_embeddings - 1)
-        return wd[idx].reshape(*(x.data.shape if hasattr(x, 'data') else x.shape), self.embedding_dim)
+        import sys
+        T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
+        if not isinstance(x, T.Tensor) and hasattr(x, 'data'):
+            x = x.data if not isinstance(x, T.Tensor) else x
+        if not isinstance(x, T.Tensor):
+            x = T.Tensor(x)
+        return _embedding_lookup(self.weight, x.long())
 
 
 class LayerNorm(Module):
@@ -249,29 +317,38 @@ class LayerNorm(Module):
         self.normalized_shape = normalized_shape
         self.eps = eps; self.elementwise_affine = elementwise_affine
         T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
-        if isinstance(normalized_shape, int):
-            self.weight = T.Tensor(np.ones(normalized_shape, dtype=np.float32)) if T and elementwise_affine else None
-            self.bias = T.Tensor(np.zeros(normalized_shape, dtype=np.float32)) if T and elementwise_affine else None
+        shape = (normalized_shape,) if isinstance(normalized_shape, int) else normalized_shape
+        if elementwise_affine:
+            self.weight = T.Tensor(np.ones(shape, dtype=np.float32), requires_grad=True) if T else None
+            self.bias = T.Tensor(np.zeros(shape, dtype=np.float32), requires_grad=True) if T else None
         else:
-            self.weight = T.Tensor(np.ones(normalized_shape, dtype=np.float32)) if T and elementwise_affine else None
-            self.bias = T.Tensor(np.zeros(normalized_shape, dtype=np.float32)) if T and elementwise_affine else None
+            self.weight = None; self.bias = None
 
     def forward(self, x):
-        d = x.data if hasattr(x, 'data') else x
-        axis = tuple(range(-len(self.normalized_shape), 0)) if isinstance(self.normalized_shape, tuple) else -1
-        mean = d.mean(axis=axis, keepdims=True); var = d.var(axis=axis, keepdims=True)
-        out = (d - mean) / np.sqrt(var + self.eps)
-        if self.elementwise_affine:
-            wd = self.weight.data if hasattr(self.weight, 'data') else self.weight
-            bd = self.bias.data if hasattr(self.bias, 'data') else self.bias
-            w = wd if wd is not None else 1.0
-            b = bd if bd is not None else 0.0
-            sh = [1] * len(d.shape)
-            if isinstance(self.normalized_shape, int): sh[-1] = self.normalized_shape
+        import sys
+        T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
+        if not isinstance(x, T.Tensor) and hasattr(x, 'data'):
+            x = x.data if not isinstance(x, T.Tensor) else x
+        if not isinstance(x, T.Tensor):
+            x = T.Tensor(x)
+        axis = tuple(range(-len(self.normalized_shape if isinstance(self.normalized_shape, tuple) else (self.normalized_shape,)), 0))
+        mean = x.mean(dim=axis, keepdim=True)
+        centered = x - mean
+        var = (centered ** 2).mean(dim=axis, keepdim=True)
+        out = centered / (var + self.eps).sqrt()
+        if self.elementwise_affine and self.weight is not None:
+            w = self.weight; b = self.bias
+            # Reshape to broadcast over non-last dims
+            sh = [1] * len(out.shape)
+            if isinstance(self.normalized_shape, int):
+                sh[-1] = int(self.normalized_shape)
             else:
-                for i, s in enumerate(self.normalized_shape): sh[i - len(self.normalized_shape)] = s
-            out = out * np.reshape(w, sh) + np.reshape(b, sh)
-        return out.astype(np.float32)
+                for i, s in enumerate(self.normalized_shape):
+                    sh[i - len(self.normalized_shape)] = int(s)
+            w_reshaped = w.reshape(*sh)
+            b_reshaped = b.reshape(*sh)
+            out = out * w_reshaped + b_reshaped
+        return out
 
 
 class BatchNorm1d(Module):
@@ -327,70 +404,92 @@ class Dropout(Module):
     def __init__(self, p=0.5, inplace=False):
         super().__init__(); self.p = p; self.inplace = inplace
     def forward(self, x):
-        if self.training:
-            mask = np.random.rand(*(x.data.shape if hasattr(x, 'data') else x.shape)) > self.p
-            d = x.data if hasattr(x, 'data') else x
-            return (d * mask) / (1 - self.p)
-        return x.data if hasattr(x, 'data') else x
+        import sys
+        T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
+        if not isinstance(x, T.Tensor) and hasattr(x, 'data'):
+            x = x.data if not isinstance(x, T.Tensor) else x
+        if not isinstance(x, T.Tensor):
+            x = T.Tensor(x)
+        if self.training and self.p > 0:
+            mask = T.Tensor(np.random.rand(*x.shape) > self.p, dtype=np.float32)
+            return x * mask / (1.0 - self.p)
+        return x
 
 
 class Dropout2d(Module):
     def __init__(self, p=0.5, inplace=False):
         super().__init__(); self.p = p; self.inplace = inplace
     def forward(self, x):
-        if self.training:
-            d = x.data if hasattr(x, 'data') else x
-            mask = np.random.rand(1, d.shape[1], d.shape[2], 1) > self.p
-            return (d * mask) / (1 - self.p)
-        return x.data if hasattr(x, 'data') else x
+        import sys
+        T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
+        if not isinstance(x, T.Tensor) and hasattr(x, 'data'):
+            x = x.data if not isinstance(x, T.Tensor) else x
+        if not isinstance(x, T.Tensor):
+            x = T.Tensor(x)
+        if self.training and self.p > 0:
+            mask = T.Tensor(np.random.rand(1, x.shape[1], x.shape[2], 1) > self.p, dtype=np.float32)
+            return x * mask / (1.0 - self.p)
+        return x
 
 
 class GELU(Module):
     def forward(self, x):
-        d = x.data if hasattr(x, 'data') else x
-        return 0.5 * d * (1 + np.tanh(np.sqrt(2/np.pi) * (d + 0.044715 * d**3)))
+        import sys
+        T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
+        if not isinstance(x, T.Tensor): x = T.Tensor(x)
+        return T.gelu(x)
 
 
 class ReLU(Module):
     def forward(self, x):
-        d = x.data if hasattr(x, 'data') else x
-        return np.maximum(d, 0)
+        import sys
+        T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
+        if not isinstance(x, T.Tensor): x = T.Tensor(x)
+        return T.relu(x)
 
 
 class LeakyReLU(Module):
     def __init__(self, negative_slope=0.01):
         super().__init__(); self.negative_slope = negative_slope
     def forward(self, x):
-        d = x.data if hasattr(x, 'data') else x
-        return np.where(d > 0, d, d * self.negative_slope)
+        import sys
+        T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
+        if not isinstance(x, T.Tensor): x = T.Tensor(x)
+        return T.leaky_relu(x, self.negative_slope)
 
 
 class Sigmoid(Module):
     def forward(self, x):
-        d = x.data if hasattr(x, 'data') else x
-        return 1.0 / (1.0 + np.exp(-np.clip(d, -500, 500)))
+        import sys
+        T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
+        if not isinstance(x, T.Tensor): x = T.Tensor(x)
+        return T.sigmoid(x)
 
 
 class Tanh(Module):
     def forward(self, x):
-        d = x.data if hasattr(x, 'data') else x
-        return np.tanh(d)
+        import sys
+        T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
+        if not isinstance(x, T.Tensor): x = T.Tensor(x)
+        return T.tanh(x)
 
 
 class Softmax(Module):
     def __init__(self, dim=-1): super().__init__(); self.dim = dim
     def forward(self, x):
-        d = x.data if hasattr(x, 'data') else x
-        e = np.exp(d - d.max(axis=self.dim, keepdims=True))
-        return e / e.sum(axis=self.dim, keepdims=True)
+        import sys
+        T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
+        if not isinstance(x, T.Tensor): x = T.Tensor(x)
+        return T.softmax(x, dim=self.dim)
 
 
 class LogSoftmax(Module):
     def __init__(self, dim=-1): super().__init__(); self.dim = dim
     def forward(self, x):
-        d = x.data if hasattr(x, 'data') else x
-        e = np.exp(d - d.max(axis=self.dim, keepdims=True))
-        return np.log(e / e.sum(axis=self.dim, keepdims=True))
+        import sys
+        T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
+        if not isinstance(x, T.Tensor): x = T.Tensor(x)
+        return T.log(T.softmax(x, dim=self.dim))
 
 
 class Flatten(Module):
@@ -610,7 +709,7 @@ class GRU(Module):
 
 
 class TransformerEncoderLayer(Module):
-    def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1, batch_first=True):
+    def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1, batch_first=False):
         super().__init__()
         self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=batch_first)
         self.linear1 = Linear(d_model, dim_feedforward); self.dropout = Dropout(dropout); self.linear2 = Linear(dim_feedforward, d_model)
@@ -626,7 +725,7 @@ class TransformerEncoderLayer(Module):
 
 
 class TransformerDecoderLayer(Module):
-    def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1, batch_first=True):
+    def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1, batch_first=False):
         super().__init__()
         self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=batch_first)
         self.multihead_attn = MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=batch_first)
@@ -645,7 +744,7 @@ class TransformerDecoderLayer(Module):
 
 
 class Transformer(Module):
-    def __init__(self, d_model=512, nhead=8, num_encoder_layers=6, num_decoder_layers=6, dim_feedforward=2048, dropout=0.1, batch_first=True):
+    def __init__(self, d_model=512, nhead=8, num_encoder_layers=6, num_decoder_layers=6, dim_feedforward=2048, dropout=0.1, batch_first=False):
         super().__init__()
         self.encoder_layers = ModuleList([TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout, batch_first) for _ in range(num_encoder_layers)])
         self.decoder_layers = ModuleList([TransformerDecoderLayer(d_model, nhead, dim_feedforward, dropout, batch_first) for _ in range(num_decoder_layers)])
@@ -658,7 +757,7 @@ class Transformer(Module):
 
 
 class MultiheadAttention(Module):
-    def __init__(self, embed_dim, num_heads, dropout=0.0, bias=True, add_bias_kv=False, kdim=None, vdim=None, batch_first=True):
+    def __init__(self, embed_dim, num_heads, dropout=0.0, bias=True, add_bias_kv=False, kdim=None, vdim=None, batch_first=False):
         import math
         super().__init__()
         self.embed_dim = embed_dim; self.num_heads = num_heads; self.batch_first = batch_first
@@ -668,25 +767,34 @@ class MultiheadAttention(Module):
         self.dropout = Dropout(dropout)
 
     def forward(self, query, key, value, attn_mask=None, key_padding_mask=None):
+        import sys
+        _T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
         q = self.q_proj(query); k = self.k_proj(key); v = self.v_proj(value)
+        # Ensure internal format is (T, N, E) where T=seq_len, N=batch
         if self.batch_first:
+            # Input is (N, T, E) → transpose to (T, N, E)
             q = q.transpose(0, 1); k = k.transpose(0, 1); v = v.transpose(0, 1)
-        N, T, _ = q.data.shape if hasattr(q, 'data') else q.shape; N2, S, _ = k.data.shape if hasattr(k, 'data') else k.shape
-        qd = q.data if hasattr(q, 'data') else q
-        kd = k.data if hasattr(k, 'data') else k
-        vd = v.data if hasattr(v, 'data') else v
-        q_data = qd.reshape(T, N*self.num_heads, self.head_dim).transpose(1, 0)
-        k_data = kd.reshape(S, N*self.num_heads, self.head_dim).transpose(1, 0)
-        v_data = vd.reshape(S, N*self.num_heads, self.head_dim).transpose(1, 0)
-        attn = np.matmul(q_data, k_data) / np.sqrt(self.head_dim)
+        # q/k/v: (T, N, embed_dim)
+        T_len = q.shape[0]; N_batch = q.shape[1]; S = k.shape[0]
+        H = self.num_heads; D = self.head_dim
+        # Reshape to (T_len, N_batch*H, D) then transpose to (N_batch*H, T_len, D)
+        q = q.reshape(T_len, N_batch * H, D).transpose(0, 1)
+        k = k.reshape(S, N_batch * H, D).transpose(0, 1)
+        v = v.reshape(S, N_batch * H, D).transpose(0, 1)
+        # Attention scores: (N_batch*H, T_len, S)
+        scale = 1.0 / (D ** 0.5)
+        attn = (q @ k.transpose(1, 2)) * scale
         if attn_mask is not None:
-            am = attn_mask.data if hasattr(attn_mask, 'data') else np.asarray(attn_mask)
-            attn = np.where(am, attn, -1e9)
-        probs = np.exp(attn - attn.max(axis=-1, keepdims=True))
-        probs = probs / probs.sum(axis=-1, keepdims=True)
-        out = np.matmul(probs, v_data).transpose(1, 0).reshape(T, N, -1)
-        if self.batch_first: out = out.transpose(0, 1)
-        return self.out_proj(out), np.zeros((N, T, T))
+            if not isinstance(attn_mask, _T.Tensor):
+                attn_mask = _T.Tensor(attn_mask)
+            # attn_mask is (T_len, S) or broadcastable
+            attn = _T.where(attn_mask, attn, -1e9)
+        probs = _T.softmax(attn, dim=-1)
+        probs = self.dropout(probs)
+        out = (probs @ v).transpose(0, 1).reshape(T_len, N_batch, -1)
+        if self.batch_first:
+            out = out.transpose(0, 1)
+        return self.out_proj(out), _T.zeros(N_batch, T_len, T_len)
 
 
 class RNNCellBase(Module):

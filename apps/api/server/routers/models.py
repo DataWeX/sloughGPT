@@ -17,82 +17,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/models", tags=["models"])
 
-_hf_home = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface")))
-HF_CACHE = _hf_home / "hub"
+from domains.infrastructure.model_size import compute_model_size_gb, format_size_gb, is_model_cached
 
-
-def _get_hf_model_size_gb(model_id: str) -> Optional[float]:
-    """Get actual model size from HuggingFace Hub API or local cache.
-
-    Priority:
-    1. HuggingFace Hub API — safetensors total bytes (always accurate)
-    2. Local HF cache — only if download is complete (verified by safetensors presence)
-    3. Known models dict — verified sizes for common models
-    """
-    # 1. Always try Hub API first — gives the true intended size
-    try:
-        from huggingface_hub import HfApi
-        api = HfApi()
-        info = api.model_info(model_id)
-        if info and info.safetensors and info.safetensors.total:
-            return round(info.safetensors.total / (1024 ** 3), 2)
-    except Exception:
-        pass
-
-    # 2. Check HF cache — but only if download looks complete
-    cache_dir = HF_CACHE / f"models--{model_id.replace('/', '--')}"
-    if cache_dir.exists():
-        # Check for actual safetensors files (not just metadata/partial downloads)
-        safetensors_files = list(cache_dir.rglob("*.safetensors"))
-        if safetensors_files:
-            total_bytes = sum(f.stat().st_size for f in safetensors_files)
-            if total_bytes > 0:
-                return round(total_bytes / (1024 ** 3), 2)
-
-    # 3. Known verified sizes (safetensors on disk)
-    known_sizes_gb = {
-        "gpt2": 0.52,
-        "openai-community/gpt2": 0.52,
-        "gpt2-medium": 1.48,
-        "openai-community/gpt2-medium": 1.48,
-        "gpt2-large": 3.15,
-        "openai-community/gpt2-large": 3.15,
-        "gpt2-xl": 6.18,
-        "openai-community/gpt2-xl": 6.18,
-        "distilgpt2": 0.34,
-        "distilbert/distilgpt2": 0.34,
-        "EleutherAI/gpt-neo-125M": 0.52,
-        "EleutherAI/gpt-neo-1.3B": 5.4,
-        "EleutherAI/gpt-j-6B": 24.6,
-        "microsoft/phi-2": 5.4,
-        "microsoft/Phi-3-mini-128k-instruct": 7.6,
-        "microsoft/Phi-3.5-mini-instruct": 7.6,
-        "TinyLlama/TinyLlama-1.1B-Chat-v1.0": 4.4,
-        "Qwen/Qwen2-0.5B-Instruct": 1.2,
-        "Qwen/Qwen2.5-0.5B-Instruct": 1.2,
-        "Qwen/Qwen2.5-1.5B-Instruct": 3.4,
-        "Qwen/Qwen2.5-3B-Instruct": 6.8,
-        "Qwen/Qwen2.5-7B-Instruct": 15.2,
-        "meta-llama/Llama-3.2-1B-Instruct": 2.5,
-        "meta-llama/Llama-3.2-3B-Instruct": 6.8,
-        "meta-llama/Llama-3.1-8B-Instruct": 16.1,
-        "google/gemma-2b": 4.8,
-        "google/gemma-7b": 16.8,
-        "HuggingFaceH4/zephyr-7b-beta": 14.2,
-        "mistralai/Mistral-7B-v0.1": 14.2,
-        "bigscience/bloom-560m": 2.1,
-        "bigscience/bloom-1b7": 6.6,
-        "facebook/opt-125m": 0.48,
-        "facebook/opt-350m": 1.4,
-        "Salesforce/codegen-350M-mono": 1.4,
-        "Salesforce/codegen-2B-mono": 7.8,
-    }
-    # Try full model_id first, then short name (after `/`)
-    size = known_sizes_gb.get(model_id)
-    if size is not None:
-        return size
-    short = model_id.split("/")[-1] if "/" in model_id else model_id
-    return known_sizes_gb.get(short)
+_hf_cache_dir = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"
 
 
 @router.get("", response_model=List[ModelInfo])
@@ -111,22 +38,23 @@ async def list_models():
             model_id=current["model_id"],
             status=ModelStatus.LOADED,
             device=current["device"],
-            parameters=124439808,
-            vocab_size=50257,
+            parameters=current.get("parameters", 0),
+            vocab_size=current.get("vocab_size", 0),
             loaded_at=current.get("loaded_at"),
         ))
     
     # Add available HuggingFace models (skip if already listed as loaded)
     loaded_ids = {m.model_id for m in models}
     hf_models = ctrl.list_hf_models()
-    for model_id in hf_models:
+    for entry in hf_models:
+        model_id = entry["model_id"]
         if model_id not in loaded_ids:
             models.append(ModelInfo(
                 model_id=model_id,
                 status=ModelStatus.AVAILABLE,
                 device="cpu",
-                parameters=124439808,
-                vocab_size=50257,
+                parameters=entry.get("parameters", 0),
+                vocab_size=entry.get("vocab_size", 0),
                 loaded_at=None,
             ))
     
@@ -146,6 +74,49 @@ async def unload_model():
     """Unload current model"""
     ctrl = get_models_controller()
     return ctrl.unload_model()
+
+
+@router.post("/vlm-load")
+async def load_vlm(model_dir: str, model_id: str = "vlm"):
+    """Load a trained VLM as a chat provider.
+
+    Args:
+        model_dir: Path to VLM output directory (contains final/, connector.pt, vlm_config.json)
+        model_id: Identifier for the loaded model
+
+    Returns:
+        Status and model info
+    """
+    from pathlib import Path as _Path
+    from domains.models.provider import load_vlm_provider, register_provider, get_provider
+
+    d = _Path(model_dir)
+    if not (d / "final").is_dir():
+        raise HTTPException(status_code=400, detail=f"No final/ directory in {model_dir}")
+    if not (d / "connector.pt").is_file():
+        raise HTTPException(status_code=400, detail=f"No connector.pt in {model_dir}")
+    if not (d / "vlm_config.json").is_file():
+        raise HTTPException(status_code=400, detail=f"No vlm_config.json in {model_dir}")
+
+    try:
+        provider = load_vlm_provider(str(d), model_id_str=model_id)
+        register_provider("vlm", provider)
+
+        # Switch the default router to use VLM as the text provider
+        default_router = get_provider("default")
+        if default_router is not None and hasattr(default_router, "set_text_provider"):
+            default_router.set_text_provider("vlm")
+            logger.info("Default router now using VLM provider: %s", model_id)
+
+        return {
+            "status": "loaded",
+            "model_id": model_id,
+            "type": "vlm",
+            "vision_encoder": provider.metadata.get("vision_encoder"),
+            "llm": provider.metadata.get("llm"),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load VLM: {e}")
 
 
 @router.get("/current")
@@ -170,8 +141,11 @@ async def list_hf_models(q: Optional[str] = None):
     model_ids = ctrl.list_hf_models(q)
 
     def _is_cached(model_id: str) -> bool:
-        cache_dir = HF_CACHE / f"models--{model_id.replace('/', '--')}"
-        return cache_dir.exists()
+        try:
+            return is_model_cached(model_id)
+        except Exception as exc:
+            logger.error("is_model_cached(%s) failed: %s", model_id, exc)
+            return False
 
     def _cache_model_id(cache_dir_name: str) -> Optional[str]:
         """Convert a HF cache directory name like 'models--Qwen--Qwen2.5-0.5B-Instruct'
@@ -184,28 +158,29 @@ async def list_hf_models(q: Optional[str] = None):
     seen_ids = set()
 
     for m in model_ids:
-        seen_ids.add(m)
-        size_gb = _get_hf_model_size_gb(m)
+        mid = m["model_id"] if isinstance(m, dict) else m
+        seen_ids.add(mid)
+        size_gb = compute_model_size_gb(mid)
         models_out.append({
-            "id": m,
-            "name": m,
-            "hf_model_id": m,
+            "id": mid,
+            "name": mid,
+            "hf_model_id": mid,
             "source": "huggingface",
             "size_mb": size_gb * 1024 if size_gb is not None else None,
             "size_gb": size_gb,
-            "cached": _is_cached(m),
+            "cached": _is_cached(mid),
         })
 
     # Scan local HF cache for models not in the Hub list
-    if not q and HF_CACHE.exists():
+    if not q and _hf_cache_dir.exists():
         try:
-            for entry in HF_CACHE.iterdir():
+            for entry in _hf_cache_dir.iterdir():
                 if not entry.name.startswith("models--") or not entry.is_dir():
                     continue
                 cached_id = _cache_model_id(entry.name)
                 if cached_id and cached_id not in seen_ids:
                     seen_ids.add(cached_id)
-                    size_gb = _get_hf_model_size_gb(cached_id)
+                    size_gb = compute_model_size_gb(cached_id)
                     models_out.append({
                         "id": cached_id,
                         "name": cached_id,
@@ -213,7 +188,7 @@ async def list_hf_models(q: Optional[str] = None):
                         "source": "huggingface",
                         "size_mb": size_gb * 1024 if size_gb is not None else None,
                         "size_gb": size_gb,
-                        "cached": True,
+                        "cached": _is_cached(cached_id),
                     })
         except Exception:
             pass
@@ -352,3 +327,77 @@ async def cancel_download(model_id: str) -> Dict[str, Any]:
     if mgr.cancel(model_id):
         return {"status": "cancelled", "model_id": model_id}
     return {"status": "not_found", "model_id": model_id}
+
+
+@router.post("/download/{model_id:path}/verify")
+async def verify_download(model_id: str) -> Dict[str, Any]:
+    """Verify a downloaded model's weight files against Hub SHA-256 checksums.
+    Returns verification result and on-disk size."""
+    from downcraft import verify as sg_verify
+    from downcraft.hf_hub import get_cache_dir
+
+    try:
+        cache_dir = get_cache_dir(model_id)
+        refs_main = cache_dir / "refs" / "main"
+        if not refs_main.exists():
+            return {"status": "not_cached", "model_id": model_id}
+        ok = sg_verify.verify_model(model_id)
+        missing = sg_verify.list_missing_files(model_id)
+        size_str = format_size_gb(compute_model_size_gb(model_id)) or "—"
+        return {
+            "status": "verified" if ok else "corrupt",
+            "model_id": model_id,
+            "verified": ok,
+            "missing_files_count": len(missing),
+            "missing_files": missing,
+            "size_on_disk": size_str,
+        }
+    except Exception as e:
+        return {"status": "error", "model_id": model_id, "error": str(e)}
+
+
+@router.post("/download/{model_id:path}/retry")
+async def retry_download(model_id: str) -> Dict[str, Any]:
+    """Redownload a cached model (cleanup + fresh download)."""
+    from domains.infrastructure.download_manager import (
+        cleanup_incomplete,
+        get_download_manager,
+        is_download_complete,
+    )
+
+    if is_download_complete(model_id):
+        cleanup_incomplete(model_id)
+
+    mgr = get_download_manager()
+    if mgr.is_downloading(model_id):
+        return {"status": "already_downloading", "model_id": model_id}
+
+    asyncio.create_task(_run_download(model_id, 0))
+    return {"status": "started", "model_id": model_id}
+
+
+@router.get("/cache-usage")
+async def cache_usage() -> Dict[str, Any]:
+    """Total disk usage of the HuggingFace model cache (fast — walks blobs/ only)."""
+    cache = _hf_cache_dir
+    if not cache.exists():
+        return {"total_bytes": 0, "total_gb": 0, "model_count": 0, "cache_dir": str(cache)}
+    total = 0
+    count = 0
+    for entry in cache.iterdir():
+        if entry.name.startswith("models--") and entry.is_dir():
+            blobs = entry / "blobs"
+            if blobs.is_dir():
+                for f in blobs.iterdir():
+                    if f.is_file():
+                        try:
+                            total += f.stat().st_size
+                        except OSError:
+                            pass
+            count += 1
+    return {
+        "total_bytes": total,
+        "total_gb": round(total / (1024**3), 2),
+        "model_count": count,
+        "cache_dir": str(cache),
+    }

@@ -8,7 +8,6 @@ Subdomains:
 """
 
 from .chat.domain import ChatDomain, get_chat_domain
-from .benchmark.domain import BenchmarkDomain, get_benchmark_domain
 
 # Companion is in companion.py (not companion/)
 from .companion import get_companion, CompanionSystem
@@ -69,8 +68,6 @@ from ._framework import (
 __all__ = [
     "ChatDomain",
     "get_chat_domain",
-    "BenchmarkDomain",
-    "get_benchmark_domain",
     "get_companion",
     "CompanionSystem",
     # Core domain exports

@@ -12,9 +12,6 @@ declare namespace Cypress {
     /** Mock /datasets endpoint */
     mockDatasets(): Chainable<null>
 
-    /** Mock /benchmark/compare endpoint */
-    mockCompare(): Chainable<null>
-
     /** Mock /system/* and /health/detailed endpoints */
     mockSystem(): Chainable<null>
 

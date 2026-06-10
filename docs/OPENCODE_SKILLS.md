@@ -395,7 +395,7 @@ class ComponentName(BaseComponent, IInterface):
 
     def __init__(self) -> None:
         super().__init__("component_name")
-        self.logger = logging.getLogger(f"sloughgpt.{self.component_name}")
+        self.logger = logging.getLogger(f"man.{self.component_name}")
         # Initialize state
         self.is_initialized = False
 

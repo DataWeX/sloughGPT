@@ -1,7 +1,7 @@
 """
 Centralized server configuration from environment.
 
-Canonical prefixes are ``SLOUGHGPT_*`` (matching the project name SloughGPT).
+Canonical prefixes are ``MAN_*`` (matching the project name SloughGPT).
 The misspelled ``SLAUGHGPT_*`` vars are still read as fallbacks for existing deployments.
 """
 
@@ -20,7 +20,7 @@ def _parse_api_key_list(raw: str) -> frozenset[str]:
 from typing import Optional
 
 def _getenv_prefer_canonical(canonical: str, legacy_typo: str) -> Optional[str]:
-    """Prefer ``SLOUGHGPT_*``; if unset or blank, use legacy ``SLAUGHGPT_*`` (historical typo)."""
+    """Prefer ``MAN_*``; if unset or blank, use legacy ``SLAUGHGPT_*`` (historical typo)."""
     v = os.getenv(canonical)
     if v is not None and str(v).strip() != "":
         return str(v)
@@ -31,7 +31,7 @@ def _getenv_prefer_canonical(canonical: str, legacy_typo: str) -> Optional[str]:
 
 
 def _getenv_api_keys_raw() -> str:
-    c = os.getenv("SLOUGHGPT_API_KEYS")
+    c = os.getenv("MAN_API_KEYS")
     if c is not None and str(c).strip() != "":
         return str(c)
     return os.getenv("SLAUGHGPT_API_KEYS", "")
@@ -51,9 +51,9 @@ class SecuritySettings:
 @lru_cache(maxsize=1)
 def get_security_settings() -> SecuritySettings:
     """Return cached security settings (singleton for the process)."""
-    primary = _getenv_prefer_canonical("SLOUGHGPT_API_KEY", "SLAUGHGPT_API_KEY") or secrets.token_urlsafe(32)
+    primary = _getenv_prefer_canonical("MAN_API_KEY", "SLAUGHGPT_API_KEY") or secrets.token_urlsafe(32)
     jwt_secret = (
-        _getenv_prefer_canonical("SLOUGHGPT_JWT_SECRET", "SLAUGHGPT_JWT_SECRET") or secrets.token_urlsafe(64)
+        _getenv_prefer_canonical("MAN_JWT_SECRET", "SLAUGHGPT_JWT_SECRET") or secrets.token_urlsafe(64)
     )
     keys = set(_parse_api_key_list(_getenv_api_keys_raw()))
     if primary:

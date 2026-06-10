@@ -88,7 +88,7 @@ if [ "$all_found" = true ]; then
     echo "To start SloughGPT:"
     echo "  API + web (one terminal): ./scripts/dev-stack.sh  |  make dev-stack  |  npm install && npm run dev:stack"
     echo "  Or separately:"
-    echo "  1. API:  SLOUGHGPT_API_PORT=8000 python3 apps/api/server/main.py"
+    echo "  1. API:  MAN_API_PORT=8000 python3 apps/api/server/main.py"
     echo "     or:  cd apps/api/server && python3 -m uvicorn main:app --reload --port 8000"
     echo "  2. Web: cd apps/web && npm run dev"
     echo ""

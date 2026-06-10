@@ -2,7 +2,8 @@
  * Dataset Controller — axios-based API for dataset management.
  */
 
-import { apiGet, apiPost, apiPatch, apiDelete, apiClient } from './http-client'
+import { apiGet, apiPost, apiPatch, apiDelete } from './http-client'
+import { PUBLIC_API_URL } from './config'
 import { useAuthStore } from './auth'
 
 export type ImportSource = 'github' | 'huggingface' | 'url' | 'local' | 'kaggle' | 'csv' | 'isbn'
@@ -31,6 +32,12 @@ export interface Dataset {
   samples?: number
   created_at: string
   tags?: string[]
+  vlm_metadata?: {
+    type: string
+    image_dir: string
+    image_count: number
+    auto_captioned: boolean
+  }
 }
 
 export interface GitHubRepo {
@@ -84,7 +91,7 @@ export const datasetController = {
 
   async export(id: string, format: string = 'jsonl'): Promise<Blob> {
     const token = useAuthStore.getState().token
-    const res = await fetch(`${apiClient.defaults.baseURL}/datasets/${id}/export`, {
+    const res = await fetch(`${PUBLIC_API_URL}/datasets/${id}/export`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

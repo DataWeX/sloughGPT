@@ -3,57 +3,6 @@ export interface ChatMessage {
   content: string;
 }
 
-// ============ Federated Learning Interfaces ============
-
-export interface LayerDelta {
-  layer_name: string;
-  old_weights: number[];
-  new_weights: number[];
-  learning_rate?: number;
-  training_samples?: number;
-  loss?: number;
-}
-
-export interface FederatedUpdate {
-  client_id: string;
-  token: string;
-  model_version: number;
-  layer_deltas: LayerDelta[];
-  total_training_samples?: number;
-  metadata?: Record<string, unknown>;
-}
-
-export interface FederatedRegistration {
-  client_id: string;
-  device_info?: Record<string, unknown>;
-  current_model_version?: number;
-}
-
-export interface FederatedRegistrationResponse {
-  client_id: string;
-  token: string;
-  registered: boolean;
-}
-
-export interface FederatedUpdateResponse {
-  received: boolean;
-  update_id: string;
-  pending_updates: number;
-}
-
-export interface FederatedModelUpdate {
-  version: number;
-  weights: Record<string, { shape: number[]; data: number[] }>;
-  is_update_available: boolean;
-}
-
-export interface FederatedStatus {
-  global_version: number;
-  pending_updates: number;
-  registered_clients: number;
-  last_aggregation: string | null;
-}
-
 export interface GenerateRequest {
   prompt: string;
   max_new_tokens?: number;
@@ -71,8 +20,6 @@ export interface ChatRequest {
   max_new_tokens?: number;
   top_p?: number;
   top_k?: number;
-  /** Ignored for wire format; server uses `POST /chat` vs `POST /chat/stream`. */
-  stream?: boolean;
 }
 
 export interface GenerationResult {
@@ -86,7 +33,6 @@ export interface ChatResult {
   message: ChatMessage;
   model: string;
   inference_time_ms?: number;
-  /** Present when the API includes token counts on `POST /chat`. */
   tokens_generated?: number;
 }
 
@@ -115,12 +61,6 @@ export interface MetricsData {
   cache_hit_rate: number;
 }
 
-/**
- * Tracked HTTP training job from `GET /training/jobs` / `GET /training/jobs/{id}`.
- * When `checkpoint` is present (often after completion), it usually references native
- * `step_*.pt` with char vocab (`stoi` / `itos` / `chars`); see `docs/policies/CONTRIBUTING.md`
- * (*Checkpoint vocabulary*).
- */
 export interface TrainingJob {
   id: string
   name?: string
@@ -141,16 +81,9 @@ export interface TrainingJob {
   error?: string
 }
 
-/**
- * Body for POST /training/start (matches server `TrainingRequest`).
- *
- * Trainer `step_*.pt` on the server includes `stoi` / `itos` / `chars`; see
- * `docs/policies/CONTRIBUTING.md` (*Checkpoint vocabulary*).
- */
 export interface TrainingStartPayload {
   name: string
   model: string
-  /** Exactly one of ``dataset``, ``manifest_uri``, or ``dataset_ref`` is required. */
   dataset?: string
   manifest_uri?: string
   dataset_ref?: { dataset_id: string; version: string; manifest_uri: string }
@@ -166,21 +99,60 @@ export interface TrainingStartPayload {
   eval_interval?: number
 }
 
-/** Legacy aliases ``model_name`` / ``dataset_id`` (mapped to ``model`` / ``dataset``). */
-export type LegacyTrainingStartInput = Omit<
-  Partial<TrainingStartPayload>,
-  'model' | 'dataset' | 'name'
-> & {
-  model_name: string
-  dataset_id: string
-  name?: string
-}
-
 export interface Experiment {
   experiment_id: string;
   name: string;
   description?: string;
   metrics?: Record<string, number>;
+}
+
+export interface SoulProfile {
+  name: string;
+  description: string;
+  traits?: Record<string, number>;
+}
+
+export interface KnowledgeItem {
+  id: string;
+  content: string;
+  topic?: string;
+  source?: string;
+  importance?: number;
+}
+
+export interface KnowledgSearchResult {
+  id: string;
+  content: string;
+  relevance: number;
+}
+
+export interface TokenizerStats {
+  vocab_size: number;
+  num_tokens: number;
+  num_merges?: number;
+}
+
+export interface SystemMetrics {
+  cpu_percent: number;
+  memory_percent: number;
+  disk_percent: number;
+  uptime_seconds: number;
+  gpu_available: boolean;
+  gpu_percent?: number;
+}
+
+export interface WorkflowStatus {
+  status: string;
+  active: boolean;
+  feedback_count: number;
+  last_aggregation?: string;
+}
+
+export interface FeedbackRecord {
+  session_id: string;
+  message_id: string;
+  score: number;
+  tags?: string[];
 }
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -227,53 +199,6 @@ export class SloughGPTClient {
     }
   }
 
-  private _bodyForTrainingStart(
-    input: TrainingStartPayload | LegacyTrainingStartInput
-  ): Record<string, unknown> {
-    const i = input as LegacyTrainingStartInput & Partial<TrainingStartPayload>
-    const {
-      model_name,
-      dataset_id,
-      model,
-      dataset,
-      name,
-      manifest_uri,
-      dataset_ref,
-      epochs,
-      batch_size,
-      learning_rate,
-      n_embed,
-      n_layer,
-      n_head,
-      block_size,
-      max_steps,
-      log_interval,
-      eval_interval,
-    } = i
-    const m = model ?? model_name
-    const body: Record<string, unknown> = {}
-    if (epochs !== undefined) body.epochs = epochs
-    if (batch_size !== undefined) body.batch_size = batch_size
-    if (learning_rate !== undefined) body.learning_rate = learning_rate
-    if (n_embed !== undefined) body.n_embed = n_embed
-    if (n_layer !== undefined) body.n_layer = n_layer
-    if (n_head !== undefined) body.n_head = n_head
-    if (block_size !== undefined) body.block_size = block_size
-    if (max_steps !== undefined) body.max_steps = max_steps
-    if (log_interval !== undefined) body.log_interval = log_interval
-    if (eval_interval !== undefined) body.eval_interval = eval_interval
-    if (m !== undefined) body.model = m
-    if (name !== undefined) body.name = name
-    else if (typeof m === 'string') body.name = `${m}-training`
-    if (dataset_ref !== undefined) body.dataset_ref = dataset_ref
-    else if (manifest_uri !== undefined) body.manifest_uri = manifest_uri
-    else {
-      const d = dataset ?? dataset_id
-      if (d !== undefined) body.dataset = d
-    }
-    return body
-  }
-
   private async request<T>(
     method: string,
     endpoint: string,
@@ -312,6 +237,8 @@ export class SloughGPTClient {
     }
   }
 
+  // ============ Health & Info ============
+
   async health(): Promise<HealthStatus> {
     return this.request<HealthStatus>('GET', '/health');
   }
@@ -324,13 +251,19 @@ export class SloughGPTClient {
     return this.request('GET', '/health/ready');
   }
 
+  async detailedHealth(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/health/detailed');
+  }
+
   async info(): Promise<SystemInfo> {
     return this.request<SystemInfo>('GET', '/info');
   }
 
+  // ============ Inference & Generation ============
+
   async generate(request: GenerateRequest): Promise<GenerationResult> {
     this.log('info', `Generating: "${request.prompt.slice(0, 50)}..."`);
-    return this.request<GenerationResult>('POST', '/generate', {
+    return this.request<GenerationResult>('POST', '/inference/generate', {
       prompt: request.prompt,
       max_new_tokens: request.max_new_tokens || 100,
       temperature: request.temperature || 0.8,
@@ -344,7 +277,7 @@ export class SloughGPTClient {
   async *generateStream(
     request: GenerateRequest
   ): AsyncGenerator<string, void, unknown> {
-    const url = `${this.baseUrl}/generate/stream`;
+    const url = `${this.baseUrl}/inference/generate/stream`;
     this.log('info', `Streaming: "${request.prompt.slice(0, 50)}..."`);
 
     const response = await fetch(url, {
@@ -395,7 +328,6 @@ export class SloughGPTClient {
       model?: string;
       tokens_generated?: number;
       error?: string;
-      choices?: Array<{ message?: { role?: string; content?: string } }>;
     }>('POST', '/chat', {
       messages: request.messages,
       model: request.model,
@@ -405,15 +337,8 @@ export class SloughGPTClient {
       top_k: request.top_k ?? 50,
     });
 
-    let content = '';
-    const choiceContent = raw.choices?.[0]?.message?.content;
-    if (choiceContent != null && choiceContent !== '') {
-      content = String(choiceContent);
-    } else if (typeof raw.text === 'string') {
-      content = raw.text;
-    }
-
-    if (typeof raw.error === 'string' && raw.error.trim() !== '' && !content.trim()) {
+    const content = raw.text ?? '';
+    if (raw.error && !content) {
       throw new SloughGPTError(raw.error, 400);
     }
 
@@ -488,56 +413,272 @@ export class SloughGPTClient {
           if (e instanceof SloughGPTError) {
             throw e;
           }
-          /* ignore malformed frames */
         }
       }
     }
   }
 
-  async batchGenerate(prompts: string[]): Promise<GenerationResult[]> {
-    return this.request<GenerationResult[]>('POST', '/generate/batch', { prompts });
-  }
+  // ============ Models ============
 
   async listModels(): Promise<ModelInfo[]> {
     return this.request<ModelInfo[]>('GET', '/models');
-  }
-
-  async getModel(modelId: string): Promise<ModelInfo> {
-    return this.request<ModelInfo>('GET', `/models/${modelId}`);
   }
 
   async loadModel(modelId: string): Promise<{ status: string }> {
     return this.request('POST', '/models/load', { model_id: modelId });
   }
 
-  async metrics(): Promise<MetricsData> {
-    return this.request<MetricsData>('GET', '/metrics');
+  async unloadModel(): Promise<{ status: string }> {
+    return this.request('POST', '/models/unload');
   }
 
-  /**
-   * Start a tracked training job (`POST /training/start`).
-   * Trainer `step_*.pt` on the server embeds char vocab for eval; see
-   * `docs/policies/CONTRIBUTING.md` (*Checkpoint vocabulary*).
-   */
-  async startTraining(input: TrainingStartPayload | LegacyTrainingStartInput): Promise<TrainingJob> {
-    return this.request<TrainingJob>('POST', '/training/start', this._bodyForTrainingStart(input));
+  async getCurrentModel(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/models/current');
   }
 
-  /**
-   * Poll one job (`GET /training/jobs/{id}`). Completed jobs may set `checkpoint`;
-   * native `step_*.pt` embeds char vocab — `docs/policies/CONTRIBUTING.md` (*Checkpoint vocabulary*).
-   */
+  async listHuggingFaceModels(query?: string, limit?: number): Promise<Record<string, unknown>[]> {
+    const params = new URLSearchParams();
+    if (query) params.set('q', query);
+    if (limit) params.set('limit', String(limit));
+    const qs = params.toString();
+    return this.request<Record<string, unknown>[]>('GET', `/models/hf${qs ? '?' + qs : ''}`);
+  }
+
+  // ============ Sessions ============
+
+  async createSession(): Promise<Record<string, unknown>> {
+    return this.request('POST', '/chat/sessions');
+  }
+
+  async listSessions(): Promise<Record<string, unknown>[]> {
+    return this.request<Record<string, unknown>[]>('GET', '/chat/sessions');
+  }
+
+  async getSession(sessionId: string): Promise<Record<string, unknown>> {
+    return this.request('GET', `/chat/sessions/${sessionId}`);
+  }
+
+  async deleteSession(sessionId: string): Promise<Record<string, unknown>> {
+    return this.request('DELETE', `/chat/sessions/${sessionId}`);
+  }
+
+  async saveSessionContext(sessionId: string, context: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.request('POST', `/session/${sessionId}/context`, context);
+  }
+
+  async getSessionMessages(sessionId: string): Promise<Record<string, unknown>[]> {
+    return this.request<Record<string, unknown>[]>('GET', `/session/${sessionId}/messages`);
+  }
+
+  async *regenerateStream(sessionId: string): AsyncGenerator<string, void, unknown> {
+    const url = `${this.baseUrl}/session/${sessionId}/regenerate`;
+    const response = await fetch(url, { method: 'POST', headers: this.headers });
+    if (!response.ok) throw new SloughGPTError(`HTTP ${response.status}`, response.status);
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new SloughGPTError('No response body');
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        const trimmed = line.trimEnd();
+        if (!trimmed.startsWith('data:')) continue;
+        const payload = trimmed.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
+        try {
+          const envelope = JSON.parse(payload) as { data?: { token?: string }; status?: string };
+          if (envelope.status === 'complete') return;
+          if (envelope.data?.token) yield envelope.data.token;
+        } catch { /* skip */ }
+      }
+    }
+  }
+
+  // ============ Souls ============
+
+  async listSouls(): Promise<SoulProfile[]> {
+    return this.request<SoulProfile[]>('GET', '/souls');
+  }
+
+  async getCurrentSoul(): Promise<SoulProfile> {
+    return this.request<SoulProfile>('GET', '/souls/current');
+  }
+
+  async switchSoul(name: string, checkpointName?: string): Promise<Record<string, unknown>> {
+    const body: Record<string, unknown> = {};
+    if (checkpointName) body.checkpoint_name = checkpointName;
+    return this.request('POST', `/souls/switch/${name}`, body);
+  }
+
+  // ============ Knowledge ============
+
+  async listKnowledge(): Promise<KnowledgeItem[]> {
+    return this.request<KnowledgeItem[]>('GET', '/knowledge');
+  }
+
+  async addKnowledge(content: string, topic?: string): Promise<KnowledgeItem> {
+    return this.request<KnowledgeItem>('POST', '/knowledge', { content, topic });
+  }
+
+  async deleteKnowledge(itemId: string): Promise<Record<string, unknown>> {
+    return this.request('DELETE', `/knowledge/${itemId}`);
+  }
+
+  async searchKnowledge(query: string): Promise<KnowledgSearchResult[]> {
+    return this.request<KnowledgSearchResult[]>('GET', `/knowledge/search?q=${encodeURIComponent(query)}`);
+  }
+
+  async getKnowledgeStats(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/knowledge/stats');
+  }
+
+  async getKnowledgeTopics(): Promise<string[]> {
+    return this.request<string[]>('GET', '/knowledge/topics');
+  }
+
+  async ingestKnowledgeUrl(url: string): Promise<Record<string, unknown>> {
+    return this.request('POST', '/knowledge/ingest-url', { url });
+  }
+
+  // ============ Tokenizer ============
+
+  async getTokenizerStats(): Promise<TokenizerStats> {
+    return this.request<TokenizerStats>('GET', '/tokenizer/stats');
+  }
+
+  async tokenize(text: string): Promise<{ tokens: number[]; token_count: number }> {
+    return this.request('POST', '/tokenizer/tokenize', { text });
+  }
+
+  async trainTokenizer(text: string, vocabSize?: number): Promise<Record<string, unknown>> {
+    return this.request('POST', '/tokenizer/train', { text, vocab_size: vocabSize });
+  }
+
+  // ============ System ============
+
+  async getSystemMetrics(): Promise<SystemMetrics> {
+    return this.request<SystemMetrics>('GET', '/system/metrics');
+  }
+
+  async getSystemInfo(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/system/info');
+  }
+
+  async getSystemDisk(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/system/disk');
+  }
+
+  // ============ Companion / Personality ============
+
+  async getPersonalities(): Promise<Array<{ name: string; description: string }>> {
+    return this.request('GET', '/personalities');
+  }
+
+  async setPersonality(personality: string): Promise<{ status: string }> {
+    return this.request('POST', '/companion/personality', { personality });
+  }
+
+  async getCompanionPrompt(): Promise<{ prompt: string }> {
+    return this.request('GET', '/companion/prompt');
+  }
+
+  async listCompanionPresets(): Promise<Record<string, unknown>[]> {
+    return this.request<Record<string, unknown>[]>('GET', '/companion/presets');
+  }
+
+  // ============ Training ============
+
+  async startTraining(input: TrainingStartPayload): Promise<TrainingJob> {
+    return this.request<TrainingJob>('POST', '/training/start', input);
+  }
+
   async getTrainingStatus(jobId: string): Promise<TrainingJob> {
     return this.request<TrainingJob>('GET', `/training/jobs/${jobId}`);
   }
 
-  /**
-   * List tracked jobs (`GET /training/jobs`). Same `checkpoint` / `step_*.pt` semantics as
-   * {@link getTrainingStatus}.
-   */
   async listTrainingJobs(): Promise<TrainingJob[]> {
     return this.request<TrainingJob[]>('GET', '/training/jobs');
   }
+
+  async deleteTrainingJob(jobId: string): Promise<Record<string, unknown>> {
+    return this.request('DELETE', `/training/jobs/${jobId}`);
+  }
+
+  async stopTraining(): Promise<Record<string, unknown>> {
+    return this.request('POST', '/training/control/stop');
+  }
+
+  async pauseTraining(): Promise<Record<string, unknown>> {
+    return this.request('POST', '/training/control/pause');
+  }
+
+  async resumeTraining(): Promise<Record<string, unknown>> {
+    return this.request('POST', '/training/control/resume');
+  }
+
+  async getTrainingRecoveryStats(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/recovery/stats');
+  }
+
+  async abandonRecovery(jobId: string): Promise<Record<string, unknown>> {
+    return this.request('DELETE', `/recovery/abandon/${jobId}`);
+  }
+
+  // ============ Auto-Train ============
+
+  async startAutoTrain(config: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.request('POST', '/auto-train/start', config);
+  }
+
+  async stopAutoTrain(): Promise<Record<string, unknown>> {
+    return this.request('POST', '/auto-train/stop');
+  }
+
+  async getAutoTrainStatus(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/auto-train/status');
+  }
+
+  async listAutoTrainCheckpoints(): Promise<Record<string, unknown>[]> {
+    return this.request<Record<string, unknown>[]>('GET', '/auto-train/checkpoints');
+  }
+
+  async deleteAutoTrainCheckpoint(name: string): Promise<Record<string, unknown>> {
+    return this.request('DELETE', `/auto-train/checkpoints/${name}`);
+  }
+
+  async loadAutoTrainCheckpoint(name: string): Promise<Record<string, unknown>> {
+    return this.request('POST', `/auto-train/checkpoints/${name}/load`);
+  }
+
+  // ============ Feedback ============
+
+  async recordFeedback(feedback: FeedbackRecord): Promise<Record<string, unknown>> {
+    return this.request('POST', '/feedback/workflow-record', feedback);
+  }
+
+  async getFeedbackStats(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/feedback/stats/summary');
+  }
+
+  // ============ Workflow ============
+
+  async getWorkflowStatus(): Promise<WorkflowStatus> {
+    return this.request<WorkflowStatus>('GET', '/workflow/status');
+  }
+
+  // ============ Metrics ============
+
+  async metrics(): Promise<MetricsData> {
+    return this.request<MetricsData>('GET', '/metrics');
+  }
+
+  // ============ Experiments ============
 
   async createExperiment(
     name: string,
@@ -567,163 +708,49 @@ export class SloughGPTClient {
     });
   }
 
-  async getPersonalities(): Promise<Array<{ name: string; description: string }>> {
-    return this.request('GET', '/personalities');
-  }
+  // ============ Datasets ============
 
-  async setPersonality(personality: string): Promise<{ status: string }> {
-    return this.request('POST', '/personalities', { personality });
-  }
-
-  async listDatasets(): Promise<unknown[]> {
+  async listDatasets(): Promise<Record<string, unknown>[]> {
     return this.request('GET', '/datasets');
   }
 
-  async getDataset(datasetId: string): Promise<unknown> {
+  async getDataset(datasetId: string): Promise<Record<string, unknown>> {
     return this.request('GET', `/datasets/${datasetId}`);
   }
 
-  async getDatasetStats(datasetId: string): Promise<unknown> {
+  async getDatasetStats(datasetId: string): Promise<Record<string, unknown>> {
     return this.request('GET', `/datasets/${datasetId}/stats`);
   }
 
-  async inferenceGenerate(request: GenerateRequest): Promise<GenerationResult> {
-    return this.request<GenerationResult>('POST', '/inference/generate', request);
+  async importDatasetLocal(path: string, name?: string): Promise<Record<string, unknown>> {
+    return this.request('POST', '/datasets/import/local', { path, name });
   }
 
-  async *inferenceStream(
-    request: GenerateRequest
-  ): AsyncGenerator<string, void, unknown> {
-    const url = `${this.baseUrl}/inference/generate/stream`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: this.headers,
-      body: JSON.stringify(request),
-    });
-
-    if (!response.ok) {
-      throw new SloughGPTError(`HTTP ${response.status}`, response.status);
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) throw new SloughGPTError('No response body');
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-      for (const line of lines) {
-        if (line.startsWith('data:')) {
-          const data = line.slice(5).trim();
-          if (data && data !== '[DONE]') yield data;
-        }
-      }
-    }
+  async importDatasetGitHub(repo: string, name?: string): Promise<Record<string, unknown>> {
+    return this.request('POST', '/datasets/import/github', { repo, name });
   }
 
-  async inferenceStats(): Promise<unknown> {
-    return this.request('GET', '/inference/stats');
+  async importDatasetUrl(url: string, name?: string): Promise<Record<string, unknown>> {
+    return this.request('POST', '/datasets/import/url', { url, name });
   }
 
-  async inferenceBatch(prompts: string[]): Promise<unknown> {
-    return this.request('POST', '/inference/batch', { prompts });
-  }
+  // ============ Rate Limit ============
 
-  async registerModel(model: {
-    name: string;
-    model_type?: string;
-    description?: string;
-    config?: Record<string, unknown>;
-  }): Promise<unknown> {
-    return this.request('POST', '/registry/models', model);
-  }
-
-  async listRegisteredModels(): Promise<unknown[]> {
-    return this.request('GET', '/registry/models');
-  }
-
-  async getRegisteredModel(modelId: string): Promise<unknown> {
-    return this.request('GET', `/registry/models/${modelId}`);
-  }
-
-  async unregisterModel(modelId: string): Promise<unknown> {
-    return this.request('DELETE', `/registry/models/${modelId}`);
-  }
-
-  async recordToRegistry(
-    modelId: string,
-    metrics: {
-      latency_ms?: number;
-      tokens_generated?: number;
-      cache_hit?: boolean;
-      error?: string;
-    }
-  ): Promise<unknown> {
-    return this.request('POST', `/registry/models/${modelId}/record`, metrics);
-  }
-
-  async getRegistryMetrics(modelId: string): Promise<unknown> {
-    return this.request('GET', `/registry/models/${modelId}/metrics`);
-  }
-
-  async getBestRegisteredModel(criteria: {
-    metric?: string;
-    order?: 'asc' | 'desc';
-    model_type?: string;
-  }): Promise<unknown> {
-    return this.request('GET', '/registry/best', criteria);
-  }
-
-  async getRegistryStats(): Promise<unknown> {
-    return this.request('GET', '/registry/stats');
-  }
-
-  async runBenchmark(config: {
-    model?: string;
-    num_samples?: number;
-    dataset?: string;
-  }): Promise<unknown> {
-    return this.request('POST', '/benchmark/run', config);
-  }
-
-  async runPerplexityBenchmark(config: {
-    model?: string;
-    dataset?: string;
-  }): Promise<unknown> {
-    return this.request('POST', '/benchmark/perplexity', config);
-  }
-
-  async compareBenchmarks(modelIds: string[]): Promise<unknown> {
-    return this.request('GET', `/benchmark/compare?models=${modelIds.join(',')}`);
-  }
-
-  async clearCache(): Promise<unknown> {
-    return this.request('DELETE', '/cache');
-  }
-
-  async cacheStats(): Promise<unknown> {
-    return this.request('GET', '/cache/stats');
-  }
-
-  async rateLimitStatus(): Promise<unknown> {
+  async rateLimitStatus(): Promise<Record<string, unknown>> {
     return this.request('GET', '/rate-limit/status');
   }
 
-  async rateLimitCheck(resource: string, cost?: number): Promise<unknown> {
-    return this.request('GET', '/rate-limit/check', { resource, cost });
+  // ============ Security ============
+
+  async getAuditLog(): Promise<Record<string, unknown>[]> {
+    return this.request<Record<string, unknown>[]>('GET', '/security/audit');
   }
 
-  async getAuditLog(): Promise<unknown> {
-    return this.request('GET', '/security/audit');
+  async getSecurityKeys(): Promise<Record<string, unknown>[]> {
+    return this.request<Record<string, unknown>[]>('GET', '/security/keys');
   }
 
-  async getSecurityKeys(): Promise<unknown> {
-    return this.request('GET', '/security/keys');
-  }
+  // ============ Auth ============
 
   async getToken(username: string, password: string): Promise<unknown> {
     return this.request('POST', '/auth/token', { username, password });
@@ -733,42 +760,32 @@ export class SloughGPTClient {
     return this.request('POST', '/auth/refresh', { refresh_token: refreshToken });
   }
 
-  // ============ Federated Learning Methods ============
+  // ============ Benchmark ============
 
-  async federatedRegister(registration: FederatedRegistration): Promise<FederatedRegistrationResponse> {
-    this.log('info', `Registering client: ${registration.client_id}`);
-    return this.request<FederatedRegistrationResponse>('POST', '/federated/register', registration);
+  async runBenchmark(config: {
+    model?: string;
+    num_samples?: number;
+    dataset?: string;
+  }): Promise<Record<string, unknown>> {
+    return this.request('POST', '/benchmark/run', config);
   }
 
-  async federatedUpdate(update: FederatedUpdate): Promise<FederatedUpdateResponse> {
-    this.log('info', `Sending federated update from: ${update.client_id}`);
-    return this.request<FederatedUpdateResponse>('POST', '/federated/update', {
-      client_id: update.client_id,
-      token: update.token,
-      model_version: update.model_version,
-      layer_deltas: update.layer_deltas,
-      total_training_samples: update.total_training_samples,
-      metadata: update.metadata,
-    });
+  async runPerplexityBenchmark(config: {
+    model?: string;
+    dataset?: string;
+  }): Promise<Record<string, unknown>> {
+    return this.request('POST', '/benchmark/perplexity', config);
   }
 
-  async federatedGetModel(clientId: string, currentVersion: number): Promise<FederatedModelUpdate> {
-    this.log('info', `Checking for model update: ${clientId} (v${currentVersion})`);
-    return this.request<FederatedModelUpdate>('GET', `/federated/model?client_id=${clientId}&current_version=${currentVersion}`);
+  async getBenchmarkMetrics(): Promise<Record<string, unknown>[]> {
+    return this.request<Record<string, unknown>[]>('GET', '/benchmark/metrics');
   }
 
-  async federatedStatus(): Promise<FederatedStatus> {
-    return this.request<FederatedStatus>('GET', '/federated/status');
+  async getBenchmarkStats(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/benchmark/stats');
   }
 
-  async federatedAggregate(): Promise<{ message: string; new_version: number; layers_updated: string[] }> {
-    this.log('info', 'Triggering federated aggregation');
-    return this.request('POST', '/federated/aggregate');
-  }
-
-  async federatedReset(): Promise<{ message: string }> {
-    return this.request('DELETE', '/federated/reset');
-  }
+  // ============ Convenience Methods ============
 
   async quickGenerate(prompt: string): Promise<string> {
     const result = await this.generate({ prompt });

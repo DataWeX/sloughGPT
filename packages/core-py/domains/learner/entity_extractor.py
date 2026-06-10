@@ -18,7 +18,7 @@ import logging
 from typing import List, Set, Tuple
 from collections import defaultdict
 
-logger = logging.getLogger("sloughgpt.learner.entity_extractor")
+logger = logging.getLogger("man.learner.entity_extractor")
 
 # Relationship patterns: (regex, relationship_type)
 _RELATION_PATTERNS = [

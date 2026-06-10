@@ -2468,30 +2468,44 @@ class SloSGD:
                 g = self._v[pid]
             p.data -= self.lr*g
             p.grad = None
-        _invalidate_gpu_cache()
 
 
 class SloAdam:
-    def __init__(self, lr=0.001, b1=0.9, b2=0.999, eps=1e-8, max_grad_norm=None):
-        self.lr = lr; self.b1 = b1; self.b2 = b2; self.eps = eps; self.max_grad_norm = max_grad_norm
+    def __init__(self, lr=0.001, b1=0.9, b2=0.999, eps=1e-8, weight_decay=0.0, max_grad_norm=None):
+        self.lr = lr; self.b1 = b1; self.b2 = b2; self.eps = eps
+        self.weight_decay = weight_decay; self.max_grad_norm = max_grad_norm
         self._m: Dict[int, Any] = {}; self._v: Dict[int, Any] = {}; self._t = 0
+
+    @staticmethod
+    def _zeros_like(t):
+        """Create zeros array matching the input's framework (numpy or torch)."""
+        if isinstance(t, np.ndarray):
+            return np.zeros_like(t)
+        return t.new_zeros(t.shape, dtype=t.dtype)
+
+    @staticmethod
+    def _sqrt(t):
+        if isinstance(t, np.ndarray):
+            return np.sqrt(t)
+        return t.sqrt()
 
     def step(self, params):
         if self.max_grad_norm is not None:
             clip_grad_norm_(params, self.max_grad_norm)
-        self._t += 1
+        self._t += 1; b1 = self.b1; b2 = self.b2; eps = self.eps; lr = self.lr; wd = self.weight_decay
         for p in params:
             if p.grad is None or not p.requires_grad: continue
             g = p.grad.data; pid = id(p)
-            if pid not in self._m: self._m[pid] = np.zeros_like(p.data)
-            if pid not in self._v: self._v[pid] = np.zeros_like(p.data)
-            self._m[pid] = self.b1*self._m[pid]+(1-self.b1)*g
-            self._v[pid] = self.b2*self._v[pid]+(1-self.b2)*(g**2)
-            mh = self._m[pid]/(1-self.b1**self._t); vh = self._v[pid]/(1-self.b2**self._t)
-            upd = self.lr*mh/(np.sqrt(vh)+self.eps)
+            if wd != 0:
+                g = g + wd * p.data
+            if pid not in self._m: self._m[pid] = self._zeros_like(p.data)
+            if pid not in self._v: self._v[pid] = self._zeros_like(p.data)
+            self._m[pid] = b1*self._m[pid]+(1-b1)*g
+            self._v[pid] = b2*self._v[pid]+(1-b2)*(g**2)
+            mh = self._m[pid]/(1-b1**self._t); vh = self._v[pid]/(1-b2**self._t)
+            upd = lr*mh/(self._sqrt(vh)+eps)
             if upd.shape != p.data.shape: upd = upd.sum(axis=0)
             p.data -= upd; p.grad = None
-        _invalidate_gpu_cache()
 
 
 # =============================================================================
@@ -2510,29 +2524,32 @@ def _sanitize(obj):
 
 def export_to_sou(net: SloNet, path: str, include_weights=True) -> str:
     metadata = {
-        "version": SOU_VERSION, "soul_name": net.soul_name, "soul_traits": net.soul_traits,
+        "version": 3, "soul_name": net.soul_name, "soul_traits": net.soul_traits,
         "lineage": net.lineage, "system_prompt": net.system_prompt,
         "soul_signature": net.soul_signature(), "metadata": net.metadata,
         "created_at": net._created_at, "step": net._step,
     }
     json_bytes = json.dumps(_sanitize(metadata), allow_nan=False).encode()
-    # Pad JSON to 4-byte boundary so Float32Array offsets are aligned in WebGPU
-    padding = (4 - len(json_bytes) % 4) % 4
     with open(path, "wb") as f:
         f.write(SOU_MAGIC)
-        f.write(struct.pack("<I", SOU_VERSION))
-        f.write(struct.pack("<I", len(json_bytes) + padding))
+        f.write(struct.pack("<I", 3))
+        f.write(struct.pack("<I", len(json_bytes)))
         f.write(json_bytes)
-        f.write(b"\x00" * padding)
         if include_weights:
-            # SloTransformer saves named state dict for proper reloading
             if hasattr(net, "state_dict") and isinstance(net, SloTransformer):
-                weights = {k: v.tolist() for k, v in net.state_dict().items()}
+                state_items = list(net.state_dict().items())
             else:
-                weights = {f"p{i}": p.data.tolist() for i, p in enumerate(net.parameters())}
-            wj = json.dumps(_sanitize(weights), allow_nan=False).encode()
-            f.write(struct.pack("<I", len(wj)))
-            f.write(wj)
+                state_items = [(f"p{i}", p.data) for i, p in enumerate(net.parameters())]
+            params = [(k, np.asarray(v, dtype=np.float32)) for k, v in state_items]
+            f.write(struct.pack("<I", len(params)))
+            for key, arr in params:
+                name_bytes = key.encode()
+                f.write(struct.pack("<I", len(name_bytes)))
+                f.write(name_bytes)
+                f.write(struct.pack("<I", arr.ndim))
+                for dim in arr.shape:
+                    f.write(struct.pack("<I", dim))
+                f.write(arr.tobytes())
     with open(path+".meta.json", "w") as f:
         json.dump(_sanitize(metadata), f, indent=2)
     return path
@@ -2559,18 +2576,38 @@ def import_from_sou(path: str) -> SloNet:
     # Weight data starts after aligned JSON section
     weight_offset = 12 + json_len
 
-    # Check if weights are JSON (SloNet format) or PyTorch ZIP
-    pk_pos = raw.find(b"PK", weight_offset)
-    if pk_pos > 0:
-        weights = _load_pytorch_zip_weights(raw[pk_pos:])
-        if weights:
-            lineage = "slolib-pytorch"
-    else:
+    # Parse weight data after config JSON
+    if version >= 3:
+        # v3+ binary float32 format with shape info
         rem = raw[weight_offset:]
         if len(rem) >= 4:
-            wl = struct.unpack("<I", rem[:4])[0]
-            if 0 < wl <= len(rem) - 4:
-                weights = json.loads(rem[4:4+wl].decode())
+            num_params = struct.unpack("<I", rem[:4])[0]
+            pos = 4
+            for _ in range(num_params):
+                name_len = struct.unpack("<I", rem[pos:pos+4])[0]
+                pos += 4
+                name = rem[pos:pos+name_len].decode("utf-8")
+                pos += name_len
+                ndim = struct.unpack("<I", rem[pos:pos+4])[0]
+                pos += 4
+                shape = tuple(struct.unpack("<I", rem[pos+4*i:pos+4*i+4])[0] for i in range(ndim))
+                pos += 4 * ndim
+                count = int(np.prod(shape))
+                weights[name] = np.frombuffer(rem[pos:pos+count*4], dtype=np.float32).copy().reshape(shape)
+                pos += count * 4
+    else:
+        # v1/v2 JSON weights or PyTorch ZIP
+        pk_pos = raw.find(b"PK", weight_offset)
+        if pk_pos > 0:
+            weights = _load_pytorch_zip_weights(raw[pk_pos:])
+            if weights:
+                lineage = "slolib-pytorch"
+        else:
+            rem = raw[weight_offset:]
+            if len(rem) >= 4:
+                wl = struct.unpack("<I", rem[:4])[0]
+                if 0 < wl <= len(rem) - 4:
+                    weights = json.loads(rem[4:4+wl].decode())
 
     # Detect SloTransformer from lineage or named weight keys
     is_transformer = (
@@ -2685,9 +2722,13 @@ def _load_pytorch_zip_weights(zip_data: bytes) -> Dict[str, np.ndarray]:
 
 def souls_from_directory(dir_path) -> List[SloNet]:
     souls = []
+    import logging
+    _log = logging.getLogger(__name__)
     for p in Path(dir_path).glob("*.soul"):
-        try: souls.append(import_from_sou(str(p)))
-        except: pass
+        try:
+            souls.append(import_from_sou(str(p)))
+        except Exception as exc:
+            _log.warning("Failed to load soul %s: %s", p.name, exc)
     return souls
 
 

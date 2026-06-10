@@ -1,23 +1,3 @@
-/**
- * Composable HTTP client — axios-based with interceptors.
- *
- * Usage:
- *   import { apiClient } from '@/lib/http-client'
- *
- *   const models = await apiClient.get<Model[]>('/models')
- *   const result = await apiClient.post<Model>('/models/load', { model_id: 'gpt2' })
- *
- * Auth token is automatically injected from useAuthStore.
- * Errors are normalized to ApiError with status code + data.
- * Retries on 5xx / 429 / network errors (3 attempts with backoff).
- */
-
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosError } from 'axios'
-import { PUBLIC_API_URL } from './config'
-import { useAuthStore } from './auth'
-
-// ─── Error type ───────────────────────────────────────────────────────────────
-
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -29,151 +9,150 @@ export class ApiError extends Error {
   }
 }
 
-// ─── Request config extensions ─────────────────────────────────────────────────
+import { PUBLIC_API_URL } from './config'
+import { useAuthStore } from './auth'
 
 export interface RequestOptions {
-  /** AbortSignal for cancellation. */
   signal?: AbortSignal
-  /** Custom timeout in ms (default: 30s). */
   timeout?: number
-  /** Skip auth header injection. */
   noAuth?: boolean
-  /** Raw FormData / Blob — skip JSON serialization. */
   raw?: boolean
-  /** Progress callback for uploads. */
   onProgress?: (pct: number) => void
-  /** Extra headers to merge into the request. */
   headers?: Record<string, string>
+  silent?: boolean
 }
-
-// ─── Client factory ────────────────────────────────────────────────────────────
 
 const RETRYABLE_STATUSES = new Set([408, 429, 502, 503, 504])
 const MAX_RETRIES = 2
 const BASE_DELAY = 500
 
-export function createApiClient(baseURL: string): AxiosInstance {
-  const client: AxiosInstance = axios.create({
-    baseURL,
-    timeout: 30_000,
-    headers: { 'Content-Type': 'application/json' },
-  })
+async function request<T>(
+  method: string,
+  url: string,
+  body?: unknown,
+  opts?: RequestOptions,
+): Promise<T> {
+  const apiUrl = `${PUBLIC_API_URL}${url}`
+  const headers: Record<string, string> = {}
+  if (!opts?.raw) headers['Content-Type'] = 'application/json'
+  if (opts?.headers) Object.assign(headers, opts.headers)
+  if (!opts?.noAuth) {
+    const token = useAuthStore.getState().token
+    if (token) headers['Authorization'] = `Bearer ${token}`
+  }
 
-  // ── Request interceptor: inject auth token ─────────────────────────
-  client.interceptors.request.use(
-    (config) => {
-      if ((config as any)._noAuth === true) return config
-      const token = useAuthStore.getState().token
-      if (token) {
-        config.headers.set('Authorization', `Bearer ${token}`)
+  let retries = 0
+  while (true) {
+    try {
+      const res = await fetch(apiUrl, {
+        method,
+        headers,
+        body: opts?.raw ? (body as BodyInit) : body != null ? JSON.stringify(body) : undefined,
+        signal: opts?.signal,
+      })
+
+      if (!res.ok) {
+        const status = res.status
+        const isRetryable = RETRYABLE_STATUSES.has(status)
+        if (isRetryable && retries < MAX_RETRIES) {
+          retries++
+          await new Promise(r => setTimeout(r, BASE_DELAY * Math.pow(2, retries - 1)))
+          continue
+        }
+
+        const text = await res.text()
+        let detail: string | undefined
+        try { const j = JSON.parse(text); detail = j.detail ?? j.message ?? j.error }
+        catch { detail = text || res.statusText }
+        const message = Array.isArray(detail) ? detail.map((d: any) => d.msg).join('; ') : detail || 'Request failed'
+
+        if (!opts?.silent) {
+          const apiErr = new ApiError(message, status, { raw: text })
+          import('./error-store').then(({ useErrorStore }) => {
+            useErrorStore.getState().addError(apiErr, {
+              source: url,
+              title: status >= 500 ? 'Server Error' : status >= 400 ? `HTTP ${status}` : 'API Error',
+            })
+          })
+        }
+        throw new ApiError(message, status, { raw: text })
       }
-      return config
-    },
-    (error) => Promise.reject(error),
-  )
 
-  // ── Response interceptor: normalise errors + retry ─────────────────
-  let retryCount = 0
-  client.interceptors.response.use(
-    (response) => {
-      retryCount = 0
-      return response
-    },
-    async (error: AxiosError) => {
-      const status = error.response?.status ?? 0
-      const data = error.response?.data
-      const isRetryable = status === 0 || RETRYABLE_STATUSES.has(status)
+      const text = await res.text()
+      if (!text) return undefined as T
+      return JSON.parse(text) as T
+    } catch (e: any) {
+      if (e instanceof ApiError) throw e
+      const status = 0
+      const message = e.message === 'Failed to fetch' ? 'Connection unavailable' : (e.message || 'Request failed')
 
-      if (isRetryable && retryCount < MAX_RETRIES) {
-        retryCount++
-        const delay = BASE_DELAY * Math.pow(2, retryCount - 1)
-        await new Promise((r) => setTimeout(r, delay))
-        return client.request(error.config!)
+      if (!opts?.silent) {
+        const apiErr = new ApiError(message, status)
+        import('./error-store').then(({ useErrorStore }) => {
+          useErrorStore.getState().addError(apiErr, {
+            source: url,
+            title: 'Connection Error',
+          })
+        })
       }
 
-      retryCount = 0
-      const detail = (error.response?.data as any)?.detail
-      const message = Array.isArray(detail)
-        ? detail.map((d: any) => d.msg).join('; ')
-        : detail ??
-          error.response?.statusText ??
-          (status === 0 ? 'Connection unavailable' : error.message) ??
-          'Request failed'
-
-      return Promise.reject(new ApiError(message, status, data))
-    },
-  )
-
-  return client
+      if (retries < MAX_RETRIES) {
+        retries++
+        await new Promise(r => setTimeout(r, BASE_DELAY * Math.pow(2, retries - 1)))
+        continue
+      }
+      throw new ApiError(message, status)
+    }
+  }
 }
 
-// ── Shared singleton ───────────────────────────────────────────────────────────
+export async function apiGet<T>(url: string, params?: Record<string, string>, opts?: RequestOptions): Promise<T> {
+  const qs = params ? '?' + new URLSearchParams(params).toString() : ''
+  return request<T>('GET', url + qs, undefined, opts)
+}
 
-export const apiClient = createApiClient(PUBLIC_API_URL)
+export async function apiPost<T>(url: string, body?: unknown, opts?: RequestOptions): Promise<T> {
+  return request<T>('POST', url, body, opts)
+}
 
-// ── Typed request helpers (composable) ─────────────────────────────────────────
+export async function apiPut<T>(url: string, body?: unknown, opts?: RequestOptions): Promise<T> {
+  return request<T>('PUT', url, body, opts)
+}
 
-function buildConfig(opts?: RequestOptions): AxiosRequestConfig & { _noAuth?: boolean } {
+export async function apiDelete<T>(url: string, opts?: RequestOptions): Promise<T> {
+  return request<T>('DELETE', url, undefined, opts)
+}
+
+export async function apiPatch<T>(url: string, body?: unknown, opts?: RequestOptions): Promise<T> {
+  return request<T>('PATCH', url, body, opts)
+}
+
+function createApiClient(baseURL?: string) {
+  const prefix = baseURL ?? PUBLIC_API_URL
   return {
-    signal: opts?.signal,
-    timeout: opts?.timeout,
-    _noAuth: opts?.noAuth,
-    ...(opts?.headers ? { headers: opts.headers } : {}),
+    defaults: { baseURL: prefix },
+    get: <T>(url: string, config?: any) => {
+      const u = url.startsWith('/') ? `${prefix}${url}` : url
+      return apiGet<T>(u, config?.params, { signal: config?.signal, silent: config?._silent, noAuth: config?._noAuth }) as any
+    },
+    post: <T>(url: string, body?: any, config?: any) => {
+      const u = url.startsWith('/') ? `${prefix}${url}` : url
+      return apiPost<T>(u, body, { signal: config?.signal, silent: config?._silent, noAuth: config?._noAuth, raw: config?._raw }) as any
+    },
+    put: <T>(url: string, body?: any, config?: any) => {
+      const u = url.startsWith('/') ? `${prefix}${url}` : url
+      return apiPut<T>(u, body, { signal: config?.signal, silent: config?._silent, noAuth: config?._noAuth }) as any
+    },
+    delete: <T>(url: string, config?: any) => {
+      const u = url.startsWith('/') ? `${prefix}${url}` : url
+      return apiDelete<T>(u, { signal: config?.signal, silent: config?._silent, noAuth: config?._noAuth }) as any
+    },
+    patch: <T>(url: string, body?: any, config?: any) => {
+      const u = url.startsWith('/') ? `${prefix}${url}` : url
+      return apiPatch<T>(u, body, { signal: config?.signal, silent: config?._silent, noAuth: config?._noAuth }) as any
+    },
   }
 }
 
-export async function apiGet<T>(
-  url: string,
-  params?: Record<string, string>,
-  opts?: RequestOptions,
-): Promise<T> {
-  const res = await apiClient.get<T>(url, { ...buildConfig(opts), params })
-  return res.data
-}
-
-export async function apiPost<T>(
-  url: string,
-  body?: unknown,
-  opts?: RequestOptions,
-): Promise<T> {
-  if (opts?.raw) {
-    const res = await apiClient.post<T>(url, body as any, {
-      ...buildConfig(opts),
-      headers: { ...opts.headers, 'Content-Type': 'multipart/form-data' },
-      onUploadProgress: opts?.onProgress
-        ? (e) => e.total && opts.onProgress!(Math.round((e.loaded / e.total) * 100))
-        : undefined,
-    })
-    return res.data
-  }
-  const res = await apiClient.post<T>(url, body ?? null, buildConfig(opts))
-  return res.data
-}
-
-export async function apiPut<T>(
-  url: string,
-  body?: unknown,
-  opts?: RequestOptions,
-): Promise<T> {
-  const res = await apiClient.put<T>(url, body ?? null, buildConfig(opts))
-  return res.data
-}
-
-export async function apiDelete<T>(
-  url: string,
-  opts?: RequestOptions,
-): Promise<T> {
-  const res = await apiClient.delete<T>(url, buildConfig(opts))
-  return res.data
-}
-
-export async function apiPatch<T>(
-  url: string,
-  body?: unknown,
-  opts?: RequestOptions,
-): Promise<T> {
-  const res = await apiClient.patch<T>(url, body ?? null, buildConfig(opts))
-  return res.data
-}
-
-
+export const apiClient = createApiClient()
+export { createApiClient }

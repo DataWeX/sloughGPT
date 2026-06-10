@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import httpx
 
-logger = logging.getLogger("sloughgpt.webhooks")
+logger = logging.getLogger("man.webhooks")
 
 
 @dataclass

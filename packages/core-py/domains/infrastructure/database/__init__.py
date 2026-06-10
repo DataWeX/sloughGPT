@@ -43,7 +43,7 @@ class BaseRepository(IDataRepository, ABC):
     def __init__(self, collection_name: str, connection: Any):
         self.collection_name = collection_name
         self.connection = connection
-        self.logger = logging.getLogger(f"sloughgpt.repository.{collection_name}")
+        self.logger = logging.getLogger(f"man.repository.{collection_name}")
 
     @abstractmethod
     async def create(self, data: Dict[str, Any]) -> str:
@@ -197,7 +197,7 @@ class DatabaseManager(BaseComponent, IDatabaseManager):
 
     def __init__(self):
         super().__init__("database_manager")
-        self.logger = logging.getLogger(f"sloughgpt.{self.component_name}")
+        self.logger = logging.getLogger(f"man.{self.component_name}")
 
         # Database connections
         self.connections: Dict[str, DatabaseConnection] = {}

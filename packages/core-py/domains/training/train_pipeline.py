@@ -45,7 +45,7 @@ from domains.training.checkpoint_utils import (
 )
 from domains.training.lora import apply_lora_to_model, LoRAConfig
 
-logger = logging.getLogger("sloughgpt.trainer")
+logger = logging.getLogger("man.trainer")
 
 
 __all__ = [

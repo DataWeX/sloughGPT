@@ -8,7 +8,7 @@ import type { ChatMessage } from './ChatMessages'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import { cn } from '@/lib/cn'
 
-export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange' | 'onSend' | 'streamingStats' | 'images' | 'onStop'> {
+export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange' | 'onSend' | 'images' | 'onStop' | 'onAudioTranscript' | 'onGeneratedImage' | 'onPDFAnalysis' | 'onPDFError'> {
   messages: ChatMessage[]
   loading: boolean
   health: ApiHealthSnapshot
@@ -47,6 +47,8 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
     images,
     onAddImage,
     onRemoveImage,
+    onAudioTranscript,
+    onGeneratedImage,
     className,
     ...inputProps
   }, ref) {
@@ -85,7 +87,7 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
       <div className={cn("flex flex-col flex-1 min-h-0", className)}>
         <div
           ref={containerRef}
-          className="flex-1 min-h-0 overflow-y-auto relative"
+          className="flex-1 min-h-0 overflow-y-auto"
           onScroll={handleScroll}
         >
           <ChatScreen
@@ -106,13 +108,12 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
           {messages.length > 0 && !isNearBottom && (
             <button
               onClick={() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' })}
-              className="sticky bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-full border bg-background/90 backdrop-blur-sm shadow-lg hover:bg-accent/50 transition-all"
+              className="sticky bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border bg-background/80 backdrop-blur-sm shadow-lg hover:bg-accent/50 transition-all"
               aria-label="Jump to latest messages"
             >
               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
               </svg>
-              Jump to bottom
               {messages.length > 0 && (
                 <span className="text-muted-foreground">{messages.length}</span>
               )}
@@ -120,24 +121,16 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
           )}
         </div>
 
-        {messages.length > 0 && (
-          <div className="shrink-0 px-3 py-1 border-t border-border/30 bg-muted/20">
-            <p className="text-[10px] text-muted-foreground/60 text-center">
-              {messages.length} message{messages.length !== 1 ? 's' : ''}
-            </p>
-          </div>
-        )}
-
-        <div className="shrink-0 flex border-t border-border bg-background">
-          <ChatInput
-            {...inputProps}
-            loading={loading}
-            health={health}
-            images={images}
-            onAddImage={onAddImage}
-            onRemoveImage={onRemoveImage}
-          />
-        </div>
+        <ChatInput
+          {...inputProps}
+          loading={loading}
+          health={health}
+          images={images}
+          onAddImage={onAddImage}
+          onRemoveImage={onRemoveImage}
+          onAudioTranscript={onAudioTranscript}
+          onGeneratedImage={onGeneratedImage}
+        />
       </div>
     )
   }

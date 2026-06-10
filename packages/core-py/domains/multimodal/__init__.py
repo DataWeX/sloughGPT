@@ -25,7 +25,7 @@ except ImportError:
     nn = None
     F = None
 
-logger = logging.getLogger("sloughgpt.multimodal")
+logger = logging.getLogger("man.multimodal")
 
 
 @dataclass

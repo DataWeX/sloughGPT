@@ -72,7 +72,7 @@ export const useAppStore = create<AppStore>()(
         set({ injectedKnowledge: [] }),
     }),
     {
-      name: 'sloughgpt-store',
+      name: 'man-store',
     }
   )
 )

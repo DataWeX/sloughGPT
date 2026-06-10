@@ -22,6 +22,7 @@ _refs: dict[str, AtomicRef] = {}
 _ATOMIC_NAMES = frozenset({
     "model", "tokenizer", "model_type", "checkpoint",
     "soul_engine", "current_soul", "gen_config", "model_request_logger",
+    "autoload_skipped",
 })
 
 for _name in _ATOMIC_NAMES:
@@ -29,7 +30,7 @@ for _name in _ATOMIC_NAMES:
 
 # Plain fields (set once at startup)
 torch_available: bool = False
-_torch_available: bool = False  # backward compat alias
+_torch_available: bool = False
 training_active: bool = False
 _self_train_proc: Optional[Any] = None
 

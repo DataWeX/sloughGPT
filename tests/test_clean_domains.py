@@ -11,7 +11,6 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from domains.chat.domain import ChatDomain, ChatRequest, ChatResponse, get_chat_domain
-from domains.benchmark.domain import BenchmarkDomain, QualityMetrics, get_benchmark_domain
 
 # companion.py (top-level, single file)
 from domains.companion import (
@@ -148,94 +147,6 @@ class TestChatDomain:
     def test_get_chat_domain_singleton(self):
         a = get_chat_domain()
         b = get_chat_domain()
-        assert a is b
-
-
-# =============================================================================
-# BenchmarkDomain Tests
-# =============================================================================
-
-
-class TestQualityMetrics:
-    def test_defaults_all_zero(self):
-        m = QualityMetrics()
-        assert m.coherence_score == 0.0
-        assert m.quality_score == 0.0
-        assert m.repetition_rate == 0.0
-        assert m.avg_length == 0.0
-        assert m.empty_rate == 0.0
-
-
-class TestBenchmarkDomain:
-    def test_evaluate_empty_list(self):
-        bench = BenchmarkDomain()
-        metrics = bench.evaluate_responses([])
-        assert metrics.coherence_score == 0.0
-        assert metrics.quality_score == 0.0
-
-    def test_evaluate_single_good_response(self):
-        bench = BenchmarkDomain()
-        metrics = bench.evaluate_responses([
-            {"assistant": "The quick brown fox jumps over the lazy dog."}
-        ])
-        assert metrics.coherence_score > 0.5
-        assert metrics.quality_score > 0.5
-        assert metrics.repetition_rate < 0.1
-        assert metrics.empty_rate == 0.0
-
-    def test_evaluate_high_repetition(self):
-        bench = BenchmarkDomain()
-        metrics = bench.evaluate_responses([
-            {"assistant": "hello hello hello hello hello hello hello hello hello hello hello hello"}
-        ])
-        assert metrics.repetition_rate > 0.5
-
-    def test_evaluate_all_empty(self):
-        bench = BenchmarkDomain()
-        metrics = bench.evaluate_responses([
-            {"assistant": ""},
-            {"assistant": "   "},
-        ])
-        assert metrics.empty_rate == 1.0
-        assert metrics.avg_length == 0.0
-
-    def test_evaluate_mixed_empty_and_good(self):
-        bench = BenchmarkDomain()
-        metrics = bench.evaluate_responses([
-            {"assistant": ""},
-            {"assistant": "A normal response here."},
-        ])
-        assert metrics.empty_rate == 0.5
-        assert metrics.avg_length > 0
-
-    def test_evaluate_missing_assistant_key(self):
-        bench = BenchmarkDomain()
-        metrics = bench.evaluate_responses([
-            {"user": "hello"}
-        ])
-        assert metrics.empty_rate == 1.0
-
-    def test_evaluate_coherence_bounds(self):
-        bench = BenchmarkDomain()
-        metrics = bench.evaluate_responses([
-            {"assistant": "x"} for _ in range(10)
-        ])
-        assert 0 <= metrics.coherence_score <= 1
-        assert 0 <= metrics.quality_score <= 1
-
-    def test_evaluate_latest_no_log_file(self):
-        bench = BenchmarkDomain(log_dir=tempfile.mkdtemp())
-        result = bench.evaluate_latest()
-        assert result == {"status": "no_data", "message": "No responses logged"}
-
-    def test_get_stats_no_data(self):
-        bench = BenchmarkDomain(log_dir=tempfile.mkdtemp())
-        stats = bench.get_stats()
-        assert stats == {"total": 0}
-
-    def test_get_benchmark_domain_singleton(self):
-        a = get_benchmark_domain()
-        b = get_benchmark_domain()
         assert a is b
 
 

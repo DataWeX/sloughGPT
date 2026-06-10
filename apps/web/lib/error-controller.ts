@@ -25,12 +25,15 @@ export interface ErrorLogResponse {
 export interface RecentErrorsResponse {
   errors: ErrorEntry[]
   unread_count: number
+  total: number
+  offset: number
+  limit: number
 }
 
 export const errorController = {
-  /** Fetch recent client-side errors from the backend ring buffer. */
-  async getRecent(limit: number = 50): Promise<{ errors: ErrorEntry[]; unread_count: number }> {
-    return apiGet<RecentErrorsResponse>('/errors/recent', { limit: String(limit) })
+  /** Fetch paginated client-side errors from the backend ring buffer. */
+  async getRecent(limit: number = 50, offset: number = 0): Promise<RecentErrorsResponse> {
+    return apiGet<RecentErrorsResponse>('/errors/recent', { limit: String(limit), offset: String(offset) })
   },
 
   /** Report a single error to the backend. */

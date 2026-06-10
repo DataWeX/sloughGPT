@@ -1,14 +1,14 @@
 """
-Auto-Train Router - Unified Teacher-Student Training Pipeline
+Auto-Train Router — SloNet LM Training Pipeline
 
-Follows TrainingSequence: GENERATE_DATA → DISTILL → TRAIN → EVALUATE → DEPLOY → COMPLETE
+Trains a SloNet LSTM as a next-token-prediction language model on user-provided
+text (source_text, dataset, or file).  Pure NumPy — no PyTorch dependency for
+student training.  Exports checkpoints as .soul (binary float32 format).
 
-Uses GPT2 as teacher to generate training pairs, SloNet (NumPy) as student to learn.
-Exports checkpoints as .soul (SloughGPT Soul Unit) — self-contained model + identity.
-No PyTorch dependency for student training — pure NumPy via SloNet.
+Phase sequence: TRAINING → COMPLETE | FAILED
 
-Encapsulates router state in ``AutoTrainState`` dataclass rather than 7 module-level
-mutable globals (``_running``, ``_config``, ``_teacher_model``, etc.).
+Encapsulates router state in ``AutoTrainState`` dataclass rather than module-level
+mutable globals.
 """
 
 from dataclasses import dataclass, field
@@ -35,29 +35,11 @@ except ImportError:
     def sse_complete(stream, phase="COMPLETE", data=None, meta=None, message="Done"):
         return sse_event(stream, phase, "complete", data or {}, meta or {}, message)
 
-def to_python(val):
-    """Convert numpy types to Python for JSON serialization"""
-    if hasattr(val, 'item'):
-        return val.item()
-    return val
-
-def to_list(vals):
-    """Convert list of values"""
-    return [to_python(v) for v in vals]
-
-
 @dataclass
 class AutoTrainState:
-    """Encapsulated mutable state for the auto-train router.
-
-    Replaces 7 bare module-level globals (``_running``, ``_config``,
-    ``_teacher_model``, ``_teacher_tokenizer``, ``_student_net``,
-    ``_student_tokenizer``, ``_source_lines``) with typed attributes.
-    """
+    """Encapsulated mutable state for the auto-train router."""
     running: bool = False
     config: dict = field(default_factory=dict)
-    teacher_model: Any = None
-    teacher_tokenizer: Any = None
     student_net: Any = None
     student_tokenizer: Any = None
     source_lines: List[str] = field(default_factory=list)
@@ -126,21 +108,34 @@ def _parse_subtitle_text(text: str) -> List[str]:
 
 
 class StartRequest(BaseModel):
-    teacher_model: str = "gpt2"
+    teacher_model: str = Field(default="gpt2", deprecated="no longer used — kept for backward compat")
     temperature: float = Field(default=0.8, ge=0.1, le=2.0)
     soul_name: str = "assistant"
     epochs: int = Field(default=10, ge=1, le=1000)
     learning_rate: float = Field(default=0.001, ge=1e-5, le=1.0)
+    batch_size: int = Field(default=64, ge=1, le=1024, description="Chunk size for training")
     source_text: Optional[str] = Field(default=None, description="Custom training text (SRT, plain, or lines). If provided, train on this instead of generating from teacher.")
     checkpoint_name: Optional[str] = Field(default=None, description="Load existing checkpoint and continue training")
+    dataset_id: Optional[str] = Field(default=None, description="Dataset ID from /datasets to train on")
+    algo: str = Field(default="bpe", description="Tokenization algorithm: 'bpe' (SloBPE) or 'unigram' (SloUnigram)")
 
 
-class TrainOnConversationsRequest(BaseModel):
-    """Train on collected conversation data."""
-    min_rating: int = Field(default=1, description="Minimum rating to include (1=thumbs up)")
-    epochs: int = Field(default=5, ge=1, le=100)
-    learning_rate: float = Field(default=0.001)
-    personality: str = Field(default="warm", description="warm, curious, playful, balanced")
+class TurboStartRequest(BaseModel):
+    method: str = Field(default="transformer", description="Training method: 'transformer', 'nanogpt', 'hf', 'slonet'")
+    data_path: str = Field(default="", description="Path to training data file")
+    dataset_id: Optional[str] = Field(default=None, description="Dataset ID to train on")
+    epochs: int = Field(default=3, ge=1, le=1000)
+    batch_size: int = Field(default=4, ge=1, le=256)
+    learning_rate: float = Field(default=3e-4, ge=1e-5, le=1.0)
+    vocab_size: int = Field(default=500, ge=50, le=50000)
+    n_embed: int = Field(default=128, ge=16, le=1024)
+    n_head: int = Field(default=4, ge=1, le=64)
+    n_encoder_layers: int = Field(default=3, ge=1, le=24)
+    n_decoder_layers: int = Field(default=3, ge=1, le=24)
+    dim_feedforward: int = Field(default=256, ge=32, le=8192)
+    dropout: float = Field(default=0.1, ge=0.0, le=0.9)
+    max_src_len: int = Field(default=128, ge=8, le=2048)
+    max_tgt_len: int = Field(default=128, ge=8, le=2048)
 
 
 def _build_soul_prompt(soul_name: str) -> str:
@@ -157,168 +152,7 @@ def _build_soul_prompt(soul_name: str) -> str:
 
 
 
-def _load_soul_profile(soul_name: str) -> dict:
-    """Load personality traits from existing .soul file."""
-    try:
-        for sou_path in (REPO_ROOT / "models").glob("*.soul"):
-            if soul_name.lower() in sou_path.stem.lower():
-                from domains.inference import load_soul
-                soul_obj, _ = load_soul(str(sou_path))
-                if soul_obj and soul_obj.personality:
-                    return {
-                        "warmth": soul_obj.personality.warmth,
-                        "creativity": soul_obj.personality.creativity,
-                        "curiosity": soul_obj.personality.curiosity,
-                        "confidence": soul_obj.personality.confidence,
-                        "empathy": soul_obj.personality.empathy,
-                        "formality": soul_obj.personality.formality,
-                    }
-    except Exception:
-        pass
-    return {
-        "warmth": 0.5, "creativity": 0.5,
-        "curiosity": 0.5, "confidence": 0.5,
-        "empathy": 0.5, "formality": 0.5,
-    }
 
-
-def _export_soul(
-    student_net,
-    student_tokenizer,
-    soul_name: str,
-    system_prompt: str,
-    total_loss: float,
-    step: int,
-    epochs: int,
-) -> tuple[str, dict]:
-    """
-    Export trained SloNet as a .soul file with full soul profile.
-
-    Args:
-        student_tokenizer: SloBPE tokenizer (or legacy dict)
-
-    Returns:
-        (checkpoint_name, soul_profile_dict)
-    """
-    import datetime
-    from domains.inference import (
-        SloProfile, PersonalityCore, GenerationParams,
-        BehavioralTraits, CognitiveSignature, EmotionalRange,
-        save_soul,
-    )
-
-    traits = _load_soul_profile(soul_name)
-    avg_loss = total_loss / max(step, 1)
-
-    # Get vocab size (handles both SloBPE and legacy dict tokenizer)
-    if hasattr(student_tokenizer, 'vocab_size'):
-        vocab_size = student_tokenizer.vocab_size
-        tokenizer_type = "soulbpe"
-    else:
-        vocab_size = len(student_tokenizer.get("stoi", {}))
-        tokenizer_type = "char"
-
-    soul_profile = SloProfile(
-        name=f"{soul_name}-soul",
-        version="1.0.0",
-        tagline=f"AI Slo trained via teacher-student distillation",
-        description=(
-            f"{'BPE' if tokenizer_type == 'soulbpe' else 'Char-level'} SloNet trained by GPT2 teacher "
-            f"in {step} steps. Slo personality: {soul_name}."
-        ),
-        lineage="teacher-student-distillation",
-        base_model="slonet-lstm",
-        training_dataset="gpt2-generated",
-        epochs_trained=epochs,
-        final_train_loss=round(avg_loss, 6),
-        final_val_loss=round(avg_loss, 6),
-        personality=PersonalityCore(
-            warmth=traits.get("warmth", 0.5),
-            creativity=traits.get("creativity", 0.5),
-            curiosity=traits.get("curiosity", 0.5),
-            confidence=traits.get("confidence", 0.5),
-            empathy=traits.get("empathy", 0.5),
-            formality=traits.get("formality", 0.5),
-        ),
-        behavior=BehavioralTraits(
-            speaking_style="conversational",
-            explanation_depth="moderate",
-        ),
-        cognition=CognitiveSignature(
-            pattern_recognition=0.5,
-            abstract_reasoning=0.5,
-            factual_precision=0.5,
-        ),
-        emotion=EmotionalRange(
-            empathy_depth=0.5,
-            mood_responsiveness=0.5,
-        ),
-        generation=GenerationParams(
-            temperature=0.8,
-            top_p=0.9,
-            top_k=40,
-            max_tokens=256,
-        ),
-        system_prompt=system_prompt,
-        tags=[soul_name, "slonet", tokenizer_type, "gpt2-teacher"],
-        metadata={
-            "steps": step,
-            "total_loss": round(total_loss, 6),
-            "avg_loss": round(avg_loss, 6),
-            "teacher": "gpt2",
-            "student": "slonet-lstm",
-            "vocab_size": vocab_size,
-            "tokenizer_type": tokenizer_type,
-            "tokenizer_config": student_tokenizer.to_dict() if hasattr(student_tokenizer, 'to_dict') else {},
-            "exported_at": datetime.datetime.utcnow().isoformat() + "Z",
-        },
-    )
-
-    ckpt_name = f"{soul_name}_{int(time.time())}.soul"
-    ckpt_path = CHECKPOINTS_DIR / ckpt_name
-
-    slonet_path = student_net._sou_path if hasattr(student_net, "_sou_path") and student_net._sou_path else None
-    SloNetExport = student_net
-    SloNetExport.system_prompt = system_prompt
-    SloNetExport.metadata["avg_loss"] = round(avg_loss, 6)
-    SloNetExport.metadata["steps"] = step
-    SloNetExport.metadata["exported_at"] = datetime.datetime.utcnow().isoformat() + "Z"
-    SloNetExport.metadata["soul_profile"] = soul_profile.to_dict()
-    SloNetExport.metadata["lstm_dropout"] = student_net.layers[1].dropout if len(student_net.layers) > 1 and hasattr(student_net.layers[1], 'dropout') else 0.0
-    if hasattr(student_tokenizer, 'to_dict'):
-        SloNetExport.metadata["tokenizer_config"] = student_tokenizer.to_dict()
-        SloNetExport.metadata["tokenizer_type"] = "soulbpe"
-
-    save_soul(student_net, str(ckpt_path), soul_profile=soul_profile)
-
-    meta_path = ckpt_path.with_suffix(".soul.meta.json")
-    with open(meta_path, "w") as f:
-        json.dump(soul_profile.to_dict(), f, indent=2, default=str)
-
-    # Keep only the best checkpoint per soul — delete all worse ones.
-    all_soul_ckpts = sorted(CHECKPOINTS_DIR.glob(f"{soul_name}_*.soul"), key=lambda p: p.stat().st_mtime)
-    if len(all_soul_ckpts) > 1:
-        best_loss = float("inf")
-        best_ckpt = None
-        for c in all_soul_ckpts:
-            m = _load_soul_meta(c)
-            l = m.get("metadata", {}).get("avg_loss") or m.get("final_train_loss")
-            if l is not None and l < best_loss:
-                best_loss = l
-                best_ckpt = c
-        for c in all_soul_ckpts:
-            if c.name != best_ckpt.name:
-                c.unlink(missing_ok=True)
-                meta = c.with_suffix(".soul.meta.json")
-                meta.unlink(missing_ok=True)
-                autotrain_logger.info(f"Pruned checkpoint: {c.name}")
-        # If the new checkpoint was pruned, report the kept one instead
-        if best_ckpt and not ckpt_path.exists():
-            ckpt_name = best_ckpt.name
-            autotrain_logger.info(f"New checkpoint was worse than existing; keeping {ckpt_name}")
-
-    autotrain_logger.info(f"Slo exported: {ckpt_name}")
-    return ckpt_name, soul_profile.to_dict()
 
 
 def _get_soul_name(soul) -> str:
@@ -586,127 +420,110 @@ def _load_checkpoint_into_model(name: str):
 @router.post("/start")
 async def start(req: StartRequest):
     """
-    Configure and start a new auto-training session.
+    Configure auto-training — stores config for /auto-train/stream to consume.
+
+    Delegates training to UnifiedTrainingPipeline (method='slonet').
 
     Args:
-        req: teacher_model (default gpt2), temperature, soul_name, epochs, learning_rate
+        req: source_text or dataset_id, epochs, learning_rate, etc.
 
     Returns:
-        dict with status and config
+        dict with status and config summary
 
     Side effects:
-        - loads GPT2 teacher model
-        - creates SloNet student model with BPE tokenizer
-        - sets AutoTrainState
+        - Stores config in AutoTrainState for streaming worker
+        - Writes source_text to temp file if provided
     """
-    state.running = True
+    if not req.source_text and not req.dataset_id and not req.checkpoint_name:
+        return {"status": "error", "message": "Provide source_text, dataset_id, or checkpoint_name"}
+
+    data_path = ""
+    if req.source_text:
+        source_lines = _parse_subtitle_text(req.source_text)
+        if source_lines:
+            tmp = REPO_ROOT / ".opencode" / "tmp" / f"autotrain_source_{int(time.time())}.txt"
+            tmp.parent.mkdir(parents=True, exist_ok=True)
+            tmp.write_text("\n".join(source_lines), encoding="utf-8")
+            data_path = str(tmp)
+            autotrain_logger.info(f"Wrote {len(source_lines)} source lines to {tmp}")
+    elif req.dataset_id:
+        ds_candidate = REPO_ROOT / "datasets" / req.dataset_id
+        if ds_candidate.exists():
+            corp = ds_candidate / "corpus.jsonl"
+            if corp.exists():
+                data_path = str(corp)
+
     state.config = {
-        "teacher_model": req.teacher_model,
-        "temperature": req.temperature,
-        "soul_name": req.soul_name,
         "epochs": req.epochs,
         "learning_rate": req.learning_rate,
-        "source_text": req.source_text,
+        "batch_size": req.batch_size,
+        "data_path": data_path,
+        "checkpoint_name": req.checkpoint_name or "",
+        "algo": req.algo,
     }
+    state.running = True
+    autotrain_logger.info("Auto-train configured: data_path=%s epochs=%d", data_path, req.epochs)
+    return {"status": "ready", "data_path": data_path, "epochs": req.epochs, "config": state.config}
 
-    # Parse custom source text if provided (supports SRT, VTT, or plain text)
-    state.source_lines = []
 
-    # Load existing checkpoint for continued training if requested
-    if req.checkpoint_name:
-        autotrain_logger.info(f"Loading checkpoint for continued training: {req.checkpoint_name}")
-        try:
-            from domains.training.slonet import import_from_sou
-            from domains.training.tokenizer import SloBPE
-            ckpt_path = CHECKPOINTS_DIR / req.checkpoint_name
-            if not ckpt_path.exists():
-                ckpt_path = CHECKPOINTS_DIR / (req.checkpoint_name + ".soul")
-            if ckpt_path.exists():
-                loaded = import_from_sou(str(ckpt_path))
-                state.student_net = loaded
-                # Try to load BPE tokenizer from checkpoint metadata
-                meta = getattr(loaded, 'metadata', {}) or {}
-                tok_config = meta.get('tokenizer_config') if isinstance(meta, dict) else None
-                if tok_config:
-                    state.student_tokenizer = SloBPE.from_dict(tok_config)
-                    autotrain_logger.info(f"BPE tokenizer loaded from checkpoint (vocab={state.student_tokenizer.vocab_size})")
-                if hasattr(loaded, 'soul_name'):
-                    state.config["soul_name"] = loaded.soul_name
-                autotrain_logger.info(f"Checkpoint loaded: {ckpt_path.name}")
-        except Exception as e:
-            autotrain_logger.error(f"Failed to load checkpoint: {e}")
+@router.post("/start-turbo")
+async def start_turbo(req: TurboStartRequest):
+    """
+    Start training using TurboTrainer (encoder-decoder Transformer via torch shim).
 
-    if req.source_text:
-        state.source_lines = _parse_subtitle_text(req.source_text)
-        autotrain_logger.info(f"Parsed {len(state.source_lines)} lines from custom source text")
-        if state.source_lines:
-            # Delegate to SloEngine for model + tokenizer creation
-            from domains.core.soul import SloEngine
-            engine = SloEngine(device="cpu")
-            result = engine.learn(
-                texts=state.source_lines,
-                soul_name=req.soul_name,
-                epochs=1,  # minimal — stream() will continue training
-                learning_rate=req.learning_rate,
-                vocab_size=512,
-            )
-            state.student_tokenizer = engine._tokenizer
-            state.student_net = engine._model
-            state.engine = engine
-            autotrain_logger.info(f"SloEngine created SloNet: {result}")
-            state.running = True
-            return {"status": "ready", "source_lines": len(state.source_lines), "config": state.config}
+    Args:
+        req: TurboStartRequest with model architecture and training params
 
+    Returns:
+        dict with training result (status, model_path, final_loss, total_steps, epochs)
+    """
     try:
-        from transformers import AutoTokenizer, AutoModelForCausalLM
-        import os
-        
-        # Check for HuggingFace token (supports private models)
-        hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
-        
-        autotrain_logger.info(f"Loading teacher: {req.teacher_model}")
-        state.teacher_tokenizer = AutoTokenizer.from_pretrained(req.teacher_model, token=hf_token)
-        state.teacher_model = AutoModelForCausalLM.from_pretrained(req.teacher_model, token=hf_token)
-        state.teacher_model.eval()
-        state.teacher_tokenizer.pad_token = state.teacher_tokenizer.eos_token
+        from domains.training.turbo_trainer import TurboTrainer, TurboConfig
+
+        data_path = req.data_path
+        if not data_path and req.dataset_id:
+            ds_candidate = REPO_ROOT / "datasets" / req.dataset_id
+            if ds_candidate.exists():
+                corp = ds_candidate / "corpus.jsonl"
+                if corp.exists():
+                    data_path = str(corp)
+                else:
+                    txt_files = list(ds_candidate.glob("*.txt"))
+                    if txt_files:
+                        data_path = str(txt_files[0])
+
+        if not data_path:
+            return {"status": "error", "message": "No data_path or dataset_id provided"}
+
+        config = TurboConfig(
+            data_path=data_path,
+            vocab_size=req.vocab_size,
+            n_embed=req.n_embed,
+            n_head=req.n_head,
+            n_encoder_layers=req.n_encoder_layers,
+            n_decoder_layers=req.n_decoder_layers,
+            dim_feedforward=req.dim_feedforward,
+            dropout=req.dropout,
+            batch_size=req.batch_size,
+            epochs=req.epochs,
+            learning_rate=req.learning_rate,
+            max_src_len=req.max_src_len,
+            max_tgt_len=req.max_tgt_len,
+        )
+
+        trainer = TurboTrainer(config)
+        output_dir = Path(REPO_ROOT / "models" / "turbo-trained")
+        config.output_dir = str(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        autotrain_logger.info("Starting TurboTrainer with method=%s data=%s", req.method, data_path)
+        result = trainer.train()
+        autotrain_logger.info("TurboTrainer result: %s", result)
+
+        return result
     except Exception as e:
-        autotrain_logger.error(f"Teacher load failed: {e}")
-        state.running = False
+        autotrain_logger.error("TurboTrainer failed: %s", e)
         return {"status": "error", "message": str(e)}
-
-    # Train BPE on seed topic examples (used when no source_text)
-    seed_texts = [
-        "What would happen if the sun suddenly disappeared?",
-        "Why do some animals sleep more than others?",
-        "How do memories form in the brain?",
-        "What is dark matter?",
-        "How does machine learning work?",
-        "What is the meaning of life?",
-        "Tell me about artificial intelligence.",
-        "The quick brown fox jumps over the lazy dog.",
-    ]
-
-    from domains.core.soul import SloEngine
-    engine = SloEngine(device="cpu")
-    result = engine.learn(
-        texts=seed_texts,
-        soul_name=req.soul_name,
-        epochs=1,
-        learning_rate=req.learning_rate,
-        vocab_size=512,
-    )
-    state.student_tokenizer = engine._tokenizer
-    state.student_net = engine._model
-    state.engine = engine
-    autotrain_logger.info(f"SloEngine created SloNet: {result}")
-
-    return {
-        "status": "started",
-        "teacher": req.teacher_model,
-        "student": "slonet-bpe-lstm",
-        "soul": req.soul_name,
-        "epochs": req.epochs,
-    }
 
 
 @router.post("/stop")
@@ -717,300 +534,102 @@ async def stop():
 
 @router.get("/status")
 async def status():
-    """Get training status including BPE tokenizer stats."""
-    result = {"running": state.running, "config": state.config}
-    tok = state.student_tokenizer
-    if tok is not None and hasattr(tok, 'vocab_size'):
-        result["bpe"] = {
-            "vocab_size": tok.vocab_size,
-            "merges": len(tok.merges),
-            "base_chars": tok.vocab_stats()["base_chars"],
-            "subwords": tok.vocab_stats()["merged_subwords"],
-        }
-    return result
+    """Get training status."""
+    return {"running": state.running, "config": state.config}
 
 
 @router.get("/stream")
 async def stream():
     """
-    Stream training following TrainingSequence:
-    GENERATE_DATA → DISTILL → TRAIN → EVALUATE → DEPLOY → COMPLETE
+    Stream auto-training as SSE via UnifiedTrainingPipeline (method='slonet').
 
-    Teacher (GPT2/PyTorch) generates training pairs.
-    Student (SloNet/NumPy) learns via cross-entropy distillation.
+    Delegates model creation, training, and .soul export to the pipeline.
+    Phases: GENERATE_DATA → DISTILL → TRAIN → EVALUATE → DEPLOY → COMPLETE
     """
-    if not state.config or state.teacher_model is None or state.student_net is None:
+    if not state.config:
         return StreamingResponse(
-            iter([sse_error("auto-train", "IDLE", "Call /auto-train/start first")]),
+            iter([sse_error("auto-train", "IDLE", "No training state — call /auto-train/start first")]),
             media_type="text/event-stream",
         )
 
-    async def event_generator():
-        from domains.training.slonet import SloAdam, cross_entropy, tensor
+    import asyncio as _asyncio
+    queue: _asyncio.Queue[str] = _asyncio.Queue()
+    loop = _asyncio.get_running_loop()
 
-        teacher = state.teacher_model
-        tokenizer = state.teacher_tokenizer
-        temp = state.config.get("temperature", 0.8)
-        epochs = state.config.get("epochs", 10)
-        soul_name = state.config.get("soul_name", "assistant")
-        lr = state.config.get("learning_rate", 0.001)
-        system_prompt = _build_soul_prompt(soul_name)
-        
-        # Check if we have custom source text
-        source_text = state.config.get("source_text")
-        use_custom = source_text and state.source_lines
-        
-        if use_custom:
-            yield sse_event(
-                stream="auto-train",
-                phase="GENERATE_DATA",
-                status="working",
-                data={},
-                meta={"epoch": 1, "total_epochs": epochs},
-                message=f"Training on {len(state.source_lines)} custom lines | Slo: {soul_name}",
-            )
-        
-        # Initialize training
-        optimizer = SloAdam(lr=lr)
-        _train_start = time.perf_counter()
-        unk_idx = state.student_tokenizer.pad_id
+    def _enqueue(event_str: str) -> None:
+        loop.call_soon_threadsafe(queue.put_nowait, event_str)
 
-        total_loss = 0.0
-        step = 0
-        loss_history = []
+    def _training_worker():
+        """Run UnifiedTrainingPipeline in executor thread."""
+        from domains.training.unified_pipeline import (
+            UnifiedTrainingPipeline, UnifiedTrainingConfig,
+        )
 
-        if not use_custom:
-            yield sse_event(
-                stream="auto-train",
-                phase="GENERATE_DATA",
-                status="working",
-                data={},
-                meta={"epoch": 1, "total_epochs": epochs},
-                message=f"Teacher: GPT2 | Student: SloNet (BPE NumPy) | Slo: {soul_name}",
-            )
+        cfg = UnifiedTrainingConfig(
+            method="slonet",
+            data_path=state.config.get("data_path", ""),
+            epochs=state.config.get("epochs", 10),
+            learning_rate=state.config.get("learning_rate", 0.001),
+            batch_size=state.config.get("batch_size", 64),
+            checkpoint_dir=str(CHECKPOINTS_DIR),
+            output_dir=str(CHECKPOINTS_DIR),
+            vocab_size=256,
+            n_embed=256,
+            n_layer=6,
+            n_head=8,
+            block_size=128,
+            soul_name=state.config.get("soul_name", "assistant"),
+            system_prompt=_build_soul_prompt(state.config.get("soul_name", "assistant")),
+            skip_generate=True,
+            skip_distill=True,
+            skip_evaluate=True,
+            skip_deploy=True,
+        )
 
-        topic_examples = [
-            "What would happen if the sun suddenly disappeared?",
-            "Why do some animals sleep more than others?",
-            "How do memories form in the brain?",
-            "What is dark matter?",
-        ]
+        pipeline = UnifiedTrainingPipeline(cfg)
 
-        for epoch in range(epochs):
-            if not state.running:
-                break
+        def _on_progress(progress):
+            sse = progress.to_sse_event(stream_name="auto-train")
+            sse_str = "data: " + json.dumps(sse) + "\n\n"
+            _enqueue(sse_str)
 
-            yield sse_event(
-                stream="auto-train",
-                phase="TRAIN",
-                status="working",
-                data={},
-                meta={
-                    "epoch": to_python(epoch) + 1,
-                    "total_epochs": to_python(epochs),
-                    "step": to_python(step),
-                    "loss": None,
-                },
-                message=f"Epoch {to_python(epoch) + 1}/{to_python(epochs)}",
-            )
+        try:
+            state.running = True
+            result = pipeline.run(on_progress=_on_progress)
 
-            # Get training data - custom or generated
-            training_pairs = []
-            
-            if use_custom:
-                # Use custom source text - each line is a training example
-                for line_idx, line in enumerate(state.source_lines):
-                    if state.running:
-                        training_pairs.append((line, line))
+            if result.get("status") == "completed":
+                ckpt = result.get("checkpoint", "")
+                fl = result.get("final_loss")
+                ts = result.get("total_steps", 0)
+                autotrain_logger.info(
+                    "Auto-train complete: checkpoint=%s final_loss=%s steps=%d",
+                    ckpt, fl, ts,
+                )
             else:
-                # Generate from teacher model (original logic)
-                for topic in topic_examples:
-                    if not state.running:
-                        break
-                    try:
-                        import torch
-                        with torch.no_grad():
-                            topic_in = tokenizer(
-                                f"Question: {topic}",
-                                return_tensors="pt",
-                                padding=True,
-                                truncation=True,
-                                max_length=80,
-                            )
-                            topic_out = teacher.generate(
-                                **topic_in,
-                                max_new_tokens=20,
-                                temperature=0.9,
-                                top_k=50,
-                                do_sample=True,
-                                pad_token_id=tokenizer.eos_token_id,
-                            )
-                            question = tokenizer.decode(topic_out[0], skip_special_tokens=True)
-                            question = question.replace(f"Question: {topic}", "").strip() or topic
+                autotrain_logger.warning("Auto-train result: %s", result.get("status"))
 
-                        yield sse_event(
-                            stream="auto-train",
-                            phase="GENERATE_DATA",
-                            status="working",
-                            data={"type": "question", "question": question[:80]},
-                            meta={"step": step},
-                            message=f"Q: {question[:80]}",
-                        )
+        except Exception as e:
+            autotrain_logger.error("Training worker error: %s", e)
+            _enqueue(sse_error("auto-train", "FAILED", str(e)))
 
-                        with torch.no_grad():
-                            ans_in = tokenizer(
-                                f"Answer: {question}",
-                                return_tensors="pt",
-                                padding=True,
-                                truncation=True,
-                                max_length=80,
-                            )
-                            ans_out = teacher.generate(
-                                **ans_in,
-                                max_new_tokens=60,
-                                temperature=temp,
-                                top_k=40,
-                                top_p=0.9,
-                                do_sample=True,
-                                pad_token_id=tokenizer.eos_token_id,
-                            )
-                            answer = tokenizer.decode(ans_out[0], skip_special_tokens=True)
-                            if "Answer:" in answer:
-                                answer = answer.split("Answer:")[-1].strip()
-                            answer = " ".join(answer.split())
-                            if len(answer) < 10:
-                                answer = f"The answer to {question} involves fundamental principles."
+    async def event_generator():
+        worker_task = loop.run_in_executor(None, _training_worker)
 
-                        yield sse_event(
-                            stream="auto-train",
-                            phase="DISTILL",
-                            status="working",
-                            data={"type": "teacher", "answer": answer[:100]},
-                            meta={"step": step},
-                            message=f"Teacher: {answer[:100]}",
-                        )
-                        training_pairs.append((question, answer))
-                    except Exception as e:
-                        autotrain_logger.warning(f"Training pair error: {e}")
-            
-            # Train on the collected pairs (both custom and generated)
-            for pair_idx, (question, answer) in enumerate(training_pairs):
-                if not state.running:
-                    break
-                    
+        while True:
+            event = await queue.get()
+            yield event
+            if event.startswith("data: "):
                 try:
-                    input_ids = state.student_tokenizer.encode(answer[:64])
-                    if len(input_ids) < 2:
-                        continue
+                    ev = json.loads(event[6:])
+                    if ev.get("status") in ("complete", "error"):
+                        break
+                except json.JSONDecodeError:
+                    pass
 
-                    seq_len = min(len(input_ids) - 1, 32)
-                    if seq_len < 1:
-                        continue
-
-                    chunk_size = 8
-                    for i in range(0, seq_len, chunk_size):
-                        x_chunk = input_ids[i : i + chunk_size]
-                        y_chunk = input_ids[i + 1 : i + chunk_size + 1]
-                        while len(x_chunk) < chunk_size:
-                            x_chunk.append(unk_idx)
-                        while len(y_chunk) < chunk_size:
-                            y_chunk.append(unk_idx)
-
-                        x = tensor([[x_chunk]], requires_grad=True)
-                        y = tensor([[y_chunk]])
-
-                        lstm_layer = state.student_net.layers[1]
-                        hidden = lstm_layer.init_hidden()
-                        logits, _ = lstm_layer.forward(x, hidden)
-                        loss = cross_entropy(logits, y.reshape(-1))
-
-                        loss.backward()
-                        optimizer.step(state.student_net.parameters())
-
-                        step += 1
-                        total_loss += loss.data[()]
-                        avg_loss = total_loss / step
-                        loss_history.append(loss.data[()])
-
-                        progress = min(int((step / (epochs * max(len(topic_examples), len(state.source_lines) if use_custom else 1))) * 100), 99)
-
-                        yield sse_event(
-                            stream="auto-train",
-                            phase="TRAIN",
-                            status="working",
-                            data={"loss": round(avg_loss, 4), "progress": progress},
-                            meta={
-                                "step": step,
-                                "epoch": epoch + 1,
-                                "total_epochs": epochs,
-                                "elapsed_ms": int((time.perf_counter() - _train_start) * 1000),
-                            },
-                            message=f"loss={avg_loss:.4f}",
-                        )
-
-                except Exception as e:
-                    autotrain_logger.error(f"Step error: {e}")
-                    yield sse_event(
-                        stream="auto-train",
-                        phase="TRAIN",
-                        status="error",
-                        data={"error": str(e)},
-                        meta={"step": step},
-                        message=f"Error: {e}",
-                    )
-
-            yield sse_event(
-                stream="auto-train",
-                phase="EVALUATE",
-                status="success",
-                data={"avg_loss": round(to_python(total_loss) / max(to_python(step), 1), 4)},
-                meta={
-                    "epoch": to_python(epoch) + 1,
-                    "total_epochs": to_python(epochs),
-                    "step": to_python(step),
-                },
-                message=f"Epoch {to_python(epoch) + 1} complete",
-            )
-
-            yield sse_event(
-                stream="auto-train",
-                phase="DEPLOY",
-                status="working",
-                data={},
-                meta={"step": to_python(step)},
-                message="Exporting SloNet to .soul format...",
-            )
-
-            state.student_net.system_prompt = system_prompt
-            state.student_net.metadata["avg_loss"] = round(total_loss / max(step, 1), 6)
-            state.student_net.metadata["steps"] = step
-
-            ckpt_name, soul_dict = _export_soul(
-                state.student_net,
-                state.student_tokenizer,
-                soul_name,
-                system_prompt,
-                total_loss,
-                step,
-                epochs,
-            )
-
-            yield sse_complete(
-                stream="auto-train",
-                phase="COMPLETE",
-                data={
-                    "checkpoint": ckpt_name,
-                    "final_loss": round(to_python(total_loss) / max(to_python(step), 1), 4),
-                    "epochs": to_python(epochs),
-                    "loss_history": to_list(loss_history[-20:]),
-                    "traits": soul_dict.get("personality", {}) if soul_dict else {},
-                },
-                meta={
-                    "steps": to_python(step),
-                    "total_epochs": to_python(epochs),
-                },
-                message=f"Training complete. Saved {ckpt_name}",
-            )
+        try:
+            await worker_task
+        except Exception:
+            pass
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
@@ -1125,77 +744,6 @@ async def download_checkpoint(name: str):
     raise HTTPException(status_code=404, detail="Checkpoint not found")
 
 
-@router.post("/train-conversations")
-async def train_on_conversations(req: TrainOnConversationsRequest):
-    """
-    Train on collected conversation data.
-    
-    Uses high-rated conversations to train a natural-sounding model.
-    """
-    try:
-        from domains.training_data import get_collector
-        from domains.companion import create_companion
-        
-        collector = get_collector()
-        
-        # Get high-quality pairs
-        pairs = collector.get_high_quality_pairs(min_rating=req.min_rating)
-        
-        if len(pairs) < 5:
-            return {
-                "status": "insufficient_data",
-                "pairs": len(pairs),
-                "message": f"Need at least 5 pairs, got {len(pairs)}. Chat more!",
-            }
-        
-        # Build training data from conversations
-        training_texts = [f"User: {p.user}\nAssistant: {p.assistant}" for p in pairs]
-        
-        # Get personality prompt
-        companion = create_companion(name="Trained", personality=req.personality)
-        system_prompt = companion.get_system_prompt()
-        
-        return {
-            "status": "ready",
-            "pairs": len(pairs),
-            "personality": req.personality,
-            "system_prompt": system_prompt[:200] + "...",
-            "message": f"Ready to train on {len(pairs)} conversation pairs",
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
-
-@router.post("/load-pt/{name}")
-async def load_pt_checkpoint(name: str):
-    """Load a .pt checkpoint directly for chat."""
-    from pathlib import Path
-    import torch
-    
-    REPO_ROOT = Path(__file__).parent.parent.parent.parent.parent
-    CHECKPOINTS_DIR = REPO_ROOT / "models" / "auto-training"
-    
-    # Find file
-    pt_file = CHECKPOINTS_DIR / name
-    if not pt_file.exists():
-        # Try with .pt suffix
-        pt_file = CHECKPOINTS_DIR / f"{name}.pt"
-    
-    if not pt_file.exists():
-        return {"error": f"Not found: {name}"}
-    
-    try:
-        ckpt = torch.load(pt_file, map_location="cpu", weights_only=False)
-        
-        return {
-            "status": "loaded",
-            "name": name,
-            "steps": ckpt.get("total_steps", 0),
-            "vocab_size": len(ckpt.get("tokenizer", {}).get("stoi", {})),
-            "train_loss": ckpt.get("training_log", [None])[-1],
-            "file_size": pt_file.stat().st_size,
-        }
-    except Exception as e:
-        return {"error": str(e)}
 
 

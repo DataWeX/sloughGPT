@@ -28,7 +28,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
         metacognitive_monitor: Optional[Any] = None,
     ) -> None:
         super().__init__("cognitive_processor")
-        self.logger = logging.getLogger(f"sloughgpt.{self.component_name}")
+        self.logger = logging.getLogger(f"man.{self.component_name}")
 
         # Core components
         self.memory_manager = memory_manager

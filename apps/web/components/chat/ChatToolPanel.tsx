@@ -3,12 +3,13 @@
 import { useState, useRef, useEffect } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { IconX, IconBrain, IconEye, IconHeart, IconSettings, IconDocument, IconModel, IconCheck, IconRefresh } from '@/components/ui'
+import { IconX, IconBrain, IconEye, IconHeart, IconSettings, IconDocument, IconModel, IconCheck, IconRefresh, IconInfo, IconUpload } from '@/components/ui'
 import { ModelDropdown } from './ModelDropdown'
 import { cn } from '@/lib/cn'
 import { KNOWLEDGE_STORAGE_KEY } from '@/lib/config'
+import { ContextInspector } from './ContextInspector'
 
-type TabId = 'knowledge' | 'vision' | 'learner' | 'checkpoints' | 'agents'
+type TabId = 'knowledge' | 'vision' | 'learner' | 'checkpoints' | 'agents' | 'context'
 
 interface KnowledgeItem {
   id: string
@@ -37,19 +38,23 @@ interface LearnerInfo {
 interface Agent {
   id: string
   name: string
-  description?: string
+  description: string
   instructions: string
 }
 
 interface ChatToolPanelProps {
   open: boolean
   onClose: () => void
+  // Session
+  sessionId: string | null
   // Vision
   visionImagesLearned?: number
   visionTrained?: boolean
   visionStatus?: string
   visionCaptionHistory?: string[]
   visionVocabSize?: number
+  visionMeanAccuracy?: number
+  visionLastAccuracy?: number
   // Learner
   learnerInfo: LearnerInfo | null
   learnerTraining: boolean
@@ -78,6 +83,7 @@ interface ChatToolPanelProps {
 }
 
 const tabs: { id: TabId; label: string; icon: typeof IconBrain }[] = [
+  { id: 'context', label: 'Context', icon: IconInfo },
   { id: 'knowledge', label: 'Knowledge', icon: IconDocument },
   { id: 'vision', label: 'Vision', icon: IconEye },
   { id: 'learner', label: 'Learner', icon: IconBrain },
@@ -88,6 +94,7 @@ const tabs: { id: TabId; label: string; icon: typeof IconBrain }[] = [
 export function ChatToolPanel({
   open,
   onClose,
+  sessionId,
   learnerInfo,
   learnerTraining,
   onTrainStep,
@@ -219,7 +226,7 @@ export function ChatToolPanel({
       id="chat-tool-panel"
       className={cn(
         'border-l border-border/50 bg-background overflow-hidden transition-all duration-200 flex flex-col',
-        open ? 'w-72 min-w-[16rem]' : 'w-0 min-w-0',
+        open ? 'w-72 min-w-[16rem] lg:relative lg:w-72 fixed right-0 top-0 bottom-0 z-50 shadow-xl lg:shadow-none' : 'w-0 min-w-0',
       )}
     >
       {open && (
@@ -261,6 +268,12 @@ export function ChatToolPanel({
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs scrollbar-thin">
+            {activeTab === 'context' && (
+              <div className="space-y-2">
+                <div className="text-xs text-muted-foreground">Context Inspector</div>
+                <ContextInspector sessionId={sessionId} />
+              </div>
+            )}
             {activeTab === 'knowledge' && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -353,49 +366,18 @@ export function ChatToolPanel({
             )}
 
             {activeTab === 'vision' && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium">Vision Model</span>
-                  <span className={cn(
-                    'inline-block h-1.5 w-1.5 rounded-full',
-                    visionTrained ? 'bg-success' : (visionImagesLearned || 0) > 0 ? 'bg-warning' : 'bg-muted-foreground/30',
-                  )} />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="p-2 rounded bg-muted/30 border border-border/40">
-                    <div className="text-[10px] text-muted-foreground">Images learned</div>
-                    <div className="text-sm font-medium">{visionImagesLearned ?? 0}</div>
-                  </div>
-                  <div className="p-2 rounded bg-muted/30 border border-border/40">
-                    <div className="text-[10px] text-muted-foreground">Status</div>
-                    <div className="text-sm font-medium capitalize">{visionStatus || 'ready'}</div>
-                  </div>
-                  {visionVocabSize !== undefined && (
-                    <div className="p-2 rounded bg-muted/30 border border-border/40">
-                      <div className="text-[10px] text-muted-foreground">Vocabulary</div>
-                      <div className="text-sm font-medium">{visionVocabSize} words</div>
-                    </div>
-                  )}
-                </div>
-
-                {visionCaptionHistory && visionCaptionHistory.length > 0 && (
-                  <div className="space-y-1">
-                    <div className="text-[10px] text-muted-foreground font-medium">Recent captions</div>
-                    <ul className="space-y-1 max-h-32 overflow-y-auto">
-                      {visionCaptionHistory.slice(-10).map((cap, i) => (
-                        <li key={i} className="p-1.5 rounded bg-muted/20 text-[10px] leading-relaxed border border-border/20">
-                          {cap}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                <p className="text-[10px] text-muted-foreground/60">
-                  The vision model learns from images you upload in chat. No external training data needed.
-                </p>
-              </div>
+              <VisionTabContent
+                visionImagesLearned={visionImagesLearned}
+                visionTrained={visionTrained}
+                visionStatus={visionStatus}
+                visionCaptionHistory={visionCaptionHistory}
+                visionVocabSize={visionVocabSize}
+                sessionId={sessionId}
+                onGeneratedImage={(dataUrl, prompt) => {
+                  const event = new CustomEvent('generate-image', { detail: { dataUrl, prompt } })
+                  window.dispatchEvent(event)
+                }}
+              />
             )}
 
             {activeTab === 'learner' && (
@@ -581,6 +563,265 @@ export function ChatToolPanel({
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+function VisionTabContent({
+  visionImagesLearned,
+  visionTrained,
+  visionStatus,
+  visionCaptionHistory,
+  visionVocabSize,
+  sessionId,
+  onGeneratedImage,
+  meanAccuracy,
+  lastAccuracy,
+}: {
+  visionImagesLearned?: number
+  visionTrained?: boolean
+  visionStatus?: string
+  visionCaptionHistory?: string[]
+  visionVocabSize?: number
+  sessionId: string | null
+  onGeneratedImage: (dataUrl: string, prompt: string) => void
+  meanAccuracy?: number
+  lastAccuracy?: number
+}) {
+  const [genPrompt, setGenPrompt] = useState('')
+  const [genLoading, setGenLoading] = useState(false)
+  const [trainLoading, setTrainLoading] = useState(false)
+  const [audioTranscript, setAudioTranscript] = useState('')
+  const [audioLoading, setAudioLoading] = useState(false)
+  const [genResult, setGenResult] = useState<string | null>(null)
+  const [lastGenPrompt, setLastGenPrompt] = useState('')
+  const [trainLabel, setTrainLabel] = useState('')
+  const [trainImagePreview, setTrainImagePreview] = useState<string | null>(null)
+  const [trainResult, setTrainResult] = useState<{ accuracy: number; caption: string } | null>(null)
+
+  const handleGenerate = async () => {
+    if (!genPrompt.trim() || genLoading) return
+    setGenLoading(true)
+    setGenResult(null)
+    setLastGenPrompt(genPrompt.trim())
+    try {
+      const { multimodalController } = await import('@/lib/multimodal-controller')
+      const result = await multimodalController.generateImage(genPrompt.trim())
+      if (result?.image) {
+        setGenResult(result.image)
+        onGeneratedImage(result.image, genPrompt.trim())
+      }
+    } catch {
+      // silent
+    } finally {
+      setGenLoading(false)
+    }
+  }
+
+  const handleSendAudioTranscript = () => {
+    if (!audioTranscript.trim()) return
+    window.dispatchEvent(new CustomEvent('send-text', { detail: { text: audioTranscript } }))
+    setAudioTranscript('')
+  }
+
+  const handleSendGeneratedImage = () => {
+    if (!genResult || !lastGenPrompt) return
+    onGeneratedImage(genResult, lastGenPrompt)
+  }
+
+  const handleAudioTranscribe = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAudioLoading(true)
+    try {
+      const { multimodalController } = await import('@/lib/multimodal-controller')
+      const result = await multimodalController.transcribeAudio(file)
+      if (result?.text) setAudioTranscript(result.text)
+    } catch {
+      setAudioTranscript('Transcription failed')
+    } finally {
+      setAudioLoading(false)
+    }
+  }
+
+  const handleTrainFromSession = async () => {
+    if (!sessionId || trainLoading) return
+    setTrainLoading(true)
+    try {
+      const { multimodalController } = await import('@/lib/multimodal-controller')
+      await multimodalController.trainImage('', sessionId)
+    } catch {
+      // silent
+    } finally {
+      setTrainLoading(false)
+    }
+  }
+
+  const handleTrainImageWithLabel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setTrainLoading(true)
+    setTrainResult(null)
+    try {
+      const reader = new FileReader()
+      reader.onload = async () => {
+        const dataUrl = reader.result as string
+        setTrainImagePreview(dataUrl)
+        const { multimodalController } = await import('@/lib/multimodal-controller')
+        const result = await multimodalController.trainImage(dataUrl, file.name, trainLabel.trim() || undefined)
+        setTrainResult({ accuracy: result.accuracy, caption: result.caption })
+        window.dispatchEvent(new CustomEvent('refresh-vision'))
+      }
+      reader.readAsDataURL(file)
+    } catch {
+      setTrainResult({ accuracy: 0, caption: 'Training failed' })
+    } finally {
+      setTrainLoading(false)
+      if (e.target) e.target.value = ''
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      {/* Status */}
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium">Vision Model</span>
+        <span className={cn(
+          'inline-block h-1.5 w-1.5 rounded-full',
+          visionTrained ? 'bg-success' : (visionImagesLearned || 0) > 0 ? 'bg-warning' : 'bg-muted-foreground/30',
+        )} />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="p-2 rounded bg-muted/30 border border-border/40">
+          <div className="text-[10px] text-muted-foreground">Images learned</div>
+          <div className="text-sm font-medium">{visionImagesLearned ?? 0}</div>
+        </div>
+        <div className="p-2 rounded bg-muted/30 border border-border/40">
+          <div className="text-[10px] text-muted-foreground">Status</div>
+          <div className="text-sm font-medium capitalize">{visionStatus || 'ready'}</div>
+        </div>
+        {visionVocabSize !== undefined && (
+          <div className="p-2 rounded bg-muted/30 border border-border/40">
+            <div className="text-[10px] text-muted-foreground">Vocabulary</div>
+            <div className="text-sm font-medium">{visionVocabSize} words</div>
+          </div>
+        )}
+        {meanAccuracy !== undefined && meanAccuracy > 0 && (
+          <div className="p-2 rounded bg-muted/30 border border-border/40">
+            <div className="text-[10px] text-muted-foreground">Mean accuracy</div>
+            <div className="text-sm font-medium">{meanAccuracy.toFixed(1)}%</div>
+          </div>
+        )}
+      </div>
+
+      {/* Caption history */}
+      {visionCaptionHistory && visionCaptionHistory.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-[10px] text-muted-foreground font-medium">Recent captions</div>
+          <ul className="space-y-1 max-h-24 overflow-y-auto">
+            {visionCaptionHistory.slice(-8).map((cap, i) => (
+              <li key={i} className="p-1.5 rounded bg-muted/20 text-[10px] leading-relaxed border border-border/20">{cap}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Supervised training with label */}
+      <div className="pt-1 border-t border-border/30 space-y-1">
+        <div className="text-[10px] text-muted-foreground font-medium">Train with label (supervised)</div>
+        <input
+          className="w-full px-2 py-1 text-xs border border-input rounded bg-background focus:outline-none focus:ring-1 focus:ring-primary/40"
+          placeholder="Label (e.g., 'a red car')"
+          value={trainLabel}
+          onChange={e => setTrainLabel(e.target.value)}
+        />
+        <label className="flex items-center gap-1 px-2 py-1.5 rounded border border-border/40 bg-muted/10 cursor-pointer hover:bg-muted/20 text-[10px]">
+          <IconUpload className="h-3 w-3" />
+          {trainLoading ? 'Training...' : 'Upload image to train'}
+          <input type="file" accept="image/*" className="hidden" onChange={handleTrainImageWithLabel} disabled={trainLoading} />
+        </label>
+        {trainImagePreview && (
+          <img src={trainImagePreview} alt="Training preview" className="w-full rounded border border-border/40 object-cover max-h-20" />
+        )}
+        {trainResult && (
+          <div className="p-1.5 rounded bg-muted/20 text-[10px] border border-border/20 space-y-0.5">
+            <div className="flex justify-between">
+              <span>Accuracy:</span>
+              <span className={cn('font-medium', trainResult.accuracy >= 80 ? 'text-success' : trainResult.accuracy >= 50 ? 'text-warning' : 'text-destructive')}>
+                {trainResult.accuracy.toFixed(1)}%
+              </span>
+            </div>
+            <div className="text-muted-foreground">Caption: {trainResult.caption}</div>
+          </div>
+        )}
+      </div>
+
+      {/* Train from session */}
+      <Button
+        size="sm"
+        variant="outline"
+        className="w-full text-[10px] h-7"
+        disabled={trainLoading || !sessionId}
+        onClick={async () => {
+          await handleTrainFromSession()
+          window.dispatchEvent(new CustomEvent('refresh-vision'))
+        }}
+      >
+        {trainLoading ? 'Training...' : 'Train from session images'}
+      </Button>
+
+      {/* Image generation */}
+      <div className="pt-1 border-t border-border/30">
+        <div className="text-[10px] text-muted-foreground font-medium mb-1">Generate Image</div>
+        <div className="flex gap-1">
+          <input
+            className="flex-1 px-2 py-1 text-xs border border-input rounded bg-background focus:outline-none focus:ring-1 focus:ring-primary/40"
+            placeholder="A cat in space..."
+            value={genPrompt}
+            onChange={e => setGenPrompt(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleGenerate() }}
+          />
+          <Button size="sm" className="h-7 text-[10px] shrink-0" disabled={genLoading || !genPrompt.trim()} onClick={handleGenerate}>
+            {genLoading ? '...' : 'Go'}
+          </Button>
+        </div>
+        {genResult && (
+          <div className="mt-1 space-y-1">
+            <img src={genResult} alt="Generated" className="w-full rounded border border-border/40 object-cover max-h-32" />
+            <div className="flex gap-1">
+              <Button size="sm" variant="outline" className="h-6 text-[10px] flex-1" onClick={handleSendGeneratedImage}>
+                Send to chat
+              </Button>
+              <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => setGenResult(null)}>
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Audio transcription */}
+      <div className="pt-1 border-t border-border/30">
+        <div className="text-[10px] text-muted-foreground font-medium mb-1">Transcribe Audio</div>
+        <label className="flex items-center gap-1 px-2 py-1.5 rounded border border-border/40 bg-muted/10 cursor-pointer hover:bg-muted/20 text-[10px]">
+          <IconUpload className="h-3 w-3" />
+          {audioLoading ? 'Transcribing...' : 'Upload audio file'}
+          <input type="file" accept="audio/*" className="hidden" onChange={handleAudioTranscribe} disabled={audioLoading} />
+        </label>
+        {audioTranscript && (
+          <div className="mt-1 space-y-1">
+            <div className="p-1.5 rounded bg-muted/20 text-[10px] leading-relaxed border border-border/20">{audioTranscript}</div>
+            <div className="flex gap-1">
+              <Button size="sm" variant="outline" className="h-6 text-[10px] flex-1" onClick={handleSendAudioTranscript}>
+                Send to chat
+              </Button>
+              <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => setAudioTranscript('')}>
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

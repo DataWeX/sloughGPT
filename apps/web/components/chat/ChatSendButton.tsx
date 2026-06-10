@@ -19,10 +19,12 @@ export function ChatSendButton({ loading, hasContent, onSend, onStop, disabled }
       onClick={loading ? onStop : onSend}
       disabled={isDisabled}
       className={cn(
-        "h-10 w-12 shrink-0 p-0 flex items-center justify-center transition-all",
+        "h-9 w-10 shrink-0 p-0 flex items-center justify-center transition-all duration-200",
         loading
-          ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-          : "bg-primary text-primary-foreground hover:opacity-90"
+          ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-lg"
+          : hasContent
+            ? "bg-primary text-primary-foreground hover:opacity-90 rounded-lg shadow-sm"
+            : "bg-muted/30 text-muted-foreground/40 rounded-lg"
       )}
       aria-label={loading ? "Stop generation" : "Send message"}
       data-send-button="true"

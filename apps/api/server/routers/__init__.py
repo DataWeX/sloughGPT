@@ -34,10 +34,11 @@ from . import lora_eval
 from . import companion
 from . import multimodal
 from . import tokenizer
-from . import labs
 from . import learner
 from . import self_train
 from . import errors as error_logger
+from . import mobile
+from . import vlm
 
 __all__ = [
     "auth", "auto_train", "models", "inference",
@@ -46,7 +47,8 @@ __all__ = [
     "ratelimit", "workflow", "experiments", "personalities", "benchmark",
     "user_adapters", "vector", "registry",
     "session", "meta_weights", "lora_eval", "companion", "multimodal",
-    "tokenizer", "labs", "learner", "self_train", "error_logger",
+    "tokenizer", "learner", "self_train", "error_logger",
+    "mobile", "vlm",
 ]
 
 def get_all_routers() -> list[APIRouter]:
@@ -60,7 +62,9 @@ def get_all_routers() -> list[APIRouter]:
         personalities.router, benchmark.router,
         user_adapters.router, vector.router, registry.router,
         session.router, meta_weights.router, lora_eval.router,
-        companion.router, multimodal.router, tokenizer.router, labs.router,
+        companion.router, multimodal.router, tokenizer.router,
         learner.router, self_train.router,
         error_logger.router,
+        mobile.router,
+        vlm.router,
     ]

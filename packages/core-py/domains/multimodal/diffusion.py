@@ -10,7 +10,7 @@ import numpy as np
 import logging
 import math
 
-logger = logging.getLogger("sloughgpt.multimodal.diffusion")
+logger = logging.getLogger("man.multimodal.diffusion")
 
 from domains.training.slonet import (
     Tensor, SloNet, SloConv2D, SloLinear, SloCrossAttention,

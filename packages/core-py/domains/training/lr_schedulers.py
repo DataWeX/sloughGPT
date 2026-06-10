@@ -10,7 +10,7 @@ from typing import Optional
 import math
 import logging
 
-logger = logging.getLogger("sloughgpt.lr_schedulers")
+logger = logging.getLogger("man.lr_schedulers")
 
 from domains.training.slonet import (
     SloLRScheduler,

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set
 from dataclasses import dataclass
 
-logger = logging.getLogger("sloughgpt.data_import")
+logger = logging.getLogger("man.data_import")
 
 DEFAULT_IGNORES: Set[str] = {
     ".git",
@@ -424,8 +424,8 @@ class RepoImporter:
 
                 json.loads(sample)
                 return "json"
-            except:
-                pass
+            except Exception:
+                logger.warning("Failed to parse JSON for sample", exc_info=True)
 
         # YAML patterns
         yaml_indicators = ["---\n", ": ", "\n  ", "\n    "]

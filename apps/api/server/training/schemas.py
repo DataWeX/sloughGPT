@@ -10,7 +10,7 @@ eval can decode without vocab warnings; see ``docs/policies/CONTRIBUTING.md``
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -125,3 +125,108 @@ class TrainingRequest(TrainDataSourceBody, _TrainHyperparameters):
 
     name: str
     model: str
+
+
+class HFTrainingRequest(BaseModel):
+    """Fine-tune a HuggingFace model (causal LM) on a text dataset with optional LoRA.
+
+    Uses transformers.Trainer + peft under the hood. The ``dataset`` field must
+    match a folder under ``datasets/`` containing ``input.txt``.
+    """
+
+    model: str
+    dataset: str = ""
+    manifest_uri: str = ""
+    name: str = "hf-finetune-job"
+    epochs: int = 3
+    batch_size: int = 4
+    learning_rate: float = 2e-4
+    use_lora: bool = False
+    lora_rank: int = 8
+    lora_alpha: int = 16
+    max_seq_length: int = 512
+    warmup_steps: int = 100
+    weight_decay: float = 0.01
+    gradient_accumulation_steps: int = 1
+    save_steps: int = 500
+    device: Optional[str] = None
+
+
+class VLMRequest(BaseModel):
+    """Multimodal VLM training request: vision encoder + LLM with trainable connector.
+
+    Trains in two stages:
+      1. Connector pretrain (LLM frozen)
+      2. Full LoRA fine-tune (LLM unfrozen)
+
+    Dataset must be a JSONL file under ``datasets/<name>/`` with image-text pairs.
+    """
+
+    dataset: str
+    vision_encoder: str = "google/siglip-base-patch16-224"
+    llm: str = "Qwen/Qwen2.5-0.5B-Instruct"
+    connector_hidden_dim: int = 1024
+    max_seq_length: int = 512
+    stage1_epochs: int = 1
+    stage2_epochs: int = 2
+    stage1_lr: float = 1e-3
+    stage2_lr: float = 2e-5
+    batch_size: int = 4
+    use_lora: bool = True
+    lora_rank: int = 8
+    lora_alpha: int = 16
+    freeze_vision: bool = True
+    gradient_accumulation_steps: int = 1
+    warmup_steps: int = 100
+    weight_decay: float = 0.01
+    name: str = "vlm-job"
+
+
+class UnifiedStartRequest(BaseModel):
+    """Request body for /training/unified-start.
+
+    Configures the UnifiedTrainingPipeline with method auto-detection.
+    """
+    method: str = "auto"
+    data_path: str = ""
+    dataset_name: str = ""
+    output_dir: str = "models/unified-trained"
+
+    epochs: int = 3
+    batch_size: int = 8
+    learning_rate: float = 1e-4
+    weight_decay: float = 0.01
+    warmup_steps: int = 100
+
+    distill: bool = False
+    temperature: float = 4.0
+    distill_alpha: float = 0.5
+    distill_beta: float = 0.5
+
+    use_lora: bool = False
+    lora_rank: int = 8
+
+    hf_model_name: str = ""
+    hf_use_lora: bool = True
+    hf_lora_rank: int = 8
+    hf_max_seq_length: int = 512
+
+    vocab_size: int = 256
+    n_embed: int = 256
+    n_layer: int = 6
+    n_head: int = 8
+    block_size: int = 128
+
+    checkpoint_dir: str = "checkpoints"
+    checkpoint_interval: int = 500
+
+    skip_generate: bool = False
+    skip_distill: bool = False
+    skip_train: bool = False
+    skip_evaluate: bool = False
+    skip_deploy: bool = False
+
+    device: str = "auto"
+
+
+

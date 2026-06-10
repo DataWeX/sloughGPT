@@ -1,545 +1,929 @@
 """
 Unified Training Pipeline
 
-Integrates:
-1. Deep Learning - SloughGPTModel pre-training
-2. Federated Learning - Privacy-preserving distributed fine-tuning
-3. RLHF/PPO - Alignment with human preferences
+Composite pipeline that wraps existing trainers through TrainingSequence phases.
+Supports SloughGPTTrainer, HFFineTuner, DistillationTrainer, and TurboTrainer.
 
-These are STAGES, not competing approaches:
-  Pre-training → Federated Fine-tune → RLHF Alignment
+High-level TrainingStage tracks strategy (pretraining/federated/rlhf),
+while TrainingSequence tracks low-level phases (GENERATE_DATA→DISTILL→TRAIN→...).
 """
 
-import asyncio
-from domains.training.slonet_compat import torch
-nn = torch.nn
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
-import logging
+from __future__ import annotations
 
-logger = logging.getLogger("sloughgpt.unified_training")
+import json
+import logging
+import time
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Union
+
+from domains.training.sequence import (
+    TrainingSequence,
+    TrainingSequenceState,
+    TrainingRunConfig,
+    PhaseResult,
+    CheckpointFormat,
+)
+
+logger = logging.getLogger("man.unified_pipeline")
+
+
+# =============================================================================
+# TrainingStage — High-Level Strategy Stage
+# =============================================================================
 
 
 class TrainingStage(Enum):
+    """High-level training pipeline stages (strategy level)."""
+    NOT_STARTED = "not_started"
     PRETRAINING = "pretraining"
     FEDERATED = "federated"
     RLHF = "rlhf"
     COMPLETE = "complete"
+    FAILED = "failed"
 
 
-@dataclass
-class UnifiedTrainingConfig:
-    """Configuration for unified training pipeline."""
-
-    # Stage 1: Pre-training
-    pretrain_epochs: int = 10
-    pretrain_lr: float = 1e-4
-    pretrain_batch_size: int = 32
-
-    # Stage 2: Federated Learning
-    federated_rounds: int = 5
-    federated_clients: int = 3
-    federated_fraction: float = 0.5  # Fraction of clients per round
-    federated_lr: float = 5e-5
-
-    # Stage 3: RLHF Alignment
-    rlhf_epochs: int = 4
-    rlhf_lr: float = 1e-5
-    ppo_clip_epsilon: float = 0.2
-    kl_penalty_coef: float = 0.1
-
-    # General
-    device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    gradient_accumulation: int = 4
-    max_grad_norm: float = 1.0
-    save_checkpoint_every: int = 1000
+# =============================================================================
+# TrainingProgress
+# =============================================================================
 
 
 @dataclass
 class TrainingProgress:
-    """Tracks progress through training stages."""
-    stage: TrainingStage = TrainingStage.PRETRAINING
+    """Real-time training progress shared via SSE or callbacks."""
+    phase: str = "idle"
     epoch: int = 0
     total_epochs: int = 0
-    loss: float = 0.0
-    metrics: Dict[str, float] = field(default_factory=dict)
-    stage_completed: bool = False
+    step: int = 0
+    total_steps: int = 0
+    loss: Optional[float] = None
+    val_loss: Optional[float] = None
+    learning_rate: float = 0.0
+    progress_pct: float = 0.0
+    status: str = "working"  # working | complete | error | skipped
+    message: str = ""
+    metrics: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "phase": self.phase,
+            "epoch": self.epoch,
+            "total_epochs": self.total_epochs,
+            "step": self.step,
+            "total_steps": self.total_steps,
+            "loss": self.loss,
+            "val_loss": self.val_loss,
+            "learning_rate": self.learning_rate,
+            "progress_pct": self.progress_pct,
+            "status": self.status,
+            "message": self.message,
+            "metrics": self.metrics,
+        }
+
+    def to_sse_event(self, stream_name: str = "auto-train") -> Dict[str, Any]:
+        data: Dict[str, Any] = {
+            "progress": self.progress_pct,
+            "loss": self.loss,
+            "val_loss": self.val_loss,
+            "epoch": self.epoch,
+            "step": self.step,
+        }
+        # Include finish-specific fields from metrics when present
+        for key in ("final_loss", "model_path", "total_steps", "elapsed", "checkpoint", "cancelled", "epochs"):
+            if key in self.metrics:
+                data[key] = self.metrics[key]
+        return {
+            "stream": stream_name,
+            "phase": self.phase,
+            "status": self.status,
+            "data": data,
+            "meta": {
+                "epoch": self.epoch,
+                "total_epochs": self.total_epochs,
+                "total_steps": self.total_steps,
+                "learning_rate": self.learning_rate,
+            },
+            "message": self.message,
+        }
+
+
+# =============================================================================
+# UnifiedTrainingConfig
+# =============================================================================
+
+
+@dataclass
+class UnifiedTrainingConfig:
+    """Configuration for the unified training pipeline.
+
+    Aggregates settings for all supported trainer types.
+    Specific trainer configs (e.g. HFTrainingRequest, TrainerConfig, TurboConfig)
+    can be passed via the ``trainer_kwargs`` dict.
+    """
+    # General
+    method: str = "auto"  # auto | distill | finetune | turbo | hf
+    data_path: str = ""
+    dataset_name: str = ""
+    output_dir: str = "models/unified-trained"
+
+    # Epochs / steps
+    epochs: int = 3
+    max_steps: Optional[int] = None
+    batch_size: int = 8
+
+    # Optimizer
+    learning_rate: float = 1e-4
+    weight_decay: float = 0.01
+    warmup_steps: int = 100
+
+    # Distillation
+    distill: bool = False
+    temperature: float = 4.0
+    distill_alpha: float = 0.5
+    distill_beta: float = 0.5
+
+    # LoRA
+    use_lora: bool = False
+    lora_rank: int = 8
+
+    # HF-specific
+    hf_model_name: str = ""
+    hf_use_lora: bool = True
+    hf_lora_rank: int = 8
+    hf_max_seq_length: int = 512
+
+    # Turbo-specific
+    turbo_model_spec: str = "transformer"
+    turbo_vocab_size: int = 1000
+    turbo_n_embed: int = 128
+    turbo_n_head: int = 4
+
+    # SloNet-specific
+    vocab_size: int = 256
+    n_embed: int = 256
+    n_layer: int = 6
+    n_head: int = 8
+    block_size: int = 128
+
+    # Soul / personality (used by auto-train route for .soul export)
+    soul_name: str = ""
+    system_prompt: str = ""
+
+    # Tracking
+    save_report_path: str = ""  # empty = no report file written
+    checkpoint_dir: str = "checkpoints"
+    checkpoint_interval: int = 500
+    save_best_only: bool = False
+    max_checkpoints: int = 5
+
+    # Sequence config
+    skip_generate: bool = False
+    skip_distill: bool = False
+    skip_train: bool = False
+    skip_evaluate: bool = False
+    skip_deploy: bool = False
+
+    # Device
+    device: str = "auto"
+    use_mixed_precision: bool = True
+
+    # Eval
+    eval_every_n_steps: int = 100
+
+    # Extra kwargs forwarded to specific trainers
+    trainer_kwargs: Dict[str, Any] = field(default_factory=dict)
+
+
+# =============================================================================
+# UnifiedTrainingPipeline
+# =============================================================================
 
 
 class UnifiedTrainingPipeline:
-    """
-    Unified training pipeline combining:
-    - Deep Learning (pre-training)
-    - Federated Learning (privacy-preserving fine-tuning)
-    - RLHF/PPO (alignment)
+    """Composite pipeline orchestration.
 
-    The key: Each stage builds on the previous, preserving learned knowledge.
+    Wraps existing trainers (SloughGPTTrainer, HFFineTuner, DistillationTrainer,
+    TurboTrainer) and drives them through ``TrainingSequence`` phases:
+
+        GENERATE_DATA → DISTILL → TRAIN → EVALUATE → DEPLOY → COMPLETE
+
+    Phases can be skipped via ``TrainingRunConfig``.
+
+    Usage:
+        pipeline = UnifiedTrainingPipeline(config)
+        result = pipeline.run(on_progress=my_callback)
     """
 
     def __init__(
         self,
-        model: nn.Module,
-        config: UnifiedTrainingConfig,
-        tokenizer=None,
+        config: Union[UnifiedTrainingConfig, Dict[str, Any]],
+        run_config: Optional[TrainingRunConfig] = None,
     ):
-        self.model = model
-        self.config = config
-        self.tokenizer = tokenizer
-        self.device = config.device
+        if isinstance(config, dict):
+            config = UnifiedTrainingConfig(**config)
+        self.config: UnifiedTrainingConfig = config
+        if run_config is None:
+            run_config = TrainingRunConfig.defaults()
+            run_config.skip_generate = config.skip_generate
+            run_config.skip_distill = config.skip_distill
+            run_config.skip_train = config.skip_train
+            run_config.skip_evaluate = config.skip_evaluate
+            run_config.skip_deploy = config.skip_deploy
+        self.run_config = run_config
+        self.state = TrainingSequenceState()
         self.progress = TrainingProgress()
+        self._trainer_instance: Optional[Any] = None
+        self._start_time: Optional[float] = None
+        self.tracker: Optional[Any] = None
 
-        # Sub-components
-        self.federated_trainer = None
-        self.rlhf_trainer = None
+        # Determine effective method
+        self._method = self._resolve_method()
 
-        # Optimizers
-        self.optimizer = None
-        self.scheduler = None
+    def _resolve_method(self) -> str:
+        """Auto-detect training method from config.
 
-    def setup(self):
-        """Initialize training components."""
-        logger.info("Setting up unified training pipeline...")
-
-        # Initialize optimizer for pre-training
-        self.optimizer = torch.optim.AdamW(
-            self.model.parameters(),
-            lr=self.config.pretrain_lr,
-            weight_decay=0.01,
-        )
-
-        # Initialize federated trainer
-        self._setup_federated()
-
-        # Initialize RLHF trainer
-        self._setup_rlhf()
-
-        logger.info("Unified training pipeline ready")
-        return self
-
-    def _setup_federated(self):
-        """Setup federated learning components."""
-        try:
-            from domains.training.federated_learning import FederatedTrainer
-            self.federated_trainer = FederatedTrainer(
-                model=self.model,
-                num_clients=self.config.federated_clients,
-                device=self.device,
-            )
-            logger.info("Federated learning enabled")
-        except Exception as e:
-            logger.warning(f"Federated learning not available: {e}")
-            self.federated_trainer = None
-
-    def _setup_rlhf(self):
-        """Setup RLHF components."""
-        try:
-            from domains.training.rlhf import PPOTrainer, RewardModel, RLHFConfig
-
-            # Create reward model (clone of base model + reward head)
-            self.reward_model = RewardModel(
-                base_model=self.model,
-                hidden_size=self._get_hidden_size(),
-            ).to(self.device)
-
-            # Create PPO trainer
-            rlhf_config = RLHFConfig(
-                ppo_epochs=self.config.rlhf_epochs,
-                clip_epsilon=self.config.ppo_clip_epsilon,
-                use_ref_model=True,
-            )
-
-            self.rlhf_trainer = PPOTrainer(
-                policy_model=self.model,
-                value_model=self.reward_model,
-                config=rlhf_config,
-                device=self.device,
-            )
-
-            # Set reference model (copy of original policy)
-            self.rlhf_trainer.set_ref_model(self._create_ref_model())
-
-            logger.info("RLHF/PPO enabled")
-        except Exception as e:
-            logger.warning(f"RLHF not available: {e}")
-            self.rlhf_trainer = None
-
-    def _get_hidden_size(self) -> int:
-        """Get model's hidden size."""
-        if hasattr(self.model, 'n_embed'):
-            return self.model.n_embed
-        elif hasattr(self.model, 'config'):
-            return getattr(self.model.config, 'hidden_size', 512)
-        return 512
-
-    def _create_ref_model(self) -> nn.Module:
-        """Create reference model for KL divergence."""
-        import copy
-        ref = copy.deepcopy(self.model)
-        ref.eval()
-        for param in ref.parameters():
-            param.requires_grad = False
-        return ref
-
-    async def train_full_pipeline(
-        self,
-        train_data,
-        val_data=None,
-        progress_callback: Optional[Callable] = None,
-    ) -> Dict[str, Any]:
+        Priority: explicit method > hf > distill > slonet (default).
+        Turbo must be set explicitly (method=\"turbo\").
         """
-        Run the full training pipeline:
-        1. Pre-training (Deep Learning)
-        2. Federated Fine-tuning
-        3. RLHF Alignment
-        """
-        results = {}
+        if self.config.method not in ("auto", ""):
+            return self.config.method
+        if self.config.hf_model_name:
+            return "hf"
+        if self.config.distill:
+            return "distill"
+        if self.config.method == "turbo":
+            return "turbo"
+        return "slonet"
 
-        # Stage 1: Pre-training
-        logger.info("=" * 60)
-        logger.info("STAGE 1: PRE-TRAINING (Deep Learning)")
-        logger.info("=" * 60)
-
-        self.progress.stage = TrainingStage.PRETRAINING
-        self.progress.total_epochs = self.config.pretrain_epochs
-
-        pretrain_results = await self._pretrain(train_data, val_data, progress_callback)
-        results["pretraining"] = pretrain_results
-
-        # Save checkpoint after pre-training
-        self._save_checkpoint("pretrain_checkpoint.pt")
-
-        # Stage 2: Federated Learning
-        if self.federated_trainer and self.config.federated_rounds > 0:
-            logger.info("=" * 60)
-            logger.info("STAGE 2: FEDERATED FINE-TUNING")
-            logger.info("=" * 60)
-
-            self.progress.stage = TrainingStage.FEDERATED
-            self.progress.total_epochs = self.config.federated_rounds
-
-            federated_results = await self._federated_train(train_data, progress_callback)
-            results["federated"] = federated_results
-
-            # Save checkpoint after federated
-            self._save_checkpoint("federated_checkpoint.pt")
-
-        # Stage 3: RLHF Alignment
-        if self.rlhf_trainer and self.config.rlhf_epochs > 0:
-            logger.info("=" * 60)
-            logger.info("STAGE 3: RLHF ALIGNMENT (PPO)")
-            logger.info("=" * 60)
-
-            self.progress.stage = TrainingStage.RLHF
-            self.progress.total_epochs = self.config.rlhf_epochs
-
-            rlhf_results = await self._rlhf_train(train_data, progress_callback)
-            results["rlhf"] = rlhf_results
-
-            # Save final model
-            self._save_checkpoint("final_model.pt")
-
-        self.progress.stage = TrainingStage.COMPLETE
-        self.progress.stage_completed = True
-
-        return results
-
-    async def _pretrain(
+    def _update_progress(
         self,
-        train_data,
-        val_data,
-        progress_callback: Optional[Callable] = None,
-    ) -> Dict[str, Any]:
-        """Stage 1: Pre-training with standard deep learning."""
-        losses = []
-
-        for epoch in range(self.config.pretrain_epochs):
-            self.progress.epoch = epoch
-            epoch_loss = 0.0
-            num_batches = 0
-
-            self.model.train()
-            for batch in train_data:
-                # Forward pass
-                input_ids = batch.to(self.device)
-                logits, loss = self.model(input_ids, input_ids)
-
-                # Backward pass
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
-                    self.config.max_grad_norm
-                )
-                self.optimizer.step()
-                self.optimizer.zero_grad()
-
-                epoch_loss += loss.item()
-                num_batches += 1
-
-            avg_loss = epoch_loss / max(num_batches, 1)
-            losses.append(avg_loss)
-            self.progress.loss = avg_loss
-
-            logger.info(f"Pre-train Epoch {epoch+1}/{self.config.pretrain_epochs} - Loss: {avg_loss:.4f}")
-
-            if progress_callback:
-                await progress_callback(self.progress)
-
-        return {"losses": losses, "final_loss": losses[-1] if losses else 0}
-
-    async def _federated_train(
-        self,
-        train_data,
-        progress_callback: Optional[Callable] = None,
-    ) -> Dict[str, Any]:
-        """Stage 2: Federated learning for privacy-preserving fine-tuning."""
-        losses = []
-
-        for round_num in range(self.config.federated_rounds):
-            self.progress.epoch = round_num
-
-            # Simulate federated round
-            round_loss = await self.federated_trainer.train_round(
-                train_data,
-                fraction=self.config.federated_fraction,
-            )
-
-            losses.append(round_loss)
-            self.progress.loss = round_loss
-
-            logger.info(f"Federated Round {round_num+1}/{self.config.federated_rounds} - Loss: {round_loss:.4f}")
-
-            if progress_callback:
-                await progress_callback(self.progress)
-
-        return {"losses": losses, "final_loss": losses[-1] if losses else 0}
-
-    async def _rlhf_train(
-        self,
-        preference_data,
-        progress_callback: Optional[Callable] = None,
-    ) -> Dict[str, Any]:
-        """Stage 3: RLHF/PPO alignment."""
-        metrics = {
-            "rewards": [],
-            "kl_divergence": [],
-            "policy_loss": [],
-            "value_loss": [],
-        }
-
-        for epoch in range(self.config.rlhf_epochs):
-            self.progress.epoch = epoch
-
-            # PPO update step
-            if hasattr(preference_data, '__iter__'):
-                batch = next(iter(preference_data))
-                ppo_metrics = await self._ppo_step(batch)
-            else:
-                ppo_metrics = await self._ppo_step(preference_data)
-
-            for key, value in ppo_metrics.items():
-                if key in metrics:
-                    metrics[key].append(value)
-
-            self.progress.metrics = ppo_metrics
-
-            logger.info(f"RLHF Epoch {epoch+1}/{self.config.rlhf_epochs} - Reward: {ppo_metrics.get('reward', 0):.4f}")
-
-            if progress_callback:
-                await progress_callback(self.progress)
-
-        return metrics
-
-    async def _ppo_step(self, batch) -> Dict[str, float]:
-        """Perform one PPO update."""
-        try:
-            # Generate responses (simplified)
-            input_ids = batch.to(self.device) if hasattr(batch, 'to') else batch
-
-            # Get log probs and values
-            with torch.no_grad():
-                old_log_probs = self.model(input_ids)[0]
-
-            # Simulate rewards (in real RLHF, this comes from RewardModel)
-            rewards = torch.randn(input_ids.size(0), device=self.device)
-
-            # Get value estimates
-            values = self.reward_model(input_ids)
-
-            # Compute advantages
-            advantages, returns = self.rlhf_trainer.compute_advantages(
-                rewards.unsqueeze(1),
-                values.unsqueeze(1),
-                values[:, -1] if values.size(1) > 1 else values,
-            )
-
-            # PPO loss
-            log_probs = self.model(input_ids)[0]
-            policy_loss, value_loss = self.rlhf_trainer.ppo_loss(
-                log_probs,
-                old_log_probs,
-                advantages,
-                values.unsqueeze(1),
-                returns,
-            )
-
-            # Update
-            total_loss = policy_loss + 0.5 * value_loss
-            total_loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.max_grad_norm)
-            self.optimizer.step()
-            self.optimizer.zero_grad()
-
-            return {
-                "reward": rewards.mean().item(),
-                "policy_loss": policy_loss.item(),
-                "value_loss": value_loss.item(),
-                "kl_divergence": 0.0,  # Would compute from ref model
-            }
-        except Exception as e:
-            logger.warning(f"PPO step failed: {e}")
-            return {"reward": 0.0, "policy_loss": 0.0, "value_loss": 0.0, "kl_divergence": 0.0}
-
-    def _save_checkpoint(self, filename: str):
-        """Save training checkpoint."""
-        try:
-            checkpoint = {
-                "model_state_dict": self.model.state_dict(),
-                "optimizer_state_dict": self.optimizer.state_dict(),
-                "progress": {
-                    "stage": self.progress.stage.value,
-                    "epoch": self.progress.epoch,
-                }
-            }
-            if self.reward_model:
-                checkpoint["reward_model_state_dict"] = self.reward_model.state_dict()
-
-            torch.save(checkpoint, filename)
-            logger.info(f"Checkpoint saved: {filename}")
-        except Exception as e:
-            logger.warning(f"Failed to save checkpoint: {e}")
-
-    def load_checkpoint(self, filename: str):
-        """Load training checkpoint."""
-        try:
-            checkpoint = torch.load(filename, map_location=self.device)
-            self.model.load_state_dict(checkpoint["model_state_dict"])
-
-            if "optimizer_state_dict" in checkpoint and self.optimizer:
-                self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-
-            if "reward_model_state_dict" in checkpoint and self.reward_model:
-                self.reward_model.load_state_dict(checkpoint["reward_model_state_dict"])
-
-            logger.info(f"Checkpoint loaded: {filename}")
-            return True
-        except Exception as e:
-            logger.warning(f"Failed to load checkpoint: {e}")
-            return False
-
-    def get_progress(self) -> TrainingProgress:
-        """Get current training progress."""
-        return self.progress
-
-
-# =============================================================================
-# FEDERATED RL (Privacy-Preserving RL)
-# =============================================================================
-
-class FederatedRLTrainer:
-    """
-    Combines Federated Learning with RLHF for privacy-preserving alignment.
-
-    Clients train locally on their preferences, then share only gradients
-    (not raw data) for aggregation.
-    """
-
-    def __init__(
-        self,
-        model: nn.Module,
-        num_clients: int = 5,
-        device: str = "cuda" if torch.cuda.is_available() else "cpu",
+        phase: str,
+        epoch: int = 0,
+        step: int = 0,
+        loss: Optional[float] = None,
+        val_loss: Optional[float] = None,
+        message: str = "",
+        status: str = "working",
+        metrics: Optional[Dict[str, Any]] = None,
     ):
-        self.global_model = model
-        self.num_clients = num_clients
-        self.device = device
-        self.client_models = []
+        self.progress.phase = phase
+        self.progress.epoch = epoch
+        self.progress.total_epochs = self.config.epochs
+        self.progress.step = step
+        self.progress.loss = loss
+        self.progress.val_loss = val_loss
+        self.progress.status = status
+        self.progress.message = message
+        if metrics:
+            self.progress.metrics.update(metrics)
 
-        # Initialize client models
-        self._init_clients()
+    def _emit_progress(self, on_progress: Optional[Callable[[TrainingProgress], None]]):
+        if on_progress:
+            on_progress(self.progress)
 
-    def _init_clients(self):
-        """Initialize client models."""
-        import copy
-        for _ in range(self.num_clients):
-            client = copy.deepcopy(self.global_model)
-            client.train()
-            self.client_models.append(client)
-
-    async def federated_rl_round(
+    def run(
         self,
-        client_preferences: List[Dict],
-        fraction: float = 0.5,
-    ) -> Dict[str, float]:
-        """
-        Perform one round of federated RL.
+        on_progress: Optional[Callable[[TrainingProgress], None]] = None,
+    ) -> Dict[str, Any]:
+        """Run the full pipeline through all enabled phases.
 
         Args:
-            client_preferences: List of preference data per client
-            fraction: Fraction of clients to sample
+            on_progress: Called after each phase transition with current progress.
 
         Returns:
-            Aggregated metrics
+            Dict with keys: status, message, model_path, final_loss, total_steps,
+            phases, elapsed, checkpoint, metrics
         """
-        num_sampled = max(1, int(self.num_clients * fraction))
-        sampled_clients = self.client_models[:num_sampled]
+        self._start_time = time.time()
+        logger.info("Starting unified pipeline: method=%s, data=%s", self._method, self.config.data_path)
 
-        client_metrics = []
+        # --- initialize TrainingStatusTracker ---
+        try:
+            from domains.training.status import TrainingStatusTracker, CompletionStatus
+            self.tracker = TrainingStatusTracker(model_name=self.config.hf_model_name or self._method)
+            self.tracker.start_training(
+                dataset=self.config.data_path or self.config.dataset_name,
+                batch_size=self.config.batch_size,
+                learning_rate=self.config.learning_rate,
+                pretrain_epochs=self.config.epochs,
+            )
+        except ImportError:
+            self.tracker = None
 
-        # Local RL updates
-        for i, (client, prefs) in enumerate(zip(sampled_clients, client_preferences[:num_sampled])):
-            metrics = await self._local_rl_update(client, prefs)
-            client_metrics.append(metrics)
+        # --- GENERATE DATA ---
+        if not self.run_config.skip_generate:
+            self.state.start_phase(TrainingSequence.GENERATE_DATA)
+            self._update_progress("generate_data", message="Generating training data...")
+            self._emit_progress(on_progress)
+            self._run_generate_data()
+            self.state.complete_phase(TrainingSequence.GENERATE_DATA)
+        else:
+            self.state.skip_phase(TrainingSequence.GENERATE_DATA, "Skipped by config")
 
-        # Aggregate
-        aggregated = self._aggregate_metrics(client_metrics)
+        # --- DISTILL ---
+        if not self.run_config.skip_distill and self.config.distill:
+            self.state.start_phase(TrainingSequence.DISTILL)
+            self._update_progress("distill", message="Running distillation...")
+            self._emit_progress(on_progress)
+            self._run_distill()
+            self.state.complete_phase(TrainingSequence.DISTILL)
+        elif self.config.distill:
+            self.state.skip_phase(TrainingSequence.DISTILL, "Skipped by config")
+        else:
+            self.state.skip_phase(TrainingSequence.DISTILL, "Distillation not enabled")
 
-        # Update global model
-        self._update_global_model()
+        # --- TRAIN ---
+        if not self.run_config.skip_train:
+            self.state.start_phase(TrainingSequence.TRAIN)
+            self._update_progress("train", message="Training...")
+            self._emit_progress(on_progress)
+            train_result = self._run_train(on_progress)
+            self.state.complete_phase(
+                TrainingSequence.TRAIN,
+                metrics={
+                    "final_loss": train_result.get("final_loss"),
+                    "total_steps": train_result.get("total_steps", 0),
+                },
+            )
+            # Update status tracker
+            if self.tracker is not None:
+                from domains.training.status import TrainingStage
+                final_loss = train_result.get("final_loss")
+                if final_loss is not None:
+                    self.tracker.update_stage(
+                        TrainingStage.PRETRAINING,
+                        epoch=self.config.epochs - 1,
+                        loss=final_loss,
+                    )
+                self.tracker.complete_stage(TrainingStage.PRETRAINING)
+        else:
+            self.state.skip_phase(TrainingSequence.TRAIN, "Skipped by config")
+            train_result = {}
 
-        return aggregated
+        # --- EVALUATE ---
+        eval_result = {}
+        if not self.run_config.skip_evaluate:
+            self.state.start_phase(TrainingSequence.EVALUATE)
+            self._update_progress("evaluate", message="Evaluating...")
+            self._emit_progress(on_progress)
+            eval_result = self._run_evaluate()
+            self.state.complete_phase(
+                TrainingSequence.EVALUATE,
+                metrics=eval_result.get("metrics", {}),
+            )
+        else:
+            self.state.skip_phase(TrainingSequence.EVALUATE, "Skipped by config")
 
-    async def _local_rl_update(self, client_model, preferences) -> Dict[str, float]:
-        """Local RL update on client."""
-        # Simplified - would use actual PPO here
-        return {"reward": 0.0, "loss": 0.0}
+        # --- DEPLOY ---
+        deploy_result = {}
+        if not self.run_config.skip_deploy:
+            self.state.start_phase(TrainingSequence.DEPLOY)
+            self._update_progress("deploy", message="Deploying model...", status="working")
+            self._emit_progress(on_progress)
+            deploy_result = self._run_deploy(train_result)
+            self.state.complete_phase(
+                TrainingSequence.DEPLOY,
+                metrics={"model_path": deploy_result.get("model_path", "")},
+            )
+        else:
+            self.state.skip_phase(TrainingSequence.DEPLOY, "Skipped by config")
 
-    def _aggregate_metrics(self, client_metrics: List[Dict]) -> Dict[str, float]:
-        """Aggregate metrics from clients."""
-        aggregated = {}
-        for key in client_metrics[0].keys():
-            values = [m[key] for m in client_metrics]
-            aggregated[key] = sum(values) / len(values)
-        return aggregated
+        # --- COMPLETE ---
+        self.state.current_phase = TrainingSequence.COMPLETE
+        elapsed = time.time() - self._start_time
+        deploy_path = deploy_result.get("model_path", train_result.get("model_path", ""))
+        final_loss = train_result.get("final_loss")
+        final_steps = train_result.get("total_steps", 0)
+        ckpt = train_result.get("checkpoint", train_result.get("checkpoint_name", ""))
+        self._update_progress(
+            "complete",
+            status="complete",
+            message=f"Training complete in {elapsed:.1f}s",
+            loss=final_loss,
+            metrics={
+                "final_loss": final_loss,
+                "model_path": deploy_path,
+                "total_steps": final_steps,
+                "elapsed": elapsed,
+                "checkpoint": ckpt,
+                "epochs": self.config.epochs,
+            },
+        )
+        self._emit_progress(on_progress)
 
-    def _update_global_model(self):
-        """Update global model from client models."""
-        import copy
+        # Mark tracker complete & save report
+        if self.tracker is not None:
+            self.tracker.mark_complete()
+            save_path = self.config.save_report_path
+            if save_path:
+                from pathlib import Path
+                Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+                self.tracker.save_report(save_path)
 
-        # Simple averaging (FedAvg)
-        with torch.no_grad():
-            for param, *client_params in zip(
-                self.global_model.parameters(),
-                *[m.parameters() for m in self.client_models]
-            ):
-                avg_param = sum(p.data for p in client_params) / len(client_params)
-                param.data.copy_(avg_param)
+        result = {
+            "status": "completed",
+            "message": f"Training complete in {elapsed:.1f}s",
+            "model_path": deploy_path,
+            "final_loss": final_loss,
+            "total_steps": final_steps,
+            "phases": [pr.to_dict() for pr in self.state.phase_results],
+            "elapsed": elapsed,
+            "checkpoint": ckpt,
+            "metrics": train_result.get("metrics", {}),
+        }
+        # Attach tracker report if available (convert enums to values)
+        if self.tracker is not None:
+            try:
+                from dataclasses import asdict
+                from enum import Enum
 
+                def _json_safe(obj):
+                    if isinstance(obj, Enum):
+                        return obj.value
+                    if isinstance(obj, dict):
+                        return {k: _json_safe(v) for k, v in obj.items()}
+                    if isinstance(obj, (list, tuple)):
+                        return [_json_safe(x) for x in obj]
+                    return obj
+
+                report = asdict(self.tracker.get_report())
+                result["tracker_report"] = _json_safe(report)
+            except Exception:
+                pass
+        logger.info("Pipeline complete: %s", result["message"])
+        return result
+
+    def _run_generate_data(self):
+        """GENERATE_DATA phase: prepare dataset."""
+        from domains.training.train_pipeline import prepare_data
+
+        if not self.config.data_path:
+            logger.info("No data_path set — checking dataset_name")
+            return
+
+        logger.info("Preparing data from %s", self.config.data_path)
+        try:
+            prepare_data(self.config.data_path, block_size=self.config.block_size)
+        except Exception as e:
+            logger.warning("Data preparation warning (non-fatal): %s", e)
+
+    def _run_distill(self):
+        """DISTILL phase: run knowledge distillation if configured."""
+        if not self.config.distill:
+            return
+        try:
+            from domains.training.distillation import (
+                DistillationTrainer,
+                DistillationConfig,
+            )
+            from domains.training.slonet import Tensor
+
+            teacher = None  # Placeholder — teacher model should be passed externally
+            student = None  # Placeholder — student model should be passed externally
+            if teacher is not None and student is not None:
+                distill_config = DistillationConfig(
+                    temperature=self.config.temperature,
+                    alpha=self.config.distill_alpha,
+                    beta=self.config.distill_beta,
+                )
+                trainer = DistillationTrainer(teacher, student, distill_config)
+                logger.info("Distillation trainer created")
+            else:
+                logger.info("Distillation skipped — no teacher/student models provided")
+        except ImportError:
+            logger.warning("Distillation import failed — skipping phase")
+
+    def _run_train(
+        self,
+        on_progress: Optional[Callable[[TrainingProgress], None]] = None,
+    ) -> Dict[str, Any]:
+        """TRAIN phase: dispatch to the appropriate trainer based on method."""
+        method = self._method
+
+        if method == "hf":
+            return self._train_hf(on_progress)
+        elif method == "turbo":
+            return self._train_turbo(on_progress)
+        elif method == "distill":
+            return self._train_distill_student(on_progress)
+        else:
+            return self._train_slonet(on_progress)
+
+    def _train_hf(
+        self,
+        on_progress: Optional[Callable[[TrainingProgress], None]] = None,
+    ) -> Dict[str, Any]:
+        """Train via HuggingFace HFFineTuner."""
+        from domains.training.hf_finetune import HFFineTuner
+
+        data_path = self.config.data_path or str(
+            Path("datasets") / self.config.dataset_name / "input.txt"
+        )
+        output_dir = self.config.output_dir
+
+        tuner = HFFineTuner(
+            model_name=self.config.hf_model_name,
+            data_path=data_path,
+            output_dir=output_dir,
+            use_lora=self.config.hf_use_lora,
+            lora_rank=self.config.hf_lora_rank,
+            epochs=self.config.epochs,
+            batch_size=self.config.batch_size,
+            learning_rate=self.config.learning_rate,
+            max_seq_length=self.config.hf_max_seq_length,
+            warmup_steps=self.config.warmup_steps,
+            weight_decay=self.config.weight_decay,
+            **self.config.trainer_kwargs,
+        )
+
+        def _hf_progress(info: Dict[str, Any]):
+            self._update_progress(
+                "train",
+                epoch=int(info.get("epoch", 0)),
+                step=info.get("step", 0),
+                loss=info.get("loss"),
+                message=f"Epoch {info.get('epoch', 0):.1f}, loss {info.get('loss', 'N/A')}",
+                metrics={"progress_pct": info.get("progress_pct", 0)},
+            )
+            if on_progress:
+                on_progress(self.progress)
+
+        result = tuner.train(on_progress=_hf_progress)
+        self._trainer_instance = tuner
+
+        return {
+            "status": result.get("status", "completed"),
+            "model_path": result.get("model_path", output_dir),
+            "final_loss": result.get("final_loss"),
+            "total_steps": result.get("total_steps", 0),
+            "checkpoint": result.get("checkpoint", result.get("checkpoint_name", "")),
+            "metrics": {},
+        }
+
+    def _train_turbo(
+        self,
+        on_progress: Optional[Callable[[TrainingProgress], None]] = None,
+    ) -> Dict[str, Any]:
+        """Train via TurboTrainer."""
+        from domains.training.turbo_trainer import TurboTrainer, TurboConfig
+
+        turbo_config = TurboConfig(
+            model_spec=self.config.turbo_model_spec,
+            data_path=self.config.data_path or self.config.dataset_name,
+            output_dir=self.config.output_dir,
+            vocab_size=self.config.turbo_vocab_size,
+            n_embed=self.config.turbo_n_embed,
+            n_head=self.config.turbo_n_head,
+            epochs=self.config.epochs,
+            batch_size=self.config.batch_size,
+            learning_rate=self.config.learning_rate,
+            **self.config.trainer_kwargs,
+        )
+        trainer = TurboTrainer(turbo_config)
+
+        step_counter = [0]
+
+        def _turbo_progress(info: Dict[str, Any]):
+            step_counter[0] += 1
+            self._update_progress(
+                "train",
+                epoch=info.get("epoch", 0),
+                step=info.get("step", step_counter[0]),
+                loss=info.get("loss"),
+                message=f"Step {step_counter[0]}",
+            )
+            if on_progress:
+                on_progress(self.progress)
+
+        result = trainer.train(on_progress=_turbo_progress)
+        self._trainer_instance = trainer
+
+        return {
+            "status": result.get("status", "completed"),
+            "model_path": result.get("model_path", self.config.output_dir),
+            "final_loss": result.get("final_loss"),
+            "total_steps": result.get("total_steps", step_counter[0]),
+            "checkpoint": result.get("checkpoint", result.get("checkpoint_name", "")),
+            "metrics": {},
+        }
+
+    def _train_distill_student(
+        self,
+        on_progress: Optional[Callable[[TrainingProgress], None]] = None,
+    ) -> Dict[str, Any]:
+        """Train a student model via distillation."""
+        from domains.training.distillation import DistillationTrainer, DistillationConfig
+        from domains.training.slonet import Tensor
+
+        distill_config = DistillationConfig(
+            temperature=self.config.temperature,
+            alpha=self.config.distill_alpha,
+            beta=self.config.distill_beta,
+        )
+
+        teacher = None  # External; passed via trainer_kwargs
+        student = None  # External; passed via trainer_kwargs
+
+        teacher = self.config.trainer_kwargs.get("teacher_model")
+        student = self.config.trainer_kwargs.get("student_model")
+        train_data = self.config.trainer_kwargs.get("train_data")
+
+        if teacher is None or student is None:
+            logger.warning("Distillation requires teacher_model and student_model in trainer_kwargs")
+            return {"status": "skipped", "final_loss": None, "total_steps": 0}
+
+        trainer = DistillationTrainer(teacher, student, distill_config)
+
+        losses = []
+        steps = 0
+        for batch in (train_data or []):
+            inputs, labels = batch
+            losses_dict = trainer.step(inputs, labels)
+            loss_val = losses_dict.get("total_loss", 0.0)
+            losses.append(loss_val)
+            steps += 1
+            self._update_progress(
+                "train",
+                step=steps,
+                loss=loss_val,
+                message=f"Distill step {steps}, loss {loss_val:.4f}",
+            )
+            if on_progress:
+                on_progress(self.progress)
+
+        final_loss = sum(losses) / max(len(losses), 1) if losses else None
+        return {
+            "status": "completed",
+            "final_loss": final_loss,
+            "total_steps": steps,
+            "model_path": self.config.output_dir,
+            "checkpoint": "",
+            "metrics": {},
+        }
+
+    def _train_slonet(
+        self,
+        on_progress: Optional[Callable[[TrainingProgress], None]] = None,
+    ) -> Dict[str, Any]:
+        """Train via SloughGPTTrainer (native SloNet / nanoGPT)."""
+        from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
+
+        trainer_config = TrainerConfig(
+            vocab_size=self.config.vocab_size,
+            n_embed=self.config.n_embed,
+            n_layer=self.config.n_layer,
+            n_head=self.config.n_head,
+            block_size=self.config.block_size,
+            batch_size=self.config.batch_size,
+            epochs=self.config.epochs,
+            learning_rate=self.config.learning_rate,
+            weight_decay=self.config.weight_decay,
+            checkpoint_dir=self.config.checkpoint_dir,
+            checkpoint_interval=self.config.checkpoint_interval,
+            save_best_only=self.config.save_best_only,
+            max_checkpoints=self.config.max_checkpoints,
+            use_mixed_precision=self.config.use_mixed_precision,
+            max_steps=self.config.max_steps,
+            warmup_steps=self.config.warmup_steps,
+            **{k: v for k, v in self.config.trainer_kwargs.items() if k not in ("teacher_model", "student_model", "train_data")},
+        )
+
+        data_path = self.config.data_path or self.config.dataset_name
+        trainer = SloughGPTTrainer(
+            data_path=data_path,
+            config=trainer_config,
+            epochs=self.config.epochs,
+            lr=self.config.learning_rate,
+            batch_size=self.config.batch_size,
+            checkpoint_dir=self.config.checkpoint_dir,
+        )
+
+        step_counter = [0]
+        loss_history: List[float] = []
+
+        def _slonet_progress(step: int, loss: float, epoch: int):
+            step_counter[0] = step
+            loss_history.append(loss)
+            self._update_progress(
+                "train",
+                epoch=epoch,
+                step=step,
+                loss=loss,
+                metrics={"loss_history": loss_history[-200:]},
+                message=f"Step {step}, loss {loss:.4f}",
+            )
+            if on_progress:
+                on_progress(self.progress)
+
+        # Wrap the progress callback
+        original_train = trainer.train
+
+        def _patched_train(*args, **kwargs):
+            return original_train(
+                *args,
+                **kwargs,
+                progress_callback=_slonet_progress,
+            )
+
+        trainer.train = _patched_train
+        try:
+            result = trainer.train()
+        except TypeError:
+            # If trainer doesn't accept progress_callback, run without it
+            result = original_train()
+
+        self._trainer_instance = trainer
+
+        # Extract final loss from trainer (SloughGPTTrainer returns best_eval_loss)
+        final_loss = None
+        if isinstance(result, dict):
+            final_loss = result.get("best_eval_loss") or result.get("final_loss")
+        if final_loss is None:
+            final_loss = getattr(trainer, "_best_val_loss", None)
+        if final_loss is None and loss_history:
+            final_loss = loss_history[-1]
+
+        checkpoint_name = ""
+        # Export .soul if soul_name is configured
+        if self.config.soul_name and hasattr(trainer, "model") and trainer.model is not None:
+            try:
+                import time as _time
+                from domains.inference import save_soul, SloProfile, PersonalityCore
+
+                soul_name = self.config.soul_name
+                total_steps = step_counter[0] or getattr(trainer, "global_step", 0)
+                ckpt_name = f"{soul_name}_{int(_time.time())}.soul"
+                ckpt_path = Path(self.config.checkpoint_dir) / ckpt_name
+
+                soul_profile = SloProfile(
+                    name=f"{soul_name}-soul",
+                    version="1.0.0",
+                    tagline="AI Slo trained via UnifiedTrainingPipeline",
+                    description=f"SloNet trained in {total_steps} steps. Loss: {final_loss:.4f}.",
+                    lineage="unified-slp-pt",
+                    base_model="slonet-lstm",
+                    training_dataset="user-provided",
+                    epochs_trained=self.config.epochs,
+                    final_train_loss=round(float(final_loss), 6) if final_loss else 0.0,
+                    final_val_loss=round(float(final_loss), 6) if final_loss else 0.0,
+                    personality=PersonalityCore(),
+                    system_prompt=self.config.system_prompt or "You are a helpful assistant.",
+                )
+                save_soul(trainer.model, str(ckpt_path), soul_profile=soul_profile)
+                checkpoint_name = ckpt_name
+                logger.info("Exported .soul checkpoint: %s", ckpt_name)
+            except Exception as e:
+                logger.warning("Soul export skipped: %s", e)
+
+        return {
+            "status": "completed",
+            "model_path": self.config.checkpoint_dir,
+            "final_loss": final_loss,
+            "total_steps": step_counter[0],
+            "checkpoint": checkpoint_name,
+            "metrics": {"loss_history": loss_history[-200:]},
+        }
+
+    def _run_evaluate(self) -> Dict[str, Any]:
+        """EVALUATE phase: compute eval metrics."""
+        metrics = {}
+        if self._trainer_instance is not None:
+            try:
+                if hasattr(self._trainer_instance, "evaluate"):
+                    eval_result = self._trainer_instance.evaluate()
+                    if isinstance(eval_result, dict):
+                        metrics = eval_result
+            except Exception as e:
+                logger.warning("Evaluation error (non-fatal): %s", e)
+                metrics = {"eval_error": str(e)}
+        return {"metrics": metrics}
+
+    def _run_deploy(self, train_result: Dict[str, Any]) -> Dict[str, Any]:
+        """DEPLOY phase: export model to output directory."""
+        model_path = train_result.get("model_path", self.config.output_dir)
+        output_dir = Path(self.config.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        manifest = {
+            "pipeline": "unified",
+            "method": self._method,
+            "created_at": datetime.utcnow().isoformat(),
+            "config": {
+                "epochs": self.config.epochs,
+                "batch_size": self.config.batch_size,
+                "learning_rate": self.config.learning_rate,
+                "use_lora": self.config.use_lora,
+                "distill": self.config.distill,
+            },
+            "result": {
+                "final_loss": train_result.get("final_loss"),
+                "total_steps": train_result.get("total_steps", 0),
+            },
+        }
+
+        manifest_path = output_dir / "pipeline_manifest.json"
+        try:
+            with open(manifest_path, "w") as f:
+                json.dump(manifest, f, indent=2)
+        except Exception as e:
+            logger.warning("Could not write manifest: %s", e)
+
+        return {"model_path": str(output_dir)}
+
+
+# =============================================================================
+# FederatedRLTrainer
+# =============================================================================
+
+
+class FederatedRLTrainer:
+    """Federated reinforcement learning trainer (stub).
+
+    Intended for privacy-preserving federated fine-tuning with RLHF alignment.
+    """
+
+    def __init__(
+        self,
+        num_clients: int = 5,
+        aggregation: str = "fedavg",
+        local_epochs: int = 3,
+        **kwargs,
+    ):
+        self.num_clients = num_clients
+        self.aggregation = aggregation
+        self.local_epochs = local_epochs
+        self._config = kwargs
+
+    def train(
+        self,
+        on_progress: Optional[Callable[[TrainingProgress], None]] = None,
+    ) -> Dict[str, Any]:
+        """Run federated training (stub — returns placeholder result).
+
+        Args:
+            on_progress: Optional progress callback.
+
+        Returns:
+            Dict with status, message, rounds.
+        """
+        logger.info(
+            "Federated training: %d clients, %s aggregation, %d local epochs",
+            self.num_clients,
+            self.aggregation,
+            self.local_epochs,
+        )
+        progress = TrainingProgress(
+            phase="federated",
+            status="complete",
+            message=f"Federated training placeholder ({self.num_clients} clients)",
+        )
+        if on_progress:
+            on_progress(progress)
+        return {
+            "status": "completed",
+            "message": "Federated RL training placeholder",
+            "rounds": self.num_clients,
+        }
+
+
+# =============================================================================
+# Convenience Factory
+# =============================================================================
+
+
+def create_pipeline(
+    config: Union[UnifiedTrainingConfig, Dict[str, Any]],
+    **kwargs,
+) -> UnifiedTrainingPipeline:
+    """Create a configured UnifiedTrainingPipeline.
+
+    Args:
+        config: Pipeline config (dict or UnifiedTrainingConfig).
+        **kwargs: Extra config fields (overrides config dict).
+
+    Returns:
+        Configured pipeline instance.
+    """
+    if isinstance(config, dict):
+        config = UnifiedTrainingConfig(**{**config, **kwargs})
+    else:
+        for k, v in kwargs.items():
+            if hasattr(config, k):
+                setattr(config, k, v)
+    return UnifiedTrainingPipeline(config)
+
+
+# =============================================================================
+# Exports
+# =============================================================================
 
 __all__ = [
+    "TrainingStage",
+    "TrainingProgress",
     "UnifiedTrainingConfig",
     "UnifiedTrainingPipeline",
-    "TrainingProgress",
-    "TrainingStage",
     "FederatedRLTrainer",
+    "create_pipeline",
 ]

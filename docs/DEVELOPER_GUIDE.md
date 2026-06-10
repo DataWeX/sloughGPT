@@ -39,17 +39,12 @@ SloughGPT uses a domain-driven architecture where each domain represents a bound
 └─────────────────┘
 ```
 
-### Design Patterns
+### Key Conventions
 
-| Pattern | Domain | Implementation | Purpose |
-|---------|--------|----------------|---------|
-| Factory | All | `DomainFactory` | Creating domain instances |
-| Strategy | Cognitive | `ReasoningStrategy` | Multiple reasoning approaches |
-| Observer | Integration | `EventBus` | Cross-domain communication |
-| Repository | Infrastructure | `DatabaseRepository` | Data access abstraction |
-| Singleton | All | `ConfigurationManager` | Shared resources |
-| Command | UI | `APICommand` | Request handling |
-| Adapter | Infrastructure | `DatabaseAdapter` | Multi-DB support |
+- **Routers** in `apps/api/server/routers/` — one per domain, thin wrapper around domain logic
+- **Domains** in `packages/core-py/domains/` — business logic, no framework imports
+- **Controllers** on frontend (`apps/web/lib/*-controller.ts`) — axios-based API wrappers
+- **No PyTorch in SloNet** — pure NumPy autograd for the custom training pipeline
 
 ## 🛠️ Development Setup
 
@@ -74,13 +69,6 @@ source .venv/bin/activate
 
 # Install development dependencies
 python3 -m pip install -e ".[dev]"
-
-# Setup pre-commit hooks
-pre-commit install
-pre-commit install --hook-stage commit-msg
-
-# Create .env file
-cp .env.example .env
 ```
 
 ### API + web (local)
@@ -209,106 +197,24 @@ def process_memory(
 
 ## 🧪 Testing
 
-### Test Structure
+Tests are flat in `tests/` (no subdirectories). Run with:
 
+```bash
+# All tests
+python3 -m pytest tests/ -q
+
+# Skip slow tests
+python3 -m pytest tests/ -m "not slow"
+
+# A single test file
+python3 -m pytest tests/test_knowledge_memory.py -v
+
+# Frontend tests
+cd apps/web && npx vitest run
+
+# TypeScript type check
+cd apps/web && npx tsc --noEmit
 ```
-tests/
-├── unit/                   # Unit tests for individual components
-├── integration/            # Integration tests between domains
-├── e2e/                     # End-to-end workflow tests
-├── performance/             # Performance and load tests
-├── fixtures/                # Test data and utilities
-└── conftest.py              # Test configuration
-```
-
-### Writing Tests
-
-#### Unit Tests
-```python
-import pytest
-from unittest.mock import AsyncMock, patch
-from domains.cognitive.memory import MemoryManager
-
-class TestMemoryManager:
-    """Unit tests for MemoryManager."""
-    
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.memory_manager = MemoryManager()
-        asyncio.run(self.memory_manager.initialize())
-    
-    @pytest.mark.asyncio
-    async def test_store_memory(self):
-        """Test memory storage functionality."""
-        memory_data = {
-            "content": "test memory",
-            "memory_type": "episodic",
-            "importance": 0.5
-        }
-        
-        memory_id = await self.memory_manager.store_memory(memory_data)
-        
-        assert memory_id is not None
-        assert len(memory_id) > 0
-```
-
-#### Integration Tests
-```python
-import pytest
-from domains.cognitive.memory import MemoryManager
-from domains.cognitive.reasoning import ReasoningEngine
-
-class TestCognitiveIntegration:
-    """Integration tests for cognitive domain."""
-    
-    def setup_method(self):
-        """Set up integration test fixtures."""
-        self.memory_manager = MemoryManager()
-        self.reasoning_engine = ReasoningEngine()
-        asyncio.run(self.memory_manager.initialize())
-        asyncio.run(self.reasoning_engine.initialize())
-    
-    @pytest.mark.asyncio
-    async def test_reasoning_with_memory(self):
-        """Test reasoning engine integration with memory."""
-        # Store memory
-        memory_id = await self.memory_manager.store_memory({
-            "content": "test premise",
-            "memory_type": "semantic",
-            "importance": 0.8
-        })
-        
-        # Reason using stored memory
-        result = await self.reasoning_engine.reason(
-            premise="test premise",
-            context={"memories": [memory_id]}
-        )
-        
-        assert result is not None
-```
-
-### Test Configuration
-
-```python
-# pytest.ini
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py", "*_test.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-addopts = [
-    "--strict-markers",
-    "--strict-config",
-    "--cov=domains",
-    "--cov-report=html",
-    "--cov-report=xml",
-]
-markers = [
-    "unit: Unit tests",
-    "integration: Integration tests",
-    "e2e: End-to-end tests",
-    "slow: Slow running tests",
-]
 
 [tool.coverage.run]
 source = ["domains"]
@@ -349,7 +255,7 @@ logger = logging.getLogger(__name__)
 
 class CognitiveService:
     def __init__(self):
-        self.logger = logging.getLogger(f"sloughgpt.{self.__class__.__name__}")
+        self.logger = logging.getLogger(f"man.{self.__class__.__name__}")
     
     async def process_request(self, request):
         self.logger.info(f"Processing request: {request.id}")
@@ -383,7 +289,7 @@ await metrics.track_counter("api_requests_total")
 ```python
 # Enable debug mode
 import os
-os.environ['SLOUGHGPT_DEBUG'] = '1'
+os.environ['MAN_DEBUG'] = '1'
 
 # Use Python debugger
 import pdb; pdb.set_trace()
@@ -611,125 +517,24 @@ LOG_LEVEL = "INFO"
 
 ### Health Checks
 
-Implement comprehensive health checks:
-
-```python
-from fastapi import FastAPI
-
-app = FastAPI()
-
-@app.get("/api/health")
-async def health_check():
-    """Comprehensive health check for all domains."""
-    return {
-        "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
-        "domains": {
-            "cognitive": await cognitive_domain.health_check(),
-            "infrastructure": await infrastructure_domain.health_check(),
-            "enterprise": await enterprise_domain.health_check(),
-            "ui": await ui_domain.health_check(),
-            "integration": await integration_domain.health_check()
-        },
-        "version": "2.0.0"
-    }
-```
-
-## 🔧 Development Tools
-
-### Code Quality Tools
-
 ```bash
-# Format code
-black domains/
-ruff check domains/
-isort domains/
+# Basic health
+curl http://localhost:8000/health
 
-# Type checking
-mypy domains/
-
-# Security scanning
-bandit -r domains/
-
-# Linting
-flake8 domains/
-pylint domains/
+# Detailed health
+curl http://localhost:8000/health/detailed
 ```
-
-### IDE Configuration
-
-#### VS Code
-```json
-{
-    "python.defaultInterpreterPath": "./venv/bin/python",
-    "python.analysis.typeCheckingMode": "basic",
-    "python.linting.pylintEnabled": true,
-    "python.linting.mypyEnabled": true,
-    "python.formatting.provider": "black"
-}
-```
-
-#### PyCharm
-- Enable type checking
-- Configure code style according to PEP 8
-- Set up test runner
-- Enable database tool integration
-
-#### VS Code Insiders
-- Install Python, Pylance, and Black Formatter
-- Configure according to project style
-- Set up test discovery
-- Enable Git integration
 
 ## 📚 Documentation
 
-### Documentation Structure
-
-```
-docs/
-├── api/                    # API documentation
-├── architecture/             # Architecture overview
-├── developer-guide/          # This guide
-├── user-guide/              # User documentation
-├── deployment/               # Deployment instructions
-└── troubleshooting/           # Common issues and solutions
-```
+Docs live flat in `docs/`. Auto-generated API docs at `http://localhost:8000/docs` (OpenAPI/Swagger).
 
 ### Writing Documentation
 
-Follow the [Google Developer Documentation Style Guide](https://developers.google.com/tech-writing/):
-
-1. **Clear and Concise**: Use simple, direct language
-2. **Audience Awareness**: Write for your intended audience
-3. **Consistent Style**: Follow established patterns
-4. **Examples**: Provide clear, working examples
-5. **Regular Updates**: Keep documentation current
-
-### API Documentation
-
-Use OpenAPI/Swagger for API documentation:
-
-```python
-from fastapi import FastAPI
-from pydantic import BaseModel
-from typing import List, Optional
-
-class ChatRequest(BaseModel):
-    message: str
-    context: Optional[str] = None
-    user_id: Optional[str] = None
-
-class ChatResponse(BaseModel):
-    response: str
-    timestamp: datetime
-    message_id: str
-
-@app.post("/api/chat", response_model=ChatResponse)
-async def chat_endpoint(request: ChatRequest):
-    """Chat endpoint with automatic OpenAPI docs."""
-    # Implementation
-    pass
-```
+1. Module docstring at top of every `.py` file
+2. `Args`/`Returns`/`Side effects` on every public function
+3. Update `AGENTS.md` if changing development workflows
+4. Update `docs/routers.md` if adding/removing API endpoints
 
 ## 🤝 Contributing
 
@@ -792,11 +597,11 @@ cp .env.example .env
 # Full suite
 python3 -m pytest tests/ -q
 
-# Integration tests
-python3 -m pytest tests/test_integration.py -v
+# Skip slow tests
+python3 -m pytest tests/ -m "not slow"
 
-# Run with coverage
-python3 -m pytest tests/ --cov=domains --cov-report=html
+# Frontend
+cd apps/web && npx vitest run && npx tsc --noEmit
 ```
 
 ### Development servers

@@ -151,6 +151,7 @@ class InferenceEngine:
         self.max_batch_size = max_batch_size
         self.max_sequence_length = max_sequence_length
         self.use_cache = use_cache
+        self._is_mps = self.device.type == "mps"
 
         self.model.eval()
         self.model.to(self.device)
@@ -349,13 +350,13 @@ class InferenceEngine:
 
         # Explicit KV cache cleanup + MPS memory release
         del input_ids, generated
-        try:
-            import gc
-            gc.collect()
-            if torch.backends.mps.is_available():
+        if self._is_mps:
+            try:
+                import gc
+                gc.collect()
                 torch.mps.empty_cache()
-        except Exception:
-            pass
+            except Exception:
+                pass
 
         return result
 
@@ -373,17 +374,16 @@ class InferenceEngine:
         loop = asyncio.get_event_loop()
 
         # Check MPS memory before starting — auto-clear if near capacity
-        try:
-            import torch
-            if torch.backends.mps.is_available():
+        if self._is_mps:
+            try:
                 from domains.infrastructure.mps_monitor import get_mps_monitor
                 monitor = get_mps_monitor()
                 usage = monitor.get_usage()
                 if usage > 0.25:
                     logger.warning("MPS at %.0f%% — clearing cache before generation", usage * 100)
                     monitor._clear_mps_cache()
-        except Exception:
-            pass
+            except Exception:
+                pass
 
         input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
         generated = []
@@ -391,18 +391,16 @@ class InferenceEngine:
 
         with torch.no_grad():
             for step in range(max_new_tokens):
-                # Check MPS mid-generation every 3 tokens — clear cache preventively
-                if step > 0 and step % 3 == 0:
+                # Check MPS mid-generation every 6 tokens — clear cache preventively
+                if self._is_mps and step > 0 and step % 6 == 0:
                     try:
-                        import torch
-                        if torch.backends.mps.is_available():
-                            from domains.infrastructure.mps_monitor import get_mps_monitor
-                            monitor = get_mps_monitor()
-                            if not monitor.check_mid_generation():
-                                logger.warning("MPS near capacity at token %d — yielding remaining tokens", step)
-                                for t in generated:
-                                    yield self.decode([t])
-                                return
+                        from domains.infrastructure.mps_monitor import get_mps_monitor
+                        monitor = get_mps_monitor()
+                        if not monitor.check_mid_generation():
+                            logger.warning("MPS near capacity at token %d — yielding remaining tokens", step)
+                            for t in generated:
+                                yield self.decode([t])
+                            return
                     except Exception:
                         pass
 
@@ -461,12 +459,15 @@ class InferenceEngine:
         # Aggressive memory cleanup after every generation
         try:
             del input_ids, generated, past_key_values, outputs, logits, next_token
-            import gc
-            gc.collect()
-            if torch.backends.mps.is_available():
-                torch.mps.empty_cache()
         except Exception:
             pass
+        if self._is_mps:
+            try:
+                import gc
+                gc.collect()
+                torch.mps.empty_cache()
+            except Exception:
+                pass
 
     async def generate_batch(
         self,

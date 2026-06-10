@@ -3,6 +3,10 @@ Printer — Consistent CLI output with Rich.
 
 Same API as before (success, error, header, table, etc.)
 but powered by rich under the hood.
+
+TUI sub-module provides live-updating dashboards and panels
+for long-running processes. Use ``printer.tui`` or import
+``core.tui`` directly.
 """
 
 import os
@@ -107,3 +111,6 @@ class Printer:
 
 
 printer = Printer()
+
+# TUI sub-module — pure-ANSI components
+from core.tui import DevDashboard, TabConfig

@@ -4,14 +4,14 @@
  * Uses raw fetch for login/register to avoid auth interceptor (no token yet).
  */
 
-import { apiGet, apiClient } from './http-client'
+import { PUBLIC_API_URL } from './config'
 
 export interface AuthResponse {
   token: string
   user: { id: string; username: string; email: string }
 }
 
-const BASE = apiClient.defaults.baseURL || 'http://localhost:8000'
+const BASE = PUBLIC_API_URL
 
 export const authController = {
   async login(username: string, password: string): Promise<AuthResponse> {

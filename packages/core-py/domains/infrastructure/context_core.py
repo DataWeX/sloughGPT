@@ -1,6 +1,6 @@
 """
 Context Core - Unified multi-layer context management for AI models.
-Manages: session context, long-term memory, RAG retrieval, and context inspection.
+Manages: session context, long-term memory, RAG retrieval, context managers.
 """
 from dataclasses import dataclass, field, asdict
 from typing import Optional, List, Dict, Any, Callable
@@ -64,6 +64,10 @@ Be concise, accurate, and helpful."""
         max_tokens: int = 2048,
         memory_enabled: bool = True,
         rag_enabled: bool = True,
+        personality_manager: Optional[Any] = None,
+        memory_manager: Optional[Any] = None,
+        style_manager: Optional[Any] = None,
+        task_manager: Optional[Any] = None,
     ):
         self.max_tokens = max_tokens
 
@@ -93,6 +97,50 @@ Be concise, accurate, and helpful."""
         self.rag_max_chars = 500
         self._vector_store = None
         self._embedding_fn = None
+
+        # Context managers (injected, not imported — avoid circular deps)
+        self._personality = personality_manager
+        self._memory = memory_manager
+        self._style = style_manager
+        self._task = task_manager
+
+    def set_managers(
+        self,
+        personality: Optional[Any] = None,
+        memory: Optional[Any] = None,
+        style: Optional[Any] = None,
+        task: Optional[Any] = None,
+    ) -> None:
+        """Inject context managers after construction."""
+        if personality:
+            self._personality = personality
+        if memory:
+            self._memory = memory
+        if style:
+            self._style = style
+        if task:
+            self._task = task
+
+    def _apply_managers(self, query: str = "") -> Dict[str, Any]:
+        """Build manager-generated context modifications.
+
+        Returns dict with optional keys: system_extra, working_capacity, etc.
+        """
+        mods: Dict[str, Any] = {"system_extra": ""}
+
+        if self._personality:
+            mods["system_extra"] += self._personality.apply(self.system_prompt)
+
+        if self._memory:
+            mods["working_capacity"] = self._memory.working_capacity
+
+        if self._style:
+            mods["system_extra"] += self._style.apply(self.system_prompt)
+
+        if self._task:
+            mods["system_extra"] += self._task.apply(self.system_prompt)
+
+        return mods
 
     def set_vector_store(self, store, embedding_fn=None) -> None:
         """Set vector store and embedding function for RAG."""
@@ -138,7 +186,8 @@ Be concise, accurate, and helpful."""
     
     def _to_working(self, item: Dict) -> None:
         """Move item to working memory."""
-        if len(self.working_memory) >= self.working_capacity:
+        cap = self._memory.working_capacity if self._memory else self.working_capacity
+        if len(self.working_memory) >= cap:
             evicted = self.working_memory.pop(0)
             self._consolidate_episode(evicted)
         self.working_memory.append(item)
@@ -254,12 +303,12 @@ Be concise, accurate, and helpful."""
             else:
                 query_vec = simple_embed(query)
             
-            # Query vector store
-            async def _query():
-                return await self._vector_store.query(query_vec, top_k=self.rag_top_k)
-            
-            # Use asyncio.run to execute the async query safely
-            results = asyncio.run(_query())
+            # Query vector store — use new loop to avoid "already running" errors
+            loop = asyncio.new_event_loop()
+            try:
+                results = loop.run_until_complete(self._vector_store.query(query_vec, top_k=self.rag_top_k))
+            finally:
+                loop.close()
             
             if not results:
                 return ""
@@ -284,10 +333,14 @@ Be concise, accurate, and helpful."""
         include_memory: bool = True,
         query: str = "",
     ) -> ContextFrame:
-        """Build a complete context frame."""
+        """Build a complete context frame, applying context managers."""
+        # Apply managers
+        manager_mods = self._apply_managers(query)
+        system_prompt = self.system_prompt + manager_mods.get("system_extra", "")
+
         frame_id = hashlib.md5(f"{datetime.now().isoformat()}{query}".encode()).hexdigest()[:12]
         layers: List[ContextLayer] = []
-        used_tokens = self._estimate_tokens(self.system_prompt)
+        used_tokens = self._estimate_tokens(system_prompt)
         
         # Layer 1: Session messages
         session_content = "\n".join(
@@ -339,7 +392,7 @@ Be concise, accurate, and helpful."""
         
         frame = ContextFrame(
             id=frame_id,
-            system_prompt=self.system_prompt,
+            system_prompt=system_prompt,
             layers=layers,
             total_tokens=used_tokens,
             max_tokens=self.max_tokens,
@@ -409,7 +462,16 @@ _context_core: Optional[ContextCore] = None
 def get_context_core() -> ContextCore:
     global _context_core
     if _context_core is None:
-        _context_core = ContextCore()
+        from domains.context.managers import (
+            PersonalityManager, MemoryManager,
+            StyleManager, TaskManager,
+        )
+        _context_core = ContextCore(
+            personality_manager=PersonalityManager(),
+            memory_manager=MemoryManager(),
+            style_manager=StyleManager(),
+            task_manager=TaskManager(),
+        )
     return _context_core
 
 

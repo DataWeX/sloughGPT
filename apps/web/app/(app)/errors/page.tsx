@@ -8,6 +8,8 @@ import { Chip, KpiGrid, StatCard, Skeleton, Toggle } from '@/components/ui'
 import { IconAlert, IconRefresh, IconX, IconTrash } from '@/components/ui'
 import { errorController, type ErrorEntry } from '@/lib/error-controller'
 
+const PAGE_SIZE = 50
+
 function ErrorDetail({ error, onClose }: { error: ErrorEntry; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -58,24 +60,41 @@ function SourceDot({ source }: { source: string }) {
 export default function ErrorMonitorPage() {
   const [errors, setErrors] = useState<ErrorEntry[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
+  const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [selected, setSelected] = useState<ErrorEntry | null>(null)
   const [sourceFilter, setSourceFilter] = useState<string | null>(null)
   const [autoRefresh, setAutoRefresh] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
 
   const fetchErrors = useCallback(async () => {
     try {
       setLoading(true)
-      const { errors: data, unread_count } = await errorController.getRecent(100)
-      setErrors(data)
-      setUnreadCount(unread_count)
+      const res = await errorController.getRecent(PAGE_SIZE, 0)
+      setErrors(res.errors)
+      setUnreadCount(res.unread_count)
+      setTotalCount(res.total)
     } catch {
       // silent
     } finally {
       setLoading(false)
     }
   }, [])
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || errors.length >= totalCount) return
+    setLoadingMore(true)
+    try {
+      const res = await errorController.getRecent(PAGE_SIZE, errors.length)
+      setErrors(prev => [...prev, ...res.errors])
+    } catch {
+      // silent
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [loadingMore, errors.length, totalCount])
 
   useEffect(() => { fetchErrors() }, [fetchErrors])
 
@@ -100,6 +119,7 @@ export default function ErrorMonitorPage() {
     await errorController.clear()
     setErrors([])
     setUnreadCount(0)
+    setTotalCount(0)
   }, [])
 
   const sources = [...new Set(errors.map(e => e.source))]
@@ -114,6 +134,9 @@ export default function ErrorMonitorPage() {
         left={<AppRouteHeaderLead title="Error Monitor" subtitle="Client-side errors reported to the server" />}
         right={
           <div className="flex items-center gap-2">
+            <span className="text-[10px] text-muted-foreground hidden sm:inline">
+              {totalCount} total
+            </span>
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
               <Toggle checked={autoRefresh} onChange={setAutoRefresh} />
               Auto
@@ -132,7 +155,7 @@ export default function ErrorMonitorPage() {
 
       <div className="space-y-4">
         <KpiGrid columns={4}>
-          <StatCard label="Total" value={loading ? '...' : errors.length} icon={<IconAlert />} />
+          <StatCard label="Total" value={loading ? '...' : totalCount} icon={<IconAlert />} />
           <StatCard label="Last hour" value={loading ? '...' : err1h} />
           <StatCard label="Sources" value={loading ? '...' : sources.length} />
           <StatCard label="Unread" value={loading ? '...' : unreadCount} />
@@ -163,36 +186,66 @@ export default function ErrorMonitorPage() {
                   : 'No errors match the selected source filter.'}
               </div>
             ) : (
-              filtered.map((err) => (
-                <button
-                  key={err.id}
-                  onClick={() => setSelected(err)}
-                  className="w-full flex items-start gap-3 rounded-md p-2.5 text-left hover:bg-muted/50 transition-colors group"
-                >
-                  <SourceDot source={err.source} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm truncate">{err.message}</div>
-                    <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                      <span>{err.source}</span>
-                      <span>·</span>
-                      <span>{new Date(err.timestamp).toLocaleTimeString()}</span>
-                      {err.url && (
-                        <>
-                          <span>·</span>
-                          <span className="truncate max-w-[200px]">{err.url}</span>
-                        </>
-                      )}
+              <>
+                {filtered.map((err) => (
+                  <button
+                    key={err.id}
+                    onClick={() => setSelected(err)}
+                    className="w-full flex items-start gap-3 rounded-md p-2.5 text-left hover:bg-muted/50 transition-colors group"
+                  >
+                    <SourceDot source={err.source} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm truncate">{err.message}</div>
+                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                        <span>{err.source}</span>
+                        <span>·</span>
+                        <span>{new Date(err.timestamp).toLocaleTimeString()}</span>
+                        {err.url && (
+                          <>
+                            <span>·</span>
+                            <span className="truncate max-w-[200px]">{err.url}</span>
+                          </>
+                        )}
+                      </div>
                     </div>
+                    <span className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+                      {err.line}:{err.col}
+                    </span>
+                  </button>
+                ))}
+                {loadingMore && (
+                  <div className="py-3 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                    <div className="h-3 w-3 animate-spin rounded-full border border-muted-foreground border-t-transparent" />
+                    Loading more...
                   </div>
-                  <span className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-                    {err.line}:{err.col}
-                  </span>
-                </button>
-              ))
+                )}
+                <div ref={sentinelRef} className="h-1" />
+              </>
             )}
           </CardContent>
         </Card>
       </div>
+
+      {/* IntersectionObserver for infinite scroll */}
+      {!loading && !loadingMore && filtered.length > 0 && filtered.length < totalCount && (
+        <InfiniteScrollTrigger sentinelRef={sentinelRef} onTrigger={loadMore} />
+      )}
     </div>
   )
+}
+
+function InfiniteScrollTrigger({ sentinelRef, onTrigger }: { sentinelRef: React.RefObject<HTMLDivElement | null>; onTrigger: () => void }) {
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) onTrigger()
+      },
+      { rootMargin: '200px' },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [sentinelRef, onTrigger])
+  return null
 }

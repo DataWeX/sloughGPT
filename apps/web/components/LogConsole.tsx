@@ -128,7 +128,7 @@ export function LogConsole({ tick = 0, className }: LogConsoleProps) {
               {tick > 0 ? ' · live' : ' · idle'}
             </span>
           </div>
-          <span className="text-[0.5625rem] uppercase tracking-wider text-muted-foreground/90">sloughgpt.web</span>
+          <span className="text-[0.5625rem] uppercase tracking-wider text-muted-foreground/90">man.web</span>
         </div>
 
         <div className="flex flex-col border-t border-border/50 sm:flex-row sm:items-stretch sm:justify-between">

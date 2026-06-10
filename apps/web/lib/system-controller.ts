@@ -60,18 +60,18 @@ export interface DetailedHealth {
 
 export const systemController = {
   async getMetrics(): Promise<SystemMetrics> {
-    return apiGet<SystemMetrics>('/system/metrics')
+    return apiGet<SystemMetrics>('/system/metrics', undefined, { silent: true })
   },
 
   async getInfo(): Promise<SystemInfo> {
-    return apiGet<SystemInfo>('/system/info')
+    return apiGet<SystemInfo>('/system/info', undefined, { silent: true })
   },
 
   async getDisk(): Promise<DiskUsage> {
-    return apiGet<DiskUsage>('/system/disk')
+    return apiGet<DiskUsage>('/system/disk', undefined, { silent: true })
   },
 
   async getDetailedHealth(): Promise<DetailedHealth> {
-    return apiGet<DetailedHealth>('/health/detailed')
+    return apiGet<DetailedHealth>('/health/detailed', undefined, { silent: true })
   },
 }

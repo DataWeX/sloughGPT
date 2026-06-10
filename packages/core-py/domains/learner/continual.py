@@ -38,7 +38,7 @@ from domains.training.slonet import (
     cross_entropy, tensor, export_to_sou, import_from_sou,
 )
 
-logger = logging.getLogger("sloughgpt.learner")
+logger = logging.getLogger("man.learner")
 
 CHAR_SET = " abcdefghijklmnopqrstuvwxyz0123456789.,!?-'"
 STOI = {c: i for i, c in enumerate(CHAR_SET)}

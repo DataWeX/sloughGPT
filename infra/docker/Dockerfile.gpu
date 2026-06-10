@@ -34,7 +34,7 @@ COPY pyproject.toml README.md LICENSE /app/
 
 RUN mkdir -p /app/models /app/datasets /app/data /app/logs /app/cache && chmod -R 755 /app
 
-ENV SLOUGHGPT_ENV=production
+ENV MAN_ENV=production
 ENV CUDA_VISIBLE_DEVICES=0
 
 EXPOSE 8000

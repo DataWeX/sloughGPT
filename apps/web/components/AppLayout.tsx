@@ -11,6 +11,7 @@ import { Sidebar } from '@/components/Sidebar'
 import { ErrorPanel } from '@/components/ui/error-panel'
 import { GlobalErrorHandler } from '@/components/GlobalErrorHandler'
 import { StatusBar } from '@/components/StatusBar'
+import { useApiMonitor } from '@/lib/api-monitor-store'
 import { ToastContainer } from '@/components/chat/Toast'
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
 import { useBackendWatcher } from '@/hooks/useBackendWatcher'
@@ -24,6 +25,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [showShortcuts, setShowShortcuts] = useState(false)
   const toasts = useToastStore(s => s.toasts)
   const dismissToast = useToastStore(s => s.dismissToast)
+  const apiStatus = useApiMonitor(s => s.status)
   useGlobalShortcuts()
   useBackendWatcher()
 
@@ -51,7 +53,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <DialogPrimitive.Root open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-      <div className="flex min-h-dvh flex-col bg-background lg:h-dvh lg:max-h-dvh lg:min-h-0 lg:flex-row">
+      <div className="flex h-dvh max-h-dvh flex-col bg-background pt-[env(safe-area-inset-top)]">
+        {apiStatus === 'reloading' && (
+          <div className="shrink-0 flex items-center justify-center gap-2 h-7 bg-warning/15 border-b border-warning/30 text-[11px] text-warning font-medium">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />
+            Backend restarting — reconnecting…
+          </div>
+        )}
+        <div className="flex min-h-0 flex-1 lg:flex-row">
         <a
           href="#main-content"
           className="sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:inline-block focus:rounded-md focus:border focus:border-border focus:bg-card focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-ring"
@@ -59,7 +68,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           Skip to main content
         </a>
 
-        <header className="sl-mobile-header sticky top-0 z-40 flex min-h-14 shrink-0 items-center gap-2 border-b px-3 pt-[max(0rem,env(safe-area-inset-top))] lg:hidden">
+        <header className="sl-mobile-header flex shrink-0 items-center gap-2 border-b px-3 min-h-12 sm:min-h-14 lg:hidden">
           <Button
             variant="menu"
             size="icon"
@@ -75,11 +84,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             href="/"
             className="min-w-0 truncate text-sm font-semibold tracking-tight text-foreground hover:text-primary transition-colors"
           >
-            SloughGPT
+            Man
           </Link>
         </header>
 
-        <div className="hidden h-dvh shrink-0 lg:flex">
+        <div className="hidden h-full shrink-0 lg:flex">
           <Sidebar variant="desktop" />
         </div>
 
@@ -91,6 +100,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
           <StatusBar />
         </main>
+        </div>
 
         <DialogPrimitive.Portal>
           <DialogPrimitive.Overlay
@@ -113,7 +123,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           >
             <DialogPrimitive.Title className="sr-only">Main navigation</DialogPrimitive.Title>
             <DialogPrimitive.Description className="sr-only">
-              Primary navigation for the SloughGPT console. Choose a section or close this panel.
+              Primary navigation for the Man console. Choose a section or close this panel.
             </DialogPrimitive.Description>
             <Sidebar variant="drawer" onClose={closeMobileNav} onNavigate={closeMobileNav} />
           </DialogPrimitive.Content>

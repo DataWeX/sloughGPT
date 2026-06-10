@@ -4,10 +4,11 @@ Inference Router - Chat and text generation endpoints
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from typing import Optional, List, AsyncIterator
+from typing import Optional, List, AsyncIterator, Any
 from pathlib import Path
 import json
 import logging
+import threading
 logger = logging.getLogger(__name__)
 
 try:
@@ -31,12 +32,17 @@ except ImportError:
 import asyncio
 import datetime
 import uuid
+import time
 from threading import Thread
 
 router = APIRouter(prefix="", tags=["inference"])
 
 SESSIONS_DIR = Path(__file__).parent.parent.parent.parent / "data" / "chat_sessions"
 SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+
+_session_cache: Optional[list] = None
+_session_cache_ts: float = 0
+_session_cache_ttl = 2.0  # seconds
 
 # Lazy import to avoid circular deps
 _context_core = None
@@ -129,6 +135,8 @@ def _load_session(session_id: str) -> dict:
 
 def _save_session(session_id: str, data: dict) -> None:
     """Save session data to disk."""
+    global _session_cache
+    _session_cache = None  # invalidate cache
     data["updated_at"] = datetime.datetime.now().isoformat()
     session_file = SESSIONS_DIR / f"{session_id}.json"
     with open(session_file, "w") as f:
@@ -173,6 +181,15 @@ class GenerateResponse(BaseModel):
 async def generate(req: GenerateRequest) -> GenerateResponse:
     """Non-streaming generation — returns complete text response."""
     from domains.models.provider import get_provider
+    from startup_progress import STARTUP_PHASE
+    
+    # Check if model is ready before processing
+    if STARTUP_PHASE.get("phase") != "ready":
+        raise HTTPException(
+            status_code=503,
+            detail=f"Model still loading (phase: {STARTUP_PHASE.get('phase', 'unknown')}). Please wait."
+        )
+    
     provider = get_provider("default")
     if provider is None:
         raise HTTPException(status_code=503, detail="No provider available")
@@ -195,6 +212,18 @@ async def generate(req: GenerateRequest) -> GenerateResponse:
 @router.post("/inference/generate/stream")
 async def generate_stream(req: GenerateRequest) -> StreamingResponse:
     """Streaming generation — yields tokens as SSE."""
+    from startup_progress import STARTUP_PHASE
+    
+    # Check if model is ready before processing
+    if STARTUP_PHASE.get("phase") != "ready":
+        async def error_stream() -> AsyncIterator[str]:
+            yield sse_error(
+                "generate",
+                "IDLE",
+                f"Model still loading (phase: {STARTUP_PHASE.get('phase', 'unknown')}). Please wait."
+            )
+        return StreamingResponse(error_stream(), media_type="text/event-stream")
+    
     async def generate() -> AsyncIterator[str]:
         from domains.models.provider import get_provider
         provider = get_provider("default")
@@ -400,8 +429,20 @@ async def load_soul(request: LoadSoulRequest):
 @router.post("/chat/stream")
 async def chat_stream(req: ChatRequest) -> StreamingResponse:
     """Stream chat responses with multi-layer context + live knowledge enrichment."""
+    from startup_progress import STARTUP_PHASE
+    
+    # Check if model is ready before processing
+    if STARTUP_PHASE.get("phase") != "ready":
+        async def error_stream() -> AsyncIterator[str]:
+            yield sse_error(
+                "chat",
+                "IDLE",
+                f"Model still loading (phase: {STARTUP_PHASE.get('phase', 'unknown')}). Please wait."
+            )
+        return StreamingResponse(error_stream(), media_type="text/event-stream")
     
     async def generate() -> AsyncIterator[str]:
+        cancel_event = threading.Event()
         user_msg = _extract_user_message(req.messages)
         if not user_msg:
             yield sse_error("chat", "IDLE", "No user message")
@@ -409,7 +450,10 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
         
         start_time = datetime.datetime.now()
         
-        # ── Knowledge enrichment ──────────────────────────────────────────
+        # ── Progressive: emit "thinking" immediately, start enrichment in parallel ──
+        yield _sse_event("chat", "STREAMING", "thinking",
+            data={}, message="Thinking...")
+
         # Store injected knowledge (from KnowledgePanel) in vector store so
         # vector search finds it. Then query vector store for relevant facts.
         if req.knowledge:
@@ -431,18 +475,8 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
         know_result = await asyncio.to_thread(
             _enrich_knowledge, user_msg, False, 5
         )
-        if know_result["source"] != "none":
-            req.knowledge = know_result["facts"]
-            logger.info(f"Knowledge: {len(know_result['facts'])} facts from {know_result['source']}")
-            yield _sse_event("chat", "STREAMING", "working",
-                data={"source": know_result["source"], "topics": know_result["topics"],
-                      "fact_count": len(know_result["facts"])},
-                message=f"Found {len(know_result['facts'])} facts via {know_result['source']}")
-        
         provider_messages = [{"role": m.role, "content": m.content} for m in req.messages]
         if req.images:
-            # Format images as image_url objects — ProviderRouter's VisionProcessor
-            # will caption them and inject the caption as text before GPT2 generation.
             content_parts = [{"type": "text", "text": user_msg}]
             for img_data in req.images:
                 content_parts.append({"type": "image_url", "image_url": {"url": img_data}})
@@ -460,34 +494,58 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
             "timestamp": datetime.datetime.now().isoformat(),
         })
         
-        # Use ContextCore if enabled
         ctx_core = _get_context_core()
         context_info = {}
+        frame = None
         if ctx_core and req.use_context_core:
             ctx_core.set_session_id(session_id)
             ctx_core.add_message("user", user_msg)
-            
             frame = ctx_core.build_context_frame(
                 include_rag=True,
                 include_memory=True,
                 query=user_msg,
             )
-            
             context_info = {
                 "layers": [l.layer_type for l in frame.layers],
                 "total_tokens": frame.total_tokens,
                 "max_tokens": frame.max_tokens,
             }
+            if frame.system_prompt:
+                for i, m in enumerate(provider_messages):
+                    if m["role"] == "system":
+                        provider_messages[i] = {"role": "system", "content": frame.system_prompt}
+                        break
+                else:
+                    provider_messages.insert(0, {"role": "system", "content": frame.system_prompt})
+        
+        # ── Emit single "ready" event with enrichment + context info ──
+        ready_data: dict[str, Any] = {}
+        if know_result["source"] != "none":
+            req.knowledge = know_result["facts"]
+            logger.info(f"Knowledge: {len(know_result['facts'])} facts from {know_result['source']}")
+            ready_data["source"] = know_result["source"]
+            ready_data["topics"] = know_result["topics"]
+            ready_data["fact_count"] = len(know_result["facts"])
+        if context_info:
+            ready_data["context"] = context_info
+        if ready_data:
+            yield _sse_event("chat", "STREAMING", "working",
+                data=ready_data,
+                message=f"Found {ready_data.get('fact_count', 0)} facts, {len(context_info.get('layers', []))} context layers" if ready_data else "")
         
         try:
             from domains.models.provider import get_provider
-            provider = get_provider("default")
+            # Use VLM provider when images are present and VLM is loaded
+            if req.images:
+                vlm_provider = get_provider("vlm")
+                if vlm_provider is not None:
+                    provider = vlm_provider
+                else:
+                    provider = get_provider("default")
+            else:
+                provider = get_provider("default")
             
             if provider is not None:
-                if context_info:
-                    yield _sse_event("chat", "STREAMING", "working",
-                        data={"context": context_info}, message="")
-
                 if req.knowledge:
                     knowledge_str = "\n".join(f"- {k}" for k in req.knowledge)
                     provider_messages.insert(0, {
@@ -497,15 +555,21 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
 
                 full_response = ""
                 try:
-                    async for token in provider.chat_stream(
-                        provider_messages,
-                        max_tokens=req.max_tokens,
-                        temperature=req.temperature,
-                    ):
-                        if token:
-                            full_response += token
-                            yield sse_token("chat", token)
-                    yield sse_token("chat", "", done=True)
+                    try:
+                        async for token in provider.chat_stream(
+                            provider_messages,
+                            max_tokens=req.max_tokens,
+                            temperature=req.temperature,
+                            cancel_event=cancel_event,
+                        ):
+                            if token:
+                                full_response += token
+                                yield sse_token("chat", token)
+                        yield sse_token("chat", "", done=True)
+                    except GeneratorExit:
+                        cancel_event.set()
+                        logger.info("Client disconnected from chat stream")
+                        return
                 except Exception as e:
                     logger.error("Provider chat_stream error: %s", e, exc_info=True)
                     yield sse_error("chat", "ERROR", f"Generation failed: {e}")
@@ -520,11 +584,7 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
                     yield sse_error("chat", "STREAMING", "No model loaded")
                     return
 
-                if context_info:
-                    yield _sse_event("chat", "STREAMING", "working",
-                        data={"context": context_info}, message="")
-
-                system_prompt = req.system_prompt or ""
+                system_prompt = frame.system_prompt if frame and frame.system_prompt else (req.system_prompt or "")
                 if req.knowledge:
                     knowledge_str = "\n".join(f"- {k}" for k in req.knowledge)
                     system_prompt = f"{system_prompt}\n\n[KNOWLEDGE]\n{knowledge_str}\n[/KNOWLEDGE]"
@@ -559,15 +619,20 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
 
                 full_response = ""
                 try:
-                    for text in streamer:
-                        if text:
-                            full_response += text
-                            yield sse_token("chat", text)
+                    try:
+                        for text in streamer:
+                            if text:
+                                full_response += text
+                                yield sse_token("chat", text)
 
-                    thread.join(timeout=120)
-                    if thread.is_alive():
-                        logger.warning("Generation thread timed out after 120s")
-                        yield sse_error("chat", "ERROR", "Generation timed out")
+                        thread.join(timeout=120)
+                        if thread.is_alive():
+                            logger.warning("Generation thread timed out after 120s")
+                            yield sse_error("chat", "ERROR", "Generation timed out")
+                            return
+                    except GeneratorExit:
+                        cancel_event.set()
+                        logger.info("Client disconnected from chat stream (fallback)")
                         return
                 except Exception as e:
                     logger.error("Streaming error: %s", e, exc_info=True)
@@ -678,6 +743,14 @@ async def reset_context(all: bool = False) -> dict:
 async def chat(req: ChatRequest) -> ChatResponse:
     """Non-streaming chat using ChatDomain."""
     from domains import get_chat_domain
+    from startup_progress import STARTUP_PHASE
+    
+    # Check if model is ready before processing
+    if STARTUP_PHASE.get("phase") != "ready":
+        raise HTTPException(
+            status_code=503,
+            detail=f"Model still loading (phase: {STARTUP_PHASE.get('phase', 'unknown')}). Please wait."
+        )
     
     user_msg = _extract_user_message(req.messages)
     if not user_msg:
@@ -713,28 +786,33 @@ async def chat(req: ChatRequest) -> ChatResponse:
     )
 
 
-@router.get("/chat/sessions")
-async def list_sessions():
+def _build_session_cache() -> list:
+    global _session_cache, _session_cache_ts
+    now = time.time()
+    if _session_cache is not None and now - _session_cache_ts < _session_cache_ttl:
+        return _session_cache
     sessions = []
     for f in SESSIONS_DIR.glob("*.json"):
         with open(f) as fp:
             data = json.load(fp)
             sessions.append(data)
     sessions.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
-    return {"sessions": sessions}
+    _session_cache = sessions
+    _session_cache_ts = now
+    return sessions
+
+
+@router.get("/chat/sessions")
+async def list_sessions():
+    return {"sessions": _build_session_cache()}
 
 
 @router.get("/chat/sessions/current")
 async def get_current_session():
     """Return the most recently updated session, or null."""
-    sessions = []
-    for f in SESSIONS_DIR.glob("*.json"):
-        with open(f) as fp:
-            data = json.load(fp)
-            sessions.append(data)
+    sessions = _build_session_cache()
     if not sessions:
         return {"session": None}
-    sessions.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
     return {"session": sessions[0]}
 
 

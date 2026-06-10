@@ -21,7 +21,7 @@ from domains.learner.knowledge import (
     get_knowledge_ingestor,
 )
 
-logger = logging.getLogger("sloughgpt.learner.augmenter")
+logger = logging.getLogger("man.learner.augmenter")
 
 _QUERY_SIGNALS = [
     "what", "who", "when", "where", "why", "how",

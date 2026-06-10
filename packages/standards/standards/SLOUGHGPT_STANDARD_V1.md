@@ -15,7 +15,7 @@ Version 1 defines **machine-readable contracts** so the same platform can run **
 |----------|------|
 | JSON Schemas | `standards/v1/schemas/*.json` |
 | Example manifests | `standards/v1/examples/` |
-| This document | `standards/SLOUGHGPT_STANDARD_V1.md` |
+| This document | `standards/MAN_STANDARD_V1.md` |
 
 ## 1. Inference envelope (v1)
 
@@ -110,7 +110,7 @@ Extend as needed; unknown `task_type` MUST be rejected or defaulted with explici
 
 ## 7. Versioning
 
-- **Standard revision**: bump `standards/SLOUGHGPT_STANDARD_V1.md` header and schemas under `standards/v1/`; keep old schemas as `standards/v0/` if needed later.
+- **Standard revision**: bump `standards/MAN_STANDARD_V1.md` header and schemas under `standards/v1/`; keep old schemas as `standards/v0/` if needed later.
 - **Breaking changes**: new major folder `standards/v2/`; servers should advertise supported revision via `GET /openapi.json` extension or `X-SloughGPT-Standard: 1`.
 
 ---

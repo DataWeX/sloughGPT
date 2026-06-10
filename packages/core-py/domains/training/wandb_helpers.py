@@ -15,12 +15,12 @@ def env_flag(name: str) -> bool:
 
 def wandb_training_enabled_from_env() -> bool:
     """Enable W&B for ``POST /training/start`` background jobs when API key or offline mode is usable."""
-    return env_flag("SLOUGHGPT_WANDB_TRAINING")
+    return env_flag("MAN_WANDB_TRAINING")
 
 
 def wandb_server_enabled_from_env() -> bool:
-    """Enable long-lived W&B run for HTTP + inference aggregates (``SLOUGHGPT_WANDB_SERVER``)."""
-    return env_flag("SLOUGHGPT_WANDB_SERVER")
+    """Enable long-lived W&B run for HTTP + inference aggregates (``MAN_WANDB_SERVER``)."""
+    return env_flag("MAN_WANDB_SERVER")
 
 
 def default_wandb_project() -> str:
@@ -63,7 +63,7 @@ def create_training_tracker_for_api_job(
     data_path: str,
     hyperparams: Dict[str, Any],
 ):
-    """Start a W&B run for a ``POST /training/start`` job when ``SLOUGHGPT_WANDB_TRAINING`` is set.
+    """Start a W&B run for a ``POST /training/start`` job when ``MAN_WANDB_TRAINING`` is set.
 
     Returns ``None`` if disabled, wandb is missing, or init fails.
     """
@@ -99,7 +99,7 @@ def create_training_tracker_for_api_job(
     except Exception:
         import logging
 
-        logging.getLogger("sloughgpt.tracking").warning(
+        logging.getLogger("man.tracking").warning(
             "W&B training tracker could not be started; continuing without experiment logging",
             exc_info=True,
         )

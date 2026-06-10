@@ -10,7 +10,7 @@ from dataclasses import dataclass
 import logging
 import numpy as np
 
-logger = logging.getLogger("sloughgpt.multimodal.engine")
+logger = logging.getLogger("man.multimodal.engine")
 
 from domains.training.slonet import (
     Tensor, SloNet, SloConv2D, SloMaxPool2D, SloLinear,

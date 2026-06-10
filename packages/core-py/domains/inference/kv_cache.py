@@ -203,4 +203,183 @@ class KVCache:
         return sum(self.current_lengths)
 
 
-__all__ = ["KVCache"]
+def reconstruct_sequence(
+    cache: KVCache,
+    layer_subset: Optional[List[int]] = None,
+) -> Dict[str, Any]:
+    """
+    Reconstruct a token-sequence view from the KVCache by correlating
+    position indices across layers with stored key/value attention patterns.
+
+    The KV cache stores per-position key and value projections — this function
+    rebuilds a structured view of the cached sequence, including:
+
+    - ``positions``: list of cached position indices per layer
+    - ``sequence_length``: max contiguous sequence length across layers
+    - ``layer_map``: positions cached per layer
+    - ``attention_similarity``: pairwise cosine similarity between adjacent
+      cached key-vectors (flattened across heads) — useful for detecting
+      topic shifts, sentence boundaries, or repeated content.
+    - ``value_norms``: L2 norm of value vectors per position per layer
+      (high norms may indicate salient tokens).
+
+    Parameters
+    ----------
+    cache : KVCache
+        Populated KV cache instance.
+    layer_subset : list[int], optional
+        If provided, only examine these layers.  Defaults to all.
+
+    Returns
+    -------
+    dict with the fields described above.
+
+    Notes
+    -----
+    True token reconstruction is impossible from KVs alone — keys and values
+    are attention projections of hidden states, not token embeddings.  This
+    function provides the closest available approximation for debugging and
+    cache-inspection purposes.
+    """
+    layers = layer_subset or list(range(cache.num_layers))
+    has_kv = all(
+        hasattr(cache, attr) and len(getattr(cache, attr)) == cache.num_layers
+        for attr in ("key_cache", "value_cache")
+    )
+    if not has_kv:
+        return {"positions": [], "sequence_length": 0, "layer_map": {}, "attention_similarity": [], "value_norms": {}}
+
+    max_pos = cache.num_layers > 0 and max((cache.current_lengths or [0]))
+
+    layer_map: Dict[int, List[int]] = {}
+    for li in layers:
+        length = cache.current_lengths[li] if li < len(cache.current_lengths) else 0
+        layer_map[li] = list(range(length))
+
+    seq_len = max((len(v) for v in layer_map.values()), default=0)
+
+    value_norms: Dict[int, List[float]] = {}
+    for li in layers:
+        vals = cache.value_cache[li]
+        norms = []
+        for pos in range(cache.current_lengths[li] if li < len(cache.current_lengths) else 0):
+            v = vals[:, :, pos, :]
+            norm = float(v.float().pow(2).sum().sqrt().item())
+            norms.append(round(norm, 4))
+        value_norms[li] = norms
+
+    sim_matrix: List[Dict[str, Any]] = []
+    if seq_len >= 2 and layers:
+        ref_layer = layers[0]
+        k = cache.key_cache[ref_layer]
+        length = cache.current_lengths[ref_layer] if ref_layer < len(cache.current_lengths) else 0
+        for i in range(1, min(length, seq_len)):
+            a = k[:, :, i - 1, :].float().flatten()
+            b = k[:, :, i, :].float().flatten()
+            cos = float(torch.nn.functional.cosine_similarity(a.unsqueeze(0), b.unsqueeze(0)).item())
+            sim_matrix.append({"from": i - 1, "to": i, "cosine_similarity": round(cos, 4)})
+
+    return {
+        "positions": list(range(seq_len)),
+        "sequence_length": seq_len,
+        "layer_map": {str(k): v for k, v in layer_map.items()},
+        "attention_similarity": sim_matrix,
+        "value_norms": value_norms,
+    }
+
+
+def reconstruct_tokens(
+    kv_cache: KVCache,
+    layer_indices: Optional[List[int]] = None,
+    similarity_threshold: float = 0.85,
+) -> Dict[str, Any]:
+    """
+    Reconstruct token sequence structure from cached key/value representations.
+
+    KV caches store projected key/value vectors per position per layer — not
+    the original tokens themselves. This function infers sequence structure by
+    computing cross-position cosine similarity between key vectors: positions
+    with highly similar keys likely belong to the same token or repeated content.
+
+    Parameters
+    ----------
+    kv_cache : KVCache
+        Populated key-value cache instance.
+    layer_indices : list of int, optional
+        Layers to include in the analysis. Defaults to all layers.
+    similarity_threshold : float, optional
+        Cosine similarity threshold (0-1) for flagging duplicate positions.
+        Default 0.85.
+
+    Returns
+    -------
+    dict with keys:
+        - ``total_tokens``: max cached length across layers
+        - ``layers``: per-layer metadata (length, shape)
+        - ``similarity_matrix``: ``(T, T)`` float matrix of mean cross-position
+          cosine similarity (averaged across selected layers), where T is the
+          max cached length. Upper-triangular; diagonal is 1.0.
+        - ``duplicates``: list of ``(pos_a, pos_b, similarity)`` tuples where
+          similarity >= threshold
+        - ``attention_context``: per-position dict mapping ``pos -> {layer ->
+          (key_norm, value_norm)}`` with L2 norms of cached vectors
+    """
+    if layer_indices is None:
+        layer_indices = list(range(kv_cache.num_layers))
+
+    max_len = max(kv_cache.current_lengths)
+    if max_len == 0:
+        return {"total_tokens": 0, "layers": {}, "similarity_matrix": [], "duplicates": [], "attention_context": {}}
+
+    n_layers = len(layer_indices)
+    all_keys: List[torch.Tensor] = []
+    for li in layer_indices:
+        k, _ = kv_cache.get(li, 0, max_len)
+        all_keys.append(k)
+
+    # Build similarity matrix: (T, T) averaged across layers
+    T = all_keys[0].shape[2]
+    sim_matrix = torch.zeros((T, T), dtype=torch.float32)
+    for k in all_keys:
+        flat = k[0].transpose(0, 1).reshape(k.shape[1], -1).unsqueeze(0)
+        norms = flat.norm(dim=-1, keepdim=True)
+        flat_normed = flat / (norms + 1e-8)
+        sim = (flat_normed @ flat_normed.transpose(-2, -1)).squeeze(0)
+        sim_matrix += sim
+    sim_matrix /= n_layers
+
+    duplicates = []
+    for i in range(T):
+        for j in range(i + 1, T):
+            s = float(sim_matrix[i, j])
+            if s >= similarity_threshold:
+                duplicates.append((i, j, round(s, 4)))
+
+    attention_context: Dict[int, Dict[str, Any]] = {}
+    for pos in range(max_len):
+        pos_ctx: Dict[str, Any] = {}
+        for li in layer_indices:
+            k_slice, v_slice = kv_cache.get(li, pos, pos + 1)
+            pos_ctx[str(li)] = {
+                "key_norm": round(float(k_slice.norm().item()), 4),
+                "value_norm": round(float(v_slice.norm().item()), 4),
+            }
+        attention_context[pos] = pos_ctx
+
+    layers_meta = {}
+    for li in layer_indices:
+        layers_meta[str(li)] = {
+            "length": kv_cache.current_lengths[li],
+            "shape": list(kv_cache.key_cache[li].shape),
+        }
+
+    return {
+        "total_tokens": max_len,
+        "layers": layers_meta,
+        "similarity_matrix": sim_matrix.tolist(),
+        "duplicates": duplicates,
+        "attention_context": attention_context,
+    }
+
+
+__all__ = ["KVCache", "reconstruct_sequence", "reconstruct_tokens"]

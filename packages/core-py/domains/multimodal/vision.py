@@ -9,12 +9,12 @@ from typing import List
 from dataclasses import dataclass
 import logging
 
-logger = logging.getLogger("sloughgpt.vision")
+logger = logging.getLogger("man.vision")
 
 from domains.training.slonet import (
     Tensor, SloNet, SloConv2D, SloBatchNorm2D, SloMaxPool2D,
     SloLinear, SloAdam, softmax as _softmax, relu as _relu,
-    flatten as _flatten, tensor as _tensor,
+    flatten as _flatten, tensor as _tensor, mse_loss,
 )
 import numpy as np
 
@@ -24,6 +24,7 @@ class ImageCaption:
     text: str
     confidence: float
     tags: List[str]
+    accuracy: float = 0.0
 
 
 @dataclass

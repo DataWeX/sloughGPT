@@ -119,16 +119,26 @@ class ChatDomain:
         messages: List[Dict[str, str]] = None,
     ) -> str:
         """Generate response using provider pipeline or core inference engine."""
+        import asyncio
+        
         # Try the provider pipeline first (supports loaded HF models like TinyLlama)
         try:
             from domains.models.provider import get_provider
             provider = get_provider("default")
             if provider is not None:
                 msgs = messages or [{"role": "user", "content": user_msg}]
-                result = await provider.chat(msgs, max_tokens=max_tokens, temperature=temperature)
+                # Add timeout to prevent hanging
+                result = await asyncio.wait_for(
+                    provider.chat(msgs, max_tokens=max_tokens, temperature=temperature),
+                    timeout=60.0
+                )
                 return result or ""
-        except Exception:
-            pass
+        except asyncio.TimeoutError:
+            return "[Error: Generation timed out after 60 seconds]"
+        except Exception as e:
+            # Log the exception instead of silently swallowing it
+            import logging
+            logging.getLogger(__name__).warning(f"Provider chat failed: {e}", exc_info=True)
 
         # Fallback: use core inference engine
         engine = self._engine
