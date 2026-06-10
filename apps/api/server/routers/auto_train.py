@@ -12,7 +12,7 @@ mutable globals.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, List, Any
+from typing import Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
@@ -40,9 +40,6 @@ class AutoTrainState:
     """Encapsulated mutable state for the auto-train router."""
     running: bool = False
     config: dict = field(default_factory=dict)
-    student_net: Any = None
-    student_tokenizer: Any = None
-    source_lines: List[str] = field(default_factory=list)
 
 
 state = AutoTrainState()
@@ -60,7 +57,7 @@ autotrain_logger = logging.getLogger("autotrain")
 autotrain_logger.setLevel(logging.INFO)
 
 
-def _parse_subtitle_text(text: str) -> List[str]:
+def _parse_subtitle_text(text: str) -> list:
     """Parse SRT, VTT, or plain text into training lines.
     
     SRT format:
@@ -353,70 +350,6 @@ def _load_lora_soul(name: str) -> Optional[dict]:
     return None
 
 
-def _load_checkpoint_into_model(name: str):
-    from domains.training.slonet import import_from_sou
-    
-    autotrain_logger.info(f"Looking for checkpoint: {name}")
-    autotrain_logger.info(f"CHECKPOINTS_DIR: {CHECKPOINTS_DIR}")
-    autotrain_logger.info(f"Files in dir: {list(CHECKPOINTS_DIR.glob('*.soul'))[:3]}")
-    
-    for ext in ("", ".soul", ".pt"):
-        candidate = CHECKPOINTS_DIR / name
-        if not (str(name).endswith(".soul") or str(name).endswith(".pt")):
-            candidate = CHECKPOINTS_DIR / (name + ext)
-        autotrain_logger.info(f"Trying candidate: {candidate}, exists: {candidate.exists()}")
-        if candidate.exists():
-            try:
-                imported = import_from_sou(str(candidate))
-                weights = imported._get_weights_dict()
-
-                import numpy as np
-                param_idx = 0
-                loaded = 0
-                skipped = 0
-                for p in state.student_net.parameters():
-                    key = f"p{param_idx}"
-                    if key in weights:
-                        w = np.array(weights[key], dtype=np.float32)
-                        if w.shape == p.data.shape:
-                            p.data[:] = w
-                            loaded += 1
-                        else:
-                            autotrain_logger.warning(
-                                f"Shape mismatch p{param_idx}: "
-                                f"checkpoint {w.shape} != model {p.data.shape} — skipping"
-                            )
-                            skipped += 1
-                    param_idx += 1
-
-                autotrain_logger.info(
-                    f"Loaded .soul weights into SloNet: {candidate.name} "
-                    f"({loaded} ok, {skipped} skipped)"
-                )
-                return imported
-            except Exception as e:
-                autotrain_logger.error(f"SloNet weight load error: {e}")
-
-            try:
-                import torch
-                ckpt = torch.load(candidate, map_location="cpu", weights_only=False)
-                if "model_state" in ckpt and state.student_net is not None:
-                    sd = ckpt["model_state"]
-                    param_idx = 0
-                    for p in state.student_net.parameters():
-                        key = f"p{param_idx}"
-                        if key in sd:
-                            import numpy as np
-                            p.data[:] = sd[key].numpy()
-                        param_idx += 1
-                    autotrain_logger.info(f"Loaded .pt weights into SloNet: {candidate.name}")
-                    return ckpt
-            except Exception as e:
-                autotrain_logger.error(f"Legacy .pt load error: {e}")
-
-    return None
-
-
 @router.post("/start")
 async def start(req: StartRequest):
     """
@@ -460,6 +393,7 @@ async def start(req: StartRequest):
         "data_path": data_path,
         "checkpoint_name": req.checkpoint_name or "",
         "algo": req.algo,
+        "soul_name": req.soul_name,
     }
     state.running = True
     autotrain_logger.info("Auto-train configured: data_path=%s epochs=%d", data_path, req.epochs)
@@ -680,56 +614,40 @@ async def delete_checkpoint(name: str):
 
 @router.post("/checkpoints/{name}/load")
 async def load_checkpoint(name: str):
-    """Load checkpoint weights into student SloNet model."""
-    if state.student_net is None:
-        return {"status": "error", "message": "No student model. Call /auto-train/start first."}
+    """Read checkpoint metadata without loading into a model (metadata-only)."""
+    from domains.inference import load_soul
 
-    imported = _load_checkpoint_into_model(name)
-
-    if imported is not None:
-        from domains.inference import load_soul
-        soul_name = name
-        if not (name.endswith(".soul") or name.endswith(".pt")):
-            for candidate in [CHECKPOINTS_DIR / (name + ".soul"), CHECKPOINTS_DIR / (name + ".pt")]:
-                if candidate.exists():
-                    soul_name = candidate.name
-                    break
-        elif name.endswith(".pt"):
-            soul_name = name.replace(".pt", ".soul")
-        else:
-            soul_name = name
-
-        for ext in ("", ".soul", ".pt"):
-            cp = CHECKPOINTS_DIR / name
-            if not (str(name).endswith(".soul") or str(name).endswith(".pt")):
-                cp = CHECKPOINTS_DIR / (name + ext)
-            if cp.exists():
-                try:
-                    soul, _ = load_soul(str(cp))
-                    return {
-                        "status": "loaded",
-                        "name": cp.name,
-                        "soul": soul.soul_name,
-                        "loss": soul.metadata.get("avg_loss"),
-                        "steps": soul.metadata.get("steps", 0),
-                        "traits": soul.soul_traits,
-                        "lineage": soul.lineage,
-                    }
-                except Exception:
-                    pass
-                try:
-                    import torch
-                    ckpt = torch.load(cp, map_location="cpu", weights_only=False)
-                    return {
-                        "status": "loaded",
-                        "name": cp.name,
-                        "soul": ckpt.get("soul_name", "unknown"),
-                        "loss": ckpt.get("train_loss"),
-                        "steps": ckpt.get("steps", 0),
-                        "traits": ckpt.get("personality_traits", {}),
-                    }
-                except Exception:
-                    pass
+    for ext in ("", ".soul", ".pt"):
+        cp = CHECKPOINTS_DIR / name
+        if not (str(name).endswith(".soul") or str(name).endswith(".pt")):
+            cp = CHECKPOINTS_DIR / (name + ext)
+        if cp.exists():
+            try:
+                soul, _ = load_soul(str(cp))
+                return {
+                    "status": "loaded",
+                    "name": cp.name,
+                    "soul": soul.soul_name,
+                    "loss": soul.metadata.get("avg_loss"),
+                    "steps": soul.metadata.get("steps", 0),
+                    "traits": soul.soul_traits,
+                    "lineage": soul.lineage,
+                }
+            except Exception:
+                pass
+            try:
+                import torch
+                ckpt = torch.load(cp, map_location="cpu", weights_only=False)
+                return {
+                    "status": "loaded",
+                    "name": cp.name,
+                    "soul": ckpt.get("soul_name", "unknown"),
+                    "loss": ckpt.get("train_loss"),
+                    "steps": ckpt.get("steps", 0),
+                    "traits": ckpt.get("personality_traits", {}),
+                }
+            except Exception:
+                pass
 
     return {"status": "not_found", "name": name}
 

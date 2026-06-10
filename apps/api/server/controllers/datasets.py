@@ -233,24 +233,53 @@ class DatasetsController:
         data_file = corpus_file if corpus_file.exists() else path / "input.txt"
         if not data_file.exists():
             return None
+
+        # Check for VLM metadata
+        vlm_meta_path = path / ".vlm_metadata.json"
+        is_vlm = vlm_meta_path.exists()
+
         samples = []
+        total_count = 0
         with open(data_file) as f:
             for i, line in enumerate(f):
-                if i >= limit:
-                    break
                 line = line.strip()
                 if not line:
+                    continue
+                total_count += 1
+                if len(samples) >= limit:
                     continue
                 try:
                     obj = json.loads(line) if corpus_file.exists() else {"text": line}
                 except json.JSONDecodeError:
                     obj = {"text": line}
-                samples.append(obj)
+
+                if is_vlm:
+                    # VLM entries have image_path + conversations
+                    img_path = obj.get("image_path", "")
+                    convs = obj.get("conversations", [])
+                    human = next((c["value"] for c in convs if c.get("from") == "human"), "")
+                    gpt = next((c["value"] for c in convs if c.get("from") == "gpt"), "")
+                    samples.append({
+                        "path": img_path,
+                        "language": "vlm",
+                        "content": f"[IMG: {img_path}] Q: {human} A: {gpt[:120]}" + ("..." if len(gpt) > 120 else ""),
+                        "size": len(gpt),
+                    })
+                else:
+                    text = obj.get("text", obj.get("content", ""))
+                    samples.append({
+                        "path": "",
+                        "language": "text",
+                        "content": text[:200] + ("..." if len(text) > 200 else ""),
+                        "size": len(text),
+                    })
+
         return {
             "dataset_id": dataset_id,
             "samples": samples,
-            "total_samples": len(samples),
-            "total_chars": sum(len(s.get("text", "")) for s in samples),
+            "total_samples": total_count,
+            "total_chars": sum(s.get("size", 0) for s in samples),
+            "languages": {"vlm": total_count} if is_vlm else {"text": total_count},
         }
 
     def export_dataset(self, dataset_id: str, format: str = "jsonl") -> Optional[Path]:

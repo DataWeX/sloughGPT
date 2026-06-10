@@ -498,7 +498,7 @@ export default function TrainingPage() {
                         className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground flex-1 max-w-sm"
                       >
                         {!datasets.selectedDataset && <option value="">Select a dataset...</option>}
-                        {datasets.datasets.map(ds => (
+                        {datasets.datasets.filter(ds => method !== 'vlm' || ds.type === 'vlm').map(ds => (
                           <option key={ds.id} value={ds.id}>{datasetLabel(ds)}</option>
                         ))}
                       </select>
@@ -628,6 +628,12 @@ export default function TrainingPage() {
                           <button className={`px-1.5 py-0.5 rounded-sm ${algo === 'unigram' ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'}`} onClick={() => setAlgo('unigram')}>Unigram</button>
                         </div>
                       </div>
+                    )}
+                    {method === 'vlm' && datasets.datasets.filter(ds => ds.type === 'vlm').length === 0 && (
+                      <p className="text-xs text-muted-foreground/70">
+                        No VLM datasets found. Create one from the{' '}
+                        <a href="/multimodal" className="text-primary underline underline-offset-2">Multimodal</a> page.
+                      </p>
                     )}
                   </div>
                 )}
