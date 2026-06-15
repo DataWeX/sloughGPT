@@ -59,7 +59,9 @@ class DatasetsController:
                 "type": dataset_type,
                 "size_bytes": size,
                 "size_formatted": f"{size / 1024:.1f} KB" if size > 0 else "Empty",
+                "size": size,
                 "num_samples": num_samples,
+                "samples": num_samples,
                 "description": self._describe_dataset(d, [], size) if (corpus_file.exists() or input_file.exists()) else "",
             }
 
@@ -115,6 +117,7 @@ class DatasetsController:
             "dataset_id": dataset_id,
             "files": len(files),
             "size_bytes": total_size,
+            "size": total_size,
             "description": description,
         }
 
