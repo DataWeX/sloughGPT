@@ -226,6 +226,18 @@ export default function ModelDetailPage() {
               </CardContent>
             </Card>
 
+            {/* Quick test card */}
+            {isLoaded && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Quick test</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ModelTestPrompt modelId={modelId} />
+                </CardContent>
+              </Card>
+            )}
+
             {/* Details card */}
             <Card>
               <CardHeader>
