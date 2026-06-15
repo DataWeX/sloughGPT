@@ -194,6 +194,17 @@ async def lifespan(app: FastAPI):
 
     STARTUP_PHASE.update(phase="ready", step=6, message="Server ready")
     logger.info("Startup complete")
+
+    # Pre-warm sentence-transformers embed model so first chat request isn't slow
+    def _prewarm_embed():
+        try:
+            from domains.inference.vector_store import _load_embed_model
+            _load_embed_model()
+        except Exception:
+            pass
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _pool:
+        _pool.submit(_prewarm_embed)
     yield
     # Shutdown: unregister all models
     registry.reset_metrics()
