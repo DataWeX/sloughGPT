@@ -281,3 +281,53 @@ function DetailItem({ label, value }: { label: string; value: string }) {
     </div>
   )
 }
+
+function ModelTestPrompt({ modelId }: { modelId: string }) {
+  const [prompt, setPrompt] = useState('Hello, who are you?')
+  const [output, setOutput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const addToast = useToastStore(s => s.addToast)
+
+  const handleTest = useCallback(async () => {
+    if (!prompt.trim() || loading) return
+    setLoading(true)
+    setOutput('')
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/inference/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: prompt.trim(), max_new_tokens: 200 }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      setOutput(data.text || data.response || JSON.stringify(data))
+    } catch (err) {
+      addToast('Test failed — is the model loaded?', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }, [prompt, loading, addToast])
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2">
+        <input
+          value={prompt}
+          onChange={e => setPrompt(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleTest() }}
+          placeholder="Type a prompt to test..."
+          className="flex-1 h-8 rounded-md border border-border/60 bg-background px-3 text-sm"
+          disabled={loading}
+        />
+        <Button size="sm" onClick={handleTest} disabled={loading || !prompt.trim()}>
+          {loading ? 'Testing…' : 'Test'}
+        </Button>
+      </div>
+      {output && (
+        <div className="rounded-md border border-border/40 bg-muted/20 p-3 text-sm text-muted-foreground whitespace-pre-wrap max-h-48 overflow-y-auto">
+          {output}
+        </div>
+      )}
+    </div>
+  )
+}

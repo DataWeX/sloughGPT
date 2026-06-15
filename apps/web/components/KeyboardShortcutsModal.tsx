@@ -23,21 +23,18 @@ const SHORTCUTS: Shortcut[] = [
   { keys: ['Shift', 'Enter'], description: 'New line in message', category: 'Chat' },
   { keys: ['Esc'], description: 'Stop streaming / Close dialog', category: 'Chat' },
   { keys: ['Ctrl', 'N'], description: 'New chat', category: 'Chat' },
-  { keys: ['Ctrl', 'R'], description: 'Regenerate response', category: 'Chat' },
-  { keys: ['Ctrl', 'K'], description: 'Toggle settings', category: 'Chat' },
   { keys: ['Ctrl', 'Shift', 'C'], description: 'Copy last response', category: 'Chat' },
+  { keys: ['Ctrl', 'Shift', 'F'], description: 'Search conversations', category: 'Chat' },
   
   // General shortcuts
   { keys: ['?'], description: 'Show keyboard shortcuts', category: 'General' },
-  { keys: ['Ctrl', 'S'], description: 'Save / Export', category: 'General' },
-  { keys: ['Ctrl', 'Shift', 'D'], description: 'Toggle debug overlay', category: 'General' },
   
   // Navigation shortcuts
   { keys: ['Ctrl', '1'], description: 'Go to Chat', category: 'Navigation' },
   { keys: ['Ctrl', '2'], description: 'Go to Models', category: 'Navigation' },
   { keys: ['Ctrl', '3'], description: 'Go to Datasets', category: 'Navigation' },
   { keys: ['Ctrl', '4'], description: 'Go to Training', category: 'Navigation' },
-  { keys: ['Ctrl', '5'], description: 'Go to Monitoring', category: 'Navigation' },
+  { keys: ['Ctrl', '5'], description: 'Go to Settings', category: 'Navigation' },
 ]
 
 function KeyboardKey({ k, 'aria-describedby': ariaDescribedBy }: { k: string; 'aria-describedby'?: string }) {
