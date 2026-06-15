@@ -15,6 +15,7 @@ export default function TokenizerPage() {
   const addToast = useToastStore(s => s.addToast)
   const [stats, setStats] = useState<TokenizerStats | null>(null)
   const [tab, setTab] = useState<'playground' | 'samples' | 'merges' | 'vocab' | 'decompose' | 'analyze'>('playground')
+  const [loading, setLoading] = useState(true)
 
   // Playground
   const [input, setInput] = useState('')
@@ -53,16 +54,16 @@ export default function TokenizerPage() {
     try {
       const s = await tokenizerController.getStats()
       setStats(s)
-    } catch { /* ignore */ }
-  }, [])
+    } catch { addToast('Failed to load tokenizer stats', 'error') }
+  }, [addToast])
 
   const fetchMerges = useCallback(async (limit = 100) => {
     try {
       const res = await tokenizerController.getMerges(limit)
       setMerges(res.merges)
       setMergeTotal(res.total)
-    } catch { /* ignore */ }
-  }, [])
+    } catch { addToast('Failed to load merge rules', 'error') }
+  }, [addToast])
 
   const fetchVocab = useCallback(async (limit = 50, offset = 0) => {
     try {
@@ -70,10 +71,12 @@ export default function TokenizerPage() {
       setVocabEntries(res.entries)
       setVocabTotal(res.total)
       setVocabOffset(res.offset)
-    } catch { /* ignore */ }
-  }, [])
+    } catch { addToast('Failed to load vocabulary', 'error') }
+  }, [addToast])
 
-  useEffect(() => { fetchStats(); fetchMerges(); fetchVocab() }, [fetchStats, fetchMerges, fetchVocab])
+  useEffect(() => {
+    Promise.all([fetchStats(), fetchMerges(), fetchVocab()]).finally(() => setLoading(false))
+  }, [fetchStats, fetchMerges, fetchVocab])
 
   const handleTokenize = async () => {
     if (!input.trim()) return
@@ -140,12 +143,20 @@ export default function TokenizerPage() {
         <Card>
           <CardHeader><CardTitle className="text-base">Vocabulary</CardTitle></CardHeader>
           <CardContent>
-            <KpiGrid columns={4}>
-              <StatCard label="Vocab size" value={stats?.vocab_size ?? '—'} />
-              <StatCard label="Base chars" value={stats?.base_chars ?? '—'} />
-              <StatCard label="Subwords" value={stats?.merged_subwords ?? '—'} />
-              <StatCard label="Merges" value={stats?.total_merges ?? '—'} />
-            </KpiGrid>
+            {loading ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[1,2,3,4].map(i => (
+                  <div key={i} className="h-16 animate-pulse bg-muted rounded" />
+                ))}
+              </div>
+            ) : (
+              <KpiGrid columns={4}>
+                <StatCard label="Vocab size" value={stats?.vocab_size ?? '—'} />
+                <StatCard label="Base chars" value={stats?.base_chars ?? '—'} />
+                <StatCard label="Subwords" value={stats?.merged_subwords ?? '—'} />
+                <StatCard label="Merges" value={stats?.total_merges ?? '—'} />
+              </KpiGrid>
+            )}
             {stats && (
               <p className="mt-2 text-xs text-muted-foreground">
                 {stats.special_tokens} special tokens
@@ -167,6 +178,7 @@ export default function TokenizerPage() {
                 placeholder="Type text to tokenize..."
                 className="text-sm"
                 onKeyDown={e => e.key === 'Enter' && handleTokenize()}
+                aria-label="Text to tokenize"
               />
               <Button size="sm" onClick={handleTokenize} disabled={tokLoading}>
                 {tokLoading ? '...' : 'Tokenize'}
@@ -248,6 +260,7 @@ export default function TokenizerPage() {
                 onChange={e => setMergeSearch(e.target.value)}
                 placeholder="Search merges..."
                 className="text-sm"
+                aria-label="Search merge rules"
               />
               <div className="max-h-80 overflow-y-auto space-y-0.5">
                 {filteredMerges.map(m => (
@@ -280,6 +293,7 @@ export default function TokenizerPage() {
                 onChange={e => setVocabSearch(e.target.value)}
                 placeholder="Search tokens..."
                 className="text-sm"
+                aria-label="Search vocabulary tokens"
               />
               <div className="max-h-80 overflow-y-auto space-y-0.5">
                 {filteredVocab.map(e => (
@@ -329,6 +343,7 @@ export default function TokenizerPage() {
                   placeholder="Enter a token (e.g. 'hello')..."
                   className="text-sm font-mono"
                   onKeyDown={e => e.key === 'Enter' && handleDecompose()}
+                  aria-label="Token to decompose"
                 />
                 <Button size="sm" onClick={handleDecompose} disabled={decompLoading}>
                   {decompLoading ? '...' : 'Trace'}
@@ -377,6 +392,7 @@ export default function TokenizerPage() {
                 onChange={e => setAnalysisText(e.target.value)}
                 placeholder={`the quick brown fox jumps over the lazy dog\nhello world\nmachine learning transformers`}
                 className="w-full h-24 text-xs font-mono p-2 rounded border border-border/60 bg-background resize-none"
+                aria-label="Corpus text for analysis"
               />
               <Button size="sm" onClick={handleAnalyze} disabled={!analysisText.trim()}>Analyze</Button>
               {analysisResult && (

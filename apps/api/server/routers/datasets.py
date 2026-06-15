@@ -323,6 +323,14 @@ async def import_from_isbn(request: ISBNImportRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/search")
+async def search_datasets(q: str = Query(..., description="Search query")):
+    """Search datasets by name"""
+    ctrl = get_datasets_controller()
+    results = ctrl.search_datasets(q)
+    return {"results": results, "count": len(results)}
+
+
 @router.get("/{dataset_id}", response_model=DatasetInfo)
 async def get_dataset(dataset_id: str):
     """Get dataset details"""
@@ -411,13 +419,6 @@ async def add_dataset_data(dataset_id: str, req: DatasetDataRequest):
     return {"status": "appended", "rows_added": result}
 
 
-@router.get("/search")
-async def search_datasets(q: str = Query(..., description="Search query")):
-    """Search datasets by name"""
-    ctrl = get_datasets_controller()
-    results = ctrl.search_datasets(q)
-    return {"results": results, "count": len(results)}
-
 
 @router.get("/{dataset_id}/preview")
 async def preview_dataset(dataset_id: str, limit: int = Query(10, description="Number of samples")):
@@ -441,3 +442,36 @@ async def export_dataset(dataset_id: str, format: str = Query("jsonl", descripti
         filename=f"{dataset_id}.{format}",
         media_type="application/octet-stream",
     )
+
+
+@router.post("/from-chat")
+async def create_dataset_from_chat(req: dict):
+    """Create a training dataset from a chat conversation.
+
+    Accepts { messages: [{role, content}...], name?: string }.
+    Saves as JSONL in the datasets directory and returns the dataset ID.
+    """
+    messages = req.get("messages", [])
+    name = req.get("name", "chat-export")
+
+    if not messages:
+        raise HTTPException(status_code=400, detail="No messages provided")
+
+    ctrl = get_datasets_controller()
+    dataset = ctrl.create_dataset(name, description=f"Exported from chat ({len(messages)} messages)")
+
+    dataset_dir = _DATASETS_DIR / dataset["id"]
+    dataset_dir.mkdir(parents=True, exist_ok=True)
+
+    jsonl_path = dataset_dir / "input.jsonl"
+    with open(jsonl_path, "w") as f:
+        for msg in messages:
+            if msg.get("role") in ("user", "assistant") and msg.get("content"):
+                f.write(json.dumps({"messages": [{"role": msg["role"], "content": msg["content"]}]}) + "\n")
+
+    return {
+        "status": "created",
+        "dataset_id": dataset["id"],
+        "name": name,
+        "messages_exported": len([m for m in messages if m.get("role") in ("user", "assistant") and m.get("content")]),
+    }

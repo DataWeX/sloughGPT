@@ -8,6 +8,31 @@ import { useAuthStore } from './auth'
 
 export type ImportSource = 'github' | 'huggingface' | 'url' | 'local' | 'kaggle' | 'csv' | 'isbn'
 
+export interface DatasetStats {
+  format: string
+  samples: number
+  chars: number
+  avg_length: number
+  has_messages: boolean
+  sample_preview: string[]
+  lines: number
+  suggested_method: string
+  file_type: string
+  error?: string
+}
+
+export interface TrainingConfig {
+  method: string
+  model: string
+  epochs: number
+  learning_rate: number
+  batch_size: number
+  use_lora: boolean
+  lora_rank: number
+  max_seq_length: number
+  reasoning: string
+}
+
 export interface DatasetPreview {
   dataset_id: string
   samples: Array<{ path: string; language: string; content: string; size: number }>
@@ -144,5 +169,24 @@ export const datasetController = {
 
   async batchImport(sources: string[]): Promise<{ imported: number; errors: string[] }> {
     return apiPost<{ imported: number; errors: string[] }>('/datasets/import/batch', { sources })
+  },
+
+  async convertToMessages(datasetId: string, systemPrompt: string = "You are a helpful assistant."): Promise<{
+    status: string
+    new_dataset_id: string
+    total_conversations: number
+  }> {
+    return apiPost(`/datasets/convert-to-messages?dataset_id=${encodeURIComponent(datasetId)}&system_prompt=${encodeURIComponent(systemPrompt)}`)
+  },
+
+  async getStats(datasetId: string): Promise<DatasetStats> {
+    return apiGet<DatasetStats>(`/datasets/${encodeURIComponent(datasetId)}/stats`)
+  },
+
+  async createFromChat(params: {
+    messages: Array<{ role: string; content: string }>
+    name?: string
+  }): Promise<{ status: string; dataset_id: string; name: string; messages_exported: number }> {
+    return apiPost('/datasets/from-chat', params)
   },
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useErrorStore, type AppError, type ErrorSeverity } from '@/lib/error-store'
 import { cn } from '@/lib/cn'
 
@@ -16,6 +16,22 @@ function WarningIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+    </svg>
+  )
+}
+
+function CopyIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+    </svg>
+  )
+}
+
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
     </svg>
   )
 }
@@ -39,6 +55,22 @@ function ChevronIcon({ className }: { className?: string }) {
 function ErrorItem({ error, onDismiss }: { error: AppError; onDismiss: (id: string) => void }) {
   const isError = error.severity === 'error'
   const isWarning = error.severity === 'warning'
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = useCallback(() => {
+    const text = [
+      `Severity: ${error.severity}`,
+      `Title: ${error.title}`,
+      `Message: ${error.message}`,
+      error.source ? `Source: ${error.source}` : null,
+      error.requestId ? `Request ID: ${error.requestId}` : null,
+      `Time: ${new Date(error.timestamp).toLocaleString()}`,
+      `URL: ${typeof window !== 'undefined' ? window.location.href : 'N/A'}`,
+    ].filter(Boolean).join('\n')
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }, [error])
 
   return (
     <div
@@ -60,7 +92,17 @@ function ErrorItem({ error, onDismiss }: { error: AppError; onDismiss: (id: stri
         {error.source && (
           <p className="mt-0.5 opacity-60 text-[9px]">Source: {error.source}</p>
         )}
+        {error.requestId && (
+          <p className="mt-0.5 text-[8px] font-mono text-muted-foreground/40">ID: {error.requestId}</p>
+        )}
       </div>
+      <button
+        onClick={handleCopy}
+        className="shrink-0 p-0.5 rounded hover:opacity-70 transition-opacity"
+        aria-label={copied ? 'Copied' : 'Copy error'}
+      >
+        {copied ? <CheckIcon className="h-3 w-3" /> : <CopyIcon className="h-3 w-3" />}
+      </button>
       <button
         onClick={() => onDismiss(error.id)}
         className="shrink-0 p-0.5 rounded hover:opacity-70 transition-opacity"
@@ -77,6 +119,7 @@ export function ErrorPanel() {
   const dismissError = useErrorStore(s => s.dismissError)
   const clearErrors = useErrorStore(s => s.clearErrors)
   const [open, setOpen] = useState(false)
+  const [copiedAll, setCopiedAll] = useState(false)
   const prevCount = useRef(errors.length)
 
   useEffect(() => {
@@ -89,6 +132,20 @@ export function ErrorPanel() {
   const errorCount = errors.filter(e => e.severity === 'error').length
   const warningCount = errors.filter(e => e.severity === 'warning' || e.severity === 'info').length
   const total = errors.length
+
+  const handleCopyAll = useCallback(() => {
+    const text = errors.map(e => [
+      `Severity: ${e.severity}`,
+      `Title: ${e.title}`,
+      `Message: ${e.message}`,
+      e.source ? `Source: ${e.source}` : null,
+      e.requestId ? `Request ID: ${e.requestId}` : null,
+      `Time: ${new Date(e.timestamp).toLocaleString()}`,
+    ].filter(Boolean).join('\n')).join('\n\n---\n\n')
+    navigator.clipboard.writeText(text)
+    setCopiedAll(true)
+    setTimeout(() => setCopiedAll(false), 2000)
+  }, [errors])
 
   if (total === 0) return null
 
@@ -112,12 +169,20 @@ export function ErrorPanel() {
               {errorCount > 0 && ` · ${errorCount} error${errorCount > 1 ? 's' : ''}`}
             </p>
             {total > 1 && (
-              <button
-                onClick={clearErrors}
-                className="text-[10px] text-muted-foreground hover:text-foreground underline"
-              >
-                Clear all
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCopyAll}
+                  className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                >
+                  {copiedAll ? 'Copied' : 'Copy all'}
+                </button>
+                <button
+                  onClick={clearErrors}
+                  className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                >
+                  Clear all
+                </button>
+              </div>
             )}
           </div>
           {errors.map(error => (

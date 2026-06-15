@@ -91,7 +91,7 @@ export function ChatInput({
         )}
 
         {images.length > 0 && (
-          <div className="flex gap-2 flex-wrap pb-2">
+          <div className="flex gap-2 flex-wrap pb-2" aria-label="Attached images">
             {images.map((img) => (
               <ImagePreview 
                 key={img.id} 

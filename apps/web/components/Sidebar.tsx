@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { inferenceHealthLabel, useApiHealth } from '@/hooks/useApiHealth'
@@ -13,6 +13,18 @@ import {
   IconModels,
   IconSearch,
   IconSettings,
+  IconActivity,
+  IconCompare,
+  IconAlert,
+  IconTraining,
+  IconBenchmark,
+  IconTokenizer,
+  IconExport,
+  IconLabs,
+  IconAgents,
+  IconLogin,
+  IconBrain,
+  IconChangelog,
 } from '@/components/icons/NavIcons'
 import { IconChevronDown } from '@/components/ui'
 import { cn } from '@/lib/cn'
@@ -21,12 +33,28 @@ import { ThemeSwitcher } from './ThemeSwitcher'
 import { CustomDropdown } from './CustomDropdown'
 import { useLocale, LOCALES } from '@/hooks/useLocale'
 
-const navItems = [
+const workspaceItems = [
   { path: '/chat', key: 'nav.chat', Icon: IconChat },
   { path: '/conversations', key: 'nav.conversations', Icon: IconMenu },
+  { path: '/training', key: 'nav.training', Icon: IconTraining },
   { path: '/models', key: 'nav.models', Icon: IconModels },
+  { path: '/datasets', key: 'nav.datasets', Icon: IconActivity },
   { path: '/knowledge', key: 'nav.knowledge', Icon: IconSearch },
+  { path: '/compare', key: 'nav.compare', Icon: IconCompare },
+  { path: '/changelog', key: 'nav.changelog', Icon: IconChangelog },
   { path: '/settings', key: 'nav.settings', Icon: IconSettings },
+] as const
+
+const systemItems = [
+  { path: '/monitoring', key: 'nav.monitoring', Icon: IconActivity },
+  { path: '/errors', key: 'nav.errors', Icon: IconAlert },
+  { path: '/benchmark', key: 'nav.benchmark', Icon: IconBenchmark },
+  { path: '/tokenizer', key: 'nav.tokenizer', Icon: IconTokenizer },
+  { path: '/webgpu', key: 'nav.webgpu', Icon: IconBrain },
+  { path: '/export', key: 'nav.export', Icon: IconExport },
+  { path: '/labs', key: 'nav.labs', Icon: IconLabs },
+  { path: '/agents', key: 'nav.agents', Icon: IconAgents },
+  { path: '/login', key: 'nav.login', Icon: IconLogin },
 ] as const
 
 /** Sidebar list — smaller than home quick-action tiles */
@@ -47,6 +75,11 @@ export function Sidebar({ variant = 'desktop', onNavigate, onClose }: SidebarPro
   const isDrawer = variant === 'drawer'
   const { state: apiHealth } = useApiHealth()
   const { locale, setLocale, t } = useLocale()
+  const [hasNewChangelog, setHasNewChangelog] = useState(false)
+
+  useEffect(() => {
+    import('@/app/(app)/changelog/page').then(m => setHasNewChangelog(m.hasUnseenChangelog()))
+  }, [pathname])
   const apiStatusDot = useMemo(() => {
     if (apiHealth === null) return 'bg-muted-foreground'
     if (apiHealth === 'offline') return 'bg-destructive'
@@ -124,7 +157,38 @@ export function Sidebar({ variant = 'desktop', onNavigate, onClose }: SidebarPro
             {t('sidebar.workspace')}
           </p>
           <ul className="space-y-1" aria-labelledby="sidebar-workspace-heading">
-            {navItems.map((item) => {
+            {workspaceItems.map((item) => {
+              const active = routeMatchesPath(pathname, item.path)
+              return (
+                <li key={item.path}>
+                  <Link
+                    href={item.path}
+                    aria-current={active ? 'page' : undefined}
+                    className={navLinkClass(active)}
+                    onClick={afterNav}
+                  >
+                    <item.Icon
+                      className={cn(NAV_ICON, active ? 'opacity-100' : 'opacity-90 dark:opacity-80')}
+                      aria-hidden
+                    />
+                    <span className="flex-1 truncate">{t(item.key)}</span>
+                    {item.path === '/changelog' && hasNewChangelog && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" aria-label="New updates" />
+                    )}
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+
+          <p
+            className="mb-2 mt-4 px-3 text-xs font-medium text-muted-foreground"
+            id="sidebar-system-heading"
+          >
+            {t('sidebar.system')}
+          </p>
+          <ul className="space-y-1" aria-labelledby="sidebar-system-heading">
+            {systemItems.map((item) => {
               const active = routeMatchesPath(pathname, item.path)
               return (
                 <li key={item.path}>

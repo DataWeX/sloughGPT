@@ -270,12 +270,14 @@ class ModelServer:
             import asyncio
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            loop.run_until_complete(self.generate(
-                prompt=self._warmup_prompt,
-                max_new_tokens=5,
-                temperature=0.7,
-            ))
-            loop.close()
+            try:
+                loop.run_until_complete(self.generate(
+                    prompt=self._warmup_prompt,
+                    max_new_tokens=5,
+                    temperature=0.7,
+                ))
+            finally:
+                loop.close()
             with self._warmup_lock:
                 self._warmup_completed = True
             logger.info("ModelServer[%s]: warmup completed", self.model_id)

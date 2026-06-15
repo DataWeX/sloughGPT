@@ -414,6 +414,7 @@ export default function MultimodalPage() {
                     onChange={e => setBatchDirPath(e.target.value)}
                     placeholder="/path/to/images on server"
                     className="h-8 text-xs flex-1"
+                    aria-label="Server directory path for batch training"
                   />
                   <Button
                     size="sm"
@@ -452,12 +453,14 @@ export default function MultimodalPage() {
                     onChange={e => setVlmDatasetName(e.target.value)}
                     placeholder="Dataset name"
                     className="h-8 text-xs flex-1"
+                    aria-label="VLM dataset name"
                   />
                   <Input
                     value={vlmImageDir}
                     onChange={e => setVlmImageDir(e.target.value)}
                     placeholder="/path/to/images"
                     className="h-8 text-xs flex-1"
+                    aria-label="Image directory for VLM dataset"
                   />
                 </div>
                 <Button
@@ -543,6 +546,7 @@ export default function MultimodalPage() {
                     placeholder="A cat in a spacesuit…"
                     className="h-8 text-xs flex-1"
                     onKeyDown={e => { if (e.key === 'Enter') handleGenerateImage() }}
+                    aria-label="Image generation prompt"
                   />
                   <Button
                     size="sm"
@@ -601,6 +605,7 @@ export default function MultimodalPage() {
                       placeholder="Text to speak…"
                       className="h-8 text-xs flex-1"
                       onKeyDown={e => { if (e.key === 'Enter') handleSynthesize() }}
+                      aria-label="Text to synthesize"
                     />
                     <Button
                       size="sm"

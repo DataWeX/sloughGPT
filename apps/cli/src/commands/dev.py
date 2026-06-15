@@ -7,6 +7,7 @@ import os
 import time
 import signal
 import threading
+import webbrowser
 from pathlib import Path
 from collections import deque
 from typing import Optional
@@ -229,97 +230,118 @@ def _print_summary(api_lines, web_lines, status):
 def cmd_serve(args):
     """Start HTTP inference server.
 
-    Default: starts the full FastAPI server (all endpoints) plus the
-    Next.js web frontend on port 3000.
-
-    With ``--lightweight``: starts a minimal HTTP server (``/health``, ``/generate``)
-    suitable for CLI testing only.
+    With --web: starts full FastAPI server + Next.js web UI and opens browser.
+    Without --web: starts the full FastAPI server only (API-only mode).
     """
-    lightweight = getattr(args, "lightweight", False)
+    web = getattr(args, "web", False)
 
-    if not lightweight:
-        # ── Full FastAPI server + web frontend ──────────────────────
+    if web:
         _cmd_api_and_web(args)
         return
 
-    # ── Lightweight HTTP server for CLI testing ─────────────────────
-    import json
-    import atexit
-    from http.server import HTTPServer, BaseHTTPRequestHandler
-    import torch
+    # ── API-only mode ────────────────────────────────────
+    _cmd_api_only(args)
 
-    printer.header("Starting Lightweight Inference Server")
-    printer.key_value("Host", f"{args.host}:{args.port}")
 
-    model_path = args.model or "models/sloughgpt.pt"
-    stoi = {}
-    itos = {}
+def _cmd_api_only(args):
+    """Start FastAPI server only (no web frontend)."""
+    root = _repo_root()
+    api_port = getattr(args, "port", 8000)
 
-    if Path(model_path).exists():
-        printer.step(f"Loading model from {model_path}...")
-        try:
-            checkpoint = torch.load(model_path, weights_only=False, map_location="cpu")
-            stoi = checkpoint.get("stoi", {})
-            itos = checkpoint.get("itos", {})
-            printer.success("Model loaded")
-        except Exception as e:
-            printer.warning(f"Could not load model: {e}")
-    else:
-        printer.warning(f"Model not found: {model_path}")
+    _kill_port(api_port)
+    time.sleep(0.3)
 
-    class Handler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            if self.path == "/health":
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    "status": "ok",
-                    "model": "sloughgpt",
-                    "model_loaded": model_path != "models/sloughgpt.pt",
-                }).encode())
-            else:
-                self.send_response(404)
-                self.end_headers()
+    printer.header("Starting SloughGPT API Server")
+    printer.key_value("API", f"http://{args.host}:{api_port}")
+    printer.key_value("Docs", f"http://{args.host}:{api_port}/docs")
 
-        def do_POST(self):
-            if self.path == "/generate":
-                content_length = int(self.headers["Content-Length"])
-                body = self.rfile.read(content_length)
-                data = json.loads(body)
+    env = os.environ.copy()
+    model = getattr(args, "model", None) or os.environ.get("SLOUGHGT_MODEL_PATH", "")
+    if model:
+        env["SLOUGHGT_MODEL_PATH"] = model
+    for k in ("MAN_AUTOLOAD_MODEL", "MAN_API_PORT", "HF_TOKEN"):
+        if k in os.environ:
+            env[k] = os.environ[k]
 
-                prompt = data.get("prompt", "")
-                max_tokens = data.get("max_tokens", 100)
-                temperature = data.get("temperature", 0.8)
+    api_lines: deque = deque(maxlen=_LOG_BUF)
+    stop_event = threading.Event()
 
-                text = f"Generated: {prompt[:50]}..."
+    python = Path(sys.executable)
+    api_proc = subprocess.Popen(
+        [str(python), "-m", "uvicorn", "apps.api.server.main:app",
+         "--host", args.host, "--port", str(api_port)],
+        cwd=str(root),
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    api_thread = threading.Thread(
+        target=_read_stream, args=(api_proc.stdout, api_lines, stop_event), daemon=True
+    )
+    api_thread.start()
 
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"text": text}).encode())
-            else:
-                self.send_response(404)
-                self.end_headers()
+    printer.step("Waiting for API...")
+    ready = False
+    for _ in range(90):
+        if _check_api_ready(api_port):
+            ready = True
+            break
+        time.sleep(1)
 
-        def log_message(self, format, *args):
-            printer.info(f"{args[0]}")
-    server = HTTPServer((args.host, args.port), Handler)
-    try:
-        printer.info(f"Server ready on http://{args.host}:{args.port}")
-        printer.info("Press Ctrl+C to stop")
-        server.serve_forever()
-    except KeyboardInterrupt:
+    if not ready:
+        printer.error("API failed to start within 90s")
+        printer.info("Last output:")
+        for line in list(api_lines)[-20:]:
+            printer.info(f"  | {line}")
+        stop_event.set()
+        _kill_port(api_port)
+        return
+
+    printer.success(f"API ready at http://{args.host}:{api_port}")
+    printer.info("Press Ctrl+C to stop")
+
+    shutdown = [False]
+
+    def _sig_handler(sig, frame):
+        if shutdown[0]:
+            return
+        shutdown[0] = True
         print()
-        printer.info("Server stopped")
-        server.shutdown()
+        printer.info("Shutting down...")
+        stop_event.set()
+        if api_proc.poll() is None:
+            try:
+                api_proc.terminate()
+                api_proc.wait(timeout=5)
+            except Exception:
+                api_proc.kill()
+        _kill_port(api_port)
+        printer.success("Stopped")
+
+    signal.signal(signal.SIGINT, _sig_handler)
+    signal.signal(signal.SIGTERM, _sig_handler)
+
+    try:
+        api_proc.wait()
+    except KeyboardInterrupt:
+        if not shutdown[0]:
+            shutdown[0] = True
+            stop_event.set()
+            try:
+                api_proc.terminate()
+                api_proc.wait(timeout=5)
+            except Exception:
+                api_proc.kill()
+            _kill_port(api_port)
+            printer.success("Stopped")
 
 
 def _cmd_api_and_web(args):
-    """Start full FastAPI server + Next.js web frontend."""
+    """Start full FastAPI server + Next.js web frontend with browser auto-open."""
     root = _repo_root()
     api_port = getattr(args, "port", 8000)
-    web_port = 3000
+    web_port = getattr(args, "web_port", 3000)
 
     # Kill existing processes on these ports
     _kill_port(api_port)
@@ -361,15 +383,62 @@ def _cmd_api_and_web(args):
     )
     api_thread.start()
 
-    # ── Start Web frontend ───────────────────────────────────────
+    # ── Build standalone if needed ──────────────────────────────
     web_root = root / "apps" / "web"
+    standalone_dir = web_root / ".next" / "standalone"
+    server_js = standalone_dir / "server.js"
+
+    if not server_js.is_file():
+        printer.step("Building Next.js standalone (first time)...")
+        build_env = {**env, "NEXT_TELEMETRY_DISABLED": "1"}
+        build_proc = subprocess.Popen(
+            ["npx", "next", "build"],
+            cwd=str(web_root),
+            env=build_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        build_lines = deque(maxlen=200)
+        build_thread = threading.Thread(
+            target=_read_stream, args=(build_proc.stdout, build_lines, stop_event), daemon=True
+        )
+        build_thread.start()
+        build_proc.wait()
+        if build_proc.returncode != 0:
+            printer.error("Next.js build failed")
+            printer.info("Build output (last 20 lines):")
+            for line in list(build_lines)[-20:]:
+                printer.info(f"  | {line}")
+            stop_event.set()
+            _kill_port(api_port)
+            return
+        printer.success("Build complete")
+
+    # ── Copy static assets for standalone ───────────────────────
+    static_src = web_root / ".next" / "static"
+    static_dst = standalone_dir / ".next" / "static"
+    if static_src.is_dir() and not static_dst.is_dir():
+        import shutil
+        static_dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(static_src, static_dst)
+
+    public_src = web_root / "public"
+    public_dst = standalone_dir / "public"
+    if public_src.is_dir() and not public_dst.is_dir():
+        import shutil
+        shutil.copytree(public_src, public_dst)
+
+    # ── Start Web frontend ───────────────────────────────────────
     web_env = {
         **env,
         "PORT": str(web_port),
+        "HOSTNAME": "0.0.0.0",
         "NEXT_PUBLIC_API_URL": f"http://{args.host}:{api_port}",
     }
-    standalone_dir = web_root / ".next" / "standalone"
-    if standalone_dir.is_dir() and (standalone_dir / "server.js").is_file():
+
+    if server_js.is_file():
+        printer.step(f"Starting Web (standalone) on port {web_port}...")
         web_proc = subprocess.Popen(
             ["node", "server.js"],
             cwd=str(standalone_dir),
@@ -379,6 +448,7 @@ def _cmd_api_and_web(args):
             text=True,
         )
     else:
+        printer.step(f"Starting Web (dev) on port {web_port}...")
         web_proc = subprocess.Popen(
             ["npm", "run", "dev"],
             cwd=str(web_root),
@@ -387,35 +457,72 @@ def _cmd_api_and_web(args):
             stderr=subprocess.STDOUT,
             text=True,
         )
+
     web_thread = threading.Thread(
         target=_read_stream, args=(web_proc.stdout, web_lines, stop_event), daemon=True
     )
     web_thread.start()
 
-    # ── Wait for readiness ───────────────────────────────────────
-    printer.step("Waiting for API to be ready...")
-    for i in range(90):
+    # ── Wait for API readiness ────────────────────────────────────
+    printer.step("Waiting for API...")
+    for _ in range(90):
         if _check_api_ready(api_port):
             break
         time.sleep(1)
     else:
         printer.error("API failed to start within 90s")
         printer.info("Last API output:")
-        for l in list(api_lines)[-20:]:
-            printer.info(f"  | {l}")
+        for line in list(api_lines)[-20:]:
+            printer.info(f"  | {line}")
+        stop_event.set()
         _cleanup(api_proc, web_proc, api_port, web_port)
         return
 
     printer.success("API ready")
+
+    # ── Wait for web readiness ────────────────────────────────────
     printer.step("Waiting for web frontend...")
-    for i in range(60):
+    for _ in range(60):
         if _check_port(web_port):
             break
+        # Check if web process died
+        if web_proc.poll() is not None:
+            printer.error(f"Web server exited with code {web_proc.returncode}")
+            printer.info("Last web output:")
+            for line in list(web_lines)[-20:]:
+                printer.info(f"  | {line}")
+            stop_event.set()
+            _cleanup(api_proc, web_proc, api_port, web_port)
+            return
         time.sleep(1)
+    else:
+        printer.warning("Web frontend did not respond within 60s")
+        printer.info("API is still running — web may need manual start")
 
-    printer.info(f"API:     http://{args.host}:{api_port}")
-    printer.info(f"Web UI:  http://localhost:{web_port}")
+    # ── Ready ────────────────────────────────────────────────────
+    web_url = f"http://localhost:{web_port}"
+    api_url = f"http://{args.host}:{api_port}"
+
+    print()
+    printer.success("All services ready!")
+    print()
+    printer.info(f"  API:      {api_url}")
+    printer.info(f"  API Docs: {api_url}/docs")
+    printer.info(f"  Web UI:   {web_url}")
+    print()
     printer.info("Press Ctrl+C to stop")
+    print()
+
+    # ── Auto-open browser ────────────────────────────────────────
+    def _open_browser():
+        time.sleep(1.5)
+        try:
+            webbrowser.open(web_url)
+        except Exception:
+            pass
+
+    browser_thread = threading.Thread(target=_open_browser, daemon=True)
+    browser_thread.start()
 
     # ── Signal handlers for clean shutdown ──────────────────────
     shutdown = [False]
@@ -433,9 +540,32 @@ def _cmd_api_and_web(args):
     signal.signal(signal.SIGINT, _sig_handler)
     signal.signal(signal.SIGTERM, _sig_handler)
 
+    # ── Monitor loop: restart crashed web, detect API death ─────
     try:
-        api_proc.wait()
+        while not shutdown[0]:
+            time.sleep(2)
+            # API crashed
+            if api_proc.poll() is not None:
+                printer.error(f"API server exited (code {api_proc.returncode})")
+                break
+            # Web crashed — restart it
+            if web_proc.poll() is not None:
+                printer.warning(f"Web server exited (code {web_proc.returncode}), restarting...")
+                web_proc = subprocess.Popen(
+                    ["node", "server.js"] if server_js.is_file() else ["npm", "run", "dev"],
+                    cwd=str(standalone_dir if server_js.is_file() else web_root),
+                    env=web_env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
+                web_thread = threading.Thread(
+                    target=_read_stream, args=(web_proc.stdout, web_lines, stop_event), daemon=True
+                )
+                web_thread.start()
     except KeyboardInterrupt:
+        pass
+    finally:
         if not shutdown[0]:
             shutdown[0] = True
             stop_event.set()
@@ -632,11 +762,13 @@ def register(subparsers):
     # Serve
     serve_parser = subparsers.add_parser(
         "serve",
-        help="Start lightweight HTTP inference server",
+        help="Start HTTP inference server",
     )
     serve_parser.add_argument("--host", default="localhost", help="Bind address")
-    serve_parser.add_argument("--port", type=int, default=8080, help="Listen port")
+    serve_parser.add_argument("--port", type=int, default=8000, help="API port")
     serve_parser.add_argument("--model", metavar="PATH", help="Model to preload")
+    serve_parser.add_argument("--web", action="store_true", help="Start web UI and open browser")
+    serve_parser.add_argument("--web-port", type=int, default=3000, help="Web UI port")
     serve_parser.set_defaults(func=cmd_serve)
 
     # Health

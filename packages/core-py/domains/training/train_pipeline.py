@@ -471,7 +471,7 @@ class SloughGPTTrainer:
         self.data, data_vocab_size, self.stoi, self.itos = prepare_data(
             data_path, self.config.block_size
         )
-        if config is not None:
+        if config is not None and self.config.vocab_size > 0:
             self.vocab_size = self.config.vocab_size
         elif vocab_size is not None:
             self.vocab_size = vocab_size

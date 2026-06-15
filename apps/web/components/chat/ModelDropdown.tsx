@@ -9,34 +9,16 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
+import { useChatToolbarContext } from '@/contexts/ChatToolbarContext'
+
+interface ModelDropdownProps {
+  variant?: 'dropdown' | 'panel'
+  panelTitle?: string
+}
 
 interface ModelInfo {
   cached?: boolean
   size_gb?: number
-}
-
-interface DownloadProgressData {
-  percentage: number
-  status: string
-  speed_mb_per_sec?: number
-  eta_seconds?: number
-  total_bytes?: number
-  bytes_downloaded?: number
-  current_file?: string
-  files_completed?: number
-  files_total?: number
-}
-
-interface ModelDropdownProps {
-  availableModels: string[]
-  currentModel: string
-  onSelectModel: (model: string) => void | Promise<void>
-  modelInfoMap?: Record<string, ModelInfo>
-  loadingModel?: string | null
-  generating?: boolean
-  variant?: 'dropdown' | 'panel'
-  panelTitle?: string
-  downloadProgress?: Record<string, DownloadProgressData>
 }
 
 function shortModelName(m: string): string {
@@ -48,16 +30,21 @@ function sizeLabel(info?: ModelInfo): string {
 }
 
 export function ModelDropdown({
-  availableModels,
-  currentModel,
-  onSelectModel,
-  modelInfoMap = {},
-  loadingModel,
-  generating,
   variant = 'dropdown',
   panelTitle = 'Backend Model',
-  downloadProgress = {},
 }: ModelDropdownProps) {
+  const ctx = useChatToolbarContext()
+  const {
+    availableModels,
+    current: currentModel,
+    loading: loadingModel,
+    generating,
+    infoMap: modelInfoMap = {},
+    descriptions: modelDescriptions = {},
+    downloadProgress,
+    onSelect: onSelectModel,
+    onUnload: onUnloadModel,
+  } = ctx.model
   const isLoading = (m: string) => m === loadingModel
   const isLoaded = (m: string) => m === currentModel
 
@@ -85,7 +72,12 @@ export function ModelDropdown({
                 )}
                 title={`${m}${sl ? ` — ${sl}` : ''}`}
               >
-                <span className="truncate">{shortModelName(m)}</span>
+                <div className="min-w-0 flex-1">
+                  <span className="truncate block">{shortModelName(m)}</span>
+                  {modelDescriptions[m] && (
+                    <span className="text-[9px] text-muted-foreground/60 block truncate">{modelDescriptions[m]}</span>
+                  )}
+                </div>
                 <span className="text-[10px] text-muted-foreground/60 ml-1 shrink-0">{sl}</span>
                 {isLoaded(m) && <IconCheck className="h-3 w-3 shrink-0 ml-1" />}
               </button>
@@ -101,7 +93,7 @@ export function ModelDropdown({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-7 px-2.5 font-mono text-xs gap-1.5 rounded-lg border border-transparent hover:border-border/50">
+        <Button variant="ghost" size="sm" className="h-7 px-2.5 font-mono text-xs gap-1.5 rounded-lg border border-transparent hover:border-border/50" aria-label={`Select model. Current: ${currentModel || 'none'}`}>
           {generating ? (
             <span className="relative inline-flex h-3 w-3 shrink-0">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/30" />
@@ -134,7 +126,7 @@ export function ModelDropdown({
       <DropdownMenuContent align="end" className="min-w-[200px] max-h-[300px] overflow-y-auto">
         {loadingModel && dlProgress?.status === 'downloading' && (
           <div className="px-3 pt-2 pb-1.5 space-y-1">
-            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={dlProgress.percentage || 0} aria-valuemin={0} aria-valuemax={100} aria-label={`Download progress: ${dlProgress.percentage?.toFixed(0) || 0}%`}>
               <div
                 className="h-full bg-warning rounded-full transition-all duration-500"
                 style={{ width: `${Math.max(2, dlProgress.percentage || 0)}%` }}
@@ -168,6 +160,20 @@ export function ModelDropdown({
             <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: '60%' }} />
           </div>
         )}
+        {currentModel && onUnloadModel && (
+          <>
+            <DropdownMenuItem
+              onSelect={() => onUnloadModel()}
+              className="text-destructive focus:text-destructive text-xs gap-2"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Unload model
+            </DropdownMenuItem>
+            <div className="h-px bg-border/50 mx-2 my-1" />
+          </>
+        )}
         {availableModels.map(m => {
           const info = modelInfoMap[m]
           const isCached = info?.cached
@@ -181,7 +187,12 @@ export function ModelDropdown({
               className="font-mono text-xs"
               title={`${m}${isCached ? ' (cached)' : ' (download)'}${sl ? ` — ${sl}` : ''}`}
             >
-              <span className="truncate flex-1">{shortModelName(m)}</span>
+              <div className="min-w-0 flex-1">
+                <span className="truncate block">{shortModelName(m)}</span>
+                {modelDescriptions[m] && (
+                  <span className="text-[9px] text-muted-foreground/60 block truncate font-sans">{modelDescriptions[m]}</span>
+                )}
+              </div>
               <span className="text-[10px] text-muted-foreground/60 ml-1 shrink-0">{sl}</span>
               {isLoading(m) && modelDl?.status === 'downloading' ? (
                 <span className="text-[9px] text-warning font-medium ml-1 shrink-0 tabular-nums">

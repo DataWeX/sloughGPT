@@ -13,6 +13,9 @@ import os
 import json
 import math
 import struct
+import logging
+
+logger = logging.getLogger(__name__)
 import hashlib
 import datetime
 import numpy as np
@@ -554,13 +557,22 @@ def save_soul(
                 state = model.state_dict()
                 params = []
                 for k, v in state.items():
-                    if hasattr(v, "numpy"):
-                        arr = v.cpu().numpy().astype(np.float32)
-                    elif hasattr(v, "detach"):
-                        arr = v.detach().cpu().numpy().astype(np.float32)
-                    else:
-                        arr = np.asarray(v, dtype=np.float32)
-                    params.append((k, arr))
+                    try:
+                        if hasattr(v, "numpy"):
+                            arr = v.cpu().numpy().astype(np.float32)
+                        elif hasattr(v, "detach"):
+                            arr = v.detach().cpu().numpy().astype(np.float32)
+                        elif isinstance(v, (list, tuple)):
+                            arr = np.asarray(v, dtype=np.float32)
+                        elif isinstance(v, dict):
+                            logger.debug("Skipping non-tensor state_dict key: %s (dict value)", k)
+                            continue
+                        else:
+                            arr = np.asarray(v, dtype=np.float32)
+                        params.append((k, arr))
+                    except (TypeError, ValueError) as e:
+                        logger.debug("Skipping state_dict key %s: %s", k, e)
+                        continue
                 f.write(struct.pack("<I", len(params)))
                 for key, arr in params:
                     name_bytes = key.encode()

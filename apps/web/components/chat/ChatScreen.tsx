@@ -5,12 +5,13 @@ import { MessageBubble } from './MessageBubble'
 import { EmptyState } from './EmptyState'
 import { SystemBanner } from './SystemBanner'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
-import type { ChatMessage } from './ChatMessages'
+import type { ChatMessage } from './types'
 import { cn } from '@/lib/cn'
 
 interface ChatScreenProps {
   messages: ChatMessage[]
   loading: boolean
+  sessionLoading?: boolean
   health: ApiHealthSnapshot
   onRefreshHealth: () => void
   onCopy: (text: string) => void
@@ -21,10 +22,11 @@ interface ChatScreenProps {
   searchQuery?: string
   onSuggestionClick?: (text: string) => void
   className?: string
+  model?: string
 }
 
 export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
-  function ChatScreen({ messages, loading, health, onRefreshHealth, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, searchQuery, onSuggestionClick, className }, ref) {
+  function ChatScreen({ messages, loading, sessionLoading, health, onRefreshHealth, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, searchQuery, onSuggestionClick, className, model }, ref) {
     const isOffline = health === 'offline'
     const hasModel = health !== null && health !== 'offline' && health.model_loaded
     const [emptyFading, setEmptyFading] = useState(false)
@@ -39,10 +41,6 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
       }
     }, [messages.length])
 
-    const filteredMessages = searchQuery
-      ? messages.filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
-      : messages
-
     return (
       <div className={cn("flex flex-col", className)}>
         {isOffline && (
@@ -55,26 +53,33 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
           />
         )}
         
-        {messages.length === 0 && !isOffline && (
+        {sessionLoading && (
+          <div className="mx-auto w-full max-w-2xl px-3 sm:px-4 py-8 space-y-4" role="status" aria-busy="true" aria-label="Loading messages">
+            <span className="sr-only">Loading conversation...</span>
+            {[1, 2, 3].map(i => (
+              <div key={i} className="animate-pulse space-y-2" aria-hidden="true">
+                <div className={cn("h-8 rounded-lg", i % 2 === 0 ? "ml-12 w-3/4" : "mr-12 w-2/3 ml-auto")} style={{ backgroundColor: 'hsl(var(--muted))' }} />
+                <div className={cn("h-4 rounded", i % 2 === 0 ? "ml-12 w-1/2" : "mr-12 w-1/3 ml-auto")} style={{ backgroundColor: 'hsl(var(--muted))' }} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {messages.length === 0 && !isOffline && !sessionLoading && (
           <div className={cn("transition-all duration-300", emptyFading && "opacity-0 scale-95")}>
             <EmptyState hasModel={hasModel} onSuggestionClick={onSuggestionClick} />
           </div>
         )}
 
-        {searchQuery && filteredMessages.length === 0 && messages.length > 0 && (
-          <p className="text-center text-sm text-muted-foreground py-4">
-            No messages match &quot;{searchQuery}&quot;
-          </p>
-        )}
-        
         <div 
+          id="chat-messages"
           className="mx-auto w-full max-w-2xl space-y-3 sm:space-y-4 px-3 sm:px-4 pb-2"
           role="feed"
           aria-label="Message history"
           aria-busy={loading}
         >
-          {filteredMessages.map((message, index) => {
-            const originalIndex = messages.findIndex(m => m.id === message.id)
+          {messages.map((message, index) => {
+            const originalIndex = index
             const isLast = originalIndex === messages.length - 1
             const showRegenerate = isLast && message.role === 'assistant' && onRegenerate
             const isStreaming = loading && isLast && message.role === 'assistant'
@@ -87,6 +92,7 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
                 role={message.role}
                 timestamp={message.timestamp}
                 showTimestamp={true}
+                model={model}
                 images={message.images}
                 onCopy={onCopy}
                 onThumbsUp={onThumbsUp}
@@ -95,9 +101,43 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
                 onRegenerate={showRegenerate ? onRegenerate : undefined}
                 searchQuery={searchQuery}
                 isStreaming={isStreaming}
+                aria-live={isStreaming ? 'polite' : undefined}
               />
             )
           })}
+
+          {!loading && messages.length > 0 && messages[messages.length - 1].role === 'assistant' && onSuggestionClick && (() => {
+            const last = messages[messages.length - 1].content.toLowerCase()
+            const hasCode = last.includes('```')
+            const suggestions = hasCode
+              ? ['Explain this code', 'Simplify this', 'How do I test this?']
+              : last.length < 200
+                ? ['Tell me more', 'Give an example', 'Why is that?']
+                : ['Summarize this', 'Explain like I\'m 5', 'Tell me more']
+            return (
+              <div className="flex flex-wrap gap-1.5 px-3 sm:px-4" role="group" aria-label="Suggested follow-ups">
+                {suggestions.map(s => (
+                  <button
+                    key={s}
+                    onClick={() => onSuggestionClick(s)}
+                    className="px-2.5 py-1 rounded-full border border-border/50 bg-muted/30 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )
+          })()}
+          
+          {loading && messages.length > 0 && messages[messages.length - 1].role !== 'assistant' && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground/60 py-2" role="status" aria-live="polite">
+              <span className="relative inline-flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/40" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+              </span>
+              <span>Thinking{model ? ` (${model})` : ''}…</span>
+            </div>
+          )}
           
           <div ref={ref} />
         </div>

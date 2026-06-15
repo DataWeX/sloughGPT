@@ -151,14 +151,27 @@ async def get_logged_responses(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/stats")
 async def get_tracker_stats() -> Dict[str, Any]:
     """Get response tracker statistics - uses BenchmarkDomain."""
     try:
         from domains import get_benchmark_domain
+
         bench = get_benchmark_domain()
         return bench.get_stats()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/history/clear")
+async def clear_history() -> dict:
+    """Clear benchmark history and logged responses."""
+    try:
+        from domains import get_benchmark_domain
+
+        bench = get_benchmark_domain()
+        bench.clear_history()
+        return {"status": "ok", "cleared": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

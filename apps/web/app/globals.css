@@ -736,3 +736,17 @@ html.dark {
 .dark .sl-hover-primary:hover {
   background-color: color-mix(in srgb, rgb(var(--primary)) 18%, transparent);
 }
+
+@keyframes mood-orb-breathe {
+  0%, 100% { transform: scale(0.88); }
+  50% { transform: scale(1.0); }
+}
+.mood-orb-pulse {
+  animation: mood-orb-breathe 3s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mood-orb-pulse {
+    animation: none;
+    transform: scale(0.94);
+  }
+}

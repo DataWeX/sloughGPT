@@ -38,7 +38,7 @@ export default function ModelDetailPage() {
       const m = models.find(m => m.id === modelId || m.name === modelId) || null
       setModel(m)
       setLoadState(h?.model_loaded && (h.model_type?.includes(modelId) ?? false) ? 'loaded' : 'idle')
-    } catch {
+    } catch (e) {
       addToast('Failed to load model data', 'error')
     } finally {
       setLoading(false)
@@ -137,6 +137,13 @@ export default function ModelDetailPage() {
             <Skeleton className="h-32 rounded-lg" />
             <Skeleton className="h-48 rounded-lg" />
           </div>
+        ) : !model ? (
+          <Card>
+            <CardContent className="py-8 text-center">
+              <p className="text-sm text-muted-foreground mb-3">Model &ldquo;{modelId}&rdquo; not found.</p>
+              <Button size="sm" onClick={() => router.push('/models')}>Browse models</Button>
+            </CardContent>
+          </Card>
         ) : (
           <>
             {/* Status card */}
@@ -153,9 +160,14 @@ export default function ModelDetailPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {isLoaded ? (
-                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleUnload}>
-                        <IconTrash className="h-3 w-3 mr-1" /> Unload
-                      </Button>
+                      <>
+                        <Button size="sm" className="h-7 text-xs" onClick={() => window.location.href = '/chat'}>
+                          Chat with this model
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleUnload}>
+                          <IconTrash className="h-3 w-3 mr-1" /> Unload
+                        </Button>
+                      </>
                     ) : (
                       <Button size="sm" className="h-7 text-xs" onClick={handleLoad} disabled={loadState === 'loading'}>
                         {loadState === 'loading' ? 'Loading…' : 'Load model'}

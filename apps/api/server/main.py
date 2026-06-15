@@ -48,6 +48,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from datetime import datetime, timedelta
 import hashlib
+import uuid
 
 from fastapi import (
     FastAPI,
@@ -135,7 +136,7 @@ logger.info(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load default HF weights in background when ``MAN_AUTOLOAD_MODEL`` is set (default: ``Qwen2.5-0.5B-Instruct``)."""
+    """Load default HF weights in background when ``MAN_AUTOLOAD_MODEL`` is set (default: ``gpt2``)."""
     STARTUP_PHASE.update(phase="loading_model", step=1, message="Loading model weights...")
     logger.info("Startup phase 1/6: loading model")
     model_load_task = asyncio.create_task(asyncio.to_thread(_autoload_hf_model_at_startup))
@@ -259,11 +260,66 @@ async def request_timeout_middleware(request: Request, call_next):
         )
 
 
+@app.middleware("http")
+async def add_correlation_id(request: Request, call_next):
+    """Generate or preserve ``X-Request-ID`` for every request.
+
+    Also records request timing in ServerState for debug/monitoring.
+    """
+    import time as _time
+    request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
+    request.state.request_id = request_id
+    start = _time.monotonic()
+    try:
+        from domains.infrastructure.server_state import get_server_state
+        get_server_state().record_request()
+    except Exception:
+        pass
+    response = await call_next(request)
+    try:
+        elapsed_ms = (_time.monotonic() - start) * 1000
+        from domains.infrastructure.server_state import get_server_state
+        ss = get_server_state()
+        ss.record_request_latency(
+            path=str(request.url.path),
+            method=request.method,
+            status=response.status_code,
+            elapsed_ms=elapsed_ms,
+        )
+        ss.record_path_latency(
+            path=str(request.url.path),
+            elapsed_ms=elapsed_ms,
+        )
+        # Snapshot health score every 30 requests for trend tracking
+        if ss.request_count % 30 == 0:
+            ss.record_health_snapshot()
+            ss.record_memory_snapshot()
+        # Rate limit check for inference endpoints (10/sec)
+        if str(request.url.path).startswith(("/chat", "/inference")):
+            if not ss.check_rate_limit(str(request.url.path), max_per_second=10):
+                pass  # Log but don't block — violations are tracked for monitoring
+    except Exception:
+        pass
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     """Handle HTTP exceptions with verbose context (method, path, detail, traceback in debug)."""
     client_ip = request.client.host if request.client else "unknown"
     detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+    try:
+        from domains.infrastructure.server_state import get_server_state
+        get_server_state().record_error_detail(
+            path=str(request.url.path),
+            method=request.method,
+            status=exc.status_code,
+            message=detail,
+            error_type="HTTPException",
+        )
+    except Exception:
+        pass
     extra = {
         "method": request.method,
         "path": str(request.url.path),
@@ -290,10 +346,23 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 async def root_exception_handler(request: Request, exc: Exception):
     """Catch-all that prevents any unhandled exception from crashing the process.
 
-    Returns a JSON 503 with error detail instead of raising an internal server error.
+    Returns a JSON 500 with error detail instead of raising an internal server error.
     Also records the failure in the ModelRegistry circuit breaker if applicable.
     """
-    logger.error("Unhandled %s: %s on %s %s", type(exc).__name__, exc, request.method, request.url.path)
+    import traceback
+    tb = traceback.format_exc()
+    logger.error("Unhandled %s on %s %s:\n%s", type(exc).__name__, request.method, request.url.path, tb)
+    try:
+        from domains.infrastructure.server_state import get_server_state
+        get_server_state().record_error_detail(
+            path=str(request.url.path),
+            method=request.method,
+            status=500,
+            message=f"{type(exc).__name__}: {exc}",
+            error_type=type(exc).__name__,
+        )
+    except Exception:
+        pass
     try:
         registry = get_model_registry()
         health = registry.health_summary()
@@ -303,9 +372,10 @@ async def root_exception_handler(request: Request, exc: Exception):
     except Exception:
         pass
     return JSONResponse(
-        status_code=503,
+        status_code=500,
         content={
             "error": f"Internal error: {type(exc).__name__}",
+            "error_type": type(exc).__name__,
             "detail": str(exc),
             "path": request.url.path,
         },
@@ -322,6 +392,17 @@ async def domain_exception_handler(request: Request, exc: SloughGPTDomainError):
         "error": str(exc),
         "code": exc.code,
     }
+    try:
+        from domains.infrastructure.server_state import get_server_state
+        get_server_state().record_error_detail(
+            path=str(request.url.path),
+            method=request.method,
+            status=422,
+            message=str(exc),
+            error_type="SloughGPTDomainError",
+        )
+    except Exception:
+        pass
     if os.environ.get("MAN_DEBUG", "").lower() in ("1", "true"):
         import traceback
         extra["traceback"] = traceback.format_exc()
@@ -338,34 +419,6 @@ async def domain_exception_handler(request: Request, exc: SloughGPTDomainError):
         content=extra,
     )
 
-
-@app.exception_handler(Exception)
-async def unhandled_exception_handler(request: Request, exc: Exception):
-    """Catch-all for unhandled 500s — include request context and traceback."""
-    client_ip = request.client.host if request.client else "unknown"
-    import traceback
-    tb = traceback.format_exc()
-    extra = {
-        "error": f"Internal server error: {exc}",
-        "method": request.method,
-        "path": str(request.url.path),
-        "status_code": 500,
-    }
-    if os.environ.get("MAN_DEBUG", "").lower() in ("1", "true"):
-        extra["traceback"] = tb
-    logger.error("Unhandled exception on %s %s:\n%s", request.method, request.url.path, tb)
-    audit_logger.log(
-        "unhandled_error",
-        client_ip,
-        resource=str(request.url.path),
-        action="500",
-        status="failure",
-        details=extra,
-    )
-    return JSONResponse(
-        status_code=500,
-        content=extra,
-    )
 
 
 # Register all feature routers
@@ -809,12 +862,12 @@ def _autoload_hf_model_at_startup() -> None:
     """
     Load default inference weights without a manual ``POST /models/load``.
 
-    - ``MAN_AUTOLOAD_MODEL``: HuggingFace model id (default: ``Qwen2.5-0.5B-Instruct``). Set to empty to skip.
+    - ``MAN_AUTOLOAD_MODEL``: HuggingFace model id (default: ``gpt2``). Set to empty to skip.
     - ``MAN_AUTOLOAD_DEVICE``: passed through to the loader (default: ``auto``).
     - ``MAN_USE_SLONET``: If set to ``1`` or ``true``, loads into SloTransformer
       (pure NumPy) instead of PyTorch. Recommended for stability.
     """
-    raw = os.environ.get("MAN_AUTOLOAD_MODEL", "Qwen/Qwen2.5-0.5B-Instruct").strip()
+    raw = os.environ.get("MAN_AUTOLOAD_MODEL", "gpt2").strip()
     if not raw or raw.lower() in ("false", "0", "none", "no", "off", "disable"):
         logger.info("MAN_AUTOLOAD_MODEL=%r — skipping startup autoload", raw)
         server_state.autoload_skipped = True
@@ -899,8 +952,19 @@ def _start_watchdog() -> None:
                     return True
                 if server_state.training_active:
                     return True
+                # If no model loaded, check if any provider exists (SloNet, HF, etc.)
                 if server_state.model is None:
-                    return False
+                    from domains.models.provider import get_provider
+                    default = get_provider("default")
+                    if default is not None:
+                        return True
+                    # No model and no provider — only unhealthy if we expected one
+                    # (MAN_AUTOLOAD_MODEL was set but failed, or model was unloaded)
+                    import os
+                    if os.environ.get("MAN_AUTOLOAD_MODEL", ""):
+                        return False
+                    # Training-only mode (no autoload configured) — always healthy
+                    return True
                 from domains.models.provider import get_provider
                 router = get_provider("default")
                 return router is not None
@@ -917,7 +981,7 @@ def _start_watchdog() -> None:
                 if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                     torch.mps.empty_cache()
                 # Reload model — _autoload_hf_model_at_startup reads MAN_AUTOLOAD_MODEL
-                # from environment; if unset it defaults to Qwen2.5-0.5B-Instruct
+                # from environment; if unset it defaults to gpt2
                 _autoload_hf_model_at_startup()
                 import state as srv_state
                 return srv_state.model is not None

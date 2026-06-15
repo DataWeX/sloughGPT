@@ -59,7 +59,7 @@ class HealthController:
         self._start_time = datetime.now()
     
     def get_basic_health(self) -> Dict[str, Any]:
-        """Get basic health status"""
+        """Get basic health status with plain-language status_message."""
         model_loaded, model_type = _get_model_info()
         inference_stats = _get_inference_stats()
         result: Dict[str, Any] = {
@@ -80,6 +80,13 @@ class HealthController:
                         result["num_parameters"] = sum(p.numel() for p in model.parameters())
             except Exception:
                 pass
+
+        # Plain-language status
+        if model_loaded:
+            result["status_message"] = f"Ready — {model_type or 'model'} loaded and waiting for questions."
+        else:
+            result["status_message"] = "Server is running but no model is loaded. Load a model to start chatting."
+
         return result
     
     def get_detailed_health(self) -> Dict[str, Any]:
@@ -113,10 +120,66 @@ class HealthController:
         except Exception:
             pass
 
+        # Add ServerState counters if available
+        try:
+            from domains.infrastructure.server_state import get_server_state
+            ss = get_server_state()
+            request_count = ss.request_count
+            error_count = ss.error_count
+            current_soul = ss.current_soul.get()
+            avg_latency = ss.get_avg_latency()
+            requests_per_min = ss.get_requests_per_minute()
+            path_latencies = ss.get_path_latencies(5)
+            recent_errors = ss.get_error_history(5)
+            inference_count = ss.inference_count
+            total_tokens = ss.total_tokens
+            tokens_per_sec = ss.get_tokens_per_second()
+            avg_tokens_per_req = ss.get_avg_tokens_per_request()
+            health_score = ss.get_health_score()
+            model_metrics = ss.get_model_metrics()
+            model_events = ss.get_model_events(10)
+            health_history = ss.get_health_history(20)
+            memory_history = ss.get_memory_history(10)
+            rate_violations = ss.get_rate_limit_violations(5)
+        except Exception:
+            request_count = 0
+            error_count = 0
+            current_soul = None
+            avg_latency = 0.0
+            requests_per_min = 0.0
+            path_latencies = []
+            recent_errors = []
+            inference_count = 0
+            total_tokens = 0
+            tokens_per_sec = 0.0
+            avg_tokens_per_req = 0.0
+            health_score = {"score": 0, "status": "unknown"}
+            model_metrics = []
+            model_events = []
+            health_history = []
+            memory_history = []
+            rate_violations = []
+
         return {
             "status": "healthy",
             "uptime_seconds": uptime,
             "timestamp": datetime.now().isoformat(),
+            "request_count": request_count,
+            "error_count": error_count,
+            "avg_latency_ms": avg_latency,
+            "requests_per_minute": requests_per_min,
+            "path_latencies": path_latencies,
+            "recent_errors": recent_errors,
+            "inference_count": inference_count,
+            "total_tokens": total_tokens,
+            "tokens_per_sec": tokens_per_sec,
+            "avg_tokens_per_request": avg_tokens_per_req,
+            "health_score": health_score,
+            "model_metrics": model_metrics,
+            "model_events": model_events,
+            "health_history": health_history,
+            "memory_history": memory_history,
+            "rate_violations": rate_violations,
             "system": {
                 "cpu_percent": round(cpu, 1),
                 "memory_percent": round(mem.percent, 1),
@@ -125,10 +188,17 @@ class HealthController:
             "gpu": gpu_info,
             "model_loaded": model_loaded,
             "model_type": model_type,
+            "soul": current_soul,
             "inference": inference_stats,
             "registry": registry_health,
+            "status_message": (
+                f"Ready — {model_type or 'model'} loaded"
+                + (f" with {current_soul} personality" if current_soul else "")
+                + f". Served {request_count} requests."
+                + (f" {error_count} errors." if error_count > 0 else "")
+            ) if model_loaded else "Server running, no model loaded.",
         }
-    
+
     def get_liveness(self) -> Dict[str, Any]:
         """Kubernetes liveness probe"""
         return {"status": "alive"}

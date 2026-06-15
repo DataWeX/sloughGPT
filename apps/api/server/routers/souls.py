@@ -11,6 +11,11 @@ from typing import Optional, Any
 from pydantic import BaseModel
 import json, asyncio, numpy as np, logging
 
+try:
+    from domains.models import SloughGPTModel
+except ImportError:
+    SloughGPTModel = None
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/souls", tags=["souls"])
@@ -42,6 +47,8 @@ def _load_slough_model(checkpoint_path, tie_weights=True):
     Side effects:
         - Reads .soul file from disk
     """
+    if SloughGPTModel is None:
+        raise RuntimeError("SloughGPTModel not available — PyTorch model module not loaded")
     from domains.inference import load_soul
 
     soul, sd = load_soul(checkpoint_path)
@@ -243,6 +250,13 @@ async def switch_soul(
         if req.checkpoint_name:
             loaded = _load_checkpoint_into_model(req.checkpoint_name)
             result["checkpoint_loaded"] = loaded
+            try:
+                from domains.infrastructure.server_state import get_server_state
+                get_server_state().record_model_event(
+                    "load", req.name, f"checkpoint={req.checkpoint_name}"
+                )
+            except Exception:
+                pass
 
         if result.get("success") and soul_info and soul_info.path:
             try:
@@ -254,6 +268,12 @@ async def switch_soul(
                 server_state.soul_engine = engine
             except Exception as exc:
                 logger.warning("Failed to set soul engine: %s", exc)
+
+        try:
+            from domains.infrastructure.server_state import get_server_state
+            get_server_state().record_model_event("switch", req.name)
+        except Exception:
+            pass
 
         return result
     except Exception as e:

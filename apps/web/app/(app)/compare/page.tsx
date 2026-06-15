@@ -106,7 +106,7 @@ export default function ComparePage() {
   ]
 
   return (
-    <div className="sl-page mx-auto max-w-6xl">
+    <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader
         left={
           <AppRouteHeaderLead
@@ -193,6 +193,7 @@ export default function ComparePage() {
                             size="icon-sm"
                             className="h-7 w-7"
                             onClick={() => clearResult(m.id)}
+                            aria-label={`Clear result for ${m.id}`}
                           >
                             <IconTrash className="h-3 w-3" />
                           </Button>

@@ -92,13 +92,33 @@ export function buildLocalPrompt(messages: ChatMessage[], systemPrompt: string):
   return prompt
 }
 
-export function exportConversationAsMarkdown(messages: ChatMessage[]): string {
+export function exportConversationAsMarkdown(messages: ChatMessage[]): void {
   let md = '# Chat Export\n\n'
   for (const m of messages) {
     const role = m.role === 'user' ? '**You**' : '**Assistant**'
     md += `### ${role}\n${m.content}\n\n`
   }
-  return md
+  const blob = new Blob([md], { type: 'text/markdown' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `chat-${new Date().toISOString().slice(0, 10)}.md`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export async function copyConversationAsMarkdown(messages: ChatMessage[]): Promise<boolean> {
+  let md = ''
+  for (const m of messages) {
+    const role = m.role === 'user' ? 'You' : 'Assistant'
+    md += `**${role}:**\n${m.content}\n\n`
+  }
+  try {
+    await navigator.clipboard.writeText(md)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function computeSearchMatches(messages: ChatMessage[], query: string): { matchIds: string[]; matchCount: number } {

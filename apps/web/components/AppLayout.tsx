@@ -13,18 +13,22 @@ import { GlobalErrorHandler } from '@/components/GlobalErrorHandler'
 import { StatusBar } from '@/components/StatusBar'
 import { useApiMonitor } from '@/lib/api-monitor-store'
 import { ToastContainer } from '@/components/chat/Toast'
+import { CommandPalette } from '@/components/CommandPalette'
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
 import { useBackendWatcher } from '@/hooks/useBackendWatcher'
 import { useToastStore } from '@/lib/toast-store'
 import { cn } from '@/lib/cn'
 import { KeyboardShortcutsModal } from '@/components/KeyboardShortcutsModal'
+import { DebugOverlay } from '@/components/DebugOverlay'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
+  const [showDebug, setShowDebug] = useState(false)
   const toasts = useToastStore(s => s.toasts)
   const dismissToast = useToastStore(s => s.dismissToast)
+  const clearToasts = useToastStore(s => s.clearToasts)
   const apiStatus = useApiMonitor(s => s.status)
   useGlobalShortcuts()
   useBackendWatcher()
@@ -131,8 +135,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         <GlobalErrorHandler />
         <ErrorPanel />
-        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} onClearAll={clearToasts} />
         <KeyboardShortcutsModal open={showShortcuts} onOpenChange={setShowShortcuts} />
+        <DebugOverlay open={showDebug} onOpenChange={setShowDebug} />
+        <CommandPalette />
       </div>
     </DialogPrimitive.Root>
   )

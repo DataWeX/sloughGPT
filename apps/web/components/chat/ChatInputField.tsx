@@ -52,16 +52,20 @@ export function ChatInputField({ value, onChange, onSend, placeholder, disabled,
   }, [onSend])
 
   return (
-    <Textarea
-      ref={textareaRef}
-      value={value}
-      onChange={handleChange}
-      onKeyDown={handleKeyDown}
-      placeholder={activePlaceholder}
-      disabled={disabled}
-      className="flex-1 min-w-0 resize-none min-h-[40px] max-h-[160px] bg-transparent border-0 shadow-none focus:shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm placeholder:text-muted-foreground/40 py-1.5"
-      rows={1}
-      aria-label="Message input"
-    />
+    <>
+      <Textarea
+        ref={textareaRef}
+        value={value}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        placeholder={activePlaceholder}
+        disabled={disabled}
+        className="flex-1 min-w-0 resize-none min-h-[40px] max-h-[160px] bg-transparent border-0 shadow-none focus:shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm placeholder:text-muted-foreground/40 py-1.5"
+        rows={1}
+        aria-label="Message input"
+        aria-describedby="chat-input-hint"
+      />
+      <p id="chat-input-hint" className="sr-only">Press Enter to send, Shift+Enter for new line</p>
+    </>
   )
 }

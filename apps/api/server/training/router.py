@@ -20,7 +20,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from training.jobs import training_jobs
 from training.resolution import resolve_training_inputs
-from training.schemas import TrainingRequest, TrainRequest, TrainResolveRequest, HFTrainingRequest, VLMRequest, UnifiedStartRequest
+from training.schemas import TrainingRequest, TrainRequest, TrainResolveRequest, HFTrainingRequest, VLMRequest, UnifiedStartRequest, QuickTrainRequest
 from training.controller import get_training_controller, TrainingState
 from training.webhooks import (
     get_webhook_store,
@@ -32,6 +32,49 @@ from training.job_store import get_job_store
 logger = logging.getLogger("man")
 
 router = APIRouter(tags=["training"])
+
+
+def _job_summary(job: dict[str, Any]) -> dict[str, Any]:
+    """Add plain-language status message to a training job dict.
+
+    Translates raw numbers into human-readable descriptions:
+    - "Training... 60% done, about 2 minutes left"
+    - "Training complete! Model saved to models/..."
+    - "Training failed: CUDA out of memory"
+    """
+    summary = dict(job)
+    status = job.get("status", "unknown")
+    progress = job.get("progress", 0)
+    model = job.get("model", "")
+    dataset = job.get("dataset", "")
+    method = job.get("data_source", "")
+    explanation = job.get("explanation", "")
+
+    if status == "running":
+        parts = [f"Training {model} on {dataset}"]
+        if progress > 0:
+            parts.append(f"{progress}% done")
+        epoch = job.get("current_epoch")
+        epochs = job.get("epochs")
+        if epoch is not None and epochs:
+            parts.append(f"epoch {epoch}/{epochs}")
+        summary["status_message"] = ", ".join(parts) + "..."
+    elif status == "completed":
+        if explanation:
+            summary["status_message"] = explanation
+        else:
+            summary["status_message"] = f"Training complete! Model: {model}"
+    elif status == "failed":
+        error = job.get("error", "Unknown error")
+        summary["status_message"] = f"Training failed: {error}"
+    elif status == "queued":
+        summary["status_message"] = f"Queued: {model} on {dataset}"
+    elif status == "stopping":
+        summary["status_message"] = "Stopping..."
+    else:
+        summary["status_message"] = f"Status: {status}"
+
+    return summary
 
 
 def _sloughgpt_trainer_kwds(req_snapshot: dict[str, Any]) -> dict[str, Any]:
@@ -176,23 +219,21 @@ async def train_status():
 
 @router.get("/training/jobs")
 async def list_training_jobs():
-    """List all tracked training jobs.
+    """List all tracked training jobs with plain-language status.
 
-    Completed jobs may expose ``checkpoint``; native ``step_*.pt`` uses charset maps for
-    ``cli.py eval`` — ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
+    Each job includes a ``status_message`` field with a human-readable
+    description of what's happening: "Training... 60% done" or
+    "Training complete! Model saved to models/...".
     """
-    return list(training_jobs.values())
+    return [_job_summary(j) for j in training_jobs.values()]
 
 
 @router.get("/training/jobs/{job_id}")
 async def get_training_job(job_id: str):
-    """Get one training job by id.
-
-    See list endpoint docstring for ``checkpoint`` / ``step_*.pt`` vocabulary semantics.
-    """
+    """Get one training job by id with plain-language status."""
     if job_id not in training_jobs:
         raise HTTPException(status_code=404, detail="Job not found")
-    return training_jobs[job_id]
+    return _job_summary(training_jobs[job_id])
 
 
 @router.post("/training/jobs/{job_id}/stop")
@@ -205,6 +246,70 @@ async def stop_training_job(job_id: str):
         raise HTTPException(status_code=400, detail=f"Job is not running (status: {job.get('status', 'unknown')})")
     job["status"] = "stopping"
     return {"status": "stopping", "job_id": job_id}
+
+
+@router.get("/training/jobs/{job_id}/summary")
+async def get_training_summary(job_id: str):
+    """Plain-language summary of a training job.
+
+    Returns what was trained, what data was used, how it went,
+    and what to do next.  No ML jargon — just facts Alex can use.
+    """
+    if job_id not in training_jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job = training_jobs[job_id]
+
+    model = job.get("model", "unknown model")
+    dataset = job.get("dataset", "unknown dataset")
+    status = job.get("status", "unknown")
+    explanation = job.get("explanation", "")
+    checkpoint = job.get("checkpoint", "")
+    epochs = job.get("epochs")
+    current_epoch = job.get("current_epoch")
+    final_loss = job.get("loss")
+    rl = bool(job.get("reward_history"))
+
+    lines = []
+
+    if status == "completed":
+        lines.append(f"You trained {model} on {dataset}.")
+        if epochs:
+            lines.append(f"It learned from {epochs} passes over your data.")
+        if final_loss is not None:
+            if final_loss < 1.5:
+                lines.append(f"Loss is low ({final_loss:.2f}) — your AI learned well.")
+            elif final_loss < 3.0:
+                lines.append(f"Loss is moderate ({final_loss:.2f}) — your AI learned something, but could do better.")
+            else:
+                lines.append(f"Loss is high ({final_loss:.2f}) — your AI may need more data or more training.")
+        if rl:
+            lines.append("Personality reinforcement was applied — your AI learned to give better answers.")
+        if checkpoint:
+            lines.append(f"Your trained model is at: {checkpoint}")
+            lines.append("Load it in the Models page to use it in chat.")
+        else:
+            lines.append("The model was saved but the checkpoint path isn't available yet.")
+    elif status == "running":
+        progress = job.get("progress", 0)
+        lines.append(f"Training {model} on {dataset}... {progress}% done.")
+        if current_epoch is not None and epochs:
+            lines.append(f"Epoch {current_epoch} of {epochs}.")
+    elif status == "failed":
+        error = job.get("error", "Unknown error")
+        lines.append(f"Training failed: {error}")
+        lines.append("Try using a smaller model, or check that you have enough disk space.")
+    elif status == "queued":
+        lines.append(f"Training {model} on {dataset} is queued. It will start shortly.")
+    else:
+        lines.append(f"Training status: {status}")
+
+    return {
+        "job_id": job_id,
+        "summary": " ".join(lines),
+        "status": status,
+        "model": model,
+        "dataset": dataset,
+    }
 
 
 @router.delete("/training/jobs/{job_id}")
@@ -334,6 +439,7 @@ async def start_training(request: TrainingRequest):
         "loss": None,
         "train_loss": None,
         "eval_loss": None,
+        "loss_history": [],
     }
     if manifest_meta is not None:
         job["manifest"] = manifest_meta
@@ -390,11 +496,13 @@ async def start_training(request: TrainingRequest):
                 tl = info.get("train_loss")
                 if tl is not None:
                     rec["train_loss"] = float(tl)
+                    rec.setdefault("loss_history", []).append({"step": rec.get("global_step", 0), "value": float(tl), "type": "train"})
                 el = info.get("eval_loss")
                 if el is not None:
                     fe = float(el)
                     rec["eval_loss"] = fe
                     rec["loss"] = fe
+                    rec.setdefault("loss_history", []).append({"step": rec.get("global_step", 0), "value": fe, "type": "eval"})
 
             trainer = SloughGPTTrainer(
                 data_path=data_path_for_thread,
@@ -486,11 +594,14 @@ async def start_hf_training(request: HFTrainingRequest):
     _datasets_dir = _repo_root / "datasets"
     data_path_str = ""
     if request.dataset:
-        ds_path = _datasets_dir / request.dataset / "input.txt"
+        ds_dir = _datasets_dir / request.dataset
+        ds_path = ds_dir / "input.txt"
+        if not ds_path.is_file():
+            ds_path = ds_dir / "corpus.jsonl"
         if not ds_path.is_file():
             raise HTTPException(
                 status_code=400,
-                detail=f"Dataset not found: {ds_path}. Use POST /datasets/import/local first.",
+                detail=f"Dataset not found: {request.dataset}. Use POST /datasets/import/local first.",
             )
         data_path_str = str(ds_path.resolve())
     elif request.manifest_uri:
@@ -518,11 +629,28 @@ async def start_hf_training(request: HFTrainingRequest):
         "global_step": 0,
         "loss": None,
         "output_dir": output_dir,
+        "loss_history": [],
+        "reward_history": [],
     }
     training_jobs[job_id] = job
 
-    # Start background thread
+    # Auto-configure when model not specified
     model_name = request.model
+    if not model_name and data_path_str:
+        from training.auto_config import auto_configure
+        _auto = auto_configure(
+            dataset=request.dataset,
+            dataset_path=data_path_str,
+            preferred_model=None,
+        )
+        model_name = _auto.model
+        job["model"] = model_name
+        job["explanation"] = _auto.explanation
+        # Apply auto-configured values where user didn't specify
+        if not request.rl_post_train:
+            request.rl_post_train = _auto.rl_post_train
+        request.use_lora = _auto.use_lora
+
     data_path = data_path_str
     req = request
 
@@ -533,44 +661,128 @@ async def start_hf_training(request: HFTrainingRequest):
             get_job_store().create(jid, req.name, req.model_dump(), req.dataset)
             get_job_store().mark_started(jid)
 
-            from domains.training.hf_finetune import HFFineTuner
+            if req.rl_post_train:
+                from domains.training.hf_finetune import GRPOTrainer, RewardFn
 
-            def on_progress(info: dict[str, Any]) -> None:
-                rec = training_jobs.get(jid)
-                if not rec:
-                    return
-                rec["progress"] = info.get("progress_pct", rec.get("progress", 0))
-                rec["current_epoch"] = info.get("epoch", rec.get("current_epoch", 0))
-                rec["global_step"] = info.get("step", rec.get("global_step", 0))
-                rec["loss"] = info.get("loss", rec.get("loss"))
-                get_job_store().update_progress(
-                    jid,
-                    rec["progress"],
-                    epoch=int(rec["current_epoch"]),
-                    step=int(rec["global_step"]),
-                    loss=rec["loss"],
+                def on_progress(info: dict[str, Any]) -> None:
+                    rec = training_jobs.get(jid)
+                    if not rec:
+                        return
+                    rec["progress"] = info.get("progress_pct", rec.get("progress", 0))
+                    rec["current_epoch"] = info.get("epoch", rec.get("current_epoch", 0))
+                    rec["global_step"] = info.get("step", rec.get("global_step", 0))
+                    rec["loss"] = info.get("loss", rec.get("loss"))
+                    loss_val = info.get("loss")
+                    reward_val = info.get("reward")
+                    if loss_val is not None:
+                        rec.setdefault("loss_history", []).append({"step": rec.get("global_step", 0), "value": float(loss_val), "type": "train"})
+                    if reward_val is not None:
+                        rec.setdefault("reward_history", []).append({"step": rec.get("global_step", 0), "value": float(reward_val)})
+                    get_job_store().update_progress(
+                        jid,
+                        rec["progress"],
+                        epoch=int(rec["current_epoch"]),
+                        step=int(rec["global_step"]),
+                        loss=rec["loss"],
+                    )
+
+                reward_mode = req.rl_reward_mode or "length"
+                if reward_mode == "keyword" and req.rl_reward_keywords:
+                    reward_fn = RewardFn(mode="keyword", keywords=req.rl_reward_keywords)
+                else:
+                    reward_fn = RewardFn(mode=reward_mode)
+
+                tuner = GRPOTrainer(
+                    model_name=model_name,
+                    prompts_path=data_path,
+                    output_dir=output_dir,
+                    num_generations=req.rl_num_generations,
+                    learning_rate=req.rl_learning_rate,
+                    kl_coef=req.rl_kl_coef,
+                    clip_range=req.rl_clip_range,
+                    epochs=req.epochs,
+                    max_new_tokens=req.rl_max_new_tokens,
+                    batch_size=req.batch_size,
+                    device=req.device,
+                    reward_fn=reward_fn,
+                    use_lora=req.use_lora,
+                    lora_rank=req.lora_rank,
+                    lora_alpha=req.lora_alpha,
                 )
+                result = tuner.train(on_progress=on_progress)
+            else:
+                from domains.training.hf_finetune import HFFineTuner
 
-            tuner = HFFineTuner(
-                model_name=model_name,
-                data_path=data_path,
-                output_dir=output_dir,
-                use_lora=req.use_lora,
-                lora_rank=req.lora_rank,
-                lora_alpha=req.lora_alpha,
-                epochs=req.epochs,
-                batch_size=req.batch_size,
-                learning_rate=req.learning_rate,
-                max_seq_length=req.max_seq_length,
-                warmup_steps=req.warmup_steps,
-                device=req.device,
-            )
-            result = tuner.train(on_progress=on_progress)
+                def on_progress(info: dict[str, Any]) -> None:
+                    rec = training_jobs.get(jid)
+                    if not rec:
+                        return
+                    rec["progress"] = info.get("progress_pct", rec.get("progress", 0))
+                    rec["current_epoch"] = info.get("epoch", rec.get("current_epoch", 0))
+                    rec["global_step"] = info.get("step", rec.get("global_step", 0))
+                    rec["loss"] = info.get("loss", rec.get("loss"))
+                    loss_val = info.get("loss")
+                    if loss_val is not None:
+                        rec.setdefault("loss_history", []).append({"step": rec.get("global_step", 0), "value": float(loss_val), "type": "train"})
+                    get_job_store().update_progress(
+                        jid,
+                        rec["progress"],
+                        epoch=int(rec["current_epoch"]),
+                        step=int(rec["global_step"]),
+                        loss=rec["loss"],
+                    )
+
+                tuner = HFFineTuner(
+                    model_name=model_name,
+                    data_path=data_path,
+                    output_dir=output_dir,
+                    use_lora=req.use_lora,
+                    lora_rank=req.lora_rank,
+                    lora_alpha=req.lora_alpha,
+                    epochs=req.epochs,
+                    batch_size=req.batch_size,
+                    learning_rate=req.learning_rate,
+                    max_seq_length=req.max_seq_length,
+                    warmup_steps=req.warmup_steps,
+                    device=req.device,
+                )
+                result = tuner.train(on_progress=on_progress)
 
             training_jobs[jid]["status"] = "completed"
             training_jobs[jid]["progress"] = 100
             training_jobs[jid]["result"] = result
-            get_job_store().mark_completed(jid, checkpoint_path=result.get("model_path", ""))
+            model_path = result.get("model_path", "")
+
+            # Build plain-language explanation
+            from training.auto_config import plain_language_verdict
+            final_loss = result.get("final_loss")
+            final_reward = result.get("final_reward")
+
+            if req.rl_post_train and final_reward is not None:
+                # GRPO completed — use reward-based verdict
+                reward_delta = {"verdict": "improved" if final_reward > 0.5 else "mixed"}
+                training_jobs[jid]["explanation"] = (
+                    plain_language_verdict(reward_delta)
+                    + f" Model saved to {model_path}."
+                )
+            elif final_loss is not None:
+                # Standard fine-tune — use loss-based explanation
+                if final_loss < 2.0:
+                    training_jobs[jid]["explanation"] = (
+                        f"Training complete! Your AI learned from the data. "
+                        f"Final loss: {final_loss:.2f} (lower is better). "
+                        f"Model saved to {model_path}."
+                    )
+                else:
+                    training_jobs[jid]["explanation"] = (
+                        f"Training complete, but the loss is still high ({final_loss:.2f}). "
+                        f"Your AI may need more data or more epochs. "
+                        f"Model saved to {model_path}."
+                    )
+            else:
+                training_jobs[jid]["explanation"] = f"Training complete! Model saved to {model_path}."
+
+            get_job_store().mark_completed(jid, checkpoint_path=model_path)
 
         except Exception as exc:
             logger.exception("HF fine-tune job %s failed", job_id)
@@ -586,6 +798,200 @@ async def start_hf_training(request: HFTrainingRequest):
         "job_id": job_id,
         "status": "queued",
         "message": f"HF fine-tune started: {request.model} on {request.dataset}",
+    }
+
+
+@router.post("/training/quick")
+async def quick_train(request: QuickTrainRequest):
+    """One-click training: pick a dataset, we handle everything.
+
+    Analyses the dataset, picks the right method, model, epochs,
+    and learning rate automatically.  Returns the chosen config
+    with a plain-language explanation of what we're doing and why.
+
+    Optional ``model`` override if you want a specific model.
+    """
+    import os
+
+    from training.auto_config import auto_configure
+
+    # Resolve dataset path
+    _repo_root = Path(__file__).resolve().parents[4]
+    _datasets_dir = _repo_root / "datasets"
+    ds_path = _datasets_dir / request.dataset
+
+    if not ds_path.exists():
+        raise HTTPException(status_code=404, detail=f"Dataset not found: {request.dataset}")
+
+    # Find the data file
+    input_file = ds_path / "input.txt"
+    corpus_file = ds_path / "corpus.jsonl"
+    data_file = input_file if input_file.exists() else (corpus_file if corpus_file.exists() else None)
+    if data_file is None:
+        raise HTTPException(status_code=400, detail=f"No input.txt or corpus.jsonl in {request.dataset}")
+
+    # Discover available models
+    available_models = ["gpt2"]
+    hf_cache = Path.home() / ".cache" / "huggingface" / "hub"
+    if hf_cache.exists():
+        for d in hf_cache.iterdir():
+            if d.name.startswith("models--"):
+                model_id = d.name.replace("models--", "").replace("--", "/")
+                available_models.append(model_id)
+
+    # Run auto-config
+    config = auto_configure(
+        dataset=request.dataset,
+        dataset_path=str(data_file),
+        available_models=available_models,
+        preferred_model=request.model,
+    )
+
+    if request.name:
+        config.dataset = request.name
+
+    # Now start training using the existing HF endpoint logic
+    job_id = f"quick_{len(training_jobs) + 1}_{int(time.time())}"
+    job: dict[str, Any] = {
+        "id": job_id,
+        "name": request.name or f"Quick: {request.dataset}",
+        "model": config.model,
+        "dataset": request.dataset,
+        "data_path": config.data_path,
+        "status": "queued",
+        "progress": 0,
+        "epochs": config.epochs,
+        "current_epoch": 0,
+        "global_step": 0,
+        "loss": None,
+        "output_dir": f"models/hf-finetuned/{request.dataset}_{int(time.time())}",
+        "loss_history": [],
+        "reward_history": [],
+    }
+    training_jobs[job_id] = job
+
+    from domains.training.hf_finetune import HFFineTuner, GRPOTrainer, RewardFn
+
+    def _run_quick():
+        jid = job_id
+        try:
+            training_jobs[jid]["status"] = "running"
+            get_job_store().create(jid, job["name"], {"auto_config": True, **config.to_dict()}, request.dataset)
+            get_job_store().mark_started(jid)
+
+            def on_progress(info: dict[str, Any]) -> None:
+                rec = training_jobs.get(jid)
+                if not rec:
+                    return
+                rec["progress"] = info.get("progress_pct", rec.get("progress", 0))
+                rec["current_epoch"] = info.get("epoch", rec.get("current_epoch", 0))
+                rec["global_step"] = info.get("step", rec.get("global_step", 0))
+                rec["loss"] = info.get("loss", rec.get("loss"))
+                loss_val = info.get("loss")
+                reward_val = info.get("reward")
+                if loss_val is not None:
+                    rec.setdefault("loss_history", []).append({"step": rec.get("global_step", 0), "value": float(loss_val), "type": "train"})
+                if reward_val is not None:
+                    rec.setdefault("reward_history", []).append({"step": rec.get("global_step", 0), "value": float(reward_val)})
+                get_job_store().update_progress(
+                    jid, rec["progress"],
+                    epoch=int(rec["current_epoch"]),
+                    step=int(rec["global_step"]),
+                    loss=rec["loss"],
+                )
+
+            if config.rl_post_train:
+                reward_fn = RewardFn(mode=config.rl_reward_mode)
+                trainer = GRPOTrainer(
+                    model_name=config.model,
+                    prompts_path=config.data_path,
+                    output_dir=job["output_dir"],
+                    num_generations=config.rl_num_generations,
+                    learning_rate=config.rl_learning_rate,
+                    kl_coef=config.rl_kl_coef,
+                    epochs=config.epochs,
+                    max_new_tokens=128,
+                    batch_size=config.batch_size,
+                    device=config.device,
+                    reward_fn=reward_fn,
+                    use_lora=config.use_lora,
+                    lora_rank=config.lora_rank,
+                    lora_alpha=config.lora_alpha,
+                )
+            else:
+                trainer = HFFineTuner(
+                    model_name=config.model,
+                    data_path=config.data_path,
+                    output_dir=job["output_dir"],
+                    use_lora=config.use_lora,
+                    lora_rank=config.lora_rank,
+                    lora_alpha=config.lora_alpha,
+                    epochs=config.epochs,
+                    batch_size=config.batch_size,
+                    learning_rate=config.learning_rate,
+                    max_seq_length=config.max_seq_length,
+                    warmup_steps=config.warmup_steps,
+                    device=config.device,
+                )
+
+            result = trainer.train(on_progress=on_progress)
+            training_jobs[jid]["status"] = "completed"
+            training_jobs[jid]["progress"] = 100
+            training_jobs[jid]["result"] = result
+
+            # Build plain-language completion message
+            from training.auto_config import plain_language_verdict
+            model_path = result.get("model_path", "")
+            final_loss = result.get("final_loss")
+            final_reward = result.get("final_reward")
+
+            if config.rl_post_train and final_reward is not None:
+                reward_delta = {"verdict": "improved" if final_reward > 0.5 else "mixed"}
+                training_jobs[jid]["explanation"] = (
+                    plain_language_verdict(reward_delta)
+                    + f" Model saved to {model_path}."
+                )
+            elif final_loss is not None:
+                if final_loss < 2.0:
+                    training_jobs[jid]["explanation"] = (
+                        f"Training complete! Your AI learned from {config.dataset}. "
+                        f"Final loss: {final_loss:.2f}. "
+                        f"Model saved to {model_path}."
+                    )
+                else:
+                    training_jobs[jid]["explanation"] = (
+                        f"Training complete, but the loss is high ({final_loss:.2f}). "
+                        f"Your AI may need more data or more epochs. "
+                        f"Model saved to {model_path}."
+                    )
+            else:
+                training_jobs[jid]["explanation"] = config.explanation + f" Model saved to {model_path}."
+
+            get_job_store().mark_completed(jid, checkpoint_path=model_path)
+
+        except Exception as exc:
+            logger.exception("Quick train job %s failed", jid)
+            if jid in training_jobs:
+                training_jobs[jid]["status"] = "failed"
+                training_jobs[jid]["error"] = str(exc)
+            get_job_store().mark_failed(jid, str(exc))
+
+    thread = threading.Thread(target=_run_quick, daemon=True)
+    thread.start()
+
+    return {
+        "job_id": job_id,
+        "status": "queued",
+        "config": {
+            "method": config.method,
+            "model": config.model,
+            "epochs": config.epochs,
+            "batch_size": config.batch_size,
+            "learning_rate": config.learning_rate,
+            "use_lora": config.use_lora,
+            "rl_enabled": config.rl_post_train,
+        },
+        "explanation": config.explanation,
     }
 
 
@@ -627,6 +1033,7 @@ async def start_vlm_training(request: VLMRequest):
         "stage": "queued",
         "loss": None,
         "output_dir": output_dir,
+        "loss_history": [],
     }
     training_jobs[job_id] = job
 
@@ -663,13 +1070,16 @@ async def start_vlm_training(request: VLMRequest):
             trainer = VLMTrainer(config)
 
             def on_progress(info):
+                loss_val = info.get("loss")
                 training_jobs[jid].update({
                     "stage": info.get("stage", "training"),
                     "progress": info.get("progress_pct", 0),
-                    "loss": info.get("loss"),
+                    "loss": loss_val,
                     "current_epoch": info.get("epoch", 0),
                     "global_step": info.get("step", 0),
                 })
+                if loss_val is not None:
+                    training_jobs[jid].setdefault("loss_history", []).append({"step": info.get("step", 0), "value": float(loss_val), "type": "train"})
 
             result = trainer.train(data_path=str(data_path), on_progress=on_progress)
             training_jobs[jid].update({
@@ -803,6 +1213,7 @@ async def train_from_feedback():
                     training_jobs[jid]["current_epoch"] = epoch
                     if loss is not None:
                         training_jobs[jid][loss_type] = float(loss)
+                        training_jobs[jid].setdefault("loss_history", []).append({"step": step, "value": float(loss), "type": loss_type})
 
                 result = trainer.train(on_progress=on_progress)
                 safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
@@ -1441,6 +1852,12 @@ async def recover_job(job_id: str):
                 rec["progress"] = int(info.get("progress_percent", rec.get("progress", 0)))
                 rec["current_epoch"] = int(info.get("epoch", rec.get("current_epoch", 0)))
                 rec["global_step"] = int(info.get("global_step", 0))
+                tl = info.get("train_loss")
+                if tl is not None:
+                    rec.setdefault("loss_history", []).append({"step": int(info.get("global_step", 0)), "value": float(tl), "type": "train"})
+                el = info.get("eval_loss")
+                if el is not None:
+                    rec.setdefault("loss_history", []).append({"step": int(info.get("global_step", 0)), "value": float(el), "type": "eval"})
                 store.update_progress(
                     jid, rec["progress"], epoch=rec["current_epoch"], step=rec["global_step"]
                 )

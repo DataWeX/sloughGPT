@@ -45,7 +45,7 @@ export default function KnowledgePage() {
         : await knowledgeController.list(500, 0)
       const filtered = activeTopic ? data.filter(i => i.topic === activeTopic) : data
       setItems(filtered)
-    } catch { /* ignore */ }
+    } catch { addToast('Failed to load knowledge items', 'error') }
     setLoading(false)
   }, [search, activeTopic])
 
@@ -53,16 +53,16 @@ export default function KnowledgePage() {
     try {
       const s = await knowledgeController.getAdapterStatus()
       setAdapterStatus(s)
-    } catch { /* ignore */ }
-  }, [])
+    } catch { addToast('Failed to load adapter status', 'error') }
+  }, [addToast])
 
   const fetchStats = useCallback(async () => {
     try {
       const [s, t] = await Promise.all([knowledgeController.stats(), knowledgeController.topics()])
       setStats(s)
       setTopics(t.topics)
-    } catch { /* ignore */ }
-  }, [])
+    } catch { addToast('Failed to load stats', 'error') }
+  }, [addToast])
 
   useEffect(() => { fetchItems() }, [fetchItems])
   useEffect(() => { fetchStats() }, [fetchStats])
@@ -104,7 +104,7 @@ export default function KnowledgePage() {
       setItems(prev => prev.filter(i => i.id !== id))
       setSelected(prev => { const n = new Set(prev); n.delete(id); return n })
       await fetchStats()
-    } catch { /* ignore */ }
+    } catch { addToast('Failed to delete item', 'error') }
   }
 
   const handleBatchDelete = async () => {
@@ -112,7 +112,7 @@ export default function KnowledgePage() {
     try {
       const res = await knowledgeController.batchDelete(ids)
       addToast(`Deleted ${res.deleted} items`, 'success')
-    } catch { /* ignore */ }
+    } catch { addToast('Failed to delete items', 'error') }
     await Promise.all([fetchItems(), fetchStats()])
     setSelected(new Set())
   }
@@ -126,7 +126,7 @@ export default function KnowledgePage() {
       try {
         const res = await knowledgeController.related(item.id, 5)
         setRelatedItems(prev => ({ ...prev, [item.id]: res.items }))
-      } catch { /* ignore */ }
+      } catch { /* ignore — non-critical */ }
       setLoadingRelated(null)
     }
   }
@@ -181,7 +181,7 @@ export default function KnowledgePage() {
       try {
         await knowledgeController.add(item.content || item.text, item.topic || item.category || 'general')
         count++
-      } catch { /* ignore */ }
+      } catch { /* skip individual item */ }
     }
     addToast(`Imported ${count} items`, 'success')
     await Promise.all([fetchItems(), fetchStats()])
@@ -294,6 +294,7 @@ export default function KnowledgePage() {
                     setSuggestedTopic(null)
                   }
                 }}
+                aria-label="Knowledge content"
               />
               {suggestedTopic && (
                 <div className="text-xs text-muted-foreground flex items-center gap-1">
@@ -307,6 +308,7 @@ export default function KnowledgePage() {
                 placeholder="Topic (optional)"
                 value={newTopic}
                 onChange={e => setNewTopic(e.target.value)}
+                aria-label="Topic"
               />
               <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
                 <input type="checkbox" checked={autoTag} onChange={e => setAutoTag(e.target.checked)} className="rounded" />
@@ -331,6 +333,7 @@ export default function KnowledgePage() {
                 placeholder="https://example.com/article"
                 value={newUrl}
                 onChange={e => setNewUrl(e.target.value)}
+                aria-label="URL to ingest"
               />
               <Button onClick={handleIngestUrl} disabled={urlIngesting || !newUrl.trim()} size="sm" variant="outline">
                 {urlIngesting ? 'Ingesting…' : 'Ingest'}
@@ -351,7 +354,7 @@ export default function KnowledgePage() {
                 <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
                   <IconUpload className="w-4 h-4 mr-1" /> Import
                 </Button>
-                <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={importJson} />
+                <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={importJson} aria-label="Import knowledge JSON file" />
                 <span className="text-xs text-muted-foreground">{items.length} items{activeTopic ? ` in "${activeTopic}"` : ''}</span>
               </div>
             </div>
@@ -383,6 +386,7 @@ export default function KnowledgePage() {
                     checked={selected.size === items.length && items.length > 0}
                     onChange={toggleSelectAll}
                     className="rounded"
+                    aria-label="Select all items"
                   />
                   <span className="text-xs text-muted-foreground">Select all</span>
                 </div>
@@ -393,6 +397,7 @@ export default function KnowledgePage() {
                       checked={selected.has(item.id)}
                       onChange={() => toggleSelect(item.id)}
                       className="mt-1 rounded"
+                      aria-label={`Select ${item.content.slice(0, 30)}`}
                     />
                     {editingId === item.id ? (
                       <div className="flex-1 min-w-0 space-y-2">
@@ -400,6 +405,7 @@ export default function KnowledgePage() {
                           className="w-full min-h-[60px] rounded border border-border bg-background px-2 py-1 text-sm resize-y"
                           value={editContent}
                           onChange={e => setEditContent(e.target.value)}
+                          aria-label="Edit knowledge content"
                         />
                         <div className="flex items-center gap-2">
                           <input
@@ -408,6 +414,7 @@ export default function KnowledgePage() {
                             value={editTopic}
                             onChange={e => setEditTopic(e.target.value)}
                             placeholder="Topic"
+                            aria-label="Edit topic"
                           />
                           <Button size="sm" onClick={() => saveEdit(item.id)}>Save</Button>
                           <Button size="sm" variant="outline" onClick={cancelEdit}>Cancel</Button>
@@ -452,6 +459,7 @@ export default function KnowledgePage() {
                           size="icon"
                           className="opacity-0 group-hover:opacity-100 shrink-0"
                           onClick={() => handleDelete(item.id)}
+                          aria-label={`Delete ${item.content.slice(0, 30)}`}
                         >
                           <IconTrash className="w-4 h-4 text-destructive" />
                         </Button>

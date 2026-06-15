@@ -11,6 +11,23 @@ export interface TrainingJob {
   status: string
   progress: number
   created_at: string
+  model?: string
+  dataset?: string
+  epochs?: number
+  current_epoch?: number
+  global_step?: number
+  loss?: number
+  train_loss?: number
+  eval_loss?: number
+  checkpoint?: string
+  data_source?: string
+  manifest?: Record<string, unknown>
+  message?: string
+  loss_history?: Array<{ step: number; value: number; type: 'train' | 'eval' }>
+  reward_history?: Array<{ step: number; value: number }>
+  result?: Record<string, unknown>
+  explanation?: string
+  status_message?: string
 }
 
 export interface TrainingStatus {
@@ -121,8 +138,8 @@ export const trainingJobsController = {
   },
 
   async list(): Promise<TrainingJob[]> {
-    const data = await apiGet<{ jobs: TrainingJob[] }>('/training/jobs')
-    return data.jobs || []
+    const data = await apiGet<TrainingJob[] | { jobs: TrainingJob[] }>('/training/jobs')
+    return Array.isArray(data) ? data : data.jobs || []
   },
 
   async listCheckpoints(): Promise<Checkpoint[]> {
@@ -169,6 +186,18 @@ export const trainingJobsController = {
     max_seq_length?: number
   }): Promise<{ job_id: string; status: string; message: string }> {
     return apiPost('/training/hf-start', params)
+  },
+
+  async startQuick(params: {
+    dataset: string
+    name?: string
+    model?: string
+  }): Promise<{ job_id: string; status: string; config: Record<string, unknown>; explanation: string }> {
+    return apiPost('/training/quick', params)
+  },
+
+  async getSummary(jobId: string): Promise<{ job_id: string; summary: string; status: string; model: string; dataset: string }> {
+    return apiGet(`/training/jobs/${jobId}/summary`)
   },
 
   async startVLMTrain(params: {

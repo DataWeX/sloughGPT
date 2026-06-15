@@ -24,14 +24,14 @@ _hf_cache_dir = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "hug
 
 @router.get("", response_model=List[ModelInfo])
 async def list_models():
-    """List available/loaded models"""
+    """List available/loaded models with plain-language descriptions."""
     ctrl = get_models_controller()
-    
+
     # Get current model info
     current = ctrl.get_current_model()
-    
+
     models = []
-    
+
     # Add currently loaded model
     if current:
         models.append(ModelInfo(
@@ -41,8 +41,9 @@ async def list_models():
             parameters=current.get("parameters", 0),
             vocab_size=current.get("vocab_size", 0),
             loaded_at=current.get("loaded_at"),
+            description=_describe_model(current["model_id"], current.get("parameters", 0), loaded=True),
         ))
-    
+
     # Add available HuggingFace models (skip if already listed as loaded)
     loaded_ids = {m.model_id for m in models}
     hf_models = ctrl.list_hf_models()
@@ -56,9 +57,44 @@ async def list_models():
                 parameters=entry.get("parameters", 0),
                 vocab_size=entry.get("vocab_size", 0),
                 loaded_at=None,
+                description=_describe_model(model_id, entry.get("parameters", 0), loaded=False),
             ))
-    
+
     return models
+
+
+def _describe_model(model_id: str, parameters: int, loaded: bool) -> str:
+    """Generate a plain-language description of a model."""
+    parts = []
+    name = model_id.split("/")[-1] if "/" in model_id else model_id
+
+    # Size description
+    if parameters:
+        if parameters < 150_000_000:
+            parts.append("Small, fast model")
+        elif parameters < 1_000_000_000:
+            parts.append("Medium-sized model")
+        else:
+            parts.append("Large model")
+    else:
+        parts.append("Model")
+
+    # Chat capability
+    if any(kw in model_id.lower() for kw in ["instruct", "chat", "qwen"]):
+        parts.append("good for conversations")
+    elif any(kw in model_id.lower() for kw in ["code", "starcoder"]):
+        parts.append("good for code")
+    else:
+        parts.append("good for text generation")
+
+    # Speed hint
+    if parameters and parameters < 500_000_000:
+        parts.append("runs fast on CPU")
+
+    if loaded:
+        parts.append("(currently loaded)")
+
+    return " — ".join(parts[:2]) + (f". {parts[2]}" if len(parts) > 2 else "") + "."
 
 
 @router.post("/load", response_model=LoadModelResponse)
@@ -66,6 +102,15 @@ async def load_model(req: LoadModelRequest):
     """Load a model"""
     ctrl = get_models_controller()
     result = ctrl.load_model(req.model_id, req.device.value, req.quantize)
+    try:
+        from domains.infrastructure.server_state import get_server_state
+        ss = get_server_state()
+        if result.get("success"):
+            ss.record_model_event("load", req.model_id, f"device={req.device.value}")
+        else:
+            ss.record_model_event("error", req.model_id, result.get("error", "unknown"))
+    except Exception:
+        pass
     return LoadModelResponse(**result)
 
 
@@ -73,7 +118,14 @@ async def load_model(req: LoadModelRequest):
 async def unload_model():
     """Unload current model"""
     ctrl = get_models_controller()
-    return ctrl.unload_model()
+    result = ctrl.unload_model()
+    try:
+        from domains.infrastructure.server_state import get_server_state
+        ss = get_server_state()
+        ss.record_model_event("unload", ctrl._current_model or "unknown")
+    except Exception:
+        pass
+    return result
 
 
 @router.post("/vlm-load")

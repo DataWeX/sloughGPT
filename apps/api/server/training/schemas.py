@@ -150,6 +150,28 @@ class HFTrainingRequest(BaseModel):
     gradient_accumulation_steps: int = 1
     save_steps: int = 500
     device: Optional[str] = None
+    # RL post-training (GRPO)
+    rl_post_train: bool = False
+    rl_num_generations: int = 4
+    rl_learning_rate: float = 1e-6
+    rl_kl_coef: float = 0.1
+    rl_clip_range: float = 0.2
+    rl_max_new_tokens: int = 128
+    rl_reward_mode: str = "length"
+    rl_reward_keywords: List[str] = Field(default_factory=list)
+
+
+class QuickTrainRequest(BaseModel):
+    """One-click training: just pick a dataset, we handle the rest.
+
+    The backend analyses the dataset, picks the right method, model,
+    epochs, and learning rate.  Optional overrides for power users.
+    """
+
+    dataset: str
+    name: str = ""
+    model: Optional[str] = None  # auto-pick if omitted
+    device: Optional[str] = None
 
 
 class VLMRequest(BaseModel):

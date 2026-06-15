@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import {
   IconChat,
   IconModels,
@@ -15,10 +16,10 @@ import { IconChevronRight, IconMessage } from '@/components/ui'
 import { apiGet } from '@/lib/http-client'
 import { useApiHealth } from '@/hooks/useApiHealth'
 import { useLocale } from '@/hooks/useLocale'
-import { modelController } from '@/lib/model-controller'
-import { soulsController } from '@/lib/souls-controller'
-import { sessionController } from '@/lib/session-controller'
+import { knowledgeController } from '@/lib/knowledge-controller'
+import { useToastStore } from '@/lib/toast-store'
 import { PUBLIC_API_URL } from '@/lib/config'
+import { useHomePageData } from '@/hooks/useHomePageData'
 
 function Greeting() {
   const [greeting, setGreeting] = useState('Hello')
@@ -36,18 +37,10 @@ function Greeting() {
 export default function HomePage() {
   const { t } = useLocale()
   const { state: health } = useApiHealth()
-  const [modelCount, setModelCount] = useState<number | null>(null)
-  const [checkpointCount, setCheckpointCount] = useState<number>(0)
-  const [modelStatus, setModelStatus] = useState<{loaded: boolean; model: string | null}>({loaded: false, model: null})
-  const inferenceCount = health && health !== 'offline' ? (health as any).inference_count ?? 0 : null
-  const [currentSoul, setCurrentSoul] = useState<{name: string; description: string; traits: string[]} | null>(null)
-  const [recentSessions, setRecentSessions] = useState<Array<{id: string; name: string; updated_at: string}>>([])
+  const addToast = useToastStore(s => s.addToast)
+  const { modelCount, currentSoul, modelStatus, inferenceCount, runningTraining, knowledgeCount, recentSessions, recentJobs, ...data } = useHomePageData(health)
 
-  const apiStatus = useMemo<'loading' | 'online' | 'offline'>(() => {
-    if (health === null) return 'loading'
-    if (health === 'offline') return 'offline'
-    return 'online'
-  }, [health])
+  const apiStatus = health === null ? 'loading' : health === 'offline' ? 'offline' : 'online'
 
   const [startup, setStartup] = useState<{phase: string; step: number; total: number; message: string} | null>(null)
 
@@ -56,8 +49,8 @@ export default function HomePage() {
     let cancelled = false
     const poll = async () => {
       try {
-        const data = await apiGet<{phase: string; step: number; total: number; message: string}>('/health/startup-progress')
-        if (!cancelled) setStartup(data)
+        const result = await apiGet<{phase: string; step: number; total: number; message: string}>('/health/startup-progress')
+        if (!cancelled) setStartup(result)
       } catch {
         if (!cancelled) setStartup(null)
       }
@@ -67,35 +60,8 @@ export default function HomePage() {
     return () => { cancelled = true; clearInterval(id) }
   }, [apiStatus])
 
-  useEffect(() => {
-    if (apiStatus !== 'online') return
-    modelController.status().then(status => {
-      setModelStatus({ loaded: status.loaded, model: status.model_type })
-    }).catch(() => {})
-    soulsController.list().then(data => {
-      const active = data.souls?.find((s: any) => s.name === data.current_soul)
-      if (active) setCurrentSoul(active)
-    }).catch(() => {})
-  }, [apiStatus])
-
-  useEffect(() => {
-    if (health === null || health === 'offline') { setModelCount(null); return }
-    let cancelled = false
-    modelController.list().then(models => { if (!cancelled) setModelCount(models.length) }).catch(() => {})
-    sessionController.list().then(sessions => {
-      if (!cancelled) {
-        const sorted = [...sessions]
-          .filter(s => s.name)
-          .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-          .slice(0, 5)
-        setRecentSessions(sorted)
-      }
-    }).catch(() => {})
-    return () => { cancelled = true }
-  }, [health])
-
   const subtitleKey = apiStatus === 'loading' ? 'home.subtitle.connecting'
-    : apiStatus === 'online' ? 'Compose models, personalities, and adapters'
+    : apiStatus === 'online' ? 'Your AI, your way'
     : 'home.subtitle.offline'
 
   return (
@@ -131,57 +97,256 @@ export default function HomePage() {
       ) : null}
 
       {apiStatus === 'offline' ? null : (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Card>
-            <CardHeader className="pb-1">
-              <CardDescription className="text-xs font-medium">{t('home.stats.status')}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {apiStatus === 'loading' ? (
-                <div className="h-8 w-24 animate-pulse rounded bg-muted" />
-              ) : (
-                <div className="flex items-center gap-2">
-                  <span className="relative flex h-3 w-3">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/40" />
-                    <span className="relative inline-flex h-3 w-3 rounded-full bg-success" />
-                  </span>
-                  <p className="text-base font-semibold">Online</p>
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <Card>
+              <CardHeader className="pb-1">
+                <CardDescription className="text-xs font-medium">{t('home.stats.status')}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {apiStatus === 'loading' ? (
+                  <div className="h-8 w-24 animate-pulse rounded bg-muted" />
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-3 w-3">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/40" />
+                      <span className="relative inline-flex h-3 w-3 rounded-full bg-success" />
+                    </span>
+                    <p className="text-base font-semibold">Online</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-1">
+                <CardDescription className="text-xs font-medium">{t('home.stats.models')}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {apiStatus === 'loading' ? (
+                  <div className="h-8 w-16 animate-pulse rounded bg-muted" />
+                ) : (
+                  <p className="text-base font-semibold tabular-nums">{modelCount !== null ? modelCount : '\u2014'}</p>
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-1">
+                <CardDescription className="text-xs font-medium">{t('home.stats.personality')}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-base font-semibold truncate">{currentSoul?.name || '\u2014'}</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-accent/5 to-transparent border-accent/20">
+              <CardHeader className="pb-1">
+                <CardDescription className="text-xs font-medium">Active</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-base font-semibold truncate">{modelStatus.loaded ? `${modelStatus.model} + ${currentSoul?.name || 'default'}` : 'Not loaded'}</p>
+                {inferenceCount !== null && inferenceCount !== undefined && (
+                  <p className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">{inferenceCount} conversations</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {runningTraining && (
+            <Link href="/training" className="block">
+              <Card className="border-primary/30 bg-primary/5 cursor-pointer hover:border-primary/50 transition-colors">
+                <CardContent className="py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="relative flex h-2 w-2 shrink-0">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">Training: {runningTraining.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{runningTraining.status_message}</p>
+                    </div>
+                    <span className="text-xs text-primary shrink-0">View →</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          )}
+        </>
+      )}
+
+      {apiStatus === 'online' && (
+        <Card>
+          <CardContent className="py-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+              <div>
+                <div className="flex justify-center mb-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
                 </div>
-              )}
+                <p className="text-[10px] text-muted-foreground">API</p>
+                <p className="text-xs font-medium">Connected</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground">Model</p>
+                <p className="text-xs font-medium truncate">{modelStatus.loaded ? modelStatus.model : 'None loaded'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground">Personality</p>
+                <p className="text-xs font-medium truncate">{currentSoul?.name || 'Default'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground">Knowledge</p>
+                <p className="text-xs font-medium">{knowledgeCount} facts</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {apiStatus === 'online' && modelStatus.loaded && (
+        <Card>
+          <CardContent className="py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium">Quick test</p>
+                <p className="text-[10px] text-muted-foreground">Send &quot;Hello!&quot; to verify the model works</p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs shrink-0"
+                disabled={data.testRunning}
+                onClick={async () => {
+                  data.setTestRunning(true)
+                  data.setTestResponse(null)
+                  try {
+                    const resp = await fetch(`${PUBLIC_API_URL}/chat`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ messages: [{ role: 'user', content: 'Hello!' }] }),
+                    })
+                    const result = await resp.json()
+                    data.setTestResponse(result.message || result.error || 'No response')
+                  } catch {
+                    data.setTestResponse('Failed to connect')
+                  } finally {
+                    data.setTestRunning(false)
+                  }
+                }}
+              >
+                {data.testRunning ? 'Testing...' : 'Test model'}
+              </Button>
+            </div>
+            {data.testResponse && (
+              <div className="mt-2 rounded bg-muted/50 p-2 text-xs text-muted-foreground font-mono leading-relaxed">
+                {data.testResponse}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {apiStatus === 'online' && (recentSessions.length > 1 || recentJobs.length > 0) && (
+        <Card>
+          <CardContent className="py-3">
+            <p className="text-xs font-medium mb-2">Recent activity</p>
+            <div className="space-y-1.5">
+              {recentSessions.slice(0, 3).map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => window.location.href = `/chat?session=${s.id}`}
+                  className="w-full flex items-center gap-2 text-left hover:bg-muted/30 rounded px-1.5 py-1 transition-colors"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0" />
+                  <span className="text-xs truncate flex-1">{s.name}</span>
+                  <span className="text-[10px] text-muted-foreground shrink-0">
+                    {(() => {
+                      const d = Date.now() - new Date(s.updated_at).getTime()
+                      const m = Math.floor(d / 60000)
+                      if (m < 1) return 'now'
+                      if (m < 60) return `${m}m`
+                      const h = Math.floor(m / 60)
+                      return h < 24 ? `${h}h` : `${Math.floor(h / 24)}d`
+                    })()}
+                  </span>
+                </button>
+              ))}
+              {recentJobs.slice(0, 2).map(j => (
+                <div key={j.id} className="flex items-center gap-2 px-1.5 py-1">
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${j.status === 'running' ? 'bg-success animate-pulse' : j.status === 'completed' ? 'bg-success' : j.status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground/40'}`} />
+                  <span className="text-xs truncate flex-1">{j.name || j.id}</span>
+                  <span className="text-[10px] text-muted-foreground shrink-0">{j.status}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!apiStatus || apiStatus === 'loading' || apiStatus === 'offline' ? null : (() => {
+        const dismissed = typeof window !== 'undefined' && localStorage.getItem('onboarding_dismissed')
+        if (dismissed) return null
+        return (
+          <Card className="border-dashed border-primary/20 bg-primary/[0.02]">
+            <CardContent className="py-3 flex items-center justify-between gap-3">
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">New here?</span>{' '}
+                Start chatting, then train the model on your conversations. The more you chat, the better it gets.
+              </p>
+              <button
+                className="text-[10px] text-muted-foreground hover:text-foreground shrink-0"
+                onClick={(e) => { localStorage.setItem('onboarding_dismissed', '1'); e.currentTarget.closest('.space-y-4 > div')?.remove() }}
+              >
+                Got it
+              </button>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-1">
-              <CardDescription className="text-xs font-medium">{t('home.stats.models')}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {apiStatus === 'loading' ? (
-                <div className="h-8 w-16 animate-pulse rounded bg-muted" />
-              ) : (
-                <p className="text-base font-semibold tabular-nums">{modelCount !== null ? modelCount : '\u2014'}</p>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-1">
-              <CardDescription className="text-xs font-medium">{t('home.stats.personality')}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-base font-semibold truncate">{currentSoul?.name || '\u2014'}</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-accent/5 to-transparent border-accent/20">
-            <CardHeader className="pb-1">
-              <CardDescription className="text-xs font-medium">Pipeline</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-base font-semibold truncate">{modelStatus.loaded ? `${modelStatus.model} + ${currentSoul?.name || 'default'}` : 'Not loaded'}</p>
-              {inferenceCount !== null && inferenceCount !== undefined && (
-                <p className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">{inferenceCount} inferences</p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        )
+      })()}
+
+      {recentSessions.length > 0 && (
+        <button
+          onClick={() => window.location.href = `/chat?session=${recentSessions[0].id}`}
+          className="w-full text-left rounded-lg border border-border/30 bg-card p-3 flex items-center gap-3 hover:border-border/60 hover:bg-muted/30 transition-colors group"
+        >
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground group-hover:text-foreground transition-colors">
+            <IconMessage className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium truncate">{recentSessions[0].name}</p>
+            <p className="text-[10px] text-muted-foreground">
+              Last conversation · {new Date(recentSessions[0].updated_at).toLocaleDateString()}
+            </p>
+          </div>
+          <IconChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-primary/60 transition-colors" />
+        </button>
+      )}
+
+      {apiStatus === 'online' && (
+        <Card>
+          <CardContent className="py-3">
+            <div className="flex items-center gap-2 mb-2">
+              <p className="text-xs font-medium">Quick note</p>
+              <p className="text-[10px] text-muted-foreground">Add a fact the AI can remember</p>
+            </div>
+            <form onSubmit={async (e) => {
+              e.preventDefault()
+              const input = e.currentTarget.querySelector('input') as HTMLInputElement
+              const text = input.value.trim()
+              if (!text) return
+              try {
+                await knowledgeController.add(text, 'general')
+                input.value = ''
+                data.setKnowledgeCount(k => k + 1)
+                addToast('Fact saved', 'success')
+              } catch { addToast('Failed to save', 'error') }
+            }} className="flex gap-2">
+              <input
+                type="text"
+                placeholder="e.g., I prefer Python over JavaScript"
+                className="flex-1 h-8 rounded-md border border-border/60 bg-background px-2 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+              />
+              <Button size="sm" type="submit" className="h-8 text-xs shrink-0">Save</Button>
+            </form>
+          </CardContent>
+        </Card>
       )}
 
       <div className="grid grid-cols-2 gap-2 sm:gap-3">
@@ -212,7 +377,7 @@ export default function HomePage() {
             </div>
             <div className="min-w-0">
               <p className="text-xs sm:text-sm font-semibold">Browse models</p>
-              <p className="hidden sm:block text-xs text-muted-foreground mt-0.5">Compose models, personalities, and adapters</p>
+              <p className="hidden sm:block text-xs text-muted-foreground mt-0.5">Load, switch, and manage your AI models</p>
             </div>
           </div>
           <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
@@ -229,7 +394,7 @@ export default function HomePage() {
             </div>
             <div className="min-w-0">
               <p className="text-xs sm:text-sm font-semibold">Settings</p>
-              <p className="hidden sm:block text-xs text-muted-foreground mt-0.5">Customize your experience</p>
+              <p className="hidden sm:block text-xs text-muted-foreground mt-0.5">Adjust the look and feel</p>
             </div>
           </div>
           <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
@@ -246,7 +411,7 @@ export default function HomePage() {
             </div>
             <div className="min-w-0">
               <p className="text-xs sm:text-sm font-semibold">Train</p>
-              <p className="hidden sm:block text-xs text-muted-foreground mt-0.5">Fine-tune, distill, or adapt a model</p>
+              <p className="hidden sm:block text-xs text-muted-foreground mt-0.5">Teach the model from your data</p>
             </div>
           </div>
           <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
@@ -275,15 +440,15 @@ export default function HomePage() {
       {apiStatus === 'online' && (
         <div className="grid grid-cols-2 gap-2 sm:gap-3">
           <div className="rounded-lg border border-border/60 p-3 sm:p-4">
-            <div className="text-xs font-medium text-muted-foreground mb-1">Composable Pipeline</div>
+            <div className="text-xs font-medium text-muted-foreground mb-1">How it works</div>
             <p className="text-[11px] text-muted-foreground/70">
-              Stack base models with personalities and adapters. Chain encoder→decoder, RAG, or multi-step inference.
+              Mix and match AI models with personalities. Each one has its own voice and style — pick the one you like.
             </p>
           </div>
           <div className="rounded-lg border border-border/60 p-3 sm:p-4">
-            <div className="text-xs font-medium text-muted-foreground mb-1">Format Interop</div>
+            <div className="text-xs font-medium text-muted-foreground mb-1">Your data</div>
             <p className="text-[11px] text-muted-foreground/70">
-              PyTorch · GGUF · ONNX · .sou — import, export, and convert between formats. Drop-in OpenAI API.
+              Import text, files, or conversations. The AI learns from your data and gets better over time.
             </p>
           </div>
         </div>

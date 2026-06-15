@@ -188,7 +188,10 @@ class KnowledgeMemory:
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            return loop.run_until_complete(coro)
+            try:
+                return loop.run_until_complete(coro)
+            finally:
+                loop.close()
 
     def __init__(self, vector_store: Optional[Any] = None):
         self._lock = threading.Lock()

@@ -161,12 +161,22 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
 interface ToastContainerProps {
   toasts: Toast[]
   onDismiss: (id: string) => void
+  onClearAll?: () => void
 }
 
-export function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
+export function ToastContainer({ toasts, onDismiss, onClearAll }: ToastContainerProps) {
   if (toasts.length === 0) return null
   return (
     <div className="sl-toast-container" role="region" aria-label="Notifications">
+      {toasts.length > 2 && onClearAll && (
+        <button
+          onClick={onClearAll}
+          className="absolute top-1 right-1 z-10 text-[9px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
+          aria-label="Dismiss all notifications"
+        >
+          Clear all
+        </button>
+      )}
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />
       ))}

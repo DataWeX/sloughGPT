@@ -25,10 +25,12 @@ const SHORTCUTS: Shortcut[] = [
   { keys: ['Ctrl', 'N'], description: 'New chat', category: 'Chat' },
   { keys: ['Ctrl', 'R'], description: 'Regenerate response', category: 'Chat' },
   { keys: ['Ctrl', 'K'], description: 'Toggle settings', category: 'Chat' },
+  { keys: ['Ctrl', 'Shift', 'C'], description: 'Copy last response', category: 'Chat' },
   
   // General shortcuts
   { keys: ['?'], description: 'Show keyboard shortcuts', category: 'General' },
   { keys: ['Ctrl', 'S'], description: 'Save / Export', category: 'General' },
+  { keys: ['Ctrl', 'Shift', 'D'], description: 'Toggle debug overlay', category: 'General' },
   
   // Navigation shortcuts
   { keys: ['Ctrl', '1'], description: 'Go to Chat', category: 'Navigation' },

@@ -60,6 +60,7 @@ class DatasetsController:
                 "size_bytes": size,
                 "size_formatted": f"{size / 1024:.1f} KB" if size > 0 else "Empty",
                 "num_samples": num_samples,
+                "description": self._describe_dataset(d, [], size) if (corpus_file.exists() or input_file.exists()) else "",
             }
 
             # Attach VLM metadata if present
@@ -93,19 +94,92 @@ class DatasetsController:
         }
     
     def get_dataset_stats(self, dataset_id: str) -> Optional[Dict[str, Any]]:
-        """Get dataset statistics"""
+        """Get dataset statistics with plain-language description."""
         path = self.datasets_dir / dataset_id
         if not path.exists():
             return None
-        
+
         files = list(path.glob("*.jsonl"))
         total_size = sum(f.stat().st_size for f in files)
-        
+
+        # Also check for input.txt
+        input_file = path / "input.txt"
+        if input_file.exists() and not files:
+            total_size = input_file.stat().st_size
+            files = [input_file]
+
+        # Build plain-language description
+        description = self._describe_dataset(path, files, total_size)
+
         return {
             "dataset_id": dataset_id,
             "files": len(files),
             "size_bytes": total_size,
+            "description": description,
         }
+
+    def _describe_dataset(self, path: Path, files: list, total_size: int) -> str:
+        """Generate a plain-language description of a dataset."""
+        size_kb = total_size / 1024
+        if size_kb < 1:
+            size_str = f"{total_size} bytes"
+        elif size_kb < 1024:
+            size_str = f"{size_kb:.0f} KB"
+        else:
+            size_str = f"{size_kb / 1024:.1f} MB"
+
+        # Try to read a sample to detect format and content
+        sample_file = path / "corpus.jsonl"
+        if not sample_file.exists():
+            sample_file = path / "input.txt"
+        if not sample_file.exists():
+            return f"Dataset with {size_str} of data."
+
+        try:
+            with open(sample_file, "r", encoding="utf-8", errors="replace") as f:
+                sample = f.read(2000)
+        except Exception:
+            return f"Dataset with {size_str} of data."
+
+        lines = [l.strip() for l in sample.split("\n") if l.strip()]
+        word_count = len(sample.split())
+
+        # Detect format
+        is_jsonl = False
+        is_messages = False
+        has_dialogue = False
+        dialogue_markers = ["user:", "assistant:", "human:", "<|user|>", "<|assistant|>"]
+
+        for line in lines[:10]:
+            if line.startswith("{"):
+                is_jsonl = True
+                try:
+                    import json
+                    obj = json.loads(line)
+                    if "messages" in obj or "conversations" in obj:
+                        is_messages = True
+                except Exception:
+                    pass
+            lower = line.lower()
+            if any(lower.startswith(m) or f" {m}" in lower for m in dialogue_markers):
+                has_dialogue = True
+
+        parts = []
+        if is_messages:
+            parts.append(f"Conversational data with {len(lines)} turns")
+        elif has_dialogue:
+            parts.append(f"Dialogue text with {word_count} words")
+        else:
+            parts.append(f"Text with {word_count} words")
+
+        parts.append(f"({size_str})")
+
+        if word_count < 1000:
+            parts.append("— small dataset, good for quick experiments")
+        elif word_count > 100000:
+            parts.append("— large dataset, training will take longer but learn more")
+
+        return " ".join(parts) + "."
     
     def search_datasets(self, q: str) -> List[str]:
         """Search datasets by name"""

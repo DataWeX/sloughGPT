@@ -11,12 +11,29 @@ import { errorController, type ErrorEntry } from '@/lib/error-controller'
 const PAGE_SIZE = 50
 
 function ErrorDetail({ error, onClose }: { error: ErrorEntry; onClose: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement as HTMLElement
+    dialogRef.current?.focus()
+    return () => { previousFocusRef.current?.focus() }
+  }, [])
+
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [onClose])
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="error-detail-title" ref={dialogRef} tabIndex={-1}>
       <Card className="max-w-2xl w-full max-h-[80vh] flex flex-col">
         <CardHeader className="flex flex-row items-center justify-between shrink-0">
-          <CardTitle className="text-base truncate">{error.message.slice(0, 80)}</CardTitle>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          <CardTitle id="error-detail-title" className="text-base truncate">{error.message.slice(0, 80)}</CardTitle>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground" aria-label="Close error details">
             <IconX className="h-4 w-4" />
           </button>
         </CardHeader>
@@ -141,10 +158,10 @@ export default function ErrorMonitorPage() {
               <Toggle checked={autoRefresh} onChange={setAutoRefresh} />
               Auto
             </label>
-            <Button variant="outline" size="sm" onClick={handleClear} disabled={errors.length === 0}>
+            <Button variant="outline" size="sm" onClick={handleClear} disabled={errors.length === 0} aria-label="Clear all errors">
               <IconTrash className="h-3.5 w-3.5" />
             </Button>
-            <Button variant="outline" size="sm" onClick={fetchErrors} disabled={loading}>
+            <Button variant="outline" size="sm" onClick={fetchErrors} disabled={loading} aria-label="Refresh errors">
               <IconRefresh className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -192,6 +209,7 @@ export default function ErrorMonitorPage() {
                     key={err.id}
                     onClick={() => setSelected(err)}
                     className="w-full flex items-start gap-3 rounded-md p-2.5 text-left hover:bg-muted/50 transition-colors group"
+                    aria-label={`View error: ${err.message.slice(0, 60)}`}
                   >
                     <SourceDot source={err.source} />
                     <div className="flex-1 min-w-0">

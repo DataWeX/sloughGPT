@@ -35,6 +35,7 @@ class ModelInfo(BaseModel):
     parameters: int = 0
     vocab_size: int = 0
     loaded_at: Optional[str] = None
+    description: str = ""
 
 
 class ModelListResponse(BaseModel):

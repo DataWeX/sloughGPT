@@ -265,9 +265,16 @@ export default function ConversationsPage() {
                 ))}
               </div>
             ) : sorted.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                {search ? 'No matching conversations' : 'No conversations yet'}
-              </p>
+              <div className="text-center py-8 space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  {search ? 'No matching conversations' : 'No conversations yet'}
+                </p>
+                {!search && (
+                  <Button size="sm" onClick={() => router.push('/chat')}>
+                    <IconPlus className="w-3.5 h-3.5 mr-1" /> Start chatting
+                  </Button>
+                )}
+              </div>
             ) : (
               <div className="space-y-4">
                 {starred.length > 0 && (
@@ -412,7 +419,7 @@ function Row({
         </div>
       </div>
 
-      <div className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity pt-0.5">
+      <div className="shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity pt-0.5">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -420,6 +427,7 @@ function Row({
               size="icon-sm"
               className="h-6 w-6 p-0 hover:bg-transparent"
               onClick={(e) => e.stopPropagation()}
+              aria-label="More options"
             >
               <IconMore className="h-3.5 w-3.5 text-muted-foreground" />
             </Button>

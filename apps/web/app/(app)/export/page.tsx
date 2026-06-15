@@ -128,6 +128,7 @@ export default function ExportPage() {
                   variant={selectedFormat === f ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setSelectedFormat(f)}
+                  aria-pressed={selectedFormat === f}
                 >
                   {f.toUpperCase()}
                 </Button>
@@ -139,12 +140,14 @@ export default function ExportPage() {
                 onChange={e => setOutputPath(e.target.value)}
                 placeholder="Output path"
                 className="text-sm flex-1"
+                aria-label="Output path"
               />
               <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
                 <input
                   type="checkbox"
                   checked={includeTokenizer}
                   onChange={e => setIncludeTokenizer(e.target.checked)}
+                  aria-label="Include tokenizer"
                 />
                 Include tokenizer
               </label>
@@ -171,6 +174,7 @@ export default function ExportPage() {
                 onChange={e => setTextExportCount(Math.max(1, parseInt(e.target.value) || 100))}
                 className="text-sm w-24"
                 min={1}
+                aria-label="Number of training pairs"
               />
               <span className="text-xs text-muted-foreground">pairs</span>
               <Button size="sm" onClick={handleTextExport} disabled={textExportBusy}>

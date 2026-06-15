@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useCallback, useMemo } from 'react'
+import { useEffect, useCallback, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useApiHealth } from '@/hooks/useApiHealth'
 import { useChatUI } from '@/hooks/useChatUI'
@@ -11,11 +11,8 @@ import { useChatModelSettings } from '@/hooks/useChatModelSettings'
 import { useChatKeyboard } from '@/hooks/useChatKeyboard'
 import { useChatMessages } from '@/hooks/useChatMessages'
 import { computeSearchMatches } from '@/lib/chat-utils'
-import { PUBLIC_API_URL } from '@/lib/config'
 import { modelController } from '@/lib/model-controller'
 import { generationConfigController } from '@/lib/generation-config-controller'
-import { soulsController, type Checkpoint } from '@/lib/souls-controller'
-import { agentsController } from '@/lib/agents-controller'
 import { AGENTS } from '@/lib/agents'
 import { useFeedbackStore } from '@/lib/feedback-store'
 import { useToastStore } from '@/lib/toast-store'
@@ -26,16 +23,20 @@ import {
 import { ChatToolbar } from '@/components/chat/ChatToolbar'
 import { ChatToolPanel } from '@/components/chat/ChatToolPanel'
 import { DownloadDialog } from '@/components/chat/DownloadDialog'
+import { ChatProvider } from '@/contexts/ChatContext'
+import { ChatToolbarProvider } from '@/contexts/ChatToolbarContext'
+import { useChatToolbarValue } from '@/hooks/useChatToolbarValue'
+import { useChatContextValue } from '@/hooks/useChatContextValue'
 
 const VoiceChatMode = dynamic(() => import('@/components/chat/VoiceChatMode').then(m => m.VoiceChatMode), { ssr: false })
 const ConversationViewer = dynamic(() => import('@/components/chat/ConversationViewer').then(m => m.ConversationViewer), { ssr: false })
 const ConversationSearch = dynamic(() => import('@/components/chat/ConversationSearch').then(m => m.ConversationSearch), { ssr: false })
 
 export default function ChatPage() {
-  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
+  const showToast = useCallback((message: string, type: string = 'success') => {
     const store = useToastStore.getState()
     const exists = store.toasts.some(t => t.message === message && t.type === type)
-    if (!exists) store.addToast(message, type)
+    if (!exists) store.addToast(message, type as 'success' | 'error' | 'info')
   }, [])
 
   const { state: health, refresh: refreshHealth } = useApiHealth()
@@ -46,6 +47,7 @@ export default function ChatPage() {
   const agents = useChatAgents()
   const engine = useChatLocalEngine(showToast)
   const model = useChatModelSettings(showToast, refreshHealth)
+  const [modelDescriptions, setModelDescriptions] = useState<Record<string, string>>({})
 
   const chat = useChatMessages({
     model: model.model,
@@ -120,62 +122,33 @@ export default function ChatPage() {
   }, [ui.setShowConversationSearch])
 
   useEffect(() => {
+    modelController.list().then(models => {
+      const desc: Record<string, string> = {}
+      models.forEach(m => { if (m.description) desc[m.id] = m.description })
+      setModelDescriptions(desc)
+    }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const handler = () => {
+      const lastAssistant = [...chat.messages].reverse().find(m => m.role === 'assistant')
+      if (lastAssistant?.content) {
+        navigator.clipboard.writeText(lastAssistant.content).then(() => {
+          showToast('Last response copied', 'info')
+        }).catch(() => {})
+      }
+    }
+    window.addEventListener('copy-last-response', handler)
+    return () => window.removeEventListener('copy-last-response', handler)
+  }, [chat.messages, showToast])
+
+  useEffect(() => {
     fetchStats()
     fetchAdapterStats()
-    if (health && health !== 'offline' && health.model_loaded && health.model_type) {
-      model.setModel(health.model_type)
-    }
-    modelController.list().then((models) => {
-      model.setAvailableModels(models.map(m => m.id))
-      const infoMap: Record<string, { cached?: boolean; size_gb?: number }> = {}
-      models.forEach(m => { infoMap[m.id] = { cached: m.cached, size_gb: m.size_gb } })
-      model.setModelInfoMap(infoMap)
-    }).catch((err) => addGlobalError(err, 'Chat:ModelsList'))
-    generationConfigController.get().then((config) => {
-      model.setTemperature(config.temperature)
-      model.setMaxTokens(config.max_new_tokens)
-    }).catch((err) => addGlobalError(err, 'Chat:GenConfig'))
-    soulsController.list().then((data) => {
-      model.setSouls(data.souls || [])
-      if (data.current_soul) {
-        const found = (data.souls || []).find(s => s.name === data.current_soul)
-        if (found) model.setCurrentSoul(found)
-      }
-    }).catch((err) => addGlobalError(err, 'Chat:Souls'))
-    agentsController.list().then((data) => {
-      const localAgents = Object.values(AGENTS)
-      const merged = data && data.length > 0 ? data : localAgents
-      agents.setAgents(merged)
-      const savedAgentId = localStorage.getItem('man_current_agent') || 'general'
-      const found = merged.find(a => a.id === savedAgentId)
-      if (found) agents.setCurrentAgent(found)
-    }).catch((err) => {
-      addGlobalError(err, 'Chat:Agents')
-      const localAgents = Object.values(AGENTS)
-      agents.setAgents(localAgents)
-      const savedAgentId = localStorage.getItem('man_current_agent') || 'general'
-      const found = localAgents.find(a => a.id === savedAgentId)
-      if (found) agents.setCurrentAgent(found)
-    })
-    soulsController.listCheckpoints().then(({ checkpoints: ckpts }) => {
-      model.setCheckpoints((ckpts || []).map((c: Checkpoint) => ({
-        name: c.name || 'unknown',
-        loss: c.loss,
-        traits: c.traits ? Object.keys(c.traits) : undefined,
-        is_loaded: (c as any).is_loaded || false,
-        eval_verdict: c.verdict,
-      })))
-    }).catch((err) => addGlobalError(err, 'Chat:Checkpoints'))
-    fetch(`${PUBLIC_API_URL}/learn/status`).then(r => r.json()).then(data => {
-      if (data && data.total_tokens_ingested !== undefined) model.setLearnerInfo(data)
-    }).catch((err) => addGlobalError(err, 'Chat:LearnerStatus'))
-  }, [fetchStats, fetchAdapterStats, health,
-      model.setModel, model.setAvailableModels, model.setModelInfoMap,
-      model.setTemperature, model.setMaxTokens,
-      model.setSouls, model.setCurrentSoul,
-      agents.setAgents, agents.setCurrentAgent,
-      model.setCheckpoints, model.setLearnerInfo,
-  ])
+    const healthModel = health && health !== 'offline' && health.model_loaded ? health.model_type : undefined
+    model.fetchInitialData(healthModel)
+    agents.fetchInitialData()
+  }, [fetchStats, fetchAdapterStats, health, model.fetchInitialData, agents.fetchInitialData])
 
   useEffect(() => {
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -189,58 +162,51 @@ export default function ChatPage() {
   // ── Flyweights: clearChat / selectAgent with toast ────────────────────────
 
   const clearChat = useCallback(() => chat.newChat(), [chat.newChat])
-  const handleSelectAgentWithToast = useCallback((a: any) => {
-    agents.setCurrentAgent(a)
-    localStorage.setItem('man_current_agent', a.id)
-    showToast(`Switched to ${a.name}`, 'info')
+
+  const handleSelectAgentWithToast = useCallback((agent: any) => {
+    agents.setCurrentAgent(agent)
+    showToast(`Switched to ${agent?.name || 'no agent'}`)
   }, [agents.setCurrentAgent, showToast])
 
+  const toolbarValue = useChatToolbarValue({
+    ui,
+    vision,
+    agents,
+    engine,
+    model,
+    chat,
+    health,
+    matchCount,
+    matchIds,
+    handlePrevMatch,
+    handleNextMatch,
+    handleSelectAgentWithToast,
+    modelDescriptions,
+    showToast,
+  })
+
+  const chatContextValue = useChatContextValue({
+    health,
+    refreshHealth,
+    model,
+    agents,
+    vision,
+    ui,
+    chat,
+    showToast,
+  })
+
   return (
+    <ChatProvider value={chatContextValue}>
+    <a href="#chat-messages" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-background focus:border focus:rounded-lg focus:shadow-lg">
+      Skip to messages
+    </a>
     <div className="flex flex-1 min-h-0 overflow-hidden">
-      <div className="flex flex-1 min-h-0 overflow-hidden rounded-none lg:rounded-lg border border-border/30 bg-background shadow-sm">
+      <main className="flex flex-1 min-h-0 overflow-hidden rounded-none lg:rounded-lg border border-border/30 bg-background shadow-sm" aria-label="Chat">
         <div className="flex flex-col flex-1 min-h-0 min-w-0 max-w-full overflow-hidden">
-          <ChatToolbar
-            sidebarConversations={chat.sidebarConversations}
-            sessionIdRef={chat.sessionIdRef}
-            onLoadSession={chat.loadSession}
-            onStarSession={chat.starSession}
-            onPinSession={chat.pinSession}
-            onNewChat={chat.newChat}
-            searchQuery={ui.searchQuery}
-            onSearchChange={ui.handleSearchChange}
-            onSearchClear={ui.handleSearchClear}
-            matchIndex={ui.matchIndex}
-            matchCount={matchCount}
-            matchIds={matchIds}
-            onPrevMatch={handlePrevMatch}
-            onNextMatch={handleNextMatch}
-            showMobileSearch={ui.showMobileSearch}
-            setShowMobileSearch={ui.setShowMobileSearch}
-            availableModels={model.availableModels}
-            model={model.model}
-            loadingModel={model.loadingModel}
-            generating={chat.loading}
-            modelInfoMap={model.modelInfoMap}
-            downloadProgress={model.downloadProgress}
-            onSelectModel={model.handleSelectModel}
-            souls={model.souls}
-            currentSoul={model.currentSoul}
-            onSelectSoul={model.handleSelectSoul}
-            knowledgeCtx={agents.knowledgeCtx}
-            onToggleKnowledge={agents.handleToggleKnowledge}
-            agents={agents.agents}
-            currentAgent={agents.currentAgent}
-            onSelectAgent={handleSelectAgentWithToast}
-            localModelUrl={engine.localModelUrl}
-            useLocalEngine={engine.useLocalEngine}
-            localEngineLoading={engine.localEngineLoading}
-            localArchInfo={engine.localArchInfo}
-            onToggleLocalEngine={engine.handleToggleLocalEngine}
-            onVoiceMode={() => ui.setVoiceMode(true)}
-            onToggleTools={() => ui.setToolPanelOpen(prev => !prev)}
-            onExportMarkdown={chat.handleExportMarkdown}
-            hasMessages={chat.messages.length > 0}
-          />
+          <ChatToolbarProvider value={toolbarValue}>
+            <ChatToolbar />
+          </ChatToolbarProvider>
 
           <ChatSettings
             isOpen={ui.showSettings}
@@ -272,6 +238,8 @@ export default function ChatPage() {
           <ChatArea
             messages={chat.messages}
             loading={chat.loading}
+            sessionLoading={chat.sessionLoading}
+            model={model.model}
             health={health}
             onRefreshHealth={refreshHealth}
             onCopy={chat.handleCopy}
@@ -340,75 +308,13 @@ export default function ChatPage() {
           />
 
         </div>
-      </div>
+      </main>
 
       {ui.toolPanelOpen && (
         <ChatToolPanel
           open={true}
           onClose={() => ui.setToolPanelOpen(false)}
           sessionId={chat.sessionIdRef.current}
-          learnerInfo={model.learnerInfo}
-          learnerTraining={model.learnerTraining}
-          onTrainStep={async () => {
-            model.setLearnerTraining(true)
-            try {
-              const resp = await fetch(`${PUBLIC_API_URL}/learn/train`, { method: 'POST' })
-              if (resp.ok) {
-                const data = await resp.json()
-                if (data.current_loss !== undefined) showToast(`Train step: loss ${data.current_loss.toFixed(4)}`)
-                else showToast('Train step complete')
-                model.setLearnerInfo(prev => {
-                  if (!prev) return prev
-                  return {
-                    ...prev,
-                    train_steps_completed: data.train_steps_completed ?? prev.train_steps_completed,
-                    current_loss: data.current_loss ?? prev.current_loss,
-                    loss_history: data.loss_history ?? prev.loss_history,
-                  }
-                })
-              } else showToast('Train step failed', 'error')
-            } catch { showToast('Train step failed', 'error') }
-            finally { model.setLearnerTraining(false) }
-          }}
-          checkpoints={model.checkpoints}
-          currentCheckpoint={model.currentCheckpoint}
-          onLoadCheckpoint={async (name) => {
-            try {
-              await soulsController.loadCheckpoint(name)
-              model.setCurrentCheckpoint(name)
-              showToast(`Checkpoint loaded: ${name}`)
-            } catch { showToast('Failed to load checkpoint', 'error') }
-          }}
-          agents={agents.agents}
-          currentAgent={agents.currentAgent}
-          onSelectAgent={(a) => agents.setCurrentAgent(a)}
-          availableModels={model.availableModels}
-          currentModel={model.model}
-          onSelectModel={async (m) => {
-            if (m === model.model) return
-            model.setModel(m)
-            try {
-              await modelController.load(m)
-              showToast(`Model loaded: ${m}`)
-            } catch { showToast(`Failed to load model: ${m}`, 'error') }
-          }}
-          souls={model.souls}
-          currentSoulName={model.currentSoul?.name}
-          onSwitchSoul={async (name) => {
-            try {
-              await soulsController.switch(name)
-              const s = model.souls.find(s => s.name === name)
-              if (s) model.setCurrentSoul(s)
-            } catch (e) { console.error('Failed to switch soul:', e) }
-          }}
-          onOpenSettings={ui.toggleSettings}
-          onOpenShortcuts={() => window.dispatchEvent(new CustomEvent('toggle-shortcuts'))}
-          onOpenConversationViewer={() => ui.setShowConversationViewer(true)}
-          visionImagesLearned={vision.visionCaps?.images_learned}
-          visionTrained={vision.visionCaps?.trained}
-          visionStatus={vision.visionCaps?.status}
-          visionCaptionHistory={vision.visionCaptionHistory}
-          visionVocabSize={vision.visionVocabSize}
         />
       )}
 
@@ -433,5 +339,6 @@ export default function ChatPage() {
         />
       )}
     </div>
+    </ChatProvider>
   )
 }

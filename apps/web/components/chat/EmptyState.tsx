@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useLocale } from '@/hooks/useLocale'
 import { Chip } from '@/components/ui/tags'
+import { cn } from '@/lib/cn'
 
 interface EmptyStateProps {
   hasModel: boolean
@@ -20,22 +21,25 @@ const suggestions = [
 ]
 
 function MoodOrb() {
-  const [pulse, setPulse] = useState(1)
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setPulse(p => 0.88 + Math.sin(Date.now() / 1400) * 0.12)
-    }, 40)
-    return () => clearInterval(interval)
+    const mql = window.matchMedia('(prefers-reduced-motion: reduce)')
+    setPrefersReducedMotion(mql.matches)
+    const handler = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches)
+    mql.addEventListener('change', handler)
+    return () => mql.removeEventListener('change', handler)
   }, [])
 
   return (
-    <div className="relative">
+    <div className="relative" aria-hidden="true">
       <div
-        className="h-16 w-16 sm:h-20 sm:w-20 rounded-full transition-transform duration-700 ease-in-out"
+        className={cn(
+          "h-16 w-16 sm:h-20 sm:w-20 rounded-full",
+          !prefersReducedMotion && "mood-orb-pulse"
+        )}
         style={{
           background: `radial-gradient(circle at 35% 30%, color-mix(in srgb, rgb(var(--primary)) 55%, transparent), color-mix(in srgb, rgb(var(--accent)) 30%, transparent))`,
-          transform: `scale(${pulse})`,
           boxShadow: `0 0 40px color-mix(in srgb, rgb(var(--primary)) 20%, transparent), 0 0 80px color-mix(in srgb, rgb(var(--accent)) 12%, transparent)`,
         }}
       />
@@ -108,7 +112,7 @@ export function EmptyState({ hasModel, onSuggestionClick }: EmptyStateProps) {
         </div>
       )}
 
-      <div className="flex items-center gap-3 text-[11px] text-muted-foreground/40 bg-muted/20 px-3 py-1.5 rounded-full border border-border/30">
+      <div className="flex items-center gap-3 text-[11px] text-muted-foreground/40 bg-muted/20 px-3 py-1.5 rounded-full border border-border/30" aria-label="Keyboard shortcuts">
         <span className="flex items-center gap-1.5">
           <kbd className="rounded-md bg-background px-1.5 py-0.5 font-mono text-[10px] shadow-sm border border-border/50">↵</kbd>
           <span>{t('chat.send')}</span>

@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { modelController } from '@/lib/model-controller'
+import { generationConfigController } from '@/lib/generation-config-controller'
 import { soulsController, type Soul } from '@/lib/souls-controller'
 import { startDownload, getDownloadStatus } from '@/lib/download-controller'
 import { sessionStore } from '@/lib/session-store'
@@ -10,7 +11,7 @@ import type { DownloadProgressInfo } from '@/lib/chat-utils'
 interface LearnerInfo {
   total_tokens_ingested: number
   train_steps_completed: number
-  current_loss: number
+  current_loss: number | undefined
   loss_history?: Array<{ step: number; loss: number; tokens: number; timestamp: number }>
   n_embed?: number
   n_layer?: number
@@ -112,6 +113,58 @@ export function useChatModelSettings(
     soulsController.switch(s.name).catch(e => console.error('Failed to switch soul:', e))
   }, [])
 
+  const handleUnloadModel = useCallback(async () => {
+    if (!model) return
+    setLoadingModel(model)
+    try {
+      await modelController.unloadModel(model)
+      await refreshHealth()
+      setModel('')
+      showToast('Model unloaded', 'info')
+    } catch (err) {
+      showToast(`Failed to unload: ${err instanceof Error ? err.message : 'unknown'}`, 'error')
+    } finally {
+      setLoadingModel(null)
+    }
+  }, [model, showToast, refreshHealth])
+
+  const fetchInitialData = useCallback(async (healthModel?: string) => {
+    try {
+      const [models, genConfig, soulsData, checkpointsData] = await Promise.all([
+        modelController.list(),
+        generationConfigController.get(),
+        soulsController.list(),
+        soulsController.listCheckpoints(),
+      ])
+
+      setAvailableModels(models.map(m => m.id))
+      const infoMap: Record<string, { cached?: boolean; size_gb?: number }> = {}
+      models.forEach(m => { infoMap[m.id] = { cached: m.cached, size_gb: m.size_gb } })
+      setModelInfoMap(infoMap)
+
+      setTemperature(genConfig.temperature)
+      setMaxTokens(genConfig.max_new_tokens)
+
+      setSouls(soulsData.souls || [])
+      if (soulsData.current_soul) {
+        const found = (soulsData.souls || []).find(s => s.name === soulsData.current_soul)
+        if (found) setCurrentSoul(found)
+      }
+
+      setCheckpoints((checkpointsData.checkpoints || []).map(c => ({
+        name: c.name || 'unknown',
+        loss: c.loss,
+        traits: c.traits ? Object.keys(c.traits) : undefined,
+        is_loaded: (c as any).is_loaded || false,
+        eval_verdict: c.verdict,
+      })))
+
+      if (healthModel) setModel(healthModel)
+    } catch (err) {
+      console.error('Failed to fetch initial model data:', err)
+    }
+  }, [setAvailableModels, setModelInfoMap, setTemperature, setMaxTokens, setSouls, setCurrentSoul, setCheckpoints, setModel])
+
   return {
     model, setModel,
     souls, setSouls,
@@ -132,5 +185,7 @@ export function useChatModelSettings(
     startDownloadFlow,
     handleSelectModel,
     handleSelectSoul,
+    handleUnloadModel,
+    fetchInitialData,
   }
 }

@@ -182,8 +182,8 @@ export default function LabsPage() {
 
       {/* Tab bar */}
       <div className="flex gap-2">
-        <Button size="sm" variant={tab === 'chat' ? 'default' : 'outline'} onClick={() => setTab('chat')}>Chat</Button>
-        <Button size="sm" variant={tab === 'train' ? 'default' : 'outline'} onClick={() => setTab('train')}>Train</Button>
+        <Button size="sm" variant={tab === 'chat' ? 'default' : 'outline'} onClick={() => setTab('chat')} aria-pressed={tab === 'chat'}>Chat</Button>
+        <Button size="sm" variant={tab === 'train' ? 'default' : 'outline'} onClick={() => setTab('train')} aria-pressed={tab === 'train'}>Train</Button>
       </div>
 
       {/* Model status */}
@@ -205,9 +205,9 @@ export default function LabsPage() {
                 if (checkpoints.length > 0) {
                   window.open(`/auto-train/checkpoints/${encodeURIComponent(checkpoints[0].name)}/download`)
                 }
-              }}>Export</Button>
+              }} aria-label="Export checkpoint">Export</Button>
             )}
-            <Button size="sm" variant="ghost" onClick={refreshModel}>Refresh</Button>
+            <Button size="sm" variant="ghost" onClick={refreshModel} aria-label="Refresh model status">Refresh</Button>
           </div>
         </CardContent>
       </Card>
@@ -217,15 +217,15 @@ export default function LabsPage() {
         <Card>
           <CardHeader><CardTitle className="text-base">Quick Train</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <Textarea value={initText} onChange={e => setInitText(e.target.value)} placeholder="Paste training text here..." rows={3} />
-            <div className="flex gap-3 items-end">
+            <Textarea value={initText} onChange={e => setInitText(e.target.value)} placeholder="Paste training text here..." rows={3} aria-label="Training text" />
+            <div className="flex gap-3 items-end flex-wrap">
               <div>
                 <label className="text-xs text-muted-foreground block">Soul</label>
-                <Input value={initSoul} onChange={e => setInitSoul(e.target.value)} className="w-28" />
+                <Input value={initSoul} onChange={e => setInitSoul(e.target.value)} className="w-28" aria-label="Soul name" />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground block">Epochs</label>
-                <Input type="number" value={initEpochs} onChange={e => setInitEpochs(Number(e.target.value))} min={1} max={100} className="w-20" />
+                <Input type="number" value={initEpochs} onChange={e => setInitEpochs(Number(e.target.value))} min={1} max={100} className="w-20" aria-label="Training epochs" />
               </div>
               <div className="flex gap-1">
                 {[{ label: 'Fast', e: 3 }, { label: 'Balanced', e: 10 }, { label: 'Deep', e: 30 }].map(p => (
@@ -251,11 +251,12 @@ export default function LabsPage() {
       )}
 
       {/* Checkpoints */}
-      {checkpoints.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Recent Checkpoints</CardTitle></CardHeader>
-          <CardContent className="space-y-1 max-h-48 overflow-y-auto">
-            {checkpoints.slice(0, 10).map(ck => (
+      <Card>
+        <CardHeader><CardTitle className="text-base">Recent Checkpoints</CardTitle></CardHeader>
+        <CardContent className="space-y-1 max-h-48 overflow-y-auto">
+          {checkpoints.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-2">No checkpoints yet — train a model to create checkpoints.</p>
+          ) : checkpoints.slice(0, 10).map(ck => (
               <div key={ck.name} className="flex items-center justify-between text-xs p-1.5 rounded hover:bg-muted/30">
                 <div className="truncate flex-1">
                   <span className="font-medium">{ck.name?.slice(0, 28)}</span>
@@ -267,14 +268,13 @@ export default function LabsPage() {
                       await soulsController.loadCheckpoint(ck.name)
                       await refreshModel()
                     } catch {}
-                  }}>Load</Button>
-                  <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => window.open(`/auto-train/checkpoints/${encodeURIComponent(ck.name)}/download`)}>↓</Button>
+                  }} aria-label={`Load checkpoint ${ck.name}`}>Load</Button>
+                  <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => window.open(`/auto-train/checkpoints/${encodeURIComponent(ck.name)}/download`)} aria-label={`Download checkpoint ${ck.name}`}>↓</Button>
                 </div>
               </div>
               ))}
             </CardContent>
           </Card>
-        )}
 
       {/* Chat tab */}
       {tab === 'chat' && (
@@ -284,7 +284,7 @@ export default function LabsPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-base">Conversation</CardTitle>
-                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={handleReset}>Clear</Button>
+                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={handleReset} aria-label="Clear conversation">Clear</Button>
               </CardHeader>
               <CardContent className="space-y-2 max-h-80 overflow-y-auto">
                 {chatLog.map((msg, i) => (
@@ -309,6 +309,7 @@ export default function LabsPage() {
                   onChange={e => setPrompt(e.target.value)}
                   placeholder="Type a message..."
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChat() } }}
+                  aria-label="Chat message"
                 />
                 <Button onClick={handleChat} disabled={chatting || !prompt.trim()}>
                   {chatting ? '...' : 'Send'}
@@ -333,7 +334,7 @@ export default function LabsPage() {
                   setPersonalizationEnabled(checked)
                   try { localStorage.setItem('labs_personalization', String(checked)) } catch {}
                 }}
-                label=""
+                label="Use my feedback adapters"
               />
             </CardContent>
           </Card>
@@ -348,7 +349,7 @@ export default function LabsPage() {
               <input type="file" accept="image/*" onChange={e => {
                 const f = e.target.files?.[0]
                 if (f) { setVisionFile(f); setVisionPreview(URL.createObjectURL(f)); setVisionCaption('') }
-              }} className="text-sm" />
+              }} className="text-sm" aria-label="Upload image for vision" />
               {visionPreview && <img src={visionPreview} alt="Vision preview" className="max-h-40 rounded border object-contain bg-muted" />}
               {visionFile && <Button size="sm" onClick={handleVision} disabled={visionBusy}>{visionBusy ? '...' : 'Describe Image'}</Button>}
               {visionCaption && <div className="p-2 bg-muted/30 rounded text-xs whitespace-pre-wrap">{visionCaption}</div>}

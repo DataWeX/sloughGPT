@@ -76,7 +76,7 @@ function ConfettiBurst({ active }: { active: boolean }) {
   if (particles.length === 0) return null
 
   return (
-    <div className="absolute inset-0 pointer-events-none overflow-visible" aria-hidden>
+    <div className="absolute inset-0 pointer-events-none overflow-visible" aria-hidden="true">
       {particles.map((p, i) => (
         <span
           key={i}
@@ -135,7 +135,7 @@ export function MessageActions({ content, messageId, onCopy, onRegenerate, onThu
 
   return (
     <div
-      className="flex items-center gap-0 mt-0 opacity-0 group-hover:opacity-100 transition-opacity relative"
+      className="flex items-center gap-0 mt-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity relative"
       role="group"
       aria-label="Message actions"
     >

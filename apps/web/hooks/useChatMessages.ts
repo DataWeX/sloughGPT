@@ -5,25 +5,24 @@ import { streamChatResponse } from '@/lib/stream-chat-response'
 import {
   cleanStreamedContent, stripAssistantPrefix, getOrCreateUserId,
   generateSessionId, CURRENT_SESSION_KEY, buildLocalPrompt,
-  exportConversationAsMarkdown,
+  exportConversationAsMarkdown, copyConversationAsMarkdown,
   type ChatMessage, type ImageAttachment, type ChatSession,
 } from '@/lib/chat-utils'
 import { getErrorInfo } from '@/components/chat/ErrorBanner'
 import type { Conversation } from '@/lib/session-controller'
 import { chatController } from '@/lib/chat-controller'
-import { sessionController } from '@/lib/session-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { multimodalController } from '@/lib/multimodal-controller'
-import { chatDB, type ChatSession as DBChatSession } from '@/lib/db'
-import { useErrorStore, addGlobalError } from '@/lib/error-store'
+import { chatDB } from '@/lib/db'
+import { useErrorStore } from '@/lib/error-store'
 import { devDebug } from '@/lib/dev-log'
 import type { SoulNetWebGPU, SoulTransformerWebGPU } from '@/lib/soulnet-webgpu'
 import type { AgentDef } from '@/lib/agents'
 import type { Soul } from '@/lib/souls-controller'
 import type { MultimodalCapabilities } from '@/lib/multimodal-controller'
+import { useChatSessions } from './useChatSessions'
 
-const MAX_STORAGE_MESSAGES = 40
-const VOICE_MODE_KEY = 'man_voice_mode'
+const DRAFT_PREFIX = 'man_draft_'
 
 interface ChatMessagesConfig {
   model: string
@@ -35,7 +34,7 @@ interface ChatMessagesConfig {
   engineRef: React.MutableRefObject<SoulNetWebGPU | SoulTransformerWebGPU | null>
   engineLoadingRef: React.MutableRefObject<boolean>
   initLocalEngine: () => Promise<boolean>
-  showToast: (message: string, type?: 'success' | 'error' | 'info') => void
+  showToast: (message: string, type?: string) => void
   recordFeedback: (params: {
     userMessage: string
     assistantResponse: string
@@ -58,161 +57,56 @@ export function useChatMessages(config: ChatMessagesConfig) {
     onVisionUpdate, onKnowledgeUpdate,
   } = config
 
+  // ── Core state ───────────────────────────────────────────────────────────
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [sessionLoading, setSessionLoading] = useState(false)
   const [images, setImages] = useState<ImageAttachment[]>([])
   const [sessionSaved, setSessionSaved] = useState(false)
-  const [sessions, setSessions] = useState<ChatSession[]>([])
   const [currentError, setCurrentError] = useState<ReturnType<typeof getErrorInfo> | null>(null)
 
+  // ── Refs for callback access (read-only, never mutated inside setState) ──
   const messagesRef = useRef<ChatMessage[]>([])
   const loadingRef = useRef<AbortController | null>(null)
   const sessionIdRef = useRef<string>('')
   const userIdRef = useRef<string>('default')
   const lastSaveRef = useRef<number>(0)
-  const sessionCreatedRef = useRef(false)
-  const streamStartRef = useRef<number>(0)
   const sendMessageRef = useRef<(overrideText?: string) => Promise<void>>(async () => {})
-  const skipMeteredWarningRef = useRef(false)
   const handleRegenerateRef = useRef<() => Promise<void>>(null as unknown as () => Promise<void>)
   const newChatRef = useRef<() => void>(null as unknown as () => void)
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // ── Session / Storage ─────────────────────────────────────────────────────
-
-  const saveSessionToStorage = async (msgs: ChatMessage[], sessionId: string) => {
-    const sessionName = msgs[0]?.content?.slice(0, 30) || 'New Chat'
-    const storedMsgs = msgs.length > MAX_STORAGE_MESSAGES
-      ? msgs.slice(-MAX_STORAGE_MESSAGES)
-      : msgs
-    const session: DBChatSession = {
-      id: sessionId, name: sessionName, messages: storedMsgs,
-      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-      synced: false, starred: false, pinned: false,
-    }
-    await chatDB.saveSession(session)
-    if (!sessionCreatedRef.current) {
-      sessionController.create(sessionName, sessionId).catch(console.error)
-      sessionCreatedRef.current = true
-    } else {
-      sessionController.update(sessionId, { name: sessionName }).catch(err => addGlobalError(err, 'Chat:SessionUpdate'))
-    }
-    const newLocal = await chatDB.loadSessions()
-    setSessions(prev => {
-      const merged = [...(prev || [])]
-      for (const p of prev || []) {
-        if (!merged.find(m => m.id === p.id) && p.id) merged.push(p)
-      }
-      return merged.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
-    })
-  }
-
-  const saveSession = useCallback(async () => {
-    if (messages.length === 0) return
-    const sid = sessionIdRef.current || localStorage.getItem(CURRENT_SESSION_KEY) || generateSessionId()
-    await saveSessionToStorage(messages, sid)
+  // Keep messagesRef in sync via effect (single source of truth is `messages` state)
+  useEffect(() => {
+    messagesRef.current = messages
   }, [messages])
 
-  const storeSessionContext = async (sessionId: string, msgs: ChatMessage[]) => {
+  // ── Session operations (delegated) ──────────────────────────────────────
+  const sessions = useChatSessions({
+    setMessages, setInput, setSessionSaved, setSessionLoading,
+    sessionIdRef, showToast,
+  })
+
+  const storeSessionContext = useCallback(async (sessionId: string, msgs: ChatMessage[]) => {
     try {
       await chatController.saveSessionContext(sessionId, msgs.map(m => ({ role: m.role, content: m.content })))
     } catch {}
-  }
-
-  const loadSession = useCallback(async (sessionId: string) => {
-    const session = await chatDB.loadSession(sessionId)
-    if (session) {
-      const filteredMessages = session.messages.filter(msg => {
-        if (msg.role === 'assistant' && !msg.content.trim()) return false
-        return true
-      })
-      try {
-        const remoteMsgs = await sessionController.fetchMessages(sessionId)
-        const remoteChatMsgs = remoteMsgs.map(m => ({
-          id: `remote_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-          timestamp: new Date(),
-        }))
-        const seen = new Set(remoteChatMsgs.map(m => `${m.role}:${m.content}`))
-        const uniqueLocal = filteredMessages.filter(m => !seen.has(`${m.role}:${m.content}`))
-        setMessages([...remoteChatMsgs, ...uniqueLocal])
-      } catch {
-        setMessages(filteredMessages)
-      }
-      localStorage.setItem(CURRENT_SESSION_KEY, sessionId)
-      const isComplete = filteredMessages.length > 0 &&
-        filteredMessages[filteredMessages.length - 1].role === 'assistant'
-      setSessionSaved(isComplete)
-      if (filteredMessages.length > 0) showToast(`Loaded: ${session.name}`)
-    }
-  }, [showToast])
+  }, [])
 
   const newChat = useCallback(() => {
     setMessages([])
+    setInput('')
     setSessionSaved(false)
     const newId = generateSessionId()
     sessionIdRef.current = newId
-    sessionCreatedRef.current = false
     localStorage.setItem(CURRENT_SESSION_KEY, newId)
+    localStorage.removeItem(`${DRAFT_PREFIX}${newId}`)
     showToast('New chat started')
   }, [showToast])
   newChatRef.current = newChat
 
-  // ── Session CRUD ──────────────────────────────────────────────────────────
-
-  const deleteSession = useCallback(async (sessionId: string) => {
-    await chatDB.deleteSession(sessionId)
-    sessionController.delete(sessionId).catch(console.error)
-    const newSessions = await chatDB.loadSessions()
-    setSessions(newSessions)
-    if (localStorage.getItem(CURRENT_SESSION_KEY) === sessionId) {
-      setMessages([])
-      setSessionSaved(false)
-      localStorage.removeItem(CURRENT_SESSION_KEY)
-    }
-    showToast('Session deleted')
-  }, [showToast])
-
-  const starSession = useCallback(async (sessionId: string, starred: boolean) => {
-    await chatDB.updateSession(sessionId, { starred })
-    sessionController.update(sessionId, { starred }).catch(console.error)
-    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, starred } : s))
-    showToast(starred ? 'Conversation starred' : 'Conversation unstarred')
-  }, [showToast])
-
-  const pinSession = useCallback(async (sessionId: string, pinned: boolean) => {
-    await chatDB.updateSession(sessionId, { pinned })
-    sessionController.update(sessionId, { pinned }).catch(console.error)
-    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, pinned } : s))
-    showToast(pinned ? 'Conversation pinned' : 'Conversation unpinned')
-  }, [showToast])
-
-  const renameSession = useCallback(async (sessionId: string, newName: string) => {
-    await chatDB.updateSession(sessionId, { name: newName })
-    sessionController.update(sessionId, { name: newName }).catch(console.error)
-    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, name: newName } : s))
-    showToast('Conversation renamed')
-  }, [showToast])
-
-  const duplicateSession = useCallback(async (sessionId: string) => {
-    const session = await chatDB.loadSession(sessionId)
-    if (session) {
-      const newId = `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-      const newSession = {
-        ...session, id: newId, name: `${session.name} (copy)`,
-        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-        starred: false, pinned: false,
-      }
-      await chatDB.saveSession(newSession)
-      const newSessions = await chatDB.loadSessions()
-      setSessions(newSessions)
-      showToast('Conversation duplicated')
-    }
-  }, [showToast])
-
   // ── Regenerate ────────────────────────────────────────────────────────────
-
   const handleRegenerate = useCallback(async () => {
     const currentMessages = messagesRef.current
     if (currentMessages.length < 2) return
@@ -231,13 +125,9 @@ export function useChatMessages(config: ChatMessagesConfig) {
       )) {
         if (data.error) { showToast('Regeneration failed', 'error'); break }
         if (data.token) {
-          setMessages(prev => {
-            const updated = prev.map(msg =>
-              msg.id === assistantId ? { ...msg, content: (msg.content || '') + data.token } : msg
-            )
-            messagesRef.current = updated
-            return updated
-          })
+          setMessages(prev => prev.map(msg =>
+            msg.id === assistantId ? { ...msg, content: (msg.content || '') + data.token } : msg
+          ))
         }
         if (data.done) break
       }
@@ -247,11 +137,10 @@ export function useChatMessages(config: ChatMessagesConfig) {
       setLoading(false)
       storeSessionContext(sessionIdRef.current, messagesRef.current)
     }
-  }, [showToast])
+  }, [showToast, storeSessionContext])
   handleRegenerateRef.current = handleRegenerate
 
   // ── Feedback ──────────────────────────────────────────────────────────────
-
   const handleThumbsUp = useCallback(async (messageId: string) => {
     const allMsgs = messagesRef.current
     const msgIdx = allMsgs.findIndex(m => m.id === messageId)
@@ -277,32 +166,28 @@ export function useChatMessages(config: ChatMessagesConfig) {
   }, [showToast, recordFeedback])
 
   // ── Edit / Retry ──────────────────────────────────────────────────────────
-
   const handleEditMessage = useCallback((messageId: string, newContent: string) => {
     const allMsgs = messagesRef.current
     const msgIndex = allMsgs.findIndex(m => m.id === messageId)
     if (msgIndex === -1) return
-    const keepCount = msgIndex
-    const sliced = allMsgs.slice(0, keepCount)
-    messagesRef.current = sliced
+    const sliced = allMsgs.slice(0, msgIndex)
     setMessages(sliced)
     setLoading(false)
     setCurrentError(null)
     setTimeout(() => sendMessageRef.current(newContent), 0)
   }, [])
 
-  const handleRetry = () => {
+  const handleRetry = useCallback(() => {
     setCurrentError(null)
     const lastUser = messagesRef.current.findLast(m => m.role === 'user')
     if (lastUser?.content) {
-      sendMessage(lastUser.content)
+      sendMessageRef.current(lastUser.content)
     } else if (input.trim()) {
-      sendMessage()
+      sendMessageRef.current()
     }
-  }
+  }, [input])
 
   // ── Image handling ────────────────────────────────────────────────────────
-
   const handleAddImage = useCallback((dataUrl: string) => {
     const newImage: ImageAttachment = {
       id: Date.now().toString(), dataUrl, name: `image-${Date.now()}.png`,
@@ -323,7 +208,6 @@ export function useChatMessages(config: ChatMessagesConfig) {
   }, [])
 
   // ── Copy / Export ─────────────────────────────────────────────────────────
-
   const handleCopy = useCallback(() => {
     showToast('Copied to clipboard')
   }, [showToast])
@@ -332,17 +216,19 @@ export function useChatMessages(config: ChatMessagesConfig) {
     exportConversationAsMarkdown(messagesRef.current)
   }, [])
 
-  // ── Suggestion click ──────────────────────────────────────────────────────
+  const handleCopyMarkdown = useCallback(async () => {
+    const ok = await copyConversationAsMarkdown(messagesRef.current)
+    showToast(ok ? 'Copied to clipboard' : 'Failed to copy', ok ? 'success' : 'error')
+  }, [showToast])
 
+  // ── Suggestion click ──────────────────────────────────────────────────────
   const handleSuggestionClick = useCallback((text: string) => {
     setInput(text)
     sendMessageRef.current(text)
   }, [])
 
-  // ── Send Message (core) ──────────────────────────────────────────────────
-
-  const sendMessage = async (overrideText?: string) => {
-    sendMessageRef.current = sendMessage
+  // ── Send Message (core — stable reference) ───────────────────────────────
+  const sendMessage = useCallback(async (overrideText?: string) => {
     const text = overrideText ?? input
     if ((!text.trim() && images.length === 0) || loading) return
     const userImages = [...images]
@@ -368,10 +254,10 @@ export function useChatMessages(config: ChatMessagesConfig) {
 
     setMessages(prev => [...prev, userMessage, assistantMessage])
     setInput('')
+    localStorage.removeItem(`${DRAFT_PREFIX}${sessionIdRef.current}`)
     setImages([])
     setCurrentError(null)
     setLoading(true)
-    streamStartRef.current = Date.now()
 
     const parts: string[] = []
     if (currentSoul) {
@@ -389,7 +275,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     const systemPrompt = parts.join('\n\n')
 
     const messagesWithNew = [...messagesRef.current, userMessage, assistantMessage]
-    saveSessionToStorage(messagesWithNew, sessionIdRef.current).catch(console.error)
+    sessions.saveSessionToStorage(messagesWithNew, sessionIdRef.current).catch(console.error)
     messagesRef.current = messagesWithNew
     loadingRef.current = new AbortController()
 
@@ -417,8 +303,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
             const updated = prev.map(m =>
               m.id === assistantId ? { ...m, content: m.content + cleanedToken } : m
             )
-            messagesRef.current = updated
-            if (shouldSave) saveSessionToStorage(updated, sessionIdRef.current).catch(console.error)
+            if (shouldSave) sessions.saveSessionToStorage(updated, sessionIdRef.current).catch(console.error)
             return updated
           })
         }
@@ -447,15 +332,13 @@ export function useChatMessages(config: ChatMessagesConfig) {
             const now = Date.now()
             const shouldSave = now - lastSaveRef.current > 500
             if (shouldSave) lastSaveRef.current = now
-            const needsSave = shouldSave
             setMessages(prev => {
               const updated = prev.map(m => {
                 if (m.id !== assistantId) return m
                 const content = m.content === 'Thinking...' ? '' : m.content
                 return { ...m, content: content + cleanedToken }
               })
-              messagesRef.current = updated
-              if (needsSave) saveSessionToStorage(updated, sessionIdRef.current).catch(console.error)
+              if (shouldSave) sessions.saveSessionToStorage(updated, sessionIdRef.current).catch(console.error)
               return updated
             })
           },
@@ -498,7 +381,12 @@ export function useChatMessages(config: ChatMessagesConfig) {
       setLoading(false)
       loadingRef.current = null
     }
-  }
+  }, [
+    input, images, loading, model, temperature, maxTokens, currentSoul, currentAgent,
+    useLocalEngine, engineRef, engineLoadingRef, initLocalEngine,
+    showToast, onKnowledgeUpdate, storeSessionContext, sessions,
+  ])
+  sendMessageRef.current = sendMessage
 
   // ── Effects ───────────────────────────────────────────────────────────────
 
@@ -512,24 +400,32 @@ export function useChatMessages(config: ChatMessagesConfig) {
       localStorage.setItem(CURRENT_SESSION_KEY, fresh)
     }
     userIdRef.current = getOrCreateUserId()
+    const savedDraft = localStorage.getItem(`${DRAFT_PREFIX}${sessionIdRef.current}`)
+    if (savedDraft) setInput(savedDraft)
   }, [])
 
   useEffect(() => {
     const currentId = localStorage.getItem(CURRENT_SESSION_KEY)
-    if (currentId) loadSession(currentId)
+    if (currentId) sessions.loadSession(currentId)
   }, [])
 
+  // Session save: ref-based debounce (doesn't recreate on messages change)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     if (messages.length > 0 && sessionSaved) {
-      const timeout = setTimeout(saveSession, 1000)
-      return () => clearTimeout(timeout)
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = setTimeout(() => {
+        const sid = sessionIdRef.current || localStorage.getItem(CURRENT_SESSION_KEY) || generateSessionId()
+        sessions.saveSessionToStorage(messagesRef.current, sid)
+      }, 1000)
+      return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
     }
-  }, [messages, saveSession, sessionSaved])
+  }, [messages, sessionSaved])
 
   useEffect(() => {
     const handler = async () => {
       try {
-        const backendSessions = await sessionController.list()
+        const backendSessions = await (await import('@/lib/session-controller')).sessionController.list()
         const localSessions = await chatDB.loadSessions()
         const merged: ChatSession[] = [
           ...(Array.isArray(backendSessions) ? backendSessions : []).map((s): ChatSession => ({
@@ -543,11 +439,11 @@ export function useChatMessages(config: ChatMessagesConfig) {
           })),
           ...localSessions.filter(l => !Array.isArray(backendSessions) || !backendSessions.find((b: { id: string }) => b.id === l.id)),
         ]
-        setSessions(merged)
+        sessions.setSessions(merged)
       } catch (err) {
         useErrorStore.getState().addError(err, { source: 'Chat Sessions' })
         const localSessions = await chatDB.loadSessions()
-        setSessions(localSessions)
+        sessions.setSessions(localSessions)
       }
     }
     handler()
@@ -569,34 +465,32 @@ export function useChatMessages(config: ChatMessagesConfig) {
 
   useEffect(() => {
     const handler = (e: CustomEvent) => {
-      if (e.detail?.text) sendMessage(e.detail.text)
+      if (e.detail?.text) sendMessageRef.current(e.detail.text)
     }
     window.addEventListener('send-text', handler as EventListener)
     return () => window.removeEventListener('send-text', handler as EventListener)
-  })
+  }, [])
 
-  // ── Computed ──────────────────────────────────────────────────────────────
-
-  const sidebarConversations: Conversation[] = (Array.isArray(sessions) ? sessions : []).map(s => ({
-    id: s.id, name: s.name || 'Untitled', session_id: s.id,
-    created_at: s.createdAt || new Date().toISOString(),
-    updated_at: s.updatedAt || new Date().toISOString(),
-    pinned: Boolean(s.pinned), starred: Boolean(s.starred),
-    message_count: Array.isArray(s.messages) ? s.messages.length : 0,
-    messages: (Array.isArray(s.messages) ? s.messages : []).map(m => ({
-      id: String(m.id || `msg_${Date.now()}`), role: String(m.role || 'user'), content: String(m.content || ''),
-      timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : String(m.timestamp || Date.now()),
-    })),
-    synced: Boolean(s.synced),
-  }))
+  useEffect(() => {
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
+    draftTimerRef.current = setTimeout(() => {
+      const sid = sessionIdRef.current
+      if (sid && input) {
+        localStorage.setItem(`${DRAFT_PREFIX}${sid}`, input)
+      }
+    }, 500)
+    return () => {
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
+    }
+  }, [input])
 
   return {
     messages, setMessages,
     input, setInput,
     loading, setLoading,
+    sessionLoading,
     images,
     sessionSaved,
-    sessions,
     currentError, setCurrentError,
     messagesRef,
     loadingRef,
@@ -605,11 +499,14 @@ export function useChatMessages(config: ChatMessagesConfig) {
     handleRegenerateRef,
     newChatRef,
     sendMessageRef,
-    saveSessionToStorage,
     sendMessage,
-    loadSession,
     newChat,
-    deleteSession, starSession, pinSession, renameSession, duplicateSession,
+    loadSession: sessions.loadSession,
+    deleteSession: sessions.deleteSession,
+    starSession: sessions.starSession,
+    pinSession: sessions.pinSession,
+    renameSession: sessions.renameSession,
+    duplicateSession: sessions.duplicateSession,
     handleRegenerate,
     handleThumbsUp, handleThumbsDown,
     handleEditMessage,
@@ -618,6 +515,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     handleRetry,
     handleSuggestionClick,
     handleExportMarkdown,
-    sidebarConversations,
+    handleCopyMarkdown,
+    sidebarConversations: sessions.sidebarConversations,
   }
 }

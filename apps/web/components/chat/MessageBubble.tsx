@@ -22,6 +22,8 @@ export interface MessageBubbleProps {
   messageId?: string
   isStreaming?: boolean
   searchQuery?: string
+  model?: string
+  'aria-live'?: 'polite' | 'assertive' | 'off'
 }
 
 function formatTime(date: Date | string): string {
@@ -59,6 +61,8 @@ export const MessageBubble = memo(function MessageBubble({
   messageId,
   isStreaming = false,
   searchQuery,
+  model,
+  'aria-live': ariaLive,
 }: MessageBubbleProps) {
   const [displayContent, setDisplayContent] = useState(content)
   const [isVisible, setIsVisible] = useState(false)
@@ -75,10 +79,15 @@ export const MessageBubble = memo(function MessageBubble({
     setEditContent(content)
   }, [content])
 
-  // Auto-scroll streaming content into view
+  // Auto-scroll streaming content into view (throttled to ~200ms)
+  const lastScrollRef = useRef(0)
   useEffect(() => {
     if (isStreaming && bubbleRef.current) {
-      bubbleRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
+      const now = Date.now()
+      if (now - lastScrollRef.current > 200) {
+        lastScrollRef.current = now
+        bubbleRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
+      }
     }
   }, [content, isStreaming])
 
@@ -102,8 +111,11 @@ export const MessageBubble = memo(function MessageBubble({
     <div
       id={messageId ? `msg-${messageId}` : undefined}
       ref={bubbleRef}
+      role="article"
+      aria-label={`Message from ${role === 'user' ? 'You' : 'Assistant'}`}
+      aria-live={isStreaming ? 'polite' : ariaLive}
       className={cn(
-        "flex flex-col transition-all duration-300 ease-out",
+        "group flex flex-col transition-all duration-300 ease-out",
         isVisible 
           ? "opacity-100 translate-y-0" 
           : "opacity-0 translate-y-3",
@@ -125,6 +137,11 @@ export const MessageBubble = memo(function MessageBubble({
           role === 'user' ? 'text-primary-foreground/60 text-right' : 'text-muted-foreground/50'
         )}>
           {role === 'user' ? 'You' : 'Assistant'}
+          {role === 'assistant' && model && (
+            <span className="ml-1.5 text-[9px] font-mono text-muted-foreground/40 group-hover:opacity-100 opacity-0 transition-opacity">
+              {model}
+            </span>
+          )}
         </span>
 
         {images && images.length > 0 && (
@@ -214,7 +231,7 @@ export const MessageBubble = memo(function MessageBubble({
         
         {showTimestamp && (
           <p className={cn(
-            "mt-1.5 text-[10px] font-normal leading-none",
+            "mt-1.5 text-[10px] font-normal leading-none opacity-0 group-hover:opacity-100 transition-opacity",
             role === 'user' ? 'text-primary-foreground/50 text-right' : 'text-muted-foreground/40'
           )}>
             {formatTime(timestamp)}

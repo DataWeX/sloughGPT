@@ -48,6 +48,13 @@ export function useGlobalShortcuts() {
         return
       }
 
+      // Copy last assistant response
+      if (ctrl && e.shiftKey && e.key === 'C') {
+        e.preventDefault()
+        window.dispatchEvent(new CustomEvent('copy-last-response'))
+        return
+      }
+
       if (!isInput && e.key === '?' && !ctrl) {
         e.preventDefault()
         // `?` toggles the dialog itself — no closeIfOpen needed, toggle-shortcuts handles it

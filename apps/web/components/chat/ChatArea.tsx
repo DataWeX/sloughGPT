@@ -4,13 +4,14 @@ import { forwardRef, useImperativeHandle, useRef, useState, useEffect, useCallba
 import { ChatInput } from './ChatInput'
 import { ChatScreen } from './ChatScreen'
 import type { ChatInputProps } from './ChatInput'
-import type { ChatMessage } from './ChatMessages'
+import type { ChatMessage } from './types'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import { cn } from '@/lib/cn'
 
 export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange' | 'onSend' | 'images' | 'onStop' | 'onAudioTranscript' | 'onGeneratedImage' | 'onPDFAnalysis' | 'onPDFError'> {
   messages: ChatMessage[]
   loading: boolean
+  sessionLoading?: boolean
   health: ApiHealthSnapshot
   onRefreshHealth: () => void
   onCopy: (text: string) => void
@@ -23,6 +24,7 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   onAddImage?: (dataUrl: string) => void
   onRemoveImage?: (id: string) => void
   className?: string
+  model?: string
 }
 
 export interface ChatAreaRef {
@@ -35,6 +37,7 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
   function ChatArea({
     messages,
     loading,
+    sessionLoading,
     health,
     onRefreshHealth,
     onCopy,
@@ -50,12 +53,17 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
     onAudioTranscript,
     onGeneratedImage,
     className,
+    model,
     ...inputProps
   }, ref) {
     const scrollRef = useRef<HTMLDivElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
     const [isNearBottom, setIsNearBottom] = useState(true)
     const prevMessageCountRef = useRef(messages.length)
+
+    const filteredMessages = searchQuery
+      ? messages.filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
+      : messages
 
     useImperativeHandle(ref, () => ({
       scrollToBottom: () => {
@@ -89,11 +97,15 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
           ref={containerRef}
           className="flex-1 min-h-0 overflow-y-auto"
           onScroll={handleScroll}
+          role="region"
+          aria-label="Chat messages"
         >
           <ChatScreen
             ref={scrollRef}
-            messages={messages}
+            messages={filteredMessages}
             loading={loading}
+            sessionLoading={sessionLoading}
+            model={model}
             health={health}
             onRefreshHealth={onRefreshHealth}
             onCopy={onCopy}
@@ -105,7 +117,7 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
             onSuggestionClick={onSuggestionClick}
           />
 
-          {messages.length > 0 && !isNearBottom && (
+          {filteredMessages.length > 0 && !isNearBottom && (
             <button
               onClick={() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' })}
               className="sticky bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border bg-background/80 backdrop-blur-sm shadow-lg hover:bg-accent/50 transition-all"
@@ -114,8 +126,8 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
               </svg>
-              {messages.length > 0 && (
-                <span className="text-muted-foreground">{messages.length}</span>
+              {filteredMessages.length > 0 && (
+                <span className="text-muted-foreground">{filteredMessages.length}</span>
               )}
             </button>
           )}

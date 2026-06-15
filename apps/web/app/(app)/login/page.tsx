@@ -106,7 +106,7 @@ export default function LoginPage() {
               />
             </div>
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <p className="text-sm text-destructive" role="alert" aria-live="assertive">{error}</p>}
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Loading…' : isLogin ? 'Sign in' : 'Create account'}

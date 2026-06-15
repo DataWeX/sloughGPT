@@ -168,26 +168,32 @@ export function VoiceInput({ onTranscript, disabled }: VoiceInputProps) {
   if (!isBrowserSupported && !isServerSupported) return null
 
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={toggleListening}
-      disabled={disabled}
-      className={cn(
-        "h-10 w-10 transition-all duration-200",
-        isListening
-          ? "text-destructive hover:text-destructive"
-          : "text-muted-foreground",
-        disabled && "opacity-50 cursor-not-allowed"
-      )}
-      aria-label={isListening ? "Stop listening" : "Start voice input"}
-      title={`Voice input${isBrowserSupported ? '' : ' (server)'}`}
-    >
-      {isListening ? (
-        <WaveformIcon className="h-5 w-5" isActive={true} />
-      ) : (
-        <MicrophoneIcon className="h-5 w-5" />
-      )}
-    </Button>
+    <>
+      <span className="sr-only" aria-live="assertive" aria-atomic="true">
+        {isListening ? 'Listening…' : ''}
+      </span>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={toggleListening}
+        disabled={disabled}
+        className={cn(
+          "h-10 w-10 transition-all duration-200",
+          isListening
+            ? "text-destructive hover:text-destructive"
+            : "text-muted-foreground",
+          disabled && "opacity-50 cursor-not-allowed"
+        )}
+        aria-label={isListening ? "Stop listening" : "Start voice input"}
+        aria-pressed={isListening}
+        title={`Voice input${isBrowserSupported ? '' : ' (server)'}`}
+      >
+        {isListening ? (
+          <WaveformIcon className="h-5 w-5" isActive={true} />
+        ) : (
+          <MicrophoneIcon className="h-5 w-5" />
+        )}
+      </Button>
+    </>
   )
 }

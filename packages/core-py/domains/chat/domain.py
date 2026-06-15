@@ -229,7 +229,7 @@ class ChatDomain:
             for line in f:
                 try:
                     responses.append(json.loads(line))
-                except:
+                except (json.JSONDecodeError, ValueError):
                     continue
         
         return responses[-limit:]

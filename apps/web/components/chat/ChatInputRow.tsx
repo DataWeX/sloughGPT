@@ -4,6 +4,7 @@ import type { RefObject } from 'react'
 import { ChatInputAccessories } from './ChatInputAccessories'
 import { ChatInputField } from './ChatInputField'
 import { ChatSendButton } from './ChatSendButton'
+import { cn } from '@/lib/cn'
 
 interface ChatInputRowProps {
   value: string
@@ -30,7 +31,7 @@ export function ChatInputRow({
   onPDFAnalysis, onPDFError, hasContent,
 }: ChatInputRowProps) {
   return (
-    <div className="flex items-end gap-1.5 w-full rounded-xl border border-border/40 bg-muted/10 px-2.5 py-1.5 focus-within:border-primary/30 focus-within:bg-muted/15 transition-all duration-200">
+    <div className="flex items-end gap-1.5 w-full rounded-xl border border-border/40 bg-muted/10 px-2.5 py-1.5 focus-within:border-primary/30 focus-within:bg-muted/15 transition-all duration-200" role="group" aria-label="Message composition">
       <ChatInputAccessories
         onImage={onImage}
         onTranscript={onTranscript}
@@ -48,6 +49,19 @@ export function ChatInputRow({
         disabled={disabled}
         textareaRef={textareaRef}
       />
+      {value.length > 0 && (
+        <span
+          className={cn(
+            "text-[10px] tabular-nums self-end mb-1.5 mr-1",
+            value.length > 4000 ? 'text-destructive' : value.length > 2000 ? 'text-warning' : 'text-muted-foreground/50'
+          )}
+          aria-live="polite"
+          aria-atomic="true"
+          aria-label={`Characters typed: ${value.length}`}
+        >
+          {value.length} chars
+        </span>
+      )}
       <ChatSendButton
         loading={loading}
         hasContent={hasContent}

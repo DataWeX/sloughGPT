@@ -54,7 +54,7 @@ export function ChatSettings({
       <div className="mx-auto flex max-w-2xl flex-wrap items-center gap-x-3 gap-y-2 text-sm">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="select" size="sm" className="text-xs font-mono" title={model}>
+            <Button variant="select" size="sm" className="text-xs font-mono" title={model} aria-label={`Model: ${modelShortName(model)}`}>
               <span className="truncate">{modelShortName(model)}</span>
               <IconChevronDown className="h-3 w-3 opacity-60 shrink-0" />
             </Button>
@@ -76,7 +76,7 @@ export function ChatSettings({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="select" size="sm" className="text-xs font-mono w-16">
+            <Button variant="select" size="sm" className="text-xs font-mono w-16" aria-label={`Temperature: ${temperature}`}>
               <span className="truncate">{temperature}</span>
               <IconChevronDown className="h-3 w-3 opacity-60 shrink-0" />
             </Button>
@@ -97,7 +97,7 @@ export function ChatSettings({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="select" size="sm" className="text-xs font-mono w-16">
+            <Button variant="select" size="sm" className="text-xs font-mono w-16" aria-label={`Max tokens: ${maxTokens}`}>
               <span className="truncate">{maxTokens}</span>
               <IconChevronDown className="h-3 w-3 opacity-60 shrink-0" />
             </Button>

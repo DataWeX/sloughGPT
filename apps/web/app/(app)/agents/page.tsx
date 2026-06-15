@@ -312,6 +312,9 @@ function AgentForm({
             <button
               key={tool.id}
               type="button"
+              role="switch"
+              aria-checked={form.tools.includes(tool.id)}
+              aria-label={`${tool.label} tool`}
               onClick={() => setForm({
                 ...form,
                 tools: form.tools.includes(tool.id)

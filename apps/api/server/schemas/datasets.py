@@ -35,6 +35,7 @@ class DatasetStats(BaseModel):
     dataset_id: str
     files: int
     size_bytes: int
+    description: str = ""
 
 
 class DatasetListResponse(BaseModel):
@@ -101,10 +102,13 @@ class ISBNImportRequest(BaseModel):
 
 
 class ImportResponse(BaseModel):
+    success: bool = True
     dataset_id: str
-    name: str
+    name: Optional[str] = None
+    message: str = ""
     files_imported: int = 0
     total_chars: int = 0
+    output_path: Optional[str] = None
     status: str = "imported"
 
 

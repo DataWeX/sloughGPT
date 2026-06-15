@@ -30,6 +30,7 @@ export default function SystemHealthPage() {
   } | null>(null)
   const [benchStats, setBenchStats] = useState<{ total: number; avg_tokens: number; models: string[] } | null>(null)
   const [dpoStatus, setDpoStatus] = useState<{ status: string; last_run: string | null; accepted_count: number; rejected_count: number; result: any } | null>(null)
+  const [dpoRunning, setDpoRunning] = useState(false)
   const [vlmStatus, setVlmStatus] = useState<{ vlm_loaded: boolean; training: { status: string } } | null>(null)
   const historyRef = useRef<Array<{ time: string; cpu: number; mem: number }>>([])
   const MAX_HISTORY = 30
@@ -261,6 +262,23 @@ export default function SystemHealthPage() {
                   Last DPO: {dpoStatus.last_run}
                 </p>
               )}
+              <div className="mt-3">
+                <Button
+                  size="sm"
+                  disabled={dpoRunning || dpoStatus?.status === 'running'}
+                  onClick={async () => {
+                    setDpoRunning(true)
+                    try {
+                      await fetch(`${PUBLIC_API_URL}/vlm/dpo`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+                      await fetchAll()
+                    } catch {}
+                    setDpoRunning(false)
+                  }}
+                  aria-label="Run DPO training"
+                >
+                  {dpoRunning || dpoStatus?.status === 'running' ? 'Running...' : 'Run DPO'}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         ) : null}
@@ -270,7 +288,7 @@ export default function SystemHealthPage() {
           <Card>
             <CardHeader><CardTitle className="text-base">Real‑time Metrics (last {MAX_HISTORY}s)</CardTitle></CardHeader>
             <CardContent>
-              <div className="h-48">
+              <div className="h-48" role="img" aria-label="CPU and memory usage chart over time">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={historyRef.current}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />

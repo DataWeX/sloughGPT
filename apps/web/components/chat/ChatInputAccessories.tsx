@@ -70,9 +70,6 @@ export function ChatInputAccessories({
         className="hidden"
         onChange={handleAudioUpload}
       />
-      {onPDFAnalysis && onPDFError && (
-        <PDFUpload onAnalysis={onPDFAnalysis} onError={onPDFError} disabled={disabled} />
-      )}
     </div>
   )
 }

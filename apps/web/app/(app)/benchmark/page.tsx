@@ -44,7 +44,8 @@ export default function BenchmarkPage() {
     try {
       const res = await benchmarkController.run({ dataset: prompt })
       setResult(res)
-    } catch { setError('Failed to run benchmark') }
+      if (res.error) setError(res.error)
+    } catch (e) { setError(e instanceof Error ? e.message : 'Failed to run benchmark') }
     finally { setLoading(false) }
   }
 

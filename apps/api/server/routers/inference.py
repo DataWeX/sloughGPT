@@ -204,7 +204,13 @@ async def generate(req: GenerateRequest) -> GenerateResponse:
             top_k=req.top_k,
             repetition_penalty=req.repetition_penalty,
         )
-        return GenerateResponse(text=result, model=req.model, tokens_generated=len(result.split()))
+        tokens = len(result.split())
+        try:
+            from domains.infrastructure.server_state import get_server_state
+            get_server_state().record_inference(tokens=tokens, elapsed_ms=0, model=req.model)
+        except Exception:
+            pass
+        return GenerateResponse(text=result, model=req.model, tokens_generated=tokens)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -250,6 +256,11 @@ async def generate_stream(req: GenerateRequest) -> StreamingResponse:
             yield sse_error("generate", "STREAMING", str(e))
             return
         elapsed = (datetime.datetime.now() - start).total_seconds() * 1000
+        try:
+            from domains.infrastructure.server_state import get_server_state
+            get_server_state().record_inference(tokens=token_count, elapsed_ms=elapsed, model=req.model)
+        except Exception:
+            pass
         yield sse_token("generate", "", done=True, meta={"tokens": token_count, "elapsed_ms": round(elapsed, 1)})
 
     return StreamingResponse(generate(), media_type="text/event-stream")
@@ -357,7 +368,6 @@ async def root():
             "generate_ws": "/ws/generate (WebSocket)",
             "load_soul": "/load-soul (POST) - loads into SloEngine",
             "soul": "/soul (GET)",
-            "personalities": "/personalities (GET)",
             "models": "/models (GET)",
             "datasets": "/datasets (GET)",
             "train_resolve": "/train/resolve (POST) — preview manifest → data_path",
@@ -659,6 +669,15 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
                 )
             except Exception:
                 pass
+
+            # Record inference metrics
+            try:
+                from domains.infrastructure.server_state import get_server_state
+                tokens = len(full_response.split())
+                elapsed_ms = (datetime.datetime.now() - start_time).total_seconds() * 1000
+                get_server_state().record_inference(tokens=tokens, elapsed_ms=elapsed_ms, model=req.model)
+            except Exception:
+                pass
             
             # Save response
             session_data["messages"].append({
@@ -778,7 +797,15 @@ async def chat(req: ChatRequest) -> ChatResponse:
         session_id=req.session_id or "default",
         user_id=req.user_id or "default",
     )
-    
+
+    # Record inference metrics
+    try:
+        from domains.infrastructure.server_state import get_server_state
+        tokens = len(result.text.split())
+        get_server_state().record_inference(tokens=tokens, elapsed_ms=0, model=req.model)
+    except Exception:
+        pass
+
     return ChatResponse(
         message=result.text,
         session_id=result.session_id,

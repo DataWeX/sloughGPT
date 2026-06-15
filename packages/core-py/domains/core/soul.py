@@ -940,13 +940,19 @@ class SloEngine:
         )
 
         # Run training
+        created_loop = False
         try:
             loop = asyncio.get_event_loop()
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
+            created_loop = True
 
-        results = loop.run_until_complete(pipeline.train_full_pipeline())
+        try:
+            results = loop.run_until_complete(pipeline.train_full_pipeline())
+        finally:
+            if created_loop:
+                loop.close()
 
         # Update soul with training metrics
         if "pretrain" in results:

@@ -23,7 +23,6 @@ from . import datasets
 from . import ratelimit
 from . import workflow
 from . import experiments
-from . import personalities
 from . import benchmark
 from . import user_adapters
 from . import vector
@@ -44,7 +43,7 @@ __all__ = [
     "auth", "auto_train", "models", "inference",
     "feedback", "knowledge", "agents", "system", "status", "souls",
     "config", "health", "metrics", "datasets", "security",
-    "ratelimit", "workflow", "experiments", "personalities", "benchmark",
+    "ratelimit", "workflow", "experiments", "benchmark",
     "user_adapters", "vector", "registry",
     "session", "meta_weights", "lora_eval", "companion", "multimodal",
     "tokenizer", "learner", "self_train", "error_logger",
@@ -59,7 +58,7 @@ def get_all_routers() -> list[APIRouter]:
         status.router, souls.router, config.router, health.router,
         metrics.router, datasets.router, security.router,
         ratelimit.router, workflow.router, experiments.router,
-        personalities.router, benchmark.router,
+        benchmark.router,
         user_adapters.router, vector.router, registry.router,
         session.router, meta_weights.router, lora_eval.router,
         companion.router, multimodal.router, tokenizer.router,

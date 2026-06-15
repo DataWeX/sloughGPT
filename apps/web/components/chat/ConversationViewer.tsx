@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { IconX, IconTrash, IconThumbUp, IconThumbDown, IconChat } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { Button } from '@/components/ui/button'
@@ -41,6 +41,8 @@ export function ConversationViewer({
   onDelete,
 }: ConversationViewerProps) {
   const [messages, setMessages] = useState<ViewerMessage[]>(initialMessages || [])
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     if (isOpen && initialMessages) {
@@ -48,6 +50,21 @@ export function ConversationViewer({
     }
   }, [isOpen, initialMessages])
 
+  // Save previous focus and restore on close
+  useEffect(() => {
+    if (isOpen) {
+      previousFocusRef.current = document.activeElement as HTMLElement
+      // Focus the dialog after render
+      requestAnimationFrame(() => {
+        dialogRef.current?.focus()
+      })
+      return () => {
+        previousFocusRef.current?.focus()
+      }
+    }
+  }, [isOpen])
+
+  // Escape key handler
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -58,6 +75,30 @@ export function ConversationViewer({
     }
   }, [isOpen, onClose])
 
+  // Focus trap
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key !== 'Tab' || !dialogRef.current) return
+
+    const focusableElements = dialogRef.current.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+    const firstElement = focusableElements[0]
+    const lastElement = focusableElements[focusableElements.length - 1]
+
+    if (e.shiftKey) {
+      if (document.activeElement === firstElement) {
+        e.preventDefault()
+        lastElement?.focus()
+      }
+    } else {
+      if (document.activeElement === lastElement) {
+        e.preventDefault()
+        firstElement?.focus()
+      }
+    }
+  }, [])
+
+  // Prevent body scroll when open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
@@ -68,7 +109,15 @@ export function ConversationViewer({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="viewer-title">
+    <div
+      ref={dialogRef}
+      className="fixed inset-0 z-[200] flex items-center justify-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="viewer-title"
+      tabIndex={-1}
+      onKeyDown={handleKeyDown}
+    >
       <div
         className="absolute inset-0 bg-foreground/20 backdrop-blur-sm"
         onClick={onClose}

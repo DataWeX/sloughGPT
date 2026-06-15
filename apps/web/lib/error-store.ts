@@ -12,6 +12,7 @@ export interface AppError {
   source?: string
   timestamp: number
   dismissible?: boolean
+  requestId?: string
 }
 
 function extractErrorMessage(err: unknown): string {
@@ -65,7 +66,7 @@ function getSeverity(err: unknown, explicitSev?: ErrorSeverity): ErrorSeverity {
 
 interface ErrorStore {
   errors: AppError[]
-  addError: (err: unknown, opts?: { source?: string; title?: string; severity?: ErrorSeverity; dismissible?: boolean }) => string
+  addError: (err: unknown, opts?: { source?: string; title?: string; severity?: ErrorSeverity; dismissible?: boolean; requestId?: string }) => string
   dismissError: (id: string) => void
   clearErrors: () => void
   getErrors: () => AppError[]
@@ -77,7 +78,7 @@ export const useErrorStore = create<ErrorStore>((set, get) => ({
 
   addError: (err, opts = {}) => {
     const id = `err_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
-    const { source, severity: sev, dismissible = true } = opts
+    const { source, severity: sev, dismissible = true, requestId } = opts
     const title = opts.title || extractErrorTitle(err)
     const message = extractErrorMessage(err)
 
@@ -89,6 +90,7 @@ export const useErrorStore = create<ErrorStore>((set, get) => ({
       source,
       timestamp: Date.now(),
       dismissible,
+      requestId,
     }
 
     set(prev => ({ errors: [error, ...prev.errors].slice(0, 20) }))
@@ -109,6 +111,6 @@ export const useErrorStore = create<ErrorStore>((set, get) => ({
   hasErrors: () => get().errors.length > 0,
 }))
 
-export function addGlobalError(err: unknown, source?: string) {
-  return useErrorStore.getState().addError(err, { source })
+export function addGlobalError(err: unknown, source?: string, requestId?: string) {
+  return useErrorStore.getState().addError(err, { source, requestId })
 }

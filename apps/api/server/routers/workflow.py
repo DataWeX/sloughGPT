@@ -43,6 +43,7 @@ async def start_workflow(request: WorkflowStartRequest) -> Dict[str, Any]:
         health_check_interval_seconds=request.health_check_interval_seconds,
     )
     workflow = _get_workflow()
+    workflow.config = config
     workflow.start()
     return {"status": "started", "config": request.model_dump()}
 

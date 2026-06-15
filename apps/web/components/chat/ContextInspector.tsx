@@ -175,6 +175,14 @@ export function ContextInspector({ sessionId }: Props) {
         </div>
       </div>
 
+      {/* System prompt */}
+      {data.workspace.system_prompt && (
+        <div className="rounded border border-border/50 bg-muted/10 p-2 space-y-1">
+          <div className="text-[10px] font-medium text-muted-foreground">System Prompt</div>
+          <p className="text-[11px] text-muted-foreground/80 leading-relaxed line-clamp-4 whitespace-pre-wrap">{data.workspace.system_prompt}</p>
+        </div>
+      )}
+
       {/* Manager modes */}
       {allModes.length > 0 && (
         <div className="space-y-1">

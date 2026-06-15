@@ -1,18 +1,20 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatCard, KpiGrid } from '@/components/strui'
 import { useToastStore } from '@/lib/toast-store'
-import { modelController } from '@/lib/controllers'
+import { modelController, trainingController } from '@/lib/controllers'
 import { datasetController } from '@/lib/controllers'
 import type { Dataset } from '@/lib/dataset-controller'
 import { DatasetImportModal } from '@/components/DatasetImportModal'
 import { cn } from '@/lib/cn'
 import { formatSize } from '@/lib/chat-utils'
 import { TestModelDialog } from '@/components/training/TestModelDialog'
+import { LossChart } from '@/components/training/LossChart'
 import { useTrainingSession } from '@/hooks/useTrainingSession'
 import { useTrainingDatasets } from '@/hooks/useTrainingDatasets'
 import { useTrainingCheckpoints } from '@/hooks/useTrainingCheckpoints'
@@ -31,6 +33,8 @@ type InputMode = 'dataset' | 'text'
 type Method = 'distill' | 'finetune' | 'vlm' | 'unified'
 
 export default function TrainingPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const addToast = useToastStore(s => s.addToast)
   const initialLoadDone = useRef(false)
 
@@ -39,7 +43,16 @@ export default function TrainingPage() {
   const checkpoints = useTrainingCheckpoints()
   const test = useTestDialog()
 
-  // ===== Config =====
+  // ===== Quick Train =====
+  const [quickDataset, setQuickDataset] = useState('')
+  const [quickStats, setQuickStats] = useState<import('@/lib/dataset-controller').DatasetStats | null>(null)
+  const [quickExplanation, setQuickExplanation] = useState('')
+  const [quickJobId, setQuickJobId] = useState('')
+  const [quickStatusMessage, setQuickStatusMessage] = useState('')
+  const [quickTraining, setQuickTraining] = useState(false)
+  const [quickComplete, setQuickComplete] = useState(false)
+
+  // ===== Advanced config =====
   const [method, setMethod] = useState<Method>('distill')
   const [inputMode, setInputMode] = useState<InputMode>('dataset')
   const [textInput, setTextInput] = useState('')
@@ -134,6 +147,66 @@ export default function TrainingPage() {
     }, addToast)
   }, [datasets.selectedDataset, turboEpochs, turboLR, turboEmbed, turboHeads, turboLayers, addToast, session])
 
+  // ===== Quick Train logic =====
+  const startQuickTrain = useCallback(async () => {
+    if (!quickDataset) { addToast('Pick a dataset first', 'error'); return }
+    setQuickTraining(true)
+    setQuickComplete(false)
+    setQuickStatusMessage('Setting up training...')
+    try {
+      const res = await trainingController.startQuick({ dataset: quickDataset })
+      setQuickJobId(res.job_id)
+      setQuickExplanation(res.explanation)
+      setQuickStatusMessage('Training started — this may take a few minutes...')
+
+      // Poll job status
+      let retries = 0
+      const poll = async () => {
+        try {
+          const jobs = await trainingController.list()
+          const job = jobs.find((j: import('@/lib/training-controller').TrainingJob) => j.id === res.job_id)
+          if (!job) return
+          if (job.message) setQuickStatusMessage(job.message)
+          if (job.status === 'completed') {
+            setQuickTraining(false)
+            setQuickComplete(true)
+            setQuickExplanation(job.explanation || res.explanation)
+            checkpoints.fetchCheckpoints()
+            checkpoints.fetchJobs()
+            addToast('Training complete!', 'success')
+          } else if (job.status === 'failed') {
+            setQuickTraining(false)
+            addToast(job.message || 'Training failed', 'error')
+          } else {
+            retries = 0
+            setTimeout(poll, 3000)
+          }
+        } catch {
+          retries += 1
+          if (retries >= 5) {
+            setQuickTraining(false)
+            addToast('Lost connection to training server', 'error')
+            return
+          }
+          setTimeout(poll, 5000)
+        }
+      }
+      setTimeout(poll, 2000)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to start training'
+      setQuickTraining(false)
+      addToast(msg, 'error')
+    }
+  }, [quickDataset, addToast, checkpoints])
+
+  useEffect(() => {
+    if (quickDataset) {
+      datasetController.getStats(quickDataset).then(setQuickStats).catch(() => setQuickStats(null))
+    } else {
+      setQuickStats(null)
+    }
+  }, [quickDataset])
+
   // Effects
   useEffect(() => { return () => { /* esRef cleanup handled in hook */ } }, [])
 
@@ -142,7 +215,10 @@ export default function TrainingPage() {
     void checkpoints.fetchCheckpoints()
     void checkpoints.fetchBuilds()
     void checkpoints.fetchJobs()
-    if (!initialLoadDone.current && datasets.datasets.length > 0) {
+    const urlDataset = searchParams.get('dataset')
+    if (urlDataset) {
+      datasets.setSelectedDataset(urlDataset)
+    } else if (!initialLoadDone.current && datasets.datasets.length > 0) {
       initialLoadDone.current = true
       datasets.setSelectedDataset(datasets.datasets[0].id)
     }
@@ -178,7 +254,7 @@ export default function TrainingPage() {
     (method === 'finetune' && !selectedModel)
 
   return (
-    <div className="sl-page mx-auto max-w-6xl">
+    <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader
         className="items-start"
         left={<AppRouteHeaderLead title="Training" subtitle="Teach the model from your data — just a click away" />}
@@ -198,58 +274,144 @@ export default function TrainingPage() {
           <StatCard label="Checkpoints" value={checkpoints.checkpoints.length} />
         </KpiGrid>
 
-        {/* Start training */}
+        {/* Quick Train — one-click training */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Start training</CardTitle>
+            <CardTitle className="text-base">Quick Train</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Pick a dataset, hit train — we figure out the rest.
+            </p>
+            <div className="flex items-center gap-2">
+              <select
+                value={quickDataset}
+                onChange={e => setQuickDataset(e.target.value)}
+                className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground flex-1 max-w-sm"
+                disabled={quickTraining}
+                aria-label="Dataset for quick training"
+              >
+                <option value="">Select a dataset...</option>
+                {datasets.datasets.map(ds => (
+                  <option key={ds.id} value={ds.id}>{datasetLabel(ds)}</option>
+                ))}
+              </select>
+              <Button size="sm" disabled={!quickDataset || quickTraining} onClick={startQuickTrain}>
+                {quickTraining ? 'Training...' : 'Start training'}
+              </Button>
+            </div>
+
+            {/* Auto-config explanation */}
+            {quickExplanation && !quickTraining && !quickComplete && (
+              <p className="text-xs text-muted-foreground/80 italic">{quickExplanation}</p>
+            )}
+            {quickStats && !quickTraining && !quickComplete && (
+              <>
+                <p className="text-xs text-muted-foreground/60">
+                  Detected: {quickStats.format} ({quickStats.samples} samples, {Math.round(quickStats.avg_length || 0)} avg chars)
+                </p>
+                {(quickStats.samples < 5 || (quickStats.avg_length || 0) < 50 || quickStats.format === 'text') && (
+                  <div className="rounded border border-amber-500/20 bg-amber-500/5 p-2 space-y-1">
+                    {quickStats.samples < 5 && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400">⚠ Very few samples — training may overfit. Add more data for better results.</p>
+                    )}
+                    {(quickStats.avg_length || 0) < 50 && quickStats.samples >= 5 && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400">⚠ Very short text — longer samples help the model learn patterns.</p>
+                    )}
+                    {quickStats.format === 'text' && (
+                      <p className="text-[11px] text-muted-foreground">Tip: Conversation format (JSONL with messages) trains better than plain text.</p>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Training progress */}
+            {quickTraining && (
+              <div className="space-y-2" role="status" aria-live="polite" aria-label="Training progress">
+                <p className="text-sm text-muted-foreground">{quickStatusMessage}</p>
+                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                  <div className="h-full bg-primary animate-pulse rounded-full" style={{ width: '40%' }} />
+                </div>
+              </div>
+            )}
+
+            {/* Completion */}
+            {quickComplete && (
+              <div className="rounded-lg border border-success/20 bg-success/5 p-3 space-y-2">
+                <p className="text-sm font-medium text-success">Training complete!</p>
+                {quickExplanation && <p className="text-xs text-muted-foreground">{quickExplanation}</p>}
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" onClick={() => router.push('/chat')}>Try in chat</Button>
+                  <Button size="sm" variant="ghost" onClick={() => { setQuickComplete(false); setQuickExplanation(''); setQuickDataset(''); setQuickStats(null) }}>
+                    Train another
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Advanced: Start training (method, model, params) */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Train another way</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
 
             {/* Progress display (during training) */}
-            {session.trainingRunning && (
-              <div className="space-y-3 mb-4">
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="relative flex h-2 w-2 shrink-0">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-                  </span>
-                  <span className="font-medium">Training in progress</span>
-                  {session.totalEpochs > 0 && (
-                    <span className="text-xs text-muted-foreground">
-                      Epoch {session.epoch} of {session.totalEpochs}
+            {session.trainingRunning && (() => {
+              const elapsed = session.startTime ? Math.floor((Date.now() - session.startTime) / 1000) : 0
+              const eta = session.progress > 0 ? Math.floor((elapsed / session.progress) * (100 - session.progress)) : 0
+              const fmtTime = (s: number) => {
+                if (s < 60) return `${s}s`
+                if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`
+                return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`
+              }
+              return (
+                <div className="space-y-3 mb-4">
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="relative flex h-2 w-2 shrink-0">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
                     </span>
-                  )}
-                  {session.loss != null && (
-                    <span className="text-xs text-muted-foreground">
-                      Loss: {session.loss.toFixed(4)}
-                    </span>
-                  )}
-                </div>
+                    <span className="font-medium">Training in progress</span>
+                    {session.totalEpochs > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        Epoch {session.epoch} of {session.totalEpochs}
+                      </span>
+                    )}
+                    {session.loss != null && (
+                      <span className="text-xs text-muted-foreground">
+                        Loss: {session.loss.toFixed(4)}
+                      </span>
+                    )}
+                    {elapsed > 5 && session.progress > 5 && (
+                      <span className="text-xs text-muted-foreground">
+                        {fmtTime(elapsed)} elapsed · ~{fmtTime(eta)} left
+                      </span>
+                    )}
+                  </div>
                 {session.message && (
                   <p className="text-xs text-muted-foreground/80">{session.message}</p>
                 )}
                 <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
                   <div className="h-full bg-primary transition-all duration-500 rounded-full" style={{ width: `${Math.min(session.progress, 100)}%` }} />
                 </div>
-                {session.lossHistory.length > 1 && (() => {
-                  const maxLoss = Math.max(...session.lossHistory.map(l => l.loss)) || 1
-                  const h = 28, w = 200
-                  const path = session.lossHistory.map((p, i) => {
-                    const x = (i / (session.lossHistory.length - 1)) * w
-                    const y = h - ((p.loss / maxLoss) * (h - 2)) - 1
-                    return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
-                  }).join(' ')
-                  return (
-                    <div className="h-12 w-full">
-                      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-full" preserveAspectRatio="none">
-                        <path d={path} fill="none" stroke="hsl(var(--primary))" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </div>
-                  )
-                })()}
+                {session.lossHistory.length > 1 && (
+                  <div className="h-12 w-full">
+                    <LossChart
+                      data={session.lossHistory.map(p => ({ step: p.step, value: p.loss, type: 'train' as const }))}
+                      height={48}
+                      showLegend={false}
+                      live={session.trainingRunning}
+                    />
+                  </div>
+                )}
                 <Button size="sm" variant="outline" onClick={session.stopTraining}>Stop training</Button>
               </div>
-            )}
+              )
+            })()}
 
             {/* Complete state */}
             {session.phase === 'complete' && !session.trainingRunning && (
@@ -345,7 +507,7 @@ export default function TrainingPage() {
                       {loadingFinetunedModel ? 'Loading...' : 'Load VLM for chat'}
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" onClick={() => window.location.href = '/chat'}>
+                  <Button size="sm" variant="outline" onClick={() => router.push('/chat')}>
                     Try in chat
                   </Button>
                   <Button size="sm" variant="ghost" onClick={session.resetTraining}>
@@ -366,203 +528,46 @@ export default function TrainingPage() {
               </div>
             )}
 
-            {/* Idle state */}
+            {/* Idle state — simple dataset picker + start button */}
             {!session.trainingRunning && !['complete', 'error'].includes(session.phase) && (
               <>
-                {/* Method toggle */}
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-1 text-sm">
-                    <button
-                      className={cn('px-3 py-1.5 rounded-md transition-colors', method === 'distill' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')}
-                      onClick={() => setMethod('distill')}
-                    >
-                      Distill
-                    </button>
-                    <button
-                      className={cn('px-3 py-1.5 rounded-md transition-colors', method === 'finetune' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')}
-                      onClick={() => setMethod('finetune')}
-                    >
-                      Fine-tune
-                    </button>
-                    <button
-                      className={cn('px-3 py-1.5 rounded-md transition-colors', method === 'vlm' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')}
-                      onClick={() => setMethod('vlm')}
-                    >
-                      VLM
-                    </button>
-                    <button
-                      className={cn('px-3 py-1.5 rounded-md transition-colors', method === 'unified' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')}
-                      onClick={() => setMethod('unified')}
-                    >
-                      Unified
-                    </button>
-                  </div>
-                  {method === 'distill' && (
-                    <span className="text-xs text-muted-foreground/70">Teacher model distills into a compact student</span>
-                  )}
-                  {method === 'finetune' && (
-                    <span className="text-xs text-muted-foreground/70">Continue training an existing model on new data</span>
-                  )}
-                  {method === 'vlm' && (
-                    <span className="text-xs text-muted-foreground/70">Vision + Language model (SigLIP encoder + LLM)</span>
-                  )}
-                  {method === 'unified' && (
-                    <span className="text-xs text-muted-foreground/70">Composite pipeline: auto-detect method, optional distillation</span>
-                  )}
-                </div>
-
-                {/* Model selector (for fine-tune / unified) */}
-                {(method === 'finetune' || method === 'unified') && availableModels.length > 0 && (
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Base model</label>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
                     <select
-                      value={selectedModel}
-                      onChange={e => setSelectedModel(e.target.value)}
-                      className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground max-w-sm"
+                      value={datasets.selectedDataset}
+                      onChange={e => datasets.setSelectedDataset(e.target.value)}
+                      className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground flex-1 max-w-sm"
+                      aria-label="Dataset for fine-tuning"
                     >
-                      {availableModels.map(id => (
-                        <option key={id} value={id}>{id}</option>
+                      {!datasets.selectedDataset && <option value="">Select a dataset...</option>}
+                      {datasets.datasets.map(ds => (
+                        <option key={ds.id} value={ds.id}>{datasetLabel(ds)}</option>
                       ))}
                     </select>
-                  </div>
-                )}
-
-                {/* VLM config */}
-                {method === 'vlm' && (
-                  <div className="grid grid-cols-2 gap-3 p-3 rounded-lg border border-border/40 bg-muted/20">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Vision Encoder</label>
-                      <select
-                        value={vlmVisionEncoder}
-                        onChange={e => setVlmVisionEncoder(e.target.value)}
-                        className="h-7 rounded-md border border-border/60 bg-background px-2 text-[11px] font-mono"
-                      >
-                        <option value="google/siglip-base-patch16-224">SigLIP Base (patch16)</option>
-                        <option value="google/siglip-large-patch16-384">SigLIP Large (patch16)</option>
-                        <option value="openai/clip-vit-base-patch32">CLIP ViT-B/32</option>
-                      </select>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Language Model</label>
-                      <input
-                        value={vlmLLM}
-                        onChange={e => setVlmLLM(e.target.value)}
-                        className="h-7 rounded-md border border-border/60 bg-background px-2 text-[11px] font-mono"
-                        placeholder="Qwen/Qwen2.5-0.5B-Instruct"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Stage 1 Epochs (connector)</label>
-                      <input type="number" min={1} max={10}
-                        value={vlmStage1Epochs}
-                        onChange={e => setVlmStage1Epochs(Number(e.target.value))}
-                        className="h-7 rounded-md border border-border/60 bg-background px-2 text-[11px] w-20"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Stage 2 Epochs (full)</label>
-                      <input type="number" min={1} max={50}
-                        value={vlmStage2Epochs}
-                        onChange={e => setVlmStage2Epochs(Number(e.target.value))}
-                        className="h-7 rounded-md border border-border/60 bg-background px-2 text-[11px] w-20"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Data source toggle */}
-                {method !== 'vlm' && method !== 'unified' && (
-                  <div className="flex items-center gap-1 text-sm">
-                    <button
-                      className={cn('px-3 py-1.5 rounded-md transition-colors', inputMode === 'dataset' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')}
-                      onClick={() => setInputMode('dataset')}
-                    >
-                      Use a dataset
-                    </button>
-                    <button
-                      className={cn('px-3 py-1.5 rounded-md transition-colors', inputMode === 'text' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')}
-                      onClick={() => setInputMode('text')}
-                    >
-                      Paste text
-                    </button>
-                  </div>
-                )}
-
-                {/* Dataset picker */}
-                {inputMode === 'dataset' && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={datasets.selectedDataset}
-                        onChange={e => datasets.setSelectedDataset(e.target.value)}
-                        className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground flex-1 max-w-sm"
-                      >
-                        {!datasets.selectedDataset && <option value="">Select a dataset...</option>}
-                        {datasets.datasets.filter(ds => method !== 'vlm' || ds.type === 'vlm').map(ds => (
-                          <option key={ds.id} value={ds.id}>{datasetLabel(ds)}</option>
-                        ))}
-                      </select>
-                      <Button size="sm" variant="outline" onClick={() => datasets.setImportModalOpen(true)}>
-                        + Import
-                      </Button>
-                      <DatasetImportModal
-                        open={datasets.importModalOpen}
-                        onOpenChange={datasets.setImportModalOpen}
-                        onImportComplete={(datasetId: string) => {
-                          void datasets.fetchDatasets().then(() => datasets.setSelectedDataset(datasetId))
-                        }}
-                      />
-                    </div>
-                    {datasets.datasetPreview && datasets.datasetPreview.samples.length > 0 && (
-                      <div className="rounded-md border border-border/40 bg-muted/30 p-3 text-xs">
-                        <div className="font-medium text-muted-foreground mb-2">
-                          Preview ({datasets.datasetPreview.total_samples} samples total)
-                        </div>
-                        <div className="space-y-1 font-mono text-muted-foreground">
-                          {datasets.datasetPreview.samples.slice(0, 3).map((sample, i) => (
-                            <div key={i} className="truncate">{sample.content}</div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Text input */}
-                {inputMode === 'text' && (
-                  <div className="space-y-2">
-                    <textarea
-                      value={textInput}
-                      onChange={e => setTextInput(e.target.value)}
-                      placeholder="Paste any text to train on — stories, docs, conversations, code..."
-                      rows={6}
-                      className="w-full rounded-md border border-border/60 bg-background p-3 text-xs font-mono text-foreground resize-y min-h-[100px]"
+                    <Button size="sm" variant="outline" onClick={() => datasets.setImportModalOpen(true)}>
+                      + Import
+                    </Button>
+                    <DatasetImportModal
+                      open={datasets.importModalOpen}
+                      onOpenChange={datasets.setImportModalOpen}
+                      onImportComplete={(datasetId: string) => {
+                        void datasets.fetchDatasets().then(() => datasets.setSelectedDataset(datasetId))
+                      }}
                     />
-                    <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
-                      <input
-                        type="file"
-                        accept=".txt,.md,.json,.jsonl"
-                        className="hidden"
-                        onChange={e => {
-                          const file = e.target.files?.[0]
-                          if (!file) return
-                          const reader = new FileReader()
-                          reader.onload = () => {
-                            const text = reader.result as string
-                            setTextInput(prev => prev + (prev ? '\n\n' : '') + text)
-                            addToast(`Loaded ${file.name} (${(text.length / 1024).toFixed(1)} KB)`, 'success')
-                          }
-                          reader.readAsText(file)
-                          e.target.value = ''
-                        }}
-                      />
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" /></svg>
-                      Upload a file
-                    </label>
                   </div>
-                )}
-
-                {/* Start button */}
+                  {datasets.datasetPreview && datasets.datasetPreview.samples.length > 0 && (
+                    <div className="rounded-md border border-border/40 bg-muted/30 p-3 text-xs">
+                      <div className="font-medium text-muted-foreground mb-2">
+                        Preview ({datasets.datasetPreview.total_samples} samples total)
+                      </div>
+                      <div className="space-y-1 font-mono text-muted-foreground">
+                        {datasets.datasetPreview.samples.slice(0, 3).map((sample, i) => (
+                          <div key={i} className="truncate">{sample.content}</div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <div className="flex items-center gap-3">
                   <Button size="sm" disabled={canStart} onClick={() => startTraining()}>
                     {method === 'unified' ? 'Start unified training' : method === 'distill' ? (inputMode === 'text' && textInput.trim() ? 'Train on pasted text' : 'Start distill') : 'Start fine-tune'}
@@ -581,60 +586,127 @@ export default function TrainingPage() {
                   {showAdvanced ? 'Hide' : 'Show'} advanced settings
                 </button>
                 {showAdvanced && (
-                  <div className="flex flex-wrap items-end gap-3 mt-3">
-                    {(method === 'distill' || method === 'unified') && availableModels.length > 0 && (
-                      <div className="flex flex-col gap-1">
+                  <div className="space-y-3 mt-3">
+                    {/* Method toggle */}
+                    <div className="flex items-center gap-4" role="radiogroup" aria-label="Training method">
+                      <div className="flex items-center gap-1 text-sm">
+                        <button role="radio" aria-checked={method === 'distill'} className={cn('px-3 py-1.5 rounded-md transition-colors', method === 'distill' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => setMethod('distill')}>Distill</button>
+                        <button role="radio" aria-checked={method === 'finetune'} className={cn('px-3 py-1.5 rounded-md transition-colors', method === 'finetune' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => setMethod('finetune')}>Fine-tune</button>
+                        <button role="radio" aria-checked={method === 'vlm'} className={cn('px-3 py-1.5 rounded-md transition-colors', method === 'vlm' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => setMethod('vlm')}>VLM</button>
+                        <button role="radio" aria-checked={method === 'unified'} className={cn('px-3 py-1.5 rounded-md transition-colors', method === 'unified' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => setMethod('unified')}>Unified</button>
+                      </div>
+                      {method === 'distill' && <span className="text-xs text-muted-foreground/70">Teacher model distills into a compact student</span>}
+                      {method === 'finetune' && <span className="text-xs text-muted-foreground/70">Continue training an existing model on new data</span>}
+                      {method === 'vlm' && <span className="text-xs text-muted-foreground/70">Vision + Language model (SigLIP encoder + LLM)</span>}
+                      {method === 'unified' && <span className="text-xs text-muted-foreground/70">Composite pipeline: auto-detect method, optional distillation</span>}
+                    </div>
+
+                    {/* Data source toggle */}
+                    {method !== 'vlm' && method !== 'unified' && (
+                      <div className="flex items-center gap-1 text-sm" role="radiogroup" aria-label="Data source">
+                        <button role="radio" aria-checked={inputMode === 'dataset'} className={cn('px-3 py-1.5 rounded-md transition-colors', inputMode === 'dataset' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => setInputMode('dataset')}>Use a dataset</button>
+                        <button role="radio" aria-checked={inputMode === 'text'} className={cn('px-3 py-1.5 rounded-md transition-colors', inputMode === 'text' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => setInputMode('text')}>Paste text</button>
+                      </div>
+                    )}
+
+                    {/* Text input (advanced) */}
+                    {inputMode === 'text' && method !== 'vlm' && method !== 'unified' && (
+                      <textarea
+                        value={textInput}
+                        onChange={e => setTextInput(e.target.value)}
+                        placeholder="Paste any text to train on — stories, docs, conversations, code..."
+                        rows={4}
+                        className="w-full rounded-md border border-border/60 bg-background p-3 text-xs font-mono text-foreground resize-y min-h-[80px]"
+                        aria-label="Training text input"
+                      />
+                    )}
+
+                    {/* Model selector (for fine-tune / unified) */}
+                    {(method === 'finetune' || method === 'unified') && availableModels.length > 0 && (
+                      <div className="flex flex-col gap-1.5">
                         <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Base model</label>
-                        <select
-                          value={selectedModel}
-                          onChange={e => setSelectedModel(e.target.value)}
-                          className="h-7 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground"
-                        >
-                          {availableModels.map(id => (
-                            <option key={id} value={id}>{id}</option>
-                          ))}
+                        <select value={selectedModel} onChange={e => setSelectedModel(e.target.value)} className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground max-w-sm" aria-label="Base model for fine-tuning">
+                          {availableModels.map(id => <option key={id} value={id}>{id}</option>)}
                         </select>
                       </div>
                     )}
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Epochs</label>
-                      <input type="number" min={1} max={200} value={trainingEpochs} onChange={e => setTrainingEpochs(Math.max(1, parseInt(e.target.value) || 1))} className="h-7 w-16 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground" />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-muted-foreground uppercase tracking-wider">LR</label>
-                      <input type="number" min={1e-6} max={1} step={1e-4} value={trainingLR} onChange={e => setTrainingLR(parseFloat(e.target.value) || 1e-3)} className="h-7 w-20 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground" />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Batch</label>
-                      <input type="number" min={1} max={1024} value={trainingBatchSize} onChange={e => setTrainingBatchSize(Math.max(1, parseInt(e.target.value) || 64))} className="h-7 w-16 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground" />
-                    </div>
-                    {(method === 'finetune' || method === 'unified') && (
-                      <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground h-7">
-                        <input type="checkbox" checked={useLoRA} onChange={e => setUseLoRA(e.target.checked)} className="rounded border-border/60" />
-                        LoRA
-                      </label>
-                    )}
-                    {method === 'unified' && (
-                      <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground h-7">
-                        <input type="checkbox" checked={unifiedDistill} onChange={e => setUnifiedDistill(e.target.checked)} className="rounded border-border/60" />
-                        Distillation
-                      </label>
-                    )}
-                    {method === 'distill' && (
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Tokenizer</label>
-                        <div className="flex items-center gap-1 text-[11px]">
-                          <button className={`px-1.5 py-0.5 rounded-sm ${algo === 'bpe' ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'}`} onClick={() => setAlgo('bpe')}>BPE</button>
-                          <button className={`px-1.5 py-0.5 rounded-sm ${algo === 'unigram' ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'}`} onClick={() => setAlgo('unigram')}>Unigram</button>
+
+                    {/* VLM config */}
+                    {method === 'vlm' && (
+                      <div className="grid grid-cols-2 gap-3 p-3 rounded-lg border border-border/40 bg-muted/20">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Vision Encoder</label>
+                          <select value={vlmVisionEncoder} onChange={e => setVlmVisionEncoder(e.target.value)} className="h-7 rounded-md border border-border/60 bg-background px-2 text-[11px] font-mono" aria-label="Vision encoder model">
+                            <option value="google/siglip-base-patch16-224">SigLIP Base (patch16)</option>
+                            <option value="google/siglip-large-patch16-384">SigLIP Large (patch16)</option>
+                            <option value="openai/clip-vit-base-patch32">CLIP ViT-B/32</option>
+                          </select>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Language Model</label>
+                          <input value={vlmLLM} onChange={e => setVlmLLM(e.target.value)} className="h-7 rounded-md border border-border/60 bg-background px-2 text-[11px] font-mono" placeholder="Qwen/Qwen2.5-0.5B-Instruct" />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Stage 1 Epochs (connector)</label>
+                          <input type="number" min={1} max={10} value={vlmStage1Epochs} onChange={e => setVlmStage1Epochs(Number(e.target.value))} className="h-7 rounded-md border border-border/60 bg-background px-2 text-[11px] w-20" />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Stage 2 Epochs (full)</label>
+                          <input type="number" min={1} max={50} value={vlmStage2Epochs} onChange={e => setVlmStage2Epochs(Number(e.target.value))} className="h-7 rounded-md border border-border/60 bg-background px-2 text-[11px] w-20" />
                         </div>
                       </div>
                     )}
-                    {method === 'vlm' && datasets.datasets.filter(ds => ds.type === 'vlm').length === 0 && (
-                      <p className="text-xs text-muted-foreground/70">
-                        No VLM datasets found. Create one from the{' '}
-                        <a href="/multimodal" className="text-primary underline underline-offset-2">Multimodal</a> page.
-                      </p>
-                    )}
+
+                    {/* Numeric parameters */}
+                    <div className="flex flex-wrap items-end gap-3">
+                      {(method === 'distill' || method === 'unified') && availableModels.length > 0 && (
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Base model</label>
+                          <select value={selectedModel} onChange={e => setSelectedModel(e.target.value)} className="h-7 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground" aria-label="Base model for distillation">
+                            {availableModels.map(id => <option key={id} value={id}>{id}</option>)}
+                          </select>
+                        </div>
+                      )}
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Epochs</label>
+                        <input type="number" min={1} max={200} value={trainingEpochs} onChange={e => setTrainingEpochs(Math.max(1, parseInt(e.target.value) || 1))} className="h-7 w-16 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground" />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] text-muted-foreground uppercase tracking-wider">LR</label>
+                        <input type="number" min={1e-6} max={1} step={1e-4} value={trainingLR} onChange={e => setTrainingLR(parseFloat(e.target.value) || 1e-3)} className="h-7 w-20 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground" />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Batch</label>
+                        <input type="number" min={1} max={1024} value={trainingBatchSize} onChange={e => setTrainingBatchSize(Math.max(1, parseInt(e.target.value) || 64))} className="h-7 w-16 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground" />
+                      </div>
+                      {(method === 'finetune' || method === 'unified') && (
+                        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground h-7">
+                          <input type="checkbox" checked={useLoRA} onChange={e => setUseLoRA(e.target.checked)} className="rounded border-border/60" />
+                          LoRA
+                        </label>
+                      )}
+                      {method === 'unified' && (
+                        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground h-7">
+                          <input type="checkbox" checked={unifiedDistill} onChange={e => setUnifiedDistill(e.target.checked)} className="rounded border-border/60" />
+                          Distillation
+                        </label>
+                      )}
+                      {method === 'distill' && (
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Tokenizer</label>
+                          <div className="flex items-center gap-1 text-[11px]" role="radiogroup" aria-label="Tokenizer algorithm">
+                            <button role="radio" aria-checked={algo === 'bpe'} className={`px-1.5 py-0.5 rounded-sm ${algo === 'bpe' ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'}`} onClick={() => setAlgo('bpe')}>BPE</button>
+                            <button role="radio" aria-checked={algo === 'unigram'} className={`px-1.5 py-0.5 rounded-sm ${algo === 'unigram' ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'}`} onClick={() => setAlgo('unigram')}>Unigram</button>
+                          </div>
+                        </div>
+                      )}
+                      {method === 'vlm' && datasets.datasets.filter(ds => ds.type === 'vlm').length === 0 && (
+                        <p className="text-xs text-muted-foreground/70">
+                          No VLM datasets found. Create one from the{' '}
+                          <a href="/multimodal" className="text-primary underline underline-offset-2">Multimodal</a> page.
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -717,7 +789,8 @@ export default function TrainingPage() {
                   <div className="space-y-1.5">
                     <label className="text-xs text-muted-foreground">Dataset</label>
                     <select value={datasets.selectedDataset} onChange={e => datasets.setSelectedDataset(e.target.value)}
-                      className="w-full h-8 rounded border border-border/50 bg-background px-2 text-xs">
+                      className="w-full h-8 rounded border border-border/50 bg-background px-2 text-xs"
+                      aria-label="Dataset for turbo training">
                       {datasets.datasets.length === 0 && <option value="">No datasets</option>}
                       {datasets.datasets.map(ds => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
                     </select>
@@ -739,7 +812,7 @@ export default function TrainingPage() {
         {checkpoints.checkpoints.length > 0 && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Checkpoints</CardTitle>
+              <CardTitle className="text-base">Trained models</CardTitle>
               <Button size="sm" variant="ghost" onClick={() => test.setTestDialogOpen(true)}>
                 Test model
               </Button>
@@ -749,16 +822,15 @@ export default function TrainingPage() {
                 {checkpoints.checkpoints.slice().reverse().map((cp: any) => (
                   <div key={cp.name} className={cn("flex items-center justify-between rounded-lg border p-3 text-sm", checkpoints.activeCheckpoint === cp.name ? "border-primary/30 bg-primary/5" : "border-border/50")}>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-mono text-xs font-medium">{cp.name}</p>
-                      <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground mt-0.5">
-                        {cp.loss != null && <span>Loss: {cp.loss.toFixed(4)}</span>}
-                        {cp.epochs_trained != null && <span>{cp.epochs_trained} epochs</span>}
-                        {cp.training_dataset && cp.training_dataset !== 'gpt2-generated' && <span>Dataset: {cp.training_dataset}</span>}
-                        {cp.model_type && <span>{cp.model_type}</span>}
-                        {cp.vocab_size != null && <span>Vocab: {cp.vocab_size}</span>}
-                      </div>
-                      {cp.traits && Object.keys(cp.traits).length > 0 && (
-                        <p className="text-xs text-muted-foreground mt-0.5">Traits: {Object.entries(cp.traits).map(([k, v]) => `${k}: ${v}`).join(', ')}</p>
+                      <p className="truncate font-medium text-xs">{cp.name}</p>
+                      {cp.description ? (
+                        <p className="text-[11px] text-muted-foreground mt-0.5">{cp.description}</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground mt-0.5">
+                          {cp.loss != null && <span>Loss: {cp.loss.toFixed(4)}</span>}
+                          {cp.epochs_trained != null && <span>{cp.epochs_trained} epochs</span>}
+                          {cp.training_dataset && cp.training_dataset !== 'gpt2-generated' && <span>Dataset: {cp.training_dataset}</span>}
+                        </div>
                       )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0 ml-2">
@@ -853,29 +925,47 @@ export default function TrainingPage() {
             </CardHeader>
             <CardContent className="p-0">
               <div className="divide-y divide-border/50">
-                {checkpoints.jobs.slice().reverse().map((job) => (
-                  <div key={job.id} className="flex items-center justify-between px-4 py-3 text-sm">
+                {checkpoints.jobs.slice().reverse().map((job) => {
+                  const relativeTime = (() => {
+                    if (!job.created_at) return ''
+                    const diff = Date.now() - new Date(job.created_at).getTime()
+                    const mins = Math.floor(diff / 60000)
+                    if (mins < 1) return 'just now'
+                    if (mins < 60) return `${mins}m ago`
+                    const hrs = Math.floor(mins / 60)
+                    if (hrs < 24) return `${hrs}h ago`
+                    return `${Math.floor(hrs / 24)}d ago`
+                  })()
+                  return (
+                  <div key={job.id} role="button" tabIndex={0} className="flex items-center justify-between px-4 py-3 text-sm cursor-pointer hover:bg-muted/20 transition-colors" onClick={() => router.push(`/training/job/${job.id}`)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/training/job/${job.id}`) } }} aria-label={`View job ${job.name || job.id}`}>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{job.name}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{job.status} &middot; {job.created_at ? new Date(job.created_at).toLocaleDateString() : ''}</p>
+                      <p className="truncate font-medium">{job.name || job.id}</p>
+                      {job.status_message ? (
+                        <p className="text-xs text-muted-foreground mt-0.5">{job.status_message}</p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground mt-0.5">{job.status} &middot; {relativeTime}</p>
+                      )}
                     </div>
-                    {job.status === 'running' && <span className="relative flex h-2 w-2 shrink-0"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-success" /></span>}
-                    {job.status === 'completed' && (
-                      <div className="flex items-center gap-2 shrink-0">
-                        {job.type === 'vlm' && job.output_dir && (
-                          <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={async () => {
-                            try { await modelController.loadVLM(job.model_path || job.output_dir); addToast('VLM loaded for chat', 'success') }
-                            catch { addToast('Failed to load VLM', 'error') }
-                          }}>
-                            VLM Chat
-                          </Button>
-                        )}
-                        <span className="text-xs text-success">Done</span>
-                      </div>
-                    )}
-                    {job.status === 'failed' && <span className="text-xs text-destructive shrink-0">Failed</span>}
+                    <div className="flex items-center gap-2 shrink-0 ml-3" onClick={e => e.stopPropagation()}>
+                      {job.status === 'running' && <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-success" /></span>}
+                      {job.status === 'completed' && (
+                        <>
+                          {job.checkpoint && (
+                            <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={async () => {
+                              try { await checkpoints.handleLoadCheckpoint(job.checkpoint!, addToast) }
+                              catch { addToast('Failed to load checkpoint', 'error') }
+                            }}>
+                              Use
+                            </Button>
+                          )}
+                          <span className="text-xs text-success shrink-0">Done</span>
+                        </>
+                      )}
+                      {job.status === 'failed' && <span className="text-xs text-destructive shrink-0">Failed</span>}
+                    </div>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </CardContent>
           </Card>
@@ -883,8 +973,14 @@ export default function TrainingPage() {
 
         {!session.trainingRunning && checkpoints.checkpoints.length === 0 && checkpoints.jobs.length === 0 && (
           <Card className="border-dashed py-8">
-            <CardContent className="text-center text-sm text-muted-foreground">
-              No training activity yet. Select a dataset or paste text above to get started.
+            <CardContent className="text-center space-y-3">
+              <p className="text-sm text-muted-foreground">No training activity yet.</p>
+              <div className="text-xs text-muted-foreground/70 space-y-1.5 max-w-sm mx-auto text-left">
+                <p>• Pick a dataset above and click <span className="font-medium text-foreground">Start training</span></p>
+                <p>• Use <span className="font-medium text-foreground">Paste text</span> to train on your own content</p>
+                <p>• Conversation-format data (JSONL) trains better than plain text</p>
+                <p>• Small datasets (5-10 samples) work for personality fine-tuning</p>
+              </div>
             </CardContent>
           </Card>
         )}

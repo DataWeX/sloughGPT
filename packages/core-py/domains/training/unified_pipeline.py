@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import threading
 import time
 from dataclasses import dataclass, field
@@ -67,6 +68,19 @@ class TrainingProgress:
     message: str = ""
     metrics: Dict[str, Any] = field(default_factory=dict)
 
+    @staticmethod
+    def _sanitize(val: Any, default: float = 0.0) -> float:
+        """Sanitize a value for JSON serialisation: replace Infinity/NaN with default."""
+        if val is None:
+            return default
+        try:
+            f = float(val)
+            if not math.isfinite(f):
+                return default
+            return f
+        except (TypeError, ValueError, OverflowError):
+            return default
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "phase": self.phase,
@@ -74,8 +88,8 @@ class TrainingProgress:
             "total_epochs": self.total_epochs,
             "step": self.step,
             "total_steps": self.total_steps,
-            "loss": self.loss,
-            "val_loss": self.val_loss,
+            "loss": self._sanitize(self.loss),
+            "val_loss": self._sanitize(self.val_loss),
             "learning_rate": self.learning_rate,
             "progress_pct": self.progress_pct,
             "status": self.status,
@@ -86,15 +100,20 @@ class TrainingProgress:
     def to_sse_event(self, stream_name: str = "auto-train") -> Dict[str, Any]:
         data: Dict[str, Any] = {
             "progress": self.progress_pct,
-            "loss": self.loss,
-            "val_loss": self.val_loss,
+            "loss": self._sanitize(self.loss),
+            "val_loss": self._sanitize(self.val_loss),
             "epoch": self.epoch,
             "step": self.step,
         }
         # Include finish-specific fields from metrics when present
+        # Sanitize numeric fields to prevent Infinity/NaN in JSON
+        _numeric_metrics = {"final_loss", "total_steps", "elapsed", "epochs"}
         for key in ("final_loss", "model_path", "total_steps", "elapsed", "checkpoint", "cancelled", "epochs"):
             if key in self.metrics:
-                data[key] = self.metrics[key]
+                val = self.metrics[key]
+                if key in _numeric_metrics and not isinstance(val, str):
+                    val = self._sanitize(val)
+                data[key] = val
         return {
             "stream": stream_name,
             "phase": self.phase,
@@ -372,6 +391,26 @@ class UnifiedTrainingPipeline:
                     "total_steps": train_result.get("total_steps", 0),
                 },
             )
+            # Early exit if training produced no data (too few samples)
+            if train_result.get("status") == "no_data":
+                self._update_progress(
+                    "complete",
+                    status="error",
+                    message=f"Training produced no data — dataset too small ({train_result.get('message', '')})",
+                    loss=None,
+                    metrics={"error": "no_data", "total_steps": train_result.get("total_steps", 0)},
+                )
+                self._emit_progress(on_progress)
+                return {
+                    "status": "error",
+                    "message": f"Training produced no data — dataset too small",
+                    "model_path": "",
+                    "final_loss": None,
+                    "total_steps": 0,
+                    "checkpoint": "",
+                    "metrics": {},
+                }
+
             # Update status tracker
             if self.tracker is not None:
                 from domains.training.status import TrainingStage
@@ -712,6 +751,7 @@ class UnifiedTrainingPipeline:
             use_mixed_precision=self.config.use_mixed_precision,
             max_steps=self.config.max_steps,
             warmup_steps=self.config.warmup_steps,
+            device="cpu",
             **{k: v for k, v in self.config.trainer_kwargs.items() if k not in ("teacher_model", "student_model", "train_data")},
         )
 
@@ -728,16 +768,21 @@ class UnifiedTrainingPipeline:
         step_counter = [0]
         loss_history: List[float] = []
 
-        def _slonet_progress(step: int, loss: float, epoch: int):
+        def _slonet_progress(info: Dict[str, Any]):
+            step = info.get("global_step") or info.get("step", 0)
+            loss = info.get("train_loss") or info.get("loss")
+            epoch = info.get("epoch", 0)
             step_counter[0] = step
-            loss_history.append(loss)
+            safe_loss = TrainingProgress._sanitize(loss)
+            if safe_loss is not None:
+                loss_history.append(safe_loss)
             self._update_progress(
                 "train",
                 epoch=epoch,
                 step=step,
-                loss=loss,
+                loss=safe_loss,
                 metrics={"loss_history": loss_history[-200:]},
-                message=f"Step {step}, loss {loss:.4f}",
+                message=f"Step {step}, loss {safe_loss:.4f}" if safe_loss is not None else f"Step {step}",
             )
             if on_progress:
                 on_progress(self.progress)
@@ -749,29 +794,41 @@ class UnifiedTrainingPipeline:
             return original_train(
                 *args,
                 **kwargs,
-                progress_callback=_slonet_progress,
+                on_progress=_slonet_progress,
                 cancel_event=self._cancel_event,
             )
 
         trainer.train = _patched_train
-        try:
-            result = trainer.train()
-        except TypeError:
-            # If trainer doesn't accept progress_callback, run without it
-            result = original_train()
+        result = trainer.train()
 
         self._trainer_instance = trainer
 
         # Extract final loss from trainer (SloughGPTTrainer returns best_eval_loss)
         final_loss = None
         if isinstance(result, dict):
-            final_loss = result.get("best_eval_loss") or result.get("final_loss")
+            be = result.get("best_eval_loss")
+            fl = result.get("final_loss")
+            final_loss = fl if fl is not None else be
         if final_loss is None:
             final_loss = getattr(trainer, "_best_val_loss", None)
         if final_loss is None and loss_history:
             final_loss = loss_history[-1]
+        # Sanitize — guard against non-numeric (dict, None, inf, nan)
+        final_loss = TrainingProgress._sanitize(final_loss, default=None)
 
         checkpoint_name = ""
+        total_steps = step_counter[0] or getattr(trainer, "global_step", 0)
+        # Skip soul export if no steps completed
+        if total_steps == 0:
+            logger.info("Zero steps completed — skipping soul export")
+            return {
+                "status": "no_data",
+                "model_path": self.config.checkpoint_dir,
+                "final_loss": None,
+                "total_steps": 0,
+                "checkpoint": "",
+                "metrics": {"loss_history": []},
+            }
         # Export .soul if soul_name is configured
         if self.config.soul_name and hasattr(trainer, "model") and trainer.model is not None:
             try:
@@ -779,29 +836,43 @@ class UnifiedTrainingPipeline:
                 from domains.inference import save_soul, SloProfile, PersonalityCore
 
                 soul_name = self.config.soul_name
-                total_steps = step_counter[0] or getattr(trainer, "global_step", 0)
                 ckpt_name = f"{soul_name}_{int(_time.time())}.soul"
                 ckpt_path = Path(self.config.checkpoint_dir) / ckpt_name
 
+                safe_loss = TrainingProgress._sanitize(final_loss)
+                if not isinstance(safe_loss, (int, float)):
+                    safe_loss = 0.0
                 soul_profile = SloProfile(
                     name=f"{soul_name}-soul",
                     version="1.0.0",
                     tagline="AI Slo trained via UnifiedTrainingPipeline",
-                    description=f"SloNet trained in {total_steps} steps. Loss: {final_loss:.4f}.",
+                    description=f"SloNet trained in {total_steps} steps. Loss: {safe_loss:.4f}.",
                     lineage="unified-slp-pt",
                     base_model="slonet-lstm",
                     training_dataset="user-provided",
                     epochs_trained=self.config.epochs,
-                    final_train_loss=round(float(final_loss), 6) if final_loss else 0.0,
-                    final_val_loss=round(float(final_loss), 6) if final_loss else 0.0,
+                    final_train_loss=round(safe_loss, 6),
+                    final_val_loss=round(safe_loss, 6),
                     personality=PersonalityCore(),
                     system_prompt=self.config.system_prompt or "You are a helpful assistant.",
+                    metadata={
+                        "vocab_size": getattr(trainer, "vocab_size", self.config.vocab_size),
+                        "n_embed": self.config.n_embed,
+                        "n_layer": self.config.n_layer,
+                        "n_head": self.config.n_head,
+                        "block_size": self.config.block_size,
+                        "model_type": "sloughgpt",
+                        "total_steps": total_steps,
+                        "stoi": getattr(trainer, "stoi", None),
+                        "itos": getattr(trainer, "itos", None),
+                    },
                 )
                 save_soul(trainer.model, str(ckpt_path), soul_profile=soul_profile)
                 checkpoint_name = ckpt_name
                 logger.info("Exported .soul checkpoint: %s", ckpt_name)
             except Exception as e:
-                logger.warning("Soul export skipped: %s", e)
+                import traceback
+                logger.warning("Soul export skipped: %s\n%s", e, traceback.format_exc())
 
         return {
             "status": "completed",

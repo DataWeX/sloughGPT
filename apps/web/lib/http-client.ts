@@ -3,6 +3,7 @@ export class ApiError extends Error {
     message: string,
     public status: number,
     public data?: unknown,
+    public requestId?: string,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -61,21 +62,23 @@ async function request<T>(
         }
 
         const text = await res.text()
+        const requestId = res.headers.get('X-Request-ID') || undefined
         let detail: string | undefined
         try { const j = JSON.parse(text); detail = j.detail ?? j.message ?? j.error }
         catch { detail = text || res.statusText }
         const message = Array.isArray(detail) ? detail.map((d: any) => d.msg).join('; ') : detail || 'Request failed'
 
         if (!opts?.silent) {
-          const apiErr = new ApiError(message, status, { raw: text })
+          const apiErr = new ApiError(message, status, { raw: text }, requestId)
           import('./error-store').then(({ useErrorStore }) => {
             useErrorStore.getState().addError(apiErr, {
               source: url,
               title: status >= 500 ? 'Server Error' : status >= 400 ? `HTTP ${status}` : 'API Error',
+              requestId: requestId,
             })
           })
         }
-        throw new ApiError(message, status, { raw: text })
+        throw new ApiError(message, status, { raw: text }, requestId)
       }
 
       const text = await res.text()

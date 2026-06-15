@@ -216,6 +216,52 @@ def _load_soul_meta(ckpt_file: Path) -> dict:
     return {}
 
 
+def _describe_checkpoint(ckpt: dict) -> str:
+    """Generate a plain-language description of a checkpoint.
+
+    Translates raw metadata into sentences Alex can understand:
+    "Trained on shakespeare for 5 epochs. Loss: 1.23 (good). Personality: warm."
+    """
+    parts = []
+    soul = ckpt.get("soul", "")
+    loss = ckpt.get("loss")
+    epochs = ckpt.get("epochs") or ckpt.get("epochs_trained")
+    steps = ckpt.get("steps", 0)
+    dataset = ckpt.get("training_dataset", "")
+    traits = ckpt.get("traits", {})
+    model_type = ckpt.get("model_type", "")
+
+    if dataset:
+        parts.append(f"Trained on {dataset}")
+    elif soul and soul != "unknown":
+        parts.append(f"Soul: {soul}")
+    else:
+        parts.append("A trained model")
+
+    if epochs:
+        parts.append(f"for {epochs} epoch{'s' if epochs != 1 else ''}")
+    elif steps:
+        parts.append(f"for {steps} steps")
+
+    if loss is not None:
+        if loss < 1.5:
+            parts.append(f"(loss {loss:.2f} — learned well)")
+        elif loss < 3.0:
+            parts.append(f"(loss {loss:.2f} — moderate)")
+        else:
+            parts.append(f"(loss {loss:.2f} — needs more training)")
+
+    if traits:
+        trait_names = list(traits.keys())[:3]
+        if trait_names:
+            parts.append(f"Personality: {', '.join(trait_names)}")
+
+    if model_type and model_type not in ("slonet", "unknown"):
+        parts.append(f"[{model_type}]")
+
+    return " ".join(parts) + "."
+
+
 def _load_soul(name: str) -> dict:
     """Load soul metadata from a .soul or .pt file. Prefers .soul.meta.json to avoid reading 80MB .soul files."""
     ckpt_file = CHECKPOINTS_DIR / name
@@ -270,9 +316,9 @@ def _load_soul(name: str) -> dict:
                 "name": ckpt_file.name,
                 "download_url": f"/auto-train/checkpoints/{ckpt_file.name}/download",
                 "soul": _get_soul_name(soul),
-                "loss": soul.metadata.get("avg_loss"),
+                "loss": getattr(soul, "final_train_loss", None) or soul.metadata.get("avg_loss"),
                 "steps": soul.metadata.get("steps", 0),
-                "epochs": soul.metadata.get("step", 0),
+                "epochs": getattr(soul, "epochs_trained", 0) or soul.metadata.get("step", 0),
                 "traits": _get_soul_traits(soul),
                 "lineage": soul.lineage,
                 "model_type": "slonet",
@@ -387,9 +433,12 @@ async def start(req: StartRequest):
     elif req.dataset_id:
         ds_candidate = REPO_ROOT / "datasets" / req.dataset_id
         if ds_candidate.exists():
-            corp = ds_candidate / "corpus.jsonl"
-            if corp.exists():
-                data_path = str(corp)
+            # Try common dataset file names
+            for name in ("corpus.jsonl", "input.txt", "train.txt", "text.txt"):
+                candidate = ds_candidate / name
+                if candidate.exists():
+                    data_path = str(candidate)
+                    break
 
     state.config = {
         "epochs": req.epochs,
@@ -401,6 +450,8 @@ async def start(req: StartRequest):
         "soul_name": req.soul_name,
     }
     state.running = True
+    import state as _srv_state
+    _srv_state.training_active = True
     autotrain_logger.info("Auto-train configured: data_path=%s epochs=%d", data_path, req.epochs)
     return {"status": "ready", "data_path": data_path, "epochs": req.epochs, "config": state.config}
 
@@ -514,14 +565,14 @@ async def stream():
             data_path=state.config.get("data_path", ""),
             epochs=state.config.get("epochs", 10),
             learning_rate=state.config.get("learning_rate", 0.001),
-            batch_size=state.config.get("batch_size", 64),
+            batch_size=state.config.get("batch_size", 32),
             checkpoint_dir=str(CHECKPOINTS_DIR),
             output_dir=str(CHECKPOINTS_DIR),
-            vocab_size=256,
-            n_embed=256,
-            n_layer=6,
-            n_head=8,
-            block_size=128,
+            vocab_size=0,
+            n_embed=64,
+            n_layer=2,
+            n_head=4,
+            block_size=64,
             soul_name=state.config.get("soul_name", "assistant"),
             system_prompt=_build_soul_prompt(state.config.get("soul_name", "assistant")),
             skip_generate=True,
@@ -566,22 +617,35 @@ async def stream():
             _enqueue(sse_error("auto-train", "FAILED", str(e)))
         finally:
             _auto_train_cancel_event = None
+            state.running = False
+            try:
+                import state as _srv_state
+                _srv_state.training_active = False
+            except Exception:
+                pass
 
     async def event_generator():
         worker_task = loop.run_in_executor(None, _training_worker)
-
-        while True:
-            event = await queue.get()
-            yield event
-            if event.startswith("data: "):
-                try:
-                    ev = json.loads(event[6:])
-                    if ev.get("status") in ("complete", "error"):
-                        break
-                except json.JSONDecodeError:
-                    pass
-
         try:
+            while True:
+                event = await queue.get()
+                yield event
+                if event.startswith("data: "):
+                    try:
+                        ev = json.loads(event[6:])
+                        if ev.get("status") in ("complete", "error"):
+                            break
+                    except json.JSONDecodeError:
+                        pass
+
+            # Drain any remaining events the worker may have enqueued
+            while not queue.empty():
+                try:
+                    extra = queue.get_nowait()
+                    yield extra
+                except _asyncio.QueueEmpty:
+                    break
+
             await worker_task
         except Exception:
             pass
@@ -611,6 +675,10 @@ async def list_checkpoints():
             if info:
                 checkpoints.append(info)
 
+    # Add plain-language description to each checkpoint
+    for ckpt in checkpoints:
+        ckpt["description"] = _describe_checkpoint(ckpt)
+
     return {"checkpoints": checkpoints}
 
 
@@ -635,42 +703,76 @@ async def delete_checkpoint(name: str):
 
 @router.post("/checkpoints/{name}/load")
 async def load_checkpoint(name: str):
-    """Read checkpoint metadata without loading into a model (metadata-only)."""
-    from domains.inference import load_soul
+    """Load a .soul checkpoint into the provider pipeline for chat.
 
-    for ext in ("", ".soul", ".pt"):
-        cp = CHECKPOINTS_DIR / name
-        if not (str(name).endswith(".soul") or str(name).endswith(".pt")):
-            cp = CHECKPOINTS_DIR / (name + ext)
-        if cp.exists():
-            try:
-                soul, _ = load_soul(str(cp))
-                return {
-                    "status": "loaded",
-                    "name": cp.name,
-                    "soul": soul.soul_name,
-                    "loss": soul.metadata.get("avg_loss"),
-                    "steps": soul.metadata.get("steps", 0),
-                    "traits": soul.soul_traits,
-                    "lineage": soul.lineage,
-                }
-            except Exception:
-                pass
-            try:
-                import torch
-                ckpt = torch.load(cp, map_location="cpu", weights_only=False)
-                return {
-                    "status": "loaded",
-                    "name": cp.name,
-                    "soul": ckpt.get("soul_name", "unknown"),
-                    "loss": ckpt.get("train_loss"),
-                    "steps": ckpt.get("steps", 0),
-                    "traits": ckpt.get("personality_traits", {}),
-                }
-            except Exception:
-                pass
+    Loads the SloTransformer model, extracts stoi/itos vocab from metadata,
+    creates a SloTransformerProvider, and registers it as the default text provider.
 
-    return {"status": "not_found", "name": name}
+    Returns:
+        dict with status, soul name, traits, and provider info
+    """
+    from domains.training.slonet import import_from_sou
+    from domains.models.provider import SloTransformerProvider, register_provider
+
+    # Find the checkpoint file
+    cp = CHECKPOINTS_DIR / name
+    if not cp.exists():
+        # Try with/without extension
+        for ext in (".soul", ".pt"):
+            candidate = CHECKPOINTS_DIR / (name + ext)
+            if candidate.exists():
+                cp = candidate
+                break
+    if not cp.exists():
+        return {"status": "not_found", "name": name}
+
+    try:
+        # Load the SloTransformer model from .soul file
+        soul_net = import_from_sou(str(cp))
+        soul_meta = soul_net.soul_signature()
+        md = soul_net.metadata or {}
+
+        # Extract vocab from metadata
+        stoi = md.get("stoi")
+        itos = md.get("itos")
+        if stoi is None or itos is None:
+            return {
+                "status": "error",
+                "name": cp.name,
+                "error": "Checkpoint has no stoi/itos vocab — retrain to include vocab.",
+            }
+
+        # Create provider and register as default
+        provider = SloTransformerProvider(
+            model=soul_net,
+            stoi=stoi,
+            itos=itos,
+            model_id_str=cp.stem,
+        )
+        register_provider("slonet", provider)
+        register_provider("default", provider)
+
+        autotrain_logger.info(
+            "Loaded checkpoint %s as provider (vocab=%d, params=%d)",
+            cp.name, len(stoi), soul_net.num_parameters(),
+        )
+
+        return {
+            "status": "loaded",
+            "name": cp.name,
+            "soul": soul_meta.get("soul_name", soul_net.soul_name),
+            "loss": md.get("final_train_loss"),
+            "steps": md.get("total_steps", 0),
+            "traits": soul_meta.get("soul_traits", {}),
+            "lineage": soul_net.lineage,
+            "vocab_size": len(stoi),
+            "params": soul_net.num_parameters(),
+            "provider": "slonet",
+        }
+    except Exception as e:
+        import traceback
+        autotrain_logger.error("Failed to load checkpoint %s: %s\n%s", cp.name, e, traceback.format_exc())
+        return {"status": "error", "name": cp.name, "error": str(e)}
 
 
 @router.get("/checkpoints/{name}/download")

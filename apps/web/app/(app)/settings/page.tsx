@@ -105,6 +105,7 @@ export default function SettingsPage() {
               placeholder="e.g., You are a helpful coding assistant. Keep responses concise..."
               value={settings.customContext}
               onChange={(e) => updateSettings({ customContext: e.target.value })}
+              aria-label="Custom instructions"
             />
           </CardContent>
         </Card>
@@ -153,6 +154,44 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         </Link>
+
+        {/* Export / Import settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Backup & restore</CardTitle>
+            <CardDescription>Export your settings to a file, or import from a backup</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => {
+                const data = JSON.stringify(settings, null, 2)
+                const blob = new Blob([data], { type: 'application/json' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url; a.download = 'sloughgpt-settings.json'; a.click()
+                URL.revokeObjectURL(url)
+                addToast('Settings exported', 'success')
+              }}>Export settings</Button>
+              <Button size="sm" variant="outline" onClick={() => {
+                const input = document.createElement('input')
+                input.type = 'file'; input.accept = '.json'
+                input.onchange = async (e) => {
+                  const file = (e.target as HTMLInputElement).files?.[0]
+                  if (!file) return
+                  try {
+                    const text = await file.text()
+                    const data = JSON.parse(text)
+                    updateSettings(data)
+                    addToast('Settings imported', 'success')
+                  } catch {
+                    addToast('Invalid settings file', 'error')
+                  }
+                }
+                input.click()
+              }}>Import settings</Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Danger zone */}
         <Card className="border-destructive/30">
