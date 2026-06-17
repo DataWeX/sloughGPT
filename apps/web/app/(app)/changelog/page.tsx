@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui'
 const CHANGELOG_KEY = 'changelog_seen_version'
 const CURRENT_VERSION = '2026-06-15'
 
-export function hasUnseenChangelog(): boolean {
+function hasUnseenChangelog(): boolean {
   if (typeof window === 'undefined') return false
   try {
     const seen = localStorage.getItem(CHANGELOG_KEY)
@@ -16,9 +16,10 @@ export function hasUnseenChangelog(): boolean {
   } catch { return false }
 }
 
-export function markChangelogSeen(): void {
+function markChangelogSeen(): void {
   try { localStorage.setItem(CHANGELOG_KEY, CURRENT_VERSION) } catch {}
 }
+
 
 interface ChangelogEntry {
   date: string

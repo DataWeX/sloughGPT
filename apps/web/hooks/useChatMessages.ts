@@ -412,7 +412,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
   // Session save: ref-based debounce (doesn't recreate on messages change)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
-    if (messages.length > 0 && sessionSaved) {
+    if (messagesRef.current.length > 0 && sessionSaved) {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       saveTimerRef.current = setTimeout(() => {
         const sid = sessionIdRef.current || localStorage.getItem(CURRENT_SESSION_KEY) || generateSessionId()
@@ -420,7 +420,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
       }, 1000)
       return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
     }
-  }, [messages, sessionSaved])
+  }, [sessionSaved])
 
   useEffect(() => {
     const handler = async () => {

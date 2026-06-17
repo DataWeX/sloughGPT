@@ -1,0 +1,58 @@
+platform :ios, '15.1'
+use_frameworks! :linkage => :static
+
+root = File.expand_path('../..', __dir__)
+
+target 'SloughGPTMobile' do
+  react_native_path = "#{root}/node_modules/react-native"
+
+  pod 'React-Core', :path => react_native_path
+  pod 'React-RCTText', :path => "#{react_native_path}/Libraries/Text"
+  pod 'React-RCTImage', :path => "#{react_native_path}/Libraries/Image"
+  pod 'React-RCTNetwork', :path => "#{react_native_path}/Libraries/Network"
+  pod 'React-RCTAnimation', :path => "#{react_native_path}/Libraries/NativeAnimation"
+  pod 'React-RCTAppDelegate', :path => "#{react_native_path}/Libraries/AppDelegate"
+  pod 'React-RCTVibration', :path => "#{react_native_path}/Libraries/Vibration"
+
+  pod 'React-callinvoker', :path => "#{react_native_path}/ReactCommon/callinvoker"
+  pod 'React-jsinspector', :path => "#{react_native_path}/ReactCommon/jsinspector"
+  pod 'React-logger', :path => "#{react_native_path}/ReactCommon/logger"
+  pod 'React-perflogger', :path => "#{react_native_path}/ReactCommon/reactperflogger"
+  pod 'React-utils', :path => "#{react_native_path}/ReactCommon/utils"
+  pod 'React-debug', :path => "#{react_native_path}/ReactCommon/debug"
+  pod 'React-featureflags', :path => "#{react_native_path}/ReactCommon/featureflags"
+  pod 'React-featureflagsnativemodule', :path => "#{react_native_path}/ReactCommon/featureflagsnativemodule"
+  pod 'React-domruntime', :path => "#{react_native_path}/ReactCommon/domruntime"
+  pod 'React-turbonruntime', :path => "#{react_native_path}/ReactCommon/turbonruntime"
+
+  pod 'React-hermes', :path => "#{react_native_path}/ReactCommon/hermes"
+  pod 'React-jsi', :path => "#{react_native_path}/ReactCommon/jsi"
+  pod 'React-jsiexecutor', :path => "#{react_native_path}/ReactCommon/jsiexecutor"
+  pod 'React-jsinspectorinfrahernmes', :path => "#{react_native_path}/ReactCommon/jsinspector/infra/hermes"
+
+  pod 'RCTRequired', :path => "#{react_native_path}/Libraries/RCTRequired"
+  pod 'RCTTypeSafety', :path => "#{react_native_path}/Libraries/TypeSafety"
+
+  pod 'ReactCommon/turbomodule/core', :path => "#{react_native_path}/ReactCommon"
+
+  pod 'React-NativeModulesApple', :path => "#{react_native_path}/ReactCommon/nativemodule/core/platform/apple"
+
+  pod 'Yoga', :path => "#{react_native_path}/ReactCommon/yoga"
+  pod 'fmt', :path => "#{root}/node_modules/fmt"
+
+  pod 'react-native-safe-area-context', :path => "#{root}/node_modules/react-native-safe-area-context"
+  pod 'react-native-screens', :path => "#{root}/node_modules/react-native-screens"
+
+  use_react_native!(
+    :path => react_native_path,
+    :app_path => "#{root}",
+  )
+end
+
+post_install do |installer|
+  react_native_post_install(
+    installer,
+    "#{root}/node_modules/react-native",
+    :mac_catalyst_enabled => false,
+  )
+end

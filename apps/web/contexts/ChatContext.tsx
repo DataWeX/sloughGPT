@@ -29,12 +29,24 @@ interface VisionCaps {
   status?: string
 }
 
-export interface ChatContextValue {
-  // Health
+// ── Sub-context 1: Health (changes on health poll) ────────────────────────
+
+export interface ChatHealthContextValue {
   health: ApiHealthSnapshot
   refreshHealth: () => Promise<void>
+}
 
-  // Model
+const ChatHealthContext = createContext<ChatHealthContextValue | null>(null)
+
+export function useChatHealth() {
+  const ctx = useContext(ChatHealthContext)
+  if (!ctx) throw new Error('useChatHealth must be used within ChatProvider')
+  return ctx
+}
+
+// ── Sub-context 2: Model state (changes on user action) ───────────────────
+
+export interface ChatModelContextValue {
   model: string
   setModel: (m: string) => void
   availableModels: string[]
@@ -46,65 +58,83 @@ export interface ChatContextValue {
   loadingModel: string | null
   handleSelectModel: (m: string) => Promise<void>
   handleUnloadModel: () => Promise<void>
-
-  // Souls
   souls: Soul[]
   currentSoul: Soul | null
   setCurrentSoul: (s: Soul | null) => void
   handleSelectSoul: (s: Soul) => void
-
-  // Checkpoints
   checkpoints: Checkpoint[]
   currentCheckpoint: string | undefined
   setCurrentCheckpoint: (c: string | undefined) => void
   onLoadCheckpoint: (name: string) => Promise<void>
-
-  // Agents
   agents: AgentDef[]
   currentAgent: AgentDef | null
   setCurrentAgent: (a: AgentDef | null) => void
-
-  // Vision
   visionCaps: VisionCaps | null
   visionCaptionHistory: string[]
   visionVocabSize: number | undefined
-
-  // Learner
   learnerInfo: LearnerInfo | null
   learnerTraining: boolean
   setLearnerInfo: React.Dispatch<React.SetStateAction<LearnerInfo | null>>
   setLearnerTraining: (t: boolean) => void
   onTrainStep: () => Promise<void>
-
-  // UI callbacks
-  onOpenSettings: () => void
-  onOpenShortcuts: () => void
-  onOpenConversationViewer: () => void
-
-  // Input
   setInput: (value: string | ((prev: string) => string)) => void
-
-  // Toast
-  showToast: (message: string, type?: 'success' | 'error' | 'info') => void
 }
 
-const ChatContext = createContext<ChatContextValue | null>(null)
+const ChatModelContext = createContext<ChatModelContextValue | null>(null)
 
-export function useChatContext() {
-  const ctx = useContext(ChatContext)
-  if (!ctx) throw new Error('useChatContext must be used within ChatProvider')
+export function useChatModel() {
+  const ctx = useContext(ChatModelContext)
+  if (!ctx) throw new Error('useChatModel must be used within ChatProvider')
   return ctx
 }
 
-interface ChatProviderProps {
-  children: ReactNode
-  value: ChatContextValue
+// ── Sub-context 3: UI callbacks (stable references) ───────────────────────
+
+export interface ChatUICallbacksContextValue {
+  onOpenSettings: () => void
+  onOpenShortcuts: () => void
+  onOpenConversationViewer: () => void
+  showToast: (message: string, type?: 'success' | 'error' | 'info') => void
 }
 
-export function ChatProvider({ children, value }: ChatProviderProps) {
+const ChatUICallbacksContext = createContext<ChatUICallbacksContextValue | null>(null)
+
+export function useChatUI() {
+  const ctx = useContext(ChatUICallbacksContext)
+  if (!ctx) throw new Error('useChatUI must be used within ChatProvider')
+  return ctx
+}
+
+// ── Combined type for backward compat ─────────────────────────────────────
+
+export interface ChatContextValue extends ChatHealthContextValue, ChatModelContextValue, ChatUICallbacksContextValue {}
+
+// ── Backward-compat hook ──────────────────────────────────────────────────
+
+export function useChatContext(): ChatContextValue {
+  const health = useChatHealth()
+  const model = useChatModel()
+  const ui = useChatUI()
+  return { ...health, ...model, ...ui }
+}
+
+// ── Provider ──────────────────────────────────────────────────────────────
+
+interface ChatProviderProps {
+  children: ReactNode
+  health: ChatHealthContextValue
+  model: ChatModelContextValue
+  ui: ChatUICallbacksContextValue
+}
+
+export function ChatProvider({ children, health, model, ui }: ChatProviderProps) {
   return (
-    <ChatContext.Provider value={value}>
-      {children}
-    </ChatContext.Provider>
+    <ChatHealthContext.Provider value={health}>
+      <ChatModelContext.Provider value={model}>
+        <ChatUICallbacksContext.Provider value={ui}>
+          {children}
+        </ChatUICallbacksContext.Provider>
+      </ChatModelContext.Provider>
+    </ChatHealthContext.Provider>
   )
 }

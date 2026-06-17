@@ -30,12 +30,27 @@ class PromptFormatterProtocol(Protocol):
 # ── Artifact patterns ─────────────────────────────────────────────────────────
 
 _STRIP_LEADING_NL = re.compile(r"^\n+")
-_STRIP_ASSISTANT = re.compile(r"^[\s\n]*Assistant:\s*", re.IGNORECASE)
-_STRIP_USER = re.compile(r"^[\s\n]*User:\s*", re.IGNORECASE)
+_STRIP_ASSISTANT = re.compile(r"[\s\n]*(?:Assistant:|A:)\s*", re.IGNORECASE)
+_STRIP_USER = re.compile(r"[\s\n]*(?:User:|Q:)\s*", re.IGNORECASE)
 _STRIP_SPECIAL_TOKENS = re.compile(
     r"<\|im_start\|>\s*(user|assistant|system)\s*|"
     r"<\|start_header_id\|>\s*(user|assistant|system)\s*<\|end_header_id\|>\s*\n*|"
     r"<\|eot_id\|>|<\|im_end\|>"
+)
+_STRIP_INSTRUCTIONS = re.compile(
+    r"\[PERSONALITY INSTRUCTIONS\].*?(?=Q:|A:|User:|Assistant:|\Z)", re.DOTALL
+)
+_STRIP_KNOWLEDGE = re.compile(
+    r"\[KNOWLEDGE\].*?\[/KNOWLEDGE\]\s*", re.DOTALL
+)
+_STRIP_CONTEXT = re.compile(
+    r"\[Context:.*?\]\s*", re.DOTALL
+)
+_STRIP_REPEATED_TURN = re.compile(
+    r"(?:\n+)(?:User:|Assistant:|Q:|A:).*?$", re.DOTALL
+)
+_STRIP_TRAILING_PROMPT = re.compile(
+    r"\n+(?:User:|Assistant:|Q:|A:).*$", re.DOTALL
 )
 
 
@@ -113,10 +128,15 @@ class PromptFormatter:
         # 1) Strip special tokens regardless
         cleaned = _STRIP_SPECIAL_TOKENS.sub("", chunk)
 
+        # 2) Strip leaked instructions/knowledge/context
+        cleaned = _STRIP_INSTRUCTIONS.sub("", cleaned)
+        cleaned = _STRIP_KNOWLEDGE.sub("", cleaned)
+        cleaned = _STRIP_CONTEXT.sub("", cleaned)
+
         if not first:
             return cleaned
 
-        # 2) First chunk: aggressive cleaning
+        # 3) First chunk: aggressive cleaning
         cleaned = _STRIP_LEADING_NL.sub("", cleaned)
         cleaned = _STRIP_ASSISTANT.sub("", cleaned)
         cleaned = _STRIP_USER.sub("", cleaned)
@@ -127,8 +147,15 @@ class PromptFormatter:
         Strip artifacts from a full (non-streamed) response string.
         """
         text = _STRIP_SPECIAL_TOKENS.sub("", text)
+        text = _STRIP_INSTRUCTIONS.sub("", text)
+        text = _STRIP_KNOWLEDGE.sub("", text)
+        text = _STRIP_CONTEXT.sub("", text)
         text = _STRIP_ASSISTANT.sub("", text)
-        return text
+        # Strip trailing turn markers (GPT-2 echoes User:/Assistant: at end)
+        text = _STRIP_TRAILING_PROMPT.sub("", text)
+        # Strip repeated turn patterns
+        text = _STRIP_REPEATED_TURN.sub("", text)
+        return text.strip()
 
     # ── Internals ────────────────────────────────────────────────────────────
 
@@ -140,16 +167,29 @@ class PromptFormatter:
         )
 
     def _base_format(self, messages: List[dict]) -> str:
-        """Base model prompt: ``User: ...\\n\\nAssistant: ...\\n\\nAssistant:``"""
+        """Base model prompt — natural language format for GPT-2.
+        
+        GPT-2 was trained on web text, not chat data. The User:/Assistant:
+        format confuses it. Instead, we extract just the conversation
+        content and let the model continue naturally.
+        """
+        # For single user message, just return it directly
+        user_msgs = [m for m in messages if m.get("role") == "user"]
+        if len(user_msgs) == 1 and not any(m.get("role") == "assistant" for m in messages):
+            return user_msgs[0].get("content", "") + "\n"
+        
+        # For multi-turn, concatenate naturally
         parts: List[str] = []
         for msg in messages:
             role = msg.get("role", "user")
             content = msg.get("content", "")
             if role == "system":
-                parts.append(content)
+                pass
             elif role == "user":
-                parts.append(f"{self._user_prefix}: {content}")
+                parts.append(content)
             elif role == "assistant":
-                parts.append(f"{self._assistant_prefix}: {content}")
-        parts.append(f"{self._assistant_prefix}:")
-        return "\n\n".join(parts)
+                parts.append(content)
+        
+        if parts:
+            return "\n\n".join(parts) + "\n\n"
+        return ""

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useCallback } from 'react'
-import type { ChatContextValue } from '@/contexts/ChatContext'
+import type { ChatHealthContextValue, ChatModelContextValue, ChatUICallbacksContextValue } from '@/contexts/ChatContext'
 import { soulsController } from '@/lib/souls-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 import type { useChatUI } from './useChatUI'
@@ -22,8 +22,15 @@ interface UseChatContextValueOpts {
   showToast: (message: string, type?: string) => void
 }
 
-export function useChatContextValue(opts: UseChatContextValueOpts) {
-  const { health, refreshHealth, model, agents, vision, ui, chat, showToast } = opts
+export function useChatHealthValue(opts: Pick<UseChatContextValueOpts, 'health' | 'refreshHealth'>): ChatHealthContextValue {
+  return useMemo(() => ({
+    health: opts.health,
+    refreshHealth: opts.refreshHealth,
+  }), [opts.health, opts.refreshHealth])
+}
+
+export function useChatModelValue(opts: Pick<UseChatContextValueOpts, 'model' | 'agents' | 'vision' | 'chat' | 'showToast'>): ChatModelContextValue {
+  const { model, agents, vision, chat, showToast } = opts
 
   const onLoadCheckpoint = useCallback(async (name: string) => {
     try {
@@ -55,9 +62,7 @@ export function useChatContextValue(opts: UseChatContextValueOpts) {
     finally { model.setLearnerTraining(false) }
   }, [model.setLearnerTraining, model.setLearnerInfo, showToast])
 
-  return useMemo<ChatContextValue>(() => ({
-    health,
-    refreshHealth,
+  return useMemo<ChatModelContextValue>(() => ({
     model: model.model,
     setModel: model.setModel,
     availableModels: model.availableModels,
@@ -88,10 +93,15 @@ export function useChatContextValue(opts: UseChatContextValueOpts) {
     setLearnerInfo: model.setLearnerInfo,
     setLearnerTraining: model.setLearnerTraining,
     onTrainStep,
-    onOpenSettings: ui.toggleSettings,
-    onOpenShortcuts: () => window.dispatchEvent(new CustomEvent('toggle-shortcuts')),
-    onOpenConversationViewer: () => ui.setShowConversationViewer(true),
     setInput: chat.setInput,
-    showToast,
-  }), [health, refreshHealth, model, agents, vision, ui, chat.setInput, showToast, onLoadCheckpoint, onTrainStep])
+  }), [model, agents, vision, chat.setInput, showToast, onLoadCheckpoint, onTrainStep])
+}
+
+export function useChatUIValue(opts: Pick<UseChatContextValueOpts, 'ui' | 'showToast'>): ChatUICallbacksContextValue {
+  return useMemo(() => ({
+    onOpenSettings: opts.ui.toggleSettings,
+    onOpenShortcuts: () => window.dispatchEvent(new CustomEvent('toggle-shortcuts')),
+    onOpenConversationViewer: () => opts.ui.setShowConversationViewer(true),
+    showToast: opts.showToast,
+  }), [opts.ui.toggleSettings, opts.ui.setShowConversationViewer, opts.showToast])
 }

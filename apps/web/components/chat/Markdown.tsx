@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { cn } from '@/lib/cn'
 
 interface MarkdownProps {
@@ -235,7 +235,29 @@ function parseInline(text: string): React.ReactNode[] {
 }
 
 export function Markdown({ content, className }: MarkdownProps) {
-  const rendered = useMemo(() => parseMarkdown(content), [content])
+  const lastParsedRef = useRef(content)
+  const lastRenderedRef = useRef<React.ReactNode[]>(parseMarkdown(content))
+  const throttleRef = useRef(0)
+
+  const rendered = useMemo(() => {
+    const now = Date.now()
+    const timeSinceLastParse = now - throttleRef.current
+
+    // During streaming, throttle full re-parsing to every 300ms
+    // Only re-parse immediately if content shrunk (edit/regenerate) or 300ms elapsed
+    const contentShrunk = content.length < lastParsedRef.current.length
+    const throttled = !contentShrunk && timeSinceLastParse < 300 && lastParsedRef.current.length > 0
+
+    if (throttled) {
+      // Re-use last render but update the trailing text for streaming feel
+      return lastRenderedRef.current
+    }
+
+    lastParsedRef.current = content
+    throttleRef.current = now
+    lastRenderedRef.current = parseMarkdown(content)
+    return lastRenderedRef.current
+  }, [content])
 
   return (
     <div className={cn("space-y-0 break-words", className)}>

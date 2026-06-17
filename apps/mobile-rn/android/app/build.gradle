@@ -1,0 +1,52 @@
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("com.facebook.react")
+}
+
+android {
+    namespace = "com.sloughgptmobile"
+    compileSdk = 35
+
+    defaultConfig {
+        applicationId = "com.sloughgptmobile"
+        minSdkVersion = 24
+        targetSdkVersion = 35
+        versionCode = 1
+        versionName = "1.0"
+    }
+
+    buildTypes {
+        debug {
+            isDebuggable = true
+            isMinifyEnabled = false
+            packaging {
+                jniLibs.keepDebugSymbols.add("**/*.so")
+            }
+        }
+        release {
+            isMinifyEnabled = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+}
+
+react {
+    entryFile = file(["node", "-e", "require('expo/scripts/with-default-config')"][0].trim())
+    reactNativeDir = file("../../node_modules/react-native")
+    codegenDir = file("../../node_modules/@react-native/codegen")
+    cliFile = file("../../node_modules/react-native/cli.js")
+    bundleCommand = "export:embed"
+}
+
+dependencies {
+    implementation("com.facebook.react:react-android")
+    implementation("com.facebook.react:hermes-android")
+}

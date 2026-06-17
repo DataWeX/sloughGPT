@@ -26,7 +26,7 @@ import { DownloadDialog } from '@/components/chat/DownloadDialog'
 import { ChatProvider } from '@/contexts/ChatContext'
 import { ChatToolbarProvider } from '@/contexts/ChatToolbarContext'
 import { useChatToolbarValue } from '@/hooks/useChatToolbarValue'
-import { useChatContextValue } from '@/hooks/useChatContextValue'
+import { useChatHealthValue, useChatModelValue, useChatUIValue } from '@/hooks/useChatContextValue'
 
 const VoiceChatMode = dynamic(() => import('@/components/chat/VoiceChatMode').then(m => m.VoiceChatMode), { ssr: false })
 const ConversationViewer = dynamic(() => import('@/components/chat/ConversationViewer').then(m => m.ConversationViewer), { ssr: false })
@@ -185,19 +185,12 @@ export default function ChatPage() {
     showToast,
   })
 
-  const chatContextValue = useChatContextValue({
-    health,
-    refreshHealth,
-    model,
-    agents,
-    vision,
-    ui,
-    chat,
-    showToast,
-  })
+  const healthValue = useChatHealthValue({ health, refreshHealth })
+  const modelValue = useChatModelValue({ model, agents, vision, chat, showToast })
+  const uiValue = useChatUIValue({ ui, showToast })
 
   return (
-    <ChatProvider value={chatContextValue}>
+    <ChatProvider health={healthValue} model={modelValue} ui={uiValue}>
     <a href="#chat-messages" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-background focus:border focus:rounded-lg focus:shadow-lg">
       Skip to messages
     </a>
