@@ -390,6 +390,11 @@ def _cmd_api_and_web(args):
 
     if not server_js.is_file():
         printer.step("Building Next.js standalone (first time)...")
+        # Clean stale .next cache to avoid type errors from old builds
+        import shutil as _shutil
+        next_cache = web_root / ".next"
+        if next_cache.is_dir():
+            _shutil.rmtree(next_cache, ignore_errors=True)
         build_env = {**env, "NEXT_TELEMETRY_DISABLED": "1"}
         build_proc = subprocess.Popen(
             ["npx", "next", "build"],
@@ -427,7 +432,25 @@ def _cmd_api_and_web(args):
     public_dst = standalone_dir / "public"
     if public_src.is_dir() and not public_dst.is_dir():
         import shutil
-        shutil.copytree(public_src, public_dst)
+        def _copy_without_broken_symlinks(src, dst):
+            """Copytree that skips broken symlinks."""
+            import shutil as _sh
+            _sh.copytree(src, dst, copy_function=lambda s, d: _sh.copy2(s, d) if not os.path.islink(s) or os.path.exists(s) else None, dirs_exist_ok=True)
+        try:
+            shutil.copytree(public_src, public_dst, dirs_exist_ok=True)
+        except shutil.Error:
+            # Fallback: copy file-by-file, skipping broken symlinks
+            import os
+            for dirpath, dirnames, filenames in os.walk(public_src, followlinks=False):
+                rel = os.path.relpath(dirpath, public_src)
+                dst_dir = public_dst / rel
+                dst_dir.mkdir(parents=True, exist_ok=True)
+                for f in filenames:
+                    src_file = os.path.join(dirpath, f)
+                    if os.path.islink(src_file) and not os.path.exists(src_file):
+                        continue
+                    dst_file = dst_dir / f
+                    shutil.copy2(src_file, dst_file)
 
     # ── Start Web frontend ───────────────────────────────────────
     web_env = {
