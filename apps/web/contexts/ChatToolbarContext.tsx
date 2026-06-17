@@ -81,6 +81,12 @@ interface ActionsGroup {
   messageCount: number
 }
 
+interface SidebarGroup {
+  open: boolean
+  onToggle: () => void
+  onClose: () => void
+}
+
 interface HealthGroup {
   status: 'ok' | 'degraded' | 'offline' | 'loading'
   modelLoaded: boolean
@@ -97,6 +103,7 @@ export interface ChatToolbarContextValue {
   localEngine: LocalEngineGroup
   actions: ActionsGroup
   health: HealthGroup
+  sidebar: SidebarGroup
 }
 
 const ChatToolbarContext = createContext<ChatToolbarContextValue | null>(null)

@@ -117,5 +117,10 @@ export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatTool
       modelLoaded: health !== null && health !== 'offline' && health.model_loaded,
       modelType: health !== null && health !== 'offline' ? health.model_type : '',
     },
+    sidebar: {
+      open: ui.sidebarOpen,
+      onToggle: () => ui.setSidebarOpen(prev => !prev),
+      onClose: () => ui.setSidebarOpen(false),
+    },
   }), [chat, ui, model, agents, engine, health, matchCount, matchIds, handlePrevMatch, handleNextMatch, handleSelectAgentWithToast, modelDescriptions, showToast])
 }

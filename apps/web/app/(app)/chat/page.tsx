@@ -22,6 +22,7 @@ import {
 } from '@/components/chat'
 import { ChatToolbar } from '@/components/chat/ChatToolbar'
 import { ChatToolPanel } from '@/components/chat/ChatToolPanel'
+import { ConversationSidebar } from '@/components/chat/ConversationSidebar'
 import { DownloadDialog } from '@/components/chat/DownloadDialog'
 import { ChatProvider } from '@/contexts/ChatContext'
 import { ChatToolbarProvider } from '@/contexts/ChatToolbarContext'
@@ -195,6 +196,14 @@ export default function ChatPage() {
       Skip to messages
     </a>
     <div className="flex flex-1 min-h-0 overflow-hidden">
+      <ConversationSidebar
+        conversations={chat.sidebarConversations}
+        currentConversationId={chat.sessionIdRef.current}
+        onLoadConversation={chat.loadSession}
+        onNewChat={chat.newChat}
+        open={ui.sidebarOpen}
+        onClose={() => ui.setSidebarOpen(false)}
+      />
       <main className="flex flex-1 min-h-0 overflow-hidden rounded-none lg:rounded-lg border border-border/30 bg-background shadow-sm" aria-label="Chat">
         <div className="flex flex-col flex-1 min-h-0 min-w-0 max-w-full overflow-hidden">
           <ChatToolbarProvider value={toolbarValue}>

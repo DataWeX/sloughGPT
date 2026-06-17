@@ -8,7 +8,7 @@ import { SoulSelectorDropdown } from './SoulSelectorDropdown'
 import { AgentSelectorDropdown } from './AgentSelectorDropdown'
 import { LocalEngineToggle } from './LocalEngineToggle'
 import { ChatMoreMenu } from './ChatMoreMenu'
-import { IconSearch } from '@/components/ui'
+import { IconSearch, IconMenu } from '@/components/ui'
 import { useChatToolbarContext } from '@/contexts/ChatToolbarContext'
 
 const STATUS_COLORS = {
@@ -30,6 +30,14 @@ export const ChatToolbar = memo(function ChatToolbar() {
 
   return (
     <div className="z-10 flex items-center justify-end lg:justify-center px-2 py-1.5 border-b border-border/30 shrink-0 bg-background/80 backdrop-blur-sm gap-1.5">
+      <button
+        className="flex lg:hidden items-center justify-center h-7 w-7 rounded-md hover:bg-muted/60 transition-colors"
+        onClick={ctx.sidebar.onToggle}
+        aria-label="Toggle conversations"
+      >
+        <IconMenu className="w-4 h-4" />
+      </button>
+
       <ConversationsDropdown
         conversations={ctx.conversations.conversations}
         currentConversationId={ctx.conversations.sessionIdRef.current}
