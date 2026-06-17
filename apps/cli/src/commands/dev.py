@@ -390,11 +390,10 @@ def _cmd_api_and_web(args):
 
     if not server_js.is_file():
         printer.step("Building Next.js standalone (first time)...")
-        # Clean stale .next cache to avoid type errors from old builds
-        import shutil as _shutil
+        # Force-clean .next to avoid stale/locked artifacts on macOS
         next_cache = web_root / ".next"
         if next_cache.is_dir():
-            _shutil.rmtree(next_cache, ignore_errors=True)
+            subprocess.run(["rm", "-rf", str(next_cache)], check=False)
         build_env = {**env, "NEXT_TELEMETRY_DISABLED": "1"}
         build_proc = subprocess.Popen(
             ["npx", "next", "build"],

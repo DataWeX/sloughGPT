@@ -55,9 +55,8 @@
  */
 
 :root {
-  /* App shell — sidebar + main column (rem-relative to root font size) */
+  /* App shell */
   --app-mobile-header-h: 3.25rem;
-  --sidebar-width: 15.75rem;
   /* Chat column max width — ~80ch at default scale; scales with font */
   --chat-thread-max: min(100%, 48rem);
   color-scheme: light;
@@ -144,18 +143,11 @@ html {
 @layer components {
   .sl-shell-main {
     background-color: rgb(var(--background));
-    background-image: 
-      radial-gradient(ellipse at 15% 0%, color-mix(in srgb, rgb(var(--primary)) 10%, transparent) 0%, transparent 45%),
-      radial-gradient(ellipse at 85% 100%, color-mix(in srgb, rgb(var(--accent)) 12%, transparent) 0%, transparent 50%);
-    box-shadow: inset 1px 0 0 color-mix(in srgb, rgb(var(--border)) 65%, transparent);
   }
 
   .sl-page {
     @apply min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4 md:p-6 text-foreground;
     background-color: rgb(var(--background));
-    background-image: 
-      radial-gradient(ellipse at 20% 0%, color-mix(in srgb, rgb(var(--primary)) 8%, transparent) 0%, transparent 50%),
-      radial-gradient(ellipse at 80% 100%, color-mix(in srgb, rgb(var(--accent)) 12%, transparent) 0%, transparent 50%);
   }
 
   /**
