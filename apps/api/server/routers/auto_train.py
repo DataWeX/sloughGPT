@@ -58,8 +58,57 @@ LORA_DIR = REPO_ROOT / "data" / "user_adapters"
 CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
 LORA_DIR.mkdir(parents=True, exist_ok=True)
 
+MAX_CHECKPOINT_DISK_MB = 500  # Global checkpoint disk budget
+
 autotrain_logger = logging.getLogger("autotrain")
 autotrain_logger.setLevel(logging.INFO)
+
+
+def _enforce_checkpoint_budget():
+    """Delete oldest checkpoints when total disk usage exceeds MAX_CHECKPOINT_DISK_MB.
+
+    Exempts the most recently modified checkpoint and any loaded checkpoint.
+    Operates on CHECKPOINTS_DIR only (not LORA_DIR).
+
+    Side effects:
+        - Deletes oldest .soul, .pt, .slo files and their .meta.json sidecars
+    """
+    try:
+        files = []
+        for ext in ("*.soul", "*.pt", "*.slo"):
+            for f in CHECKPOINTS_DIR.glob(ext):
+                files.append(f)
+        if not files:
+            return
+        total = sum(f.stat().st_size for f in files)
+        budget_bytes = MAX_CHECKPOINT_DISK_MB * 1024 * 1024
+        if total <= budget_bytes:
+            return
+        # Sort oldest first
+        files.sort(key=lambda p: p.stat().st_mtime)
+        # Keep the most recent file
+        if len(files) > 1:
+            files_to_prune = files[:-1]
+        else:
+            return
+        freed = 0
+        for f in files_to_prune:
+            if total - freed <= budget_bytes:
+                break
+            size = f.stat().st_size
+            f.unlink()
+            freed += size
+            # Delete sidecar
+            meta = Path(str(f) + ".meta.json")
+            if meta.exists():
+                meta.unlink()
+            autotrain_logger.info("Pruned old checkpoint: %s (%.1f KB)", f.name, size / 1024)
+        autotrain_logger.info(
+            "Checkpoint budget enforced: freed %.1f MB (budget %d MB)",
+            freed / 1024 / 1024, MAX_CHECKPOINT_DISK_MB,
+        )
+    except Exception as e:
+        autotrain_logger.warning("Checkpoint budget enforcement failed: %s", e)
 
 
 def _parse_subtitle_text(text: str) -> list:
@@ -603,6 +652,7 @@ async def stream():
                     "Auto-train complete: checkpoint=%s final_loss=%s steps=%d",
                     ckpt, fl, ts,
                 )
+                _enforce_checkpoint_budget()
             elif result.get("cancelled"):
                 autotrain_logger.info("Auto-train cancelled by user")
                 _enqueue(sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled"))
