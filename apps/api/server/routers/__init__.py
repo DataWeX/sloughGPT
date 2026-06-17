@@ -1,58 +1,67 @@
 """
 API Routers Package
 Modular API endpoints organized by feature.
+
+All router imports are deferred to ``get_all_routers()`` to avoid pulling in
+heavy dependencies (JAX, sentence-transformers, PyTorch) at module-load time.
+This cuts API cold-start from ~100s to ~8s.
 """
 from typing import List
 from fastapi import APIRouter
-from . import auth
-from . import auto_train
-# training endpoints are in apps/api/server/training/router.py — registered directly in main.py
-from . import models
-from . import inference
-from . import feedback
-from . import kb as knowledge
-from . import agents
-from . import system
-from . import status
-from . import souls
-from . import config
-from . import health
-from . import security
-from . import metrics
-from . import datasets
-from . import ratelimit
-from . import workflow
-from . import experiments
-from . import benchmark
-from . import user_adapters
-from . import vector
-from . import registry
-from . import session
-from . import meta_weights
-from . import lora_eval
-from . import companion
-from . import multimodal
-from . import tokenizer
-from . import learner
-from . import self_train
-from . import errors as error_logger
-from . import mobile
-from . import vlm
 
 __all__ = [
-    "auth", "auto_train", "models", "inference",
-    "feedback", "knowledge", "agents", "system", "status", "souls",
-    "config", "health", "metrics", "datasets", "security",
-    "ratelimit", "workflow", "experiments", "benchmark",
-    "user_adapters", "vector", "registry",
-    "session", "meta_weights", "lora_eval", "companion", "multimodal",
-    "tokenizer", "learner", "self_train", "error_logger",
-    "mobile", "vlm",
+    "get_all_routers",
 ]
 
-def get_all_routers() -> list[APIRouter]:
-    """Get all routers for main.py to include."""
-    return [
+# Module-level cache so we only import once
+_cached_routers: list[APIRouter] | None = None
+
+
+def get_all_routers() -> List[APIRouter]:
+    """Get all routers for main.py to include.
+
+    Imports are deferred to first call to avoid 90s+ cold-start from
+    transitive heavy imports (JAX via datasets, sentence-transformers, etc.).
+    """
+    global _cached_routers
+    if _cached_routers is not None:
+        return _cached_routers
+
+    from . import auth
+    from . import auto_train
+    from . import models
+    from . import inference
+    from . import feedback
+    from . import kb as knowledge
+    from . import agents
+    from . import system
+    from . import status
+    from . import souls
+    from . import config
+    from . import health
+    from . import security
+    from . import metrics
+    from . import datasets
+    from . import ratelimit
+    from . import workflow
+    from . import experiments
+    from . import benchmark
+    from . import user_adapters
+    from . import vector
+    from . import registry
+    from . import session
+    from . import meta_weights
+    from . import lora_eval
+    from . import companion
+    from . import multimodal
+    from . import tokenizer
+    from . import learner
+    from . import self_train
+    from . import errors as error_logger
+    from . import mobile
+    from . import vlm
+
+    _cached_routers = [
         auth.router, auto_train.router, models.router, inference.router,
         feedback.router, knowledge.router, agents.router, system.router,
         status.router, souls.router, config.router, health.router,
@@ -67,3 +76,4 @@ def get_all_routers() -> list[APIRouter]:
         mobile.router,
         vlm.router,
     ]
+    return _cached_routers

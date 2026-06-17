@@ -572,10 +572,13 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
                             temperature=req.temperature,
                             cancel_event=cancel_event,
                             repetition_penalty=1.3,
-                            stop_sequences=["\nUser:", "\n\nAssistant:"],
                         ):
                             if token:
                                 full_response += token
+                                # Echo detection: if model starts generating turn markers, stop
+                                trimmed = full_response.strip()
+                                if trimmed.endswith("Assistant:") or trimmed.endswith("User:"):
+                                    break
                                 yield sse_token("chat", token)
                         yield sse_token("chat", "", done=True)
                     except GeneratorExit:

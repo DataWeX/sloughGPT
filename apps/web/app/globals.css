@@ -58,7 +58,7 @@
   /* App shell */
   --app-mobile-header-h: 3.25rem;
   /* Chat column max width — ~80ch at default scale; scales with font */
-  --chat-thread-max: min(100%, 48rem);
+  --chat-thread-max: min(100%, 52rem);
   color-scheme: light;
 
   /* Light — warm cream paper with violet undertone */
@@ -140,13 +140,20 @@ html {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Responsive root scale: 14px base (mobile) → 16px on md+ (desktop) */
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
 @layer components {
   .sl-shell-main {
     background-color: rgb(var(--background));
   }
 
   .sl-page {
-    @apply min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4 md:p-6 text-foreground;
+    @apply min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4 md:p-6 lg:p-8 text-foreground;
     background-color: rgb(var(--background));
   }
 
@@ -243,40 +250,40 @@ html {
   }
 
   .sl-h2 {
-    @apply text-lg font-semibold text-foreground;
+    @apply text-lg md:text-xl font-semibold text-foreground;
   }
 
   /* Text utilities - use these in components */
   .sl-text-title {
-    @apply text-lg font-semibold text-foreground;
+    @apply text-lg md:text-xl font-semibold text-foreground;
   }
 
   .sl-text-subtitle {
-    @apply text-base font-medium text-foreground;
+    @apply text-base md:text-lg font-medium text-foreground;
   }
 
   .sl-text-body {
-    @apply text-sm text-foreground;
+    @apply text-sm md:text-base text-foreground;
   }
 
   .sl-text-caption {
-    @apply text-xs text-muted-foreground;
+    @apply text-xs md:text-sm text-muted-foreground;
   }
 
   /* Shorthand aliases */
-  .sl-subtitle { @apply text-base font-medium text-foreground; }
-  .sl-body { @apply text-sm text-foreground; }
-  .sl-caption { @apply text-xs text-muted-foreground; }
-  .sl-muted { @apply text-muted-foreground text-sm; }
+  .sl-subtitle { @apply text-base md:text-lg font-medium text-foreground; }
+  .sl-body { @apply text-sm md:text-base text-foreground; }
+  .sl-caption { @apply text-xs md:text-sm text-muted-foreground; }
+  .sl-muted { @apply text-muted-foreground text-sm md:text-base; }
 
   /* Label: form labels, small caps */
   .sl-label {
-    @apply block text-xs font-medium text-muted-foreground mb-1.5 uppercase tracking-wider;
+    @apply block text-xs md:text-sm font-medium text-muted-foreground mb-1.5 uppercase tracking-wider;
   }
 
   /* Input field */
   .sl-input {
-    @apply w-full rounded-lg border border-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors duration-200 ease-smooth focus:outline-none;
+    @apply w-full rounded-lg border border-input px-3 py-2 text-sm md:text-base text-foreground placeholder:text-muted-foreground transition-colors duration-200 ease-smooth focus:outline-none;
     background-color: color-mix(in srgb, rgb(var(--card)) 88%, rgb(var(--muted)));
   }
 
@@ -286,7 +293,7 @@ html {
   }
 
   .sl-btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 ease-smooth disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98];
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm md:text-base font-medium transition-all duration-200 ease-smooth disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98];
   }
 
   .sl-btn-primary {

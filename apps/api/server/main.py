@@ -58,7 +58,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from settings import get_security_settings
 
 # MVC routers
-from routers import get_all_routers
 import state as server_state
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -191,6 +190,18 @@ async def lifespan(app: FastAPI):
         logger.info("Model load still in progress — server will accept requests, model loads when ready")
     except Exception as e:
         logger.warning("Model autoload failed: %s", e)
+
+    # Register all feature routers (deferred import to avoid 90s cold-start)
+    from routers import get_all_routers
+    for _router in get_all_routers():
+        app.include_router(_router)
+
+    # Training router (defined in training/ subdirectory, not in routers/)
+    try:
+        from training.router import router as training_router
+        app.include_router(training_router)
+    except Exception as exc:
+        logger.warning("Failed to register training router: %s", exc, exc_info=True)
 
     STARTUP_PHASE.update(phase="ready", step=6, message="Server ready")
     logger.info("Startup complete")
@@ -431,17 +442,6 @@ async def domain_exception_handler(request: Request, exc: SloughGPTDomainError):
     )
 
 
-
-# Register all feature routers
-for _router in get_all_routers():
-    app.include_router(_router)
-
-# Training router (defined in training/ subdirectory, not in routers/)
-try:
-    from training.router import router as training_router
-    app.include_router(training_router)
-except Exception as exc:
-    logger.warning("Failed to register training router: %s", exc, exc_info=True)
 
 
 # Model globals live in server_state (state.py)
