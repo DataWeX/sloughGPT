@@ -1,25 +1,7 @@
 'use client'
 
-import { useEffect } from 'react'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
-import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui'
-
-const CHANGELOG_KEY = 'changelog_seen_version'
-const CURRENT_VERSION = '2026-06-15'
-
-function hasUnseenChangelog(): boolean {
-  if (typeof window === 'undefined') return false
-  try {
-    const seen = localStorage.getItem(CHANGELOG_KEY)
-    return seen !== CURRENT_VERSION
-  } catch { return false }
-}
-
-function markChangelogSeen(): void {
-  try { localStorage.setItem(CHANGELOG_KEY, CURRENT_VERSION) } catch {}
-}
-
 
 interface ChangelogEntry {
   date: string
@@ -90,8 +72,6 @@ const TYPE_STYLES = {
 }
 
 export default function ChangelogPage() {
-  useEffect(() => { markChangelogSeen() }, [])
-
   return (
     <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader left={<AppRouteHeaderLead title="What's new" subtitle="Recent features and improvements" />} />
