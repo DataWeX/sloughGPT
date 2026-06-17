@@ -167,18 +167,11 @@ class PromptFormatter:
         )
 
     def _base_format(self, messages: List[dict]) -> str:
-        """Base model prompt — natural language format for GPT-2.
+        """Base model prompt: ``User: ...\\n\\nAssistant: ...\\n\\nAssistant:``
         
-        GPT-2 was trained on web text, not chat data. The User:/Assistant:
-        format confuses it. Instead, we extract just the conversation
-        content and let the model continue naturally.
+        System messages are skipped — base models don't understand them
+        and they leak into output.
         """
-        # For single user message, just return it directly
-        user_msgs = [m for m in messages if m.get("role") == "user"]
-        if len(user_msgs) == 1 and not any(m.get("role") == "assistant" for m in messages):
-            return user_msgs[0].get("content", "") + "\n"
-        
-        # For multi-turn, concatenate naturally
         parts: List[str] = []
         for msg in messages:
             role = msg.get("role", "user")
@@ -186,10 +179,8 @@ class PromptFormatter:
             if role == "system":
                 pass
             elif role == "user":
-                parts.append(content)
+                parts.append(f"User: {content}")
             elif role == "assistant":
-                parts.append(content)
-        
-        if parts:
-            return "\n\n".join(parts) + "\n\n"
-        return ""
+                parts.append(f"Assistant: {content}")
+        parts.append("Assistant:")
+        return "\n\n".join(parts)

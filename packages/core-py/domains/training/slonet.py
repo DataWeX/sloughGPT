@@ -2530,28 +2530,45 @@ def export_to_sou(net: SloNet, path: str, include_weights=True) -> str:
         "created_at": net._created_at, "step": net._step,
     }
     json_bytes = json.dumps(_sanitize(metadata), allow_nan=False).encode()
-    with open(path, "wb") as f:
-        f.write(SOU_MAGIC)
-        f.write(struct.pack("<I", 3))
-        f.write(struct.pack("<I", len(json_bytes)))
-        f.write(json_bytes)
-        if include_weights:
-            if hasattr(net, "state_dict") and isinstance(net, SloTransformer):
-                state_items = list(net.state_dict().items())
-            else:
-                state_items = [(f"p{i}", p.data) for i, p in enumerate(net.parameters())]
-            params = [(k, np.asarray(v, dtype=np.float32)) for k, v in state_items]
-            f.write(struct.pack("<I", len(params)))
-            for key, arr in params:
-                name_bytes = key.encode()
-                f.write(struct.pack("<I", len(name_bytes)))
-                f.write(name_bytes)
-                f.write(struct.pack("<I", arr.ndim))
-                for dim in arr.shape:
-                    f.write(struct.pack("<I", dim))
-                f.write(arr.tobytes())
-    with open(path+".meta.json", "w") as f:
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+
+    # Write .meta.json first (small, fast — serves as sidecar for list endpoint)
+    with open(path + ".meta.json", "w") as f:
         json.dump(_sanitize(metadata), f, indent=2)
+
+    # Atomic write: temp file then rename
+    import tempfile
+    tmp_fd, tmp_path = tempfile.mkstemp(
+        dir=os.path.dirname(path) or ".", suffix=".tmp",
+    )
+    try:
+        with os.fdopen(tmp_fd, "wb") as f:
+            f.write(SOU_MAGIC)
+            f.write(struct.pack("<I", 3))
+            f.write(struct.pack("<I", len(json_bytes)))
+            f.write(json_bytes)
+            if include_weights:
+                if hasattr(net, "state_dict") and isinstance(net, SloTransformer):
+                    state_items = list(net.state_dict().items())
+                else:
+                    state_items = [(f"p{i}", p.data) for i, p in enumerate(net.parameters())]
+                params = [(k, np.asarray(v, dtype=np.float32)) for k, v in state_items]
+                f.write(struct.pack("<I", len(params)))
+                for key, arr in params:
+                    name_bytes = key.encode()
+                    f.write(struct.pack("<I", len(name_bytes)))
+                    f.write(name_bytes)
+                    f.write(struct.pack("<I", arr.ndim))
+                    for dim in arr.shape:
+                        f.write(struct.pack("<I", dim))
+                    f.write(arr.tobytes())
+        os.rename(tmp_path, path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
     return path
 
 

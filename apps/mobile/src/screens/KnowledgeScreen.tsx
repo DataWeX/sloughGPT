@@ -10,10 +10,10 @@ import {
   Modal,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {api} from '../../services/api-client';
-import {StatusBadge} from '../../components/StatusBadge';
-import {colors, spacing, radii, typography} from '../../theme';
-import type {KnowledgeItem} from '../../types';
+import {api} from '../services/api-client';
+import {StatusBadge} from '../components/StatusBadge';
+import {colors, spacing, radii, typography} from '../theme';
+import type {KnowledgeItem} from '../types';
 
 export function KnowledgeScreen() {
   const [items, setItems] = useState<KnowledgeItem[]>([]);

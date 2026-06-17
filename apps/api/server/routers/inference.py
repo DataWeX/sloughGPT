@@ -571,6 +571,8 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
                             max_tokens=req.max_tokens,
                             temperature=req.temperature,
                             cancel_event=cancel_event,
+                            repetition_penalty=1.3,
+                            stop_sequences=["\nUser:", "\n\nAssistant:"],
                         ):
                             if token:
                                 full_response += token

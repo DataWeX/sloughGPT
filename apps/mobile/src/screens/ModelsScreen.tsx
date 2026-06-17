@@ -9,9 +9,9 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {useModelStore} from '../../stores/model-store';
-import {StatusBadge} from '../../components/StatusBadge';
-import {colors, spacing, radii, typography} from '../../theme';
+import {useModelStore} from '../stores/model-store';
+import {StatusBadge} from '../components/StatusBadge';
+import {colors, spacing, radii, typography} from '../theme';
 
 export function ModelsScreen() {
   const {

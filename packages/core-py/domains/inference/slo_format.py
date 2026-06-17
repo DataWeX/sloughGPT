@@ -545,44 +545,7 @@ def save_soul(
 
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
-    with open(output_path, "wb") as f:
-        f.write(SOU_MAGIC)
-        f.write(struct.pack("<I", SOU_VERSION_V3))
-        f.write(struct.pack("<I", len(config_json)))
-        f.write(config_json.encode("utf-8"))
-
-        if not weights_only:
-            import numpy as np
-            if hasattr(model, "state_dict"):
-                state = model.state_dict()
-                params = []
-                for k, v in state.items():
-                    try:
-                        if hasattr(v, "numpy"):
-                            arr = v.cpu().numpy().astype(np.float32)
-                        elif hasattr(v, "detach"):
-                            arr = v.detach().cpu().numpy().astype(np.float32)
-                        elif isinstance(v, (list, tuple)):
-                            arr = np.asarray(v, dtype=np.float32)
-                        elif isinstance(v, dict):
-                            logger.debug("Skipping non-tensor state_dict key: %s (dict value)", k)
-                            continue
-                        else:
-                            arr = np.asarray(v, dtype=np.float32)
-                        params.append((k, arr))
-                    except (TypeError, ValueError) as e:
-                        logger.debug("Skipping state_dict key %s: %s", k, e)
-                        continue
-                f.write(struct.pack("<I", len(params)))
-                for key, arr in params:
-                    name_bytes = key.encode()
-                    f.write(struct.pack("<I", len(name_bytes)))
-                    f.write(name_bytes)
-                    f.write(struct.pack("<I", arr.ndim))
-                    for dim in arr.shape:
-                        f.write(struct.pack("<I", dim))
-                    f.write(arr.tobytes())
-
+    # Write .meta.json first (small, fast — serves as sidecar for list endpoint)
     meta_path = output_path + ".meta.json"
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(
@@ -592,6 +555,72 @@ def save_soul(
             default=str,
             allow_nan=False,
         )
+
+    # Atomic write: write to temp file, then rename
+    import tempfile
+    tmp_fd, tmp_path = tempfile.mkstemp(
+        dir=os.path.dirname(output_path) or ".", suffix=".tmp",
+    )
+    try:
+        with os.fdopen(tmp_fd, "wb") as f:
+            f.write(SOU_MAGIC)
+            f.write(struct.pack("<I", SOU_VERSION_V3))
+            f.write(struct.pack("<I", len(config_json)))
+            f.write(config_json.encode("utf-8"))
+
+            if not weights_only:
+                import numpy as np
+                if hasattr(model, "state_dict"):
+                    state = model.state_dict()
+                    params = []
+                    for k, v in state.items():
+                        try:
+                            # SloNet Tensor: has .data attribute that is a numpy ndarray
+                            if hasattr(v, "data") and isinstance(v.data, np.ndarray):
+                                arr = v.data.astype(np.float32)
+                            elif hasattr(v, "numpy"):
+                                # PyTorch tensor
+                                arr = v.cpu().numpy().astype(np.float32)
+                            elif hasattr(v, "detach"):
+                                # PyTorch tensor without .numpy()
+                                arr = v.detach().cpu().numpy().astype(np.float32)
+                            elif isinstance(v, np.ndarray):
+                                arr = v.astype(np.float32)
+                            elif isinstance(v, (list, tuple)):
+                                arr = np.asarray(v, dtype=np.float32)
+                            elif isinstance(v, dict):
+                                logger.debug("Skipping non-tensor state_dict key: %s (dict value)", k)
+                                continue
+                            else:
+                                arr = np.asarray(v, dtype=np.float32)
+                            params.append((k, arr))
+                        except (TypeError, ValueError) as e:
+                            logger.warning("Skipping state_dict key %s: %s", k, e)
+                            continue
+                    if len(params) == 0 and len(state) > 0:
+                        logger.error(
+                            "save_soul: wrote 0 params out of %d state_dict keys — "
+                            "checkpoint will be unusable. Model type: %s",
+                            len(state), type(model).__name__,
+                        )
+                    f.write(struct.pack("<I", len(params)))
+                    for key, arr in params:
+                        name_bytes = key.encode()
+                        f.write(struct.pack("<I", len(name_bytes)))
+                        f.write(name_bytes)
+                        f.write(struct.pack("<I", arr.ndim))
+                        for dim in arr.shape:
+                            f.write(struct.pack("<I", dim))
+                        f.write(arr.tobytes())
+
+        os.rename(tmp_path, output_path)
+    except Exception:
+        # Clean up temp file on failure
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
     return output_path
 

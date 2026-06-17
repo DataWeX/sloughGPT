@@ -9,13 +9,13 @@ import {
   Alert,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {useSettingsStore} from '../../stores/settings-store';
-import {useModelStore} from '../../stores/model-store';
-import {StatusBadge} from '../../components/StatusBadge';
-import {api, getApiUrl, setApiUrl} from '../../services/api-client';
-import {colors, spacing, radii, typography} from '../../theme';
-import type {HealthStatus} from '../../types';
-import type {ThemeMode} from '../../types';
+import {useSettingsStore} from '../stores/settings-store';
+import {useModelStore} from '../stores/model-store';
+import {StatusBadge} from '../components/StatusBadge';
+import {api, getApiUrl, setApiUrl} from '../services/api-client';
+import {colors, spacing, radii, typography} from '../theme';
+import type {HealthStatus} from '../types';
+import type {ThemeMode} from '../types';
 
 export function SettingsScreen() {
   const settings = useSettingsStore();

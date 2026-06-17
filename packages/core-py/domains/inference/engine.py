@@ -466,7 +466,7 @@ class InferenceEngine:
                 if stop_sequences and generated:
                     full_text = self.decode(generated)
                     for stop_seq in stop_sequences:
-                        if full_text.endswith(stop_seq):
+                        if stop_seq in full_text[len(prompt):]:
                             return
 
         self._stats["requests_processed"] += 1

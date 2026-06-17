@@ -23,19 +23,19 @@ const defaults: Omit<SettingsState, 'setTheme' | 'update' | 'reset'> = {
   apiUrl: 'http://localhost:8000',
 };
 
-async function loadSettings() {
+let _loaded = false;
+
+async function hydrateSettings(store: {setState: (s: Partial<SettingsState>) => void}) {
+  if (_loaded) return;
+  _loaded = true;
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) store.setState(JSON.parse(raw));
   } catch {}
-  return {};
 }
-
-const saved = await loadSettings();
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   ...defaults,
-  ...saved,
   setTheme: theme => set({theme}),
   update: partial => {
     set(partial);
@@ -48,3 +48,5 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     AsyncStorage.removeItem(STORAGE_KEY);
   },
 }));
+
+hydrateSettings(useSettingsStore);

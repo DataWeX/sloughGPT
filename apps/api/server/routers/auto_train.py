@@ -659,11 +659,15 @@ async def list_checkpoints():
     checkpoints = []
     seen = set()
 
-    for ext in ("*.soul", "*.pt"):
+    for ext in ("*.soul", "*.pt", "*.slo"):
         for f in sorted(CHECKPOINTS_DIR.glob(ext), key=lambda p: p.stat().st_mtime, reverse=True):
             if f.name in seen:
                 continue
             seen.add(f.name)
+            # Skip truncated/corrupt header-only files (< 4 KB = header + no weights)
+            if f.suffix == ".soul" and f.stat().st_size < 4096:
+                autotrain_logger.debug("Skipping corrupt header-only checkpoint: %s", f.name)
+                continue
             info = _load_soul(f.name)
             if info:
                 checkpoints.append(info)
@@ -684,20 +688,28 @@ async def list_checkpoints():
 
 @router.delete("/checkpoints/{name}")
 async def delete_checkpoint(name: str):
-    """Delete a checkpoint (.soul or .pt)."""
-    base = CHECKPOINTS_DIR / name
+    """Delete a checkpoint file and its .meta.json sidecar.
 
+    Accepts bare names (e.g., ``assistant_1781507107``) or names with extension
+    (e.g., ``assistant_1781507107.soul``).  Searches all known extensions
+    (``.soul``, ``.pt``, ``.slo``) and removes matching files + sidecars.
+    """
     deleted = []
-    for candidate in [base, base.with_suffix(".soul" if not name.endswith(".soul") else ".pt")]:
-        if candidate.exists():
-            candidate.unlink()
-            deleted.append(candidate.name)
-        meta = candidate.with_suffix(candidate.suffix + ".meta.json")
-        if meta.exists():
-            meta.unlink()
+    for ext in (".soul", ".pt", ".slo"):
+        if name.endswith(ext):
+            candidates = [CHECKPOINTS_DIR / name]
+        else:
+            candidates = [CHECKPOINTS_DIR / (name + ext)]
+        for candidate in candidates:
+            if candidate.exists():
+                candidate.unlink()
+                deleted.append(candidate.name)
+            meta = Path(str(candidate) + ".meta.json")
+            if meta.exists():
+                meta.unlink()
 
     if deleted:
-        return {"status": "deleted", "name": deleted[0]}
+        return {"status": "deleted", "name": deleted}
     return {"status": "not_found"}
 
 

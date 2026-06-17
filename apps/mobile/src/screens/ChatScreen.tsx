@@ -10,12 +10,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {useChatStore} from '../../stores/chat-store';
-import {useModelStore} from '../../stores/model-store';
-import {MessageBubble} from '../../components/MessageBubble';
-import {ChatInput} from '../../components/ChatInput';
-import {colors, spacing, radii, typography} from '../../theme';
-import type {Message} from '../../types';
+import {useChatStore} from '../stores/chat-store';
+import {useModelStore} from '../stores/model-store';
+import {MessageBubble} from '../components/MessageBubble';
+import {ChatInput} from '../components/ChatInput';
+import {colors, spacing, radii, typography} from '../theme';
+import type {Message} from '../types';
 
 const SUGGESTIONS = [
   'Tell me something interesting',
