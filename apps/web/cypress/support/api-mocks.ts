@@ -71,28 +71,10 @@ Cypress.Commands.add('mockTokenizer', () => {
   }).as('tokenizerSamples')
 })
 
-Cypress.Commands.add('mockExport', () => {
-  cy.intercept('GET', `${api}/models/export/formats`, {
-    statusCode: 200,
-    body: { formats: ['sou', 'pytorch', 'onnx', 'gguf'] },
-  }).as('exportFormats')
-})
-
-Cypress.Commands.add('mockAgents', () => {
-  cy.intercept('GET', `${api}/agents`, {
-    statusCode: 200,
-    body: [
-      { id: 'agent-1', name: 'Helper', description: 'General assistant', instructions: 'Be helpful', tools: ['code_execution'], avatar: '' },
-    ],
-  }).as('agents')
-})
-
 Cypress.Commands.add('mockAll', () => {
   cy.mockHealth()
   cy.mockModels()
   cy.mockDatasets()
   cy.mockSystem()
   cy.mockTokenizer()
-  cy.mockExport()
-  cy.mockAgents()
 })

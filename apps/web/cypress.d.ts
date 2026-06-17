@@ -18,12 +18,6 @@ declare namespace Cypress {
     /** Mock /tokenizer/* endpoints */
     mockTokenizer(): Chainable<null>
 
-    /** Mock /models/export endpoint */
-    mockExport(): Chainable<null>
-
-    /** Mock /agents endpoint */
-    mockAgents(): Chainable<null>
-
     /** Mock all endpoints via individual mocks */
     mockAll(): Chainable<null>
   }
