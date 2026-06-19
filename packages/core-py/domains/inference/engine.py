@@ -368,19 +368,10 @@ class InferenceEngine:
         top_p: float = 0.9,
         top_k: int = 40,
         repetition_penalty: float = 1.0,
-        stop_sequences: Optional[List[str]] = None,
+        **kwargs,
     ) -> AsyncIterator[str]:
-        """Generate text with streaming (async).
-        
-        Args:
-            stop_sequences: Stop generation when any of these strings appear.
-                           Default: ["User:", "Assistant:", "Q:", "A:"]
-        """
+        """Generate text with streaming (async)."""
         prompt = require_non_empty_prompt(prompt)
-        loop = asyncio.get_event_loop()
-        
-        if stop_sequences is None:
-            stop_sequences = []
 
         # Check MPS memory before starting — auto-clear if near capacity
         if self._is_mps:
@@ -461,13 +452,6 @@ class InferenceEngine:
 
                 token_text = self.decode([next_token])
                 yield token_text
-
-                # Check stop sequences — if accumulated text ends with one, stop
-                if stop_sequences and generated:
-                    full_text = self.decode(generated)
-                    for stop_seq in stop_sequences:
-                        if stop_seq in full_text[len(prompt):]:
-                            return
 
         self._stats["requests_processed"] += 1
         self._stats["tokens_generated"] += len(generated)

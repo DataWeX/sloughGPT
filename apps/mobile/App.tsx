@@ -6,6 +6,7 @@ import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {ChatScreen} from './src/screens/ChatScreen';
 import {ModelsScreen} from './src/screens/ModelsScreen';
+import {TrainingScreen} from './src/screens/TrainingScreen';
 import {KnowledgeScreen} from './src/screens/KnowledgeScreen';
 import {SettingsScreen} from './src/screens/SettingsScreen';
 import {HealthScreen} from './src/screens/HealthScreen';
@@ -18,6 +19,7 @@ const Stack = createNativeStackNavigator();
 const TAB_ICONS: Record<string, string> = {
   Chat: '💬',
   Models: '🧠',
+  Train: '🏋️',
   Knowledge: '📚',
   Settings: '⚙️',
 };
@@ -72,6 +74,7 @@ export default function App() {
           })}>
           <Tab.Screen name="Chat" component={ChatScreen} />
           <Tab.Screen name="Models" component={ModelsScreen} />
+          <Tab.Screen name="Train" component={TrainingScreen} />
           <Tab.Screen name="Knowledge" component={KnowledgeScreen} />
           <Tab.Screen
             name="Settings"
