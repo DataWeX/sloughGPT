@@ -54,6 +54,16 @@ When enhancing an existing page or feature:
 3. Keep existing visual hierarchy and layout patterns
 4. New features should be additive — they can be collapsed by default but never hidden
 
+### Infrastructure Before Endpoints
+Build the CLI tool or core module **first**, then wire the API endpoint to it. Never build the endpoint and retrofit the logic.
+
+Order:
+1. Core module / function (testable standalone)
+2. CLI wrapper (human-friendly interface)
+3. API endpoint (thin HTTP wrapper calling the module)
+
+Rationale: Core logic is reusable, testable, and doesn't depend on FastAPI. Endpoints are just adapters — if you build them first, the logic gets tangled in request/response plumbing and is hard to test or reuse from CLI.
+
 ### UX First — No API Complexity for Users
 Users should never interact with API endpoints. Complex operations (RAG, ingestion, context management) must be **one-click or fully automatic**.
 

@@ -288,6 +288,20 @@ class CheckpointManager:
             },
         }
 
+        # Save optimizer state for resume
+        if optimizer is not None:
+            try:
+                save_dict["optimizer_state_dict"] = optimizer.state_dict()
+            except Exception as exc:
+                logger.warning("Could not serialize optimizer state: %s", exc)
+
+        # Save scheduler state for resume
+        if scheduler is not None:
+            try:
+                save_dict["scheduler_state_dict"] = scheduler.state_dict()
+            except Exception as exc:
+                logger.warning("Could not serialize scheduler state: %s", exc)
+
         # Add vocab (needed for inference)
         if stoi is not None:
             save_dict["stoi"] = stoi

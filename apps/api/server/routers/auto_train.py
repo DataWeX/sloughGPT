@@ -60,7 +60,7 @@ LORA_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_CHECKPOINT_DISK_MB = 500  # Global checkpoint disk budget
 
-autotrain_logger = logging.getLogger("autotrain")
+autotrain_logger = logging.getLogger("man.autotrain")
 autotrain_logger.setLevel(logging.INFO)
 
 
@@ -497,6 +497,8 @@ async def start(req: StartRequest):
         "checkpoint_name": req.checkpoint_name or "",
         "algo": req.algo,
         "soul_name": req.soul_name,
+        "resume": getattr(req, "resume", False),
+        "resume_path": getattr(req, "resume_path", ""),
     }
     state.running = True
     import state as _srv_state
@@ -628,6 +630,8 @@ async def stream():
             skip_distill=True,
             skip_evaluate=True,
             skip_deploy=True,
+            resume=state.config.get("resume", False),
+            resume_path=state.config.get("resume_path", ""),
         )
 
         pipeline = UnifiedTrainingPipeline(cfg)

@@ -198,6 +198,10 @@ class UnifiedTrainingConfig:
     save_best_only: bool = False
     max_checkpoints: int = 5
 
+    # Resume
+    resume: bool = False
+    resume_path: Optional[str] = None  # explicit .pt path; empty = auto-detect latest
+
     # Sequence config
     skip_generate: bool = False
     skip_distill: bool = False
@@ -796,6 +800,8 @@ class UnifiedTrainingPipeline:
                 **kwargs,
                 on_progress=_slonet_progress,
                 cancel_event=self._cancel_event,
+                resume=self.config.resume,
+                resume_path=self.config.resume_path,
             )
 
         trainer.train = _patched_train

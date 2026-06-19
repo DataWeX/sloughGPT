@@ -14,6 +14,9 @@ from utils.formatting import format_size, format_time, format_number
 def cmd_train(args):
     """Start a training job."""
     # Route to sub-modes
+    if getattr(args, "checkpoint_info_path", None):
+        args.checkpoint = args.checkpoint_info_path
+        return _cmd_checkpoint_info(args)
     if getattr(args, "self_train", False):
         return _cmd_self_train(args)
     if getattr(args, "auto_train_action", None):
@@ -671,6 +674,113 @@ def _cmd_feedback_export(args):
         printer.error(f"Feedback module: {e}")
 
 
+def _cmd_checkpoint_info(args):
+    """Inspect a training checkpoint — show metadata, optimizer state, resume readiness."""
+    import torch
+    from pathlib import Path
+
+    printer.header("Checkpoint Info")
+
+    ckpt_path = Path(args.checkpoint)
+    if not ckpt_path.exists():
+        printer.error(f"File not found: {ckpt_path}")
+        sys.exit(1)
+
+    printer.key_value("Path", str(ckpt_path))
+    printer.key_value("Size", format_size(ckpt_path.stat().st_size))
+
+    try:
+        checkpoint = torch.load(str(ckpt_path), map_location="cpu", weights_only=False)
+    except Exception as e:
+        printer.error(f"Failed to load: {e}")
+        sys.exit(1)
+
+    # Top-level keys
+    printer.section("Keys")
+    for k in checkpoint.keys():
+        v = checkpoint[k]
+        if isinstance(v, dict):
+            printer.key_value(k, f"dict ({len(v)} keys)")
+        elif isinstance(v, torch.Tensor):
+            printer.key_value(k, f"tensor {list(v.shape)}")
+        elif isinstance(v, (int, float, str, bool)):
+            printer.key_value(k, str(v))
+        elif v is None:
+            printer.key_value(k, "None")
+        else:
+            printer.key_value(k, type(v).__name__)
+
+    # Model weights summary
+    state = checkpoint.get("model_state_dict") or checkpoint.get("model") or {}
+    if isinstance(state, dict) and state:
+        printer.section("Model Weights")
+        total_params = sum(v.numel() for v in state.values() if isinstance(v, torch.Tensor))
+        total_bytes = sum(v.numel() * v.element_size() for v in state.values() if isinstance(v, torch.Tensor))
+        printer.key_value("Parameters", format_number(total_params))
+        printer.key_value("Weight Groups", str(len(state)))
+        printer.key_value("Size (FP32)", format_size(total_bytes))
+        for name, tensor in list(state.items())[:10]:
+            printer.key_value(f"  {name}", f"{list(tensor.shape)} {tensor.dtype}")
+
+    # Optimizer state
+    opt_state = checkpoint.get("optimizer_state_dict")
+    if isinstance(opt_state, dict) and opt_state:
+        printer.section("Optimizer State")
+        groups = opt_state.get("param_groups", [])
+        printer.key_value("Param Groups", str(len(groups)))
+        for i, pg in enumerate(groups):
+            lr = pg.get("lr", "?")
+            wd = pg.get("weight_decay", "?")
+            printer.key_value(f"  Group {i}", f"lr={lr}, weight_decay={wd}, params={len(pg.get('params', []))}")
+        # State tensors
+        state_keys = [k for k in opt_state.keys() if k != "param_groups"]
+        if state_keys:
+            printer.key_value("State Entries", str(len(state_keys)))
+    else:
+        printer.section("Optimizer State")
+        printer.warning("Not saved — cannot resume with full optimizer momentum/LR schedule")
+        printer.info("Train with updated CheckpointManager to save optimizer state")
+
+    # Scheduler state
+    sched_state = checkpoint.get("scheduler_state_dict")
+    if isinstance(sched_state, dict) and sched_state:
+        printer.section("Scheduler State")
+        for k, v in sched_state.items():
+            if isinstance(v, (int, float)):
+                printer.key_value(k, str(v))
+    else:
+        printer.section("Scheduler State")
+        printer.info("Not saved (will use fresh scheduler on resume)")
+
+    # Training metadata
+    printer.section("Training Metadata")
+    step = checkpoint.get("step", checkpoint.get("global_step", "?"))
+    epoch = checkpoint.get("epoch", "?")
+    metrics = checkpoint.get("metrics", {})
+    ts = checkpoint.get("timestamp", "")
+    printer.key_value("Step", str(step))
+    printer.key_value("Epoch", str(epoch))
+    printer.key_value("Timestamp", str(ts))
+    if metrics:
+        for k, v in metrics.items():
+            printer.key_value(f"  {k}", str(v))
+
+    # Resume readiness
+    printer.section("Resume Readiness")
+    has_model = "model_state_dict" in checkpoint or "model" in checkpoint
+    has_optim = isinstance(opt_state, dict) and bool(opt_state)
+    has_sched = isinstance(sched_state, dict) and bool(sched_state)
+    printer.status("Model weights", "Yes" if has_model else "No", "ok" if has_model else "error")
+    printer.status("Optimizer state", "Yes" if has_optim else "No", "ok" if has_optim else "warn")
+    printer.status("Scheduler state", "Yes" if has_sched else "No", "info" if has_sched else "info")
+    if has_model and has_optim:
+        printer.success("Full resume possible — weights + optimizer + LR schedule")
+    elif has_model:
+        printer.warning("Partial resume — weights only, optimizer/scheduler reset")
+    else:
+        printer.error("Cannot resume — no model weights found")
+
+
 def cmd_demo(args):
     """Run system demos (RAG, KG, EWC, inference)."""
     import sys
@@ -827,6 +937,9 @@ def register(subparsers):
     train_parser.add_argument("--export-feedback", action="store_true", help="Export feedback data")
     train_parser.add_argument("--export-feedback-output", default="data/training_feedback.jsonl", help="Export path")
     train_parser.add_argument("--export-feedback-format", choices=["jsonl", "dpo"], default="jsonl", help="Export format")
+
+    # Checkpoint info
+    train_parser.add_argument("--checkpoint-info", dest="checkpoint_info_path", help="Inspect a checkpoint file (.pt)")
 
     train_parser.set_defaults(func=cmd_train)
 
