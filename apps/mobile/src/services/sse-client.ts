@@ -5,6 +5,7 @@ export interface SSEEvent {
   done?: boolean;
   error?: string;
   meta?: Record<string, unknown>;
+  raw?: Record<string, unknown>;
 }
 
 export async function* streamSSE(
@@ -47,7 +48,7 @@ export async function* streamSSE(
         if (trimmed.startsWith('data: ')) {
           try {
             const data = JSON.parse(trimmed.slice(6));
-            const event: SSEEvent = {};
+            const event: SSEEvent = {raw: data};
 
             if (data.data?.token !== undefined) {
               event.token = data.data.token;
@@ -55,7 +56,7 @@ export async function* streamSSE(
             if (data.status === 'complete' || data.status === 'error') {
               event.done = true;
               if (data.status === 'error') {
-                event.error = data.message || 'Stream error';
+                event.error = data.message || data.data?.error || 'Stream error';
               }
             }
             if (data.meta) {

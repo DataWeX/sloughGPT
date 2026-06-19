@@ -5,6 +5,7 @@ import {
   getTrainingStatus,
   listCheckpoints,
   deleteCheckpoint,
+  loadCheckpoint,
   listDatasets,
   streamTraining,
   type TrainConfig,
@@ -15,6 +16,11 @@ import {
 export type TrainPhase =
   | 'idle'
   | 'configuring'
+  | 'GENERATE_DATA'
+  | 'DISTILL'
+  | 'TRAIN'
+  | 'EVALUATE'
+  | 'DEPLOY'
   | 'TRAINING'
   | 'EVALUATING'
   | 'COMPLETE'
@@ -101,40 +107,61 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
 
     try {
       for await (const event of streamTraining(abortController.signal)) {
-        const data = event.meta || {};
+        const raw = event.raw || {};
+        const rawPhase = raw.phase as string | undefined;
+        const rawStatus = raw.status as string | undefined;
+        const rawData = (raw.data || {}) as Record<string, any>;
+        const rawMeta = (raw.meta || {}) as Record<string, any>;
 
-        if (event.token) {
-          try {
-            const parsed = JSON.parse(event.token);
-            if (parsed.phase) {
-              set({phase: parsed.phase as TrainPhase});
-            }
-            if (parsed.data) {
-              const d = parsed.data;
-              if (d.loss !== undefined) {
-                const step = d.step || get().steps;
-                set(s => ({
-                  loss: d.loss,
-                  steps: step,
-                  epoch: d.epoch || s.epoch,
-                  lossHistory: [...s.lossHistory, {step, value: d.loss}],
-                }));
-              }
-              if (d.checkpoint) {
-                set({checkpoint: d.checkpoint});
-              }
-            }
-          } catch {
-            // plain text progress — skip
-          }
+        if (rawPhase) {
+          set({phase: rawPhase as TrainPhase});
         }
 
-        if (event.done) {
-          if (event.error) {
-            set({phase: 'FAILED', error: event.error});
-          } else {
-            set({phase: 'COMPLETE'});
+        if (rawData.loss !== undefined) {
+          const step = rawData.step ?? rawData.global_step ?? get().steps;
+          const ep = rawData.epoch ?? rawData.current_epoch ?? get().epoch;
+          set(s => ({
+            loss: Number(rawData.loss),
+            steps: Number(step),
+            epoch: Number(ep),
+            lossHistory: [
+              ...s.lossHistory,
+              {step: Number(step), value: Number(rawData.loss)},
+            ],
+          }));
+        }
+
+        if (rawData.checkpoint) {
+          set({checkpoint: String(rawData.checkpoint)});
+        }
+
+        if (rawData.progress_percent !== undefined) {
+          const ep = Math.round(
+            (Number(rawData.progress_percent) / 100) * get().totalEpochs,
+          );
+          set({epoch: ep});
+        }
+
+        if (rawData.final_loss !== undefined) {
+          set({loss: Number(rawData.final_loss)});
+        }
+
+        if (rawData.cancelled) {
+          set({phase: 'idle', running: false});
+          break;
+        }
+
+        if (rawStatus === 'complete') {
+          if (rawData.checkpoint) {
+            set({checkpoint: String(rawData.checkpoint)});
           }
+          set({phase: 'COMPLETE'});
+          break;
+        }
+
+        if (rawStatus === 'error') {
+          const msg = raw.message || rawData.error || 'Training failed';
+          set({phase: 'FAILED', error: String(msg)});
           break;
         }
       }
@@ -175,7 +202,8 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
 
   loadCheckpoint: async (name: string) => {
     try {
-      set({checkpoint: name, phase: 'idle'});
+      await loadCheckpoint(name);
+      set({checkpoint: name});
     } catch (err: any) {
       set({error: err.message});
     }

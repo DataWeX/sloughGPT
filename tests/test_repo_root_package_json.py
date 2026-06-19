@@ -16,11 +16,9 @@ def test_root_package_json_declares_dev_stack() -> None:
     data = json.loads(pkg.read_text(encoding="utf-8"))
     scripts = data.get("scripts", {})
     assert "dev:stack" in scripts, "root package.json should expose npm run dev:stack"
-    assert "concurrently" in scripts["dev:stack"]
+    assert "dev-stack.sh" in scripts["dev:stack"], "dev:stack should point to dev-stack.sh"
     assert "test:repo-root" in scripts, "root package.json should expose npm run test:repo-root"
     assert "test_repo_root_package_json.py" in scripts["test:repo-root"]
-    dev_deps = data.get("devDependencies", {})
-    assert "concurrently" in dev_deps, "root package.json should list concurrently as a devDependency"
 
 
 def test_verify_sh_requires_root_package_json() -> None:
@@ -38,7 +36,6 @@ def test_verify_sh_documents_dev_stack() -> None:
     text = (_repo_root() / "scripts" / "verify.sh").read_text(encoding="utf-8")
     assert "npm run dev:stack" in text
     assert "./scripts/dev-stack.sh" in text
-    assert "concurrently" in text, "verify.sh should mention concurrently (root npm install / dev:stack)"
     assert "tests/test_repo_root_package_json.py" in text, "verify.sh CI parity hint should list this module"
     assert "reusable-ci-core.yml" in text, "verify.sh should point to the workflow for the full pytest list"
     assert "npm run test:repo-root" in text

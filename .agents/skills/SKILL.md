@@ -74,7 +74,7 @@ cd apps/web && npm run dev
 # API + web in one terminal (from repo root; Ctrl+C stops both)
 ./scripts/dev-stack.sh
 # make dev-stack
-# npm install && npm run dev:stack   # same two processes via concurrently (optional)
+# npm install && npm run dev:stack   # same two processes via dev-stack.sh (optional)
 # npm run test:repo-root             # tests/test_repo_root_package_json.py (optional)
 # make test-repo-root                # same (Makefile)
 

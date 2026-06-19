@@ -32,7 +32,7 @@ python3 apps/api/server/main.py
 
 **Web UI** (another terminal): `cd apps/web && npm install && npm run dev` → http://localhost:3000
 
-**API + web together** (one terminal; Ctrl+C stops both): `./scripts/dev-stack.sh`, `make dev-stack`, or **`npm install` at repo root once then `npm run dev:stack`** (uses `concurrently`; same processes as the shell script).
+**API + web together** (one terminal; Ctrl+C stops both): `./scripts/dev-stack.sh`, `make dev-stack`, or **`npm install` at repo root once then `npm run dev:stack`** (auto-restarts on crash; same processes as the shell script).
 
 **Root `package.json` contract test** (optional): **`npm run test:repo-root`** (after `npm install` at repo root), **`make test-repo-root`**, or **`python3 -m pytest tests/test_repo_root_package_json.py -q`**.
 

@@ -7,7 +7,7 @@ What does this change and why?
 - [ ] Installed from repo root as needed: `python3 -m pip install -e ".[dev]"` (see **QUICKSTART.md**)
 - [ ] `./verify.sh` passes (path checks + ruff smoke when `ruff` is available)
 - [ ] `python3 -m pytest tests/` passes (or the subset you touched; CI uses **`.github/workflows/reusable-ci-core.yml`**)
-- [ ] If **repo root `package.json`** changed (e.g. **`dev:stack`** / **`concurrently`**): `npm run test:repo-root` (after `npm install` at repo root), `make test-repo-root`, or `python3 -m pytest tests/test_repo_root_package_json.py -q`
+- [ ] If **repo root `package.json`** changed (e.g. **`dev:stack`** / **`dev-stack.sh`**): `npm run test:repo-root` (after `npm install` at repo root), `make test-repo-root`, or `python3 -m pytest tests/test_repo_root_package_json.py -q`
 - [ ] If **`apps/web/`** changed: `cd apps/web && npm ci && npm run ci`
 - [ ] If **`packages/strui/`** changed: `cd packages/strui && npm ci && npm run ci`
 - [ ] If **`packages/sdk-ts/typescript-sdk/`** changed: `cd packages/sdk-ts/typescript-sdk && npm ci && npm run ci`

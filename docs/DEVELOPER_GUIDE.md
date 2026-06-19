@@ -79,7 +79,7 @@ Run the FastAPI app and the Next.js dev server in **one terminal** or two. Full 
 # One terminal (API :8000 + web :3000)
 ./scripts/dev-stack.sh
 # or: make dev-stack
-# or: npm install && npm run dev:stack   # repo root; uses concurrently
+# or: npm install && npm run dev:stack   # repo root; same shell script
 
 # Contract tests for repo root package.json (after npm install at repo root)
 npm run test:repo-root
