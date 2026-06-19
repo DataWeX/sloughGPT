@@ -18,6 +18,9 @@ declare namespace Cypress {
     /** Mock /tokenizer/* endpoints */
     mockTokenizer(): Chainable<null>
 
+    /** Mock /knowledge CRUD endpoints */
+    mockKnowledge(items?: string[]): Chainable<null>
+
     /** Mock all endpoints via individual mocks */
     mockAll(): Chainable<null>
   }

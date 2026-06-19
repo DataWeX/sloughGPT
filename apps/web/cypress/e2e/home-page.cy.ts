@@ -1,22 +1,28 @@
-/**
- * Home page - dashboard overview
- */
 describe('Home page - dashboard', () => {
-  it('displays the dashboard title', () => {
+  beforeEach(() => {
+    cy.mockAll()
     cy.visit('/')
-    cy.wait(500)
+  })
+
+  it('displays the dashboard title', () => {
     cy.contains('h1', 'SloughGPT').should('be.visible')
   })
 
   it('shows API status card', () => {
-    cy.visit('/')
-    cy.wait(500)
     cy.contains('API status').should('be.visible')
   })
 
-  it('shows quick actions section', () => {
-    cy.visit('/')
-    cy.wait(500)
-    cy.contains('Quick actions').should('be.visible')
+  it('shows quick actions with agent-forward labels', () => {
+    cy.contains('Start chatting').should('be.visible')
+    cy.contains('Personalities').should('be.visible')
+    cy.contains('Knowledge').should('be.visible')
+    cy.contains('Teach me').should('be.visible')
+    cy.contains('Datasets').should('be.visible')
+  })
+
+  it('links quick actions to correct routes', () => {
+    cy.contains('a', 'Personalities').should('have.attr', 'href', '/models')
+    cy.contains('a', 'Knowledge').should('have.attr', 'href', '/knowledge')
+    cy.contains('a', 'Teach me').should('have.attr', 'href', '/training')
   })
 })

@@ -257,7 +257,7 @@ export default function TrainingPage() {
     <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader
         className="items-start"
-        left={<AppRouteHeaderLead title="Training" subtitle="Teach the model from your data — just a click away" />}
+        left={<AppRouteHeaderLead title="Teach me" subtitle="Teach your agent from your data" />}
         right={
           <div className="flex items-center gap-2">
             <Button size="sm" variant="ghost" onClick={() => { void checkpoints.fetchJobs(); void checkpoints.fetchCheckpoints() }}>Refresh</Button>

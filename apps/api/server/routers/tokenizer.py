@@ -15,14 +15,6 @@ from pydantic import BaseModel
 from domains.training.tokenizer_manager import get_tokenizer_manager
 
 
-class TrainTokenizerRequest(BaseModel):
-    texts: list[str]
-    vocab_size: int = 512
-    min_frequency: int = 2
-    lowercase: bool = True
-    pretokenizer: str = "gpt2"
-
-
 class TokenizeRequest(BaseModel):
     text: str
 
@@ -47,19 +39,6 @@ def _require_trained():
             ["the quick brown fox jumps over the lazy dog", "hello world", "machine learning"],
             vocab_size=256, min_frequency=1, lowercase=True,
         )
-
-
-@router.post("/train")
-async def train_tokenizer(req: TrainTokenizerRequest):
-    mgr = get_tokenizer_manager()
-    stats = mgr.train(req.texts, vocab_size=req.vocab_size, min_frequency=req.min_frequency, lowercase=req.lowercase)
-    return {
-        "vocab_size": stats["vocab_size"],
-        "base_chars": stats.get("base_chars", stats.get("subwords", 0)),
-        "merged_subwords": stats.get("merged_subwords", stats.get("subwords", 0)),
-        "special_tokens": stats["special_tokens"],
-        "total_merges": stats.get("total_merges_learned", stats.get("total_merges", 0)),
-    }
 
 
 @router.get("/stats")

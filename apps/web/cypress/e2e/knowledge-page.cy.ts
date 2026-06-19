@@ -1,5 +1,3 @@
-import { cy } from '@cypress'
-
 describe('Knowledge page', () => {
   beforeEach(() => {
     cy.mockAll()

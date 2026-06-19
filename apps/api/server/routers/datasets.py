@@ -475,3 +475,65 @@ async def create_dataset_from_chat(req: dict):
         "name": name,
         "messages_exported": len([m for m in messages if m.get("role") in ("user", "assistant") and m.get("content")]),
     }
+
+
+@router.post("/convert-to-messages")
+async def convert_to_messages(dataset_id: str, system_prompt: str = "You are a helpful assistant."):
+    """Convert a dataset to chat message format for fine-tuning.
+
+    Reads the dataset's input.jsonl, wraps each entry in a
+    system/user/assistant message structure, and saves as a new dataset.
+    """
+    ctrl = get_datasets_controller()
+    datasets = ctrl.list_datasets()
+    source = None
+    for ds in datasets:
+        if ds["id"] == dataset_id:
+            source = ds
+            break
+    if not source:
+        raise HTTPException(status_code=404, detail=f"Dataset {dataset_id} not found")
+
+    source_dir = _DATASETS_DIR / dataset_id
+    jsonl_path = source_dir / "input.jsonl"
+    if not jsonl_path.exists():
+        raise HTTPException(status_code=404, detail="Dataset has no input.jsonl")
+
+    messages_out = []
+    with open(jsonl_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if "text" in row:
+                messages_out.append({"messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": row["text"]},
+                    {"role": "assistant", "content": row["text"]},
+                ]})
+            elif "messages" in row:
+                msgs = row["messages"]
+                if msgs and msgs[0].get("role") != "system":
+                    msgs = [{"role": "system", "content": system_prompt}] + msgs
+                messages_out.append({"messages": msgs})
+
+    new_ds = ctrl.create_dataset(
+        name=f"{source['name']}-messages",
+        description=f"Converted from {source['name']} ({len(messages_out)} conversations)",
+    )
+    new_dir = _DATASETS_DIR / new_ds["id"]
+    new_dir.mkdir(parents=True, exist_ok=True)
+    out_path = new_dir / "input.jsonl"
+    with open(out_path, "w") as f:
+        for entry in messages_out:
+            f.write(json.dumps(entry) + "\n")
+
+    return {
+        "status": "converted",
+        "new_dataset_id": new_ds["id"],
+        "total_conversations": len(messages_out),
+    }

@@ -31,14 +31,13 @@ export function CommandPalette() {
 
   const actions: CommandAction[] = useMemo(() => {
     const nav: CommandAction[] = [
-      { id: 'nav-chat', label: 'Go to Chat', description: 'Open chat page', icon: '💬', category: 'navigation', run: () => router.push('/chat') },
-      { id: 'nav-models', label: 'Go to Models', description: 'Model catalog', icon: '🧠', category: 'navigation', run: () => router.push('/models') },
-      { id: 'nav-training', label: 'Go to Training', description: 'Train models', icon: '🎓', category: 'navigation', run: () => router.push('/training') },
-      { id: 'nav-datasets', label: 'Go to Datasets', description: 'Manage datasets', icon: '📊', category: 'navigation', run: () => router.push('/datasets') },
-      { id: 'nav-compare', label: 'Go to Compare', description: 'Compare models', icon: '⚖️', category: 'navigation', run: () => router.push('/compare') },
-      { id: 'nav-monitoring', label: 'Go to Monitoring', description: 'System health', icon: '📈', category: 'navigation', run: () => router.push('/monitoring') },
-      { id: 'nav-knowledge', label: 'Go to Knowledge', description: 'Knowledge base', icon: '📚', category: 'navigation', run: () => router.push('/knowledge') },
-      { id: 'nav-settings', label: 'Go to Settings', description: 'App settings', icon: '⚙️', category: 'navigation', run: () => router.push('/settings') },
+      { id: 'nav-chat', label: 'Chat', description: 'Talk to your agent', icon: '💬', category: 'navigation', run: () => router.push('/chat') },
+      { id: 'nav-models', label: 'Personalities', description: 'Switch agent personality', icon: '🧠', category: 'navigation', run: () => router.push('/models') },
+      { id: 'nav-training', label: 'Teach me', description: 'Teach your agent new things', icon: '🎓', category: 'navigation', run: () => router.push('/training') },
+      { id: 'nav-datasets', label: 'Datasets', description: 'Manage training data', icon: '📊', category: 'navigation', run: () => router.push('/datasets') },
+      { id: 'nav-knowledge', label: 'Knowledge', description: 'Agent memory', icon: '📚', category: 'navigation', run: () => router.push('/knowledge') },
+      { id: 'nav-settings', label: 'Settings', description: 'App settings', icon: '⚙️', category: 'navigation', run: () => router.push('/settings') },
+      { id: 'nav-advanced', label: 'Advanced', description: 'Monitoring, tokenizer, benchmarks', icon: '🔧', category: 'navigation', run: () => router.push('/monitoring') },
     ]
     const acts: CommandAction[] = [
       { id: 'act-newchat', label: 'New Chat', description: 'Start a new conversation', icon: '➕', category: 'action', run: () => { window.dispatchEvent(new CustomEvent('new-chat')); router.push('/chat') } },

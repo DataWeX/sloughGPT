@@ -55,28 +55,31 @@ import json
 import asyncio
 import time
 import logging
-import coloredlogs
 from domains.errors import SloughGPTDomainError
 
 # Note: model_registry imported in lifespan to avoid 14s torch import at module level
 
-coloredlogs.install(
-    level=logging.INFO,
-    fmt="%(asctime)s %(levelname)-8s %(name)s %(message)s",
-    datefmt="%H:%M:%S",
-    field_styles={
-        "asctime": {"color": "white", "faint": True},
-        "levelname": {"bold": True},
-        "name": {"color": "cyan", "faint": True},
-    },
-    level_styles={
-        "DEBUG": {"color": "cyan", "faint": True},
-        "INFO": {"color": "green", "bold": False},
-        "WARNING": {"color": "yellow", "bold": True},
-        "ERROR": {"color": "red", "bold": True},
-        "CRITICAL": {"color": "red", "bold": True, "background": "white"},
-    },
-)
+# ── Structured logging setup ────────────────────────────────────────────
+from domains.logging import ConsoleLogger, BridgeHandler, set_global, LogLevel
+
+_log_level_name = os.environ.get("MAN_LOG_LEVEL", "INFO").upper()
+_log_level = getattr(LogLevel, _log_level_name, LogLevel.INFO)
+
+_console_logger = ConsoleLogger("man", level=_log_level)
+set_global(_console_logger)
+
+# Bridge standard logging.getLogger("man.xxx") through our ConsoleLogger
+_bridge = BridgeHandler(_console_logger)
+_bridge.setLevel(getattr(logging, _log_level_name, logging.INFO))
+logging.root.addHandler(_bridge)
+logging.root.setLevel(getattr(logging, _log_level_name, logging.INFO))
+
+# Suppress noisy urllib3 NotOpenSSLWarning (LibreSSL on macOS is fine for dev)
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="urllib3")
+warnings.filterwarnings("ignore", message=".*urllib3 v2 only supports OpenSSL.*")
+warnings.filterwarnings("ignore", message=".*NotOpenSSLWarning.*")
+
 logger = logging.getLogger("man")
 
 _PROCESS_START_MONOTONIC = time.monotonic()
@@ -991,6 +994,18 @@ def _start_watchdog() -> None:
 if __name__ == "__main__":
     import argparse
     import atexit
+    import signal
+    import traceback
+
+    # ── Global exception handler — log and exit cleanly ──
+    def _handle_uncaught_exception(exc_type, exc_value, exc_tb):
+        if issubclass(exc_type, (KeyboardInterrupt, SystemExit)):
+            sys.__excepthook__(exc_type, exc_value, exc_tb)
+            return
+        logger.critical("Unhandled exception: %s", exc_value, exc_info=(exc_type, exc_value, exc_tb))
+
+    sys.excepthook = _handle_uncaught_exception
+
     parser = argparse.ArgumentParser(description="SloughGPT API Server")
     parser.add_argument(
         "--reload",
@@ -1071,6 +1086,16 @@ if __name__ == "__main__":
     if web_proc:
         atexit.register(lambda p=web_proc: (p.terminate(), p.wait(timeout=5)) if p.poll() is None else None)
 
+    # ── Graceful shutdown on SIGTERM/SIGINT ──
+    def _shutdown_handler(signum, frame):
+        sig_name = signal.Signals(signum).name
+        logger.info("Received %s — shutting down gracefully", sig_name)
+        # Let uvicorn's lifespan handle cleanup; just exit cleanly
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, _shutdown_handler)
+    signal.signal(signal.SIGINT, _shutdown_handler)
+
     uvicorn_kw = dict(
         app=app,
         host="0.0.0.0",
@@ -1099,4 +1124,11 @@ if __name__ == "__main__":
             "datasets/**",
             "models/**",
         ]
-    uvicorn.run(**uvicorn_kw)
+
+    try:
+        uvicorn.run(**uvicorn_kw)
+    except KeyboardInterrupt:
+        logger.info("Interrupted by user")
+    except Exception as e:
+        logger.critical("Server crashed: %s", e, exc_info=True)
+        sys.exit(1)

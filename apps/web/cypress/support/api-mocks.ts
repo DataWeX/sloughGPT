@@ -71,6 +71,30 @@ Cypress.Commands.add('mockTokenizer', () => {
   }).as('tokenizerSamples')
 })
 
+Cypress.Commands.add('mockKnowledge', (items: string[] = []) => {
+  const knowledgeItems = items.map((content, i) => ({
+    id: `k${i + 1}`,
+    content,
+    topic: 'general',
+    source: 'test',
+    importance: 1,
+    score: 1,
+    created_at: new Date().toISOString(),
+  }))
+  cy.intercept('GET', `${api}/knowledge`, {
+    statusCode: 200,
+    body: knowledgeItems,
+  }).as('mockKnowledgeList')
+  cy.intercept('POST', `${api}/knowledge`, {
+    statusCode: 200,
+    body: { id: 'k-new', content: '', topic: 'general', source: 'manual', importance: 1, score: 1, created_at: new Date().toISOString() },
+  }).as('mockKnowledgeAdd')
+  cy.intercept('POST', `${api}/knowledge/batch-delete`, {
+    statusCode: 200,
+    body: { deleted: items.length },
+  }).as('mockKnowledgeDelete')
+})
+
 Cypress.Commands.add('mockAll', () => {
   cy.mockHealth()
   cy.mockModels()

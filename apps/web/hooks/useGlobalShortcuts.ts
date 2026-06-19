@@ -6,9 +6,9 @@ import { useRouter } from 'next/navigation'
 const NAV_SHORTCUTS: Record<string, string> = {
   '1': '/chat',
   '2': '/models',
-  '3': '/datasets',
+  '3': '/knowledge',
   '4': '/training',
-  '5': '/settings',
+  '5': '/datasets',
 }
 
 export function useGlobalShortcuts() {
@@ -39,6 +39,13 @@ export function useGlobalShortcuts() {
           window.dispatchEvent(new CustomEvent('new-chat'))
           return
         }
+      }
+
+      if (ctrl && e.shiftKey && e.key === 'A') {
+        e.preventDefault()
+        closeIfOpen()
+        router.push('/monitoring')
+        return
       }
 
       if (ctrl && e.shiftKey && e.key === 'F') {
