@@ -489,6 +489,21 @@ async def start(req: StartRequest):
                     data_path = str(candidate)
                     break
 
+    resume = getattr(req, "resume", False)
+    resume_path = getattr(req, "resume_path", "")
+
+    if not resume and req.checkpoint_name:
+        ckpt_soul = CHECKPOINTS_DIR / f"{req.checkpoint_name}.soul"
+        ckpt_pt = CHECKPOINTS_DIR / f"{req.checkpoint_name}.pt"
+        if ckpt_pt.exists():
+            resume = True
+            resume_path = str(ckpt_pt)
+            autotrain_logger.info("Auto-resume from %s", resume_path)
+        elif ckpt_soul.exists():
+            resume = True
+            resume_path = str(ckpt_soul)
+            autotrain_logger.info("Auto-resume from %s", resume_path)
+
     state.config = {
         "epochs": req.epochs,
         "learning_rate": req.learning_rate,
@@ -497,8 +512,8 @@ async def start(req: StartRequest):
         "checkpoint_name": req.checkpoint_name or "",
         "algo": req.algo,
         "soul_name": req.soul_name,
-        "resume": getattr(req, "resume", False),
-        "resume_path": getattr(req, "resume_path", ""),
+        "resume": resume,
+        "resume_path": resume_path,
     }
     state.running = True
     import state as _srv_state
