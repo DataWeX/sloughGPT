@@ -125,7 +125,7 @@ logger.info(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load default HF weights in background when ``MAN_AUTOLOAD_MODEL`` is set (default: ``gpt2``)."""
+    """Load default HF weights in background when ``MAN_AUTOLOAD_MODEL`` is set (default: Qwen2.5-0.5B-Instruct)."""
     STARTUP_PHASE.update(phase="loading_model", step=1, message="Loading model weights...")
     logger.info("Startup phase 1/6: loading model")
     model_load_task = asyncio.create_task(asyncio.to_thread(_autoload_hf_model_at_startup))
@@ -229,12 +229,6 @@ app.add_middleware(
 
 # Note: Feature routers are registered in the lifespan (below) to avoid
 # blocking module-level imports for 40+s (JAX/sentence_transformers transitive deps).
-# A lightweight inline /health is provided for startup readiness checks.
-@app.get("/health", tags=["health"])
-async def _health_quick():
-    """Minimal health check for startup readiness — superseded by routers.health once loaded."""
-    from controllers.health import get_health_controller
-    return get_health_controller().get_basic_health()
 
 
 @app.middleware("http")
@@ -864,7 +858,7 @@ def _autoload_hf_model_at_startup() -> None:
     - ``MAN_USE_SLONET``: If set to ``1`` or ``true``, loads into SloTransformer
       (pure NumPy) instead of PyTorch. Recommended for stability.
     """
-    raw = os.environ.get("MAN_AUTOLOAD_MODEL", "gpt2").strip()
+    raw = os.environ.get("MAN_AUTOLOAD_MODEL", "Qwen/Qwen2.5-0.5B-Instruct").strip()
     if not raw or raw.lower() in ("false", "0", "none", "no", "off", "disable"):
         logger.info("MAN_AUTOLOAD_MODEL=%r — skipping startup autoload", raw)
         server_state.autoload_skipped = True
