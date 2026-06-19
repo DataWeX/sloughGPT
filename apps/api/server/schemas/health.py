@@ -13,6 +13,7 @@ class HealthResponse(BaseModel):
     model_type: Optional[str] = None
     is_inferencing: bool = False
     inference_count: int = 0
+    summary: str = ""
 
 
 class DetailedHealthResponse(BaseModel):

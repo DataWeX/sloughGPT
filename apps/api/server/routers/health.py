@@ -109,8 +109,8 @@ async def model_health():
 async def health_summary():
     """Compact health summary for the status bar.
 
-    Returns only what the UI needs: score, status, model, soul, key counters.
-    Lightweight — no history arrays, no path breakdowns.
+    Returns the flow-based health verdict: score, status, human-readable
+    summary, and per-check diagnoses. No raw numbers in user-facing text.
     """
     ctrl = get_health_controller()
     detailed = ctrl.get_detailed_health()
@@ -118,6 +118,8 @@ async def health_summary():
     return {
         "score": hs.get("score", 0),
         "status": hs.get("status", "unknown"),
+        "summary": hs.get("summary", ""),
+        "diagnoses": hs.get("diagnoses", []),
         "model_loaded": detailed.get("model_loaded", False),
         "model_type": detailed.get("model_type"),
         "soul": detailed.get("soul"),

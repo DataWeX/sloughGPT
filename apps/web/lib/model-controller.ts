@@ -41,6 +41,7 @@ export interface HealthStatus {
   status: string
   model_loaded: boolean
   model_type: string
+  summary: string
   is_inferencing?: boolean
   inference_count?: number
   soul_engine_active?: boolean

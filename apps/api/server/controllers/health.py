@@ -59,7 +59,7 @@ class HealthController:
         self._start_time = datetime.now()
     
     def get_basic_health(self) -> Dict[str, Any]:
-        """Get basic health status with plain-language status_message."""
+        """Get basic health status with flow-based summary."""
         model_loaded, model_type = _get_model_info()
         inference_stats = _get_inference_stats()
         result: Dict[str, Any] = {
@@ -70,6 +70,16 @@ class HealthController:
             "is_inferencing": inference_stats.get("is_inferencing", False),
             "inference_count": inference_stats.get("inference_count", 0),
         }
+
+        # Flow-based summary sentence
+        try:
+            from domains.infrastructure.server_state import get_server_state
+            ss = get_server_state()
+            hs = ss.get_health_score()
+            result["summary"] = hs.get("summary", "")
+        except Exception:
+            result["summary"] = ""
+
         if model_loaded:
             try:
                 import state as server_state
@@ -80,12 +90,6 @@ class HealthController:
                         result["num_parameters"] = sum(p.numel() for p in model.parameters())
             except Exception:
                 pass
-
-        # Plain-language status
-        if model_loaded:
-            result["status_message"] = f"Ready — {model_type or 'model'} loaded and waiting for questions."
-        else:
-            result["status_message"] = "Server is running but no model is loaded. Load a model to start chatting."
 
         return result
     

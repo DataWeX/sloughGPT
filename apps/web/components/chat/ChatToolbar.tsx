@@ -19,10 +19,10 @@ const STATUS_COLORS = {
 } as const
 
 const STATUS_LABELS = {
-  ok: 'Model ready',
-  degraded: 'Connected, no model loaded',
+  ok: 'Ready to chat',
+  degraded: 'Connected — no model loaded yet',
   offline: 'Server offline',
-  loading: 'Checking...',
+  loading: 'Connecting...',
 } as const
 
 export const ChatToolbar = memo(function ChatToolbar() {
@@ -70,7 +70,7 @@ export const ChatToolbar = memo(function ChatToolbar() {
         <div className="flex items-center gap-1.5">
           <span
             className={`w-2 h-2 rounded-full shrink-0 ${STATUS_COLORS[ctx.health.status]}`}
-            title={STATUS_LABELS[ctx.health.status]}
+            title={ctx.health.summary || STATUS_LABELS[ctx.health.status]}
           />
           <ModelDropdown />
         </div>

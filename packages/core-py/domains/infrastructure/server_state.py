@@ -286,61 +286,44 @@ class ServerState:
             return result
 
     def get_health_score(self) -> dict:
-        """Composite health score (0-100) based on error rate, latency, and throughput.
+        """Composite health score via the diagnostic flow pipeline.
 
-        Scoring:
-          - Error rate (0% = 100, >=5% = 0): 40% weight
-          - Latency degradation (<200ms = 100, >=2000ms = 0): 30% weight
-          - Tokens/sec (>50 = 100, <5 = 0): 20% weight
-          - Uptime bonus (>60s = 100, <10s = 50): 10% weight
+        Each concern (errors, latency, throughput, model, uptime) is checked
+        independently. The flow produces a score, status, and a human-readable
+        summary sentence — no raw numbers in user-facing messages.
         """
+        from .health_flow import run_health_flow
+
         with self._lock:
             req_count = self._request_count
             err_count = self._error_count
 
-            # Error rate score (0-1)
-            if req_count == 0:
-                err_score = 1.0
-            else:
-                err_rate = err_count / req_count
-                err_score = max(0.0, 1.0 - err_rate / 0.05)
+        avg_lat = self.get_avg_latency()
+        tps = self.get_tokens_per_second()
+        uptime = time.time() - self._started_at
+        model = self.model.get()
+        model_loaded = model is not None
+        model_type = getattr(model, "name_or_path", "") or (self.model_type.get() or "")
 
-            # Latency score (0-1)
-            avg_lat = self.get_avg_latency()
-            if avg_lat == 0:
-                lat_score = 1.0
-            else:
-                lat_score = max(0.0, 1.0 - (avg_lat - 200) / 1800)
+        result = run_health_flow(
+            req_count=req_count,
+            err_count=err_count,
+            avg_latency_ms=avg_lat,
+            tokens_per_sec=tps,
+            uptime_seconds=uptime,
+            model_loaded=model_loaded,
+            model_type=model_type,
+        )
 
-            # Throughput score (0-1)
-            tps = self.get_tokens_per_second()
-            if tps == 0:
-                tp_score = 0.5
-            else:
-                tp_score = min(1.0, max(0.0, (tps - 5) / 45))
-
-            # Uptime score (0-1)
-            uptime = time.time() - self._started_at
-            up_score = 1.0 if uptime > 60 else 0.5 if uptime > 10 else 0.3
-
-            total = round((err_score * 0.40 + lat_score * 0.30 + tp_score * 0.20 + up_score * 0.10) * 100)
-
-            # Determine status
-            if total >= 80:
-                status = "healthy"
-            elif total >= 50:
-                status = "degraded"
-            else:
-                status = "unhealthy"
-
-            return {
-                "score": total,
-                "status": status,
-                "error_rate_score": round(err_score * 100),
-                "latency_score": round(lat_score * 100),
-                "throughput_score": round(tp_score * 100),
-                "uptime_score": round(up_score * 100),
-            }
+        return {
+            "score": result.score,
+            "status": result.status,
+            "summary": result.summary,
+            "diagnoses": [
+                {"check": d.check, "severity": d.severity.value, "score": round(d.score), "message": d.message}
+                for d in result.diagnoses
+            ],
+        }
 
     def record_model_event(self, event_type: str, model: str, detail: str = "") -> None:
         """Record a model lifecycle event: load, unload, error, swap."""

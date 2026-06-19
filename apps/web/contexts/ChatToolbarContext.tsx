@@ -89,6 +89,7 @@ interface SidebarGroup {
 
 interface HealthGroup {
   status: 'ok' | 'degraded' | 'offline' | 'loading'
+  summary: string
   modelLoaded: boolean
   modelType: string
 }

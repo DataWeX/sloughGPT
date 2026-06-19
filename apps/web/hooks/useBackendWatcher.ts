@@ -6,6 +6,13 @@ import { PUBLIC_API_URL } from '@/lib/config'
 const POLL_INTERVAL = 3000
 const REQUEST_TIMEOUT = 3000
 
+interface HealthSummary {
+  score: number
+  status: string
+  summary: string
+  model_loaded: boolean
+}
+
 export function useBackendWatcher() {
   const setStatus = useApiMonitor((s) => s.setStatus)
   const wasOffline = useRef(false)
@@ -28,7 +35,7 @@ export function useBackendWatcher() {
         clearTimeout(timeout)
         if (!res.ok) throw new Error(String(res.status))
 
-        const data = await res.json()
+        const data: HealthSummary = await res.json()
 
         if (wasOffline.current) {
           wasOffline.current = false
@@ -41,16 +48,11 @@ export function useBackendWatcher() {
         if (data.status && data.status !== lastScoreStatus.current) {
           if (lastScoreStatus.current !== null) {
             const { useToastStore } = await import('@/lib/toast-store')
+            const summary = data.summary || `Score: ${data.score}`
             if (data.status === 'degraded') {
-              useToastStore.getState().addToast(
-                `System degraded (score ${data.score}). Some requests may be slow.`,
-                'info'
-              )
+              useToastStore.getState().addToast(summary, 'info')
             } else if (data.status === 'unhealthy') {
-              useToastStore.getState().addToast(
-                `System unhealthy (score ${data.score}). Check server logs.`,
-                'error'
-              )
+              useToastStore.getState().addToast(summary, 'error')
             }
           }
           lastScoreStatus.current = data.status
