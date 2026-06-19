@@ -31,17 +31,6 @@ from domains.torch_runtime import apply_api_process_torch_env
 
 apply_api_process_torch_env()
 
-# Pre-import transformers core classes to work around a uvicorn import-ordering
-# issue where ``from transformers import AutoModelForCausalLM`` fails with
-# ``cannot import name`` when called later in `lifespan`.
-# This eager import at module level ensures the class is available.
-try:
-    from transformers import AutoModelForCausalLM, AutoTokenizer  # noqa: F401
-    import transformers as _t
-    _t  # silence unused
-except Exception:
-    pass
-
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 from starlette.requests import Request
@@ -68,7 +57,8 @@ import time
 import logging
 import coloredlogs
 from domains.errors import SloughGPTDomainError
-from domains.infrastructure.model_registry import get_model_registry
+
+# Note: model_registry imported in lifespan to avoid 14s torch import at module level
 
 coloredlogs.install(
     level=logging.INFO,
@@ -167,55 +157,39 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("W&B server background task did not start: %s", e)
     STARTUP_PHASE.update(phase="multimodal", step=3, message="Initializing multimodal engine...")
-    try:
-        speech_server = os.environ.get("SPEECH_SERVER", "").lower() in ("1", "true", "yes")
-        if speech_server:
-            from domains.multimodal import initialize_multimodal
-            initialize_multimodal(speech_server=True, vision_model="slonet")
-            logger.info("Multimodal initialized (server-side ASR enabled)")
-        else:
-            from domains.multimodal import get_multimodal_manager
-            get_multimodal_manager().initialize(vision_model="slonet")
-            logger.info("Multimodal initialized (browser ASR only)")
-    except Exception as e:
-        logger.warning("Multimodal initialization failed: %s", e)
+    def _init_multimodal():
+        try:
+            speech_server = os.environ.get("SPEECH_SERVER", "").lower() in ("1", "true", "yes")
+            if speech_server:
+                from domains.multimodal import initialize_multimodal
+                initialize_multimodal(speech_server=True, vision_model="slonet")
+                logger.info("Multimodal initialized (server-side ASR enabled)")
+            else:
+                from domains.multimodal import get_multimodal_manager
+                get_multimodal_manager().initialize(vision_model="slonet")
+                logger.info("Multimodal initialized (browser ASR only)")
+        except Exception as e:
+            logger.warning("Multimodal initialization failed: %s", e)
+    asyncio.create_task(asyncio.to_thread(_init_multimodal))
     STARTUP_PHASE.update(phase="model_registry", step=5, message="Initializing model registry...")
+    from domains.infrastructure.model_registry import get_model_registry
     registry = get_model_registry()
     logger.info("Model registry initialized")
-
-    # Wait up to 120s for model load to complete before declaring ready
-    try:
-        await asyncio.wait_for(model_load_task, timeout=120.0)
-    except asyncio.TimeoutError:
-        logger.info("Model load still in progress — server will accept requests, model loads when ready")
-    except Exception as e:
-        logger.warning("Model autoload failed: %s", e)
-
-    # Register all feature routers (deferred import to avoid 90s cold-start)
-    from routers import get_all_routers
-    for _router in get_all_routers():
-        app.include_router(_router)
-
-    # Training router (defined in training/ subdirectory, not in routers/)
-    try:
-        from training.router import router as training_router
-        app.include_router(training_router)
-    except Exception as exc:
-        logger.warning("Failed to register training router: %s", exc, exc_info=True)
 
     STARTUP_PHASE.update(phase="ready", step=6, message="Server ready")
     logger.info("Startup complete")
 
-    # Pre-warm sentence-transformers embed model so first chat request isn't slow
-    def _prewarm_embed():
-        try:
-            from domains.inference.vector_store import _load_embed_model
-            _load_embed_model()
-        except Exception:
-            pass
-    import concurrent.futures
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _pool:
-        _pool.submit(_prewarm_embed)
+    # Register feature routers (synchronous — all heavy deps now lazy)
+    from routers import get_all_routers
+    for r in get_all_routers():
+        app.include_router(r)
+    try:
+        from training.router import router as training_router
+        app.include_router(training_router)
+    except Exception as exc:
+        logger.warning("Failed to register training router: %s", exc)
+    logger.info("All routers registered (%d routes)", len(app.routes))
+
     yield
     # Shutdown: unregister all models
     registry.reset_metrics()
@@ -252,6 +226,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Note: Feature routers are registered in the lifespan (below) to avoid
+# blocking module-level imports for 40+s (JAX/sentence_transformers transitive deps).
+# A lightweight inline /health is provided for startup readiness checks.
+@app.get("/health", tags=["health"])
+async def _health_quick():
+    """Minimal health check for startup readiness — superseded by routers.health once loaded."""
+    from controllers.health import get_health_controller
+    return get_health_controller().get_basic_health()
 
 
 @app.middleware("http")
@@ -386,6 +369,7 @@ async def root_exception_handler(request: Request, exc: Exception):
     except Exception:
         pass
     try:
+        from domains.infrastructure.model_registry import get_model_registry
         registry = get_model_registry()
         health = registry.health_summary()
         degraded_models = [m["model_id"] for m in health.get("models", []) if m.get("status") == "degraded"]

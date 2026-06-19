@@ -20,7 +20,7 @@ python3 apps/api/server/main.py &
 API_PID=$!
 
 echo "Waiting for API /health on port $MAN_API_PORT..."
-for _ in $(seq 1 90); do
+for _ in $(seq 1 30); do
   if curl -sf "http://127.0.0.1:${MAN_API_PORT}/health" >/dev/null; then
     echo "API healthy."
     break
@@ -33,7 +33,7 @@ for _ in $(seq 1 90); do
   sleep 1
 done
 if ! curl -sf "http://127.0.0.1:${MAN_API_PORT}/health" >/dev/null; then
-  echo "❌ API did not become healthy within 90s (http://127.0.0.1:${MAN_API_PORT}/health)."
+  echo "❌ API did not become healthy within 30s (http://127.0.0.1:${MAN_API_PORT}/health)."
   exit 1
 fi
 

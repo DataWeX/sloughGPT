@@ -46,7 +46,7 @@ async def detailed_health():
 @router.get("/startup-progress")
 async def startup_progress():
     """Return current server startup phase so the frontend can show
-    meaningful progress during the 90s PyTorch cold-import window."""
+    meaningful progress during the startup sequence."""
     return STARTUP_PHASE
 
 

@@ -6,15 +6,14 @@ All router imports are deferred to ``get_all_routers()`` to avoid pulling in
 heavy dependencies (JAX, sentence-transformers, PyTorch) at module-load time.
 This cuts API cold-start from ~100s to ~8s.
 """
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter
 
 __all__ = [
     "get_all_routers",
 ]
 
-# Module-level cache so we only import once
-_cached_routers: list[APIRouter] | None = None
+_cached_routers: Optional[List[APIRouter]] = None
 
 
 def get_all_routers() -> List[APIRouter]:

@@ -24,13 +24,18 @@ from typing import Any, Optional, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
-# Pre-import torch at module level so background threads don't pay the
-# ~5s cold-import cost (Metal Performance Shaders loading on macOS).
-try:
-    import torch
-    _TORCH_AVAILABLE = True
-except ImportError:
-    _TORCH_AVAILABLE = False
+# torch imported lazily in generate() / generate_stream() to avoid 9s module-level block
+_TORCH_AVAILABLE = None
+
+def _ensure_torch():
+    global _TORCH_AVAILABLE
+    if _TORCH_AVAILABLE is None:
+        try:
+            import torch  # noqa: F401
+            _TORCH_AVAILABLE = True
+        except ImportError:
+            _TORCH_AVAILABLE = False
+    return _TORCH_AVAILABLE
 
 logger = logging.getLogger(__name__)
 
@@ -287,7 +292,7 @@ class ModelServer:
             logger.warning("ModelServer[%s]: warmup failed: %s", self.model_id, e)
 
     def _check_device(self) -> None:
-        if not _TORCH_AVAILABLE:
+        if not _ensure_torch():
             self._device = "unknown"
             return
         try:
@@ -505,7 +510,7 @@ class ModelServer:
             result["elapsed_ms"] = round((time.time() - start) * 1000, 1)
             return result
 
-        if not _TORCH_AVAILABLE:
+        if not _ensure_torch():
             raise RuntimeError("torch is required for synchronous generation")
 
         with self._lock:
@@ -532,6 +537,7 @@ class ModelServer:
         )
         gen_kwargs.update(kwargs)
 
+        import torch
         with torch.no_grad():
             output = model.generate(**gen_kwargs)
 
