@@ -37,8 +37,8 @@ async def get_vector_store():
             if _vector_store_type == "chromadb":
                 kwargs["persist_directory"] = "data/vector_store"
             _vector_store = await create_vector_store(provider=_vector_store_type, **kwargs)
-        except Exception:
-            pass
+        except Exception as e:
+            logging.getLogger(__name__).debug("Vector store init failed: %s", e)
     return _vector_store
 
 

@@ -2,10 +2,13 @@
 Session Router - Chat session management.
 Delegates to message_feedback in main.py for storage (in-process singleton).
 """
+import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/session", tags=["session"])
 
@@ -68,8 +71,8 @@ async def get_session_inspector(session_id: str):
             km = get_knowledge_memory()
             knowledge["total_facts"] = km.stats().get("total_facts", 0)
             knowledge["topics"] = [t[0] for t in km.all_topics()[:10]]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Knowledge memory unavailable in session detail: %s", e)
 
         traits = {}
         modes = {}
@@ -84,8 +87,8 @@ async def get_session_inspector(session_id: str):
                 "style": StyleManager(config).get_mode(),
                 "task": TaskManager(config).get_mode(),
             }
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Trait config unavailable in session detail: %s", e)
 
         workspace = {"working_memory": [], "semantic_keys": [], "episodic_count": 0}
         try:
@@ -99,8 +102,8 @@ async def get_session_inspector(session_id: str):
                 "sensory_buffer_size": insp.get("sensory_buffer_size", 0),
                 "system_prompt": insp.get("system_prompt", "")[:300],
             }
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Context core unavailable in session detail: %s", e)
 
         return {
             "session": {

@@ -465,8 +465,8 @@ async def start_training(request: TrainingRequest):
             )
 
         asyncio.create_task(notify_async())
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Training webhook notification failed: %s", e)
 
     req_snapshot = request.model_dump()
     data_path_for_thread = data_path_str
@@ -538,8 +538,8 @@ async def start_training(request: TrainingRequest):
                         },
                     )
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Training completion webhook failed: %s", e)
         except Exception as e:
             logger.exception("Training job %s failed", jid)
             training_jobs[jid]["status"] = "failed"
@@ -1241,8 +1241,8 @@ async def train_from_feedback():
                             },
                         )
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Feedback training webhook failed: %s", e)
 
             except Exception as e:
                 logger.exception("Feedback training job %s failed", jid)

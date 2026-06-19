@@ -48,8 +48,8 @@ class FeedbackController:
                 from domains.feedback.workflow import get_feedback_workflow
                 self._workflow = get_feedback_workflow()
                 self._wire_model()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Feedback workflow init failed: %s", e)
         return self._workflow
 
     def _wire_model(self):
@@ -58,8 +58,8 @@ class FeedbackController:
             from routers.auto_train import state as at_state
             if self._workflow and at_state.student_net is not None:
                 self._workflow.set_model(at_state.student_net, at_state.student_tokenizer)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to wire auto-train model to workflow: %s", e)
 
     def _get_lora_updater(self):
         """Lazy-load online LoRA updater."""
@@ -67,8 +67,8 @@ class FeedbackController:
             try:
                 from domains.feedback.online_train import get_online_lora_updater
                 self._lora_updater = get_online_lora_updater()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Online LoRA updater init failed: %s", e)
         return self._lora_updater
 
     def record_feedback(

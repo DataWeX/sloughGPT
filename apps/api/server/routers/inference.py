@@ -700,15 +700,15 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
             try:
                 from domains.learner import get_learner
                 get_learner().ingest_conversation([(user_msg, full_response)])
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Continual learner ingest failed: %s", e)
 
             # Auto-extract entities and relationships into knowledge base
             try:
                 from domains.learner.entity_extractor import extract_and_store
                 extract_and_store(user_msg or "", full_response)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Entity extraction failed: %s", e)
 
             logger.info(f"Chat stream: generated {len(full_response)} chars")
 

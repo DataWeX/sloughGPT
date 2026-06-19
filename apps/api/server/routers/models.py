@@ -109,8 +109,8 @@ async def load_model(req: LoadModelRequest):
             ss.record_model_event("load", req.model_id, f"device={req.device.value}")
         else:
             ss.record_model_event("error", req.model_id, result.get("error", "unknown"))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to record model load event: %s", e)
     return LoadModelResponse(**result)
 
 
@@ -123,8 +123,8 @@ async def unload_model():
         from domains.infrastructure.server_state import get_server_state
         ss = get_server_state()
         ss.record_model_event("unload", ctrl._current_model or "unknown")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to record model unload event: %s", e)
     return result
 
 

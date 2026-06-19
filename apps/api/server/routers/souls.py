@@ -243,8 +243,8 @@ async def switch_soul(
                 if ctx_core:
                     soul_prompt = _build_soul_system_prompt(soul_info)
                     ctx_core.set_system_prompt(soul_prompt)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to update context core system prompt on soul switch: %s", e)
 
         # Load checkpoint into main model if requested
         if req.checkpoint_name:
@@ -255,8 +255,8 @@ async def switch_soul(
                 get_server_state().record_model_event(
                     "load", req.name, f"checkpoint={req.checkpoint_name}"
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to record checkpoint load event: %s", e)
 
         if result.get("success") and soul_info and soul_info.path:
             try:

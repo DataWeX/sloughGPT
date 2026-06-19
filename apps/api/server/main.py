@@ -302,7 +302,9 @@ async def add_correlation_id(request: Request, call_next):
         # Rate limit check for inference endpoints (10/sec)
         if str(request.url.path).startswith(("/chat", "/inference")):
             if not ss.check_rate_limit(str(request.url.path), max_per_second=10):
-                pass  # Log but don't block — violations are tracked for monitoring
+                logging.getLogger("man.middleware").debug(
+                    "Rate limit exceeded: %s", request.url.path
+                )
     except Exception:
         pass
     response.headers["X-Request-ID"] = request_id
