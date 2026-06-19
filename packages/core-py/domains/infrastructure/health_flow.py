@@ -55,13 +55,13 @@ def _check_errors(req_count: int, err_count: int) -> Diagnosis:
     score = max(0.0, 1.0 - err_rate / 0.05) * 100
 
     if err_rate == 0:
-        msg = f"All {req_count} requests succeeded."
+        msg = f"All {req_count} requests OK."
     elif err_rate < 0.01:
-        msg = f"Rare hiccup — {err_count} error out of {req_count} requests."
+        msg = f"{err_count}/{req_count} errors — rare."
     elif err_rate < 0.05:
-        msg = f"Some requests failed ({err_count}/{req_count}). Might slow things down."
+        msg = f"{err_count}/{req_count} errors — degrading."
     else:
-        msg = f"Many errors ({err_count}/{req_count}). Server is struggling."
+        msg = f"{err_count}/{req_count} errors — failing."
 
     severity = (
         Severity.OK if score >= 80
@@ -79,13 +79,13 @@ def _check_latency(avg_ms: float) -> Diagnosis:
     score = max(0.0, 1.0 - (avg_ms - 200) / 1800) * 100
 
     if avg_ms < 300:
-        msg = f"Responses are snappy ({avg_ms:.0f}ms average)."
+        msg = f"Snappy — {avg_ms:.0f}ms avg."
     elif avg_ms < 800:
-        msg = f"Response time is fine ({avg_ms:.0f}ms average)."
+        msg = f"Fine — {avg_ms:.0f}ms avg."
     elif avg_ms < 1500:
-        msg = f"Responses are taking a moment ({avg_ms:.0f}ms average)."
+        msg = f"Slow — {avg_ms:.0f}ms avg."
     else:
-        msg = f"Responses are slow ({avg_ms:.0f}ms average). The model is working hard."
+        msg = f"Very slow — {avg_ms:.0f}ms avg."
 
     severity = (
         Severity.OK if score >= 80
@@ -103,13 +103,13 @@ def _check_throughput(tokens_per_sec: float) -> Diagnosis:
     score = min(1.0, max(0.0, (tokens_per_sec - 5) / 45)) * 100
 
     if tokens_per_sec >= 30:
-        msg = f"Generating quickly ({tokens_per_sec:.0f} tokens/sec)."
+        msg = f"Fast — {tokens_per_sec:.0f} tok/s."
     elif tokens_per_sec >= 10:
-        msg = f"Decent speed ({tokens_per_sec:.0f} tokens/sec)."
+        msg = f"OK — {tokens_per_sec:.0f} tok/s."
     elif tokens_per_sec >= 5:
-        msg = f"A bit slow ({tokens_per_sec:.0f} tokens/sec). CPU inference."
+        msg = f"Slow — {tokens_per_sec:.0f} tok/s."
     else:
-        msg = f"Very slow generation ({tokens_per_sec:.0f} tokens/sec)."
+        msg = f"Very slow — {tokens_per_sec:.0f} tok/s."
 
     severity = (
         Severity.OK if score >= 80
@@ -122,23 +122,23 @@ def _check_throughput(tokens_per_sec: float) -> Diagnosis:
 def _check_model(model_loaded: bool, model_type: str) -> Diagnosis:
     """Check if a model is loaded and ready."""
     if model_loaded and model_type:
-        return Diagnosis("model", Severity.OK, 100, f"{model_type} is loaded and ready.")
+        return Diagnosis("model", Severity.OK, 100, f"{model_type} loaded.")
     elif model_loaded:
-        return Diagnosis("model", Severity.OK, 100, "Model is loaded and ready.")
+        return Diagnosis("model", Severity.OK, 100, "Model loaded.")
     else:
-        return Diagnosis("model", Severity.WARN, 40, "No model loaded. Chat won't work until one is.")
+        return Diagnosis("model", Severity.WARN, 40, "No model loaded.")
 
 
 def _check_uptime(uptime_seconds: float) -> Diagnosis:
     """Check server stability (uptime as proxy)."""
     if uptime_seconds > 3600:
-        msg = f"Running smoothly for {uptime_seconds / 3600:.1f} hours."
+        msg = f"Up {uptime_seconds / 3600:.1f}h."
     elif uptime_seconds > 60:
-        msg = f"Stable for {uptime_seconds / 60:.0f} minutes."
+        msg = f"Up {uptime_seconds / 60:.0f}m."
     elif uptime_seconds > 10:
-        msg = "Just started — still warming up."
+        msg = "Warming up."
     else:
-        msg = "Server just booted."
+        msg = "Just booted."
 
     score = 100 if uptime_seconds > 60 else 50 if uptime_seconds > 10 else 30
     severity = Severity.OK if score >= 80 else Severity.INFO
