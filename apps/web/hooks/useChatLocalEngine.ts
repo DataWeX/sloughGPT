@@ -58,19 +58,19 @@ export function useChatLocalEngine(
         })
         engineRef.current = engine
         setLocalArchInfo(`${embedDim}×${numLayers}×8 Transformer`)
-        showToast(`Transformer engine ready (${embedDim}×${numLayers}L)`)
+        showToast(`On-device AI ready (${embedDim}×${numLayers}L)`)
       } else {
         const engine = new SoulNetWebGPU()
         await engine.init()
         await engine.load(buf, { ...arch })
         engineRef.current = engine
         setLocalArchInfo(`${arch.embedDim}×${arch.hiddenDim} LSTM`)
-        showToast(`Local engine ready (${arch.embedDim}x${arch.hiddenDim})`)
+        showToast(`Local AI ready (${arch.embedDim}x${arch.hiddenDim})`)
       }
       return true
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'unknown error'
-      showToast(`Failed to load local engine: ${msg}`, 'error')
+      showToast(`Failed to load local AI: ${msg}`, 'error')
       devDebug('Local engine init failed', { error: msg, url: localModelUrl })
       return false
     } finally {
@@ -83,20 +83,20 @@ export function useChatLocalEngine(
     if (useLocalEngine) {
       setUseLocalEngine(false)
       setLocalArchInfo(null)
-      showToast('Switched to server inference', 'info')
+      showToast('Switched to server mode', 'info')
       devDebug('Switched to server mode')
     } else if (engineRef.current) {
       setUseLocalEngine(true)
-      showToast(`Local GPU ready (${localArchInfo})`, 'success')
+      showToast(`Local AI ready (${localArchInfo})`, 'success')
       devDebug('Switched to local mode', { arch: localArchInfo })
     } else {
-      showToast('Loading local engine...', 'info')
+      showToast('Loading local AI...', 'info')
       devDebug('Attempting local engine init', { url: localModelUrl })
       if (await initLocalEngine()) {
         setUseLocalEngine(true)
-        showToast(`Local GPU ready (${localArchInfo})`, 'success')
+        showToast(`Local AI ready (${localArchInfo})`, 'success')
       } else {
-        showToast('Local engine failed — check .soul file URL', 'error')
+        showToast('Local AI failed — check model URL', 'error')
         devDebug('Local engine init failed')
       }
     }

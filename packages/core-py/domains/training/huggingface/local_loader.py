@@ -7,11 +7,15 @@ from pathlib import Path
 
 from domains.training.slonet_compat import torch
 
+import logging
+
 try:
     from transformers import AutoTokenizer, AutoModelForCausalLM
 except ImportError:
     AutoTokenizer = None  # type: ignore
     AutoModelForCausalLM = None  # type: ignore
+
+logger = logging.getLogger("man.hf_loader")
 
 
 @dataclass

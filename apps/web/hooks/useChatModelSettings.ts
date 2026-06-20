@@ -72,14 +72,14 @@ export function useChatModelSettings(
             clearInterval(pi)
             pollIntervalRef.current = null
             setDownloadProgress(prev => { const r = { ...prev }; delete r[m]; return r })
-            showToastFn(`Download ${status.status}: ${status.error || 'unknown'}`, 'error')
+            showToastFn(`Download failed: ${status.error || 'unknown reason'}`, 'error')
             setLoadingModel(null)
           }
         } catch { /* poll retry */ }
       }, 2000)
       pollIntervalRef.current = pi
     } catch (err) {
-      showToastFn(`Failed: ${err instanceof Error ? err.message : 'unknown'}`, 'error')
+      showToastFn(`Something went wrong: ${err instanceof Error ? err.message : 'unknown error'}`, 'error')
       setLoadingModel(null)
     }
   }, [showToast, refreshHealth])
@@ -96,7 +96,7 @@ export function useChatModelSettings(
         setModel(m)
         showToast(`Model ready: ${m} (${result.device || 'cpu'})`, 'success')
       } catch (err) {
-        showToast(`Failed to load ${m}: ${err instanceof Error ? err.message : 'unknown error'}`, 'error')
+        showToast(`Something went wrong: ${err instanceof Error ? err.message : 'unknown error'}`, 'error')
       } finally {
         setLoadingModel(null)
       }
@@ -120,9 +120,9 @@ export function useChatModelSettings(
       await modelController.unloadModel(model)
       await refreshHealth()
       setModel('')
-      showToast('Model unloaded', 'info')
+      showToast('Model stopped', 'info')
     } catch (err) {
-      showToast(`Failed to unload: ${err instanceof Error ? err.message : 'unknown'}`, 'error')
+      showToast(`Something went wrong: ${err instanceof Error ? err.message : 'unknown error'}`, 'error')
     } finally {
       setLoadingModel(null)
     }

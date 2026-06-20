@@ -12,7 +12,11 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import numpy as np
 
+import logging
+
 from domains.training.slonet_compat import torch, nn, F
+
+logger = logging.getLogger("man.ewc")
 
 
 @dataclass

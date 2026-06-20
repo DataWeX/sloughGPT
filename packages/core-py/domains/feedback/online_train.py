@@ -8,8 +8,11 @@ that can update model weights in seconds (not minutes/hours).
 import numpy as np
 from typing import Optional, Dict, Any, Callable
 from dataclasses import dataclass
+import logging
 import threading
 import time
+
+logger = logging.getLogger("man.online_train")
 
 
 @dataclass
@@ -143,10 +146,10 @@ class OnlineLoRAUpdater:
                 self._stats["average_update_ms"] * (self._stats["total_updates"] - 1) + elapsed
             ) / self._stats["total_updates"]
 
-            print(f"[OnlineLoRA] Updated with {len(feedback_batch)} samples in {elapsed:.1f}ms")
+            logger.info("Updated with %d samples in %.1fms", len(feedback_batch), elapsed)
 
         except Exception as e:
-            print(f"[OnlineLoRA] Update failed: {e}")
+            logger.error("Update failed: %s", e)
         finally:
             self._is_updating = False
 

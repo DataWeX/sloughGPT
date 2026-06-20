@@ -18,7 +18,7 @@ import logging
 
 from .ultimate import UltimateSLO, SLOConfig, Thought, EvolutionStage
 
-logger = logging.getLogger("slo.transcendent")
+logger = logging.getLogger("man.soul.transcendent")
 
 
 class TranscendentalExistenceSystem:

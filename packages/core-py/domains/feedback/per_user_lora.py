@@ -16,6 +16,9 @@ import time
 from pathlib import Path
 from typing import Dict, Optional, Any, List
 from dataclasses import dataclass
+import logging
+
+logger = logging.getLogger("man.feedback.per_user_lora")
 
 
 @dataclass
@@ -236,7 +239,7 @@ class PerUserLoRAStore:
                         max_age_days=7,
                     )
                     self._last_prune_count = total_users - len(deleted)
-                    print(f"[PerUserLoRA] Auto-pruned {len(deleted)} low-quality adapters")
+                    logger.info("Auto-pruned %d low-quality adapters", len(deleted))
 
             # Auto-aggregate: if we have enough quality adapters
             quality_adapters = self.get_quality_adapters(
@@ -251,12 +254,10 @@ class PerUserLoRAStore:
                     )
                     if "error" not in result:
                         self._last_aggregate_count = len(quality_adapters)
-                        print(
-                            f"[PerUserLoRA] Auto-aggregated {result.get('user_count', 0)} adapters"
-                        )
+                        logger.info("Auto-aggregated %d adapters", result.get('user_count', 0))
 
         except Exception as e:
-            print(f"[PerUserLoRA] Auto-manage error: {e}")
+            logger.error("Auto-manage error: %s", e)
 
     def _save_adapter(self, adapter: UserAdapter):
         """Save adapter weights to disk."""
@@ -536,7 +537,7 @@ class PerUserLoRAStore:
                 report_path = self.store_path / f"{output_name}_eval.txt"
                 with open(report_path, "w") as f:
                     f.write(evaluator.compare_with_report(baseline, with_adapter))
-                print(f"[PerUserLoRA] Eval report saved: {report_path}")
+                logger.info("Eval report saved: %s", report_path)
 
                 # Export as .soul checkpoint so it appears in model catalog
                 try:
@@ -550,14 +551,12 @@ class PerUserLoRAStore:
                         output_sou=str(sou_path),
                     )
                     result["sou_checkpoint"] = str(sou_path)
-                    print(f"[PerUserLORA] .soul checkpoint exported: {sou_path}")
+                    logger.info(".soul checkpoint exported: %s", sou_path)
                 except Exception as e2:
-                    print(f"[PerUserLoRA] .soul export skipped: {e2}")
+                    logger.warning(".soul export skipped: %s", e2)
 
             except Exception as e:
-                import traceback
-                print(f"[PerUserLoRA] Eval skipped: {e}")
-                traceback.print_exc()
+                logger.warning("Eval skipped: %s", e, exc_info=True)
                 result["eval"] = {"error": str(e)}
 
         return result

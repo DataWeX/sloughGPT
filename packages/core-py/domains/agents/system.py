@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Any
 
 from . import Agent, AgentConfig, ToolCapability, get_agent
 
-logger = logging.getLogger("agents")
+logger = logging.getLogger("man.agents")
 
 AGENTS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "data", "agents")
 

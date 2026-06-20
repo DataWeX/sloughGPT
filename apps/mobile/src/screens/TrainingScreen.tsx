@@ -12,14 +12,20 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useTrainingStore, type TrainPhase} from '../stores/training-store';
+import {useModelStore} from '../stores/model-store';
 import {StatusBadge} from '../components/StatusBadge';
 import {colors, spacing, radii, typography} from '../theme';
 
-const PHASE_LABELS: Record<TrainPhase, {text: string; variant: string}> = {
+const PHASE_LABELS: Record<string, {text: string; variant: string}> = {
   idle: {text: 'Ready', variant: 'default'},
   configuring: {text: 'Configuring', variant: 'info'},
+  GENERATE_DATA: {text: 'Generating Data', variant: 'info'},
+  DISTILL: {text: 'Distilling', variant: 'info'},
+  TRAIN: {text: 'Training', variant: 'warning'},
   TRAINING: {text: 'Training', variant: 'warning'},
+  EVALUATE: {text: 'Evaluating', variant: 'info'},
   EVALUATING: {text: 'Evaluating', variant: 'info'},
+  DEPLOY: {text: 'Deploying', variant: 'info'},
   COMPLETE: {text: 'Complete', variant: 'success'},
   FAILED: {text: 'Failed', variant: 'error'},
 };
@@ -29,7 +35,7 @@ function LossChart({data}: {data: {step: number; value: number}[]}) {
     return (
       <View style={styles.chartPlaceholder}>
         <Text style={styles.chartPlaceholderText}>
-          Loss curve will appear here during training
+          Loss curve will appear here
         </Text>
       </View>
     );
@@ -38,48 +44,38 @@ function LossChart({data}: {data: {step: number; value: number}[]}) {
   const maxLoss = Math.max(...data.map(d => d.value));
   const minLoss = Math.min(...data.map(d => d.value));
   const range = maxLoss - minLoss || 1;
-  const chartWidth = 300;
-  const chartHeight = 80;
+  const W = 280;
+  const H = 80;
+  const pad = 4;
 
   return (
-    <View style={styles.chartContainer}>
-      <Text style={styles.chartLabel}>Loss</Text>
-      <View style={[styles.chart, {width: chartWidth, height: chartHeight}]}>
+    <View style={styles.chartWrap}>
+      <View style={[styles.chart, {width: W, height: H}]}>
         {data.map((point, i) => {
-          if (i === 0) return null;
-          const x1 = ((i - 1) / (data.length - 1)) * chartWidth;
-          const x2 = (i / (data.length - 1)) * chartWidth;
-          const y1 =
-            chartHeight -
-            ((data[i - 1].value - minLoss) / range) * (chartHeight - 8);
-          const y2 =
-            chartHeight -
-            ((point.value - minLoss) / range) * (chartHeight - 8);
-          const dx = x2 - x1;
-          const dy = y2 - y1;
-          const len = Math.sqrt(dx * dx + dy * dy);
+          const x = pad + (i / (data.length - 1)) * (W - pad * 2);
+          const y = H - pad - ((point.value - minLoss) / range) * (H - pad * 2);
+          const dotSize = i === data.length - 1 ? 6 : 3;
+          const color = i === data.length - 1 ? colors.primary : colors.primaryLight;
           return (
             <View
               key={i}
               style={{
                 position: 'absolute',
-                left: x1,
-                top: y1,
-                width: Math.max(len, 1),
-                height: 2,
-                backgroundColor: colors.primary,
-                transform: [{rotate: `${Math.atan2(dy, dx)}rad`}],
-                transformOrigin: '0 0',
+                left: x - dotSize / 2,
+                top: y - dotSize / 2,
+                width: dotSize,
+                height: dotSize,
+                borderRadius: dotSize / 2,
+                backgroundColor: color,
               }}
             />
           );
         })}
       </View>
       <View style={styles.chartAxis}>
+        <Text style={styles.chartAxisText}>{minLoss.toFixed(2)}</Text>
         <Text style={styles.chartAxisText}>{data.length} points</Text>
-        <Text style={styles.chartAxisText}>
-          {minLoss.toFixed(2)} – {maxLoss.toFixed(2)}
-        </Text>
+        <Text style={styles.chartAxisText}>{maxLoss.toFixed(2)}</Text>
       </View>
     </View>
   );
@@ -103,13 +99,16 @@ export function TrainingScreen() {
     start,
     stop,
     refresh,
+    loadCheckpoint,
     deleteCheckpoint,
     clearError,
   } = useTrainingStore();
+  const modelStore = useModelStore();
   const [sourceText, setSourceText] = useState('');
   const [selectedDataset, setSelectedDataset] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [inputMode, setInputMode] = useState<'text' | 'dataset'>('text');
+  const [loadingCheckpoint, setLoadingCheckpoint] = useState<string | null>(null);
 
   useEffect(() => {
     refresh();
@@ -138,12 +137,26 @@ export function TrainingScreen() {
     start();
   };
 
-  const isTraining = phase === 'TRAINING' || phase === 'EVALUATING';
+  const handleLoadCheckpoint = async (name: string) => {
+    setLoadingCheckpoint(name);
+    try {
+      await loadCheckpoint(name);
+      await modelStore.refresh();
+      Alert.alert('Loaded', `Checkpoint ${name} loaded into model`);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to load checkpoint');
+    } finally {
+      setLoadingCheckpoint(null);
+    }
+  };
+
+  const isTraining = phase === 'TRAINING' || phase === 'EVALUATING' ||
+    phase === 'GENERATE_DATA' || phase === 'DISTILL' || phase === 'TRAIN' ||
+    phase === 'EVALUATE' || phase === 'DEPLOY';
   const isDone = phase === 'COMPLETE';
   const isFailed = phase === 'FAILED';
   const progress =
     totalEpochs > 0 ? Math.round((epoch / totalEpochs) * 100) : 0;
-
   const phaseInfo = PHASE_LABELS[phase] || PHASE_LABELS.idle;
 
   return (
@@ -170,7 +183,6 @@ export function TrainingScreen() {
           </View>
         )}
 
-        {/* Input source selector */}
         {!isTraining && !isDone && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Training Data</Text>
@@ -178,22 +190,14 @@ export function TrainingScreen() {
               <TouchableOpacity
                 style={[styles.modeBtn, inputMode === 'text' && styles.modeBtnActive]}
                 onPress={() => setInputMode('text')}>
-                <Text
-                  style={[
-                    styles.modeBtnText,
-                    inputMode === 'text' && styles.modeBtnTextActive,
-                  ]}>
+                <Text style={[styles.modeBtnText, inputMode === 'text' && styles.modeBtnTextActive]}>
                   Paste Text
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modeBtn, inputMode === 'dataset' && styles.modeBtnActive]}
                 onPress={() => setInputMode('dataset')}>
-                <Text
-                  style={[
-                    styles.modeBtnText,
-                    inputMode === 'dataset' && styles.modeBtnTextActive,
-                  ]}>
+                <Text style={[styles.modeBtnText, inputMode === 'dataset' && styles.modeBtnTextActive]}>
                   Dataset
                 </Text>
               </TouchableOpacity>
@@ -217,10 +221,7 @@ export function TrainingScreen() {
                   datasets.map(ds => (
                     <TouchableOpacity
                       key={ds.id}
-                      style={[
-                        styles.datasetItem,
-                        selectedDataset === ds.id && styles.datasetItemActive,
-                      ]}
+                      style={[styles.datasetItem, selectedDataset === ds.id && styles.datasetItemActive]}
                       onPress={() => setSelectedDataset(ds.id)}>
                       <View style={styles.datasetInfo}>
                         <Text style={styles.datasetName}>{ds.name}</Text>
@@ -228,9 +229,7 @@ export function TrainingScreen() {
                           {ds.file_count} files · {ds.total_chars.toLocaleString()} chars
                         </Text>
                       </View>
-                      {selectedDataset === ds.id && (
-                        <Text style={styles.check}>✓</Text>
-                      )}
+                      {selectedDataset === ds.id && <Text style={styles.check}>✓</Text>}
                     </TouchableOpacity>
                   ))
                 )}
@@ -239,7 +238,6 @@ export function TrainingScreen() {
           </View>
         )}
 
-        {/* Hyperparameters */}
         {!isTraining && !isDone && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Hyperparameters</Text>
@@ -249,18 +247,9 @@ export function TrainingScreen() {
                 {[3, 5, 10, 20, 50].map(v => (
                   <TouchableOpacity
                     key={v}
-                    style={[
-                      styles.paramBtn,
-                      config.epochs === v && styles.paramBtnActive,
-                    ]}
+                    style={[styles.paramBtn, config.epochs === v && styles.paramBtnActive]}
                     onPress={() => setConfig({epochs: v})}>
-                    <Text
-                      style={[
-                        styles.paramBtnText,
-                        config.epochs === v && styles.paramBtnTextActive,
-                      ]}>
-                      {v}
-                    </Text>
+                    <Text style={[styles.paramBtnText, config.epochs === v && styles.paramBtnTextActive]}>{v}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -271,40 +260,22 @@ export function TrainingScreen() {
                 {[0.0001, 0.001, 0.01].map(v => (
                   <TouchableOpacity
                     key={v}
-                    style={[
-                      styles.paramBtn,
-                      config.learning_rate === v && styles.paramBtnActive,
-                    ]}
+                    style={[styles.paramBtn, config.learning_rate === v && styles.paramBtnActive]}
                     onPress={() => setConfig({learning_rate: v})}>
-                    <Text
-                      style={[
-                        styles.paramBtnText,
-                        config.learning_rate === v && styles.paramBtnTextActive,
-                      ]}>
-                      {v}
-                    </Text>
+                    <Text style={[styles.paramBtnText, config.learning_rate === v && styles.paramBtnTextActive]}>{v}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </View>
             <View style={styles.paramRow}>
-              <Text style={styles.paramLabel}>Soul Name</Text>
+              <Text style={styles.paramLabel}>Soul</Text>
               <View style={styles.paramBtns}>
                 {['assistant', 'creative', 'coder', 'teacher', 'analyst'].map(v => (
                   <TouchableOpacity
                     key={v}
-                    style={[
-                      styles.paramBtn,
-                      config.soul_name === v && styles.paramBtnActive,
-                    ]}
+                    style={[styles.paramBtn, config.soul_name === v && styles.paramBtnActive]}
                     onPress={() => setConfig({soul_name: v})}>
-                    <Text
-                      style={[
-                        styles.paramBtnText,
-                        config.soul_name === v && styles.paramBtnTextActive,
-                      ]}>
-                      {v}
-                    </Text>
+                    <Text style={[styles.paramBtnText, config.soul_name === v && styles.paramBtnTextActive]}>{v}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -312,14 +283,11 @@ export function TrainingScreen() {
           </View>
         )}
 
-        {/* Training progress */}
         {(isTraining || isDone || isFailed) && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Progress</Text>
             <View style={styles.progressHeader}>
-              <Text style={styles.progressText}>
-                Epoch {epoch}/{totalEpochs}
-              </Text>
+              <Text style={styles.progressText}>Epoch {epoch}/{totalEpochs}</Text>
               <Text style={styles.progressText}>{progress}%</Text>
             </View>
             <View style={styles.progressTrack}>
@@ -328,11 +296,7 @@ export function TrainingScreen() {
                   styles.progressFill,
                   {
                     width: `${progress}%`,
-                    backgroundColor: isDone
-                      ? colors.success
-                      : isFailed
-                      ? colors.error
-                      : colors.primary,
+                    backgroundColor: isDone ? colors.success : isFailed ? colors.error : colors.primary,
                   },
                 ]}
               />
@@ -340,9 +304,7 @@ export function TrainingScreen() {
             <View style={styles.statsRow}>
               <View style={styles.stat}>
                 <Text style={styles.statLabel}>Loss</Text>
-                <Text style={styles.statValue}>
-                  {loss !== null ? loss.toFixed(4) : '—'}
-                </Text>
+                <Text style={styles.statValue}>{loss !== null ? loss.toFixed(4) : '—'}</Text>
               </View>
               <View style={styles.stat}>
                 <Text style={styles.statLabel}>Steps</Text>
@@ -353,27 +315,33 @@ export function TrainingScreen() {
             {isTraining && (
               <View style={styles.progressActions}>
                 <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={styles.trainingText}>Training in progress...</Text>
+                <Text style={styles.trainingText}>{phaseInfo.text}...</Text>
               </View>
             )}
           </View>
         )}
 
-        {/* Complete */}
         {isDone && checkpoint && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Training Complete</Text>
             <StatusBadge label="Success" variant="success" />
-            <Text style={styles.completeText}>
-              Checkpoint saved: {checkpoint}
-            </Text>
+            <Text style={styles.completeText}>Checkpoint: {checkpoint}</Text>
             <Text style={styles.completeMeta}>
               Final loss: {loss?.toFixed(4) || '—'} · {steps} steps
             </Text>
+            <TouchableOpacity
+              style={styles.loadBtn}
+              onPress={() => handleLoadCheckpoint(checkpoint)}
+              disabled={loadingCheckpoint === checkpoint}>
+              {loadingCheckpoint === checkpoint ? (
+                <ActivityIndicator size="small" color={colors.white} />
+              ) : (
+                <Text style={styles.loadBtnText}>Load Model for Chat</Text>
+              )}
+            </TouchableOpacity>
           </View>
         )}
 
-        {/* Start / Stop buttons */}
         <View style={styles.actions}>
           {isTraining ? (
             <TouchableOpacity style={styles.stopBtn} onPress={stop}>
@@ -391,7 +359,6 @@ export function TrainingScreen() {
           )}
         </View>
 
-        {/* Checkpoints */}
         {checkpoints.length > 0 && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Checkpoints</Text>
@@ -404,24 +371,40 @@ export function TrainingScreen() {
                     {cp.steps > 0 ? `· ${cp.steps} steps` : ''}{' '}
                     {cp.size_mb ? `· ${cp.size_mb} MB` : ''}
                   </Text>
-                  {cp.soul && cp.soul !== 'unknown' && (
-                    <StatusBadge label={cp.soul} variant="info" />
-                  )}
+                  <View style={styles.ckptBadges}>
+                    {cp.soul && cp.soul !== 'unknown' && (
+                      <StatusBadge label={cp.soul} variant="info" />
+                    )}
+                    {cp.verdict && (
+                      <StatusBadge
+                        label={cp.verdict}
+                        variant={cp.verdict === 'improved' ? 'success' : 'warning'}
+                      />
+                    )}
+                  </View>
                 </View>
-                <TouchableOpacity
-                  style={styles.ckptDelete}
-                  onPress={() => {
-                    Alert.alert('Delete', `Delete ${cp.name}?`, [
-                      {text: 'Cancel', style: 'cancel'},
-                      {
-                        text: 'Delete',
-                        style: 'destructive',
-                        onPress: () => deleteCheckpoint(cp.name),
-                      },
-                    ]);
-                  }}>
-                  <Text style={styles.ckptDeleteText}>×</Text>
-                </TouchableOpacity>
+                <View style={styles.ckptActions}>
+                  <TouchableOpacity
+                    style={styles.ckptLoad}
+                    onPress={() => handleLoadCheckpoint(cp.name)}
+                    disabled={loadingCheckpoint === cp.name}>
+                    {loadingCheckpoint === cp.name ? (
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    ) : (
+                      <Text style={styles.ckptLoadText}>Load</Text>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.ckptDelete}
+                    onPress={() => {
+                      Alert.alert('Delete', `Delete ${cp.name}?`, [
+                        {text: 'Cancel', style: 'cancel'},
+                        {text: 'Delete', style: 'destructive', onPress: () => deleteCheckpoint(cp.name)},
+                      ]);
+                    }}>
+                    <Text style={styles.ckptDeleteText}>×</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ))}
           </View>
@@ -509,9 +492,7 @@ const styles = StyleSheet.create({
   datasetMeta: {...typography.small, color: colors.textMuted},
   check: {color: colors.primary, fontSize: 18, fontWeight: '700'},
   empty: {...typography.caption, color: colors.textMuted, textAlign: 'center', padding: spacing.lg},
-  paramRow: {
-    marginBottom: spacing.md,
-  },
+  paramRow: {marginBottom: spacing.md},
   paramLabel: {...typography.caption, color: colors.textSecondary, marginBottom: spacing.xs},
   paramBtns: {flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap'},
   paramBtn: {
@@ -547,8 +528,7 @@ const styles = StyleSheet.create({
   stat: {},
   statLabel: {...typography.small, color: colors.textMuted},
   statValue: {...typography.h3, color: colors.text},
-  chartContainer: {marginTop: spacing.sm},
-  chartLabel: {...typography.small, color: colors.textMuted, marginBottom: spacing.xs},
+  chartWrap: {marginTop: spacing.sm},
   chart: {
     backgroundColor: colors.background,
     borderRadius: radii.sm,
@@ -577,6 +557,15 @@ const styles = StyleSheet.create({
   trainingText: {...typography.caption, color: colors.textMuted},
   completeText: {...typography.body, color: colors.text, marginTop: spacing.md},
   completeMeta: {...typography.small, color: colors.textMuted, marginTop: spacing.xs},
+  loadBtn: {
+    marginTop: spacing.md,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.md,
+    alignItems: 'center',
+  },
+  loadBtnText: {...typography.caption, color: colors.white, fontWeight: '600'},
   actions: {gap: spacing.sm},
   startBtn: {
     backgroundColor: colors.primary,
@@ -604,6 +593,15 @@ const styles = StyleSheet.create({
   ckptInfo: {flex: 1, gap: spacing.xs},
   ckptName: {...typography.body, color: colors.text, fontWeight: '500'},
   ckptMeta: {...typography.small, color: colors.textMuted},
+  ckptBadges: {flexDirection: 'row', gap: spacing.xs},
+  ckptActions: {flexDirection: 'row', gap: spacing.xs, alignItems: 'center'},
+  ckptLoad: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.md,
+    backgroundColor: colors.primary + '15',
+  },
+  ckptLoadText: {...typography.small, color: colors.primary, fontWeight: '600'},
   ckptDelete: {
     width: 28,
     height: 28,

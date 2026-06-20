@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 import numpy as np
+import logging
+
+logger = logging.getLogger("man.feedback.training")
 
 
 @dataclass

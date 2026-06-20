@@ -28,7 +28,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from contextlib import contextmanager
 
-logger = logging.getLogger("man")
+logger = logging.getLogger("man.agents")
 
 
 # ============ Security & Safety ============

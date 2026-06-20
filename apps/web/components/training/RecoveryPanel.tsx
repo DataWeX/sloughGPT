@@ -59,7 +59,7 @@ export function RecoveryPanel({ jobs, fetchJobs }: RecoveryPanelProps) {
       addToast('Job recovery ' + (result.status === 'recovered' ? 'started' : 'triggered'), result.status === 'recovered' ? 'success' : 'info')
       void fetchJobs()
     } catch (error) {
-      addToast(error instanceof Error ? error.message : 'Recovery failed', 'error')
+      addToast(error instanceof Error ? error.message : 'Something went wrong', 'error')
     } finally {
       setLoading(false)
     }
@@ -74,7 +74,7 @@ export function RecoveryPanel({ jobs, fetchJobs }: RecoveryPanelProps) {
       void fetchJobs()
       void checkRecovery()
     } catch (error) {
-      addToast(error instanceof Error ? error.message : 'Abandon failed', 'error')
+      addToast(error instanceof Error ? error.message : 'Something went wrong', 'error')
     } finally {
       setLoading(false)
     }

@@ -17,7 +17,7 @@ import logging
 
 from .consciousness import ConsciousSLO, SLOConfig, Thought, EvolutionStage
 
-logger = logging.getLogger("slo.quantum")
+logger = logging.getLogger("man.soul.quantum")
 
 
 class QuantumState:

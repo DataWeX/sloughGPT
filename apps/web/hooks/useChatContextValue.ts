@@ -36,8 +36,8 @@ export function useChatModelValue(opts: Pick<UseChatContextValueOpts, 'model' | 
     try {
       await soulsController.loadCheckpoint(name)
       model.setCurrentCheckpoint(name)
-      showToast(`Checkpoint loaded: ${name}`)
-    } catch { showToast('Failed to load checkpoint', 'error') }
+      showToast(`Trained version loaded: ${name}`)
+    } catch { showToast('Failed to load trained version', 'error') }
   }, [model.setCurrentCheckpoint, showToast])
 
   const onTrainStep = useCallback(async () => {
@@ -46,8 +46,8 @@ export function useChatModelValue(opts: Pick<UseChatContextValueOpts, 'model' | 
       const resp = await fetch(`${PUBLIC_API_URL}/learn/train`, { method: 'POST' })
       if (resp.ok) {
         const data = await resp.json()
-        if (data.current_loss !== undefined) showToast(`Train step: loss ${data.current_loss.toFixed(4)}`)
-        else showToast('Train step complete')
+        if (data.current_loss !== undefined) showToast(`Training step: loss ${data.current_loss.toFixed(4)}`)
+        else showToast('Training step complete')
         model.setLearnerInfo(prev => {
           if (!prev) return prev
           return {
@@ -57,8 +57,8 @@ export function useChatModelValue(opts: Pick<UseChatContextValueOpts, 'model' | 
             loss_history: data.loss_history ?? prev.loss_history,
           }
         })
-      } else showToast('Train step failed', 'error')
-    } catch { showToast('Train step failed', 'error') }
+      } else showToast('Training step failed', 'error')
+    } catch { showToast('Training step failed', 'error') }
     finally { model.setLearnerTraining(false) }
   }, [model.setLearnerTraining, model.setLearnerInfo, showToast])
 

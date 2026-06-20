@@ -24,10 +24,13 @@ Usage:
 """
 
 import json
+import logging
 import time
 import numpy as np
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
+
+logger = logging.getLogger("man.lora_eval")
 from dataclasses import dataclass, field
 
 
@@ -188,7 +191,7 @@ class LoRAEvaluator:
             self._model.to(self._device)
             self._model.eval()
         except Exception as e:
-            print(f"[LoRAEval] Could not load model: {e}")
+            logger.warning("Could not load model: %s", e)
             self._model = None
 
     def _generate(self, prompt: str, adapter_path: Optional[str] = None, max_tokens: int = 50) -> Tuple[str, float, float]:
@@ -593,7 +596,7 @@ class LoRAEvaluator:
         )
 
         save_soul(net, output_sou)
-        print(f"[LoRAEval] Exported .soul checkpoint: {output_sou}")
+        logger.info("Exported .soul checkpoint: %s", output_sou)
         return output_sou
 
     def get_history(self, limit: int = 20) -> List[EvalResult]:

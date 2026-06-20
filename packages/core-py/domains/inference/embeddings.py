@@ -29,7 +29,10 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union
 from enum import Enum
 
+import logging
 import numpy as np
+
+logger = logging.getLogger("man.embeddings")
 
 
 class EmbeddingProvider(Enum):
@@ -117,7 +120,7 @@ class SentenceTransformerEmbedder(BaseEmbedder):
         try:
             from sentence_transformers import SentenceTransformer
             self.model = SentenceTransformer(model, device=device)
-            print(f"✓ Loaded sentence-transformers: {model} on {device}")
+            logger.info("Loaded sentence-transformers: %s on %s", model, device)
         except ImportError:
             raise ImportError(
                 "pip install sentence-transformers\n"

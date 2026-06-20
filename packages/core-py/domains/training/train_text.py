@@ -36,31 +36,25 @@ try:
 except ImportError:
     _RICH = False
 
-logger = logging.getLogger("man.train_text")
+from domains.logging import CLILogger, LogLevel
+
+_log = CLILogger("man.train_text", level=LogLevel.DEBUG)
 
 
 def _log_info(msg: str):
-    if _RICH:
-        _console.print(f"  [bold cyan]▸[/] {msg}")
-    logger.info(msg)
+    _log.info(msg)
 
 
 def _log_ok(msg: str):
-    if _RICH:
-        _console.print(f"  [bold green]✔[/] {msg}")
-    logger.info(msg)
+    _log.success(msg)
 
 
 def _log_warn(msg: str):
-    if _RICH:
-        _console.print(f"  [bold yellow]⚠[/] {msg}")
-    logger.warning(msg)
+    _log.warning(msg)
 
 
 def _log_error(msg: str):
-    if _RICH:
-        _console.print(f"  [bold red]✘[/] {msg}")
-    logger.error(msg)
+    _log.error(msg)
 
 
 def load_texts(path: str) -> List[str]:

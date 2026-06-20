@@ -1,116 +1,86 @@
 """
-Printer — Consistent CLI output with Rich.
+Printer — Consistent CLI output with Rich, backed by the OOP logging hierarchy.
 
-Same API as before (success, error, header, table, etc.)
-but powered by rich under the hood.
+Inherits from ``CLILogger`` (domains.logging) so that all output goes through
+the structured Logger system.  Keeps the existing API (success, error, header,
+table, etc.) for backward compatibility with all CLI commands.
 
-TUI sub-module provides live-updating dashboards and panels
-for long-running processes. Use ``printer.tui`` or import
-``core.tui`` directly.
+Usage::
+
+    from core.printer import printer
+
+    printer.success("model loaded")
+    printer.error("connection failed")
+    printer.table(["Name", "Size"], [["gpt2", "500MB"]])
 """
 
 import os
+import sys
 import json as _json
 from typing import Optional, List
-from rich.console import Console
-from rich.table import Table as RichTable
-from rich.panel import Panel
-from rich.syntax import Syntax
-from rich.text import Text
-from rich import box
+
+# Lazy import of CLILogger to avoid circular deps in CLI context.
+# The CLI runs from apps/cli/ which adds core-py to sys.path at startup.
+from domains.logging import CLILogger, LogLevel
 
 
-_console = Console(highlight=False)
+class Printer(CLILogger):
+    """CLI output formatter — inherits from CLILogger, adds Printer-specific helpers.
 
+    Inherits: debug, info, warning, error, critical, exception, emit,
+              success, step, header, section, table, json, status, divider.
 
-class Printer:
-    """Consistent CLI output formatting powered by Rich."""
+    Adds: key_value, print_json, blank, command.
+    """
 
-    def __init__(self, width: Optional[int] = None, color: bool = True):
-        self.width = width or _console.width
-        self._color_enabled = color
+    def __init__(self, name: str = "man.cli", level: LogLevel = LogLevel.DEBUG):
+        super().__init__(name=name, level=level)
+        # Printer exposes width as a public attribute (used by commands)
+        try:
+            from rich.console import Console
+            self.width = Console(highlight=False).width
+        except Exception:
+            self.width = 80
+
+    # ── Printer-specific helpers (not on CLILogger) ─────────────────────
+
+    def key_value(self, key: str, value: str, indent: int = 2):
+        """Print a dim key: value pair."""
+        from rich.console import Console
+        c = Console(highlight=False)
+        padding = " " * indent
+        c.print(f"{padding}[dim]{key}:[/] {value}")
+
+    def print_json(self, data: dict, indent: int = 2):
+        """Pretty-print JSON with syntax highlighting."""
+        # Delegate to CLILogger.json()
+        self.json(data, indent=indent)
+
+    def blank(self, count: int = 1):
+        """Print blank lines."""
+        from rich.console import Console
+        c = Console(highlight=False)
+        for _ in range(count):
+            c.print()
+
+    def command(self, cmd: str, description: str = ""):
+        """Print a command with optional description."""
+        from rich.console import Console
+        c = Console(highlight=False)
+        if description:
+            c.print(f"  [cyan]{cmd:<30}[/] [dim]{description}[/]")
+        else:
+            c.print(f"  [cyan]{cmd}[/]")
+
+    # ── Backward compat properties ──────────────────────────────────────
 
     @property
     def color_enabled(self) -> bool:
-        return self._color_enabled
+        return True
 
     @color_enabled.setter
     def color_enabled(self, value: bool):
-        self._color_enabled = value
-
-    def success(self, message: str):
-        _console.print(f"  [green]✓[/] {message}")
-
-    def error(self, message: str):
-        _console.print(f"  [red]✗[/] {message}")
-
-    def warning(self, message: str):
-        _console.print(f"  [yellow]![/] {message}")
-
-    def info(self, message: str):
-        _console.print(f"  [blue]ℹ[/] {message}")
-
-    def step(self, message: str):
-        _console.print(f"  [cyan]→[/] {message}")
-
-    def header(self, title: str, char: str = "="):
-        line = char * self.width
-        _console.print(f"[bold]{title}[/]")
-        _console.print(f"[dim]{line}[/]")
-
-    def section(self, title: str):
-        _console.print()
-        _console.print(f"[bold]{title}[/]")
-        _console.print(f"[dim]{'-' * self.width}[/]")
-
-    def key_value(self, key: str, value: str, indent: int = 2):
-        padding = " " * indent
-        _console.print(f"{padding}[dim]{key}:[/] {value}")
-
-    def table(
-        self,
-        headers: List[str],
-        rows: List[List[str]],
-        align: Optional[List[str]] = None,
-    ):
-        if not rows:
-            return
-        t = RichTable(box=box.SIMPLE, show_header=True, header_style="bold")
-        for i, h in enumerate(headers):
-            justification = {"l": "left", "r": "right", "c": "center"}.get(
-                align[i] if align and i < len(align) else "l", "left"
-            )
-            t.add_column(h, justify=justification)
-        for row in rows:
-            t.add_row(*row)
-        _console.print(t)
-
-    def divider(self, char: str = "-"):
-        _console.print(f"[dim]{char * self.width}[/]")
-
-    def print_json(self, data: dict, indent: int = 2):
-        text = _json.dumps(data, indent=indent, default=str)
-        syntax = Syntax(text, "json", theme="monokai", line_numbers=False)
-        _console.print(syntax)
-
-    def blank(self, count: int = 1):
-        for _ in range(count):
-            _console.print()
-
-    def status(self, label: str, value: str, status: str = "ok"):
-        colors = {"ok": "green", "warn": "yellow", "error": "red", "info": "blue"}
-        color = colors.get(status, "white")
-        indicator = {"ok": "✓", "warn": "!", "error": "✗", "info": "ℹ"}.get(status, "•")
-        _console.print(f"  [[{color}]{indicator}[/]] {label}: {value}")
-
-    def command(self, cmd: str, description: str = ""):
-        if description:
-            _console.print(f"  [cyan]{cmd:<30}[/] [dim]{description}[/]")
-        else:
-            _console.print(f"  [cyan]{cmd}[/]")
+        pass  # Rich handles color detection internally
 
 
 printer = Printer()
-
-# TUI sub-module — pure-ANSI components
-from core.tui import DevDashboard, TabConfig

@@ -14,6 +14,9 @@ import time
 import stat as stat_mod
 from pathlib import Path
 from typing import Any, Callable, Optional
+import logging
+
+logger = logging.getLogger("man.shell.vfs")
 
 
 class VFSEntry:

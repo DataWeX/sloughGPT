@@ -17,6 +17,9 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 from domains.training.slonet_compat import torch
 F = torch.F
+import logging
+
+logger = logging.getLogger("man.optimizer")
 
 
 def _is_float32(t):

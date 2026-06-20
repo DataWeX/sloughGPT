@@ -8,8 +8,11 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 from typing import Optional, List, Dict
 from pathlib import Path
+import logging
 import threading
 import random
+
+logger = logging.getLogger("man.training_db")
 
 
 @dataclass

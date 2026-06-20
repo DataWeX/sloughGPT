@@ -30,6 +30,9 @@ import math
 from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Set
+import logging
+
+logger = logging.getLogger("man.tokenizer")
 
 
 # GPT-2 style regex pre-tokenization.

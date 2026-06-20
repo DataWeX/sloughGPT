@@ -123,7 +123,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
         sessionIdRef.current,
         contextMessages.map(m => ({ role: m.role, content: m.content }))
       )) {
-        if (data.error) { showToast('Regeneration failed', 'error'); break }
+        if (data.error) { showToast('Failed to regenerate response', 'error'); break }
         if (data.token) {
           setMessages(prev => prev.map(msg =>
             msg.id === assistantId ? { ...msg, content: (msg.content || '') + data.token } : msg

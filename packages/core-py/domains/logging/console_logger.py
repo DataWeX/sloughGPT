@@ -19,7 +19,7 @@ import os
 import sys
 import time
 from datetime import datetime
-from typing import TextIO
+from typing import Optional, TextIO
 
 from .base import Logger, LogLevel, LogRecord
 
@@ -77,8 +77,8 @@ class ConsoleLogger(Logger):
         self,
         name: str = "man",
         level: LogLevel = LogLevel.INFO,
-        stream: TextIO | None = None,
-        colors: bool | None = None,
+        stream: Optional[TextIO] = None,
+        colors: Optional[bool] = None,
         context=None,
     ) -> None:
         super().__init__(name=name, level=level, context=context)

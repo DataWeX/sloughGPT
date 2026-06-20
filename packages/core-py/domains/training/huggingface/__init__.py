@@ -37,6 +37,10 @@ from .model_map import (
     map_to_sloughgpt_config,
 )
 
+import logging
+
+logger = logging.getLogger("man.huggingface")
+
 MODEL_REGISTRY = HF_MODELS  # legacy alias (not every call site needs the training registry)
 
 from .client import (

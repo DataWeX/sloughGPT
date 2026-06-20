@@ -16,6 +16,9 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Any, Tuple, Callable
 from pathlib import Path
+import logging
+
+logger = logging.getLogger("man.slonet")
 
 # Lazy GPU acceleration — import on demand, never at module load
 _ACCELERATOR = None

@@ -42,7 +42,7 @@ export class ErrorBoundary extends Component<Props, State> {
     if (isNonFatalError(error)) {
       // Log to toast instead
       try {
-        useToastStore.getState().addToast(error.message, 'error')
+        useToastStore.getState().addToast('Something went wrong. Try refreshing the page.', 'error')
       } catch {
         // Toast store might not be initialized
       }
@@ -75,7 +75,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
               <h1 className="text-xl font-semibold">Something went wrong</h1>
               <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                {this.state.error?.message || 'An unexpected error occurred'}
+                Something went wrong. Try refreshing the page.
               </p>
             </div>
             <div className="flex items-center justify-center gap-3">
@@ -100,7 +100,7 @@ export function useErrorHandler() {
     console.error('Error:', error)
     // Show as toast for non-fatal errors
     if (isNonFatalError(error)) {
-      useToastStore.getState().addToast(error.message, 'error')
+      useToastStore.getState().addToast('Something went wrong. Try refreshing the page.', 'error')
     } else {
       throw error
     }

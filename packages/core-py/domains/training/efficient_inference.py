@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from enum import Enum
 import logging
 
-logger = logging.getLogger("sloughgpt.efficient")
+logger = logging.getLogger("man.training.efficient")
 
 
 class DeviceType(Enum):

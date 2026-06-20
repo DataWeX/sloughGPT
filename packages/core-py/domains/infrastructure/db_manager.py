@@ -10,6 +10,9 @@ from typing import Optional, List, Dict
 from datetime import datetime
 import uuid
 from dataclasses import dataclass
+import logging
+
+logger = logging.getLogger("man.db_manager")
 
 # Database configuration
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./sloughgpt.db")

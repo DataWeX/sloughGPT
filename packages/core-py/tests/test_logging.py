@@ -86,7 +86,7 @@ class _MemoryLogger(Logger):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.records: list[LogRecord] = []
+        self.records = []  # type: list[LogRecord]
 
     def emit(self, record: LogRecord) -> None:
         self.records.append(record)

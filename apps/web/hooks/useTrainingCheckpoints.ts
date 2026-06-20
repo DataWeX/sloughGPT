@@ -54,18 +54,18 @@ export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
     try {
       await trainingJobsController.loadCheckpoint?.(name)
       setActiveCheckpoint(name)
-      addToast(`Loaded checkpoint: ${name}`, 'success')
-    } catch { addToast('Failed to load checkpoint', 'error') }
+      addToast(`Loaded trained version: ${name}`, 'success')
+    } catch { addToast('Failed to load trained version', 'error') }
   }, [])
 
   const handleDeleteCheckpoint = useCallback(async (name: string, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => {
-    if (!confirm(`Delete checkpoint "${name}"?`)) return
+    if (!confirm(`Delete trained version "${name}"?`)) return
     try {
       await trainingJobsController.deleteCheckpoint?.(name)
       setCheckpoints(prev => prev.filter(c => c.name !== name))
       setActiveCheckpoint(prev => prev === name ? null : prev)
       addToast(`Deleted ${name}`, 'success')
-    } catch { addToast('Failed to delete checkpoint', 'error') }
+    } catch { addToast('Failed to delete trained version', 'error') }
   }, [])
 
   return {

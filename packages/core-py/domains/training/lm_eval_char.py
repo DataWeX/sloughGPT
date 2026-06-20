@@ -15,11 +15,15 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from domains.training.slonet_compat import torch
 
+import logging
+
 from domains.training.checkpoint_utils import (
     load_sloughgpt_from_checkpoint,
     tokenizer_maps_from_bundle,
     torch_load_checkpoint,
 )
+
+logger = logging.getLogger("man.lm_eval")
 
 
 def _resolve_stoi(bundle: Dict[str, Any], eval_text: str) -> Tuple[Dict[str, int], List[str]]:

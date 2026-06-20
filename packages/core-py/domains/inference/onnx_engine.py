@@ -19,8 +19,11 @@ except ImportError:
     ONNXRuntimeError = Exception
     ONNXRUNTIME_AVAILABLE = False
 
+import logging
 import numpy as np
 import time
+
+logger = logging.getLogger("man.onnx_engine")
 
 
 class ONNXRuntimeError(Exception):

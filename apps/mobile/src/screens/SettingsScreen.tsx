@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {useNavigation} from '@react-navigation/native';
 import {useSettingsStore} from '../stores/settings-store';
 import {useModelStore} from '../stores/model-store';
 import {StatusBadge} from '../components/StatusBadge';
@@ -20,6 +21,7 @@ import type {ThemeMode} from '../types';
 export function SettingsScreen() {
   const settings = useSettingsStore();
   const {health, refresh} = useModelStore();
+  const navigation = useNavigation<any>();
   const [serverUrl, setServerUrl] = useState('');
   const [healthData, setHealthData] = useState<HealthStatus | null>(null);
 
@@ -75,6 +77,18 @@ export function SettingsScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        <TouchableOpacity
+          style={styles.card}
+          onPress={() => navigation.navigate('Health')}>
+          <View style={styles.navRow}>
+            <View>
+              <Text style={styles.cardTitle}>System Health</Text>
+              <Text style={styles.navDesc}>CPU, memory, disk, uptime</Text>
+            </View>
+            <Text style={styles.navArrow}>→</Text>
+          </View>
+        </TouchableOpacity>
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Appearance</Text>

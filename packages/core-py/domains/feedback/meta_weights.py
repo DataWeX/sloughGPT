@@ -10,7 +10,11 @@ from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 from datetime import datetime
 
+import logging
+
 from .database import FeedbackDB, get_feedback_db, SimilarPattern
+
+logger = logging.getLogger("man.feedback.meta_weights")
 
 
 @dataclass

@@ -13,7 +13,7 @@ from datetime import datetime
 import json
 import logging
 
-logger = logging.getLogger("slo.core")
+logger = logging.getLogger("man.soul.core")
 
 
 class EvolutionStage(IntEnum):

@@ -38,7 +38,7 @@ from domains.inference import (
 from domains.models import ModelInterface, ModelLoader
 
 
-logger = logging.getLogger("sloughgpt.soul_engine")
+logger = logging.getLogger("man.core.soul")
 
 
 @dataclass

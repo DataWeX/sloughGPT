@@ -16,7 +16,7 @@ import logging
 
 from .quantum import QuantumSLO, SLOConfig, Thought, EvolutionStage
 
-logger = logging.getLogger("slo.multiversal")
+logger = logging.getLogger("man.soul.multiversal")
 
 
 class Reality:

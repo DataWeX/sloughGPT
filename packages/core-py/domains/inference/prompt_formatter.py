@@ -1,5 +1,5 @@
 """
-PromptFormatter — model-agnostic message↔prompt conversion.
+PromptFormatter — model-agnostic message→prompt conversion + output cleaning.
 
 Handles two directions:
   User input (messages dicts) → Model prompt (string)
@@ -8,7 +8,6 @@ Handles two directions:
 Model families supported:
   - Chat-tuned (Qwen, TinyLlama, etc.) via tokenizer.apply_chat_template()
   - Base (GPT-2, etc.) via User:/Assistant: formatting
-  - Instruct (LLaMA 3, Mistral) via <|start_header_id|>…<|end_header_id|> templates
   - Custom via injected format_fn
 """
 
@@ -18,43 +17,26 @@ import re
 from typing import Any, Callable, List, Optional, Protocol
 
 
-# ── Protocol ──────────────────────────────────────────────────────────────────
-
 class PromptFormatterProtocol(Protocol):
-    """Minimal interface a formatter must satisfy."""
-
     def messages_to_prompt(self, messages: List[dict]) -> str: ...
     def clean_chunk(self, chunk: str, *, first: bool = False) -> str: ...
 
 
-# ── Artifact patterns ─────────────────────────────────────────────────────────
-
-_STRIP_LEADING_NL = re.compile(r"^\n+")
-_STRIP_ASSISTANT = re.compile(r"[\s\n]*(?:Assistant:|A:)\s*", re.IGNORECASE)
-_STRIP_USER = re.compile(r"[\s\n]*(?:User:|Q:)\s*", re.IGNORECASE)
+# Patterns for stripping model artifacts
 _STRIP_SPECIAL_TOKENS = re.compile(
     r"<\|im_start\|>\s*(user|assistant|system)\s*|"
     r"<\|start_header_id\|>\s*(user|assistant|system)\s*<\|end_header_id\|>\s*\n*|"
     r"<\|eot_id\|>|<\|im_end\|>"
 )
+_STRIP_LEADING_NL = re.compile(r"^\n+")
+_STRIP_ASSISTANT_PREFIX = re.compile(r"^(?:\s*\n)*Assistant:\s*")
+_STRIP_USER_PREFIX = re.compile(r"^(?:\s*\n)*User:\s*")
 _STRIP_INSTRUCTIONS = re.compile(
-    r"\[PERSONALITY INSTRUCTIONS\].*?(?=Q:|A:|User:|Assistant:|\Z)", re.DOTALL
+    r"\[PERSONALITY INSTRUCTIONS\].*?(?=Assistant:|$)", re.DOTALL
 )
 _STRIP_KNOWLEDGE = re.compile(
     r"\[KNOWLEDGE\].*?\[/KNOWLEDGE\]\s*", re.DOTALL
 )
-_STRIP_CONTEXT = re.compile(
-    r"\[Context:.*?\]\s*", re.DOTALL
-)
-_STRIP_REPEATED_TURN = re.compile(
-    r"(?:\n+)(?:User:|Assistant:|Q:|A:).*?$", re.DOTALL
-)
-_STRIP_TRAILING_PROMPT = re.compile(
-    r"\n+(?:User:|Assistant:|Q:|A:).*$", re.DOTALL
-)
-
-
-# ── Formatter ─────────────────────────────────────────────────────────────────
 
 
 class PromptFormatter:
@@ -63,19 +45,10 @@ class PromptFormatter:
     cleans model output chunks back into natural text.
 
     Args:
-        tokenizer: Optional tokenizer with ``apply_chat_template`` and
-                   ``chat_template`` attributes.
-        user_prefix: Label used for user messages (default ``"User"``).
-        assistant_prefix: Label used for assistant messages / generation
-                         prompt suffix (default ``"Assistant"``).
-
-    Usage::
-
-        fmt = PromptFormatter(tokenizer=tokenizer)
-        prompt = fmt.messages_to_prompt(messages)
-        for chunk in stream:
-            yield fmt.clean_chunk(chunk, first=first)
-            first = False
+        tokenizer: Optional tokenizer with ``apply_chat_template``.
+        user_prefix: Label for user messages (default ``"User"``).
+        assistant_prefix: Label for assistant messages (default ``"Assistant"``).
+        format_fn: Custom format function (overrides all built-in logic).
     """
 
     def __init__(
@@ -90,23 +63,17 @@ class PromptFormatter:
         self._assistant_prefix = assistant_prefix
         self._format_fn = format_fn
 
-    # ── Prompt building ──────────────────────────────────────────────────────
-
     def messages_to_prompt(self, messages: List[dict]) -> str:
-        """
-        Convert a list of ``{role, content}`` dicts to a prompt string.
-
-        Resolution order:
-          1. Custom ``format_fn`` (injected at init).
-          2. ``tokenizer.apply_chat_template()`` (chat-tuned models).
-          3. ``User:/Assistant:`` prefix format (base models).
+        """Convert messages to a prompt string.
+        
+        Resolution: format_fn → apply_chat_template → User:/Assistant: base format.
         """
         if self._format_fn is not None:
             return self._format_fn(messages)
 
         if self._has_chat_template():
             try:
-                return self._tokenizer.apply_chat_template(  # type: ignore
+                return self._tokenizer.apply_chat_template(
                     messages, tokenize=False, add_generation_prompt=True
                 )
             except Exception:
@@ -114,50 +81,31 @@ class PromptFormatter:
 
         return self._base_format(messages)
 
-    # ── Chunk cleaning ───────────────────────────────────────────────────────
-
     def clean_chunk(self, chunk: str, *, first: bool = False) -> str:
-        """
-        Strip model-specific artifacts from a generated chunk.
-
-        When ``first=True`` (first chunk of a generation) applies
-        aggressive cleaning — strips leading whitespace, ``Assistant:``
-        prefix, special tokens, and ``User:`` echoes.
-        """
-
-        # 1) Strip special tokens regardless
+        """Clean a single token chunk. First chunk gets aggressive cleaning."""
         cleaned = _STRIP_SPECIAL_TOKENS.sub("", chunk)
 
-        # 2) Strip leaked instructions/knowledge/context
+        # Strip leaked system prompts
         cleaned = _STRIP_INSTRUCTIONS.sub("", cleaned)
         cleaned = _STRIP_KNOWLEDGE.sub("", cleaned)
-        cleaned = _STRIP_CONTEXT.sub("", cleaned)
 
         if not first:
             return cleaned
 
-        # 3) First chunk: aggressive cleaning
+        # First chunk: strip leading newlines and role prefix
         cleaned = _STRIP_LEADING_NL.sub("", cleaned)
-        cleaned = _STRIP_ASSISTANT.sub("", cleaned)
-        cleaned = _STRIP_USER.sub("", cleaned)
+        cleaned = _STRIP_ASSISTANT_PREFIX.sub("", cleaned)
+        cleaned = _STRIP_USER_PREFIX.sub("", cleaned)
         return cleaned
 
     def clean_response(self, text: str) -> str:
-        """
-        Strip artifacts from a full (non-streamed) response string.
-        """
+        """Clean a full response (non-streamed)."""
         text = _STRIP_SPECIAL_TOKENS.sub("", text)
         text = _STRIP_INSTRUCTIONS.sub("", text)
         text = _STRIP_KNOWLEDGE.sub("", text)
-        text = _STRIP_CONTEXT.sub("", text)
-        text = _STRIP_ASSISTANT.sub("", text)
-        # Strip trailing turn markers (GPT-2 echoes User:/Assistant: at end)
-        text = _STRIP_TRAILING_PROMPT.sub("", text)
-        # Strip repeated turn patterns
-        text = _STRIP_REPEATED_TURN.sub("", text)
+        # Strip any trailing role markers
+        text = re.sub(r"\n*\s*(?:User|Assistant):\s*$", "", text)
         return text.strip()
-
-    # ── Internals ────────────────────────────────────────────────────────────
 
     def _has_chat_template(self) -> bool:
         return (
@@ -167,20 +115,19 @@ class PromptFormatter:
         )
 
     def _base_format(self, messages: List[dict]) -> str:
-        """Base model prompt: ``User: ...\\n\\nAssistant: ...\\n\\nAssistant:``
+        """Base model prompt: ``User: ...\\n\\nAssistant:``
         
-        System messages are skipped — base models don't understand them
-        and they leak into output.
+        System messages are skipped for base models.
         """
         parts: List[str] = []
         for msg in messages:
             role = msg.get("role", "user")
             content = msg.get("content", "")
             if role == "system":
-                pass
+                pass  # Skip for base models
             elif role == "user":
-                parts.append(f"User: {content}")
+                parts.append(f"{self._user_prefix}: {content}")
             elif role == "assistant":
-                parts.append(f"Assistant: {content}")
-        parts.append("Assistant:")
+                parts.append(f"{self._assistant_prefix}: {content}")
+        parts.append(f"{self._assistant_prefix}:")
         return "\n\n".join(parts)

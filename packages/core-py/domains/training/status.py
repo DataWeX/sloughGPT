@@ -17,6 +17,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from domains.training.slonet_compat import torch
+import logging
+
+logger = logging.getLogger("man.training.status")
 
 
 class TrainingStage(Enum):

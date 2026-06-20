@@ -91,11 +91,11 @@ export default function TrainingPage() {
     }
 
     if ((method === 'finetune' || method === 'unified') && !hasDataset) {
-      addToast(`${method === 'unified' ? 'Unified training' : 'Fine-tune'} requires a dataset.`, 'error'); return
+      addToast(`${method === 'unified' ? 'Unified training' : 'Continue training'} requires a dataset.`, 'error'); return
     }
 
     if (method === 'vlm' && !hasDataset) {
-      addToast('VLM training requires a dataset with image-text pairs', 'error'); return
+      addToast('Vision model training requires a dataset with image-text pairs', 'error'); return
     }
 
     const body: Record<string, unknown> = { algo, epochs: trainingEpochs, learning_rate: trainingLR }
@@ -193,9 +193,8 @@ export default function TrainingPage() {
       }
       setTimeout(poll, 2000)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to start training'
       setQuickTraining(false)
-      addToast(msg, 'error')
+      addToast('Something went wrong starting training', 'error')
     }
   }, [quickDataset, addToast, checkpoints])
 
@@ -268,10 +267,10 @@ export default function TrainingPage() {
       <div className="space-y-4">
         {/* Stats */}
         <KpiGrid columns={4}>
-          <StatCard label="Total Jobs" value={checkpoints.jobs.length} />
+          <StatCard label="Training runs" value={checkpoints.jobs.length} />
           <StatCard label="Running" value={runningJob ? 1 : 0} />
           <StatCard label="Completed" value={completedCount} />
-          <StatCard label="Checkpoints" value={checkpoints.checkpoints.length} />
+          <StatCard label="Saved versions" value={checkpoints.checkpoints.length} />
         </KpiGrid>
 
         {/* Quick Train — one-click training */}
@@ -456,9 +455,9 @@ export default function TrainingPage() {
                       setLoadingFinetunedModel(true)
                       try {
                         await modelController.loadModelPath(session.finetunedModelPath!)
-                        addToast('Fine-tuned model loaded', 'success')
+                        addToast('Model loaded', 'success')
                       } catch {
-                        addToast('Failed to load fine-tuned model', 'error')
+                        addToast('Failed to load model', 'error')
                       } finally {
                         setLoadingFinetunedModel(false)
                       }
@@ -471,7 +470,7 @@ export default function TrainingPage() {
                       try {
                         await checkpoints.handleLoadCheckpoint(session.distillCheckpoint!, addToast)
                       } catch {
-                        addToast('Failed to load checkpoint', 'error')
+                        addToast('Failed to load trained version', 'error')
                       }
                     }}>
                       Load checkpoint
@@ -482,9 +481,9 @@ export default function TrainingPage() {
                       setLoadingFinetunedModel(true)
                       try {
                         await modelController.loadModelPath(session.unifiedModelPath!)
-                        addToast('Unified model loaded', 'success')
+                        addToast('Model loaded', 'success')
                       } catch {
-                        addToast('Failed to load unified model', 'error')
+                        addToast('Failed to load model', 'error')
                       } finally {
                         setLoadingFinetunedModel(false)
                       }
@@ -497,9 +496,9 @@ export default function TrainingPage() {
                       setLoadingFinetunedModel(true)
                       try {
                         await modelController.loadVLM(session.vlmOutputDir!)
-                        addToast('VLM loaded for chat', 'success')
+                        addToast('Vision model loaded', 'success')
                       } catch {
-                        addToast('Failed to load VLM', 'error')
+                        addToast('Failed to load vision model', 'error')
                       } finally {
                         setLoadingFinetunedModel(false)
                       }
@@ -592,13 +591,13 @@ export default function TrainingPage() {
                       <div className="flex items-center gap-1 text-sm">
                         <button role="radio" aria-checked={method === 'distill'} className={cn('px-3 py-1.5 rounded-md transition-colors', method === 'distill' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => setMethod('distill')}>Distill</button>
                         <button role="radio" aria-checked={method === 'finetune'} className={cn('px-3 py-1.5 rounded-md transition-colors', method === 'finetune' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => setMethod('finetune')}>Fine-tune</button>
-                        <button role="radio" aria-checked={method === 'vlm'} className={cn('px-3 py-1.5 rounded-md transition-colors', method === 'vlm' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => setMethod('vlm')}>VLM</button>
-                        <button role="radio" aria-checked={method === 'unified'} className={cn('px-3 py-1.5 rounded-md transition-colors', method === 'unified' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => setMethod('unified')}>Unified</button>
+                        <button role="radio" aria-checked={method === 'vlm'} className={cn('px-3 py-1.5 rounded-md transition-colors', method === 'vlm' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => setMethod('vlm')}>Vision model</button>
+                        <button role="radio" aria-checked={method === 'unified'} className={cn('px-3 py-1.5 rounded-md transition-colors', method === 'unified' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => setMethod('unified')}>Auto</button>
                       </div>
-                      {method === 'distill' && <span className="text-xs text-muted-foreground/70">Teacher model distills into a compact student</span>}
+                      {method === 'distill' && <span className="text-xs text-muted-foreground/70">A large model teaches a smaller one to copy its style</span>}
                       {method === 'finetune' && <span className="text-xs text-muted-foreground/70">Continue training an existing model on new data</span>}
-                      {method === 'vlm' && <span className="text-xs text-muted-foreground/70">Vision + Language model (SigLIP encoder + LLM)</span>}
-                      {method === 'unified' && <span className="text-xs text-muted-foreground/70">Composite pipeline: auto-detect method, optional distillation</span>}
+                      {method === 'vlm' && <span className="text-xs text-muted-foreground/70">Teach the AI to understand images and text</span>}
+                      {method === 'unified' && <span className="text-xs text-muted-foreground/70">Automatically pick the best method</span>}
                     </div>
 
                     {/* Data source toggle */}
@@ -893,8 +892,8 @@ export default function TrainingPage() {
                       )}
                       {b.build_type === 'vlm' && (
                         <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={async () => {
-                          try { await modelController.loadVLM(b.model_path!); addToast(`VLM loaded: ${b.name}`, 'success') }
-                          catch { addToast('Failed to load VLM', 'error') }
+                          try { await modelController.loadVLM(b.model_path!); addToast(`Vision model loaded: ${b.name}`, 'success') }
+                          catch { addToast('Failed to load vision model', 'error') }
                         }}>
                           VLM Chat
                         </Button>
@@ -953,7 +952,7 @@ export default function TrainingPage() {
                           {job.checkpoint && (
                             <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={async () => {
                               try { await checkpoints.handleLoadCheckpoint(job.checkpoint!, addToast) }
-                              catch { addToast('Failed to load checkpoint', 'error') }
+                              catch { addToast('Failed to load trained version', 'error') }
                             }}>
                               Use
                             </Button>

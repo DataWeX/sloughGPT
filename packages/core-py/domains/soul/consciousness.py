@@ -17,7 +17,7 @@ import logging
 
 from .cognitive import CognitiveSLO, SLOConfig, Thought, EvolutionStage
 
-logger = logging.getLogger("slo.consciousness")
+logger = logging.getLogger("man.soul.consciousness")
 
 
 class GlobalWorkspace:

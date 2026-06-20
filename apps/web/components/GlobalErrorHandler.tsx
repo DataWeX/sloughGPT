@@ -97,7 +97,7 @@ export function GlobalErrorHandler() {
       }
       const verbose = verboseParts.length > 0 ? verboseParts.join('\n') : undefined
 
-      addToast(message, 'error', verbose)
+      addToast('Something went wrong.', 'error', verbose)
       event.preventDefault()
     }
 
@@ -125,7 +125,7 @@ export function GlobalErrorHandler() {
       }
       const verbose = verboseParts.length > 0 ? verboseParts.join('\n') : undefined
 
-      addToast(message, 'error', verbose)
+      addToast('Something went wrong.', 'error', verbose)
       event.preventDefault()
     }
 

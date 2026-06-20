@@ -55,7 +55,7 @@ export function ConversationDataSection() {
       }
     } catch (err) {
       console.error('Export error:', err)
-      addToast('Export failed: ' + (err instanceof Error ? err.message : 'Unknown error'), 'error')
+      addToast('Something went wrong exporting', 'error')
     } finally {
       setExporting(false)
     }

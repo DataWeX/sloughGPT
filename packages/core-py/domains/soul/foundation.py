@@ -16,7 +16,7 @@ import logging
 
 from .base import BaseSLO, SLOConfig, Experience, Thought, EvolutionStage
 
-logger = logging.getLogger("slo.foundation")
+logger = logging.getLogger("man.soul.foundation")
 
 
 class HaulsStore:

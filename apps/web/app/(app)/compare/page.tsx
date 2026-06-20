@@ -39,7 +39,7 @@ export default function ComparePage() {
         }))
         setModels(entries.slice(0, 8))
       } catch {
-        addToast('Failed to fetch models', 'error')
+        addToast('Failed to load models', 'error')
       } finally {
         setLoading(false)
       }
@@ -54,7 +54,7 @@ export default function ComparePage() {
       setResults(prev => ({ ...prev, [modelId]: result }))
     } catch {
       setResults(prev => ({ ...prev, [modelId]: { error: 'Failed' } as BenchmarkResult }))
-      addToast(`Benchmark failed for ${modelId}`, 'error')
+      addToast(`Performance test failed for ${modelId}`, 'error')
     } finally {
       setRunning(prev => { const n = new Set(prev); n.delete(modelId); return n })
     }
@@ -97,12 +97,12 @@ export default function ComparePage() {
     lowerBetter?: boolean
     accessor: (r: BenchmarkResult) => number
   }[] = [
-    { label: 'Parameters', key: 'num_parameters', fmt: v => v.toLocaleString(), accessor: r => r.num_parameters },
+    { label: 'Model size', key: 'num_parameters', fmt: v => v.toLocaleString(), accessor: r => r.num_parameters },
     { label: 'Memory', key: 'memory_mb', fmt: v => `${v.toFixed(0)} MB`, accessor: r => r.memory_mb },
-    { label: 'Throughput', key: 'throughput_tokens_per_sec', fmt: v => `${v.toFixed(1)} tok/s`, accessor: r => r.throughput_tokens_per_sec },
-    { label: 'Avg latency', key: 'inference_time_ms', fmt: v => `${v.toFixed(0)} ms`, lowerBetter: true, accessor: r => r.inference_time_ms },
-    { label: 'P95', key: 'latency_p95_ms', fmt: v => `${v.toFixed(0)} ms`, lowerBetter: true, accessor: r => r.latency_p95_ms ?? Infinity },
-    { label: 'P99', key: 'latency_p99_ms', fmt: v => `${v.toFixed(0)} ms`, lowerBetter: true, accessor: r => r.latency_p99_ms ?? Infinity },
+    { label: 'Speed', key: 'throughput_tokens_per_sec', fmt: v => `${v.toFixed(1)} tok/s`, accessor: r => r.throughput_tokens_per_sec },
+    { label: 'Avg response time', key: 'inference_time_ms', fmt: v => `${v.toFixed(0)} ms`, lowerBetter: true, accessor: r => r.inference_time_ms },
+    { label: '95th percentile', key: 'latency_p95_ms', fmt: v => `${v.toFixed(0)} ms`, lowerBetter: true, accessor: r => r.latency_p95_ms ?? Infinity },
+    { label: '99th percentile', key: 'latency_p99_ms', fmt: v => `${v.toFixed(0)} ms`, lowerBetter: true, accessor: r => r.latency_p99_ms ?? Infinity },
   ]
 
   return (

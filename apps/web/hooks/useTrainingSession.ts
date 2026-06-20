@@ -183,7 +183,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       lora_rank: 8,
     }).then(resp => {
       const jobId = resp.job_id
-      addToast(resp.message || 'Fine-tune queued', 'info')
+      addToast(resp.message || 'Training queued', 'info')
       setPhase('TRAINING'); setProgress(0); setTotalEpochs(params.epochs)
       const pollId = setInterval(async () => {
         try {
@@ -196,18 +196,18 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             setPhase('complete'); setProgress(100)
             setFinetunedModelPath(myJob.result?.model_path || '')
             setFinetunedModelLoss(myJob.result?.final_loss || myJob.loss || null)
-            addToast('Fine-tune complete', 'success')
+            addToast('Training complete', 'success')
             onComplete?.()
           } else if (myJob.status === 'failed') {
             clearInterval(pollId); setPhase('error')
-            addToast(myJob.error || 'Fine-tune failed', 'error')
+            addToast(myJob.error || 'Training failed', 'error')
           } else if (myJob.loss != null) {
             setLoss(myJob.loss); setProgress(myJob.progress || 0); setEpoch(myJob.current_epoch || 0)
           }
         } catch { clearInterval(pollId) }
       }, 3000)
       setTimeout(() => clearInterval(pollId), 300000)
-    }).catch(() => addToast('Failed to start fine-tune', 'error'))
+    }).catch(() => addToast('Something went wrong starting training', 'error'))
   }, [])
 
   const startVLMTraining = useCallback((
@@ -226,7 +226,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       name: `vlm-${params.dataset}-${Date.now()}`,
     }).then(resp => {
       const jobId = resp.job_id
-      addToast(resp.message || 'VLM training queued', 'info')
+      addToast(resp.message || 'Image model training queued', 'info')
       setPhase('TRAINING'); setProgress(0); setTotalEpochs(params.stage1Epochs + params.stage2Epochs)
       const pollId = setInterval(async () => {
         try {
@@ -240,11 +240,11 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             setFinetunedModelLoss(myJob.loss || null)
             setVlmOutputDir(myJob.output_dir || null)
             setVlmSouPath(myJob.sou_path || null)
-            addToast('VLM training complete', 'success')
+            addToast('Image model training complete', 'success')
             onComplete?.()
           } else if (myJob.status === 'failed') {
             clearInterval(pollId); setPhase('error')
-            addToast(myJob.error || 'VLM training failed', 'error')
+            addToast(myJob.error || 'Image model training failed', 'error')
           } else if (myJob.loss != null) {
             setLoss(myJob.loss); setProgress(myJob.progress || 0); setEpoch(myJob.current_epoch || 0)
             setMessage(myJob.stage || '')
@@ -252,7 +252,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
         } catch { clearInterval(pollId) }
       }, 3000)
       setTimeout(() => clearInterval(pollId), 600000)
-    }).catch(() => addToast('Failed to start VLM training', 'error'))
+    }).catch(() => addToast('Something went wrong starting image model training', 'error'))
   }, [])
 
   const startTurboTrain = useCallback((
@@ -338,7 +338,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             setPhase('complete')
             addToast('Unified training complete', 'success')
           }
-          if (env.status === 'error') { es.close(); esRef.current = null; setPhase('error'); addToast(env.message || 'Unified training failed', 'error') }
+          if (env.status === 'error') { es.close(); esRef.current = null; setPhase('error'); addToast(env.message || 'Something went wrong during training', 'error') }
         } catch { /* ignore */ }
       }
       let esRetries = 0
@@ -347,7 +347,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
           es.close(); esRef.current = null; setPhase('error')
         } else { esRetries++ }
       }
-    }).catch(() => addToast('Failed to start unified training', 'error'))
+    }).catch(() => addToast('Something went wrong starting training', 'error'))
   }, [])
 
   return {

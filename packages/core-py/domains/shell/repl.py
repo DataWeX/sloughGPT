@@ -118,6 +118,10 @@ class ShellREPL:
         self._env.update(self.state.env)
         self._update_color_state()
 
+        # Structured logger — inherit from domains.logging
+        from domains.logging import ShellLogger, LogLevel
+        self.log = ShellLogger("man.shell.repl", level=LogLevel.DEBUG)
+
         self._aliases: dict[str, str] = dict(self.state.aliases)
         self._aliases.update({
             "q": "exit", "quit": "exit", "h": "help",
@@ -286,6 +290,23 @@ class ShellREPL:
 
     def _print(self, *args, **kwargs) -> None:
         print(*args, **kwargs)
+
+    def _log_ok(self, msg: str, **ctx) -> None:
+        """Log a success message (green checkmark)."""
+        from domains.logging import LogLevel
+        self.log.emit(self.log._make_record(LogLevel.INFO, msg, ctx))
+
+    def _log_warn(self, msg: str, **ctx) -> None:
+        """Log a warning (yellow exclamation)."""
+        self.log.warning(msg, **ctx)
+
+    def _log_error(self, msg: str, **ctx) -> None:
+        """Log an error (red cross)."""
+        self.log.error(msg, **ctx)
+
+    def _log_step(self, msg: str, **ctx) -> None:
+        """Log a step/action (cyan arrow)."""
+        self.log.info(msg, **ctx)
 
     def _print_header(self) -> None:
         terminal = shutil.get_terminal_size().columns

@@ -15,7 +15,7 @@ import logging
 
 from .multiversal import MultiversalSLO, SLOConfig, Thought, EvolutionStage
 
-logger = logging.getLogger("slo.ultimate")
+logger = logging.getLogger("man.soul.ultimate")
 
 
 class SourceCodeManipulator:

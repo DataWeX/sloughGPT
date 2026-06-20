@@ -135,7 +135,7 @@ export default function SystemHealthPage() {
                 value={!loaded ? '...' : formatUptime(detailed.uptime_seconds)}
               />
               <StatCard
-                label="Inferences"
+                label="Responses served"
                 value={!loaded ? '...' : detailed?.inference?.inference_count ?? 0}
               />
             </KpiGrid>
@@ -182,7 +182,7 @@ export default function SystemHealthPage() {
               <StatCard label="Topics" value={knowledgeStats ? knowledgeStats.topic_count.toString() : '...'} />
               <StatCard label="Avg Importance" value={knowledgeStats ? knowledgeStats.avg_importance.toFixed(2) : '...'} />
               <StatCard
-                label="Adapter"
+                label="AI training"
                 value={!adapterStatus ? '...' : adapterStatus.adapter_exists ? 'Trained' : 'Not trained'}
                 icon={
                   <span className={`inline-block w-2 h-2 rounded-full ${!adapterStatus ? 'bg-warning' : adapterStatus.adapter_exists ? 'bg-success' : 'bg-muted-foreground/50'}`} />
@@ -200,7 +200,7 @@ export default function SystemHealthPage() {
         {/* Model Quality */}
         {benchQuality && benchQuality.status === 'ok' && (
           <Card>
-            <CardHeader><CardTitle className="text-base">Model Quality</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">Response quality</CardTitle></CardHeader>
             <CardContent>
               <KpiGrid columns={4}>
                 <StatCard label="Coherence" value={benchQuality.coherence_score.toFixed(2)} icon={
@@ -215,7 +215,7 @@ export default function SystemHealthPage() {
               <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
                 <span>Avg length: {benchQuality.avg_length.toFixed(1)} words</span>
                 <span>Empty rate: {(benchQuality.empty_rate * 100).toFixed(1)}%</span>
-                {benchStats && <span>Avg tokens: {benchStats.avg_tokens.toFixed(0)}</span>}
+                {benchStats && <span>Avg response length: {benchStats.avg_tokens.toFixed(0)}</span>}
               </div>
             </CardContent>
           </Card>
@@ -224,11 +224,11 @@ export default function SystemHealthPage() {
         {/* DPO / VLM Training */}
         {dpoStatus || vlmStatus ? (
           <Card>
-            <CardHeader><CardTitle className="text-base">Model Training (DPO + VLM)</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">Model Training (Feedback + Vision model)</CardTitle></CardHeader>
             <CardContent>
               <KpiGrid columns={4}>
                 <StatCard
-                  label="DPO Status"
+                  label="Training feedback status"
                   value={dpoStatus ? dpoStatus.status : '...'}
                   icon={
                     <span className={`inline-block w-2 h-2 rounded-full ${!dpoStatus ? 'bg-warning' : dpoStatus.status === 'running' ? 'bg-warning' : dpoStatus.status === 'completed' ? 'bg-success' : dpoStatus.status === 'error' ? 'bg-destructive' : 'bg-muted-foreground/50'}`}
@@ -236,15 +236,15 @@ export default function SystemHealthPage() {
                   }
                 />
                 <StatCard
-                  label="DPO Accepted"
+                  label="Feedback accepted"
                   value={dpoStatus ? dpoStatus.accepted_count.toString() : '...'}
                 />
                 <StatCard
-                  label="DPO Rejected"
+                  label="Feedback rejected"
                   value={dpoStatus ? dpoStatus.rejected_count.toString() : '...'}
                 />
                 <StatCard
-                  label="VLM Loaded"
+                  label="Vision model loaded"
                   value={vlmStatus ? (vlmStatus.vlm_loaded ? 'Yes' : 'No') : '...'}
                   icon={
                     <span className={`inline-block w-2 h-2 rounded-full ${!vlmStatus ? 'bg-warning' : vlmStatus.vlm_loaded ? 'bg-success' : 'bg-muted-foreground/50'}`}
@@ -254,12 +254,12 @@ export default function SystemHealthPage() {
               </KpiGrid>
               {vlmStatus?.training && (
                 <p className="text-xs text-muted-foreground mt-2">
-                  VLM training: {vlmStatus.training.status}
+                  Vision model training: {vlmStatus.training.status}
                 </p>
               )}
               {dpoStatus?.last_run && (
                 <p className="text-xs text-muted-foreground mt-1">
-                  Last DPO: {dpoStatus.last_run}
+                  Last feedback: {dpoStatus.last_run}
                 </p>
               )}
               <div className="mt-3">
@@ -274,9 +274,9 @@ export default function SystemHealthPage() {
                     } catch {}
                     setDpoRunning(false)
                   }}
-                  aria-label="Run DPO training"
+                  aria-label="Run feedback training"
                 >
-                  {dpoRunning || dpoStatus?.status === 'running' ? 'Running...' : 'Run DPO'}
+                  {dpoRunning || dpoStatus?.status === 'running' ? 'Running...' : 'Run feedback'}
                 </Button>
               </div>
             </CardContent>

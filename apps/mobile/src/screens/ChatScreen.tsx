@@ -109,6 +109,13 @@ export function ChatScreen() {
             )}
           </View>
           <View style={styles.headerRight}>
+            <TouchableOpacity
+              style={styles.newChatBtn}
+              onPress={() => {
+                useChatStore.getState().createSession();
+              }}>
+              <Text style={styles.newChatText}>+ New</Text>
+            </TouchableOpacity>
             <View
               style={[
                 styles.dot,
@@ -229,6 +236,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  newChatBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.md,
+    backgroundColor: colors.primary + '15',
+  },
+  newChatText: {
+    ...typography.small,
+    color: colors.primary,
+    fontWeight: '600',
   },
   dot: {
     width: 8,

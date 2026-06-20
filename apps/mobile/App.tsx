@@ -11,6 +11,7 @@ import {KnowledgeScreen} from './src/screens/KnowledgeScreen';
 import {SettingsScreen} from './src/screens/SettingsScreen';
 import {HealthScreen} from './src/screens/HealthScreen';
 import {useModelStore} from './src/stores/model-store';
+import {ErrorBoundary} from './src/components/ErrorBoundary';
 import {colors} from './src/theme';
 
 const Tab = createBottomTabNavigator();
@@ -49,40 +50,42 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
-      <NavigationContainer>
-        <Tab.Navigator
-          screenOptions={({route}) => ({
-            headerShown: false,
-            tabBarIcon: ({focused}) => (
-              <TabIcon name={route.name} focused={focused} />
-            ),
-            tabBarActiveTintColor: colors.primary,
-            tabBarInactiveTintColor: colors.textMuted,
-            tabBarStyle: {
-              backgroundColor: colors.background,
-              borderTopColor: colors.border,
-              height: 60,
-              paddingBottom: 8,
-              paddingTop: 4,
-            },
-            tabBarLabelStyle: {
-              fontSize: 11,
-              fontWeight: '500',
-            },
-          })}>
-          <Tab.Screen name="Chat" component={ChatScreen} />
-          <Tab.Screen name="Models" component={ModelsScreen} />
-          <Tab.Screen name="Train" component={TrainingScreen} />
-          <Tab.Screen name="Knowledge" component={KnowledgeScreen} />
-          <Tab.Screen
-            name="Settings"
-            component={SettingsStack}
-            options={{headerShown: false}}
-          />
-        </Tab.Navigator>
-      </NavigationContainer>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+        <NavigationContainer>
+          <Tab.Navigator
+            screenOptions={({route}) => ({
+              headerShown: false,
+              tabBarIcon: ({focused}) => (
+                <TabIcon name={route.name} focused={focused} />
+              ),
+              tabBarActiveTintColor: colors.primary,
+              tabBarInactiveTintColor: colors.textMuted,
+              tabBarStyle: {
+                backgroundColor: colors.background,
+                borderTopColor: colors.border,
+                height: 60,
+                paddingBottom: 8,
+                paddingTop: 4,
+              },
+              tabBarLabelStyle: {
+                fontSize: 11,
+                fontWeight: '500',
+              },
+            })}>
+            <Tab.Screen name="Chat" component={ChatScreen} />
+            <Tab.Screen name="Models" component={ModelsScreen} />
+            <Tab.Screen name="Train" component={TrainingScreen} />
+            <Tab.Screen name="Knowledge" component={KnowledgeScreen} />
+            <Tab.Screen
+              name="Settings"
+              component={SettingsStack}
+              options={{headerShown: false}}
+            />
+          </Tab.Navigator>
+        </NavigationContainer>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }

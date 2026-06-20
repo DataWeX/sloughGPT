@@ -13,6 +13,9 @@ import threading
 import time
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
+import logging
+
+logger = logging.getLogger("man.feedback")
 
 from .database import FeedbackDB, get_feedback_db
 from .meta_weights import MetaWeightManager, get_meta_weight_manager
@@ -658,9 +661,9 @@ class FeedbackWorkflowManager:
             )
             if deleted:
                 self._stats["prunes_performed"] += 1
-                print(f"[Workflow] Pruned {len(deleted)} adapters")
+                logger.info("Pruned %d adapters", len(deleted))
         except Exception as e:
-            print(f"[Workflow] Prune error: {e}")
+            logger.warning("Prune error: %s", e)
 
 
     def _do_export(self):
@@ -676,9 +679,9 @@ class FeedbackWorkflowManager:
 
             self.db.export_feedback_jsonl(str(filepath))
             self._stats["exports_performed"] += 1
-            print(f"[Workflow] Exported training data to {filepath}")
+            logger.info("Exported training data to %s", filepath)
         except Exception as e:
-            print(f"[Workflow] Export error: {e}")
+            logger.warning("Export error: %s", e)
 
     def _do_dpo(self):
         """Run scheduled DPO preference learning on mixed-feedback pairs.
@@ -703,7 +706,7 @@ class FeedbackWorkflowManager:
             self._stats["workflow_runs"] += 1
             self._last_health_check = time.time()
         except Exception as e:
-            print(f"[Workflow] Health check error: {e}")
+            logger.warning("Health check error: %s", e)
 
     def start(self):
         """Start the automated workflow in background threads."""
@@ -721,12 +724,12 @@ class FeedbackWorkflowManager:
         self._scheduler_thread = threading.Thread(target=scheduler_loop, daemon=True)
         self._scheduler_thread.start()
 
-        print("[Workflow] Started automated feedback workflow")
+        logger.info("Started automated feedback workflow")
 
     def stop(self):
         """Stop the automated workflow."""
         self._running = False
-        print("[Workflow] Stopped automated feedback workflow")
+        logger.info("Stopped automated feedback workflow")
 
     def get_status(self) -> Dict[str, Any]:
         """Get current workflow status and statistics."""

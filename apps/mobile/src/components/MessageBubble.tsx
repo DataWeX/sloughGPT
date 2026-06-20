@@ -1,12 +1,11 @@
 import React, {useState} from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   StyleSheet,
-  Alert,
 } from 'react-native';
-import {colors, spacing, radii, typography} from '../theme';
+import {Markdown} from './Markdown';
+import {colors, spacing, radii} from '../theme';
 import type {Message} from '../types';
 
 interface Props {
@@ -30,38 +29,35 @@ export function MessageBubble({message, onRegenerate, onFeedback}: Props) {
         style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}
         onLongPress={handleLongPress}
         activeOpacity={0.8}>
-        <Text
-          style={[styles.text, isUser ? styles.userText : styles.assistantText]}
-          selectable>
-          {message.content || (isUser ? '' : 'Thinking...')}
-        </Text>
+        {isUser ? (
+          <Markdown content={message.content} style={styles.userText} />
+        ) : (
+          <Markdown content={message.content || 'Thinking...'} style={styles.assistantText} />
+        )}
       </TouchableOpacity>
 
       {showActions && !isUser && (
         <View style={styles.actions}>
           <TouchableOpacity
             style={styles.actionBtn}
-            onPress={() => {
-              onFeedback?.(true);
-              setShowActions(false);
-            }}>
-            <Text style={styles.actionText}>👍</Text>
+            onPress={() => { onFeedback?.(true); setShowActions(false); }}>
+            <View style={[styles.actionIcon, {backgroundColor: colors.success + '20'}]}>
+              <Markdown content="👍" />
+            </View>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionBtn}
-            onPress={() => {
-              onFeedback?.(false);
-              setShowActions(false);
-            }}>
-            <Text style={styles.actionText}>👎</Text>
+            onPress={() => { onFeedback?.(false); setShowActions(false); }}>
+            <View style={[styles.actionIcon, {backgroundColor: colors.error + '20'}]}>
+              <Markdown content="👎" />
+            </View>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionBtn}
-            onPress={() => {
-              onRegenerate?.();
-              setShowActions(false);
-            }}>
-            <Text style={styles.actionText}>↻</Text>
+            onPress={() => { onRegenerate?.(); setShowActions(false); }}>
+            <View style={[styles.actionIcon, {backgroundColor: colors.primary + '20'}]}>
+              <Markdown content="↻" />
+            </View>
           </TouchableOpacity>
         </View>
       )}
@@ -92,9 +88,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderBottomLeftRadius: radii.sm,
   },
-  text: {
-    ...typography.body,
-  },
   userText: {
     color: colors.white,
   },
@@ -106,15 +99,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     gap: spacing.xs,
   },
-  actionBtn: {
+  actionBtn: {},
+  actionIcon: {
     width: 32,
     height: 32,
     borderRadius: radii.full,
-    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  actionText: {
-    fontSize: 14,
   },
 });

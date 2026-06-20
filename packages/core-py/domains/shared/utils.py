@@ -9,6 +9,9 @@ import random
 import string
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+import logging
+
+logger = logging.getLogger("man.shared")
 
 
 def generate_id(prefix: str = "") -> str:

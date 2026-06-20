@@ -54,7 +54,7 @@ export default function TokenizerPage() {
     try {
       const s = await tokenizerController.getStats()
       setStats(s)
-    } catch { addToast('Failed to load tokenizer stats', 'error') }
+    } catch { addToast('Failed to load stats', 'error') }
   }, [addToast])
 
   const fetchMerges = useCallback(async (limit = 100) => {
@@ -102,7 +102,7 @@ export default function TokenizerPage() {
       const res = await tokenizerController.decomposeToken(decompToken)
       setDecompResult(res)
     } catch (e: any) {
-      addToast(e.message || 'Token not found in vocab', 'error')
+      addToast('Something went wrong decomposing token', 'error')
       setDecompResult(null)
     }
     setDecompLoading(false)
@@ -115,7 +115,7 @@ export default function TokenizerPage() {
       const res = await tokenizerController.analyzeCorpus(texts)
       setAnalysisResult(res)
     } catch (e: any) {
-      addToast(e.message || 'Analysis failed', 'error')
+      addToast('Something went wrong analyzing text', 'error')
     }
   }
 
@@ -151,9 +151,9 @@ export default function TokenizerPage() {
               </div>
             ) : (
               <KpiGrid columns={4}>
-                <StatCard label="Vocab size" value={stats?.vocab_size ?? '—'} />
+                <StatCard label="Vocabulary size" value={stats?.vocab_size ?? '—'} />
                 <StatCard label="Base chars" value={stats?.base_chars ?? '—'} />
-                <StatCard label="Subwords" value={stats?.merged_subwords ?? '—'} />
+                <StatCard label="Word pieces" value={stats?.merged_subwords ?? '—'} />
                 <StatCard label="Merges" value={stats?.total_merges ?? '—'} />
               </KpiGrid>
             )}
@@ -230,8 +230,8 @@ export default function TokenizerPage() {
           tabs={[
             { value: 'playground', label: 'Playground' },
             { value: 'samples', label: 'Samples' },
-            { value: 'merges', label: `Merges (${mergeTotal})` },
-            { value: 'vocab', label: `Vocab (${vocabTotal})` },
+            { value: 'merges', label: `Merge rules (${mergeTotal})` },
+            { value: 'vocab', label: `Vocabulary (${vocabTotal})` },
             { value: 'decompose', label: 'Decompose' },
             { value: 'analyze', label: 'Analyze' },
           ]}
@@ -384,9 +384,9 @@ export default function TokenizerPage() {
         {/* Analyze tab */}
         {tab === 'analyze' && (
           <Card>
-            <CardHeader><CardTitle className="text-base">Corpus Analysis</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">Text Analysis</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-xs text-muted-foreground">Paste text (one line per document) to analyze tokenization efficiency.</p>
+              <p className="text-xs text-muted-foreground">Paste text to see how it gets split into tokens.</p>
               <textarea
                 value={analysisText}
                 onChange={e => setAnalysisText(e.target.value)}
@@ -398,8 +398,8 @@ export default function TokenizerPage() {
               {analysisResult && (
                 <div className="space-y-3">
                   <KpiGrid columns={3}>
-                    <StatCard label="Compression ratio" value={analysisResult.compression_ratio.toFixed(2)} />
-                    <StatCard label="Vocab utilization" value={`${(analysisResult.vocab_utilization * 100).toFixed(1)}%`} />
+                    <StatCard label="Compression" value={analysisResult.compression_ratio.toFixed(2)} />
+                    <StatCard label="Vocabulary usage" value={`${(analysisResult.vocab_utilization * 100).toFixed(1)}%`} />
                     <StatCard label="Top tokens shown" value={analysisResult.top_tokens.length} />
                   </KpiGrid>
                   <div>
@@ -426,7 +426,7 @@ export default function TokenizerPage() {
           <CardHeader><CardTitle className="text-base">Train</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              Train a new BPE tokenizer on the Tiny Shakespeare dataset (~2K lines).
+              Train a new tokenizer on the Tiny Shakespeare dataset (~2K lines).
             </p>
             <Button
               size="sm"
@@ -437,7 +437,7 @@ export default function TokenizerPage() {
                   addToast('Tokenizer trained on Shakespeare', 'success')
                   await Promise.all([fetchStats(), fetchMerges(), fetchVocab()])
                 } catch (e: any) {
-                  addToast(e.message || 'Training failed', 'error')
+                  addToast('Something went wrong training the tokenizer', 'error')
                 }
                 setTraining(false)
               }}

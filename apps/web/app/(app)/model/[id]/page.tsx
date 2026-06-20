@@ -39,7 +39,7 @@ export default function ModelDetailPage() {
       setModel(m)
       setLoadState(h?.model_loaded && (h.model_type?.includes(modelId) ?? false) ? 'loaded' : 'idle')
     } catch (e) {
-      addToast('Failed to load model data', 'error')
+      addToast('Something went wrong loading the model', 'error')
     } finally {
       setLoading(false)
     }
@@ -74,7 +74,7 @@ export default function ModelDetailPage() {
       addToast(`Model ready: ${modelId} (${result.device || 'cpu'})`, 'success')
     } catch {
       setLoadState('error')
-      addToast(`Failed to load ${modelId}`, 'error')
+      addToast(`Something went wrong loading ${modelId}`, 'error')
     }
   }
 
@@ -83,9 +83,9 @@ export default function ModelDetailPage() {
       await modelController.unloadModel(modelId)
       setLoadState('idle')
       setHealth(prev => prev ? { ...prev, model_loaded: false, model_type: '' } : null)
-      addToast('Model unloaded', 'info')
+      addToast('Model stopped', 'info')
     } catch {
-      addToast('Failed to unload', 'error')
+      addToast('Something went wrong', 'error')
     }
   }
 
@@ -97,7 +97,7 @@ export default function ModelDetailPage() {
       setBenchmark(result)
     } catch {
       setBenchmark({ error: 'Benchmark failed' } as BenchmarkResult)
-      addToast('Benchmark failed', 'error')
+      addToast('Performance test failed', 'error')
     } finally {
       setBenchmarking(false)
     }

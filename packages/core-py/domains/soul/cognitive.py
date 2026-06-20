@@ -25,7 +25,7 @@ import logging
 from .foundation import FoundationSLO, SLOConfig, Experience, Thought, EvolutionStage
 from ..infrastructure import RAGEngine, SpacedRepetitionScheduler, SLOKnowledgeGraph
 
-logger = logging.getLogger("slo.cognitive")
+logger = logging.getLogger("man.soul.cognitive")
 
 
 class SentimentAnalyzer:

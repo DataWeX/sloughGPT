@@ -57,7 +57,7 @@ export default function MultimodalPage() {
       setTrainStatus(s)
       setVlmLoaded(vlmStatus.loaded)
     } catch {
-      addToast('Failed to load multimodal data', 'error')
+      addToast('Failed to load data', 'error')
     } finally {
       setLoading(false)
     }
@@ -113,7 +113,7 @@ export default function MultimodalPage() {
           }
           fetchAll()
           if (status.completed > 0) {
-            addToast(`Batch training complete: ${status.completed} images, ${status.errors} errors`, status.errors > 0 ? 'error' : 'success')
+            addToast(`Training complete: ${status.completed} images, ${status.errors} errors`, status.errors > 0 ? 'error' : 'success')
           }
         }
       } catch {
@@ -128,10 +128,10 @@ export default function MultimodalPage() {
     setBatchUploading(true)
     try {
       const result = await multimodalController.trainBatch(files)
-      addToast(`Batch training started: ${result.total_images} images`, 'success')
+      addToast(`Training started: ${result.total_images} images`, 'success')
       startPolling()
     } catch {
-      addToast('Batch upload failed', 'error')
+      addToast('Upload failed', 'error')
     } finally {
       setBatchUploading(false)
       if (batchFileInputRef.current) batchFileInputRef.current.value = ''
@@ -143,10 +143,10 @@ export default function MultimodalPage() {
     setBatchUploading(true)
     try {
       const result = await multimodalController.trainBatchFromDir(batchDirPath.trim())
-      addToast(`Batch training started: ${result.total_images} images from ${batchDirPath}`, 'success')
+      addToast(`Training started: ${result.total_images} images from ${batchDirPath}`, 'success')
       startPolling()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Batch training failed'
+      const msg = err instanceof Error ? err.message : 'Training failed'
       addToast(msg, 'error')
     } finally {
       setBatchUploading(false)
@@ -196,7 +196,7 @@ export default function MultimodalPage() {
       const result = await multimodalController.transcribeAudio(file)
       setTranscript(result.text)
     } catch {
-      addToast('Transcription failed', 'error')
+      addToast('Speech-to-text failed', 'error')
     } finally {
       setTranscribing(false)
       if (audioInputRef.current) audioInputRef.current.value = ''
@@ -208,9 +208,9 @@ export default function MultimodalPage() {
     setSynthesizing(true)
     try {
       const result = await multimodalController.synthesizeSpeech(synthText)
-      addToast(`Speech synthesized (${result.duration_sec.toFixed(1)}s)`, 'success')
+      addToast(`Voice generated (${result.duration_sec.toFixed(1)}s)`, 'success')
     } catch {
-      addToast('Speech synthesis failed', 'error')
+      addToast('Speech generation failed', 'error')
     } finally {
       setSynthesizing(false)
     }
@@ -238,7 +238,7 @@ export default function MultimodalPage() {
       setVlmOutput(result.text)
       addToast(`Generated ${result.tokens_generated} tokens in ${(result.elapsed_ms / 1000).toFixed(1)}s`, 'success')
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'VLM inference failed'
+      const msg = err instanceof Error ? err.message : 'Something went wrong'
       addToast(msg, 'error')
     } finally {
       setVlmInferring(false)
@@ -251,7 +251,7 @@ export default function MultimodalPage() {
     { label: 'Vision model', ok: !!caps.vision_model },
     { label: 'Speech model', ok: !!caps.speech_model },
     { label: 'Trained', ok: caps.trained },
-    { label: 'VLM loaded', ok: vlmLoaded },
+    { label: 'Vision model loaded', ok: vlmLoaded },
   ] : []
 
   return (
@@ -289,7 +289,7 @@ export default function MultimodalPage() {
                 </div>
                 <KpiGrid columns={4}>
                   <StatCard label="Images learned" value={caps?.images_learned ?? 0} />
-                  <StatCard label="Replay buffer" value={`${caps?.replay_buffer_size ?? 0} items`} />
+                  <StatCard label="Memory" value={`${caps?.replay_buffer_size ?? 0} items`} />
                   <StatCard label="Learning method" value={caps?.learning_method || '—'} />
                   <StatCard label="Status" value={caps?.status || '—'} />
                 </KpiGrid>
@@ -385,7 +385,7 @@ export default function MultimodalPage() {
 
             {/* Batch training */}
             <Card>
-              <CardHeader><CardTitle className="text-base">Batch Training</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-base">Train with multiple images</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-xs text-muted-foreground">Train on multiple images at once. Upload files or specify a server directory path.</p>
                 <div className="flex items-center gap-2">
@@ -444,9 +444,9 @@ export default function MultimodalPage() {
 
             {/* VLM Dataset Creation */}
             <Card>
-              <CardHeader><CardTitle className="text-base">VLM Dataset</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-base">Image description dataset</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                <p className="text-xs text-muted-foreground">Create a VLM training dataset from a directory of images. Auto-generates captions using the vision model.</p>
+                <p className="text-xs text-muted-foreground">Create a training dataset from a folder of images. The AI writes descriptions for each image automatically.</p>
                 <div className="flex items-center gap-2">
                   <Input
                     value={vlmDatasetName}
@@ -476,14 +476,14 @@ export default function MultimodalPage() {
 
             {/* VLM Inference */}
             <Card>
-              <CardHeader><CardTitle className="text-base">VLM Inference</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-base">Test the vision model</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  Test a loaded VLM model with an image and text prompt.
+                  Upload an image and ask a question about it.
                   {vlmLoaded ? (
-                    <span className="text-success ml-1">VLM is loaded.</span>
+                    <span className="text-success ml-1">Vision model is loaded.</span>
                   ) : (
-                    <span className="text-muted-foreground ml-1">Train a VLM on the Training page first.</span>
+                    <span className="text-muted-foreground ml-1">Train a vision model on the Training page first.</span>
                   )}
                 </p>
                 <div className="flex items-center gap-2">

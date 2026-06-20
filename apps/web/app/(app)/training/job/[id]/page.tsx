@@ -47,7 +47,7 @@ export default function TrainingJobDetailPage() {
       const j = await trainingJobsController.get(jobId)
       setJob(j)
     } catch {
-      addToast('Failed to load job', 'error')
+      addToast('Something went wrong loading the job', 'error')
     } finally {
       setLoading(false)
     }
@@ -70,7 +70,7 @@ export default function TrainingJobDetailPage() {
         consecutiveErrors++
         if (consecutiveErrors >= 5) {
           clearInterval(id)
-          addToast('Stopped polling due to repeated errors', 'error')
+          addToast('Lost connection to training server', 'error')
         }
       }
     }, 3000)
@@ -83,8 +83,8 @@ export default function TrainingJobDetailPage() {
     if (!job?.checkpoint) return
     try {
       await modelController.loadModelPath(job.checkpoint)
-      addToast(`Loaded checkpoint: ${job.checkpoint}`, 'success')
-    } catch { addToast('Failed to load checkpoint', 'error') }
+      addToast(`Loaded trained version: ${job.checkpoint}`, 'success')
+    } catch { addToast('Failed to load trained version', 'error') }
   }
 
   const handleDelete = async () => {
@@ -94,7 +94,7 @@ export default function TrainingJobDetailPage() {
       await trainingJobsController.delete(job.id)
       addToast('Job deleted', 'info')
       router.push('/training')
-    } catch { addToast('Failed to delete job', 'error') }
+    } catch {       addToast('Something went wrong deleting the job', 'error') }
   }
 
   return (

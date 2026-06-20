@@ -45,7 +45,7 @@ export default function KnowledgePage() {
         : await knowledgeController.list(500, 0)
       const filtered = activeTopic ? data.filter(i => i.topic === activeTopic) : data
       setItems(filtered)
-    } catch { addToast('Failed to load knowledge items', 'error') }
+    } catch { addToast('Failed to load facts', 'error') }
     setLoading(false)
   }, [search, activeTopic])
 
@@ -53,7 +53,7 @@ export default function KnowledgePage() {
     try {
       const s = await knowledgeController.getAdapterStatus()
       setAdapterStatus(s)
-    } catch { addToast('Failed to load adapter status', 'error') }
+    } catch { addToast('Failed to load status', 'error') }
   }, [addToast])
 
   const fetchStats = useCallback(async () => {
@@ -76,7 +76,7 @@ export default function KnowledgePage() {
       setNewContent('')
       addToast(res.topic ? `Stored under "${res.topic}"` : 'Stored', 'success')
       await Promise.all([fetchItems(), fetchStats()])
-    } catch (e) { addToast(e instanceof Error ? e.message : 'Failed to add', 'error') }
+    } catch (e) { addToast('Something went wrong adding this item', 'error') }
     setAdding(false)
   }
 
@@ -86,15 +86,15 @@ export default function KnowledgePage() {
     try {
       const res = await knowledgeController.ingestUrl(newUrl)
       if (res.status === 'ok') {
-        addToast(`Ingested ${res.new_facts} facts from "${res.title}"`, 'success')
+        addToast(`Loaded ${res.new_facts} facts from "${res.title}"`, 'success')
       } else if (res.rejected) {
-        addToast(`URL rejected: ${res.reason || 'filtered'}`, 'info')
+        addToast(`Couldn't load that URL`, 'info')
       } else {
-        addToast(`Status: ${res.status}`, 'info')
+        addToast(`Done`, 'info')
       }
       setNewUrl('')
       await Promise.all([fetchItems(), fetchStats()])
-    } catch (e) { addToast('Ingestion failed', 'error') }
+    } catch (e) { addToast('Loading failed', 'error') }
     setUrlIngesting(false)
   }
 
@@ -192,7 +192,7 @@ export default function KnowledgePage() {
     setTrainingAdapter(true)
     try {
       const res = await knowledgeController.trainAdapter()
-      addToast(`Adapter trained on ${res.fact_count} facts in ${res.elapsed}s`, 'success')
+      addToast(`Trained on ${res.fact_count} facts in ${res.elapsed}s`, 'success')
       await fetchAdapterStatus()
     } catch (e) { addToast('Training failed', 'error') }
     setTrainingAdapter(false)
@@ -225,13 +225,13 @@ export default function KnowledgePage() {
         {/* Knowledge Adapter — bakes facts into model weights */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Model Weights</CardTitle>
+            <CardTitle className="text-base">AI Memory</CardTitle>
             <Button
               size="sm"
               onClick={handleTrainAdapter}
               disabled={trainingAdapter || (adapterStatus?.total_facts_available ?? 0) < 1}
             >
-              {trainingAdapter ? 'Training…' : 'Train on Knowledge'}
+              {trainingAdapter ? 'Teaching…' : 'Teach the AI'}
             </Button>
           </CardHeader>
           <CardContent>
@@ -241,7 +241,7 @@ export default function KnowledgePage() {
               <div className="flex items-center gap-4 text-sm flex-wrap">
                 <Badge variant="default" label="Trained" />
                 <span className="text-muted-foreground">
-                  {adapterStatus.fact_count} facts · rank {adapterStatus.lora_rank}
+                  {adapterStatus.fact_count} facts
                 </span>
                 {adapterStatus.trained_at && (
                   <span className="text-muted-foreground">
@@ -256,7 +256,7 @@ export default function KnowledgePage() {
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                No adapter yet. Click &ldquo;Train on Knowledge&rdquo; to bake {stats?.total_items || 0} facts into model weights — no prompt tuning needed.
+                Not trained yet. Click &ldquo;Teach the AI&rdquo; to learn {stats?.total_items || 0} facts — no setup needed.
               </p>
             )}
           </CardContent>
@@ -278,7 +278,7 @@ export default function KnowledgePage() {
           <CardContent className="space-y-3">
               <textarea
                 className="w-full min-h-[80px] rounded-md border border-border bg-background px-3 py-2 text-sm resize-y"
-                placeholder="Enter knowledge content…"
+                placeholder="Enter a fact to remember…"
                 value={newContent}
                 onChange={e => {
                   setNewContent(e.target.value)
@@ -324,7 +324,7 @@ export default function KnowledgePage() {
 
         {/* Ingest URL */}
         <Card>
-          <CardHeader><CardTitle className="text-base">Ingest from URL</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">Learn from a Web Page</CardTitle></CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
               <input
@@ -336,7 +336,7 @@ export default function KnowledgePage() {
                 aria-label="URL to ingest"
               />
               <Button onClick={handleIngestUrl} disabled={urlIngesting || !newUrl.trim()} size="sm" variant="outline">
-                {urlIngesting ? 'Ingesting…' : 'Ingest'}
+                {urlIngesting ? 'Learning…' : 'Learn'}
               </Button>
             </div>
           </CardContent>
@@ -346,7 +346,7 @@ export default function KnowledgePage() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Knowledge Base</CardTitle>
+              <CardTitle className="text-base">Saved Facts</CardTitle>
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={exportJson} disabled={items.length === 0}>
                   <IconDownload className="w-4 h-4 mr-1" /> Export
@@ -376,7 +376,7 @@ export default function KnowledgePage() {
               </div>
             ) : items.length === 0 ? (
               <EmptyCard
-                message={search ? 'Try a different search term' : activeTopic ? `No items in "${activeTopic}"` : 'Add your first knowledge item above'}
+                message={search ? 'Try a different search term' : activeTopic ? `No items in "${activeTopic}"` : 'Add your first fact above'}
               />
             ) : (
               <div className="space-y-2">

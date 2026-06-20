@@ -121,8 +121,9 @@ class GenerationConfig:
 gen_config = GenerationConfig.from_env()
 server_state.gen_config = gen_config
 logger.info(
-    f"Generation config: temp={gen_config.temperature}, top_p={gen_config.top_p}, "
-    f"top_k={gen_config.top_k}, rep_penalty={gen_config.repetition_penalty}"
+    "Generation config loaded",
+    extra={"context": {"temperature": gen_config.temperature, "top_p": gen_config.top_p,
+                       "top_k": gen_config.top_k, "rep_penalty": gen_config.repetition_penalty}},
 )
 
 
@@ -158,7 +159,7 @@ async def lifespan(app: FastAPI):
             extra_metrics=_wandb_server_extra_metrics,
         )
     except Exception as e:
-        logger.warning("W&B server background task did not start: %s", e)
+        logger.warning("W&B server background task did not start", extra={"context": {"error": str(e)}})
     STARTUP_PHASE.update(phase="multimodal", step=3, message="Initializing multimodal engine...")
     def _init_multimodal():
         try:
@@ -172,7 +173,7 @@ async def lifespan(app: FastAPI):
                 get_multimodal_manager().initialize(vision_model="slonet")
                 logger.info("Multimodal initialized (browser ASR only)")
         except Exception as e:
-            logger.warning("Multimodal initialization failed: %s", e)
+            logger.warning("Multimodal initialization failed", extra={"context": {"error": str(e)}})
     asyncio.create_task(asyncio.to_thread(_init_multimodal))
     STARTUP_PHASE.update(phase="model_registry", step=5, message="Initializing model registry...")
     from domains.infrastructure.model_registry import get_model_registry
@@ -190,8 +191,8 @@ async def lifespan(app: FastAPI):
         from training.router import router as training_router
         app.include_router(training_router)
     except Exception as exc:
-        logger.warning("Failed to register training router: %s", exc)
-    logger.info("All routers registered (%d routes)", len(app.routes))
+        logger.warning("Failed to register training router", extra={"context": {"error": str(exc)}})
+    logger.info("All routers registered", extra={"context": {"route_count": len(app.routes)}})
 
     yield
     # Shutdown: unregister all models
@@ -626,7 +627,7 @@ def load_model(model_path: Optional[str] = None):
             logger.info("No model found, demo mode active")
             return
 
-        logger.info("Loading model from %s...", model_path)
+        logger.info("Loading model", extra={"context": {"model_path": model_path}})
         ckpt = torch.load(model_path, map_location="cpu", weights_only=False)
 
         if isinstance(ckpt, dict):
@@ -639,18 +640,18 @@ def load_model(model_path: Optional[str] = None):
                     "itos": ckpt["itos"],
                     "vocab_size": len(ckpt["chars"]),
                 }
-                logger.info("Tokenizer loaded: %d characters", len(ckpt['chars']))
+                logger.info("Tokenizer loaded", extra={"context": {"char_count": len(ckpt['chars'])}})
             else:
                 server_state.tokenizer = None
-            logger.info("Model loaded: %d parameters", len(ckpt.get('model', {})))
+            logger.info("Model loaded", extra={"context": {"param_count": len(ckpt.get('model', {}))}})
         else:
             server_state.model = ckpt
             server_state.model_type = "sloughgpt_finetuned"
             server_state.tokenizer = None
-            logger.info("Model loaded successfully from %s", model_path)
+            logger.info("Model loaded successfully", extra={"context": {"model_path": model_path}})
 
     except Exception as e:
-        logger.warning("Failed to load model: %s", e)
+        logger.warning("Failed to load model", extra={"context": {"error": str(e)}})
         import traceback
         traceback.print_exc()
         server_state.model = None
@@ -873,13 +874,11 @@ def _autoload_hf_model_at_startup() -> None:
     req = LoadModelRequest(model_id=raw, mode="local", device=device)
     result = _load_hf_model_core(req, use_slonet=use_slonet)
     if result.get("status") == "error":
-        logger.warning("Startup autoload failed for %s: %s", raw, result.get("error"))
+        logger.warning("Startup autoload failed", extra={"context": {"model": raw, "error": result.get("error")}})
     else:
         logger.info(
-            "Startup autoload ok: model_id=%s effective_device=%s mode=%s",
-            raw,
-            result.get("effective_device"),
-            "slonet" if use_slonet else "pytorch",
+            "Startup autoload ok",
+            extra={"context": {"model_id": raw, "device": result.get("effective_device"), "mode": "slonet" if use_slonet else "pytorch"}},
         )
 
 
@@ -898,7 +897,7 @@ def _start_feedback_workflow() -> None:
             workflow.start()
             logger.info("Feedback workflow started automatically")
     except Exception as e:
-        logger.warning("Failed to start feedback workflow: %s", e)
+        logger.warning("Failed to start feedback workflow", extra={"context": {"error": str(e)}})
 
 
 def _start_health_monitor() -> None:
@@ -916,11 +915,11 @@ def _start_health_monitor() -> None:
         thread = monitor.start_auto_monitoring(interval_seconds=interval)
         thread.name = "health-monitor"
         logger.info(
-            "Model health monitor started (interval=%ds)",
-            interval,
+            "Model health monitor started",
+            extra={"context": {"interval_seconds": interval}},
         )
     except Exception as e:
-        logger.warning("Failed to start health monitor: %s", e)
+        logger.warning("Failed to start health monitor", extra={"context": {"error": str(e)}})
 
 
 def _start_watchdog() -> None:
@@ -1051,7 +1050,7 @@ if __name__ == "__main__":
     _start_feedback_workflow()
     _start_health_monitor()
     _start_watchdog()
-    logger.info("Starting SloughGPT server on port %d... (reload=%s)", port, args.reload)
+    logger.info("Starting SloughGPT server", extra={"context": {"port": port, "reload": args.reload}})
 
     # ── Web frontend (optional) ────────────────────────────────
     web_proc = None
@@ -1063,7 +1062,7 @@ if __name__ == "__main__":
 
         if standalone_dir.is_dir() and (standalone_dir / "server.js").is_file():
             # Run standalone Next.js server (needs Node.js runtime for SSR)
-            logger.info("Starting built web frontend on http://localhost:%d", web_port)
+            logger.info("Starting built web frontend", extra={"context": {"port": web_port}})
             web_proc = subprocess.Popen(
                 ["node", "server.js"],
                 cwd=str(standalone_dir),
@@ -1073,7 +1072,7 @@ if __name__ == "__main__":
             )
         else:
             # Spawn Next.js dev server
-            logger.info("No standalone build found — spawning Next.js dev server on http://localhost:%d", web_port)
+            logger.info("No standalone build found — spawning Next.js dev server", extra={"context": {"port": web_port}})
             web_proc = subprocess.Popen(
                 ["npm", "run", "dev"],
                 cwd=str(web_root),
