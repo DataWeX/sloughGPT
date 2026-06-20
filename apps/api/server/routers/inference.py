@@ -482,9 +482,9 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
                     logger.info("Stored %d injected knowledge items in vector store", stored, extra={"context": {"count": stored}})
             except Exception as e:
                 logger.warning("Failed to store injected knowledge: %s", e, extra={"context": {"error": str(e)}})
-        know_result = await asyncio.to_thread(
-            _enrich_knowledge, user_msg, False, 5
-        )
+        # Skip knowledge enrichment in streaming to avoid blocking the event loop.
+        # Knowledge is loaded lazily and the first call can take 20+ seconds.
+        know_result = {"facts": [], "source": "none", "topics": []}
         provider_messages = [{"role": m.role, "content": m.content} for m in req.messages]
         if req.images:
             content_parts = [{"type": "text", "text": user_msg}]

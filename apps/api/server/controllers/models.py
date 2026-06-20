@@ -109,7 +109,7 @@ class ModelsController:
         When ``use_slonet=True``, loads weights into SloTransformer (pure NumPy)
         instead of PyTorch. No PyTorch dependency at inference time.
         """
-        if model_id.endswith('.gguf') or model_id.startswith('/'):
+        if model_id.endswith('.gguf'):
             return self._load_gguf_model(model_id, device)
 
         import state as server_state

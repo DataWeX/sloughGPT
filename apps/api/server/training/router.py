@@ -612,9 +612,9 @@ async def start_hf_training(request: HFTrainingRequest):
     else:
         raise HTTPException(status_code=400, detail="Provide a `dataset` or `manifest_uri`")
 
-    # Create output directory
+    # Create output directory (repo-root relative)
     safe_model = request.model.replace("/", "--")
-    output_dir = f"models/hf-finetuned/{safe_model}_{request.dataset or 'custom'}_{int(time.time())}"
+    output_dir = str(_repo_root / f"models/hf-finetuned/{safe_model}_{request.dataset or 'custom'}_{int(time.time())}")
 
     job: dict[str, Any] = {
         "id": job_id,
@@ -864,7 +864,7 @@ async def quick_train(request: QuickTrainRequest):
         "current_epoch": 0,
         "global_step": 0,
         "loss": None,
-        "output_dir": f"models/hf-finetuned/{request.dataset}_{int(time.time())}",
+        "output_dir": str(_repo_root / f"models/hf-finetuned/{request.dataset}_{int(time.time())}"),
         "loss_history": [],
         "reward_history": [],
     }
@@ -1018,7 +1018,7 @@ async def start_vlm_training(request: VLMRequest):
             detail=f"VLM dataset not found: {data_path}. Expected JSONL with image_path + conversations.",
         )
 
-    output_dir = f"models/vlm/{request.dataset}_{int(time.time())}"
+    output_dir = str(_repo_root / f"models/vlm/{request.dataset}_{int(time.time())}")
 
     job: dict[str, Any] = {
         "id": job_id,
