@@ -73,6 +73,7 @@ export default function TrainingPage() {
   const [vlmStage2Epochs, setVlmStage2Epochs] = useState(2)
 
   // ===== Turbo config =====
+  const [showTurboAdvanced, setShowTurboAdvanced] = useState(false)
   const [turboEpochs, setTurboEpochs] = useState(3)
   const [turboLR, setTurboLR] = useState(3e-4)
   const [turboEmbed, setTurboEmbed] = useState(128)
@@ -759,49 +760,56 @@ export default function TrainingPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-xs text-muted-foreground">Epochs</label>
-                    <input type="number" value={turboEpochs} onChange={e => setTurboEpochs(Number(e.target.value))}
-                      className="w-full h-8 rounded border border-border/50 bg-background px-2 text-xs" min={1} max={100} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs text-muted-foreground">Learning rate</label>
-                    <input type="number" value={turboLR} onChange={e => setTurboLR(Number(e.target.value))}
-                      className="w-full h-8 rounded border border-border/50 bg-background px-2 text-xs" step={1e-5} min={1e-5} max={1} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs text-muted-foreground">Embed dim</label>
-                    <input type="number" value={turboEmbed} onChange={e => setTurboEmbed(Number(e.target.value))}
-                      className="w-full h-8 rounded border border-border/50 bg-background px-2 text-xs" min={16} max={1024} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs text-muted-foreground">Heads</label>
-                    <input type="number" value={turboHeads} onChange={e => setTurboHeads(Number(e.target.value))}
-                      className="w-full h-8 rounded border border-border/50 bg-background px-2 text-xs" min={1} max={64} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs text-muted-foreground">Encoder/Decoder layers</label>
-                    <input type="number" value={turboLayers} onChange={e => setTurboLayers(Number(e.target.value))}
-                      className="w-full h-8 rounded border border-border/50 bg-background px-2 text-xs" min={1} max={24} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs text-muted-foreground">Dataset</label>
-                    <select value={datasets.selectedDataset} onChange={e => datasets.setSelectedDataset(e.target.value)}
-                      className="w-full h-8 rounded border border-border/50 bg-background px-2 text-xs"
-                      aria-label="Dataset for turbo training">
-                      {datasets.datasets.length === 0 && <option value="">No datasets</option>}
-                      {datasets.datasets.map(ds => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
-                    </select>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <select value={datasets.selectedDataset} onChange={e => datasets.setSelectedDataset(e.target.value)}
+                    className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground flex-1 max-w-xs"
+                    aria-label="Dataset for turbo training">
+                    {datasets.datasets.length === 0 && <option value="">No datasets</option>}
+                    {datasets.datasets.map(ds => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
+                  </select>
+                  <Button size="sm" onClick={startTurboTrain} disabled={!datasets.selectedDataset || datasets.datasets.length === 0}>
+                    Train with Turbo
+                  </Button>
                 </div>
-                <Button size="sm" onClick={startTurboTrain} disabled={!datasets.selectedDataset || datasets.datasets.length === 0}>
-                  Train with Turbo
-                </Button>
                 <p className="text-[11px] text-muted-foreground">
                   Encoder-decoder Transformer via our own torch shim. No PyTorch, no downloads, runs on CPU.
                   Saves model to <code className="text-xs">models/turbo-trained/</code>
                 </p>
+                <div className="border-t border-border/40 pt-2">
+                  <button className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => setShowTurboAdvanced(!showTurboAdvanced)}>
+                    {showTurboAdvanced ? 'Hide' : 'Show'} advanced settings
+                  </button>
+                  {showTurboAdvanced && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-muted-foreground">Epochs</label>
+                        <input type="number" value={turboEpochs} onChange={e => setTurboEpochs(Number(e.target.value))}
+                          className="w-full h-8 rounded border border-border/50 bg-background px-2 text-xs" min={1} max={100} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-muted-foreground">Learning rate</label>
+                        <input type="number" value={turboLR} onChange={e => setTurboLR(Number(e.target.value))}
+                          className="w-full h-8 rounded border border-border/50 bg-background px-2 text-xs" step={1e-5} min={1e-5} max={1} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-muted-foreground">Embed dim</label>
+                        <input type="number" value={turboEmbed} onChange={e => setTurboEmbed(Number(e.target.value))}
+                          className="w-full h-8 rounded border border-border/50 bg-background px-2 text-xs" min={16} max={1024} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-muted-foreground">Heads</label>
+                        <input type="number" value={turboHeads} onChange={e => setTurboHeads(Number(e.target.value))}
+                          className="w-full h-8 rounded border border-border/50 bg-background px-2 text-xs" min={1} max={64} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-muted-foreground">Encoder/Decoder layers</label>
+                        <input type="number" value={turboLayers} onChange={e => setTurboLayers(Number(e.target.value))}
+                          className="w-full h-8 rounded border border-border/50 bg-background px-2 text-xs" min={1} max={24} />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </CardContent>

@@ -204,7 +204,7 @@ class FeedbackTrainer:
                         + "\n"
                     )
             results["dpo"] = str(dpo_path)
-            print(f"Exported {len(pairs)} DPO pairs to {dpo_path}")
+            logger.info("Exported %d DPO pairs to %s", len(pairs), dpo_path)
 
         if "sft" in formats:
             sft_path = output_path / "sft_training.jsonl"
@@ -213,7 +213,7 @@ class FeedbackTrainer:
                 for item in sft_data:
                     f.write(json.dumps(item) + "\n")
             results["sft"] = str(sft_path)
-            print(f"Exported {len(sft_data)} SFT examples to {sft_path}")
+            logger.info("Exported %d SFT examples to %s", len(sft_data), sft_path)
 
         if "reward" in formats:
             reward_path = output_path / "reward_training.jsonl"
@@ -232,7 +232,7 @@ class FeedbackTrainer:
                             + "\n"
                         )
             results["reward"] = str(reward_path)
-            print(f"Exported {len(examples)} reward examples to {reward_path}")
+            logger.info("Exported %d reward examples to %s", len(examples), reward_path)
 
         return results
 

@@ -132,7 +132,7 @@ class WebhookStore:
             conn.commit()
             conn.close()
 
-        logger.info(f"Registered webhook {webhook_id} for {url}")
+        logger.info("Registered webhook %s for %s", webhook_id, url)
         return webhook_id
 
     def unregister(self, webhook_id: str) -> bool:
@@ -145,7 +145,7 @@ class WebhookStore:
             conn.close()
 
         if deleted:
-            logger.info(f"Unregistered webhook {webhook_id}")
+            logger.info("Unregistered webhook %s", webhook_id)
         return deleted
 
     def get(self, webhook_id: str) -> Optional[Webhook]:
@@ -259,24 +259,26 @@ class WebhookStore:
                     delivery.success = 200 <= response.status_code < 300
 
                     if delivery.success:
-                        logger.info(f"Webhook {webhook_id} delivered successfully")
+                        logger.info("Webhook %s delivered successfully", webhook_id)
                         break
 
                     last_error = f"HTTP {response.status_code}"
                     logger.warning(
-                        f"Webhook {webhook_id} delivery failed (attempt {attempt + 1}): {last_error}"
+                        "Webhook %s delivery failed (attempt %d): %s",
+                        webhook_id, attempt + 1, last_error,
                     )
 
             except Exception as e:
                 last_error = str(e)
-                logger.warning(f"Webhook {webhook_id} delivery failed (attempt {attempt + 1}): {e}")
+                logger.warning("Webhook %s delivery failed (attempt %d): %s",
+                               webhook_id, attempt + 1, e)
 
             if attempt < retries - 1:
                 await asyncio.sleep(2**attempt)  # Exponential backoff
 
         if not delivery.success:
             delivery.error = last_error
-            logger.error(f"Webhook {webhook_id} delivery failed after {retries} attempts")
+            logger.error("Webhook %s delivery failed after %d attempts", webhook_id, retries)
 
         self._add_delivery(delivery)
         return delivery
@@ -353,17 +355,17 @@ async def notify_training_event(
 ) -> List[WebhookDelivery]:
     """Send notification to all matching webhooks."""
     if event not in TRAINING_EVENTS:
-        logger.warning(f"Unknown training event: {event}")
+        logger.warning("Unknown training event: %s", event)
         return []
 
     store = get_webhook_store()
     matching_webhooks = store.list(event_filter=event)
 
     if not matching_webhooks:
-        logger.debug(f"No webhooks registered for event: {event}")
+        logger.debug("No webhooks registered for event: %s", event)
         return []
 
-    logger.info(f"Sending {event} to {len(matching_webhooks)} webhook(s)")
+    logger.info("Sending %s to %d webhook(s)", event, len(matching_webhooks))
 
     deliveries = []
     for webhook in matching_webhooks:

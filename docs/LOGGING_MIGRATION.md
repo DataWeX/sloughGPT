@@ -83,14 +83,18 @@ Same pattern — already routed via BridgeHandler. Add context metadata where us
 |-------|-------|--------|
 | 1. Fix logger names | 13 | ✅ Done — all renamed to `man.*` |
 | 2. Add loggers to print-only files | 24 | ✅ Done — all have `logging.getLogger()` |
-| 3. API routers structured context | 47 | ✅ Done — main.py (15 key calls), router.py, auto_train.py, inference.py |
+| 2b. Convert diagnostic `print()` → `logger` | 13 files | ✅ `onnx_engine.py`, `engine.py`, `meta_weights.py`, `tokenizer.py` (3 debug), `status.py` (1 warning), `feedback/training.py` (3 export), `auto_train.py` (3 f-string), `inference.py` (6 f-string), `training/router.py` (1 f-string), `training/webhooks.py` (8 f-string) |
+| 3. API routers structured context | 20 calls | ✅ `main.py` (15), `auto_train.py` (9), `inference.py` (8) |
 | 4. Core domains | ~60 | ✅ Already routed via BridgeHandler |
 | 5. Shell/CLI/web integrations | ~10 | ✅ Done |
 
 **Total files touched: 47+** (13 logger renames + 24 new loggers + 10 interface integrations + structured context in main.py)
 
-**Total files touched: 47** (13 logger renames + 24 new loggers + 10 interface integrations)
+**Total diagnostic prints converted to logger: ~35** across 13 files
+
+**Total f-string logger calls fixed: ~18** across 3 files
 
 ## What's left (optional, low priority)
 - Phase 3/4: The ~798 `logger.info/warning/error` calls across existing files already route through the BridgeHandler. Adding `context={}` metadata to key calls is optional and can be done incrementally.
 - Phase 5: Shell `_print()` calls stay for raw REPL output; new code uses `self.log`.
+- Phase 6: Most remaining `print()` calls are user-facing CLI output (`.show_*()` methods, `__main__` blocks, progress display). These should stay as `print()`.

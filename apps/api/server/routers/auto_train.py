@@ -673,13 +673,13 @@ async def stream():
                 )
                 _enforce_checkpoint_budget()
             elif result.get("cancelled"):
-                autotrain_logger.info("Auto-train cancelled by user")
+                autotrain_logger.info("Auto-train cancelled by user", extra={"context": {"action": "cancel"}})
                 _enqueue(sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled"))
             else:
                 autotrain_logger.warning("Auto-train result: %s", result.get("status"))
 
         except _AutoTrainCancelled:
-            autotrain_logger.info("Auto-train cancelled by user")
+            autotrain_logger.info("Auto-train cancelled by user", extra={"context": {"action": "cancel"}})
             _enqueue(sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled"))
         except Exception as e:
             autotrain_logger.error("Training worker error: %s", e, extra={"context": {"error": str(e)}})

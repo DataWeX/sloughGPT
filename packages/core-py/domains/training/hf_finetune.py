@@ -21,6 +21,7 @@ from transformers import (
     Trainer,
     TrainingArguments,
     DataCollatorForLanguageModeling,
+    DataCollatorWithPadding,
     PreTrainedTokenizer,
     PreTrainedTokenizerFast,
 )
@@ -170,9 +171,9 @@ class HFFineTuner:
         )
         logger.info("Dataset has %d examples", len(dataset))
 
-        data_collator = DataCollatorForLanguageModeling(
+        data_collator = DataCollatorWithPadding(
             tokenizer=tokenizer,
-            mlm=False,
+            padding="longest",
         )
 
         output_path = Path(self.output_dir)

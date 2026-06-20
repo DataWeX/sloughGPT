@@ -1899,7 +1899,7 @@ async def recover_job(job_id: str):
                 pass
 
         except Exception as e:
-            logger.error(f"Recovery failed: {e}")
+            logger.error("Recovery failed: %s", e)
             training_jobs[jid]["status"] = "failed"
             training_jobs[jid]["error"] = str(e)
             store.mark_failed(jid, str(e))

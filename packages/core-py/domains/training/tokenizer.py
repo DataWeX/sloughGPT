@@ -195,9 +195,9 @@ class SloBPE:
             new_token = best_pair[0] + best_pair[1]
 
             if verbose:
-                print(f"Merge #{len(self.vocab) - len(base_chars) - len(self.SPECIAL_TOKENS) + 1}: "
-                      f"'{best_pair[0]}' + '{best_pair[1]}' -> '{new_token}' "
-                      f"(count={best_count})")
+                logger.debug("Merge #%d: '%s' + '%s' -> '%s' (count=%d)",
+                             len(self.vocab) - len(base_chars) - len(self.SPECIAL_TOKENS) + 1,
+                             best_pair[0], best_pair[1], new_token, best_count)
 
             self.merges.append(best_pair)
             self.vocab.append(new_token)
@@ -894,7 +894,7 @@ class SloUnigram:
         self._special_set = set(self.SPECIAL_TOKENS)
 
         if verbose:
-            print(f"Seed vocab: {len(self.vocab)} tokens ({len(seen)} n-grams)")
+            logger.debug("Seed vocab: %d tokens (%d n-grams)", len(self.vocab), len(seen))
 
         # ── Step 2: Pre-tokenize — split corpus into pretokens ──
         pretok_counts: Counter = Counter()
@@ -1005,8 +1005,7 @@ class SloUnigram:
                            if i not in pruned_ids}
 
             if verbose:
-                print(f"Pruned {n_prune} → {len(self.vocab)} tokens "
-                      f"(target {target})")
+                logger.debug("Pruned %d -> %d tokens (target %d)", n_prune, len(self.vocab), target)
 
             if len(self.vocab) <= target:
                 break

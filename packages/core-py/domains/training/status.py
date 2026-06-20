@@ -408,7 +408,7 @@ class CheckpointManager:
             try:
                 optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
             except Exception as e:
-                print(f"Warning: Could not load optimizer state: {e}")
+                logger.warning("Could not load optimizer state: %s", e)
         
         # Restore training status
         if "training_status" in checkpoint:
