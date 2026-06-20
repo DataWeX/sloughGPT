@@ -993,7 +993,6 @@ def _start_watchdog() -> None:
 if __name__ == "__main__":
     import argparse
     import atexit
-    import signal
     import traceback
 
     # ── Global exception handler — log and exit cleanly ──
@@ -1085,15 +1084,9 @@ if __name__ == "__main__":
     if web_proc:
         atexit.register(lambda p=web_proc: (p.terminate(), p.wait(timeout=5)) if p.poll() is None else None)
 
-    # ── Graceful shutdown on SIGTERM/SIGINT ──
-    def _shutdown_handler(signum, frame):
-        sig_name = signal.Signals(signum).name
-        logger.info("Received %s — shutting down gracefully", sig_name)
-        # Let uvicorn's lifespan handle cleanup; just exit cleanly
-        sys.exit(0)
-
-    signal.signal(signal.SIGTERM, _shutdown_handler)
-    signal.signal(signal.SIGINT, _shutdown_handler)
+    # uvicorn handles SIGTERM/SIGINT internally via capture_signals;
+    # do NOT install custom signal handlers that call sys.exit(0)
+    # as they conflict with uvicorn's lifecycle management.
 
     uvicorn_kw = dict(
         app=app,
