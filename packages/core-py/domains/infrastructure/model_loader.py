@@ -151,7 +151,7 @@ def load_hf_model(model_id: str, device: Optional[str] = None):
         tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
         model = AutoModelForCausalLM.from_pretrained(
             model_id,
-            torch_dtype=torch.float32,
+            dtype=torch.float32,
             local_files_only=True,
         )
         logger.info("%s loaded from local cache", model_id)
@@ -160,7 +160,7 @@ def load_hf_model(model_id: str, device: Optional[str] = None):
         tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=False)
         model = AutoModelForCausalLM.from_pretrained(
             model_id,
-            torch_dtype=torch.float32,
+            dtype=torch.float32,
             local_files_only=False,
         )
         logger.info("%s downloaded successfully", model_id)

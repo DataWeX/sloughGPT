@@ -400,7 +400,7 @@ def _load_soul(name: str) -> dict:
                 pass
             return result
     except Exception as e:
-        autotrain_logger.warning(f"Failed to load {ckpt_file}: {e}")
+        autotrain_logger.warning("Failed to load %s: %s", ckpt_file, e, extra={"context": {"checkpoint": str(ckpt_file), "error": str(e)}})
 
     return {"name": ckpt_file.name, "soul": "unknown", "size_mb": size_mb}
 
@@ -445,7 +445,7 @@ def _load_lora_soul(name: str) -> Optional[dict]:
                             result[k] = v
                 return result
             except Exception as e:
-                autotrain_logger.warning(f"Failed to load LoRA soul {candidate}: {e}")
+                autotrain_logger.warning("Failed to load LoRA soul %s: %s", candidate, e, extra={"context": {"candidate": str(candidate), "error": str(e)}})
 
     return None
 
@@ -478,7 +478,7 @@ async def start(req: StartRequest):
             tmp.parent.mkdir(parents=True, exist_ok=True)
             tmp.write_text("\n".join(source_lines), encoding="utf-8")
             data_path = str(tmp)
-            autotrain_logger.info(f"Wrote {len(source_lines)} source lines to {tmp}")
+            autotrain_logger.info("Wrote %d source lines to %s", len(source_lines), tmp, extra={"context": {"source_lines": len(source_lines), "path": str(tmp)}})
     elif req.dataset_id:
         ds_candidate = REPO_ROOT / "datasets" / req.dataset_id
         if ds_candidate.exists():
@@ -498,11 +498,11 @@ async def start(req: StartRequest):
         if ckpt_pt.exists():
             resume = True
             resume_path = str(ckpt_pt)
-            autotrain_logger.info("Auto-resume from %s", resume_path)
+            autotrain_logger.info("Auto-resume from %s", resume_path, extra={"context": {"checkpoint": resume_path}})
         elif ckpt_soul.exists():
             resume = True
             resume_path = str(ckpt_soul)
-            autotrain_logger.info("Auto-resume from %s", resume_path)
+            autotrain_logger.info("Auto-resume from %s", resume_path, extra={"context": {"checkpoint": resume_path}})
 
     state.config = {
         "epochs": req.epochs,
@@ -669,7 +669,7 @@ async def stream():
                 ts = result.get("total_steps", 0)
                 autotrain_logger.info(
                     "Auto-train complete: checkpoint=%s final_loss=%s steps=%d",
-                    ckpt, fl, ts,
+                    ckpt, fl, ts, extra={"context": {"checkpoint": ckpt, "final_loss": fl, "steps": ts}},
                 )
                 _enforce_checkpoint_budget()
             elif result.get("cancelled"):
@@ -682,7 +682,7 @@ async def stream():
             autotrain_logger.info("Auto-train cancelled by user")
             _enqueue(sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled"))
         except Exception as e:
-            autotrain_logger.error("Training worker error: %s", e)
+            autotrain_logger.error("Training worker error: %s", e, extra={"context": {"error": str(e)}})
             _enqueue(sse_error("auto-train", "FAILED", str(e)))
         finally:
             _auto_train_cancel_event = None
@@ -836,6 +836,7 @@ async def load_checkpoint(name: str):
         autotrain_logger.info(
             "Loaded checkpoint %s as provider (vocab=%d, params=%d)",
             cp.name, len(stoi), soul_net.num_parameters(),
+            extra={"context": {"checkpoint": cp.name, "vocab_size": len(stoi), "params": soul_net.num_parameters()}},
         )
 
         return {
@@ -852,7 +853,7 @@ async def load_checkpoint(name: str):
         }
     except Exception as e:
         import traceback
-        autotrain_logger.error("Failed to load checkpoint %s: %s\n%s", cp.name, e, traceback.format_exc())
+        autotrain_logger.error("Failed to load checkpoint %s: %s", cp.name, e, extra={"context": {"checkpoint": cp.name, "error": str(e), "traceback": traceback.format_exc()}})
         return {"status": "error", "name": cp.name, "error": str(e)}
 
 

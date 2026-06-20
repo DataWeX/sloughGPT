@@ -143,7 +143,7 @@ class HFFineTuner:
         model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
             trust_remote_code=True,
-            torch_dtype=torch.float32,
+            dtype=torch.float32,
         )
 
         if self.use_lora:
@@ -476,7 +476,7 @@ class GRPOTrainer:
         model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
             trust_remote_code=True,
-            torch_dtype=torch.float32,
+            dtype=torch.float32,
         )
         model.to(self.device)
 
@@ -497,7 +497,7 @@ class GRPOTrainer:
         ref_model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
             trust_remote_code=True,
-            torch_dtype=torch.float32,
+            dtype=torch.float32,
         )
         ref_model.to(self.device)
         ref_model.eval()

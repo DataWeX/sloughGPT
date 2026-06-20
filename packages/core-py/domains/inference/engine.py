@@ -20,7 +20,7 @@ except ImportError:
 
 from domains.errors import require_non_empty_prompt
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("man.engine")
 
 
 @dataclass
@@ -160,9 +160,9 @@ class InferenceEngine:
         if compile_mode and hasattr(torch, "compile"):
             try:
                 self._compiled_forward = torch.compile(self.model, mode=compile_mode)
-                print(f"Model compiled with mode: {compile_mode}")
+                logger.info("Model compiled with mode: %s", compile_mode)
             except Exception as e:
-                print(f"Compilation failed: {e}")
+                logger.warning("Compilation failed: %s", e)
 
         self._lock = threading.Lock()
         self._active_requests: Dict[str, GenerationRequest] = {}
@@ -547,7 +547,7 @@ def create_engine(
             else "cpu"
         )
 
-    print(f"Loading {model_name} on {device}...")
+    logger.info("Loading %s on %s...", model_name, device)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     # Ensure we have a distinct pad token. The default HF tokenizers set ``pad_token``
@@ -572,7 +572,7 @@ def create_engine(
         max_batch_size=max_batch_size,
     )
 
-    print(f"Engine ready: {engine.get_stats()}")
+    logger.info("Engine ready: %s", engine.get_stats())
     return engine
 
 

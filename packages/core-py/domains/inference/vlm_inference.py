@@ -91,7 +91,7 @@ class VLMInference:
         self.lm = AutoModelForCausalLM.from_pretrained(
             str(final_dir) if final_dir.exists() else llm_name,
             trust_remote_code=True,
-            torch_dtype=self.dtype,
+            dtype=self.dtype,
         ).to(self.device).eval()
         llm_dim = self.lm.config.hidden_size
 

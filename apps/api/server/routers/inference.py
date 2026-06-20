@@ -9,7 +9,7 @@ from pathlib import Path
 import json
 import logging
 import threading
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("man.inference")
 
 try:
     from domains.api.sse_envelope import sse_event as _sse_event, sse_token, sse_error
@@ -120,7 +120,7 @@ def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 
         from domains.learner.knowledge_augmenter import enrich_with_knowledge
         return enrich_with_knowledge(user_msg, auto_search=auto_search, max_facts=max_facts)
     except Exception as e:
-        logger.warning(f"Knowledge enrichment failed: {e}")
+        logger.warning("Knowledge enrichment failed: %s", e, extra={"context": {"error": str(e)}})
         return {"facts": [], "source": "none", "topics": []}
 
 
@@ -479,9 +479,9 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
                         if mem.add_fact(fact):
                             stored += 1
                 if stored:
-                    logger.info(f"Stored {stored} injected knowledge items in vector store")
+                    logger.info("Stored %d injected knowledge items in vector store", stored, extra={"context": {"count": stored}})
             except Exception as e:
-                logger.warning(f"Failed to store injected knowledge: {e}")
+                logger.warning("Failed to store injected knowledge: %s", e, extra={"context": {"error": str(e)}})
         know_result = await asyncio.to_thread(
             _enrich_knowledge, user_msg, False, 5
         )
@@ -532,7 +532,7 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
         ready_data: dict[str, Any] = {}
         if know_result["source"] != "none":
             req.knowledge = know_result["facts"]
-            logger.info(f"Knowledge: {len(know_result['facts'])} facts from {know_result['source']}")
+            logger.info("Knowledge: %d facts from %s", len(know_result['facts']), know_result['source'], extra={"context": {"fact_count": len(know_result['facts']), "source": know_result['source']}})
             ready_data["source"] = know_result["source"]
             ready_data["topics"] = know_result["topics"]
             ready_data["fact_count"] = len(know_result["facts"])
@@ -579,10 +579,10 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
                         yield sse_token("chat", "", done=True)
                     except GeneratorExit:
                         cancel_event.set()
-                        logger.info("Client disconnected from chat stream")
+                        logger.info("Client disconnected from chat stream", extra={"context": {"session_id": session_id}})
                         return
                 except Exception as e:
-                    logger.error("Provider chat_stream error: %s", e, exc_info=True)
+                    logger.error("Provider chat_stream error: %s", e, exc_info=True, extra={"context": {"session_id": session_id, "error": str(e)}})
                     yield sse_error("chat", "ERROR", f"Generation failed: {e}")
                     return
             else:
@@ -622,7 +622,7 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
                                 streamer=streamer,
                             )
                     except Exception as e:
-                        logger.error("HF model.generate error: %s", e, exc_info=True)
+                        logger.error("HF model.generate error: %s", e, exc_info=True, extra={"context": {"session_id": session_id, "error": str(e)}})
                         raise
 
                 thread = Thread(target=run_generation)
@@ -638,15 +638,15 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
 
                         thread.join(timeout=120)
                         if thread.is_alive():
-                            logger.warning("Generation thread timed out after 120s")
+                            logger.warning("Generation thread timed out after 120s", extra={"context": {"session_id": session_id, "timeout_s": 120}})
                             yield sse_error("chat", "ERROR", "Generation timed out")
                             return
                     except GeneratorExit:
                         cancel_event.set()
-                        logger.info("Client disconnected from chat stream (fallback)")
+                        logger.info("Client disconnected from chat stream (fallback)", extra={"context": {"session_id": session_id}})
                         return
                 except Exception as e:
-                    logger.error("Streaming error: %s", e, exc_info=True)
+                    logger.error("Streaming error: %s", e, exc_info=True, extra={"context": {"session_id": session_id, "error": str(e)}})
                     yield sse_error("chat", "ERROR", f"Streaming failed: {e}")
                     return
 
@@ -706,7 +706,7 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
             except Exception as e:
                 logger.debug("Entity extraction failed: %s", e)
 
-            logger.info(f"Chat stream: generated {len(full_response)} chars")
+            logger.info("Chat stream: generated %d chars", len(full_response), extra={"context": {"char_count": len(full_response), "session_id": session_id}})
 
         except Exception as e:
             yield sse_error("chat", "STREAMING", str(e))
