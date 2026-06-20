@@ -31,7 +31,7 @@ import sys
 from typing import Any, Optional, Callable
 from dataclasses import dataclass, field
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("man.infrastructure.model_worker")
 
 _ctx = mp.get_context("spawn")  # spawn avoids fork-safety issues with torch
 

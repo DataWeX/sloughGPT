@@ -21,7 +21,7 @@ from typing import Any, Optional, get_type_hints
 
 from .model_server import ModelServer, ModelStatus
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("man.infrastructure.model_registry")
 
 DEFAULT_MODEL_ID = "default"
 

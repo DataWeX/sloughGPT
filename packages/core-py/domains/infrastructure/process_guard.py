@@ -11,7 +11,7 @@ import logging
 import threading
 from typing import Any, Optional, Callable
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("man.infrastructure.process_guard")
 
 
 class ProcessGuard:

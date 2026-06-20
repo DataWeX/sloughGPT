@@ -13,7 +13,7 @@ import logging
 import threading
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("man.infrastructure.mps_monitor")
 
 
 class MPSMemoryMonitor:

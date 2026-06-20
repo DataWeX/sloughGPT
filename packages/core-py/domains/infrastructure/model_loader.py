@@ -17,7 +17,7 @@ from typing import Optional
 
 import torch
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("man.infrastructure.model_loader")
 
 
 def _mps_available() -> bool:

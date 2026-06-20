@@ -165,7 +165,7 @@ export default function ModelDetailPage() {
                           Chat with this model
                         </Button>
                         <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleUnload}>
-                          <IconTrash className="h-3 w-3 mr-1" /> Unload
+                           <IconTrash className="h-3 w-3 mr-1" /> Remove
                         </Button>
                       </>
                     ) : (

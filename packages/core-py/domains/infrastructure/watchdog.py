@@ -13,7 +13,7 @@ import threading
 import time
 from typing import Callable, Optional
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("man.infrastructure.watchdog")
 
 
 class HealthWatchdog:

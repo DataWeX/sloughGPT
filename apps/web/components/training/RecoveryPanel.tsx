@@ -52,7 +52,7 @@ export function RecoveryPanel({ jobs, fetchJobs }: RecoveryPanelProps) {
   }, [checkRecovery])
 
   const handleRecover = async (jobId: string) => {
-    if (!confirm('Recover this job? It will restart from the last checkpoint.')) return
+    if (!confirm('Recover this job? It will restart where it left off.')) return
     setLoading(true)
     try {
       const result = await trainingJobsController.recover(jobId)

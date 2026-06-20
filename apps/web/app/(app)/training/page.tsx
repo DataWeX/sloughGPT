@@ -570,7 +570,7 @@ export default function TrainingPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <Button size="sm" disabled={canStart} onClick={() => startTraining()}>
-                    {method === 'unified' ? 'Start unified training' : method === 'distill' ? (inputMode === 'text' && textInput.trim() ? 'Train on pasted text' : 'Start distill') : 'Start fine-tune'}
+                    {method === 'unified' ? 'Start unified training' : method === 'distill' ? (inputMode === 'text' && textInput.trim() ? 'Train on pasted text' : 'Start') : 'Start'}
                   </Button>
                 </div>
               </>
@@ -591,7 +591,7 @@ export default function TrainingPage() {
                     <div className="flex items-center gap-4" role="radiogroup" aria-label="Training method">
                       <div className="flex items-center gap-1 text-sm">
                         <button role="radio" aria-checked={method === 'distill'} className={cn('px-3 py-1.5 rounded-md transition-colors', method === 'distill' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => setMethod('distill')}>Distill</button>
-                        <button role="radio" aria-checked={method === 'finetune'} className={cn('px-3 py-1.5 rounded-md transition-colors', method === 'finetune' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => setMethod('finetune')}>Fine-tune</button>
+                        <button role="radio" aria-checked={method === 'finetune'} className={cn('px-3 py-1.5 rounded-md transition-colors', method === 'finetune' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => setMethod('finetune')}>Continue training</button>
                         <button role="radio" aria-checked={method === 'vlm'} className={cn('px-3 py-1.5 rounded-md transition-colors', method === 'vlm' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => setMethod('vlm')}>Vision model</button>
                         <button role="radio" aria-checked={method === 'unified'} className={cn('px-3 py-1.5 rounded-md transition-colors', method === 'unified' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => setMethod('unified')}>Auto</button>
                       </div>
@@ -682,7 +682,7 @@ export default function TrainingPage() {
                       {(method === 'finetune' || method === 'unified') && (
                         <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground h-7">
                           <input type="checkbox" checked={useLoRA} onChange={e => setUseLoRA(e.target.checked)} className="rounded border-border/60" />
-                          LoRA
+                          Advanced
                         </label>
                       )}
                       {method === 'unified' && (
@@ -880,7 +880,7 @@ export default function TrainingPage() {
                           b.build_type === 'lora' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : '',
                           b.build_type === 'vlm' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' : '',
                         )}>
-                          {b.build_type === 'auto-train' ? 'Auto' : b.build_type === 'hf-finetune' ? 'HF' : b.build_type === 'hf-finetuned-dir' ? 'Dir' : b.build_type === 'vlm' ? 'VLM' : 'LoRA'}
+                          {b.build_type === 'auto-train' ? 'Auto' : b.build_type === 'hf-finetune' ? 'HF' : b.build_type === 'hf-finetuned-dir' ? 'Dir' : b.build_type === 'vlm' ? 'VLM' : 'Adv'}
                         </span>
                       </div>
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground mt-0.5">

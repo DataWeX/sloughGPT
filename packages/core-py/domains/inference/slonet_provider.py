@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, AsyncIterator
 import numpy as np
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("man.inference.slonet_provider")
 
 QWEN_KEYS = {
     "model.embed_tokens.weight": "tok_emb.weight",

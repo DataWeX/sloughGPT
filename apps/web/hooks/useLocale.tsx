@@ -137,7 +137,7 @@ const translations: Record<Locale, Translations> = {
     'models.subtitle.loaded': '{model} loaded',
     'models.subtitle.noModel': 'No model loaded',
     'models.load': 'Load',
-    'models.unload': 'Unload',
+    'models.unload': 'Remove',
     'models.loading': 'Loading...',
     'models.switchSoul': 'Switch to this personality',
     'models.useCheckpoint': 'Use trained version',

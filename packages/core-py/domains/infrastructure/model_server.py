@@ -37,7 +37,7 @@ def _ensure_torch():
             _TORCH_AVAILABLE = False
     return _TORCH_AVAILABLE
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("man.infrastructure.model_server")
 
 
 class ModelStatus(Enum):

@@ -21,7 +21,7 @@ from typing import Optional, List, AsyncIterator, Dict, Any, Union
 from dataclasses import dataclass, field
 import logging
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("man.inference.llama_engine")
 
 LLAMA_CPP_AVAILABLE = False
 LLAMA_CPP_PYTHON_AVAILABLE = False

@@ -155,7 +155,7 @@ export default function TrainingJobDetailPage() {
                   <div className="flex items-center gap-1">
                     {job.checkpoint && job.status === 'completed' && (
                       <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleLoadCheckpoint}>
-                        Load checkpoint
+                        Load saved version
                       </Button>
                     )}
                     <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => router.push('/chat')}>
@@ -232,7 +232,7 @@ export default function TrainingJobDetailPage() {
                   </div>
                   {job.checkpoint && (
                     <div className="col-span-2">
-                      <p className="text-xs text-muted-foreground">Checkpoint</p>
+                      <p className="text-xs text-muted-foreground">Saved version</p>
                       <p className="font-mono text-xs mt-0.5 truncate">{job.checkpoint}</p>
                     </div>
                   )}

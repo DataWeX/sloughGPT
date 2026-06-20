@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("man.inference.vector_store")
 
 
 class VectorStoreType(str, Enum):

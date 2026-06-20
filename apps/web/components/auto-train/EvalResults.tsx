@@ -61,7 +61,7 @@ function EvalResults({ data }: EvalResultsProps) {
     <div className="space-y-3">
       {verdict && (
         <div className={`text-sm font-bold text-center py-1.5 rounded ${verdictColor}`}>
-          Verdict: {verdict.toUpperCase()}
+          Rating: {verdict === 'improved' ? 'Improved' : verdict === 'degraded' ? 'Degraded' : 'Unchanged'}
         </div>
       )}
       <div className="grid grid-cols-2 gap-2">

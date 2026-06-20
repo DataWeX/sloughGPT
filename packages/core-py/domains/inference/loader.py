@@ -14,7 +14,7 @@ from .slo_format import SloProfile, SouParser, save_soul
 from .quantization import SouModelQuantizer, QuantizationType
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("man.inference.loader")
 
 
 @dataclass

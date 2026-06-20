@@ -74,7 +74,7 @@ export function StatusBar() {
         {summary?.tokens_per_sec ? (
           <span className="hidden sm:inline tabular-nums">{summary.tokens_per_sec.toFixed(0)} t/s</span>
         ) : health !== null && health !== 'offline' && health.inference_count != null ? (
-          <span className="hidden sm:inline">{health.inference_count} inference{health.inference_count !== 1 ? 's' : ''}</span>
+          <span className="hidden sm:inline">{health.inference_count} response{health.inference_count !== 1 ? 's' : ''}</span>
         ) : null}
       </div>
     </Link>

@@ -16,7 +16,7 @@ from typing import Optional, List, Dict, Any
 import torch
 from peft import LoraConfig, get_peft_model, PeftModel, TaskType
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("man.infrastructure.knowledge_weight_integrator")
 
 _ADAPTER_DIR = Path("data/knowledge_adapter")
 _ADAPTER_DIR.mkdir(parents=True, exist_ok=True)
