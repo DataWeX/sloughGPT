@@ -637,7 +637,7 @@ async def start_hf_training(request: HFTrainingRequest):
     # Auto-configure when model not specified
     model_name = request.model
     if not model_name and data_path_str:
-        from training.auto_config import auto_configure
+        from domains.training.auto_config import auto_configure
         _auto = auto_configure(
             dataset=request.dataset,
             dataset_path=data_path_str,
@@ -754,7 +754,7 @@ async def start_hf_training(request: HFTrainingRequest):
             model_path = result.get("model_path", "")
 
             # Build plain-language explanation
-            from training.auto_config import plain_language_verdict
+            from domains.training.auto_config import plain_language_verdict
             final_loss = result.get("final_loss")
             final_reward = result.get("final_reward")
 
@@ -940,7 +940,7 @@ async def quick_train(request: QuickTrainRequest):
             training_jobs[jid]["result"] = result
 
             # Build plain-language completion message
-            from training.auto_config import plain_language_verdict
+            from domains.training.auto_config import plain_language_verdict
             model_path = result.get("model_path", "")
             final_loss = result.get("final_loss")
             final_reward = result.get("final_reward")
