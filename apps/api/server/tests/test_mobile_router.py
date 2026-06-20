@@ -6,14 +6,13 @@ Tests all /mobile/* endpoints to ensure proper aggregation and response formatti
 
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
-from fastapi.testclient import TestClient
-from apps.api.server.main import app
+from test_support import get_test_client
 
 
 @pytest.fixture
 def client():
     """Create test client."""
-    return TestClient(app)
+    return get_test_client()
 
 
 @pytest.fixture

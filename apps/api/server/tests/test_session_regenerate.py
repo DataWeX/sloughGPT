@@ -1,13 +1,9 @@
 import json
-from fastapi.testclient import TestClient
-
-# Import the FastAPI app defined in the server entrypoint
-from apps.api.server.main import app
+from test_support import get_test_client
 
 
 def _parse_sse_line(line: str) -> dict:
     """Extract the JSON payload from an SSE ``data: {json}`` line."""
-    # FastAPI's StreamingResponse yields lines like "data: {...}\n\n"
     line = line.strip()
     if not line.startswith("data: "):
         return {}
@@ -19,7 +15,7 @@ def _parse_sse_line(line: str) -> dict:
 
 
 def test_regenerate_uses_stored_context():
-    client = TestClient(app)
+    client = get_test_client()
     session_id = "unittest-session"
     # Store a simple conversation context
     messages = [{"role": "user", "content": "Hello"}]

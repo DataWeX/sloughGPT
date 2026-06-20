@@ -10,3 +10,8 @@ for _p in ('packages/core-py', 'apps/api/server'):
     _full = os.path.join(repo_root, _p)
     if os.path.isdir(_full) and _full not in sys.path:
         sys.path.insert(0, _full)
+
+# Add server tests directory so test_support.py is importable
+_server_tests = os.path.join(repo_root, 'apps', 'api', 'server', 'tests')
+if os.path.isdir(_server_tests) and _server_tests not in sys.path:
+    sys.path.insert(0, _server_tests)

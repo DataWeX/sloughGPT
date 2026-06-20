@@ -1,8 +1,7 @@
 import json
-from fastapi.testclient import TestClient
-from apps.api.server.main import app
+from test_support import get_test_client
 
-client = TestClient(app)
+client = get_test_client()
 
 def test_get_metrics_structure():
     resp = client.get('/system/metrics')

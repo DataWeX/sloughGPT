@@ -7,6 +7,10 @@ tested via integration tests in test_hf_finetune_integration.py.
 
 from __future__ import annotations
 
+import pytest
+
+pytest.importorskip("transformers", reason="transformers not installed")
+
 from domains.training.hf_finetune import HFFineTuner
 
 

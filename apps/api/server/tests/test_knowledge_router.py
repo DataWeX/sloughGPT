@@ -1,8 +1,6 @@
 """Integration tests for the /knowledge router (CRUD + search + batch)."""
 
-import json
-from fastapi.testclient import TestClient
-from apps.api.server.main import app
+from test_support import get_test_client
 
 
 def _cleanup(client):
@@ -12,7 +10,7 @@ def _cleanup(client):
 
 
 def test_list_knowledge_empty():
-    client = TestClient(app)
+    client = get_test_client()
     _cleanup(client)
     resp = client.get("/knowledge")
     assert resp.status_code == 200
@@ -22,7 +20,7 @@ def test_list_knowledge_empty():
 
 
 def test_add_and_list_knowledge():
-    client = TestClient(app)
+    client = get_test_client()
     _cleanup(client)
 
     add = client.post("/knowledge", json={"content": "Test fact one", "topic": "test", "source": "manual"})
@@ -45,7 +43,7 @@ def test_add_and_list_knowledge():
 
 
 def test_add_with_defaults():
-    client = TestClient(app)
+    client = get_test_client()
     _cleanup(client)
 
     resp = client.post("/knowledge", json={"content": "Default fact"})
@@ -56,13 +54,13 @@ def test_add_with_defaults():
 
 
 def test_add_empty_content_fails():
-    client = TestClient(app)
+    client = get_test_client()
     resp = client.post("/knowledge", json={"content": ""})
     assert resp.status_code == 422
 
 
 def test_delete_knowledge():
-    client = TestClient(app)
+    client = get_test_client()
     _cleanup(client)
 
     client.post("/knowledge", json={"content": "Delete me", "topic": "test"})
@@ -78,14 +76,14 @@ def test_delete_knowledge():
 
 
 def test_delete_nonexistent_returns_404():
-    client = TestClient(app)
+    client = get_test_client()
     resp = client.delete("/knowledge/nonexistent-id-12345")
     assert resp.status_code == 404
     assert "not found" in resp.json()["detail"].lower()
 
 
 def test_search_knowledge():
-    client = TestClient(app)
+    client = get_test_client()
     _cleanup(client)
 
     client.post("/knowledge", json={"content": "Python is a programming language", "topic": "code"})
@@ -99,7 +97,7 @@ def test_search_knowledge():
 
 
 def test_search_no_results():
-    client = TestClient(app)
+    client = get_test_client()
     _cleanup(client)
 
     # With an empty store, search should return count: 0
@@ -109,7 +107,7 @@ def test_search_no_results():
 
 
 def test_batch_ingest():
-    client = TestClient(app)
+    client = get_test_client()
     _cleanup(client)
 
     resp = client.post("/knowledge/batch", json={
@@ -127,7 +125,7 @@ def test_batch_ingest():
 
 
 def test_get_context():
-    client = TestClient(app)
+    client = get_test_client()
     _cleanup(client)
 
     client.post("/knowledge", json={"content": "Context test fact", "topic": "test"})

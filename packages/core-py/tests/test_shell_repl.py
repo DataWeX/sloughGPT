@@ -261,7 +261,7 @@ class TestYes:
     def _test_yes_output(self, args, expected_in):
         """Run _cmd_yes in a subprocess with SIGALRM to avoid infinite loop."""
         import subprocess, sys
-        pkgs = os.path.join(os.path.dirname(__file__), "..", "packages", "core-py")
+        pkgs = os.path.join(os.path.dirname(__file__), "..")
         code = f"""
 import sys, os, signal, tempfile, json
 sys.path.insert(0, {pkgs!r})

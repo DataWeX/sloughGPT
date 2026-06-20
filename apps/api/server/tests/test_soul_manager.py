@@ -178,9 +178,8 @@ class TestSoulManagerAPI:
     """Tests for SloManager through the FastAPI endpoint."""
 
     def test_souls_endpoint_returns_list(self):
-        from apps.api.server.main import app
-        from fastapi.testclient import TestClient
-        client = TestClient(app)
+        from test_support import get_test_client
+        client = get_test_client()
         resp = client.get("/souls")
         assert resp.status_code == 200
         data = resp.json()
@@ -190,9 +189,8 @@ class TestSoulManagerAPI:
         assert "current_soul" in data
 
     def test_souls_endpoint_soul_has_personality(self):
-        from apps.api.server.main import app
-        from fastapi.testclient import TestClient
-        client = TestClient(app)
+        from test_support import get_test_client
+        client = get_test_client()
         resp = client.get("/souls")
         data = resp.json()
         for soul in data["souls"]:
@@ -201,9 +199,8 @@ class TestSoulManagerAPI:
             assert isinstance(soul["personality"], dict)
 
     def test_souls_endpoint_soul_has_traits(self):
-        from apps.api.server.main import app
-        from fastapi.testclient import TestClient
-        client = TestClient(app)
+        from test_support import get_test_client
+        client = get_test_client()
         resp = client.get("/souls")
         data = resp.json()
         for soul in data["souls"]:
