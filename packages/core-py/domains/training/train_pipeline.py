@@ -102,7 +102,7 @@ def prepare_data(data_path, block_size=128):
                 all_texts.append((text, target_len))
                 total_len += target_len
             else:
-                print(f"Warning: dataset {ds_name} not found, skipping")
+                logger.warning("dataset %s not found, skipping", ds_name)
 
         if not all_texts:
             raise ValueError("No valid datasets found")
@@ -111,7 +111,7 @@ def prepare_data(data_path, block_size=128):
         for text_chunk, target_len in all_texts:
             text += text_chunk[:target_len]
 
-        print(f"Combined {len(datasets_with_ratios)} datasets: {total_len} chars")
+        logger.info("Combined %d datasets: %d chars", len(datasets_with_ratios), total_len)
 
     elif isinstance(data_path, list):
         datasets = data_path
@@ -121,7 +121,7 @@ def prepare_data(data_path, block_size=128):
             if path.exists():
                 texts.append(path.read_text(encoding="utf-8"))
             else:
-                print(f"Warning: dataset {ds_name} not found, skipping")
+                logger.warning("dataset %s not found, skipping", ds_name)
         text = "".join(texts)
 
     else:
@@ -136,7 +136,7 @@ def prepare_data(data_path, block_size=128):
     itos = {i: c for i, c in enumerate(chars)}
     data = torch.tensor([stoi[c] for c in text], dtype=torch.long)
 
-    print(f"Data: {len(data)} tokens, {len(chars)} chars")
+    logger.info("Data: %d tokens, %d chars", len(data), len(chars))
     return data, len(chars), stoi, itos
 
 
@@ -478,7 +478,7 @@ class SloughGPTTrainer:
         self._y_batch: Optional[torch.Tensor] = None
         self._batch_allocated = False
 
-        print(f"Using device: {self.device}")
+        logger.info("Using device: %s", self.device)
 
         # Prepare data — prefer corpus-derived vocab unless caller sets ``vocab_size`` (legacy path)
         # or supplies a full ``TrainerConfig`` (advanced; caller must match data).
@@ -520,7 +520,7 @@ class SloughGPTTrainer:
         self.global_step = 0
         self.current_epoch = 0
 
-        print(f"\nTrain: {len(self.train_data)}, Val: {len(self.val_data)}")
+        logger.info("Train: %d, Val: %d", len(self.train_data), len(self.val_data))
 
     def _setup_device(self) -> str:
         """Setup training device."""
@@ -539,7 +539,7 @@ class SloughGPTTrainer:
 
     def _create_model(self):
         """Create and setup the model."""
-        print("\n=== Creating Model ===")
+        logger.info("=== Creating Model ===")
         self.model = SloughGPTModel(
             vocab_size=self.vocab_size,
             n_embed=self.config.n_embed,
@@ -549,16 +549,12 @@ class SloughGPTTrainer:
             dropout=self.config.dropout,
         ).to(self.device)
 
-        print(f"Model type: SloughGPTModel")
-        print(f"  - RoPE position embeddings")
-        print(f"  - SwiGLU activation")
-        print(f"  - RMSNorm")
-        print(f"  - SDPA attention")
-        print(f"Base model: {self.model.num_parameters():,} params")
+        logger.info("Model: SloughGPTModel (RoPE, SwiGLU, RMSNorm, SDPA)")
+        logger.info("Base model params: %d", self.model.num_parameters())
 
         # Apply LoRA
         if self.config.use_lora:
-            print("\n=== Applying LoRA ===")
+            logger.info("=== Applying LoRA ===")
             lora_config = LoRAConfig(
                 rank=self.config.lora_rank,
                 alpha=self.config.lora_alpha,
@@ -567,25 +563,25 @@ class SloughGPTTrainer:
             self.model = apply_lora_to_model(self.model, config=lora_config)
             lora_params = sum(p.numel() for n, p in self.model.named_parameters() if "lora_" in n)
             total = sum(p.numel() for p in self.model.parameters())
-            print(f"LoRA params: {lora_params:,} ({100 * lora_params / total:.1f}%)")
+            logger.info("LoRA params: %d (%.1f%%)", lora_params, 100 * lora_params / total)
 
         # Apply channels-last memory format for GPU
         if self.config.use_channels_last and self.device == "cuda":
             self.model = self.model.to(memory_format=torch.channels_last)
-            print("Using channels_last memory format")
+            logger.info("Using channels_last memory format")
 
         # Apply torch.compile for PyTorch 2.0+
         if self.config.use_compile and hasattr(torch, "compile") and self.device == "cuda":
-            print(f"Compiling model with mode: {self.config.compile_mode}")
+            logger.info("Compiling model with mode: %s", self.config.compile_mode)
             try:
                 self._compiled_model = torch.compile(
                     self.model,
                     mode=self.config.compile_mode,
                     fullgraph=False,
                 )
-                print("Model compiled successfully")
+                logger.info("Model compiled successfully")
             except Exception as e:
-                print(f"torch.compile failed: {e}")
+                logger.warning("torch.compile failed: %s", e)
                 self._compiled_model = None
 
         # Setup DDP
@@ -656,7 +652,7 @@ class SloughGPTTrainer:
         self.mixed_precision_dtype = (
             torch.bfloat16 if self.config.mixed_precision_dtype == "bf16" else torch.float16
         )
-        print(f"Mixed precision: {self.mixed_precision_dtype}")
+        logger.info("Mixed precision: %s", self.mixed_precision_dtype)
 
     def _create_optimizer(self) -> torch.optim.Optimizer:
         """Create optimizer with weight decay."""

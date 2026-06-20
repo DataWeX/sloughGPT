@@ -21,7 +21,6 @@ from transformers import (
     Trainer,
     TrainingArguments,
     DataCollatorForLanguageModeling,
-    DataCollatorWithPadding,
     PreTrainedTokenizer,
     PreTrainedTokenizerFast,
 )
@@ -41,6 +40,7 @@ class TextFileDataset(Dataset):
     ):
         self.tokenizer = tokenizer
         self.max_length = max_length
+        self.pad_token_id = tokenizer.pad_token_id or tokenizer.eos_token_id or 0
 
         with open(file_path, "r", encoding="utf-8") as f:
             text = f.read()
@@ -53,7 +53,26 @@ class TextFileDataset(Dataset):
             if len(chunk) < 64:
                 continue
             input_ids = torch.tensor(chunk, dtype=torch.long)
-            self.examples.append({"input_ids": input_ids, "labels": input_ids.clone()})
+            labels = input_ids.clone()
+            self.examples.append({"input_ids": input_ids, "labels": labels})
+
+        self._pad_examples()
+
+    def _pad_examples(self) -> None:
+        """Pad all examples to the same length (max_length) so the batch collator can stack them."""
+        max_len = self.max_length
+        for ex in self.examples:
+            cur = ex["input_ids"].size(0)
+            if cur < max_len:
+                pad_len = max_len - cur
+                ex["input_ids"] = torch.cat([
+                    ex["input_ids"],
+                    torch.full((pad_len,), self.pad_token_id, dtype=torch.long),
+                ])
+                ex["labels"] = torch.cat([
+                    ex["labels"],
+                    torch.full((pad_len,), -100, dtype=torch.long),
+                ])
 
     def __len__(self) -> int:
         return len(self.examples)
@@ -171,9 +190,10 @@ class HFFineTuner:
         )
         logger.info("Dataset has %d examples", len(dataset))
 
-        data_collator = DataCollatorWithPadding(
+        data_collator = DataCollatorForLanguageModeling(
             tokenizer=tokenizer,
-            padding="longest",
+            mlm=False,
+            pad_to_multiple_of=None,
         )
 
         output_path = Path(self.output_dir)
