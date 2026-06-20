@@ -7,6 +7,7 @@ import type { TrainingBuild } from '@/lib/training-controller'
 
 export interface UseTrainingCheckpointsReturn {
   checkpoints: Checkpoint[]
+  loadingCheckpoints: boolean
   activeCheckpoint: string | null
   builds: TrainingBuild[]
   loadingBuilds: boolean
@@ -23,6 +24,7 @@ export interface UseTrainingCheckpointsReturn {
 
 export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([])
+  const [loadingCheckpoints, setLoadingCheckpoints] = useState(true)
   const [activeCheckpoint, setActiveCheckpoint] = useState<string | null>(null)
   const [builds, setBuilds] = useState<TrainingBuild[]>([])
   const [loadingBuilds, setLoadingBuilds] = useState(true)
@@ -30,10 +32,12 @@ export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
   const [loadingJobs, setLoadingJobs] = useState(true)
 
   const fetchCheckpoints = useCallback(async () => {
+    setLoadingCheckpoints(true)
     try {
       const data = await trainingJobsController.listCheckpoints()
       setCheckpoints(data)
     } catch { /* ignore */ }
+    finally { setLoadingCheckpoints(false) }
   }, [])
 
   const fetchBuilds = useCallback(async () => {
@@ -69,7 +73,7 @@ export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
   }, [])
 
   return {
-    checkpoints, activeCheckpoint, builds, loadingBuilds, jobs, loadingJobs,
+    checkpoints, loadingCheckpoints, activeCheckpoint, builds, loadingBuilds, jobs, loadingJobs,
     setActiveCheckpoint, setCheckpoints,
     fetchCheckpoints, fetchBuilds, fetchJobs,
     handleLoadCheckpoint, handleDeleteCheckpoint,

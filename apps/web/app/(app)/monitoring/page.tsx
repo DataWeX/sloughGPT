@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -8,11 +8,15 @@ import { ProgressBar } from '@/components/ui'
 import { StatCard, KpiGrid } from '@/components/ui/display'
 import { systemController, type DetailedHealth, type SystemMetrics, type SystemInfo, type DiskUsage, type GPUInfo } from '@/lib/system-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
+import { benchmarkController } from '@/lib/benchmark-controller'
+import { multimodalController, type MultimodalCapabilities } from '@/lib/multimodal-controller'
 import { useLocale } from '@/hooks/useLocale'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { PUBLIC_API_URL } from '@/lib/config'
 import { formatUptime } from '@/lib/chat-utils'
+import { PUBLIC_API_URL } from '@/lib/config'
 import { GpuCard, DiskCard, ServerInfoCard } from '@/components/monitoring/SystemInfoCards'
+import { Skeleton } from '@/components/ui'
+import { apiPost } from '@/lib/http-client'
 
 export default function SystemHealthPage() {
   const { t } = useLocale()
@@ -29,27 +33,28 @@ export default function SystemHealthPage() {
     repetition_rate: number; avg_length: number; empty_rate: number;
   } | null>(null)
   const [benchStats, setBenchStats] = useState<{ total: number; avg_tokens: number; models: string[] } | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null)
+  const [chartHistory, setChartHistory] = useState<Array<{ time: string; cpu: number; mem: number }>>([])
   const [dpoStatus, setDpoStatus] = useState<{ status: string; last_run: string | null; accepted_count: number; rejected_count: number; result: any } | null>(null)
   const [dpoRunning, setDpoRunning] = useState(false)
   const [vlmStatus, setVlmStatus] = useState<{ vlm_loaded: boolean; training: { status: string } } | null>(null)
-  const historyRef = useRef<Array<{ time: string; cpu: number; mem: number }>>([])
   const MAX_HISTORY = 30
 
   const fetchAll = useCallback(async (showRefreshing = false) => {
     if (showRefreshing) setRefreshing(true)
     setError(null)
     try {
-      const [d, m, i, di, ks, as, bq, bs, ds, vs] = await Promise.all([
+      const [d, m, i, di, ks, as, bq, bs, dsRes, vs] = await Promise.all([
         systemController.getDetailedHealth(),
         systemController.getMetrics(),
         systemController.getInfo(),
         systemController.getDisk(),
         knowledgeController.stats(),
         knowledgeController.getAdapterStatus().catch(() => null),
-        fetch(`${PUBLIC_API_URL}/benchmark/quality`).then(r => r.json()).catch(() => null),
-        fetch(`${PUBLIC_API_URL}/benchmark/stats`).then(r => r.json()).catch(() => null),
-        fetch(`${PUBLIC_API_URL}/vlm/dpo/status`).then(r => r.json()).catch(() => null),
-        fetch(`${PUBLIC_API_URL}/vlm/status`).then(r => r.json()).catch(() => null),
+        benchmarkController.quality().catch(() => null),
+        benchmarkController.stats().catch(() => null),
+        fetch(`${PUBLIC_API_URL}/vlm/dpo/status`).then(r => r.json() as any).catch(() => null),
+        multimodalController.getVLMStatus().catch(() => null),
       ])
       setDetailed(d)
       setMetrics(m)
@@ -57,15 +62,17 @@ export default function SystemHealthPage() {
       setDisk(di)
       setKnowledgeStats(ks)
       setAdapterStatus(as)
-      setBenchQuality(bq)
-      setBenchStats(bs)
-      setDpoStatus(ds)
-      setVlmStatus(vs)
-      // Append to rolling history
+      setBenchQuality(bq && 'coherence_score' in bq ? { ...bq as any, status: 'ok', total_responses: 0, avg_length: 0, empty_rate: 0 } : null)
+      setBenchStats(bs as any)
+      setDpoStatus(dsRes)
+      setVlmStatus(vs ? { vlm_loaded: vs.loaded, training: { status: vs.model ? 'idle' : 'none' } } : null)
+      setLastUpdated(new Date().toLocaleTimeString())
       if (m) {
-        const h = historyRef.current
-        h.push({ time: new Date().toLocaleTimeString(), cpu: m.cpu_percent, mem: m.memory_percent })
-        if (h.length > MAX_HISTORY) h.shift()
+        setChartHistory(prev => {
+          const next = [...prev, { time: new Date().toLocaleTimeString(), cpu: m.cpu_percent, mem: m.memory_percent }]
+          if (next.length > MAX_HISTORY) next.shift()
+          return next
+        })
       }
     } catch (e: any) {
       setError(e?.message || 'Failed to load system health')
@@ -105,14 +112,33 @@ export default function SystemHealthPage() {
           />
         }
         right={
-          <Button variant="outline" size="sm" onClick={() => fetchAll(true)} disabled={refreshing || !loaded}>
-            {refreshing ? 'Refreshing...' : 'Refresh'}
-          </Button>
+          <div className="flex items-center gap-2">
+            {lastUpdated && (
+              <span className="text-[11px] text-muted-foreground hidden sm:inline">Updated {lastUpdated}</span>
+            )}
+            <Button variant="outline" size="sm" onClick={() => fetchAll(true)} disabled={refreshing || !loaded}>
+              {refreshing ? 'Refreshing...' : 'Refresh'}
+            </Button>
+          </div>
         }
       />
       <div className="space-y-4">
+        {!loaded && (
+          <Card>
+            <CardHeader><CardTitle className="text-base">Status</CardTitle></CardHeader>
+            <CardContent>
+              <KpiGrid columns={4}>
+                <StatCard label="API" value={<Skeleton className="h-4 w-16" />} />
+                <StatCard label="Model" value={<Skeleton className="h-4 w-20" />} />
+                <StatCard label="Uptime" value={<Skeleton className="h-4 w-16" />} />
+                <StatCard label="Responses served" value={<Skeleton className="h-4 w-8" />} />
+              </KpiGrid>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Status + Model */}
-        <Card>
+        {loaded && <Card>
           <CardHeader><CardTitle className="text-base">Status</CardTitle></CardHeader>
           <CardContent>
             <KpiGrid columns={4}>
@@ -140,7 +166,7 @@ export default function SystemHealthPage() {
               />
             </KpiGrid>
           </CardContent>
-        </Card>
+        </Card>}
 
         {/* System Resources */}
         <Card>
@@ -269,7 +295,7 @@ export default function SystemHealthPage() {
                   onClick={async () => {
                     setDpoRunning(true)
                     try {
-                      await fetch(`${PUBLIC_API_URL}/vlm/dpo`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+                      await apiPost('/vlm/dpo', {})
                       await fetchAll()
                     } catch {}
                     setDpoRunning(false)
@@ -284,13 +310,13 @@ export default function SystemHealthPage() {
         ) : null}
 
         {/* Real-time chart */}
-        {historyRef.current.length > 1 && (
+        {chartHistory.length > 1 && (
           <Card>
             <CardHeader><CardTitle className="text-base">Real‑time Metrics (last {MAX_HISTORY}s)</CardTitle></CardHeader>
             <CardContent>
               <div className="h-48" role="img" aria-label="CPU and memory usage chart over time">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={historyRef.current}>
+                  <LineChart data={chartHistory}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                     <XAxis dataKey="time" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                     <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} width={30} />

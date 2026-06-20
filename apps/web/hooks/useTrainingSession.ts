@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { trainingJobsController } from '@/lib/controllers'
 import { PUBLIC_API_URL } from '@/lib/config'
 
@@ -69,6 +69,16 @@ export interface UseTrainingSessionReturn extends TrainingSessionState {
 }
 
 export function useTrainingSession(): UseTrainingSessionReturn {
+  const ftPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const vlmPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (ftPollRef.current) { clearInterval(ftPollRef.current); ftPollRef.current = null }
+      if (vlmPollRef.current) { clearInterval(vlmPollRef.current); vlmPollRef.current = null }
+    }
+  }, [])
+
   const [phase, setPhase] = useState('idle')
   const [loss, setLoss] = useState<number | null>(null)
   const [progress, setProgress] = useState(0)
@@ -112,6 +122,8 @@ export function useTrainingSession(): UseTrainingSessionReturn {
 
   const stopTraining = useCallback(() => {
     esRef.current?.close(); esRef.current = null
+    if (ftPollRef.current) { clearInterval(ftPollRef.current); ftPollRef.current = null }
+    if (vlmPollRef.current) { clearInterval(vlmPollRef.current); vlmPollRef.current = null }
     trainingJobsController.stopAutoTrain().catch(() => {})
     trainingJobsController.stopUnified().catch(() => {})
     resetTraining()
@@ -190,23 +202,24 @@ export function useTrainingSession(): UseTrainingSessionReturn {
           const resp2 = await fetch(`${PUBLIC_API_URL}/training/jobs`)
           const jobs = await resp2.json()
           const myJob = (jobs || []).find((j: { id: string }) => j.id === jobId)
-          if (!myJob) { clearInterval(pollId); return }
+          if (!myJob) { clearInterval(pollId); ftPollRef.current = null; return }
           if (myJob.status === 'completed') {
-            clearInterval(pollId)
+            clearInterval(pollId); ftPollRef.current = null
             setPhase('complete'); setProgress(100)
             setFinetunedModelPath(myJob.result?.model_path || '')
             setFinetunedModelLoss(myJob.result?.final_loss || myJob.loss || null)
             addToast('Training complete', 'success')
             onComplete?.()
           } else if (myJob.status === 'failed') {
-            clearInterval(pollId); setPhase('error')
+            clearInterval(pollId); ftPollRef.current = null; setPhase('error')
             addToast(myJob.error || 'Training failed', 'error')
           } else if (myJob.loss != null) {
             setLoss(myJob.loss); setProgress(myJob.progress || 0); setEpoch(myJob.current_epoch || 0)
           }
-        } catch { clearInterval(pollId) }
+        } catch { clearInterval(pollId); ftPollRef.current = null }
       }, 3000)
-      setTimeout(() => clearInterval(pollId), 300000)
+      ftPollRef.current = pollId
+      setTimeout(() => { clearInterval(pollId); ftPollRef.current = null }, 300000)
     }).catch(() => addToast('Something went wrong starting training', 'error'))
   }, [])
 
@@ -233,9 +246,9 @@ export function useTrainingSession(): UseTrainingSessionReturn {
           const resp2 = await fetch(`${PUBLIC_API_URL}/training/jobs`)
           const jobs = await resp2.json()
           const myJob = (jobs || []).find((j: { id: string }) => j.id === jobId)
-          if (!myJob) { clearInterval(pollId); return }
+          if (!myJob) { clearInterval(pollId); vlmPollRef.current = null; return }
           if (myJob.status === 'completed') {
-            clearInterval(pollId); setPhase('complete'); setProgress(100)
+            clearInterval(pollId); vlmPollRef.current = null; setPhase('complete'); setProgress(100)
             setFinetunedModelPath(myJob.model_path || '')
             setFinetunedModelLoss(myJob.loss || null)
             setVlmOutputDir(myJob.output_dir || null)
@@ -243,15 +256,16 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             addToast('Image model training complete', 'success')
             onComplete?.()
           } else if (myJob.status === 'failed') {
-            clearInterval(pollId); setPhase('error')
+            clearInterval(pollId); vlmPollRef.current = null; setPhase('error')
             addToast(myJob.error || 'Image model training failed', 'error')
           } else if (myJob.loss != null) {
             setLoss(myJob.loss); setProgress(myJob.progress || 0); setEpoch(myJob.current_epoch || 0)
             setMessage(myJob.stage || '')
           }
-        } catch { clearInterval(pollId) }
+        } catch { clearInterval(pollId); vlmPollRef.current = null }
       }, 3000)
-      setTimeout(() => clearInterval(pollId), 600000)
+      vlmPollRef.current = pollId
+      setTimeout(() => { clearInterval(pollId); vlmPollRef.current = null }, 600000)
     }).catch(() => addToast('Something went wrong starting image model training', 'error'))
   }, [])
 

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui'
 import { StatCard, KpiGrid } from '@/components/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { modelController, trainingController } from '@/lib/controllers'
@@ -37,6 +38,7 @@ export default function TrainingPage() {
   const searchParams = useSearchParams()
   const addToast = useToastStore(s => s.addToast)
   const initialLoadDone = useRef(false)
+  const qtTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const session = useTrainingSession()
   const datasets = useTrainingDatasets(addToast)
@@ -83,6 +85,13 @@ export default function TrainingPage() {
   // ===== Fine-tuned model loading =====
   const [loadingFinetunedModel, setLoadingFinetunedModel] = useState(false)
 
+  // ===== Optimistic job entries (show immediately while backend processes) =====
+  const [optimisticJobs, setOptimisticJobs] = useState<any[]>([])
+  const allJobs = [...optimisticJobs, ...checkpoints.jobs]
+
+  // ===== Visibility-based polling pause =====
+  const visibilityRef = useRef<boolean>(true)
+
   const startTraining = useCallback(async (checkpointName?: string) => {
     const hasDataset = inputMode === 'dataset' && datasets.selectedDataset
     const hasText = inputMode === 'text' && textInput.trim()
@@ -105,6 +114,14 @@ export default function TrainingPage() {
     if (hasDataset) body.dataset_id = datasets.selectedDataset
     if (hasText) body.source_text = textInput.trim()
 
+    const tempId = `pending-${Date.now()}`
+    const now = new Date().toISOString()
+    setOptimisticJobs(prev => [...prev, {
+      id: tempId, name: `${method} started`, status: 'running',
+      created_at: now, status_message: 'Starting...',
+    }])
+    const clearOptimistic = () => setOptimisticJobs([])
+
     if (method === 'finetune') {
       session.startFineTune({
         model: selectedModel || 'gpt2',
@@ -113,7 +130,7 @@ export default function TrainingPage() {
         batchSize: trainingBatchSize,
         lr: trainingLR,
         useLoRA,
-      }, addToast, () => { checkpoints.fetchJobs() })
+      }, addToast, () => { clearOptimistic(); checkpoints.fetchJobs() })
     } else if (method === 'vlm') {
       session.startVLMTraining({
         dataset: datasets.selectedDataset,
@@ -122,7 +139,7 @@ export default function TrainingPage() {
         stage1Epochs: vlmStage1Epochs,
         stage2Epochs: vlmStage2Epochs,
         useLoRA,
-      }, addToast, () => { checkpoints.fetchJobs() })
+      }, addToast, () => { clearOptimistic(); checkpoints.fetchJobs() })
     } else if (method === 'unified') {
       session.startUnifiedTraining({
         method: 'auto',
@@ -135,7 +152,9 @@ export default function TrainingPage() {
         hfModel: selectedModel || undefined,
       }, addToast)
     } else {
-      session.startSSETraining(body, addToast, () => { checkpoints.fetchCheckpoints() })
+      session.startSSETraining(body, addToast, () => {
+        clearOptimistic(); checkpoints.fetchCheckpoints()
+      })
     }
   }, [method, inputMode, textInput, algo, trainingEpochs, trainingLR, trainingBatchSize,
       selectedModel, useLoRA, unifiedDistill, datasets.selectedDataset, vlmVisionEncoder, vlmLLM,
@@ -180,7 +199,7 @@ export default function TrainingPage() {
             addToast(job.message || 'Training failed', 'error')
           } else {
             retries = 0
-            setTimeout(poll, 3000)
+            qtTimeoutRef.current = setTimeout(poll, 3000)
           }
         } catch {
           retries += 1
@@ -189,10 +208,10 @@ export default function TrainingPage() {
             addToast('Lost connection to training server', 'error')
             return
           }
-          setTimeout(poll, 5000)
+          qtTimeoutRef.current = setTimeout(poll, 5000)
         }
       }
-      setTimeout(poll, 2000)
+      qtTimeoutRef.current = setTimeout(poll, 2000)
     } catch (err: unknown) {
       setQuickTraining(false)
       addToast('Something went wrong starting training', 'error')
@@ -207,8 +226,19 @@ export default function TrainingPage() {
     }
   }, [quickDataset])
 
-  // Effects
-  useEffect(() => { return () => { /* esRef cleanup handled in hook */ } }, [])
+  // Clear optimistic jobs when training ends (success or error)
+  useEffect(() => {
+    if (session.phase === 'complete' || session.phase === 'error') {
+      setOptimisticJobs([])
+    }
+  }, [session.phase])
+
+  // Effects: cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (qtTimeoutRef.current) { clearTimeout(qtTimeoutRef.current); qtTimeoutRef.current = null }
+    }
+  }, [])
 
   useEffect(() => {
     void datasets.fetchDatasets()
@@ -224,9 +254,19 @@ export default function TrainingPage() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Pause checkpoint polling when page is hidden
   useEffect(() => {
-    const id = setInterval(() => void checkpoints.fetchCheckpoints(), 10000)
-    return () => clearInterval(id)
+    const onVisibility = () => { visibilityRef.current = !document.hidden }
+    document.addEventListener('visibilitychange', onVisibility)
+    let id: ReturnType<typeof setInterval>
+    const tick = () => {
+      if (visibilityRef.current) void checkpoints.fetchCheckpoints()
+    }
+    id = setInterval(tick, 10000)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [checkpoints.fetchCheckpoints])
 
   useEffect(() => {
@@ -245,8 +285,8 @@ export default function TrainingPage() {
     }
   }, [datasets.selectedDataset, inputMode, datasets.setDatasetPreview])
 
-  const runningJob = checkpoints.jobs.find(j => j.status === 'running')
-  const completedCount = checkpoints.jobs.filter(j => j.status === 'completed').length
+  const runningJob = allJobs.find(j => j.status === 'running')
+  const completedCount = allJobs.filter(j => j.status === 'completed').length
 
   const canStart = session.trainingRunning ||
     (inputMode === 'dataset' && !datasets.selectedDataset) ||
@@ -268,7 +308,7 @@ export default function TrainingPage() {
       <div className="space-y-4">
         {/* Stats */}
         <KpiGrid columns={4}>
-          <StatCard label="Training runs" value={checkpoints.jobs.length} />
+          <StatCard label="Training runs" value={allJobs.length} />
           <StatCard label="Running" value={runningJob ? 1 : 0} />
           <StatCard label="Completed" value={completedCount} />
           <StatCard label="Saved versions" value={checkpoints.checkpoints.length} />
@@ -816,7 +856,7 @@ export default function TrainingPage() {
         </Card>
 
         {/* Checkpoints */}
-        {checkpoints.checkpoints.length > 0 && (
+        {(checkpoints.checkpoints.length > 0 || checkpoints.loadingCheckpoints) && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Trained models</CardTitle>
@@ -825,6 +865,19 @@ export default function TrainingPage() {
               </Button>
             </CardHeader>
             <CardContent>
+              {checkpoints.loadingCheckpoints && checkpoints.checkpoints.length === 0 ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {[1,2].map(i => (
+                    <div key={i} className="flex items-center justify-between rounded-lg border border-border/50 p-3">
+                      <div className="space-y-1.5 flex-1">
+                        <Skeleton className="h-4 w-40" />
+                        <Skeleton className="h-3 w-28" />
+                      </div>
+                      <Skeleton className="h-5 w-12 rounded" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
               <div className="grid gap-2 sm:grid-cols-2">
                 {checkpoints.checkpoints.slice().reverse().map((cp: any) => (
                   <div key={cp.name} className={cn("flex items-center justify-between rounded-lg border p-3 text-sm", checkpoints.activeCheckpoint === cp.name ? "border-primary/30 bg-primary/5" : "border-border/50")}>
@@ -852,12 +905,13 @@ export default function TrainingPage() {
                   </div>
                 ))}
               </div>
+              )}
             </CardContent>
           </Card>
         )}
 
         {/* Builds */}
-        {checkpoints.builds.length > 0 && (
+        {(checkpoints.builds.length > 0 || checkpoints.loadingBuilds) && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Builds</CardTitle>
@@ -866,6 +920,19 @@ export default function TrainingPage() {
               </Button>
             </CardHeader>
             <CardContent className="p-0">
+              {checkpoints.loadingBuilds ? (
+                <div className="divide-y divide-border/50">
+                  {[1,2].map(i => (
+                    <div key={i} className="flex items-center justify-between px-4 py-3">
+                      <div className="space-y-1.5 flex-1">
+                        <Skeleton className="h-4 w-56" />
+                        <Skeleton className="h-3 w-40" />
+                      </div>
+                      <Skeleton className="h-5 w-14 rounded" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
               <div className="divide-y divide-border/50">
                 {checkpoints.builds.slice().reverse().map((b, i) => (
                   <div key={`${b.build_type}-${b.name}-${i}`} className="flex items-center justify-between px-4 py-3 text-sm">
@@ -920,19 +987,33 @@ export default function TrainingPage() {
                   </div>
                 ))}
               </div>
+              )}
             </CardContent>
           </Card>
         )}
 
         {/* Job history */}
-        {checkpoints.jobs.length > 0 && (
+        {(allJobs.length > 0 || checkpoints.loadingJobs) && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Job history</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
+              {checkpoints.loadingJobs ? (
+                <div className="divide-y divide-border/50">
+                  {[1,2,3].map(i => (
+                    <div key={i} className="flex items-center justify-between px-4 py-3">
+                      <div className="space-y-1.5 flex-1">
+                        <Skeleton className="h-4 w-48" />
+                        <Skeleton className="h-3 w-32" />
+                      </div>
+                      <Skeleton className="h-5 w-12 rounded-full" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
               <div className="divide-y divide-border/50">
-                {checkpoints.jobs.slice().reverse().map((job) => {
+                {allJobs.slice().reverse().map((job) => {
                   const relativeTime = (() => {
                     if (!job.created_at) return ''
                     const diff = Date.now() - new Date(job.created_at).getTime()
@@ -974,11 +1055,12 @@ export default function TrainingPage() {
                   )
                 })}
               </div>
+              )}
             </CardContent>
           </Card>
         )}
 
-        {!session.trainingRunning && checkpoints.checkpoints.length === 0 && checkpoints.jobs.length === 0 && (
+        {!session.trainingRunning && !checkpoints.loadingCheckpoints && checkpoints.checkpoints.length === 0 && allJobs.length === 0 && (
           <Card className="border-dashed py-8">
             <CardContent className="text-center space-y-3">
               <p className="text-sm text-muted-foreground">No training activity yet.</p>

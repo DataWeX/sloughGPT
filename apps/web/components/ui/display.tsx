@@ -5,7 +5,7 @@ import { cn } from '@/lib/cn'
 
 interface StatCardProps {
   label: string
-  value: string | number
+  value: string | number | ReactNode
   icon?: ReactNode
   trend?: { value: number; positive?: boolean }
   className?: string

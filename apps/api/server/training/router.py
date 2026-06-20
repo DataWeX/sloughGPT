@@ -813,7 +813,7 @@ async def quick_train(request: QuickTrainRequest):
     """
     import os
 
-    from training.auto_config import auto_configure
+    from domains.training.auto_config import auto_configure
 
     # Resolve dataset path
     _repo_root = Path(__file__).resolve().parents[4]
