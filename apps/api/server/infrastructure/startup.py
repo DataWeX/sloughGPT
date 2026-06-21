@@ -45,8 +45,10 @@ class StartupOrchestrator:
         self._phase4_multimodal()
         self._phase5_model_registry()
         self._phase6_routers()
+        await self._phase_ready()
 
     async def _phase1_logging(self):
+        STARTUP_PHASE.update(phase="initializing", step=1, total=6, message="Starting up...")
         logger.info("Startup phase 1/6: logging initialized")
 
     def _phase2_model_load(self):
@@ -61,11 +63,13 @@ class StartupOrchestrator:
             logger.info("Phase 2/6: autoload disabled (%r)", raw)
             return
 
+        STARTUP_PHASE.update(phase="loading_model", step=2, message="Loading model weights...")
         logger.info("Phase 2/6: loading model %s in background", raw)
         asyncio.create_task(asyncio.to_thread(_autoload_model, cfg))
 
     def _phase3_wandb(self):
         """Start W&B metrics server (if available)."""
+        STARTUP_PHASE.update(phase="wandb_server", step=3, message="Starting W&B metrics server...")
         try:
             from domains.ops.wandb_server import start_wandb_server_background
 
@@ -102,6 +106,7 @@ class StartupOrchestrator:
 
     def _phase4_multimodal(self):
         """Initialize multimodal engine (if available)."""
+        STARTUP_PHASE.update(phase="multimodal", step=4, message="Initializing multimodal engine...")
         try:
 
             def _init():
@@ -123,6 +128,7 @@ class StartupOrchestrator:
 
     def _phase5_model_registry(self):
         """Initialize model registry."""
+        STARTUP_PHASE.update(phase="model_registry", step=5, message="Initializing model registry...")
         try:
             from domains.infrastructure.model_registry import get_model_registry
             self._registry = get_model_registry()
@@ -132,6 +138,7 @@ class StartupOrchestrator:
 
     def _phase6_routers(self):
         """Register all feature routers."""
+        STARTUP_PHASE.update(phase="registering_routers", step=6, message="Registering routes...")
         try:
             from routers import get_all_routers
             for r in get_all_routers():
@@ -148,6 +155,11 @@ class StartupOrchestrator:
         except Exception as e:
             logger.error("Phase 6/6: router registration failed: %s", e)
             raise
+
+    async def _phase_ready(self):
+        """Mark server as ready — happens after all synchronous phases complete."""
+        STARTUP_PHASE.update(phase="ready", step=7, message="Server ready")
+        logger.info("Startup complete — server ready for requests")
 
     async def shutdown(self):
         """Clean up on server shutdown."""
