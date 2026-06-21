@@ -1,13 +1,13 @@
-import React, {useEffect, useState, useCallback} from 'react';
+import React, {useEffect, useState, useCallback, useRef} from 'react';
 import {
   View,
-  Text,
   FlatList,
   TextInput,
   TouchableOpacity,
   StyleSheet,
   RefreshControl,
   Modal,
+  Keyboard,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {api} from '../services/api-client';
@@ -25,6 +25,9 @@ export function KnowledgeScreen() {
   const [editItem, setEditItem] = useState<KnowledgeItem | null>(null);
   const [formContent, setFormContent] = useState('');
   const [formTopic, setFormTopic] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchItems = useCallback(async () => {
     try {
@@ -69,6 +72,12 @@ export function KnowledgeScreen() {
     setRefreshing(false);
   };
 
+  const debouncedSearch = (text: string) => {
+    setSearch(text);
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(() => {}, 300);
+  };
+
   const handleAdd = async () => {
     if (!formContent.trim()) return;
     try {
@@ -105,76 +114,138 @@ export function KnowledgeScreen() {
     } catch {}
   };
 
+  const handleBatchDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    try {
+      await Promise.all(ids.map(id => api.delete(`/knowledge/${id}`)));
+      setSelectedIds(new Set());
+      setSelectMode(false);
+      await fetchItems();
+    } catch {}
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const openEdit = (item: KnowledgeItem) => {
     setEditItem(item);
     setFormContent(item.content);
     setFormTopic(item.topic || '');
   };
 
-  const renderItem = ({item}: {item: KnowledgeItem}) => (
-    <View style={styles.itemCard}>
-      <View style={styles.itemHeader}>
-        <Text style={styles.itemContent} numberOfLines={3}>
-          {item.content}
-        </Text>
-      </View>
-      <View style={styles.itemFooter}>
-        <View style={styles.itemMeta}>
-          {item.topic && <StatusBadge label={item.topic} variant="info" />}
-          <View style={styles.importanceDots}>
-            {Array.from({length: 5}).map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.dot,
-                  i < item.importance && styles.dotFilled,
-                ]}
-              />
-            ))}
+  const renderItem = ({item}: {item: KnowledgeItem}) => {
+    const isSelected = selectedIds.has(item.id);
+    return (
+      <TouchableOpacity
+        style={[styles.itemCard, isSelected && styles.itemCardSelected]}
+        onLongPress={() => {
+          setSelectMode(true);
+          setSelectedIds(new Set([item.id]));
+        }}
+        onPress={() => {
+          if (selectMode) {
+            toggleSelect(item.id);
+          } else {
+            openEdit(item);
+          }
+        }}
+        activeOpacity={0.7}>
+        <View style={styles.itemHeader}>
+          {selectMode && (
+            <View style={[styles.checkbox, isSelected && styles.checkboxActive]}>
+              {isSelected && <View style={styles.checkInner} />}
+            </View>
+          )}
+          <Text style={styles.itemContent} numberOfLines={3}>
+            {item.content}
+          </Text>
+        </View>
+        <View style={styles.itemFooter}>
+          <View style={styles.itemMeta}>
+            {item.topic && <StatusBadge label={item.topic} variant="info" />}
+            <View style={styles.importanceDots}>
+              {Array.from({length: 5}).map((_, i) => (
+                <View
+                  key={i}
+                  style={[styles.dot, i < item.importance && styles.dotFilled]}
+                />
+              ))}
+            </View>
           </View>
+          {!selectMode && (
+            <View style={styles.itemActions}>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => openEdit(item)}>
+                <StatusBadge label="Edit" variant="info" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => handleDelete(item.id)}>
+                <StatusBadge label="Del" variant="error" />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
-        <View style={styles.itemActions}>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => openEdit(item)}>
-            <Text style={styles.actionText}>Edit</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.deleteBtn]}
-            onPress={() => handleDelete(item.id)}>
-            <Text style={[styles.actionText, styles.deleteText]}>Del</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Knowledge</Text>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => {
-            setFormContent('');
-            setFormTopic('');
-            setAddModalVisible(true);
-          }}>
-          <Text style={styles.addBtnText}>+ Add</Text>
-        </TouchableOpacity>
+        {selectMode ? (
+          <View style={styles.selectHeader}>
+            <TouchableOpacity onPress={() => { setSelectMode(false); setSelectedIds(new Set()); }}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.selectCount}>{selectedIds.size} selected</Text>
+            <TouchableOpacity
+              onPress={handleBatchDelete}
+              disabled={selectedIds.size === 0}>
+              <Text style={[styles.deleteText, selectedIds.size === 0 && styles.disabledText]}>
+                Delete ({selectedIds.size})
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <Text style={styles.title}>Knowledge</Text>
+            <TouchableOpacity
+              style={styles.addBtn}
+              onPress={() => {
+                setFormContent('');
+                setFormTopic('');
+                setAddModalVisible(true);
+              }}>
+              <Text style={styles.addBtnText}>+ Add</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
-      <View style={styles.searchRow}>
-        <TextInput
-          style={styles.searchInput}
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search knowledge..."
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
+      {!selectMode && (
+        <View style={styles.searchRow}>
+          <TextInput
+            style={styles.searchInput}
+            value={search}
+            onChangeText={debouncedSearch}
+            placeholder="Search knowledge..."
+            placeholderTextColor={colors.textMuted}
+            returnKeyType="search"
+            onSubmitEditing={() => Keyboard.dismiss()}
+          />
+        </View>
+      )}
 
-      {topics.length > 0 && (
+      {!selectMode && topics.length > 0 && (
         <FlatList
           horizontal
           data={[null, ...topics]}
@@ -205,6 +276,7 @@ export function KnowledgeScreen() {
         renderItem={renderItem}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.list}
+        keyboardDismissMode="on-drag"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -217,8 +289,11 @@ export function KnowledgeScreen() {
       />
 
       <Modal visible={addModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setAddModalVisible(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.modalContent} onPress={() => {}}>
             <Text style={styles.modalTitle}>Add Knowledge</Text>
             <TextInput
               style={styles.modalInput}
@@ -228,31 +303,37 @@ export function KnowledgeScreen() {
               placeholderTextColor={colors.textMuted}
               multiline
               textAlignVertical="top"
+              autoFocus
             />
             <TextInput
-              style={styles.modalInput}
+              style={styles.modalInputShort}
               value={formTopic}
               onChangeText={setFormTopic}
               placeholder="Topic (optional)"
               placeholderTextColor={colors.textMuted}
+              returnKeyType="done"
             />
             <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setAddModalVisible(false)}>
-                <Text style={styles.cancelText}>Cancel</Text>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setAddModalVisible(false)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.saveBtn} onPress={handleAdd}>
+              <TouchableOpacity
+                style={[styles.saveBtn, !formContent.trim() && styles.saveBtnDisabled]}
+                onPress={handleAdd}
+                disabled={!formContent.trim()}>
                 <Text style={styles.saveText}>Add</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       <Modal visible={!!editItem} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setEditItem(null)}>
+          <TouchableOpacity activeOpacity={1} style={styles.modalContent} onPress={() => {}}>
             <Text style={styles.modalTitle}>Edit Knowledge</Text>
             <TextInput
               style={styles.modalInput}
@@ -264,24 +345,26 @@ export function KnowledgeScreen() {
               textAlignVertical="top"
             />
             <TextInput
-              style={styles.modalInput}
+              style={styles.modalInputShort}
               value={formTopic}
               onChangeText={setFormTopic}
               placeholder="Topic (optional)"
               placeholderTextColor={colors.textMuted}
+              returnKeyType="done"
             />
             <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setEditItem(null)}>
-                <Text style={styles.cancelText}>Cancel</Text>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditItem(null)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.saveBtn} onPress={handleEdit}>
+              <TouchableOpacity
+                style={[styles.saveBtn, !formContent.trim() && styles.saveBtnDisabled]}
+                onPress={handleEdit}
+                disabled={!formContent.trim()}>
                 <Text style={styles.saveText}>Save</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </SafeAreaView>
   );
@@ -302,6 +385,30 @@ const styles = StyleSheet.create({
   title: {
     ...typography.h1,
     color: colors.text,
+  },
+  selectHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flex: 1,
+  },
+  selectCount: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  cancelText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  deleteText: {
+    ...typography.caption,
+    color: colors.error,
+    fontWeight: '600',
+  },
+  disabledText: {
+    opacity: 0.4,
   },
   addBtn: {
     backgroundColor: colors.primary,
@@ -359,12 +466,41 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     padding: spacing.md,
   },
+  itemCardSelected: {
+    backgroundColor: colors.primary + '10',
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
   itemHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
     marginBottom: spacing.sm,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: radii.sm,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  checkboxActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
+  },
+  checkInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 2,
+    backgroundColor: colors.white,
   },
   itemContent: {
     ...typography.body,
     color: colors.text,
+    flex: 1,
   },
   itemFooter: {
     flexDirection: 'row',
@@ -394,19 +530,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.xs,
   },
-  actionBtn: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radii.sm,
-  },
-  actionText: {
-    ...typography.small,
-    color: colors.primary,
-  },
-  deleteBtn: {},
-  deleteText: {
-    color: colors.error,
-  },
+  actionBtn: {},
   empty: {
     alignItems: 'center',
     paddingVertical: spacing.xxxl * 2,
@@ -442,7 +566,15 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
-    minHeight: 80,
+    minHeight: 100,
+  },
+  modalInputShort: {
+    ...typography.body,
+    color: colors.text,
+    backgroundColor: colors.surface,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
   },
   modalActions: {
     flexDirection: 'row',
@@ -454,7 +586,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: radii.md,
   },
-  cancelText: {
+  cancelBtnText: {
     ...typography.caption,
     color: colors.textSecondary,
     fontWeight: '600',
@@ -464,6 +596,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: radii.md,
     backgroundColor: colors.primary,
+  },
+  saveBtnDisabled: {
+    opacity: 0.4,
   },
   saveText: {
     ...typography.caption,
