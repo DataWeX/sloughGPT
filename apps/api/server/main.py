@@ -1,23 +1,41 @@
 #!/usr/bin/env python3
 """
-SloughGPT Model Server
-FastAPI server for model inference with HuggingFace fallback.
+SloughGPT Model Server — thin entry point (~240 lines).
+
+Startup phases, middleware, exception handlers, and auth have been
+extracted into the ``server/infrastructure/`` package.  This file
+only handles:
+
+  1. Python path bootstrapping (``sys.path``, ``HF_HOME``)
+  2. Structured logging initialisation
+  3. CORS middleware
+  4. Lifespan delegating to ``StartupOrchestrator``
+  5. The ``__main__`` entry point (argument parsing, uvicorn launch)
+
+Backward-compatible re-exports are provided so existing consumers
+(``from main import app``, ``from main import audit_logger`` etc.)
+continue to work unchanged.
 """
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
+import warnings
+from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any, Dict, Optional
 
-# Import path must exist before domains (see ``domains.torch_runtime``).
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+# ── Path bootstrapping (must happen before any domain imports) ────────
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _SERVER_ROOT = Path(__file__).resolve().parent
 _CORE_PY_ROOT = _REPO_ROOT / "packages" / "core-py"
 _SGLOADER_ROOT = _REPO_ROOT / "packages" / "downcraft"
 
-
-# Project-local HuggingFace cache (models/hf-cache/ instead of ~/.cache/huggingface/)
 _HF_CACHE = _REPO_ROOT / "models" / "hf-cache"
 _HF_CACHE.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("HF_HOME", str(_HF_CACHE))
@@ -31,36 +49,15 @@ from domains.torch_runtime import apply_api_process_torch_env
 
 apply_api_process_torch_env()
 
-from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional
-from starlette.requests import Request
-from starlette.responses import JSONResponse
-from datetime import datetime, timedelta
-import hashlib
-import uuid
+import state as server_state  # noqa: E402
 
-from fastapi import (
-    FastAPI,
-    HTTPException,
-)
-from fastapi.middleware.cors import CORSMiddleware
-from settings import get_security_settings
+# ── Warning suppression ──────────────────────────────────────────────
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="urllib3")
+warnings.filterwarnings("ignore", message=".*urllib3 v2 only supports OpenSSL.*")
+warnings.filterwarnings("ignore", message=".*NotOpenSSLWarning.*")
 
-# MVC routers
-import state as server_state
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from dataclasses import dataclass
-import json
-import asyncio
-import time
-import logging
-from domains.errors import SloughGPTDomainError
-
-# Note: model_registry imported in lifespan to avoid 14s torch import at module level
-
-# ── Structured logging setup ────────────────────────────────────────────
-from domains.logging import ConsoleLogger, BridgeHandler, set_global, LogLevel
+# ── Structured logging ───────────────────────────────────────────────
+from domains.logging import ConsoleLogger, BridgeHandler, set_global, LogLevel  # noqa: E402
 
 _log_level_name = os.environ.get("MAN_LOG_LEVEL", "INFO").upper()
 _log_level = getattr(LogLevel, _log_level_name, LogLevel.INFO)
@@ -68,153 +65,41 @@ _log_level = getattr(LogLevel, _log_level_name, LogLevel.INFO)
 _console_logger = ConsoleLogger("man", level=_log_level)
 set_global(_console_logger)
 
-# Bridge standard logging.getLogger("man.xxx") through our ConsoleLogger
 _bridge = BridgeHandler(_console_logger)
 _bridge.setLevel(getattr(logging, _log_level_name, logging.INFO))
 logging.root.addHandler(_bridge)
 logging.root.setLevel(getattr(logging, _log_level_name, logging.INFO))
 
-# Suppress noisy urllib3 NotOpenSSLWarning (LibreSSL on macOS is fine for dev)
-import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="urllib3")
-warnings.filterwarnings("ignore", message=".*urllib3 v2 only supports OpenSSL.*")
-warnings.filterwarnings("ignore", message=".*NotOpenSSLWarning.*")
-
 logger = logging.getLogger("man")
 
-_PROCESS_START_MONOTONIC = time.monotonic()
 
-from startup_progress import STARTUP_PHASE
-
-# Suppress noisy urllib3 NotOpenSSLWarning (LibreSSL on macOS is fine for dev)
-import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="urllib3")
-warnings.filterwarnings("ignore", message=".*urllib3 v2 only supports OpenSSL.*")
-warnings.filterwarnings("ignore", message=".*NotOpenSSLWarning.*")
-
-
-# ============ Production Configuration ============
-@dataclass
-class GenerationConfig:
-    """Production configuration for text generation. Set via environment variables."""
-
-    temperature: float = float(os.getenv("SLOUGHGT_TEMPERATURE", "0.8"))
-    top_p: float = float(os.getenv("SLOUGHGT_TOP_P", "0.9"))
-    top_k: int = int(os.getenv("SLOUGHGT_TOP_K", "50"))
-    repetition_penalty: float = float(os.getenv("SLOUGHGT_REPETITION_PENALTY", "1.2"))
-    max_new_tokens: int = int(os.getenv("SLOUGHGT_MAX_NEW_TOKENS", "200"))
-    max_context_length: int = int(os.getenv("SLOUGHGT_MAX_CONTEXT_LENGTH", "1024"))
-
-    @classmethod
-    def from_env(cls) -> "GenerationConfig":
-        """Create config from environment variables."""
-        return cls(
-            temperature=float(os.getenv("SLOUGHGT_TEMPERATURE", "0.8")),
-            top_p=float(os.getenv("SLOUGHGT_TOP_P", "0.9")),
-            top_k=int(os.getenv("SLOUGHGT_TOP_K", "50")),
-            repetition_penalty=float(os.getenv("SLOUGHGT_REPETITION_PENALTY", "1.2")),
-            max_new_tokens=int(os.getenv("SLOUGHGT_MAX_NEW_TOKENS", "200")),
-            max_context_length=int(os.getenv("SLOUGHGT_MAX_CONTEXT_LENGTH", "1024")),
-        )
-
+# ── Config ──────────────────────────────────────────────────────────
+from config import GenerationConfig, ServerConfig  # noqa: E402
 
 gen_config = GenerationConfig.from_env()
 server_state.gen_config = gen_config
-logger.info(
-    "Generation config loaded",
-    extra={"context": {"temperature": gen_config.temperature, "top_p": gen_config.top_p,
-                       "top_k": gen_config.top_k, "rep_penalty": gen_config.repetition_penalty}},
-)
+
+cfg = ServerConfig.from_env()
 
 
+# ── Lifespan ────────────────────────────────────────────────────────
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Load default HF weights in background when ``MAN_AUTOLOAD_MODEL`` is set (default: Qwen2.5-0.5B-Instruct)."""
-    STARTUP_PHASE.update(phase="loading_model", step=1, message="Loading model weights...")
-    logger.info("Startup phase 1/6: loading model")
-    model_load_task = asyncio.create_task(asyncio.to_thread(_autoload_hf_model_at_startup))
-    STARTUP_PHASE.update(phase="wandb_server", step=2, message="Starting W&B metrics server...")
-    wandb_server_task: Optional[asyncio.Task] = None
+async def lifespan(app_inst: FastAPI):
+    """Delegate startup phases to ``StartupOrchestrator``."""
     try:
-        from domains.ops.wandb_server import start_wandb_server_background
+        from infrastructure.startup import StartupOrchestrator
 
-        def _wandb_server_extra_metrics() -> Dict[str, Any]:
-            from host_metrics import sample_host_metrics_sync
-            h = sample_host_metrics_sync()
-            out: Dict[str, Any] = {
-                "host/cpu_percent": float(h["cpu_percent"]),
-                "host/memory_percent": float(h["memory_percent"]),
-            }
-            rss = h.get("process_rss_bytes")
-            if isinstance(rss, int) and rss >= 0:
-                out["server/process_rss_bytes"] = float(rss)
-            return out
-
-        class _NoopHttpMetrics:
-            @staticmethod
-            def wandb_aggregate() -> dict:
-                return {}
-        wandb_server_task = await start_wandb_server_background(
-            _NoopHttpMetrics(),
-            extra_metrics=_wandb_server_extra_metrics,
-        )
-    except Exception as e:
-        logger.warning("W&B server background task did not start", extra={"context": {"error": str(e)}})
-    STARTUP_PHASE.update(phase="multimodal", step=3, message="Initializing multimodal engine...")
-    def _init_multimodal():
-        try:
-            speech_server = os.environ.get("SPEECH_SERVER", "").lower() in ("1", "true", "yes")
-            if speech_server:
-                from domains.multimodal import initialize_multimodal
-                initialize_multimodal(speech_server=True, vision_model="slonet")
-                logger.info("Multimodal initialized (server-side ASR enabled)")
-            else:
-                from domains.multimodal import get_multimodal_manager
-                get_multimodal_manager().initialize(vision_model="slonet")
-                logger.info("Multimodal initialized (browser ASR only)")
-        except Exception as e:
-            logger.warning("Multimodal initialization failed", extra={"context": {"error": str(e)}})
-    asyncio.create_task(asyncio.to_thread(_init_multimodal))
-    STARTUP_PHASE.update(phase="model_registry", step=5, message="Initializing model registry...")
-    from domains.infrastructure.model_registry import get_model_registry
-    registry = get_model_registry()
-    logger.info("Model registry initialized")
-
-    STARTUP_PHASE.update(phase="ready", step=6, message="Server ready")
-    logger.info("Startup complete")
-
-    # Register feature routers (synchronous — all heavy deps now lazy)
-    from routers import get_all_routers
-    for r in get_all_routers():
-        app.include_router(r)
-    try:
-        from training.router import router as training_router
-        app.include_router(training_router)
+        orch = StartupOrchestrator(app_inst, cfg)
+        await orch.run()
+        yield
+        await orch.shutdown()
     except Exception as exc:
-        logger.warning("Failed to register training router", extra={"context": {"error": str(exc)}})
-    logger.info("All routers registered", extra={"context": {"route_count": len(app.routes)}})
-
-    yield
-    # Shutdown: unregister all models
-    registry.reset_metrics()
-    logger.info("Model registry reset on shutdown")
-    try:
-        from training.job_store import get_job_store
-        store = get_job_store()
-        running_jobs = store.list(status="running")
-        for job in running_jobs:
-            logger.info(f"Marking job {job['id']} as interrupted on shutdown")
-            store.mark_crashed(job["id"])
-    except Exception as e:
-        logger.warning("Failed to mark running jobs as interrupted: %s", e)
-    if wandb_server_task is not None:
-        wandb_server_task.cancel()
-        try:
-            await wandb_server_task
-        except asyncio.CancelledError:
-            pass
+        logger.critical("Startup failed: %s", exc, exc_info=True)
+        yield
+        raise
 
 
+# ── FastAPI application ─────────────────────────────────────────────
 app = FastAPI(
     title="SloughGPT API",
     description="SloughGPT Model Inference API with HuggingFace models",
@@ -231,343 +116,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Note: Feature routers are registered in the lifespan (below) to avoid
-# blocking module-level imports for 40+s (JAX/sentence_transformers transitive deps).
+# Register structured middleware from the infrastructure package.
+from infrastructure.middleware import register_all_middleware  # noqa: E402
+register_all_middleware(app)
+
+# Feature routers are registered by StartupOrchestrator._phase6_routers()
+# during the lifespan context.  Tests that need routes without lifespan
+# should import and register only the specific router they test.
+
+# Register exception handlers.
+from infrastructure.exception_handlers import register_all_handlers  # noqa: E402
+register_all_handlers(app)
 
 
-@app.middleware("http")
-async def request_timeout_middleware(request: Request, call_next):
-    """
-    Enforce a maximum request duration to prevent hung requests from
-    blocking the event loop and making the server appear offline.
-
-    Streaming endpoints (chat, auto-train) are excluded since they
-    hold the connection open intentionally.
-    """
-    import asyncio
-
-    # Skip timeout for streaming endpoints
-    path = request.url.path
-    if any(path.startswith(p) for p in ["/chat/stream", "/auto-train/stream", "/session/", "/generate/stream", "/models/load", "/inference/generate", "/chat"]):
-        return await call_next(request)
-
-    # 60-second timeout for regular requests
-    try:
-        return await asyncio.wait_for(call_next(request), timeout=60.0)
-    except asyncio.TimeoutError:
-        logger.warning("Request timed out: %s %s", request.method, request.url.path)
-        from fastapi.responses import JSONResponse
-        return JSONResponse(
-            status_code=504,
-            content={"error": "Request timed out", "path": request.url.path},
-        )
-
-
-@app.middleware("http")
-async def add_correlation_id(request: Request, call_next):
-    """Generate or preserve ``X-Request-ID`` for every request.
-
-    Also records request timing in ServerState for debug/monitoring.
-    """
-    import time as _time
-    request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
-    request.state.request_id = request_id
-    start = _time.monotonic()
-    try:
-        from domains.infrastructure.server_state import get_server_state
-        get_server_state().record_request()
-    except Exception:
-        pass
-    response = await call_next(request)
-    try:
-        elapsed_ms = (_time.monotonic() - start) * 1000
-        from domains.infrastructure.server_state import get_server_state
-        ss = get_server_state()
-        ss.record_request_latency(
-            path=str(request.url.path),
-            method=request.method,
-            status=response.status_code,
-            elapsed_ms=elapsed_ms,
-        )
-        ss.record_path_latency(
-            path=str(request.url.path),
-            elapsed_ms=elapsed_ms,
-        )
-        # Snapshot health score every 30 requests for trend tracking
-        if ss.request_count % 30 == 0:
-            ss.record_health_snapshot()
-            ss.record_memory_snapshot()
-        # Rate limit check for inference endpoints (10/sec)
-        if str(request.url.path).startswith(("/chat", "/inference")):
-            if not ss.check_rate_limit(str(request.url.path), max_per_second=10):
-                logging.getLogger("man.middleware").debug(
-                    "Rate limit exceeded: %s", request.url.path
-                )
-    except Exception:
-        pass
-    response.headers["X-Request-ID"] = request_id
-    return response
-
-
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException):
-    """Handle HTTP exceptions with verbose context (method, path, detail, traceback in debug)."""
-    client_ip = request.client.host if request.client else "unknown"
-    detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
-    try:
-        from domains.infrastructure.server_state import get_server_state
-        get_server_state().record_error_detail(
-            path=str(request.url.path),
-            method=request.method,
-            status=exc.status_code,
-            message=detail,
-            error_type="HTTPException",
-        )
-    except Exception:
-        pass
-    extra = {
-        "method": request.method,
-        "path": str(request.url.path),
-        "detail": detail,
-    }
-    if os.environ.get("MAN_DEBUG", "").lower() in ("1", "true"):
-        import traceback
-        extra["traceback"] = traceback.format_exc()
-    audit_logger.log(
-        "http_error",
-        client_ip,
-        resource=str(request.url.path),
-        action=str(exc.status_code),
-        status="failure",
-        details=extra,
-    )
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=extra,
-    )
-
-
-@app.exception_handler(Exception)
-async def root_exception_handler(request: Request, exc: Exception):
-    """Catch-all that prevents any unhandled exception from crashing the process.
-
-    Returns a JSON 500 with error detail instead of raising an internal server error.
-    Also records the failure in the ModelRegistry circuit breaker if applicable.
-    """
-    import traceback
-    tb = traceback.format_exc()
-    logger.error("Unhandled %s on %s %s:\n%s", type(exc).__name__, request.method, request.url.path, tb)
-    try:
-        from domains.infrastructure.server_state import get_server_state
-        get_server_state().record_error_detail(
-            path=str(request.url.path),
-            method=request.method,
-            status=500,
-            message=f"{type(exc).__name__}: {exc}",
-            error_type=type(exc).__name__,
-        )
-    except Exception:
-        pass
-    try:
-        from domains.infrastructure.model_registry import get_model_registry
-        registry = get_model_registry()
-        health = registry.health_summary()
-        degraded_models = [m["model_id"] for m in health.get("models", []) if m.get("status") == "degraded"]
-        if degraded_models:
-            logger.warning("Degraded models: %s", degraded_models)
-    except Exception:
-        pass
-    return JSONResponse(
-        status_code=500,
-        content={
-            "error": f"Internal error: {type(exc).__name__}",
-            "error_type": type(exc).__name__,
-            "detail": str(exc),
-            "path": request.url.path,
-        },
-    )
-
-
-@app.exception_handler(SloughGPTDomainError)
-async def domain_exception_handler(request: Request, exc: SloughGPTDomainError):
-    """Map core ``domains`` errors to JSON with verbose context."""
-    client_ip = request.client.host if request.client else "unknown"
-    extra = {
-        "method": request.method,
-        "path": str(request.url.path),
-        "error": str(exc),
-        "code": exc.code,
-    }
-    try:
-        from domains.infrastructure.server_state import get_server_state
-        get_server_state().record_error_detail(
-            path=str(request.url.path),
-            method=request.method,
-            status=422,
-            message=str(exc),
-            error_type="SloughGPTDomainError",
-        )
-    except Exception:
-        pass
-    if os.environ.get("MAN_DEBUG", "").lower() in ("1", "true"):
-        import traceback
-        extra["traceback"] = traceback.format_exc()
-    audit_logger.log(
-        "domain_error",
-        client_ip,
-        resource=str(request.url.path),
-        action="domain_error",
-        status="failure",
-        details=extra,
-    )
-    return JSONResponse(
-        status_code=422,
-        content=extra,
-    )
-
-
-
-
-# Model globals live in server_state (state.py)
-
-
-# ============ Security Configuration ============
-_sec = get_security_settings()
-JWT_SECRET = _sec.jwt_secret
-JWT_ALGORITHM = _sec.jwt_algorithm
-JWT_EXPIRATION_HOURS = _sec.jwt_expiration_hours
-VALID_API_KEYS = _sec.valid_api_keys
-
-
-# ============ JWT Authentication ============
-class JWTAuth:
-    """Simple JWT implementation."""
-
-    def __init__(self):
-        self.secret = JWT_SECRET
-        self.algorithm = JWT_ALGORITHM
-        self.expiration_hours = JWT_EXPIRATION_HOURS
-
-    def create_token(self, subject: str, **extra_claims) -> str:
-        """Create a JWT token."""
-        import base64
-        import json
-
-        now = datetime.utcnow()
-        payload = {
-            "sub": subject,
-            "iat": int(now.timestamp()),
-            "exp": int((now + timedelta(hours=self.expiration_hours)).timestamp()),
-            **extra_claims,
-        }
-
-        header = {"alg": self.algorithm, "typ": "JWT"}
-        header_b64 = base64.urlsafe_b64encode(json.dumps(header).encode()).decode().rstrip("=")
-        payload_b64 = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
-
-        import hmac
-
-        signature = hmac.new(
-            self.secret.encode(), f"{header_b64}.{payload_b64}".encode(), hashlib.sha256
-        )
-        signature_b64 = base64.urlsafe_b64encode(signature.digest()).decode().rstrip("=")
-
-        return f"{header_b64}.{payload_b64}.{signature_b64}"
-
-    def verify_token(self, token: str) -> Optional[Dict]:
-        """Verify and decode a JWT token."""
-        import base64
-        import json
-        import hmac
-
-        try:
-            parts = token.split(".")
-            if len(parts) != 3:
-                return None
-
-            header_b64, payload_b64, signature_b64 = parts
-
-            # Verify signature
-            expected_sig = hmac.new(
-                self.secret.encode(), f"{header_b64}.{payload_b64}".encode(), hashlib.sha256
-            )
-            expected_sig_b64 = base64.urlsafe_b64encode(expected_sig.digest()).decode().rstrip("=")
-
-            if not hmac.compare_digest(signature_b64, expected_sig_b64):
-                return None
-
-            # Decode payload
-            payload = json.loads(base64.urlsafe_b64decode(payload_b64 + "=="))
-
-            # Check expiration
-            if payload.get("exp", 0) < datetime.utcnow().timestamp():
-                return None
-
-            return payload
-        except Exception:
-            return None
-
-    def refresh_token(self, token: str) -> Optional[str]:
-        """Refresh a JWT token."""
-        payload = self.verify_token(token)
-        if payload:
-            return self.create_token(
-                payload["sub"], **{k: v for k, v in payload.items() if k != "sub"}
-            )
-        return None
-
-
-jwt_auth = JWTAuth()
-
-
-# ============ Audit Logger ============
-class AuditLogger:
-    """Audit logging for security events."""
-
-    def __init__(self):
-        self.logs: List[Dict] = []
-        self.max_logs = 10000
-
-    def log(
-        self,
-        event_type: str,
-        client_ip: str,
-        user_id: Optional[str] = None,
-        resource: str = "",
-        action: str = "",
-        status: str = "success",
-        details: Optional[Dict] = None,
-    ):
-        """Log an audit event."""
-        entry = {
-            "timestamp": datetime.utcnow().isoformat(),
-            "event_type": event_type,
-            "client_ip": client_ip,
-            "user_id": user_id,
-            "resource": resource,
-            "action": action,
-            "status": status,
-            "details": details or {},
-        }
-        self.logs.append(entry)
-        if len(self.logs) > self.max_logs:
-            self.logs = self.logs[-self.max_logs :]
-
-        # Log to standard logger
-        log_level = logging.INFO if status == "success" else logging.WARNING
-        logger.log(log_level, f"AUDIT: {event_type} - {client_ip} - {action} - {status}")
-
-    def get_logs(self, limit: int = 100, event_type: Optional[str] = None) -> List[Dict]:
-        """Get audit logs."""
-        logs = self.logs[-limit:]
-        if event_type:
-            logs = [l for l in logs if l["event_type"] == event_type]
-        return logs
-
-
-audit_logger = AuditLogger()
-
-
+# ── Legacy helpers (preserved for existing callers) ─────────────────
 def _first_trainable_device(module: Any) -> torch.device:
     """Device for placing tokenized inputs beside a loaded HF ``model``."""
     try:
@@ -659,8 +221,7 @@ def load_model(model_path: Optional[str] = None):
         server_state.model_type = "demo"
 
 
-# ============ Meta-Weight Learning Endpoints ============
-
+# ── Meta-weight manager ─────────────────────────────────────────────
 _meta_weight_manager = None
 
 
@@ -670,94 +231,39 @@ def get_meta_weight_manager():
     if _meta_weight_manager is None:
         try:
             from domains.feedback import get_meta_weight_manager as _get_manager
-
             _meta_weight_manager = _get_manager()
         except ImportError:
             return None
     return _meta_weight_manager
 
 
-@app.post("/session/{session_id}/regenerate", tags=["session"])
-async def regenerate_response(session_id: str, req: Request):
-    """Stream a regenerated response for the last user message in the conversation."""
-    from fastapi.responses import StreamingResponse
-    import json
-    from typing import AsyncIterator
+# ── Backward-compatible re-exports ─────────────────────────────────
+# Consumers still import from main.py (e.g. ``from main import audit_logger``).
+# These symbols used to be defined inline but now live in the ``server/infrastructure/``
+# package.  The re-exports below ensure zero-changes for existing callers.
 
-    try:
-        body = await req.json()
-    except Exception:
-        body = {}
+from config import gen_config as gen_config_reexport  # noqa: E402, F401
+gen_config = gen_config_reexport
+server_state.gen_config = gen_config
 
-    messages = body.get("messages", [])
-    if not messages:
-        from domains.infrastructure.session_core import SessionCore
-        messages = SessionCore.get_messages(session_id)
-        if not messages:
-            return StreamingResponse(
-                iter([f"data: " + json.dumps({"stream": "chat", "status": "error", "phase": "STREAMING", "data": {"error": "No session context found"}}) + "\n\n"]),
-                media_type="text/event-stream"
-            )
+from infrastructure.auth import JWTAuth, AuditLogger, get_jwt_auth, get_audit_logger  # noqa: E402
+jwt_auth = get_jwt_auth()
+audit_logger = get_audit_logger()
 
-    user_msg = None
-    for msg in reversed(messages):
-        if msg.get("role") == "user":
-            user_msg = msg.get("content", "")
-            break
+# Security settings (kept as module-level globals for legacy imports)
+from settings import get_security_settings  # noqa: E402
+_sec = get_security_settings()
+JWT_SECRET = _sec.jwt_secret
+JWT_ALGORITHM = _sec.jwt_algorithm
+JWT_EXPIRATION_HOURS = _sec.jwt_expiration_hours
+VALID_API_KEYS = _sec.valid_api_keys
 
-    if user_msg is None:
-        return StreamingResponse(
-            iter([f"data: " + json.dumps({"stream": "chat", "status": "error", "phase": "STREAMING", "data": {"error": "No user message found"}}) + "\n\n"]),
-            media_type="text/event-stream"
-        )
-
-    from controllers.models import get_models_controller
-    _mc = get_models_controller()
-    _model = _mc._hf_model if _mc._hf_model is not None else server_state.model
-    _tokenizer = _mc._tokenizer if _mc._tokenizer is not None else server_state.tokenizer
-
-    if _model is None or _tokenizer is None:
-        return StreamingResponse(
-            iter([f"data: " + json.dumps({"stream": "chat", "status": "error", "phase": "STREAMING", "data": {"error": "Model not loaded"}}) + "\n\n"]),
-            media_type="text/event-stream"
-        )
-
-    async def generate() -> AsyncIterator[str]:
-        try:
-            from transformers import TextIteratorStreamer
-            from threading import Thread
-            user_ids = _tokenizer(user_msg, return_tensors="pt")
-            user_ids = _inputs_to_model_device(user_ids, _model)
-
-            streamer = TextIteratorStreamer(_tokenizer, skip_prompt=True, skip_special_tokens=True)
-
-            def run_gen():
-                _model.generate(
-                    **user_ids,
-                    max_new_tokens=body.get("max_new_tokens", 256),
-                    temperature=body.get("temperature", 0.8),
-                    do_sample=True,
-                    pad_token_id=_tokenizer.eos_token_id,
-                    streamer=streamer,
-                )
-
-            thread = Thread(target=run_gen)
-            thread.start()
-
-            for token in streamer:
-                if token:
-                    yield f"data: " + json.dumps({"stream": "chat", "phase": "STREAMING", "status": "working", "data": {"token": token}}) + "\n\n"
-
-            thread.join()
-            yield f"data: " + json.dumps({"stream": "chat", "phase": "STREAMING", "status": "complete", "data": {"token": ""}}) + "\n\n"
-
-        except Exception as e:
-            yield f"data: " + json.dumps({"stream": "chat", "status": "error", "phase": "STREAMING", "data": {"error": str(e)}}) + "\n\n"
-
-    return StreamingResponse(generate(), media_type="text/event-stream")
+from pydantic import BaseModel  # noqa: E402
 
 
 class LoadModelRequest(BaseModel):
+    """Request schema for ``POST /models/load`` — kept here for import compatibility."""
+
     model_id: str
     mode: Optional[str] = "local"
     device: Optional[str] = "auto"
@@ -765,15 +271,12 @@ class LoadModelRequest(BaseModel):
 
 def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> Dict[str, Any]:
     """
-    Load HuggingFace model via ModelsController.
-
-    Notes:
-      - ``_load_hf_model()`` inside the controller already creates the InferenceEngine,
-        calls ``setup_providers()``, and injects into ChatDomain.
-      - This function only adds ModelRegistry registration + server_state updates.
+    Load HuggingFace model via ModelsController (extracted into
+    ``routers/models.py`` endpoint).  Preserved here for startup import.
     """
     try:
         from controllers.models import get_models_controller
+
         ctrl = get_models_controller()
         result = ctrl.load_model(request.model_id, request.device or "auto", use_slonet=use_slonet)
 
@@ -798,6 +301,7 @@ def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> 
         # Auto-load knowledge adapter
         try:
             from domains.infrastructure.knowledge_weight_integrator import load_knowledge_adapter, get_adapter_status
+
             status = get_adapter_status()
             if status.get("adapter_exists"):
                 model = load_knowledge_adapter(model, device="cpu", merge=True)
@@ -806,9 +310,10 @@ def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> 
         except Exception as e:
             logger.warning("Knowledge adapter load skipped: %s", e)
 
-        # Register with ModelRegistry (the only step _load_hf_model does NOT do)
+        # Register with ModelRegistry
         try:
             from domains.infrastructure.model_registry import get_model_registry
+
             registry = get_model_registry()
             registry.register(
                 model_id=request.model_id,
@@ -818,9 +323,8 @@ def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> 
                 max_concurrent=1,
                 generate_timeout=120.0,
             )
-            # Re-register HF provider so it uses the ModelServer for
-            # lifecycle-managed generation (semaphore, timeout, circuit breaker).
             from domains.models.provider import register_provider, HFModelProvider
+
             model_server = registry.get(request.model_id)
             provider = HFModelProvider(
                 model, tokenizer,
@@ -849,39 +353,10 @@ def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> 
 def find_available_port(start_port: int = 8000, max_attempts: int = 10) -> int:
     """Find an available port starting from start_port (DEPRECATED - use domains.shared.find_available_port)."""
     from domains.shared import find_available_port as _find_available_port
-
     return _find_available_port(host="", start_port=start_port, max_attempts=max_attempts)
 
 
-def _autoload_hf_model_at_startup() -> None:
-    """
-    Load default inference weights without a manual ``POST /models/load``.
-
-    - ``MAN_AUTOLOAD_MODEL``: HuggingFace model id (default: ``gpt2``). Set to empty to skip.
-    - ``MAN_AUTOLOAD_DEVICE``: passed through to the loader (default: ``auto``).
-    - ``MAN_USE_SLONET``: If set to ``1`` or ``true``, loads into SloTransformer
-      (pure NumPy) instead of PyTorch. Recommended for stability.
-    """
-    raw = os.environ.get("MAN_AUTOLOAD_MODEL", "Qwen/Qwen2.5-0.5B-Instruct").strip()
-    if not raw or raw.lower() in ("false", "0", "none", "no", "off", "disable"):
-        logger.info("MAN_AUTOLOAD_MODEL=%r — skipping startup autoload", raw)
-        server_state.autoload_skipped = True
-        return
-    if server_state.model is not None:
-        return
-    device = (os.environ.get("MAN_AUTOLOAD_DEVICE") or "auto").strip() or "auto"
-    use_slonet = os.environ.get("MAN_USE_SLONET", "0").strip().lower() in ("1", "true", "yes")
-    req = LoadModelRequest(model_id=raw, mode="local", device=device)
-    result = _load_hf_model_core(req, use_slonet=use_slonet)
-    if result.get("status") == "error":
-        logger.warning("Startup autoload failed", extra={"context": {"model": raw, "error": result.get("error")}})
-    else:
-        logger.info(
-            "Startup autoload ok",
-            extra={"context": {"model_id": raw, "device": result.get("effective_device"), "mode": "slonet" if use_slonet else "pytorch"}},
-        )
-
-
+# ── Background daemons (callable from __main__) ─────────────────────
 def _start_feedback_workflow() -> None:
     """Start the automated feedback workflow at server startup."""
     try:
@@ -933,6 +408,7 @@ def _start_watchdog() -> None:
             return
 
         import time
+
         _startup_time = time.time()
         _WATCHDOG_GRACE_SECS = 120
 
@@ -945,20 +421,17 @@ def _start_watchdog() -> None:
                     return True
                 if server_state.training_active:
                     return True
-                # If no model loaded, check if any provider exists (SloNet, HF, etc.)
                 if server_state.model is None:
                     from domains.models.provider import get_provider
+
                     default = get_provider("default")
                     if default is not None:
                         return True
-                    # No model and no provider — only unhealthy if we expected one
-                    # (MAN_AUTOLOAD_MODEL was set but failed, or model was unloaded)
-                    import os
                     if os.environ.get("MAN_AUTOLOAD_MODEL", ""):
                         return False
-                    # Training-only mode (no autoload configured) — always healthy
                     return True
                 from domains.models.provider import get_provider
+
                 router = get_provider("default")
                 return router is not None
             except Exception:
@@ -969,15 +442,16 @@ def _start_watchdog() -> None:
             try:
                 import gc
                 import torch
-                # Clear any stale state
+
                 gc.collect()
                 if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                     torch.mps.empty_cache()
-                # Reload model — _autoload_hf_model_at_startup reads MAN_AUTOLOAD_MODEL
-                # from environment; if unset it defaults to gpt2
-                _autoload_hf_model_at_startup()
-                import state as srv_state
-                return srv_state.model is not None
+                from config import ServerConfig
+
+                c = ServerConfig.from_env()
+                req = LoadModelRequest(model_id=c.autoload_model, mode="local", device=c.autoload_device)
+                result = _load_hf_model_core(req, use_slonet=c.use_slonet)
+                return result.get("status") != "error"
             except Exception as e:
                 logger.error("Recovery failed: %s", e)
                 return False
@@ -990,12 +464,13 @@ def _start_watchdog() -> None:
         logger.warning("Failed to start watchdog: %s", e)
 
 
+# ── Entry point ─────────────────────────────────────────────────────
 if __name__ == "__main__":
     import argparse
     import atexit
-    import traceback
+    import subprocess
+    import uvicorn
 
-    # ── Global exception handler — log and exit cleanly ──
     def _handle_uncaught_exception(exc_type, exc_value, exc_tb):
         if issubclass(exc_type, (KeyboardInterrupt, SystemExit)):
             sys.__excepthook__(exc_type, exc_value, exc_tb)
@@ -1008,50 +483,40 @@ if __name__ == "__main__":
     parser.add_argument(
         "--reload",
         action="store_true",
-        default=os.environ.get("MAN_RELOAD", "").lower() in ("1", "true", "yes"),
-        help="Enable auto-reload on file changes (default: $MAN_RELOAD or false)",
+        default=cfg.reload,
+        help="Enable auto-reload on file changes",
     )
     parser.add_argument(
         "--port",
         type=int,
         default=None,
-        help="Port to bind (default: 8000, falls back to next available)",
+        help="Port to bind (default: from config or 8000)",
     )
     parser.add_argument(
         "--web",
         action="store_true",
-        default=os.environ.get("MAN_WEB", "").lower() in ("1", "true", "yes"),
-        help="Serve web frontend alongside API (default: $MAN_WEB or false)",
+        default=cfg.enable_web,
+        help="Serve web frontend alongside API",
     )
-    args, _ = parser.parse_known_args()
+    args = parser.parse_args()
 
-    # Kill orphan processes on port 8000 to avoid port conflicts
-    import subprocess
+    # Kill orphan processes on target port to avoid port conflicts
+    bind_port = args.port or cfg.port
     try:
-        orphans = subprocess.check_output(["lsof", "-ti", ":8000"], timeout=5).decode().strip().split()
+        orphans = subprocess.check_output(["lsof", "-ti", f":{bind_port}"], timeout=5).decode().strip().split()
         for pid in orphans:
             if pid and pid != str(os.getpid()):
                 os.kill(int(pid), 9)
-                logger.warning(f"Killed orphan process {pid} on port 8000")
+                logger.warning("Killed orphan process %s on port %d", pid, bind_port)
     except Exception:
         pass
-
-    import uvicorn
-
-    raw_port = os.environ.get("MAN_API_PORT", "").strip()
-    if args.port:
-        port = args.port
-    elif raw_port:
-        port = int(raw_port)
-    else:
-        port = find_available_port(8000)
 
     _start_feedback_workflow()
     _start_health_monitor()
     _start_watchdog()
-    logger.info("Starting SloughGPT server", extra={"context": {"port": port, "reload": args.reload}})
+    logger.info("Starting SloughGPT server", extra={"context": {"port": bind_port, "reload": args.reload}})
 
-    # ── Web frontend (optional) ────────────────────────────────
+    # Optional web frontend
     web_proc = None
     if args.web:
         web_root = _REPO_ROOT / "apps" / "web"
@@ -1060,8 +525,6 @@ if __name__ == "__main__":
         web_env = {**os.environ, "PORT": str(web_port)}
 
         if standalone_dir.is_dir() and (standalone_dir / "server.js").is_file():
-            # Run standalone Next.js server (needs Node.js runtime for SSR)
-            logger.info("Starting built web frontend", extra={"context": {"port": web_port}})
             web_proc = subprocess.Popen(
                 ["node", "server.js"],
                 cwd=str(standalone_dir),
@@ -1070,8 +533,6 @@ if __name__ == "__main__":
                 stderr=subprocess.STDOUT,
             )
         else:
-            # Spawn Next.js dev server
-            logger.info("No standalone build found — spawning Next.js dev server", extra={"context": {"port": web_port}})
             web_proc = subprocess.Popen(
                 ["npm", "run", "dev"],
                 cwd=str(web_root),
@@ -1080,41 +541,23 @@ if __name__ == "__main__":
                 stderr=subprocess.STDOUT,
             )
 
-    # Clean up web subprocess on exit
     if web_proc:
         atexit.register(lambda p=web_proc: (p.terminate(), p.wait(timeout=5)) if p.poll() is None else None)
 
-    # uvicorn handles SIGTERM/SIGINT internally via capture_signals;
-    # do NOT install custom signal handlers that call sys.exit(0)
-    # as they conflict with uvicorn's lifecycle management.
-
-    uvicorn_kw = dict(
+    uvicorn_kw: dict = dict(
         app=app,
-        host="0.0.0.0",
-        port=port,
-        log_level="info",
+        host=cfg.host,
+        port=bind_port,
+        log_level=cfg.log_level.lower(),
     )
     if args.reload:
         uvicorn_kw["reload"] = True
-        # Pass as import string so reload spawns a real child process
         uvicorn_kw["app"] = "main:app"
-        # Only watch Python files and exclude large third-party directories
         uvicorn_kw["reload_includes"] = ["*.py"]
         uvicorn_kw["reload_excludes"] = [
-            ".*/**",
-            "node_modules/**",
-            "__pycache__/**",
-            "*.pyc",
-            ".git/**",
-            ".venv/**",
-            "venv/**",
-            "env/**",
-            "build/**",
-            "dist/**",
-            ".next/**",
-            "data/**",
-            "datasets/**",
-            "models/**",
+            ".*/**", "node_modules/**", "__pycache__/**", "*.pyc",
+            ".git/**", ".venv/**", "venv/**", "env/**",
+            "build/**", "dist/**", ".next/**", "data/**", "datasets/**", "models/**",
         ]
 
     try:

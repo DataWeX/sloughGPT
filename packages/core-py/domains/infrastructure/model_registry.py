@@ -17,7 +17,7 @@ import asyncio
 import logging
 import time
 from threading import Lock
-from typing import Any, Optional, get_type_hints
+from typing import Any, Optional, Union, get_type_hints
 
 from .model_server import ModelServer, ModelStatus
 
@@ -34,7 +34,7 @@ class ModelRegistry:
     """
 
     def __init__(self) -> None:
-        self._servers: dict[str, ModelServer] = {}
+        self._servers: dict[str, Union[ModelServer, Any]] = {}
         self._lock = Lock()
         self._default_id: Optional[str] = None
 
@@ -89,6 +89,31 @@ class ModelRegistry:
             model_id, server._device, generate_timeout, max_concurrent,
         )
         return server
+
+    def register_engine(
+        self,
+        engine_id: str,
+        provider: Any,
+        make_default: bool = False,
+    ) -> None:
+        """Register an InferenceEngine-backed provider.
+
+        The provider is expected to implement ``get_metrics_snapshot()``
+        and ``metadata`` (e.g. ``InferenceEngineProvider``).
+
+        Args:
+            engine_id: Unique identifier for this engine.
+            provider: The InferenceEngineProvider instance.
+            make_default: If True, this becomes the default.
+        """
+        with self._lock:
+            self._servers[engine_id] = provider  # type: ignore[assignment]
+            if make_default or self._default_id is None:
+                self._default_id = engine_id
+        logger.info(
+            "ModelRegistry: registered engine '%s' (make_default=%s)",
+            engine_id, make_default,
+        )
 
     def unregister(self, model_id: str) -> bool:
         """Unregister a model and clean up resources."""
