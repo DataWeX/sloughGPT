@@ -41,7 +41,8 @@ class TestVLMRouter:
             json={"max_pairs": 2},
         )
         assert resp.status_code == 400
-        assert "No model loaded" in resp.json()["detail"]
+        body = resp.json()
+        assert "No model loaded" in body.get("error", body.get("detail", ""))
 
     def test_vlm_generate_no_model(self):
         """POST /vlm/generate returns 400 when VLM not loaded."""
@@ -50,7 +51,8 @@ class TestVLMRouter:
             json={"image_base64": "dGVzdA==", "prompt": "test"},
         )
         assert resp.status_code == 400
-        assert "VLM not loaded" in resp.json()["detail"]
+        body = resp.json()
+        assert "VLM not loaded" in body.get("error", body.get("detail", ""))
 
     def test_vlm_load_no_checkpoint(self):
         """POST /vlm/load returns 500 when checkpoint doesn't exist."""
@@ -74,7 +76,8 @@ class TestMultimodalDatasetEndpoint:
             },
         )
         assert resp.status_code == 400
-        assert "not found" in resp.json()["detail"].lower()
+        body = resp.json()
+        assert "not found" in body.get("error", body.get("detail", "")).lower()
 
     def test_vlm_dataset_missing_name(self):
         """POST /multimodal/vlm-dataset without name returns 422."""

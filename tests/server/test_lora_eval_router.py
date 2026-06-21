@@ -32,11 +32,15 @@ def _mock_eval_result():
 class TestRunEval:
     """GET /lora-eval/run"""
 
+    @patch("pathlib.Path")
     @patch("domains.feedback.lora_eval.get_lora_evaluator")
-    def test_baseline_only_no_adapter(self, mock_get_eval):
+    def test_baseline_only_no_adapter(self, mock_get_eval, mock_path_cls):
         evaluator = MagicMock()
         evaluator.run.return_value = _mock_eval_result()
         mock_get_eval.return_value = evaluator
+        mock_path_instance = MagicMock()
+        mock_path_instance.exists.return_value = False
+        mock_path_cls.return_value = mock_path_instance
 
         resp = client.get("/lora-eval/run", params={"soul": "assistant"})
         assert resp.status_code == 200
