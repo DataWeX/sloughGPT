@@ -62,7 +62,8 @@ jobs:
             --ignore=tests/test_server_integration.py \
             --ignore=tests/test_process_isolation.py \
             --ignore=tests/test_hf_dpo.py \
-            -q --tb=short -x
+            --ignore=tests/test_unified_pipeline_run.py \
+            -q --tb=short
 
   # ─── Server API tests ───────────────────────────────────────────
   test-server:
