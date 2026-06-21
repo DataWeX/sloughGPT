@@ -1,6 +1,7 @@
 import {create} from 'zustand';
 import {api} from '../services/api-client';
 import {streamSSE} from '../services/sse-client';
+import {useSettingsStore} from './settings-store';
 import type {Message, Session} from '../types';
 
 interface ChatState {
@@ -21,6 +22,10 @@ interface ChatState {
 }
 
 let abortController: AbortController | null = null;
+
+function buildProviderMessages(messages: Message[]) {
+  return messages.map(m => ({role: m.role, content: m.content}));
+}
 
 export const useChatStore = create<ChatState>((set, get) => ({
   sessions: [],
@@ -104,10 +109,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
     abortController = new AbortController();
     let accumulated = '';
 
+    const settings = useSettingsStore.getState();
+
     try {
       for await (const event of streamSSE(
         '/chat/stream',
-        {messages: [...state.messages, userMsg].map(m => ({role: m.role, content: m.content}))},
+        {
+          messages: [...state.messages, userMsg].map(m => ({
+            role: m.role,
+            content: m.content,
+          })),
+          temperature: settings.temperature,
+          max_new_tokens: settings.maxTokens,
+        },
         abortController.signal,
       )) {
         if (event.token) {

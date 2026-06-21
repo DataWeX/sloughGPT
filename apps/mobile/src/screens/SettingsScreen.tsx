@@ -336,4 +336,18 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontWeight: '600',
   },
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  navDesc: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  navArrow: {
+    fontSize: 20,
+    color: colors.textMuted,
+  },
 });

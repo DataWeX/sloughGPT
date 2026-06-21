@@ -4,11 +4,15 @@ Tests for the VLM router endpoints.
 import pytest
 from fastapi.testclient import TestClient
 
-try:
-    from apps.api.server.main import app
-    client = TestClient(app)
-except Exception:
-    pytest.skip("Server app not available", allow_module_level=True)
+from apps.api.server.main import app
+from routers.vlm import router as vlm_router
+from routers.multimodal import router as multimodal_router
+from routers.models import router as models_router
+
+app.include_router(vlm_router)
+app.include_router(multimodal_router)
+app.include_router(models_router)
+client = TestClient(app)
 
 
 class TestVLMRouter:

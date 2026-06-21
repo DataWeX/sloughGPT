@@ -173,6 +173,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       es.onerror = () => {
         if (es.readyState === EventSource.CLOSED || esRetries >= 3) {
           es.close(); esRef.current = null; setPhase('error')
+          addToast('Connection lost during training', 'error')
         } else { esRetries++ }
       }
     }).catch(() => addToast('Failed to start training', 'error'))
@@ -359,6 +360,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       es.onerror = () => {
         if (es.readyState === EventSource.CLOSED || esRetries >= 3) {
           es.close(); esRef.current = null; setPhase('error')
+          addToast('Connection lost during training', 'error')
         } else { esRetries++ }
       }
     }).catch(() => addToast('Something went wrong starting training', 'error'))

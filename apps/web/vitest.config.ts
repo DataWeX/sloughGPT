@@ -10,6 +10,7 @@ export default defineConfig({
     environment: 'node',
     include: ['lib/**/*.test.ts', 'hooks/**/*.test.ts', 'components/**/*.test.tsx'],
     passWithNoTests: true,
+    setupFiles: ['./vitest-setup.ts'],
   },
   resolve: {
     alias: {

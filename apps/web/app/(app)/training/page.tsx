@@ -92,6 +92,16 @@ export default function TrainingPage() {
   // ===== Visibility-based polling pause =====
   const visibilityRef = useRef<boolean>(true)
 
+  // ===== Loading timeout: show retry suggestion if data doesn't load in 15s =====
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false)
+  useEffect(() => {
+    if (checkpoints.loadingCheckpoints || checkpoints.loadingJobs) {
+      setLoadingTimedOut(false)
+      const t = setTimeout(() => setLoadingTimedOut(true), 15000)
+      return () => clearTimeout(t)
+    }
+  }, [checkpoints.loadingCheckpoints, checkpoints.loadingJobs])
+
   const startTraining = useCallback(async (checkpointName?: string) => {
     const hasDataset = inputMode === 'dataset' && datasets.selectedDataset
     const hasText = inputMode === 'text' && textInput.trim()
@@ -233,6 +243,14 @@ export default function TrainingPage() {
     }
   }, [session.phase])
 
+  // Warn before leaving during active training
+  useEffect(() => {
+    if (!session.trainingRunning) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault() }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [session.trainingRunning])
+
   // Effects: cleanup on unmount
   useEffect(() => {
     return () => {
@@ -274,8 +292,8 @@ export default function TrainingPage() {
       const ids = models.map(m => m.id)
       setAvailableModels(ids)
       setSelectedModel(prev => prev || ids[0] || '')
-    }).catch(() => {})
-  }, [])
+    }).catch(() => addToast('Could not load model list — training may be limited', 'info'))
+  }, [addToast])
 
   useEffect(() => {
     if (datasets.selectedDataset && inputMode === 'dataset') {
@@ -324,21 +342,32 @@ export default function TrainingPage() {
               Pick a dataset, hit train — we figure out the rest.
             </p>
             <div className="flex items-center gap-2">
-              <select
-                value={quickDataset}
-                onChange={e => setQuickDataset(e.target.value)}
-                className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground flex-1 max-w-sm"
-                disabled={quickTraining}
-                aria-label="Dataset for quick training"
-              >
-                <option value="">Select a dataset...</option>
-                {datasets.datasets.map(ds => (
-                  <option key={ds.id} value={ds.id}>{datasetLabel(ds)}</option>
-                ))}
-              </select>
-              <Button size="sm" disabled={!quickDataset || quickTraining} onClick={startQuickTrain}>
-                {quickTraining ? 'Training...' : 'Start training'}
-              </Button>
+              {datasets.datasets.length === 0 ? (
+                <>
+                  <span className="text-xs text-muted-foreground">No datasets yet — import one to get started.</span>
+                  <Button size="sm" variant="outline" onClick={() => datasets.setImportModalOpen(true)}>
+                    + Import
+                  </Button>
+                </>
+              ) : (
+              <>
+                <select
+                  value={quickDataset}
+                  onChange={e => setQuickDataset(e.target.value)}
+                  className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground flex-1 max-w-sm"
+                  disabled={quickTraining}
+                  aria-label="Dataset for quick training"
+                >
+                  <option value="">Select a dataset...</option>
+                  {datasets.datasets.map(ds => (
+                    <option key={ds.id} value={ds.id}>{datasetLabel(ds)}</option>
+                  ))}
+                </select>
+                <Button size="sm" disabled={!quickDataset || quickTraining} onClick={startQuickTrain}>
+                  {quickTraining ? 'Training...' : 'Start training'}
+                </Button>
+              </>
+              )}
             </div>
 
             {/* Auto-config explanation */}
@@ -801,15 +830,23 @@ export default function TrainingPage() {
             ) : (
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <select value={datasets.selectedDataset} onChange={e => datasets.setSelectedDataset(e.target.value)}
-                    className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground flex-1 max-w-xs"
-                    aria-label="Dataset for turbo training">
-                    {datasets.datasets.length === 0 && <option value="">No datasets</option>}
-                    {datasets.datasets.map(ds => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
-                  </select>
-                  <Button size="sm" onClick={startTurboTrain} disabled={!datasets.selectedDataset || datasets.datasets.length === 0}>
-                    Train with Turbo
-                  </Button>
+                  {datasets.datasets.length === 0 ? (
+                    <>
+                      <span className="text-xs text-muted-foreground">No datasets yet — import one to use Turbo Train.</span>
+                      <Button size="sm" variant="outline" onClick={() => datasets.setImportModalOpen(true)}>+ Import</Button>
+                    </>
+                  ) : (
+                  <>
+                    <select value={datasets.selectedDataset} onChange={e => datasets.setSelectedDataset(e.target.value)}
+                      className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground flex-1 max-w-xs"
+                      aria-label="Dataset for turbo training">
+                      {datasets.datasets.map(ds => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
+                    </select>
+                    <Button size="sm" onClick={startTurboTrain} disabled={!datasets.selectedDataset || datasets.datasets.length === 0}>
+                      Train with Turbo
+                    </Button>
+                  </>
+                  )}
                 </div>
                 <p className="text-[11px] text-muted-foreground">
                   Encoder-decoder Transformer via our own torch shim. No PyTorch, no downloads, runs on CPU.
@@ -866,6 +903,14 @@ export default function TrainingPage() {
             </CardHeader>
             <CardContent>
               {checkpoints.loadingCheckpoints && checkpoints.checkpoints.length === 0 ? (
+                loadingTimedOut ? (
+                  <div className="py-6 text-center space-y-2">
+                    <p className="text-sm text-muted-foreground">Taking longer than expected</p>
+                    <Button size="sm" variant="ghost" onClick={() => { setLoadingTimedOut(false); void checkpoints.fetchCheckpoints() }}>
+                      Retry
+                    </Button>
+                  </div>
+                ) : (
                 <div className="grid gap-2 sm:grid-cols-2">
                   {[1,2].map(i => (
                     <div key={i} className="flex items-center justify-between rounded-lg border border-border/50 p-3">
@@ -877,6 +922,7 @@ export default function TrainingPage() {
                     </div>
                   ))}
                 </div>
+                )
               ) : (
               <div className="grid gap-2 sm:grid-cols-2">
                 {checkpoints.checkpoints.slice().reverse().map((cp: any) => (
@@ -921,6 +967,14 @@ export default function TrainingPage() {
             </CardHeader>
             <CardContent className="p-0">
               {checkpoints.loadingBuilds ? (
+                loadingTimedOut ? (
+                  <div className="px-4 py-6 text-center space-y-2">
+                    <p className="text-sm text-muted-foreground">Taking longer than expected</p>
+                    <Button size="sm" variant="ghost" onClick={() => { setLoadingTimedOut(false); void checkpoints.fetchBuilds() }}>
+                      Retry
+                    </Button>
+                  </div>
+                ) : (
                 <div className="divide-y divide-border/50">
                   {[1,2].map(i => (
                     <div key={i} className="flex items-center justify-between px-4 py-3">
@@ -932,6 +986,7 @@ export default function TrainingPage() {
                     </div>
                   ))}
                 </div>
+                )
               ) : (
               <div className="divide-y divide-border/50">
                 {checkpoints.builds.slice().reverse().map((b, i) => (
@@ -1000,6 +1055,14 @@ export default function TrainingPage() {
             </CardHeader>
             <CardContent className="p-0">
               {checkpoints.loadingJobs ? (
+                loadingTimedOut ? (
+                  <div className="px-4 py-6 text-center space-y-2">
+                    <p className="text-sm text-muted-foreground">Taking longer than expected</p>
+                    <Button size="sm" variant="ghost" onClick={() => { setLoadingTimedOut(false); void checkpoints.fetchJobs() }}>
+                      Retry
+                    </Button>
+                  </div>
+                ) : (
                 <div className="divide-y divide-border/50">
                   {[1,2,3].map(i => (
                     <div key={i} className="flex items-center justify-between px-4 py-3">
@@ -1011,6 +1074,7 @@ export default function TrainingPage() {
                     </div>
                   ))}
                 </div>
+                )
               ) : (
               <div className="divide-y divide-border/50">
                 {allJobs.slice().reverse().map((job) => {

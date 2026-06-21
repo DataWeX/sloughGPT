@@ -1,4 +1,4 @@
-import React, {useEffect, useRef, useState, useCallback} from 'react';
+import React, {useEffect, useState, useCallback} from 'react';
 import {
   View,
   FlatList,
@@ -8,14 +8,18 @@ import {
   Platform,
   TouchableOpacity,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  Alert,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useChatStore} from '../stores/chat-store';
 import {useModelStore} from '../stores/model-store';
 import {MessageBubble} from '../components/MessageBubble';
 import {ChatInput} from '../components/ChatInput';
+import {StatusBadge} from '../components/StatusBadge';
 import {colors, spacing, radii, typography} from '../theme';
-import type {Message} from '../types';
+import type {Message, Session} from '../types';
 
 const SUGGESTIONS = [
   'Tell me something interesting',
@@ -25,6 +29,7 @@ const SUGGESTIONS = [
 
 export function ChatScreen() {
   const {
+    sessions,
     messages,
     streaming,
     error,
@@ -34,10 +39,14 @@ export function ChatScreen() {
     recordFeedback,
     clearError,
     refreshSessions,
+    loadSession,
+    deleteSession,
+    createSession,
   } = useChatStore();
   const {health, currentSoul} = useModelStore();
   const flatListRef = useRef<FlatList>(null);
   const [atBottom, setAtBottom] = useState(true);
+  const [showDrawer, setShowDrawer] = useState(false);
 
   useEffect(() => {
     refreshSessions();
@@ -101,6 +110,9 @@ export function ChatScreen() {
         keyboardVerticalOffset={0}>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
+            <TouchableOpacity onPress={() => setShowDrawer(true)}>
+              <Text style={styles.menuBtn}>☰</Text>
+            </TouchableOpacity>
             <Text style={styles.title}>Chat</Text>
             {currentSoul && (
               <View style={styles.soulPill}>
@@ -111,9 +123,7 @@ export function ChatScreen() {
           <View style={styles.headerRight}>
             <TouchableOpacity
               style={styles.newChatBtn}
-              onPress={() => {
-                useChatStore.getState().createSession();
-              }}>
+              onPress={() => createSession()}>
               <Text style={styles.newChatText}>+ New</Text>
             </TouchableOpacity>
             <View
@@ -192,9 +202,68 @@ export function ChatScreen() {
           </TouchableOpacity>
         )}
       </KeyboardAvoidingView>
+
+      {/* Session drawer */}
+      <Modal visible={showDrawer} animationType="slide" transparent>
+        <View style={styles.drawerOverlay}>
+          <View style={styles.drawer}>
+            <View style={styles.drawerHeader}>
+              <Text style={styles.drawerTitle}>Conversations</Text>
+              <TouchableOpacity onPress={() => setShowDrawer(false)}>
+                <Text style={styles.drawerClose}>×</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={sessions}
+              keyExtractor={item => item.id}
+              renderItem={({item: session}) => (
+                <TouchableOpacity
+                  style={[
+                    styles.sessionItem,
+                    session.id === useChatStore.getState().activeSessionId &&
+                      styles.sessionItemActive,
+                  ]}
+                  onPress={() => {
+                    loadSession(session.id);
+                    setShowDrawer(false);
+                  }}>
+                  <View style={styles.sessionInfo}>
+                    <Text style={styles.sessionTitle} numberOfLines={1}>
+                      {session.title || 'New conversation'}
+                    </Text>
+                    <Text style={styles.sessionMeta}>
+                      {session.message_count || 0} messages
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      Alert.alert('Delete', 'Delete this conversation?', [
+                        {text: 'Cancel', style: 'cancel'},
+                        {
+                          text: 'Delete',
+                          style: 'destructive',
+                          onPress: () => deleteSession(session.id),
+                        },
+                      ]);
+                    }}>
+                    <Text style={styles.sessionDelete}>×</Text>
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <Text style={styles.drawerEmpty}>
+                  No conversations yet
+                </Text>
+              }
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
+
+import {useRef} from 'react';
 
 const styles = StyleSheet.create({
   safe: {
@@ -217,6 +286,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  menuBtn: {
+    fontSize: 20,
+    color: colors.textSecondary,
+    padding: spacing.xs,
   },
   title: {
     ...typography.h3,
@@ -344,5 +418,74 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 18,
     fontWeight: '600',
+  },
+  // Drawer
+  drawerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-start',
+  },
+  drawer: {
+    width: '80%',
+    maxWidth: 320,
+    maxHeight: '80%',
+    backgroundColor: colors.background,
+    borderBottomRightRadius: radii.lg,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  drawerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  drawerTitle: {
+    ...typography.h3,
+    color: colors.text,
+  },
+  drawerClose: {
+    fontSize: 24,
+    color: colors.textMuted,
+    padding: spacing.xs,
+  },
+  sessionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  sessionItemActive: {
+    backgroundColor: colors.primary + '10',
+  },
+  sessionInfo: {flex: 1},
+  sessionTitle: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  sessionMeta: {
+    ...typography.small,
+    color: colors.textMuted,
+  },
+  sessionDelete: {
+    fontSize: 18,
+    color: colors.textMuted,
+    padding: spacing.xs,
+  },
+  drawerEmpty: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textAlign: 'center',
+    padding: spacing.xxxl,
   },
 });

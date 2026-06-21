@@ -56,9 +56,9 @@ export default function ModelsPage() {
   const addToast = useToastStore(s => s.addToast)
 
   const { data: modelsData, isLoading: modelsLoading, refetch: refetchModels } = useModels()
-  const { data: soulsData, refetch: refetchSouls } = useSouls()
-  const { data: currentSoulData, refetch: refetchCurrentSoul } = useCurrentSoul()
-  const { data: checkpointsData, refetch: refetchCheckpoints } = useCheckpoints()
+  const { data: soulsData, isLoading: soulsLoading, refetch: refetchSouls } = useSouls()
+  const { data: currentSoulData, isLoading: currentSoulLoading, refetch: refetchCurrentSoul } = useCurrentSoul()
+  const { data: checkpointsData, isLoading: checkpointsLoading, refetch: refetchCheckpoints } = useCheckpoints()
   const { mutateAsync: loadModel } = useLoadModel()
   const { mutateAsync: switchSoul } = useSwitchSoul()
 
@@ -95,21 +95,26 @@ export default function ModelsPage() {
     }
   }
 
-  const handleRefresh = () => {
-    void refetchModels()
-    void refetchSouls()
-    void refetchCurrentSoul()
-    void refetchCheckpoints()
-    void refreshHealth()
-    void fetchTraitWeights()
-    void fetchSnapshots()
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    await Promise.allSettled([
+      refetchModels(),
+      refetchSouls(),
+      refetchCurrentSoul(),
+      refetchCheckpoints(),
+      refreshHealth(),
+      fetchTraitWeights(),
+      fetchSnapshots(),
+    ])
+    setRefreshing(false)
+    addToast('Refreshed', 'success')
   }
 
   const fetchTraitWeights = async () => {
     try {
       const w = await soulsController.getTraitWeights()
       if (w && !('error' in w)) setTraitWeights(w)
-    } catch {}
+    } catch { addToast('Could not load trait weights', 'info') }
   }
 
   // ── Snapshots ──
@@ -120,12 +125,13 @@ export default function ModelsPage() {
   }
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([])
   const [snapshotName, setSnapshotName] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
 
   const fetchSnapshots = async () => {
     try {
       const list = await soulsController.listWeightSnapshots()
       setSnapshots(list)
-    } catch {}
+    } catch { addToast('Could not load weight snapshots', 'info') }
   }
 
   const handleSaveSnapshot = async () => {
@@ -152,6 +158,7 @@ export default function ModelsPage() {
   }
 
   const handleDeleteSnapshot = async (name: string) => {
+    if (!confirm(`Delete snapshot "${name}"? This cannot be undone.`)) return
     try {
       await soulsController.deleteWeightSnapshot(name)
       addToast(`Deleted "${name}"`, 'success')
@@ -164,7 +171,8 @@ export default function ModelsPage() {
   useEffect(() => { setMounted(true); fetchTraitWeights(); fetchSnapshots() }, [])
 
   const isOnline = health !== null && health !== 'offline'
-  const subtitle = !isOnline ? 'API offline'
+  const subtitle = health === null ? 'Connecting...'
+    : !isOnline ? 'API offline'
     : health.model_loaded ? `${health.model_type} · running`
     : 'No model loaded'
 
@@ -177,8 +185,8 @@ export default function ModelsPage() {
     <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader
         className="items-start"
-        left={<AppRouteHeaderLead title="Personalities" subtitle={subtitle} />}
-        right={<Button type="button" variant="secondary" size="sm" onClick={handleRefresh}><IconRefresh className="w-3.5 h-3.5 mr-1" /> Refresh</Button>}
+        left={<AppRouteHeaderLead title="Models & Personalities" subtitle={subtitle} />}
+        right={<Button type="button" variant="secondary" size="sm" disabled={refreshing} onClick={handleRefresh}><IconRefresh className={`w-3.5 h-3.5 mr-1 ${refreshing ? 'animate-spin' : ''}`} /> {refreshing ? 'Refreshing...' : 'Refresh'}</Button>}
       />
 
       <div className="space-y-4">
@@ -215,9 +223,9 @@ export default function ModelsPage() {
 
         {/* ── Pipeline Stats ── */}
         <KpiGrid columns={3}>
-          <StatCard label="Models" value={models.length.toString()} icon={<span className="text-xs font-mono">M</span>} />
-          <StatCard label="Personalities" value={souls.length.toString()} icon={<span className="text-xs">🎭</span>} />
-          <StatCard label="Checkpoints" value={checkpoints.length.toString()} icon={<span className="text-xs">📦</span>} />
+          <StatCard label="Models" value={modelsLoading ? '—' : models.length.toString()} icon={<span className="text-xs font-mono">M</span>} />
+          <StatCard label="Personalities" value={soulsLoading ? '—' : souls.length.toString()} icon={<span className="text-xs">🎭</span>} />
+          <StatCard label="Checkpoints" value={checkpointsLoading ? '—' : checkpoints.length.toString()} icon={<span className="text-xs">📦</span>} />
         </KpiGrid>
 
         {/* ── Composable Layers ── */}
@@ -245,11 +253,23 @@ export default function ModelsPage() {
         </Card>
 
         {/* ── Personalities ── */}
-        {souls.length > 0 && (
+        {(souls.length > 0 || soulsLoading) && (
           <Card>
             <CardHeader><CardTitle className="text-base">Personalities</CardTitle></CardHeader>
             <CardContent className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {souls.map((s: Soul) => {
+              {soulsLoading ? (
+                [1,2,3].map(i => (
+                  <div key={i} className="animate-pulse flex items-center gap-3 p-3 rounded-lg border border-border/60">
+                    <div className="w-2 h-2 rounded-full bg-muted-foreground/20" />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-3 w-24 bg-muted rounded" />
+                      <div className="h-2.5 w-32 bg-muted rounded" />
+                    </div>
+                    <div className="h-6 w-14 bg-muted rounded" />
+                  </div>
+                ))
+              ) : (
+              souls.map((s: Soul) => {
                 const soulCheckpoints = checkpoints?.filter((c: Checkpoint) => c.soul === s.name) ?? []
                 const isCurrent = currentSoul === s.name
                 return (
@@ -278,15 +298,20 @@ export default function ModelsPage() {
                             <option key={cp.name} value={cp.name}>{cp.name}{activeCheckpoint === cp.name ? ' (active)' : ''}</option>
                           ))}
                         </select>
+                      ) : checkpointsLoading ? (
+                        <span className="text-xs text-muted-foreground animate-pulse">loading&hellip;</span>
+                      ) : isCurrent ? (
+                        <Badge variant="success">Active</Badge>
                       ) : (
                         <Button variant="outline" size="sm" className="h-7 text-xs px-2" disabled={switchingSoul === s.name} onClick={() => handleSwitchSoul(s.name)}>
-                          {switchingSoul === s.name ? '...' : isCurrent ? 'Active' : 'Switch'}
+                          {switchingSoul === s.name ? '...' : 'Switch'}
                         </Button>
                       )}
                     </div>
                   </div>
                 )
-              })}
+              })
+              )}
             </CardContent>
           </Card>
         )}
@@ -323,10 +348,12 @@ export default function ModelsPage() {
                 <CardTitle className="text-base">Trait Weights</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center gap-4 mb-4 pb-3 border-b border-border/40">
+                <p className="text-[10px] text-muted-foreground mb-3">Scores fine-tune how the model responds &mdash; higher values amplify each trait during chat.</p>
+              <div className="flex items-center gap-4 mb-4 pb-3 border-b border-border/40">
                   <div className="flex flex-col items-center">
                     <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Overall</span>
                     <span className={`text-3xl font-bold ${ratingColor(overall)}`}>{overall}</span>
+                    <span className="text-[9px] text-muted-foreground/60 mt-0.5">0–100</span>
                   </div>
                   <div className="flex-1 grid grid-cols-3 gap-1.5 text-[10px]">
                     {groups.map(g => {
