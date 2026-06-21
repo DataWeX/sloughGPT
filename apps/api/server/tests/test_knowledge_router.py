@@ -79,7 +79,8 @@ def test_delete_nonexistent_returns_404():
     client = get_test_client()
     resp = client.delete("/knowledge/nonexistent-id-12345")
     assert resp.status_code == 404
-    assert "not found" in resp.json()["detail"].lower()
+    body = resp.json()
+    assert "not found" in body.get("error", body.get("detail", "")).lower()
 
 
 def test_search_knowledge():

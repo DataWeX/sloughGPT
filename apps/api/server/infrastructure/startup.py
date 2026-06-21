@@ -23,6 +23,7 @@ from typing import Any, Optional
 from fastapi import FastAPI
 
 from config import ServerConfig
+from startup_progress import STARTUP_PHASE
 
 logger = logging.getLogger("man.startup")
 

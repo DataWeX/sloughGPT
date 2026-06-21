@@ -4,13 +4,33 @@ Delegates to message_feedback in main.py for storage (in-process singleton).
 """
 import logging
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, AsyncIterator
 from datetime import datetime
+import json
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/session", tags=["session"])
+
+try:
+    from domains.api.sse_envelope import sse_event as _sse_event, sse_token, sse_error
+except ImportError:
+    def _sse_event(stream, phase, status, data=None, meta=None, message=""):
+        return "data: " + json.dumps({
+            "stream": stream, "phase": phase, "status": status,
+            "data": data or {}, "meta": meta or {}, "message": message,
+        }) + "\n\n"
+    def sse_token(stream, token, done=False, meta=None, elapsed_ms=None):
+        phase = "STREAMING"
+        status = "complete" if done else "working"
+        m = dict(meta) if meta else {}
+        if done and elapsed_ms is not None:
+            m["elapsed_ms"] = round(elapsed_ms, 1)
+        return _sse_event(stream, phase, status, {"token": token}, m, "")
+    def sse_error(stream, phase, error, meta=None):
+        return _sse_event(stream, phase, "error", {"error": error}, meta or {}, f"Error: {error}")
 
 class SessionContext(BaseModel):
     system_prompt: Optional[str] = None
@@ -124,3 +144,52 @@ async def get_session_inspector(session_id: str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{session_id}/regenerate")
+async def regenerate_session(session_id: str) -> StreamingResponse:
+    """Regenerate the last assistant response for a session.
+
+    Loads stored session messages, calls the provider to regenerate
+    the next assistant response, and streams the result via SSE.
+    """
+    async def generate() -> AsyncIterator[str]:
+        try:
+            from domains.infrastructure.session_core import SessionCore
+            msgs = SessionCore.get_messages(session_id)
+            if not msgs:
+                yield sse_error("chat", "REGENERATE", "No session context found")
+                return
+
+            from domains.models.provider import get_provider
+            provider = get_provider("default")
+            if provider is None:
+                yield sse_error("chat", "REGENERATE", "Model not loaded")
+                return
+
+            yield _sse_event("chat", "REGENERATE", "thinking",
+                             data={}, message="Regenerating...")
+
+            full_response = ""
+            try:
+                async for token in provider.chat_stream(
+                    msgs,
+                    max_tokens=512,
+                    temperature=0.8,
+                ):
+                    if token:
+                        full_response += token
+                        yield sse_token("chat", token)
+                yield sse_token("chat", "", done=True)
+            except GeneratorExit:
+                return
+            except Exception as e:
+                logger.error("Regenerate stream error: %s", e, exc_info=True)
+                yield sse_error("chat", "REGENERATE", f"Generation failed: {e}")
+                return
+
+        except Exception as e:
+            logger.error("Regenerate error: %s", e, exc_info=True)
+            yield sse_error("chat", "REGENERATE", str(e))
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
