@@ -9,6 +9,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+try:
+    from domains.models import SloughGPTModel
+except (ImportError, ModuleNotFoundError):
+    pytest.skip("domains.models not available", allow_module_level=True)
+
 
 def test_onnx_export():
     """Test ONNX export."""

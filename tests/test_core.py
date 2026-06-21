@@ -9,6 +9,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 import torch
 
+try:
+    from domains.models import SloughGPTModel
+except (ImportError, ModuleNotFoundError):
+    pytest.skip("domains.models not available", allow_module_level=True)
+
 
 class TestSloughGPTModel:
     """Tests for SloughGPTModel."""

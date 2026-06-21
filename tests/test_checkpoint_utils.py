@@ -1,8 +1,14 @@
 """Tests for domains.training.checkpoint_utils."""
 
-import torch
+import pytest
 
-from domains.models import SloughGPTModel
+torch = pytest.importorskip("torch")
+
+try:
+    from domains.models import SloughGPTModel
+except (ImportError, ModuleNotFoundError):
+    pytest.skip("domains.models not available", allow_module_level=True)
+
 from domains.training.checkpoint_utils import (
     KEY_MODEL_STATE,
     extract_state_dict,

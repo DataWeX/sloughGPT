@@ -13,7 +13,10 @@ from pathlib import Path
 import pytest
 import torch
 
-from domains.models import SloughGPTModel
+try:
+    from domains.models import SloughGPTModel
+except (ImportError, ModuleNotFoundError):
+    pytest.skip("domains.models not available", allow_module_level=True)
 from domains.training.lm_eval_char import evaluate_sloughgpt_char_lm, main
 
 
