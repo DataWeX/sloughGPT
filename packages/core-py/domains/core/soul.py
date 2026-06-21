@@ -35,7 +35,12 @@ from domains.inference import (
     load_soul,
     save_soul,
 )
-from domains.models import ModelInterface, ModelLoader
+
+try:
+    from domains.models import ModelInterface, ModelLoader
+except (ImportError, ModuleNotFoundError):
+    ModelInterface = Any  # type: ignore[misc,assignment]
+    ModelLoader = None  # type: ignore[assignment]
 
 
 logger = logging.getLogger("man.core.soul")

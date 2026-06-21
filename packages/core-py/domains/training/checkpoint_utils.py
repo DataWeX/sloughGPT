@@ -15,7 +15,10 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 
-from domains.models import SloughGPTModel
+try:
+    from domains.models import SloughGPTModel
+except (ImportError, ModuleNotFoundError):
+    SloughGPTModel = None  # type: ignore[assignment,misc]
 
 KEY_MODEL_STATE = "model_state_dict"
 KEY_MODEL_LEGACY = "model"

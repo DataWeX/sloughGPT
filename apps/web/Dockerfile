@@ -1,17 +1,22 @@
-# Build from the **repository root** so `file:../../packages/strui` in package.json resolves.
-# Example: `docker build -f apps/web/Dockerfile .`
-# Compose: `infra/docker/docker-compose.yml` uses `context: ../..` and `dockerfile: apps/web/Dockerfile`.
-
+# Build from repository root: docker build -f apps/web/Dockerfile .
 FROM node:20-alpine AS base
 
-FROM base AS builder
+FROM base AS deps
 WORKDIR /app
 COPY apps/web/package.json apps/web/package-lock.json* ./apps/web/
 COPY packages/strui ./packages/strui
+WORKDIR /app/apps/web
+RUN npm ci
+
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY --from=deps /app/packages/strui/node_modules ./packages/strui/node_modules
 COPY apps/web ./apps/web
+COPY packages/strui ./packages/strui
 WORKDIR /app/apps/web
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm ci && npm run build
+RUN npm run build
 
 FROM base AS runner
 WORKDIR /app

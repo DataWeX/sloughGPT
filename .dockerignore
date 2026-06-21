@@ -28,8 +28,8 @@ ENV/
 .pytest_cache
 .coverage
 htmlcov/
-.mypy_cache/
-.ruff_cache/
+.mypy_cache
+.ruff_cache
 .tox/
 .hypothesis/
 
@@ -51,5 +51,18 @@ grafana/
 prometheus_data/
 prometheus.yml
 
-domains/
-!domains/__init__.py
+# Test infra
+tests/
+cypress/
+cypress.config.ts
+__test-helper.ts
+vitest.config.ts
+vitest.setup.ts
+
+# Dev/docs
+docs/
+*.md
+!README.md
+scripts/
+infra/k8s/
+infra/docker/Dockerfile.*

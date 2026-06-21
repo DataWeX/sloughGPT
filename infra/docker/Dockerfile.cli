@@ -1,0 +1,33 @@
+FROM python:3.12-slim
+
+LABEL maintainer="SloughGPT"
+LABEL description="SloughGPT CLI — interactive shell, multi-agent orchestration, training CLI"
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY apps/api/server/requirements.txt /tmp/requirements-api.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-api.txt \
+    && pip install --no-cache-dir \
+    torch --index-url https://download.pytorch.org/whl/cpu
+
+COPY apps/cli /app/apps/cli
+COPY apps/api/server /app/apps/api/server
+COPY packages/core-py /app/packages/core-py
+COPY packages/sdk-py /app/packages/sdk-py
+COPY pyproject.toml README.md LICENSE /app/
+
+RUN mkdir -p /app/data /app/models /app/datasets
+
+ENV PYTHONPATH="/app:/app/packages/core-py:/app/apps/api/server"
+
+CMD ["python", "/app/apps/cli/cli.py"]

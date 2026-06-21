@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -8,7 +8,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     git \
@@ -17,23 +17,23 @@ RUN apt-get update && apt-get install -y \
     procps \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --upgrade pip && \
-    pip install torch --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 
 COPY apps/api/server/requirements.txt /tmp/requirements-api.txt
-RUN pip install -r /tmp/requirements-api.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-api.txt
 
-RUN pip install transformers accelerate bitsandbytes scipy pytest pytest-asyncio pytest-cov ruff black mypy ipython psutil
+RUN pip install --no-cache-dir \
+    transformers accelerate scipy pytest pytest-asyncio pytest-cov ruff black ipython psutil
 
 COPY apps/api/server /app/apps/api/server
 COPY packages/core-py /app/packages/core-py
-COPY packages/sdk-py/sloughgpt_sdk /app/packages/sdk-py/sloughgpt_sdk
+COPY packages/sdk-py /app/packages/sdk-py
 COPY pyproject.toml README.md LICENSE /app/
 
 RUN mkdir -p /app/models /app/datasets /app/data /app/logs /app/checkpoints
 
 WORKDIR /app/apps/api/server
 
-EXPOSE 8000 5678
+EXPOSE 8000
 
 CMD ["uvicorn", "main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]

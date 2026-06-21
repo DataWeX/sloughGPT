@@ -38,7 +38,10 @@ if TYPE_CHECKING:
     from domains.training.tracking import ExperimentTracker
 from datetime import datetime
 
-from domains.models import SloughGPTModel
+try:
+    from domains.models import SloughGPTModel
+except (ImportError, ModuleNotFoundError):
+    SloughGPTModel = None  # type: ignore[assignment,misc]
 from domains.training.checkpoint_utils import (
     extract_state_dict,
     normalize_raw_checkpoint,
