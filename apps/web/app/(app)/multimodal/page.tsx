@@ -63,6 +63,28 @@ export default function MultimodalPage() {
     }
   }, [addToast])
 
+  const startPolling = useCallback(() => {
+    if (pollIntervalRef.current) return
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const status = await multimodalController.getTrainingStatus()
+        setTrainStatus(status)
+        if (!status.running) {
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current)
+            pollIntervalRef.current = null
+          }
+          fetchAll()
+          if (status.completed > 0) {
+            addToast(`Training complete: ${status.completed} images, ${status.errors} errors`, status.errors > 0 ? 'error' : 'success')
+          }
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }, 2000)
+  }, [fetchAll, addToast])
+
   useEffect(() => { fetchAll() }, [fetchAll])
 
   useEffect(() => {
@@ -99,28 +121,6 @@ export default function MultimodalPage() {
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
-
-  const startPolling = useCallback(() => {
-    if (pollIntervalRef.current) return
-    pollIntervalRef.current = setInterval(async () => {
-      try {
-        const status = await multimodalController.getTrainingStatus()
-        setTrainStatus(status)
-        if (!status.running) {
-          if (pollIntervalRef.current) {
-            clearInterval(pollIntervalRef.current)
-            pollIntervalRef.current = null
-          }
-          fetchAll()
-          if (status.completed > 0) {
-            addToast(`Training complete: ${status.completed} images, ${status.errors} errors`, status.errors > 0 ? 'error' : 'success')
-          }
-        }
-      } catch {
-        // ignore polling errors
-      }
-    }, 2000)
-  }, [fetchAll, addToast])
 
   const handleBatchUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
