@@ -1,0 +1,48 @@
+"""
+Tests for status router — /status, /ready, /live endpoints.
+"""
+import pytest
+from fastapi.testclient import TestClient
+from fastapi import FastAPI
+
+from routers.status import router as status_router
+
+app = FastAPI()
+app.include_router(status_router)
+client = TestClient(app)
+
+
+class TestStatus:
+
+    def test_status_healthy(self):
+        resp = client.get("/status")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "healthy"
+
+    def test_status_has_uptime(self):
+        resp = client.get("/status")
+        data = resp.json()
+        assert "uptime_seconds" in data
+        assert data["uptime_seconds"] >= 0
+
+    def test_status_has_timestamp(self):
+        resp = client.get("/status")
+        data = resp.json()
+        assert "timestamp" in data
+
+
+class TestReady:
+
+    def test_ready_returns_true(self):
+        resp = client.get("/ready")
+        assert resp.status_code == 200
+        assert resp.json() == {"ready": True}
+
+
+class TestLive:
+
+    def test_live_returns_true(self):
+        resp = client.get("/live")
+        assert resp.status_code == 200
+        assert resp.json() == {"alive": True}
