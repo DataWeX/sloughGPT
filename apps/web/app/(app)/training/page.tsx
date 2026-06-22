@@ -285,7 +285,7 @@ export default function TrainingPage() {
       clearInterval(id)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [checkpoints.fetchCheckpoints])
+  }, [checkpoints])
 
   useEffect(() => {
     modelController.list().then(models => {
@@ -301,7 +301,7 @@ export default function TrainingPage() {
     } else {
       datasets.setDatasetPreview(null)
     }
-  }, [datasets.selectedDataset, inputMode, datasets.setDatasetPreview])
+  }, [datasets, inputMode])
 
   const runningJob = allJobs.find(j => j.status === 'running')
   const completedCount = allJobs.filter(j => j.status === 'completed').length

@@ -47,7 +47,7 @@ export default function KnowledgePage() {
       setItems(filtered)
     } catch { addToast('Failed to load facts', 'error') }
     setLoading(false)
-  }, [search, activeTopic])
+  }, [search, activeTopic, addToast])
 
   const fetchAdapterStatus = useCallback(async () => {
     try {

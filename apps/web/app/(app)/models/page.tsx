@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
@@ -110,12 +110,12 @@ export default function ModelsPage() {
     addToast('Refreshed', 'success')
   }
 
-  const fetchTraitWeights = async () => {
+  const fetchTraitWeights = useCallback(async () => {
     try {
       const w = await soulsController.getTraitWeights()
       if (w && !('error' in w)) setTraitWeights(w)
     } catch { addToast('Could not load trait weights', 'info') }
-  }
+  }, [addToast])
 
   // ── Snapshots ──
   interface SnapshotMeta {
@@ -127,12 +127,12 @@ export default function ModelsPage() {
   const [snapshotName, setSnapshotName] = useState('')
   const [refreshing, setRefreshing] = useState(false)
 
-  const fetchSnapshots = async () => {
+  const fetchSnapshots = useCallback(async () => {
     try {
       const list = await soulsController.listWeightSnapshots()
       setSnapshots(list)
     } catch { addToast('Could not load weight snapshots', 'info') }
-  }
+  }, [addToast])
 
   const handleSaveSnapshot = async () => {
     const name = snapshotName.trim()
@@ -168,7 +168,7 @@ export default function ModelsPage() {
     }
   }
 
-  useEffect(() => { setMounted(true); fetchTraitWeights(); fetchSnapshots() }, [])
+  useEffect(() => { setMounted(true); fetchTraitWeights(); fetchSnapshots() }, [fetchTraitWeights, fetchSnapshots])
 
   const isOnline = health !== null && health !== 'offline'
   const subtitle = health === null ? 'Connecting...'

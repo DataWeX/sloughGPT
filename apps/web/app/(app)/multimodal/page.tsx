@@ -77,7 +77,7 @@ export default function MultimodalPage() {
     if (trainStatus?.running && !pollIntervalRef.current) {
       startPolling()
     }
-  }, [trainStatus?.running])
+  }, [trainStatus?.running, startPolling])
 
   const handleUploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -100,7 +100,7 @@ export default function MultimodalPage() {
     }
   }
 
-  const startPolling = () => {
+  const startPolling = useCallback(() => {
     if (pollIntervalRef.current) return
     pollIntervalRef.current = setInterval(async () => {
       try {
@@ -120,7 +120,7 @@ export default function MultimodalPage() {
         // ignore polling errors
       }
     }, 2000)
-  }
+  }, [fetchAll, addToast])
 
   const handleBatchUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])

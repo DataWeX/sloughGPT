@@ -99,14 +99,14 @@ export default function ChatPage() {
     ui.setMatchIndex(newIdx)
     const el = document.getElementById(`msg-${matchIds[newIdx]}`)
     el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }, [ui.matchIndex, matchCount, matchIds, ui.setMatchIndex])
+  }, [ui, matchCount, matchIds])
 
   const handleNextMatch = useCallback(() => {
     const newIdx = ui.matchIndex < matchCount - 1 ? ui.matchIndex + 1 : 0
     ui.setMatchIndex(newIdx)
     const el = document.getElementById(`msg-${matchIds[newIdx]}`)
     el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }, [ui.matchIndex, matchCount, matchIds, ui.setMatchIndex])
+  }, [ui, matchCount, matchIds])
 
   // ── Effects ───────────────────────────────────────────────────────────────
 
@@ -114,13 +114,13 @@ export default function ChatPage() {
     const newChatHandler = () => chat.newChatRef.current?.()
     window.addEventListener('new-chat', newChatHandler)
     return () => window.removeEventListener('new-chat', newChatHandler)
-  }, [])
+  }, [chat.newChatRef])
 
   useEffect(() => {
     const handler = () => ui.setShowConversationSearch(true)
     window.addEventListener('search-conversations', handler)
     return () => window.removeEventListener('search-conversations', handler)
-  }, [ui.setShowConversationSearch])
+  }, [ui])
 
   useEffect(() => {
     modelController.list().then(models => {
@@ -149,7 +149,7 @@ export default function ChatPage() {
     const healthModel = health && health !== 'offline' && health.model_loaded ? health.model_type : undefined
     model.fetchInitialData(healthModel)
     agents.fetchInitialData()
-  }, [fetchStats, fetchAdapterStats, health, model.fetchInitialData, agents.fetchInitialData])
+  }, [fetchStats, fetchAdapterStats, health, model, agents])
 
   useEffect(() => {
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -162,12 +162,12 @@ export default function ChatPage() {
 
   // ── Flyweights: clearChat / selectAgent with toast ────────────────────────
 
-  const clearChat = useCallback(() => chat.newChat(), [chat.newChat])
+  const clearChat = useCallback(() => chat.newChat(), [chat])
 
   const handleSelectAgentWithToast = useCallback((agent: any) => {
     agents.setCurrentAgent(agent)
     showToast(`Switched to ${agent?.name || 'no agent'}`)
-  }, [agents.setCurrentAgent, showToast])
+  }, [agents, showToast])
 
   const toolbarValue = useChatToolbarValue({
     ui,
