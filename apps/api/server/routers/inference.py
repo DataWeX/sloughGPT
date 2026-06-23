@@ -507,10 +507,20 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
         ctx_core = _get_context_core()
         context_info = {}
         frame = None
+        skip_context = False
         if ctx_core and req.use_context_core:
+            try:
+                from domains.learner.knowledge import get_knowledge_memory
+                kmem = get_knowledge_memory()
+                if kmem.stats().get("total_items", 0) == 0 and not req.knowledge:
+                    skip_context = True
+            except Exception:
+                pass
+        if ctx_core and req.use_context_core and not skip_context:
             ctx_core.set_session_id(session_id)
             ctx_core.add_message("user", user_msg)
-            frame = ctx_core.build_context_frame(
+            frame = await asyncio.to_thread(
+                ctx_core.build_context_frame,
                 include_rag=True,
                 include_memory=True,
                 query=user_msg,
@@ -823,6 +833,21 @@ def _build_session_cache() -> list:
     for f in SESSIONS_DIR.glob("*.json"):
         with open(f) as fp:
             data = json.load(fp)
+            # Normalize: ensure every session has id, name, updated_at
+            sid = data.get("id") or data.get("session_id") or f.stem
+            data["id"] = sid
+            data.pop("session_id", None)
+            if not data.get("name"):
+                msgs = data.get("messages", [])
+                if msgs:
+                    first = msgs[0].get("content", "").split("\n")[0]
+                    data["name"] = first[:60]
+                else:
+                    data["name"] = sid
+            if not data.get("updated_at"):
+                data["updated_at"] = data.get("created_at") or datetime.datetime.fromtimestamp(
+                    f.stat().st_mtime
+                ).isoformat()
             sessions.append(data)
     sessions.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
     _session_cache = sessions

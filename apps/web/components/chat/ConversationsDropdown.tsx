@@ -5,47 +5,36 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { IconMessage, IconStar, IconPin, IconChat, IconPlus, IconChevronRight } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { useChatToolbarContext } from '@/contexts/ChatToolbarContext'
 import type { Conversation } from '@/lib/session-controller'
 
-interface ConversationsDropdownProps {
-  conversations: Conversation[]
-  currentConversationId?: string
-  onLoadConversation: (id: string) => void
-  onStarConversation?: (id: string, starred: boolean) => void
-  onPinConversation?: (id: string, pinned: boolean) => void
-  onNewChat: () => void
-}
-
-function formatDate(dateStr: string | undefined): string {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
-  if (isNaN(date.getTime())) return ''
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
-  const diffHours = Math.floor(diffMs / 3600000)
-  const diffDays = Math.floor(diffMs / 86400000)
-  if (diffMins < 1) return 'Just now'
-  if (diffMins < 60) return `${diffMins}m`
-  if (diffHours < 24) return `${diffHours}h`
-  if (diffDays < 7) return `${diffDays}d`
-  return date.toLocaleDateString()
-}
-
-function truncateMessage(content: string, maxLen = 40): string {
-  if (!content) return 'Empty conversation'
-  const firstLine = content.split('\n')[0]
-  return firstLine.length > maxLen ? firstLine.slice(0, maxLen) + '…' : firstLine
-}
-
-export function ConversationsDropdown({
-  conversations,
-  currentConversationId,
-  onLoadConversation,
-  onNewChat,
-}: ConversationsDropdownProps) {
+export function ConversationsDropdown() {
+  const ctx = useChatToolbarContext()
+  const { conversations, sessionIdRef, onLoad, onStar, onPin, onNewChat } = ctx.conversations
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+
+  function formatDate(dateStr: string | undefined): string {
+    if (!dateStr) return ''
+    const date = new Date(dateStr)
+    if (isNaN(date.getTime())) return ''
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m`
+    if (diffHours < 24) return `${diffHours}h`
+    if (diffDays < 7) return `${diffDays}d`
+    return date.toLocaleDateString()
+  }
+
+  function truncateMessage(content: string, maxLen = 40): string {
+    if (!content) return 'Empty conversation'
+    const firstLine = content.split('\n')[0]
+    return firstLine.length > maxLen ? firstLine.slice(0, maxLen) + '…' : firstLine
+  }
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -71,8 +60,9 @@ export function ConversationsDropdown({
   const starred = sorted.filter(c => c.starred).slice(0, 5)
   const recent = sorted.filter(c => !c.starred).slice(0, 8)
 
+  const currentConversationId = sessionIdRef.current
   const handleSelect = (id: string) => {
-    onLoadConversation(id)
+    onLoad(id)
     setOpen(false)
   }
 
@@ -168,6 +158,19 @@ export function ConversationsDropdown({
       )}
     </div>
   )
+}
+
+function formatDate(date: string | Date | undefined): string {
+  if (!date) return ''
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return ''
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+function truncateMessage(content: string, maxLen = 36): string {
+  if (!content) return 'Empty conversation'
+  const firstLine = content.split('\n')[0]
+  return firstLine.length > maxLen ? firstLine.slice(0, maxLen) + '…' : firstLine
 }
 
 function ConvRow({

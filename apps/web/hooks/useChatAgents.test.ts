@@ -33,8 +33,8 @@ describe('useChatAgents', () => {
 
   it('handleSelectAgent sets current agent and saves to localStorage', () => {
     const { result } = renderHook(() => useChatAgents())
-    act(() => result.current.handleSelectAgent({ id: 'custom', name: 'Custom', description: 'test', icon: 'brain' }))
-    expect(result.current.currentAgent).toEqual({ id: 'custom', name: 'Custom', description: 'test', icon: 'brain' })
+    act(() => result.current.handleSelectAgent({ id: 'custom', name: 'Custom', description: 'test', icon: 'brain', instructions: '' }))
+    expect(result.current.currentAgent).toEqual({ id: 'custom', name: 'Custom', description: 'test', icon: 'brain', instructions: '' })
     expect(localStorage.getItem('man_current_agent')).toBe('custom')
   })
 

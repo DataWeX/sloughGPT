@@ -1,26 +1,11 @@
 'use client'
 
 import { IconSearch, IconX } from '@/components/ui'
+import { useChatToolbarContext } from '@/contexts/ChatToolbarContext'
 
-interface ChatSearchBarProps {
-  searchQuery: string
-  onSearchChange: (value: string) => void
-  onClear: () => void
-  matchIndex: number
-  matchCount: number
-  onPrevMatch: () => void
-  onNextMatch: () => void
-}
-
-export function ChatSearchBar({
-  searchQuery,
-  onSearchChange,
-  onClear,
-  matchIndex,
-  matchCount,
-  onPrevMatch,
-  onNextMatch,
-}: ChatSearchBarProps) {
+export function ChatSearchBar() {
+  const ctx = useChatToolbarContext()
+  const { query: searchQuery, onChange: onSearchChange, onClear, matchIndex, matchCount, onPrevMatch, onNextMatch } = ctx.search
   return (
     <div className="relative w-36 sm:w-44">
       <IconSearch className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground/60 pointer-events-none" aria-hidden />

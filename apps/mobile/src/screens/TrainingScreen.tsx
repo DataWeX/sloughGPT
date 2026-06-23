@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useState, useRef} from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,12 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useTrainingStore, type TrainPhase} from '../stores/training-store';
 import {useModelStore} from '../stores/model-store';
+import {api} from '../services/api-client';
 import {StatusBadge} from '../components/StatusBadge';
 import {colors, spacing, radii, typography} from '../theme';
 
@@ -109,6 +111,30 @@ export function TrainingScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [inputMode, setInputMode] = useState<'text' | 'dataset'>('text');
   const [loadingCheckpoint, setLoadingCheckpoint] = useState<string | null>(null);
+  const [previewData, setPreviewData] = useState<string[]>([]);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const prevPhaseRef = useRef(phase);
+
+  useEffect(() => {
+    if (prevPhaseRef.current !== 'COMPLETE' && phase === 'COMPLETE') {
+      Alert.alert(
+        'Training Complete',
+        checkpoint
+          ? `Model trained successfully. Checkpoint: ${checkpoint}`
+          : 'Model trained successfully.',
+        [{text: 'OK'}],
+      );
+    }
+    prevPhaseRef.current = phase;
+  }, [phase, checkpoint]);
+
+  const fetchPreview = async (datasetId: string) => {
+    try {
+      const result = await api.get<{rows: string[]}>(`/datasets/${datasetId}/preview`);
+      setPreviewData(result.rows || []);
+      setPreviewVisible(true);
+    } catch {}
+  };
 
   useEffect(() => {
     refresh();
@@ -229,6 +255,11 @@ export function TrainingScreen() {
                           {ds.file_count} files · {ds.total_chars.toLocaleString()} chars
                         </Text>
                       </View>
+                      <TouchableOpacity
+                        style={styles.previewBtn}
+                        onPress={() => fetchPreview(ds.id)}>
+                        <Text style={styles.previewBtnText}>Preview</Text>
+                      </TouchableOpacity>
                       {selectedDataset === ds.id && <Text style={styles.check}>✓</Text>}
                     </TouchableOpacity>
                   ))
@@ -410,6 +441,31 @@ export function TrainingScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Dataset preview modal */}
+      <Modal visible={previewVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Dataset Preview</Text>
+              <TouchableOpacity onPress={() => setPreviewVisible(false)}>
+                <Text style={styles.modalClose}>×</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalBody}>
+              {previewData.map((line, i) => (
+                <View key={i} style={styles.previewLine}>
+                  <Text style={styles.previewNum}>{i + 1}</Text>
+                  <Text style={styles.previewText} numberOfLines={3}>{line}</Text>
+                </View>
+              ))}
+              {previewData.length === 0 && (
+                <Text style={styles.previewEmpty}>No preview available</Text>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -611,4 +667,71 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ckptDeleteText: {color: colors.error, fontSize: 16, fontWeight: '600'},
+  previewBtn: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radii.sm,
+    backgroundColor: colors.primary + '15',
+  },
+  previewBtnText: {
+    ...typography.small,
+    color: colors.primary,
+    fontWeight: '500',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+    maxHeight: '70%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  modalTitle: {
+    ...typography.h3,
+    color: colors.text,
+  },
+  modalClose: {
+    fontSize: 24,
+    color: colors.textMuted,
+    padding: spacing.xs,
+  },
+  modalBody: {
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+  },
+  previewLine: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  previewNum: {
+    ...typography.small,
+    color: colors.textMuted,
+    width: 24,
+  },
+  previewText: {
+    ...typography.caption,
+    color: colors.text,
+    flex: 1,
+  },
+  previewEmpty: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textAlign: 'center',
+    padding: spacing.xxl,
+  },
 });

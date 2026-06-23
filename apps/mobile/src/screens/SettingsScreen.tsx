@@ -180,6 +180,18 @@ export function SettingsScreen() {
           />
         </View>
 
+        <TouchableOpacity
+          style={styles.card}
+          onPress={() => navigation.navigate('About')}>
+          <View style={styles.navRow}>
+            <View>
+              <Text style={styles.cardTitle}>About SloughGPT</Text>
+              <Text style={styles.navDesc}>Version, features, architecture</Text>
+            </View>
+            <Text style={styles.navArrow}>→</Text>
+          </View>
+        </TouchableOpacity>
+
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Danger Zone</Text>
           <TouchableOpacity

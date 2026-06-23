@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Modal,
   Keyboard,
+  Share,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {api} from '../services/api-client';
@@ -134,10 +135,51 @@ export function KnowledgeScreen() {
     });
   };
 
+  const handleExport = async () => {
+    try {
+      const data = items.map(item => ({
+        content: item.content,
+        topic: item.topic,
+        importance: item.importance,
+      }));
+      const json = JSON.stringify(data, null, 2);
+      await Share.share({
+        title: 'Knowledge Export',
+        message: json,
+      });
+    } catch {}
+  };
+
   const openEdit = (item: KnowledgeItem) => {
     setEditItem(item);
     setFormContent(item.content);
     setFormTopic(item.topic || '');
+  };
+
+  const [importModalVisible, setImportModalVisible] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importing, setImporting] = useState(false);
+
+  const handleImport = async () => {
+    if (!importText.trim()) return;
+    setImporting(true);
+    try {
+      const lines = importText.split('\n').filter(l => l.trim().length > 2);
+      await Promise.all(
+        lines.map(line =>
+          api.post('/knowledge', {
+            content: line.trim(),
+            topic: formTopic.trim() || undefined,
+          }),
+        ),
+      );
+      setImportModalVisible(false);
+      setImportText('');
+      setFormTopic('');
+      await fetchItems();
+      await fetchTopics();
+    } catch {}
+    setImporting(false);
   };
 
   const renderItem = ({item}: {item: KnowledgeItem}) => {
@@ -218,15 +260,27 @@ export function KnowledgeScreen() {
         ) : (
           <>
             <Text style={styles.title}>Knowledge</Text>
-            <TouchableOpacity
-              style={styles.addBtn}
-              onPress={() => {
-                setFormContent('');
-                setFormTopic('');
-                setAddModalVisible(true);
-              }}>
-              <Text style={styles.addBtnText}>+ Add</Text>
-            </TouchableOpacity>
+            <View style={styles.headerActions}>
+              {items.length > 0 && (
+                <TouchableOpacity style={styles.exportBtn} onPress={handleExport}>
+                  <Text style={styles.exportBtnText}>Export</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={styles.importBtn}
+                onPress={() => { setImportText(''); setImportModalVisible(true); }}>
+                <Text style={styles.importBtnText}>Import</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.addBtn}
+                onPress={() => {
+                  setFormContent('');
+                  setFormTopic('');
+                  setAddModalVisible(true);
+                }}>
+                <Text style={styles.addBtnText}>+ Add</Text>
+              </TouchableOpacity>
+            </View>
           </>
         )}
       </View>
@@ -366,6 +420,52 @@ export function KnowledgeScreen() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {/* Import modal */}
+      <Modal visible={importModalVisible} animationType="slide" transparent>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setImportModalVisible(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.modalContent} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Import Knowledge</Text>
+            <Text style={styles.importHint}>
+              Paste one item per line. Each line becomes a knowledge entry.
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              value={importText}
+              onChangeText={setImportText}
+              placeholder="Line 1\nLine 2\nLine 3..."
+              placeholderTextColor={colors.textMuted}
+              multiline
+              textAlignVertical="top"
+              autoFocus
+            />
+            <TextInput
+              style={styles.modalInputShort}
+              value={formTopic}
+              onChangeText={setFormTopic}
+              placeholder="Topic for all (optional)"
+              placeholderTextColor={colors.textMuted}
+              returnKeyType="done"
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setImportModalVisible(false)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveBtn, (!importText.trim() || importing) && styles.saveBtnDisabled]}
+                onPress={handleImport}
+                disabled={!importText.trim() || importing}>
+                <Text style={styles.saveText}>
+                  {importing ? 'Importing...' : `Import (${importText.split('\n').filter(l => l.trim().length > 2).length})`}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -382,9 +482,45 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   title: {
     ...typography.h1,
     color: colors.text,
+  },
+  importBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  importBtnText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  exportBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  exportBtnText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  importHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginBottom: spacing.xs,
   },
   selectHeader: {
     flexDirection: 'row',

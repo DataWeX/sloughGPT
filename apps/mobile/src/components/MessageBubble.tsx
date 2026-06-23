@@ -3,8 +3,10 @@ import {
   View,
   TouchableOpacity,
   StyleSheet,
+  Alert,
 } from 'react-native';
 import {Markdown} from './Markdown';
+import {copyToClipboard} from '../services/clipboard';
 import {colors, spacing, radii} from '../theme';
 import type {Message} from '../types';
 
@@ -19,8 +21,15 @@ export function MessageBubble({message, onRegenerate, onFeedback}: Props) {
   const [showActions, setShowActions] = useState(false);
 
   const handleLongPress = () => {
-    if (isUser) return;
     setShowActions(!showActions);
+  };
+
+  const handleCopy = async () => {
+    const ok = await copyToClipboard(message.content);
+    setShowActions(false);
+    if (ok) {
+      Alert.alert('Copied', 'Message copied to clipboard');
+    }
   };
 
   return (
@@ -36,29 +45,38 @@ export function MessageBubble({message, onRegenerate, onFeedback}: Props) {
         )}
       </TouchableOpacity>
 
-      {showActions && !isUser && (
+      {showActions && (
         <View style={styles.actions}>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => { onFeedback?.(true); setShowActions(false); }}>
-            <View style={[styles.actionIcon, {backgroundColor: colors.success + '20'}]}>
-              <Markdown content="👍" />
+          <TouchableOpacity style={styles.actionBtn} onPress={handleCopy}>
+            <View style={[styles.actionIcon, {backgroundColor: colors.surface}]}>
+              <Markdown content="📋" />
             </View>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => { onFeedback?.(false); setShowActions(false); }}>
-            <View style={[styles.actionIcon, {backgroundColor: colors.error + '20'}]}>
-              <Markdown content="👎" />
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => { onRegenerate?.(); setShowActions(false); }}>
-            <View style={[styles.actionIcon, {backgroundColor: colors.primary + '20'}]}>
-              <Markdown content="↻" />
-            </View>
-          </TouchableOpacity>
+          {!isUser && (
+            <>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => { onFeedback?.(true); setShowActions(false); }}>
+                <View style={[styles.actionIcon, {backgroundColor: colors.success + '20'}]}>
+                  <Markdown content="👍" />
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => { onFeedback?.(false); setShowActions(false); }}>
+                <View style={[styles.actionIcon, {backgroundColor: colors.error + '20'}]}>
+                  <Markdown content="👎" />
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => { onRegenerate?.(); setShowActions(false); }}>
+                <View style={[styles.actionIcon, {backgroundColor: colors.primary + '20'}]}>
+                  <Markdown content="↻" />
+                </View>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       )}
     </View>

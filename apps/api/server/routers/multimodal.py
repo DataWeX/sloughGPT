@@ -10,7 +10,7 @@ import numpy as np
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Form
 from pydantic import BaseModel
-from domains.multimodal import get_multimodal_manager
+from domains.multimodal import get_multimodal_manager, ImageCaption
 
 logger = logging.getLogger("man.routers.multimodal")
 
@@ -354,6 +354,63 @@ async def generate_image(prompt: str = Form(...), steps: int = Form(20),
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
+
+
+# ── Analyze Image ──────────────────────────────────────────────────────────
+
+@router.post("/analyze")
+async def analyze_image(file: UploadFile = File(...)):
+    """Upload and analyze an image — returns caption, confidence, features, and model status.
+
+    Runs the image through the multimodal engine's training+caption pipeline,
+    returning structured analysis alongside current model state.
+    """
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image files accepted")
+
+    mgr = _ensure_initialized()
+    try:
+        contents = await file.read()
+        from PIL import Image
+        import io
+        img = Image.open(io.BytesIO(contents)).convert("RGB")
+
+        cap = mgr.caption_image(img)
+        learning = getattr(mgr, "_learning_count", 0)
+        engine = getattr(mgr, "_multimodal_engine", None)
+        trained = getattr(engine, "_trained", False) if engine else False
+        buf = getattr(mgr, "_replay_buffer", None)
+        accuracy_history = getattr(mgr, "_accuracy_history", [])
+        mean_accuracy_ = round(sum(accuracy_history) / max(len(accuracy_history), 1), 2)
+
+        return {
+            "caption": cap.text,
+            "confidence": cap.confidence,
+            "tags": cap.tags or [],
+            "accuracy": cap.accuracy,
+            "supervised": cap.accuracy > 0,
+            "images_learned": learning,
+            "trained": trained,
+            "replay_buffer_size": buf.size if buf else 0,
+            "mean_accuracy": mean_accuracy_,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {e}")
+
+
+# ── Reset model ────────────────────────────────────────────────────────────
+
+@router.post("/reset")
+async def reset_multimodal():
+    """Reset the multimodal engine — clears learned images, replay buffer, and accuracy history."""
+    mgr = _ensure_initialized()
+    mgr._learning_count = 0
+    mgr._caption_history = []
+    mgr._accuracy_history = []
+    if getattr(mgr, "_replay_buffer", None):
+        mgr._replay_buffer.clear()
+    mgr._multimodal_engine = None
+    return {"status": "ok", "message": "Multimodal engine reset"}
 
 
 @router.get("/generation-status")

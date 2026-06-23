@@ -38,24 +38,9 @@ export const ChatToolbar = memo(function ChatToolbar() {
         <IconMenu className="w-4 h-4" />
       </button>
 
-      <ConversationsDropdown
-        conversations={ctx.conversations.conversations}
-        currentConversationId={ctx.conversations.sessionIdRef.current}
-        onLoadConversation={ctx.conversations.onLoad}
-        onStarConversation={ctx.conversations.onStar}
-        onPinConversation={ctx.conversations.onPin}
-        onNewChat={ctx.conversations.onNewChat}
-      />
+      <ConversationsDropdown />
       <div className={'sm:flex flex-1 sm:flex-initial ' + (ctx.search.showMobile ? 'flex' : 'hidden')}>
-        <ChatSearchBar
-          searchQuery={ctx.search.query}
-          onSearchChange={ctx.search.onChange}
-          onClear={ctx.search.onClear}
-          matchIndex={ctx.search.matchIndex}
-          matchCount={ctx.search.matchCount}
-          onPrevMatch={ctx.search.onPrevMatch}
-          onNextMatch={ctx.search.onNextMatch}
-        />
+        <ChatSearchBar />
       </div>
 
       <button
@@ -75,11 +60,7 @@ export const ChatToolbar = memo(function ChatToolbar() {
           <ModelDropdown />
         </div>
 
-        <SoulSelectorDropdown
-          souls={ctx.soul.souls}
-          currentSoul={ctx.soul.current}
-          onSelect={ctx.soul.onSelect}
-        />
+        <SoulSelectorDropdown />
 
         {ctx.actions.messageCount > 0 && (
           <span className="hidden sm:inline text-[10px] text-muted-foreground tabular-nums" title={`${ctx.actions.messageCount} messages in conversation`}>
@@ -108,28 +89,10 @@ export const ChatToolbar = memo(function ChatToolbar() {
           </div>
         )}
 
-        <AgentSelectorDropdown
-          agents={ctx.agent.agents}
-          currentAgent={ctx.agent.current}
-          onSelect={ctx.agent.onSelect}
-        />
+        <AgentSelectorDropdown />
 
-        <LocalEngineToggle
-          visible={!!ctx.localEngine.modelUrl}
-          useLocalEngine={ctx.localEngine.useLocal}
-          localEngineLoading={ctx.localEngine.loading}
-          localArchInfo={ctx.localEngine.archInfo}
-          onToggle={ctx.localEngine.onToggle}
-        />
-
-        <ChatMoreMenu
-          onVoiceMode={ctx.actions.onVoiceMode}
-          onToggleTools={ctx.actions.onToggleTools}
-          onExportMarkdown={ctx.actions.onExportMarkdown}
-          onCopyMarkdown={ctx.actions.onCopyMarkdown}
-          onSaveAsDataset={ctx.actions.onSaveAsDataset}
-          hasMessages={ctx.actions.hasMessages}
-        />
+        <LocalEngineToggle />
+        <ChatMoreMenu />
       </div>
     </div>
   )

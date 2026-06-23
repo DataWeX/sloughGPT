@@ -77,16 +77,61 @@ export function useChatMessages(config: ChatMessagesConfig) {
   const newChatRef = useRef<() => void>(null as unknown as () => void)
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Keep messagesRef in sync via effect (single source of truth is `messages` state)
-  useEffect(() => {
-    messagesRef.current = messages
-  }, [messages])
-
   // ── Session operations (delegated) ──────────────────────────────────────
   const sessions = useChatSessions({
     setMessages, setInput, setSessionSaved, setSessionLoading,
     sessionIdRef, showToast,
   })
+
+  // ── Token accumulator for streaming perf ─────────────────────────────────
+  // Buffers tokens in a ref and flushes to setMessages every FLUSH_MS.
+  // Avoids O(n) array copy per token — flushes at most ~60x/sec.
+  const tokenBufRef = useRef<{ id: string; text: string }[]>([])
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const FLUSH_MS = 16
+
+  const sessionsRef = useRef(sessions)
+  sessionsRef.current = sessions
+
+  const flushTokens = useCallback(() => {
+    flushTimerRef.current = null
+    const buf = tokenBufRef.current
+    if (buf.length === 0) return
+    tokenBufRef.current = []
+    const byId = new Map<string, string>()
+    for (const { id, text } of buf) {
+      byId.set(id, (byId.get(id) || '') + text)
+    }
+    setMessages(prev => {
+      const updated = prev.map(m => {
+        const delta = byId.get(m.id)
+        return delta ? { ...m, content: m.content + delta } : m
+      })
+      const now = Date.now()
+      if (now - lastSaveRef.current > 500) {
+        lastSaveRef.current = now
+        sessionsRef.current.saveSessionToStorage(updated, sessionIdRef.current).catch(console.error)
+      }
+      return updated
+    })
+  }, [])
+
+  const scheduleFlush = useCallback(() => {
+    if (flushTimerRef.current) return
+    flushTimerRef.current = setTimeout(flushTokens, FLUSH_MS)
+  }, [flushTokens])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (flushTimerRef.current) clearTimeout(flushTimerRef.current)
+    }
+  }, [])
+
+  // Keep messagesRef in sync via effect (single source of truth is `messages` state)
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
 
   const storeSessionContext = useCallback(async (sessionId: string, msgs: ChatMessage[]) => {
     try {
@@ -125,9 +170,8 @@ export function useChatMessages(config: ChatMessagesConfig) {
       )) {
         if (data.error) { showToast('Failed to regenerate response', 'error'); break }
         if (data.token) {
-          setMessages(prev => prev.map(msg =>
-            msg.id === assistantId ? { ...msg, content: (msg.content || '') + data.token } : msg
-          ))
+          tokenBufRef.current.push({ id: assistantId, text: data.token })
+          scheduleFlush()
         }
         if (data.done) break
       }
@@ -296,16 +340,8 @@ export function useChatMessages(config: ChatMessagesConfig) {
             cleanedToken = cleanStreamedContent(cleanedToken)
           }
           assistantContentLen += cleanedToken.length
-          const now = Date.now()
-          const shouldSave = now - lastSaveRef.current > 500
-          if (shouldSave) lastSaveRef.current = now
-          setMessages(prev => {
-            const updated = prev.map(m =>
-              m.id === assistantId ? { ...m, content: m.content + cleanedToken } : m
-            )
-            if (shouldSave) sessions.saveSessionToStorage(updated, sessionIdRef.current).catch(console.error)
-            return updated
-          })
+          tokenBufRef.current.push({ id: assistantId, text: cleanedToken })
+          scheduleFlush()
         }
         if (!hasContent) {
           setMessages(prev => prev.map(msg =>
@@ -329,27 +365,19 @@ export function useChatMessages(config: ChatMessagesConfig) {
               cleanedToken = cleanStreamedContent(cleanedToken)
             }
             assistantContentLen += cleanedToken.length
-            const now = Date.now()
-            const shouldSave = now - lastSaveRef.current > 500
-            if (shouldSave) lastSaveRef.current = now
-            setMessages(prev => {
-              const updated = prev.map(m => {
-                if (m.id !== assistantId) return m
-                const content = m.content === 'Thinking...' ? '' : m.content
-                return { ...m, content: content + cleanedToken }
-              })
-              if (shouldSave) sessions.saveSessionToStorage(updated, sessionIdRef.current).catch(console.error)
-              return updated
-            })
+            tokenBufRef.current.push({ id: assistantId, text: cleanedToken })
+            scheduleFlush()
           },
           onComplete: () => {
             streamComplete = true
             setSessionSaved(true)
+            flushTokens()
             setMessages(prev => prev.map(m =>
               m.id === assistantId && m.content === 'Thinking...' ? { ...m, content: '' } : m
             ))
           },
           onError: (status: number, text?: string) => {
+            flushTokens()
             setCurrentError(getErrorInfo(status, text || 'Stream error'))
             setMessages(prev => prev.filter(msg => msg.id !== assistantId))
             setLoading(false)

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Markdown } from './Markdown'
 import { Textarea } from '@/components/ui/textarea'
 import { MessageActions } from './MessageActions'
+import { ImageLightbox } from './ImageLightbox'
 import type { ImageAttachment } from './ImageUpload'
 
 export interface MessageBubbleProps {
@@ -68,6 +69,7 @@ export const MessageBubble = memo(function MessageBubble({
   const [isVisible, setIsVisible] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(content)
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
   const bubbleRef = useRef<HTMLDivElement>(null)
   
   useEffect(() => {
@@ -112,8 +114,20 @@ export const MessageBubble = memo(function MessageBubble({
       id={messageId ? `msg-${messageId}` : undefined}
       ref={bubbleRef}
       role="article"
+      tabIndex={0}
       aria-label={`Message from ${role === 'user' ? 'You' : 'Assistant'}`}
       aria-live={isStreaming ? 'polite' : ariaLive}
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+          e.preventDefault()
+          const feed = document.getElementById('chat-messages')
+          if (!feed) return
+          const articles = Array.from(feed.querySelectorAll<HTMLElement>('[role="article"]'))
+          const idx = articles.indexOf(e.currentTarget as HTMLElement)
+          const next = e.key === 'ArrowUp' ? idx - 1 : idx + 1
+          if (next >= 0 && next < articles.length) articles[next].focus()
+        }
+      }}
       className={cn(
         "group flex flex-col transition-all duration-300 ease-out",
         isVisible 
@@ -150,14 +164,29 @@ export const MessageBubble = memo(function MessageBubble({
             role === 'user' && "flex-row-reverse"
           )}>
             {images.map((img) => (
-              <img
+              <button
                 key={img.id}
-                src={img.dataUrl}
-                alt={img.name}
-                className="h-24 w-24 rounded-xl object-cover border border-current/20 shadow-sm hover:shadow-md transition-shadow"
-              />
+                type="button"
+                onClick={() => setLightboxSrc(img.dataUrl)}
+                className="p-0 border-0 bg-transparent rounded-xl cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40"
+                aria-label={`View ${img.name} full size`}
+              >
+                <img
+                  src={img.dataUrl}
+                  alt={img.name}
+                  className="h-24 w-24 rounded-xl object-cover border border-current/20 shadow-sm hover:shadow-md hover:scale-105 transition-all duration-200"
+                />
+              </button>
             ))}
           </div>
+        )}
+
+        {lightboxSrc && (
+          <ImageLightbox
+            src={lightboxSrc}
+            alt="Image preview"
+            onClose={() => setLightboxSrc(null)}
+          />
         )}
         
         {hasContent && (
@@ -231,7 +260,7 @@ export const MessageBubble = memo(function MessageBubble({
         
         {showTimestamp && (
           <p className={cn(
-            "mt-1.5 text-[10px] font-normal leading-none opacity-0 group-hover:opacity-100 transition-opacity",
+            "mt-1.5 text-[10px] font-normal leading-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity",
             role === 'user' ? 'text-primary-foreground/50 text-right' : 'text-muted-foreground/40'
           )}>
             {formatTime(timestamp)}

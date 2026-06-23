@@ -39,7 +39,7 @@ export default function HomePage() {
   const { t } = useLocale()
   const { state: health } = useApiHealth()
   const addToast = useToastStore(s => s.addToast)
-  const { modelCount, currentSoul, modelStatus, inferenceCount, runningTraining, knowledgeCount, recentSessions, recentJobs, ...data } = useHomePageData(health)
+  const { modelCount, currentSoul, modelStatus, inferenceCount, runningTraining, knowledgeCount, recentSessions, recentJobs, healthSummary, ...data } = useHomePageData(health)
 
   const apiStatus = health === null ? 'loading' : health === 'offline' ? 'offline' : 'online'
 
@@ -61,14 +61,21 @@ export default function HomePage() {
     return () => { cancelled = true; clearInterval(id) }
   }, [apiStatus])
 
-  const subtitleKey = apiStatus === 'loading' ? 'home.subtitle.connecting'
-    : apiStatus === 'online' ? 'Your AI, your way'
-    : 'home.subtitle.offline'
+  function subtitleText(): string {
+    if (apiStatus === 'loading') return 'Connecting...'
+    if (apiStatus === 'offline') return t('home.subtitle.offline')
+    if (healthSummary) {
+      const shortName = healthSummary.split('/').pop() || healthSummary
+      const convs = inferenceCount !== null ? `${inferenceCount} conversation${inferenceCount === 1 ? '' : 's'}` : null
+      return convs ? `${shortName} loaded · ${convs}` : `${shortName} loaded`
+    }
+    return 'Your AI, your way'
+  }
 
   return (
     <div className="sl-page mx-auto max-w-4xl space-y-4 overflow-hidden">
       <AppRouteHeader
-        left={<AppRouteHeaderLead title={<Greeting />} subtitle={t(subtitleKey)} />}
+        left={<AppRouteHeaderLead title={<Greeting />} subtitle={subtitleText()} />}
       />
 
       {apiStatus === 'offline' ? (
@@ -179,22 +186,31 @@ export default function HomePage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
               <div>
                 <div className="flex justify-center mb-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className={`w-2 h-2 rounded-full ${health && health !== 'offline' && (health as any).status === 'healthy' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
                 </div>
                 <p className="text-[10px] text-muted-foreground">API</p>
-                <p className="text-xs font-medium">Connected</p>
+                <p className="text-xs font-medium">{(health as any)?.status === 'healthy' ? 'Healthy' : 'Degraded'}</p>
               </div>
               <div>
                 <p className="text-[10px] text-muted-foreground">Model</p>
-                <p className="text-xs font-medium truncate">{modelStatus.loaded ? modelStatus.model : 'None loaded'}</p>
+                <p className="text-xs font-medium truncate">
+                  {modelStatus.loaded ? (modelStatus.model?.split('/').pop() || modelStatus.model) : 'None loaded'}
+                </p>
+                {inferenceCount !== null && inferenceCount !== undefined && (
+                  <p className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">{inferenceCount} inference{inferenceCount === 1 ? '' : 's'}</p>
+                )}
               </div>
               <div>
                 <p className="text-[10px] text-muted-foreground">Personality</p>
                 <p className="text-xs font-medium truncate">{currentSoul?.name || 'Default'}</p>
+                {currentSoul?.traits && currentSoul.traits.length > 0 && (
+                  <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{currentSoul.traits.slice(0, 3).join(', ')}</p>
+                )}
               </div>
               <div>
                 <p className="text-[10px] text-muted-foreground">Knowledge</p>
-                <p className="text-xs font-medium">{knowledgeCount} facts</p>
+                <p className="text-xs font-medium">{knowledgeCount} fact{knowledgeCount === 1 ? '' : 's'}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{modelCount !== null ? `${modelCount} model${modelCount === 1 ? '' : 's'} available` : ''}</p>
               </div>
             </div>
           </CardContent>

@@ -57,6 +57,7 @@
 :root {
   /* App shell */
   --app-mobile-header-h: 3.25rem;
+  --sidebar-width: 15.75rem;
   /* Chat column max width — ~80ch at default scale; scales with font */
   --chat-thread-max: min(100%, 52rem);
   color-scheme: light;

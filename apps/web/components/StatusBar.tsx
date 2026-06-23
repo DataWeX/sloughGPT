@@ -6,6 +6,7 @@ import { useApiHealth } from '@/hooks/useApiHealth'
 import { soulsController } from '@/lib/souls-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { cn } from '@/lib/cn'
+import { deriveArchetype } from '@/components/souls/PersonalitySummary'
 
 const API = PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -27,12 +28,24 @@ interface HealthSummary {
 export function StatusBar() {
   const { state: health } = useApiHealth()
   const [soulName, setSoulName] = useState<string | null>(null)
+  const [archetypeLabel, setArchetypeLabel] = useState<string | null>(null)
   const [summary, setSummary] = useState<HealthSummary | null>(null)
 
   useEffect(() => {
     if (health === null || health === 'offline') return
-    soulsController.getCurrent().then(s => {
-      if (s && 'name' in s) setSoulName((s as any).name)
+    soulsController.getCurrent().then(async (s) => {
+      if (s && 'name' in s) {
+        const name = (s as any).name
+        setSoulName(name)
+        // Fetch trait weights to derive archetype
+        try {
+          const w = await soulsController.getTraitWeights()
+          if (w && !('error' in w)) {
+            const arch = deriveArchetype(w as any)
+            setArchetypeLabel(arch.label)
+          }
+        } catch {}
+      }
     }).catch(() => {})
   }, [health])
 
@@ -57,7 +70,6 @@ export function StatusBar() {
     score != null && score < 80 ? 'bg-warning' :
     health.model_loaded ? 'bg-success' : 'bg-warning'
 
-  // Use the human-readable summary from the flow pipeline
   const statusText = health === null ? 'Connecting...' :
     health === 'offline' ? 'Offline' :
     summary?.summary || (health.model_loaded ? health.model_type : 'No model')
@@ -69,6 +81,11 @@ export function StatusBar() {
           <span className={cn("inline-block h-1.5 w-1.5 rounded-full shrink-0", dot)} aria-hidden="true" />
           <span className="truncate max-w-[200px] sm:max-w-none">{statusText}</span>
         </span>
+        {soulName && archetypeLabel && (
+          <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary/8 text-primary/80 text-[9px] font-medium leading-none">
+            {archetypeLabel}
+          </span>
+        )}
       </div>
       <div className="flex items-center gap-2 sm:gap-3">
         {summary?.tokens_per_sec ? (

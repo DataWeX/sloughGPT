@@ -3,18 +3,11 @@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { IconMore, IconSettings } from '@/components/ui'
-import type { ChatMessage } from './types'
+import { useChatToolbarContext } from '@/contexts/ChatToolbarContext'
 
-interface ChatMoreMenuProps {
-  onVoiceMode: () => void
-  onToggleTools: () => void
-  onExportMarkdown: () => void
-  onCopyMarkdown?: () => void
-  onSaveAsDataset?: () => void
-  hasMessages: boolean
-}
-
-export function ChatMoreMenu({ onVoiceMode, onToggleTools, onExportMarkdown, onCopyMarkdown, onSaveAsDataset, hasMessages }: ChatMoreMenuProps) {
+export function ChatMoreMenu() {
+  const ctx = useChatToolbarContext()
+  const { onVoiceMode, onToggleTools, onExportMarkdown, onCopyMarkdown, onSaveAsDataset, hasMessages } = ctx.actions
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

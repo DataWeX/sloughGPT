@@ -23,6 +23,8 @@ export interface ModelInfo {
   params: string;
   description: string;
   source: string;
+  tags: string[];
+  thumbnail?: string;
 }
 
 export interface SoulInfo {

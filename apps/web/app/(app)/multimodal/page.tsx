@@ -37,6 +37,23 @@ export default function MultimodalPage() {
   const [vlmOutput, setVlmOutput] = useState<string | null>(null)
   const [vlmPrompt, setVlmPrompt] = useState('Describe this image in detail.')
   const [vlmLoaded, setVlmLoaded] = useState(false)
+  const [vlmTrainDataPath, setVlmTrainDataPath] = useState('')
+  const [vlmTraining, setVlmTraining] = useState(false)
+  const [vlmTrainStatus, setVlmTrainStatus] = useState<string>('idle')
+  const [vlmTrainProgress, setVlmTrainProgress] = useState<number | null>(null)
+  const [vlmTrainCurrentStage, setVlmTrainCurrentStage] = useState<string | null>(null)
+  const [vlmTrainLoss, setVlmTrainLoss] = useState<number | null>(null)
+  const [vlmTrainResult, setVlmTrainResult] = useState<any>(null)
+  const [vlmTrainError, setVlmTrainError] = useState<string | null>(null)
+  const [vlmModelDir, setVlmModelDir] = useState('models/vlm-finetuned')
+  const [vlmLoadLoading, setVlmLoadLoading] = useState(false)
+  const [dpoRunning, setDpoRunning] = useState(false)
+  const [dpoStatus, setDpoStatus] = useState<string>('idle')
+  const [dpoResult, setDpoResult] = useState<any>(null)
+  const [dpoError, setDpoError] = useState<string | null>(null)
+  const [dpoLastRun, setDpoLastRun] = useState<string | null>(null)
+  const [dpoAccepted, setDpoAccepted] = useState(0)
+  const [dpoRejected, setDpoRejected] = useState(0)
   const vlmImageInputRef = useRef<HTMLInputElement>(null)
   const [vlmImageBase64, setVlmImageBase64] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -169,6 +186,120 @@ export default function MultimodalPage() {
       addToast(msg, 'error')
     } finally {
       setCreatingDataset(false)
+    }
+  }
+
+  const pollVLMTrain = useCallback(async () => {
+    try {
+      const status = await multimodalController.getVLMTrainStatus()
+      setVlmTrainStatus(status.status)
+      setVlmTrainProgress(status.progress)
+      setVlmTrainCurrentStage(status.current_stage)
+      setVlmTrainLoss(status.current_loss)
+      if (status.status === 'completed') {
+        setVlmTrainResult(status.result)
+        setVlmTraining(false)
+        addToast('VLM training complete', 'success')
+      } else if (status.status === 'error') {
+        setVlmTrainError(status.error || 'Training failed')
+        setVlmTraining(false)
+        addToast(status.error || 'Training failed', 'error')
+      }
+    } catch {
+      // silent
+    }
+  }, [addToast])
+
+  useEffect(() => {
+    if (vlmTrainStatus === 'running') {
+      const interval = setInterval(pollVLMTrain, 3000)
+      return () => clearInterval(interval)
+    }
+  }, [vlmTrainStatus, pollVLMTrain])
+
+  const handleVLMTrain = async () => {
+    if (!vlmTrainDataPath.trim() || vlmTraining) return
+    setVlmTraining(true)
+    setVlmTrainResult(null)
+    setVlmTrainError(null)
+    setVlmTrainStatus('running')
+    try {
+      const dataPath = vlmTrainDataPath.trim().startsWith('/')
+        ? vlmTrainDataPath.trim()
+        : `datasets/${vlmTrainDataPath.trim().replace(/^datasets\//, '')}/corpus.jsonl`
+      const result = await multimodalController.startVLMTrain({
+        data_path: dataPath,
+      })
+      addToast(`VLM training started: ${result.job_id}`, 'success')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Training failed'
+      setVlmTrainError(msg)
+      setVlmTrainStatus('error')
+      setVlmTraining(false)
+      addToast(msg, 'error')
+    }
+  }
+
+  const handleVLMLoad = async () => {
+    setVlmLoadLoading(true)
+    try {
+      const result = await multimodalController.loadVLMModel(vlmModelDir.trim() || undefined)
+      setVlmLoaded(true)
+      addToast(result.message || 'Model loaded', 'success')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Loading failed'
+      addToast(msg, 'error')
+    } finally {
+      setVlmLoadLoading(false)
+    }
+  }
+
+  const pollDPOStatus = useCallback(async () => {
+    try {
+      const s = await multimodalController.getDPOStatus()
+      setDpoStatus(s.status)
+      setDpoLastRun(s.last_run)
+      setDpoAccepted(s.accepted_count)
+      setDpoRejected(s.rejected_count)
+      if (s.status === 'completed' && s.result) {
+        setDpoResult(s.result)
+        setDpoRunning(false)
+        addToast('DPO training complete', 'success')
+      } else if (s.status === 'error') {
+        setDpoError(s.result?.error as string || 'DPO failed')
+        setDpoRunning(false)
+        addToast(s.result?.error as string || 'DPO failed', 'error')
+      } else if (s.status === 'idle') {
+        setDpoRunning(false)
+      }
+    } catch {
+      // silent
+    }
+  }, [addToast])
+
+  useEffect(() => {
+    if (dpoStatus === 'running') {
+      const interval = setInterval(pollDPOStatus, 3000)
+      return () => clearInterval(interval)
+    }
+  }, [dpoStatus, pollDPOStatus])
+
+  const handleTriggerDPO = async () => {
+    if (dpoRunning || dpoStatus === 'running') return
+    setDpoRunning(true)
+    setDpoError(null)
+    setDpoResult(null)
+    setDpoStatus('running')
+    try {
+      const result = await multimodalController.triggerDPO()
+      addToast(`DPO training started: ${result.job_id || result.status}`, 'success')
+      setDpoStatus('running')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'DPO trigger failed'
+      setDpoError(msg)
+      setDpoStatus('error')
+      setDpoRunning(false)
+      addToast(msg, 'error')
     }
   }
 
@@ -471,6 +602,140 @@ export default function MultimodalPage() {
                 >
                   {creatingDataset ? 'Creating…' : 'Create dataset'}
                 </Button>
+              </CardContent>
+            </Card>
+
+            {/* VLM Training */}
+            <Card>
+              <CardHeader><CardTitle className="text-base">Train vision model</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-muted-foreground">Train a vision-language model on an image description dataset created above.</p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={vlmTrainDataPath}
+                    onChange={e => setVlmTrainDataPath(e.target.value)}
+                    placeholder="datasets/my-dataset/corpus.jsonl"
+                    className="h-8 text-xs flex-1"
+                    aria-label="Training data path"
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs shrink-0"
+                    onClick={handleVLMTrain}
+                    disabled={!vlmTrainDataPath.trim() || vlmTraining || vlmTrainStatus === 'running'}
+                  >
+                    {vlmTraining || vlmTrainStatus === 'running' ? 'Training…' : 'Start training'}
+                  </Button>
+                </div>
+                {vlmTrainStatus === 'running' && (
+                  <div className="space-y-1 pt-1">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{vlmTrainCurrentStage || 'Training…'}</span>
+                      {vlmTrainLoss !== null && <span>Loss: {vlmTrainLoss.toFixed(4)}</span>}
+                    </div>
+                    <ProgressBar
+                      value={vlmTrainProgress || 0}
+                      max={100}
+                      variant="default"
+                    />
+                  </div>
+                )}
+                {vlmTrainResult && (
+                  <div className="p-2 rounded bg-success/10 border border-success/20 text-xs text-success">
+                    Training complete
+                  </div>
+                )}
+                {vlmTrainError && (
+                  <div className="p-2 rounded bg-destructive/10 border border-destructive/20 text-xs text-destructive">
+                    {vlmTrainError}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* VLM Model Load */}
+            <Card>
+              <CardHeader><CardTitle className="text-base">Load trained model</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-muted-foreground">Load a trained vision-language model for inference testing.</p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={vlmModelDir}
+                    onChange={e => setVlmModelDir(e.target.value)}
+                    placeholder="models/vlm-finetuned"
+                    className="h-8 text-xs flex-1"
+                    aria-label="Model directory"
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs shrink-0"
+                    onClick={handleVLMLoad}
+                    disabled={vlmLoadLoading}
+                  >
+                    {vlmLoadLoading ? 'Loading…' : 'Load model'}
+                  </Button>
+                </div>
+                {vlmLoaded && (
+                  <p className="text-xs text-success flex items-center gap-1">
+                    <IconCheck className="h-3.5 w-3.5" />
+                    Vision model loaded and ready for inference
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* VLM DPO */}
+            <Card>
+              <CardHeader><CardTitle className="text-base">DPO fine-tune</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Run Direct Preference Optimization on feedback pairs (thumbs up/down) to align the model.
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs shrink-0"
+                    onClick={handleTriggerDPO}
+                    disabled={dpoRunning || dpoStatus === 'running'}
+                  >
+                    {dpoRunning || dpoStatus === 'running' ? 'Running…' : 'Run DPO'}
+                  </Button>
+                  {(dpoAccepted > 0 || dpoRejected > 0) && (
+                    <span className="text-xs text-muted-foreground">
+                      {dpoAccepted} accepted / {dpoRejected} rejected
+                    </span>
+                  )}
+                </div>
+                {(dpoStatus === 'running') && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="animate-pulse h-2 w-2 rounded-full bg-primary" />
+                    DPO training in progress…
+                  </div>
+                )}
+                {dpoResult && dpoResult.status === 'accepted' && (
+                  <div className="space-y-1 p-2 rounded bg-success/10 border border-success/20 text-xs">
+                    <p className="text-success font-medium">✓ DPO accepted — model updated</p>
+                    {dpoResult.steps > 0 && <p className="text-muted-foreground">{dpoResult.steps} steps · avg loss {dpoResult.avg_loss?.toFixed(4)}</p>}
+                    {dpoResult.ppl_before != null && (
+                      <p className="text-muted-foreground">PPL: {dpoResult.ppl_before?.toFixed(2)} → {dpoResult.ppl_after?.toFixed(2)} ({dpoResult.ppl_delta_pct > 0 ? '+' : ''}{dpoResult.ppl_delta_pct?.toFixed(1)}%)</p>
+                    )}
+                    {dpoResult.pairs_trained > 0 && <p className="text-muted-foreground">{dpoResult.pairs_trained} pairs trained</p>}
+                    {dpoResult.elapsed_seconds > 0 && <p className="text-muted-foreground">Took {dpoResult.elapsed_seconds}s</p>}
+                  </div>
+                )}
+                {dpoResult && dpoResult.status === 'rejected' && (
+                  <div className="p-2 rounded bg-destructive/10 border border-destructive/20 text-xs text-destructive">
+                    DPO rejected — PPL degradation above threshold
+                  </div>
+                )}
+                {dpoError && (
+                  <div className="p-2 rounded bg-destructive/10 border border-destructive/20 text-xs text-destructive">
+                    {dpoError}
+                  </div>
+                )}
+                {dpoLastRun && dpoResult && (
+                  <p className="text-[10px] text-muted-foreground">Last run: {dpoLastRun}</p>
+                )}
               </CardContent>
             </Card>
 

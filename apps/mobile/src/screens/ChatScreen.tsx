@@ -1,4 +1,4 @@
-import React, {useEffect, useState, useCallback} from 'react';
+import React, {useEffect, useState, useCallback, useRef} from 'react';
 import {
   View,
   FlatList,
@@ -8,13 +8,17 @@ import {
   Platform,
   TouchableOpacity,
   ActivityIndicator,
+  Pressable,
   Modal,
   TextInput,
   Alert,
+  Keyboard,
+  Share,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useChatStore} from '../stores/chat-store';
 import {useModelStore} from '../stores/model-store';
+import {useOnlineStatus} from '../hooks/useOnlineStatus';
 import {MessageBubble} from '../components/MessageBubble';
 import {ChatInput} from '../components/ChatInput';
 import {StatusBadge} from '../components/StatusBadge';
@@ -43,10 +47,13 @@ export function ChatScreen() {
     deleteSession,
     createSession,
   } = useChatStore();
-  const {health, currentSoul} = useModelStore();
+  const {health, currentSoul, souls, switchSoul} = useModelStore();
+  const online = useOnlineStatus();
   const flatListRef = useRef<FlatList>(null);
   const [atBottom, setAtBottom] = useState(true);
   const [showDrawer, setShowDrawer] = useState(false);
+  const [showSoulPicker, setShowSoulPicker] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     refreshSessions();
@@ -100,7 +107,7 @@ export function ChatScreen() {
     setAtBottom(distFromBottom < 50);
   }, []);
 
-  const isConnected = health?.status === 'healthy';
+  const isConnected = online;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -113,14 +120,32 @@ export function ChatScreen() {
             <TouchableOpacity onPress={() => setShowDrawer(true)}>
               <Text style={styles.menuBtn}>☰</Text>
             </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowSoulPicker(true)}>
+              <Text style={styles.menuBtn}>⚙</Text>
+            </TouchableOpacity>
             <Text style={styles.title}>Chat</Text>
             {currentSoul && (
-              <View style={styles.soulPill}>
+              <TouchableOpacity
+                style={styles.soulPill}
+                onPress={() => setShowSoulPicker(true)}>
                 <Text style={styles.soulText}>{currentSoul.name}</Text>
-              </View>
+              </TouchableOpacity>
             )}
           </View>
           <View style={styles.headerRight}>
+            {messages.length > 0 && (
+              <TouchableOpacity
+                style={styles.exportBtn}
+                onPress={async () => {
+                  const md = messages.map(m => {
+                    const role = m.role === 'user' ? 'You' : 'Assistant';
+                    return `**${role}:**\n${m.content}`;
+                  }).join('\n\n---\n\n');
+                  await Share.share({title: 'Chat Export', message: md});
+                }}>
+                <Text style={styles.exportBtnText}>Export</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={styles.newChatBtn}
               onPress={() => createSession()}>
@@ -163,20 +188,22 @@ export function ChatScreen() {
             </View>
           </View>
         ) : (
-          <FlatList
-            ref={flatListRef}
-            data={messages}
-            renderItem={renderItem}
-            keyExtractor={keyExtractor}
-            contentContainerStyle={styles.messageList}
-            onScroll={onScroll}
-            scrollEventThrottle={16}
-            onContentSizeChange={() => {
+          <Pressable style={{flex: 1}} onPress={() => Keyboard.dismiss()}>
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              renderItem={renderItem}
+              keyExtractor={keyExtractor}
+              contentContainerStyle={styles.messageList}
+              onScroll={onScroll}
+              scrollEventThrottle={16}
+              onContentSizeChange={() => {
               if (atBottom) {
                 flatListRef.current?.scrollToEnd({animated: false});
               }
             }}
-          />
+            />
+          </Pressable>
         )}
 
         {streaming && (
@@ -259,11 +286,114 @@ export function ChatScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Soul picker */}
+      <Modal visible={showSoulPicker} animationType="slide" transparent>
+        <TouchableOpacity
+          style={styles.drawerOverlay}
+          activeOpacity={1}
+          onPress={() => setShowSoulPicker(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.drawer} onPress={() => {}}>
+            <View style={styles.drawerHeader}>
+              <Text style={styles.drawerTitle}>Personality</Text>
+              <TouchableOpacity onPress={() => setShowSoulPicker(false)}>
+                <Text style={styles.drawerClose}>×</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={souls}
+              keyExtractor={item => item.name}
+              renderItem={({item: soul}) => (
+                <TouchableOpacity
+                  style={[
+                    styles.sessionItem,
+                    soul.name === currentSoul?.name && styles.sessionItemActive,
+                  ]}
+                  onPress={() => {
+                    switchSoul(soul.name);
+                    setShowSoulPicker(false);
+                  }}>
+                  <View style={styles.sessionInfo}>
+                    <Text style={styles.sessionTitle}>{soul.name}</Text>
+                    {soul.description && (
+                      <Text style={styles.sessionMeta} numberOfLines={2}>
+                        {soul.description}
+                      </Text>
+                    )}
+                  </View>
+                  {soul.name === currentSoul?.name && (
+                    <Text style={styles.checkMark}>✓</Text>
+                  )}
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <Text style={styles.drawerEmpty}>No personalities available</Text>
+              }
+            />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Soul picker modal */}
+      <Modal visible={showSoulPicker} animationType="slide" transparent>
+        <View style={styles.drawerOverlay}>
+          <View style={styles.drawer}>
+            <View style={styles.drawerHeader}>
+              <Text style={styles.drawerTitle}>Personality</Text>
+              <TouchableOpacity onPress={() => setShowSoulPicker(false)}>
+                <Text style={styles.drawerClose}>×</Text>
+              </TouchableOpacity>
+            </View>
+            {currentSoul && (
+              <View style={styles.activeSoul}>
+                <Text style={styles.activeSoulLabel}>Active</Text>
+                <Text style={styles.activeSoulName}>{currentSoul.name}</Text>
+                {currentSoul.description && (
+                  <Text style={styles.activeSoulDesc}>{currentSoul.description}</Text>
+                )}
+              </View>
+            )}
+            <FlatList
+              data={souls}
+              keyExtractor={item => item.name}
+              renderItem={({item: soul}) => {
+                const isActive = currentSoul?.name === soul.name;
+                return (
+                  <TouchableOpacity
+                    style={[styles.sessionItem, isActive && styles.sessionItemActive]}
+                    onPress={() => {
+                      switchSoul(soul.name);
+                      setShowSoulPicker(false);
+                    }}>
+                    <View style={styles.sessionInfo}>
+                      <Text style={styles.sessionTitle}>{soul.name}</Text>
+                      {soul.description && (
+                        <Text style={styles.sessionMeta} numberOfLines={1}>
+                          {soul.description}
+                        </Text>
+                      )}
+                      {soul.traits && soul.traits.length > 0 && (
+                        <View style={styles.traitRow}>
+                          {soul.traits.map(trait => (
+                            <StatusBadge key={trait} label={trait} variant="info" />
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                    {isActive && <Text style={styles.checkMark}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              }}
+              ListEmptyComponent={
+                <Text style={styles.drawerEmpty}>No personalities found</Text>
+              }
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
-
-import {useRef} from 'react';
 
 const styles = StyleSheet.create({
   safe: {
@@ -310,6 +440,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  exportBtn: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  exportBtnText: {
+    ...typography.small,
+    color: colors.textSecondary,
+    fontWeight: '500',
   },
   newChatBtn: {
     paddingHorizontal: spacing.md,
@@ -480,6 +623,12 @@ const styles = StyleSheet.create({
   sessionDelete: {
     fontSize: 18,
     color: colors.textMuted,
+    padding: spacing.xs,
+  },
+  checkMark: {
+    fontSize: 16,
+    color: colors.primary,
+    fontWeight: '700',
     padding: spacing.xs,
   },
   drawerEmpty: {

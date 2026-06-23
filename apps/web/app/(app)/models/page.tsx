@@ -16,6 +16,8 @@ import { modelController } from '@/lib/model-controller'
 import { soulsController } from '@/lib/souls-controller'
 import type { Soul, Checkpoint } from '@/lib/souls-controller'
 import { cn } from '@/lib/cn'
+import SoulVisualizer from '@/components/souls/SoulVisualizer'
+import TraitEditor from '@/components/souls/TraitEditor'
 import {
   useModels,
   useLoadModel,
@@ -95,6 +97,17 @@ export default function ModelsPage() {
     }
   }
 
+  const handleSaveTraits = useCallback(async (weights: Record<string, Record<string, number>>) => {
+    try {
+      await soulsController.saveTraitWeights(weights)
+      addToast('Personality updated', 'success')
+      setTraitWeights(weights)
+      setEditingTraits(false)
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Failed to save traits', 'error')
+    }
+  }, [addToast])
+
   const handleRefresh = async () => {
     setRefreshing(true)
     await Promise.allSettled([
@@ -123,6 +136,7 @@ export default function ModelsPage() {
     saved_at?: string
     label?: string
   }
+  const [editingTraits, setEditingTraits] = useState(false)
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([])
   const [snapshotName, setSnapshotName] = useState('')
   const [refreshing, setRefreshing] = useState(false)
@@ -183,6 +197,24 @@ export default function ModelsPage() {
 
   return (
     <div className="sl-page mx-auto max-w-4xl">
+      <style>{`
+        @keyframes pulseGlow {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.3); }
+          50% { box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.1); }
+        }
+        @keyframes cardLift {
+          to { transform: translateY(-2px); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+        }
+        .card-hover {
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .card-hover:hover {
+          animation: cardLift 0.2s ease forwards;
+        }
+        .pulse-dot {
+          animation: pulseGlow 2s ease-in-out infinite;
+        }
+      `}</style>
       <AppRouteHeader
         className="items-start"
         left={<AppRouteHeaderLead title="Models & Personalities" subtitle={subtitle} />}
@@ -198,7 +230,7 @@ export default function ModelsPage() {
             <CardContent>
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <span className={cn("w-2 h-2 rounded-full", health.model_loaded ? "bg-success" : "bg-warning")} />
+                  <span className={cn("w-2 h-2 rounded-full", health.model_loaded ? "bg-success pulse-dot" : "bg-warning")} />
                   <span className="text-xs font-medium">{health.model_type || 'No model'}</span>
                 </div>
                 {currentSoul && (
@@ -239,7 +271,7 @@ export default function ModelsPage() {
                 { title: 'Adapters', desc: 'LoRA/DoRA fine-tuned adapters that stack on any base', icon: '🧩', count: checkpoints.filter((c: Checkpoint) => c.soul).length },
                 { title: 'Checkpoints', desc: 'Trained checkpoints that persist a model+personality snapshot', icon: '📦', count: checkpoints.length },
               ].map(layer => (
-                <div key={layer.title} className="rounded-lg border border-border/60 p-3 hover:border-border/80 transition-colors">
+                <div key={layer.title} className="rounded-lg border border-border/60 p-3 card-hover">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-base">{layer.icon}</span>
                     <span className="text-sm font-medium">{layer.title}</span>
@@ -273,7 +305,7 @@ export default function ModelsPage() {
                 const soulCheckpoints = checkpoints?.filter((c: Checkpoint) => c.soul === s.name) ?? []
                 const isCurrent = currentSoul === s.name
                 return (
-                  <div key={s.name} className={cn("flex items-center justify-between p-3 rounded-lg border transition-colors", isCurrent ? "border-primary/40 bg-primary/5" : "border-border/60")}>
+                  <div key={s.name} className={cn("flex items-center justify-between p-3 rounded-lg border card-hover", isCurrent ? "border-primary/40 bg-primary/5" : "border-border/60")}>
                     <div className="flex items-center gap-3 min-w-0">
                       <div className={cn("w-2 h-2 rounded-full shrink-0", isCurrent ? "bg-primary" : "bg-muted-foreground/30")} />
                       <div className="min-w-0">
@@ -316,142 +348,89 @@ export default function ModelsPage() {
           </Card>
         )}
 
-        {/* ── Trait Weights (player stats card) ── */}
-        {traitWeights && mounted && (() => {
-          const allTraits: [string, string, number][] = []
-          let totalVal = 0
-          let totalCount = 0
-          for (const group of ['personality', 'cognition', 'emotion'] as const) {
-            const traits = traitWeights[group]
-            if (!traits || typeof traits !== 'object') continue
-            for (const [name, value] of Object.entries(traits) as [string, number][]) {
-              const pct = Math.round(value * 100)
-              allTraits.push([group, name, pct])
-              totalVal += pct
-              totalCount++
-            }
-          }
-          const overall = totalCount > 0 ? Math.round(totalVal / totalCount) : 0
+        {/* ── Personality Profile ── */}
+        {traitWeights && mounted && (
+          <Card className="relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.02] to-transparent pointer-events-none" />
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Personality Profile</CardTitle>
+                <button
+                  type="button"
+                  onClick={() => setEditingTraits(!editingTraits)}
+                  className="text-[10px] px-2 py-1 rounded-md border border-border/60 hover:bg-muted/50 transition-colors"
+                >
+                  {editingTraits ? 'View' : 'Edit'}
+                </button>
+              </div>
+            </CardHeader>
+            <CardContent className="relative">
+              <p className="text-[10px] text-muted-foreground mb-3">Traits shape how your personality responds &mdash; like a character sheet for your AI.</p>
+              {editingTraits ? (
+                <TraitEditor
+                  traitWeights={traitWeights}
+                  onSave={handleSaveTraits}
+                  onReset={() => setEditingTraits(false)}
+                />
+              ) : (
+                <SoulVisualizer traitWeights={traitWeights} currentSoulName={currentSoul} />
+              )}
 
-          const ratingColor = (v: number) =>
-            v >= 80 ? 'text-green-500' : v >= 60 ? 'text-amber-500' : 'text-red-400'
-
-          const bgColor = (v: number) =>
-            v >= 80 ? 'bg-green-500/15 text-green-600' : v >= 60 ? 'bg-amber-500/15 text-amber-600' : 'bg-red-500/15 text-red-400'
-
-          const groups = ['personality', 'cognition', 'emotion'] as const
-          const groupLabels = { personality: 'Personality', cognition: 'Cognition', emotion: 'Emotion' }
-
-          return (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Trait Weights</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-[10px] text-muted-foreground mb-3">Scores fine-tune how the model responds &mdash; higher values amplify each trait during chat.</p>
-              <div className="flex items-center gap-4 mb-4 pb-3 border-b border-border/40">
-                  <div className="flex flex-col items-center">
-                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Overall</span>
-                    <span className={`text-3xl font-bold ${ratingColor(overall)}`}>{overall}</span>
-                    <span className="text-[9px] text-muted-foreground/60 mt-0.5">0–100</span>
-                  </div>
-                  <div className="flex-1 grid grid-cols-3 gap-1.5 text-[10px]">
-                    {groups.map(g => {
-                      const traits = traitWeights[g]
-                      if (!traits || typeof traits !== 'object') return null
-                      const entries = Object.entries(traits) as [string, number][]
-                      const avg = entries.length > 0
-                        ? Math.round(entries.reduce((s, [, v]) => s + v * 100, 0) / entries.length)
-                        : 0
-                      return (
-                        <div key={g} className="flex flex-col items-center p-1.5 rounded bg-muted/40">
-                          <span className="text-muted-foreground mb-0.5">{groupLabels[g]}</span>
-                          <span className={`text-sm font-bold ${ratingColor(avg)}`}>{avg}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
+              {/* ── Snapshots section ── */}
+              <div className="mt-4 pt-3 border-t border-border/40">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    Snapshots ({snapshots.length})
+                  </span>
                 </div>
-
-                {groups.map(group => {
-                  const traits = traitWeights[group]
-                  if (!traits || typeof traits !== 'object') return null
-                  const entries = Object.entries(traits) as [string, number][]
-                  if (entries.length === 0) return null
-                  return (
-                    <div key={group} className="mb-3 last:mb-0">
-                      <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{groupLabels[group]}</div>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-                        {entries.map(([name, value]) => {
-                          const pct = Math.round(value * 100)
-                          return (
-                            <div key={name} className="flex items-center justify-between py-0.5">
-                              <span className="text-[11px] text-muted-foreground capitalize">{name.replace(/_/g, ' ')}</span>
-                              <span className={`text-[11px] font-mono font-semibold tabular-nums ${bgColor(pct)} px-1.5 py-0 rounded`}>{pct}</span>
-                            </div>
-                          )
-                        })}
+                <div className="flex items-center gap-2 mb-3">
+                  <Input
+                    value={snapshotName}
+                    onChange={e => setSnapshotName(e.target.value)}
+                    placeholder="Name this state..."
+                    className="h-7 text-[11px]"
+                    onKeyDown={e => { if (e.key === 'Enter') handleSaveSnapshot() }}
+                  />
+                  <Button size="sm" className="h-7 text-[11px] px-2 shrink-0" onClick={handleSaveSnapshot} disabled={!snapshotName.trim()}>
+                    <IconPlus className="w-3 h-3 mr-1" /> Save
+                  </Button>
+                </div>
+                {snapshots.length === 0 ? (
+                  <div className="text-[10px] text-muted-foreground">Save weight presets to switch between personalities quickly</div>
+                ) : (
+                  <div className="space-y-1">
+                    {snapshots.map(s => (
+                      <div key={s.name} className="flex items-center justify-between px-2 py-1.5 rounded bg-muted/30 hover:bg-muted/50 transition-colors">
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[11px] font-medium">{s.label || s.name}</span>
+                          {s.saved_at && (
+                            <span className="text-[9px] text-muted-foreground ml-2">
+                              {new Date(s.saved_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            className="text-[10px] text-primary hover:text-primary/80 px-1.5 py-0.5 rounded hover:bg-primary/10"
+                            onClick={() => handleLoadSnapshot(s.name)}
+                            title="Load this snapshot"
+                          >Load</button>
+                          <button
+                            type="button"
+                            className="text-[10px] text-red-400 hover:text-red-300 px-1.5 py-0.5 rounded hover:bg-red-500/10"
+                            onClick={() => handleDeleteSnapshot(s.name)}
+                            title="Delete snapshot"
+                          >Delete</button>
+                        </div>
                       </div>
-                    </div>
-                  )
-                })}
-
-                {/* ── Snapshots section ── */}
-                <div className="mt-4 pt-3 border-t border-border/40">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                      Snapshots ({snapshots.length})
-                    </span>
+                    ))}
                   </div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Input
-                      value={snapshotName}
-                      onChange={e => setSnapshotName(e.target.value)}
-                      placeholder="Name this state..."
-                      className="h-7 text-[11px]"
-                      onKeyDown={e => { if (e.key === 'Enter') handleSaveSnapshot() }}
-                    />
-                    <Button size="sm" className="h-7 text-[11px] px-2 shrink-0" onClick={handleSaveSnapshot} disabled={!snapshotName.trim()}>
-                      <IconPlus className="w-3 h-3 mr-1" /> Save
-                    </Button>
-                  </div>
-                  {snapshots.length === 0 ? (
-                    <div className="text-[10px] text-muted-foreground">Save weight presets to switch between personalities quickly</div>
-                  ) : (
-                    <div className="space-y-1">
-                      {snapshots.map(s => (
-                        <div key={s.name} className="flex items-center justify-between px-2 py-1.5 rounded bg-muted/30 hover:bg-muted/50 transition-colors">
-                          <div className="min-w-0 flex-1">
-                            <span className="text-[11px] font-medium">{s.label || s.name}</span>
-                            {s.saved_at && (
-                              <span className="text-[9px] text-muted-foreground ml-2">
-                                {new Date(s.saved_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              type="button"
-                              className="text-[10px] text-primary hover:text-primary/80 px-1.5 py-0.5 rounded hover:bg-primary/10"
-                              onClick={() => handleLoadSnapshot(s.name)}
-                              title="Load this snapshot"
-                            >Load</button>
-                            <button
-                              type="button"
-                              className="text-[10px] text-red-400 hover:text-red-300 px-1.5 py-0.5 rounded hover:bg-red-500/10"
-                              onClick={() => handleDeleteSnapshot(s.name)}
-                              title="Delete snapshot"
-                            >Delete</button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })()}
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* ── Model Catalog ── */}
         <Card>
@@ -490,8 +469,8 @@ export default function ModelsPage() {
                     <div
                       key={model.id}
                       className={cn(
-                        "flex items-center justify-between p-3 rounded-lg border transition-colors cursor-pointer",
-                        isLoaded ? "border-primary/40 bg-primary/5" : "border-border/60 hover:border-border"
+                        "flex items-center justify-between p-3 rounded-lg border cursor-pointer card-hover",
+                        isLoaded ? "border-primary/40 bg-primary/5" : "border-border/60"
                       )}
                       onClick={() => router.push(`/model/${encodeURIComponent(model.id)}`)}
                       onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/model/${encodeURIComponent(model.id)}`) }}

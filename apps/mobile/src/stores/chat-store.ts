@@ -82,7 +82,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     let sessionId = state.activeSessionId;
 
     if (!sessionId) {
-      sessionId = await get().createSession();
+      try {
+        sessionId = await get().createSession();
+      } catch {
+        set({error: 'Failed to create session. Check your connection.'});
+        return;
+      }
       if (!sessionId) return;
     }
 
@@ -108,35 +113,58 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     abortController = new AbortController();
     let accumulated = '';
-
     const settings = useSettingsStore.getState();
+    const body = {
+      messages: [...state.messages, userMsg].map(m => ({
+        role: m.role,
+        content: m.content,
+      })),
+      temperature: settings.temperature,
+      max_new_tokens: settings.maxTokens,
+    };
+
+    let retries = 0;
+    const maxRetries = 2;
+
+    const attemptStream = async (): Promise<boolean> => {
+      try {
+        for await (const event of streamSSE('/chat/stream', body, abortController!.signal)) {
+          if (event.token) {
+            accumulated += event.token;
+            set(s => ({
+              messages: s.messages.map(m =>
+                m.id === assistantMsg.id ? {...m, content: accumulated} : m,
+              ),
+            }));
+          }
+          if (event.error) {
+            if (retries < maxRetries) {
+              retries++;
+              await new Promise(r => setTimeout(r, 500 * retries));
+              return false;
+            }
+            set({error: event.error, streaming: false});
+            return true;
+          }
+          if (event.done) return true;
+        }
+        return true;
+      } catch (err: any) {
+        if (err.name === 'AbortError') return true;
+        if (retries < maxRetries) {
+          retries++;
+          await new Promise(r => setTimeout(r, 500 * retries));
+          return false;
+        }
+        set({error: err.message, streaming: false});
+        return true;
+      }
+    };
 
     try {
-      for await (const event of streamSSE(
-        '/chat/stream',
-        {
-          messages: [...state.messages, userMsg].map(m => ({
-            role: m.role,
-            content: m.content,
-          })),
-          temperature: settings.temperature,
-          max_new_tokens: settings.maxTokens,
-        },
-        abortController.signal,
-      )) {
-        if (event.token) {
-          accumulated += event.token;
-          set(s => ({
-            messages: s.messages.map(m =>
-              m.id === assistantMsg.id ? {...m, content: accumulated} : m,
-            ),
-          }));
-        }
-        if (event.error) {
-          set({error: event.error, streaming: false});
-          return;
-        }
-        if (event.done) break;
+      let done = false;
+      while (!done) {
+        done = await attemptStream();
       }
 
       api

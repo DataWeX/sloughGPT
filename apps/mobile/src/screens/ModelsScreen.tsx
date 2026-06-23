@@ -1,8 +1,9 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useState, useMemo} from 'react';
 import {
   View,
   Text,
   ScrollView,
+  TextInput,
   TouchableOpacity,
   StyleSheet,
   RefreshControl,
@@ -34,6 +35,18 @@ export function ModelsScreen() {
   } = useModelStore();
   const [refreshing, setRefreshing] = useState(false);
   const [detailModel, setDetailModel] = useState<ModelInfo | null>(null);
+  const [search, setSearch] = useState('');
+
+  const filteredModels = useMemo(() => {
+    if (!search.trim()) return models;
+    const q = search.toLowerCase();
+    return models.filter(m =>
+      m.name.toLowerCase().includes(q) ||
+      m.type.toLowerCase().includes(q) ||
+      (m.description || '').toLowerCase().includes(q) ||
+      (m.source || '').toLowerCase().includes(q)
+    );
+  }, [models, search]);
 
   useEffect(() => {
     refresh();
@@ -150,10 +163,22 @@ export function ModelsScreen() {
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Available Models</Text>
-          {models.length === 0 && !loading && (
-            <Text style={styles.empty}>No models found</Text>
+          {models.length > 3 && (
+            <TextInput
+              style={styles.searchInput}
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search models..."
+              placeholderTextColor={colors.textMuted}
+              returnKeyType="search"
+            />
           )}
-          {models.map(model => {
+          {filteredModels.length === 0 && !loading && (
+            <Text style={styles.empty}>
+              {search ? 'No models match your search' : 'No models found'}
+            </Text>
+          )}
+          {filteredModels.map(model => {
             const isLoading = loadingModelId === model.id;
             return (
               <TouchableOpacity
@@ -435,6 +460,15 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     paddingVertical: spacing.lg,
+  },
+  searchInput: {
+    ...typography.body,
+    color: colors.text,
+    backgroundColor: colors.background,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
   },
   // Modal
   modalOverlay: {

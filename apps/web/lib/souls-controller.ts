@@ -122,4 +122,8 @@ export const soulsController = {
     )
     return res.deleted
   },
+
+  async saveTraitWeights(weights: Record<string, Record<string, number>>): Promise<{ status: string }> {
+    return apiPost<{ status: string }>('/souls/weights', weights)
+  },
 }

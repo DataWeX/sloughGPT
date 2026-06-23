@@ -4,6 +4,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Button } from '@/components/ui/button'
 import { IconChevronDown, IconCheck } from '@/components/ui'
 import type { AgentDef } from '@/lib/agents'
+import { useChatToolbarContext } from '@/contexts/ChatToolbarContext'
 
 const AGENT_ICONS: Record<string, string> = {
   coder: '💻',
@@ -16,13 +17,9 @@ function getAgentIcon(agent: AgentDef): string {
   return agent.icon || AGENT_ICONS[agent.id] || '💬'
 }
 
-interface AgentSelectorDropdownProps {
-  agents: AgentDef[]
-  currentAgent: AgentDef | null
-  onSelect: (agent: AgentDef) => void
-}
-
-export function AgentSelectorDropdown({ agents, currentAgent, onSelect }: AgentSelectorDropdownProps) {
+export function AgentSelectorDropdown() {
+  const ctx = useChatToolbarContext()
+  const { agents, current: currentAgent, onSelect } = ctx.agent
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

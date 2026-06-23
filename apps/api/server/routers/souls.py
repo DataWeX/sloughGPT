@@ -7,7 +7,8 @@ mutable globals. Actual soul state lives in ``SloManager`` singleton.
 from dataclasses import dataclass
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
-from typing import Optional, Any
+from typing import Optional, Any, Dict
+from pydantic import BaseModel
 from pydantic import BaseModel
 import json, asyncio, numpy as np, logging
 
@@ -397,6 +398,41 @@ async def get_trait_weights():
         return weights
     except Exception as e:
         return {"error": str(e)}
+
+
+class SaveWeightsRequest(BaseModel):
+    """Request body for saving trait weights."""
+    personality: Optional[Dict[str, float]] = None
+    cognition: Optional[Dict[str, float]] = None
+    emotion: Optional[Dict[str, float]] = None
+
+
+@router.post("/weights")
+async def save_trait_weights(body: SaveWeightsRequest):
+    """
+    Save trait weights to the persistent config. Accepts a dict of trait
+    groups (personality, cognition, emotion) with trait name → 0.0–1.0 values.
+
+    Flattens the grouped structure and writes to TraitWeightsConfig. Returns
+    the merged current state after save.
+
+    Side effects:
+        - overwrites selected trait weights in persistent config
+        - does not modify soul files — only the live config overlay
+    """
+    try:
+        from domains.context.managers import get_trait_config
+        config = get_trait_config()
+        flat: Dict[str, float] = {}
+        for group in ("personality", "cognition", "emotion"):
+            traits = getattr(body, group, None)
+            if traits:
+                for k, v in traits.items():
+                    flat[k] = float(v)
+        config.set_many(flat)
+        return {"status": "saved"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
 
 @router.get("/weights/modes")

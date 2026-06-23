@@ -3,16 +3,12 @@
 import { Button } from '@/components/ui/button'
 import { IconRefresh } from '@/components/ui'
 import { Cpu, Server } from 'lucide-react'
+import { useChatToolbarContext } from '@/contexts/ChatToolbarContext'
 
-interface LocalEngineToggleProps {
-  visible: boolean
-  useLocalEngine: boolean
-  localEngineLoading: boolean
-  localArchInfo: string | null
-  onToggle: () => void
-}
-
-export function LocalEngineToggle({ visible, useLocalEngine, localEngineLoading, localArchInfo, onToggle }: LocalEngineToggleProps) {
+export function LocalEngineToggle() {
+  const ctx = useChatToolbarContext()
+  const { modelUrl, useLocal: useLocalEngine, loading: localEngineLoading, archInfo: localArchInfo, onToggle } = ctx.localEngine
+  const visible = !!modelUrl
   if (!visible) return null
 
   return (

@@ -111,7 +111,6 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         const rawPhase = raw.phase as string | undefined;
         const rawStatus = raw.status as string | undefined;
         const rawData = (raw.data || {}) as Record<string, any>;
-        const rawMeta = (raw.meta || {}) as Record<string, any>;
 
         if (rawPhase) {
           set({phase: rawPhase as TrainPhase});
@@ -155,13 +154,13 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
           if (rawData.checkpoint) {
             set({checkpoint: String(rawData.checkpoint)});
           }
-          set({phase: 'COMPLETE'});
+          set({phase: 'COMPLETE', running: false});
           break;
         }
 
         if (rawStatus === 'error') {
           const msg = raw.message || rawData.error || 'Training failed';
-          set({phase: 'FAILED', error: String(msg)});
+          set({phase: 'FAILED', error: String(msg), running: false});
           break;
         }
       }
@@ -169,7 +168,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
       get().refresh();
     } catch (err: any) {
       if (err.name !== 'AbortError') {
-        set({phase: 'FAILED', error: err.message});
+        set({phase: 'FAILED', error: err.message, running: false});
       }
     } finally {
       set({running: false});
