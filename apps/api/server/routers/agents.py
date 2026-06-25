@@ -5,7 +5,7 @@ Agents Router - Full CRUD for AI agent definitions with execution and orchestrat
 import json
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List
@@ -135,7 +135,7 @@ class OrchestrateRequest(BaseModel):
 
 
 @router.post("/orchestrate")
-async def orchestrate_agents(req: OrchestrateRequest):
+async def orchestrate_agents(req: OrchestrateRequest, request: Request):
     """Orchestrate multiple agents on a goal with SSE streaming.
 
     Streams plan → per-level task execution → composition → complete.
@@ -153,6 +153,9 @@ async def orchestrate_agents(req: OrchestrateRequest):
                 data={"goal": req.goal},
                 message="Planning orchestration...",
             )
+
+            if await request.is_disconnected():
+                return
 
             # Plan
             tasks = orch._plan(req.goal, req.context or "")
@@ -175,6 +178,9 @@ async def orchestrate_agents(req: OrchestrateRequest):
                 message=f"Planned {len(tasks)} subtasks",
             )
 
+            if await request.is_disconnected():
+                return
+
             # Execute level by level
             task_map = {t.id: t for t in tasks}
             levels = orch._compute_levels(tasks)
@@ -191,6 +197,9 @@ async def orchestrate_agents(req: OrchestrateRequest):
             from concurrent.futures import ThreadPoolExecutor, as_completed
 
             for level_idx, task_ids in enumerate(levels):
+                if await request.is_disconnected():
+                    return
+
                 yield sse_event(
                     stream="agent-orchestrate",
                     phase="EXECUTE",
@@ -244,6 +253,9 @@ async def orchestrate_agents(req: OrchestrateRequest):
                                 },
                                 message=f"Failed: {task.description}",
                             )
+
+                if await request.is_disconnected():
+                    return
 
             # Compose
             yield sse_event(
