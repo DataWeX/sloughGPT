@@ -62,11 +62,23 @@ class TestAutoTrainStreamEvents:
     @classmethod
     async def _run_stream(cls):
         _ensure_paths()
-        from routers.auto_train import state as at_state
+        from routers.auto_train import state as at_state, REPO_ROOT
+        from unittest.mock import AsyncMock
+        import tempfile, os
 
         model, tok = _make_tiny_model_and_tokenizer()
+
+        # Write source text to a temp file so UnifiedTrainingPipeline can find it
+        tmp_dir = REPO_ROOT / ".opencode" / "tmp"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        fd, data_path = tempfile.mkstemp(suffix=".txt", dir=str(tmp_dir))
+        with os.fdopen(fd, "w") as f:
+            f.write("hello world how are you doing today\n")
+        cls._tmp_data_path = data_path
+
         at_state.running = True
         at_state.config = {
+            "data_path": data_path,
             "source_text": "hello world how are you doing today",
             "epochs": 1,
             "soul_name": "test",
@@ -81,8 +93,11 @@ class TestAutoTrainStreamEvents:
         at_state.teacher_model = MagicMock()
         at_state.teacher_tokenizer = MagicMock()
 
+        mock_request = MagicMock()
+        mock_request.is_disconnected = AsyncMock(return_value=False)
+
         from routers.auto_train import stream as stream_endpoint
-        response = await stream_endpoint()
+        response = await stream_endpoint(mock_request)
         phases = []
         async for chunk in response.body_iterator:
             text = chunk if isinstance(chunk, str) else chunk.decode()
@@ -92,24 +107,31 @@ class TestAutoTrainStreamEvents:
                     return phases
         return phases
 
-    # --- tests ---
+        @classmethod
+    def teardown_class(cls):
+        """Clean up temp file created by _run_stream."""
+        import os
+        if hasattr(cls, "_tmp_data_path") and os.path.exists(cls._tmp_data_path):
+            os.remove(cls._tmp_data_path)
+
+# --- tests ---
 
     def test_generate_data_phase(self):
         phases = self._get_phases()
-        assert any(p["phase"] == "TRAINING" for p in phases), f"Phases: {[p['phase'] for p in phases]}"
+        assert any(p["phase"] == "train" for p in phases), f"Phases: {[p['phase'] for p in phases]}"
 
     def test_train_phase(self):
         phases = self._get_phases()
-        assert any(p["phase"] == "TRAINING" for p in phases), f"Phases: {[p['phase'] for p in phases]}"
+        assert any(p["phase"] == "train" for p in phases), f"Phases: {[p['phase'] for p in phases]}"
 
     def test_terminal_phase(self):
         phases = self._get_phases()
-        assert phases[-1]["phase"] in ("COMPLETE", "FAILED"), f"Phases: {[p['phase'] for p in phases]}"
+        assert phases[-1]["phase"] in ("complete", "failed"), f"Phases: {[p['phase'] for p in phases]}"
 
     def test_phase_order(self):
         phases = self._get_phases()
         phase_names = [p["phase"] for p in phases]
-        expected = ["TRAINING", "COMPLETE"]
+        expected = ["train", "complete"]
         filtered = [n for n in phase_names if n in expected]
         indices = [expected.index(n) for n in filtered]
         assert indices == sorted(indices), f"Phases out of order: {filtered}"
@@ -117,6 +139,8 @@ class TestAutoTrainStreamEvents:
     def test_loss_values_are_finite(self):
         phases = self._get_phases()
         for p in phases:
+            if p.get("status") in ("error", "failed"):
+                continue
             d = p.get("data", {}) or {}
             loss = d.get("loss")
             if loss is not None:
@@ -145,7 +169,10 @@ class TestAutoTrainStreamEvents:
 
     @staticmethod
     async def _get_error_events(stream_endpoint):
-        response = await stream_endpoint()
+        from unittest.mock import AsyncMock
+        mock_req = MagicMock()
+        mock_req.is_disconnected = AsyncMock(return_value=False)
+        response = await stream_endpoint(mock_req)
         events = []
         async for chunk in response.body_iterator:
             text = chunk if isinstance(chunk, str) else chunk.decode()

@@ -1,6 +1,7 @@
 # Xcode / iOS
 apps/mobile/ios/Pods/
 apps/mobile/ios/build/
+apps/mobile/ios/
 
 # SloughGPT Enterprise Framework
 __pycache__/
