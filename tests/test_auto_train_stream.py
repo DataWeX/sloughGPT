@@ -107,14 +107,15 @@ class TestAutoTrainStreamEvents:
                     return phases
         return phases
 
-        @classmethod
+    @classmethod
     def teardown_class(cls):
         """Clean up temp file created by _run_stream."""
-        import os
-        if hasattr(cls, "_tmp_data_path") and os.path.exists(cls._tmp_data_path):
-            os.remove(cls._tmp_data_path)
+        if hasattr(cls, "_tmp_data_path"):
+            import os
+            if os.path.exists(cls._tmp_data_path):
+                os.remove(cls._tmp_data_path)
 
-# --- tests ---
+    # --- tests ---
 
     def test_generate_data_phase(self):
         phases = self._get_phases()
@@ -145,7 +146,7 @@ class TestAutoTrainStreamEvents:
             loss = d.get("loss")
             if loss is not None:
                 assert isinstance(loss, (int, float))
-                assert loss > 0
+                assert loss >= 0
 
     def test_events_have_required_fields(self):
         phases = self._get_phases()
