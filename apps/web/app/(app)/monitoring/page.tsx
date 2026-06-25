@@ -9,7 +9,7 @@ import { StatCard, KpiGrid } from '@/components/ui/display'
 import { systemController, type DetailedHealth, type SystemMetrics, type SystemInfo, type DiskUsage, type GPUInfo } from '@/lib/system-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { benchmarkController } from '@/lib/benchmark-controller'
-import { multimodalController, type MultimodalCapabilities } from '@/lib/multimodal-controller'
+import { visualController } from '@/lib/controllers'
 import { useLocale } from '@/hooks/useLocale'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { formatUptime } from '@/lib/chat-utils'
@@ -37,7 +37,7 @@ export default function SystemHealthPage() {
   const [chartHistory, setChartHistory] = useState<Array<{ time: string; cpu: number; mem: number }>>([])
   const [dpoStatus, setDpoStatus] = useState<{ status: string; last_run: string | null; accepted_count: number; rejected_count: number; result: any } | null>(null)
   const [dpoRunning, setDpoRunning] = useState(false)
-  const [vlmStatus, setVlmStatus] = useState<{ vlm_loaded: boolean; training: { status: string } } | null>(null)
+  const [visualStatus, setVisualStatus] = useState<{ visual_loaded: boolean; training: { status: string } } | null>(null)
   const MAX_HISTORY = 30
 
   const fetchAll = useCallback(async (showRefreshing = false) => {
@@ -53,8 +53,8 @@ export default function SystemHealthPage() {
         knowledgeController.getAdapterStatus().catch(() => null),
         benchmarkController.quality().catch(() => null),
         benchmarkController.stats().catch(() => null),
-        fetch(`${PUBLIC_API_URL}/vlm/dpo/status`).then(r => r.json() as any).catch(() => null),
-        multimodalController.getVLMStatus().catch(() => null),
+        fetch(`${PUBLIC_API_URL}/visual/dpo/status`).then(r => r.json() as any).catch(() => null),
+        visualController.getVisualStatus().catch(() => null),
       ])
       setDetailed(d)
       setMetrics(m)
@@ -65,7 +65,7 @@ export default function SystemHealthPage() {
       setBenchQuality(bq && 'coherence_score' in bq ? { ...bq as any, status: 'ok', total_responses: 0, avg_length: 0, empty_rate: 0 } : null)
       setBenchStats(bs as any)
       setDpoStatus(dsRes)
-      setVlmStatus(vs ? { vlm_loaded: vs.loaded, training: { status: vs.model ? 'idle' : 'none' } } : null)
+      setVisualStatus(vs ? { visual_loaded: vs.loaded, training: { status: vs.model ? 'idle' : 'none' } } : null)
       setLastUpdated(new Date().toLocaleTimeString())
       if (m) {
         setChartHistory(prev => {
@@ -247,8 +247,8 @@ export default function SystemHealthPage() {
           </Card>
         )}
 
-        {/* DPO / VLM Training */}
-        {dpoStatus || vlmStatus ? (
+        {/* DPO / Visual Training */}
+        {dpoStatus || visualStatus ? (
           <Card>
             <CardHeader><CardTitle className="text-base">Model Training (Feedback + Vision model)</CardTitle></CardHeader>
             <CardContent>
@@ -271,16 +271,16 @@ export default function SystemHealthPage() {
                 />
                 <StatCard
                   label="Vision model loaded"
-                  value={vlmStatus ? (vlmStatus.vlm_loaded ? 'Yes' : 'No') : '...'}
+                  value={visualStatus ? (visualStatus.visual_loaded ? 'Yes' : 'No') : '...'}
                   icon={
-                    <span className={`inline-block w-2 h-2 rounded-full ${!vlmStatus ? 'bg-warning' : vlmStatus.vlm_loaded ? 'bg-success' : 'bg-muted-foreground/50'}`}
+                    <span className={`inline-block w-2 h-2 rounded-full ${!visualStatus ? 'bg-warning' : visualStatus.visual_loaded ? 'bg-success' : 'bg-muted-foreground/50'}`}
                     />
                   }
                 />
               </KpiGrid>
-              {vlmStatus?.training && (
+              {visualStatus?.training && (
                 <p className="text-xs text-muted-foreground mt-2">
-                  Vision model training: {vlmStatus.training.status}
+                  Vision model training: {visualStatus.training.status}
                 </p>
               )}
               {dpoStatus?.last_run && (
@@ -295,7 +295,7 @@ export default function SystemHealthPage() {
                   onClick={async () => {
                     setDpoRunning(true)
                     try {
-                      await apiPost('/vlm/dpo', {})
+                      await apiPost('/visual/dpo', {})
                       await fetchAll()
                     } catch {}
                     setDpoRunning(false)

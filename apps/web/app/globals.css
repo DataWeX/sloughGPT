@@ -60,6 +60,7 @@
   --sidebar-width: 15.75rem;
   /* Chat column max width — ~80ch at default scale; scales with font */
   --chat-thread-max: min(100%, 52rem);
+  --chat-bg: 246 242 237;
   color-scheme: light;
 
   /* Light — warm cream paper with violet undertone */
@@ -94,6 +95,7 @@
 
 html.dark {
   color-scheme: dark;
+  --chat-bg: 22 20 30;
   --background: 17 15 24;
   --foreground: 238 234 248;
   --card: 28 25 38;

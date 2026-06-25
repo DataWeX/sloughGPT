@@ -115,8 +115,8 @@ export const modelController = {
     return true
   },
 
-  async loadVLM(modelDir: string, modelId = 'vlm'): Promise<{ status: string; model_id: string; type: string; vision_encoder?: string; llm?: string }> {
-    return apiPost(`/models/vlm-load?model_dir=${encodeURIComponent(modelDir)}&model_id=${encodeURIComponent(modelId)}`)
+  async loadVisualModel(modelDir: string, modelId = 'visual'): Promise<{ status: string; model_id: string; type: string; vision_encoder?: string; llm?: string }> {
+    return apiPost(`/models/visual-load?model_dir=${encodeURIComponent(modelDir)}&model_id=${encodeURIComponent(modelId)}`)
   },
 }
 

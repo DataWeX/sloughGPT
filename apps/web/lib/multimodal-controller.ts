@@ -120,77 +120,7 @@ export const multimodalController = {
     return apiPost('/multimodal/synthesize-speech', fd, { raw: true })
   },
 
-  async createVLMDataset(name: string, imageDir: string, captionPrompt?: string, autoCaption = true): Promise<{ status: string; dataset: string; path: string; entries: number; auto_captioned: boolean }> {
-    return apiPost('/multimodal/vlm-dataset', {
-      name,
-      image_dir: imageDir,
-      caption_prompt: captionPrompt || 'Describe this image in detail.',
-      auto_caption: autoCaption,
-    })
-  },
-
-  async vlmInference(imageBase64: string, prompt?: string): Promise<{ text: string; tokens_generated: number; elapsed_ms: number }> {
-    return apiPost('/vlm/generate', {
-      image_base64: imageBase64,
-      prompt: prompt || 'Describe this image in detail.',
-      max_new_tokens: 256,
-      temperature: 0.7,
-      top_p: 0.9,
-    })
-  },
-
-  async getVLMStatus(): Promise<{ loaded: boolean; model?: string; vision_encoder?: string; llm?: string }> {
-    return apiGet('/vlm/status')
-  },
-
-  async startVLMTrain(data: {
-    data_path: string
-    stage1_epochs?: number
-    stage2_epochs?: number
-    batch_size?: number
-    learning_rate?: number
-    lora_rank?: number
-    output_dir?: string
-  }): Promise<{ status: string; job_id: string; data_path: string; output_dir: string }> {
-    return apiPost('/vlm/train', data)
-  },
-
-  async getVLMTrainStatus(): Promise<{
-    status: string
-    job_id: string | null
-    progress: number | null
-    current_stage: string | null
-    total_steps: number | null
-    current_step: number | null
-    current_loss: number | null
-    result: Record<string, unknown> | null
-    error: string | null
-  }> {
-    return apiGet('/vlm/train/status')
-  },
-
-  async loadVLMModel(modelDir?: string): Promise<{ status: string; message: string }> {
-    return apiPost('/vlm/load', { model_dir: modelDir || 'models/vlm-finetuned' })
-  },
-
-  async triggerDPO(data?: {
-    max_pairs?: number
-    learning_rate?: number
-  }): Promise<{ status: string; message: string; job_id: string }> {
-    return apiPost('/vlm/dpo', data || {})
-  },
-
-  async getDPOStatus(): Promise<{
-    status: string
-    last_run: string | null
-    result: Record<string, unknown> | null
-    accepted_count: number
-    rejected_count: number
-  }> {
-    return apiGet('/vlm/dpo/status')
-  },
-
-  async analyzeImage(file: File): Promise<{
+  async analyzeImage(file: File, prompt?: string): Promise<{
     caption: string
     confidence: number
     tags: string[]
@@ -203,6 +133,7 @@ export const multimodalController = {
   }> {
     const fd = new FormData()
     fd.append('file', file)
+    if (prompt) fd.append('prompt', prompt)
     return apiPost('/multimodal/analyze', fd, { raw: true })
   },
 

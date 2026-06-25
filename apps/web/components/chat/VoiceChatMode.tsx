@@ -1,222 +1,46 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef } from 'react'
-import { Button } from '@/components/ui/button'
-import { chatController } from '@/lib/chat-controller'
+import { useEffect, useState } from 'react'
+import { useVoiceChat } from '@/hooks/useVoiceChat'
 import { IconX, IconRefresh } from '@/components/ui'
-
-// ── Speech Recognition Types (local, no global conflicts) ─────────────────
-
-interface SRResult {
-  isFinal: boolean
-  [index: number]: { transcript: string; confidence: number }
-}
-
-interface SRResultList {
-  length: number
-  [index: number]: SRResult
-}
-
-interface SREvent extends Event {
-  results: SRResultList
-  resultIndex: number
-}
-
-interface SRInstance {
-  continuous: boolean
-  interimResults: boolean
-  lang: string
-  start(): void
-  stop(): void
-  abort(): void
-  onstart: (() => void) | null
-  onend: (() => void) | null
-  onerror: ((e: Event) => void) | null
-  onresult: ((e: SREvent) => void) | null
-}
-
-interface SRConstructor {
-  new (): SRInstance
-}
-
-// ── Voice Chat Mode Component ─────────────────────────────────────────────
 
 interface VoiceChatModeProps {
   onMessage: (text: string) => void
   onClose: () => void
 }
 
-const SILENCE_TIMEOUT = 2000
-
 export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
-  const [isListening, setIsListening] = useState(false)
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [interimText, setInterimText] = useState('')
-  const [finalText, setFinalText] = useState('')
-  const [responseText, setResponseText] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [pulsePhase, setPulsePhase] = useState(0)
+  const {
+    state,
+    interimText,
+    finalText,
+    responseText,
+    errorMessage,
+    handleToggle,
+    startListening,
+  } = useVoiceChat({ onMessage })
 
-  const recognitionRef = useRef<SRInstance | null>(null)
-  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pulseRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const isListeningRef = useRef(false)
-  const finalTextRef = useRef('')
-  const handleSubmitRef = useRef<(text: string) => Promise<void>>(null!)
-  const stopListeningRef = useRef<() => void>(null!)
+  const [pulsePhase, setPulsePhase] = useState(0)
+  const isListening = state === 'listening'
+  const isProcessing = state === 'processing'
+  const isSpeaking = state === 'speaking'
+
+  // Auto-start on mount
+  useEffect(() => { startListening() }, [startListening])
 
   // Pulse animation
   useEffect(() => {
-    if (isListening) {
-      pulseRef.current = setInterval(() => setPulsePhase(p => (p + 1) % 360), 50)
-    } else {
-      if (pulseRef.current) clearInterval(pulseRef.current)
-      setPulsePhase(0)
+    if (isListening || isSpeaking) {
+      const interval = setInterval(() => setPulsePhase(p => (p + 1) % 360), 50)
+      return () => clearInterval(interval)
     }
-    return () => { if (pulseRef.current) clearInterval(pulseRef.current) }
-  }, [isListening])
-
-  const resetSilenceTimer = useCallback((text: string) => {
-    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
-    silenceTimerRef.current = setTimeout(() => {
-      if (isListeningRef.current && text.trim()) {
-        stopListeningRef.current()
-        handleSubmitRef.current(text.trim())
-      }
-    }, SILENCE_TIMEOUT)
-  }, [])
-
-  const startListening = useCallback(() => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SR) {
-      setError('Speech recognition not supported — try Chrome or Safari')
-      return
-    }
-
-    setFinalText('')
-    finalTextRef.current = ''
-    setInterimText('')
-    setResponseText('')
-    setError(null)
-
-    const recognition: SRInstance = new SR()
-    recognition.continuous = true
-    recognition.interimResults = true
-    recognition.lang = 'en-US'
-
-    recognition.onstart = () => {
-      setIsListening(true)
-      isListeningRef.current = true
-    }
-
-    recognition.onend = () => {
-      setIsListening(false)
-      isListeningRef.current = false
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
-    }
-
-    recognition.onerror = (e: Event) => {
-      const type = (e as any)?.error || 'unknown'
-      if (type === 'not-allowed') {
-        setError('Microphone access denied')
-      } else if (type !== 'aborted') {
-        setError(`Speech error: ${type}`)
-      }
-      setIsListening(false)
-      isListeningRef.current = false
-    }
-
-    recognition.onresult = (event: SREvent) => {
-      let interim = ''
-      let final = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i]
-        if (result.isFinal) {
-          final += result[0].transcript
-        } else {
-          interim += result[0].transcript
-        }
-      }
-      if (final) {
-        const newFinal = finalTextRef.current + final
-        finalTextRef.current = newFinal
-        setFinalText(newFinal)
-        setInterimText('')
-        resetSilenceTimer(newFinal)
-      }
-      if (interim) {
-        setInterimText(interim)
-        resetSilenceTimer(finalTextRef.current + interim)
-      }
-    }
-
-    recognitionRef.current = recognition
-    recognition.start()
-  }, [resetSilenceTimer])
-
-  const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop()
-      recognitionRef.current = null
-    }
-    isListeningRef.current = false
-    setIsListening(false)
-    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
-  }, [])
-
-  const handleSubmit = useCallback(async (text: string) => {
-    if (!text || isProcessing) return
-    setIsProcessing(true)
-    setResponseText('')
-    setError(null)
-
-    onMessage(text)
-
-    try {
-      let fullResponse = ''
-      for await (const token of chatController.stream(text)) {
-        fullResponse += token
-        setResponseText(fullResponse)
-      }
-    } catch (e: any) {
-      setError(e.message || 'Generation failed')
-    } finally {
-      setIsProcessing(false)
-      // Auto-resume listening after response
-      setTimeout(() => startListening(), 500)
-    }
-  }, [isProcessing, onMessage, startListening])
-
-  // Keep refs in sync with latest callbacks (breaks circular dep in resetSilenceTimer)
-  useEffect(() => { handleSubmitRef.current = handleSubmit }, [handleSubmit])
-  useEffect(() => { stopListeningRef.current = stopListening }, [stopListening])
-
-  const handleToggle = useCallback(() => {
-    if (isListening) {
-      stopListening()
-    } else if (!isProcessing) {
-      startListening()
-    }
-  }, [isListening, isProcessing, startListening, stopListening])
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      stopListening()
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
-    }
-  }, [stopListening])
-
-  // Auto-start on mount
-  useEffect(() => {
-    startListening()
-  }, [startListening])
+    setPulsePhase(0)
+  }, [isListening, isSpeaking])
 
   const hasInterim = interimText.length > 0
 
   return (
     <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col items-center justify-center">
-      {/* Close button */}
       <button
         onClick={onClose}
         className="absolute top-4 right-4 p-2 rounded-full hover:bg-muted transition-colors"
@@ -225,11 +49,9 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
         <IconX className="h-5 w-5" />
       </button>
 
-      {/* Main content */}
       <div className="flex flex-col items-center gap-8 max-w-lg w-full px-6">
-        {/* Listening orb */}
+        {/* Orb */}
         <div className="relative">
-          {/* Pulse rings */}
           {isListening && (
             <>
               <div
@@ -249,7 +71,25 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
             </>
           )}
 
-          {/* Main button */}
+          {isSpeaking && (
+            <>
+              <div
+                className="absolute inset-0 rounded-full border-2 border-success/30"
+                style={{
+                  transform: `scale(${1 + Math.sin(pulsePhase * Math.PI / 180) * 0.2})`,
+                  opacity: 0.6,
+                }}
+              />
+              <div
+                className="absolute inset-0 rounded-full border border-success/20"
+                style={{
+                  transform: `scale(${1 + Math.sin((pulsePhase + 180) * Math.PI / 180) * 0.35})`,
+                  opacity: 0.3,
+                }}
+              />
+            </>
+          )}
+
           <button
             onClick={handleToggle}
             disabled={isProcessing}
@@ -267,6 +107,10 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
           >
             {isProcessing ? (
               <IconRefresh className="h-8 w-8 animate-spin" />
+            ) : isSpeaking ? (
+              <svg className="h-10 w-10" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+              </svg>
             ) : (
               <svg className="h-10 w-10" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
@@ -283,9 +127,11 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
               ? 'Listening...'
               : isProcessing
                 ? 'Thinking...'
-                : responseText
-                  ? 'Tap to continue'
-                  : 'Tap microphone to start'
+                : isSpeaking
+                  ? 'Speaking...'
+                  : responseText
+                    ? 'Tap to continue'
+                    : 'Tap microphone to start'
             }
           </p>
           {hasInterim && (
@@ -299,21 +145,20 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
           )}
         </div>
 
-        {/* Response display */}
+        {/* Response */}
         {responseText && (
           <div className="w-full bg-muted/50 rounded-xl p-4 text-sm leading-relaxed max-h-48 overflow-y-auto">
             {responseText}
           </div>
         )}
 
-        {/* Error display */}
-        {error && (
+        {/* Error */}
+        {errorMessage && (
           <div className="w-full bg-error/10 text-error rounded-xl p-4 text-sm text-center">
-            {error}
+            {errorMessage}
           </div>
         )}
 
-        {/* Instructions */}
         <p className="text-xs text-muted-foreground/60 text-center">
           Speak naturally — auto-sends after 2s of silence.
           <br />

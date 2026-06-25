@@ -53,7 +53,7 @@ describe('ChatScreen', () => {
   it('shows thinking indicator when loading and last message is user', () => {
     const messages = [msg('m1', 'user', 'Tell me something')]
     render(<ChatScreen messages={messages} loading={true} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
-    expect(screen.getByText(/Thinking/)).toBeDefined()
+    expect(screen.getByText('Reasoning')).toBeDefined()
   })
 
   it('shows suggestion buttons after assistant message', () => {

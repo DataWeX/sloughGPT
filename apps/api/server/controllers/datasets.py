@@ -41,12 +41,12 @@ class DatasetsController:
                 except Exception:
                     pass
 
-            # Detect VLM dataset from metadata marker
-            vlm_meta_path = d / ".vlm_metadata.json"
-            if vlm_meta_path.exists():
+            # Detect Visual dataset from metadata marker
+            visual_meta_path = d / ".visual_metadata.json"
+            if visual_meta_path.exists():
                 try:
-                    vlm_meta = json.loads(vlm_meta_path.read_text())
-                    dataset_type = "vlm"
+                    visual_meta = json.loads(visual_meta_path.read_text())
+                    dataset_type = "visual"
                 except Exception:
                     dataset_type = "corpus" if has_corpus else "text"
             else:
@@ -65,10 +65,10 @@ class DatasetsController:
                 "description": self._describe_dataset(d, [], size) if (corpus_file.exists() or input_file.exists()) else "",
             }
 
-            # Attach VLM metadata if present
-            if vlm_meta_path.exists() and dataset_type == "vlm":
+            # Attach Visual metadata if present
+            if visual_meta_path.exists() and dataset_type == "visual":
                 try:
-                    dataset["vlm_metadata"] = json.loads(vlm_meta_path.read_text())
+                    dataset["visual_metadata"] = json.loads(visual_meta_path.read_text())
                 except Exception:
                     pass
             
@@ -311,9 +311,9 @@ class DatasetsController:
         if not data_file.exists():
             return None
 
-        # Check for VLM metadata
-        vlm_meta_path = path / ".vlm_metadata.json"
-        is_vlm = vlm_meta_path.exists()
+        # Check for Visual metadata
+        visual_meta_path = path / ".visual_metadata.json"
+        is_visual = visual_meta_path.exists()
 
         samples = []
         total_count = 0
@@ -330,15 +330,15 @@ class DatasetsController:
                 except json.JSONDecodeError:
                     obj = {"text": line}
 
-                if is_vlm:
-                    # VLM entries have image_path + conversations
+                if is_visual:
+                    # Visual entries have image_path + conversations
                     img_path = obj.get("image_path", "")
                     convs = obj.get("conversations", [])
                     human = next((c["value"] for c in convs if c.get("from") == "human"), "")
                     gpt = next((c["value"] for c in convs if c.get("from") == "gpt"), "")
                     samples.append({
                         "path": img_path,
-                        "language": "vlm",
+                        "language": "visual",
                         "content": f"[IMG: {img_path}] Q: {human} A: {gpt[:120]}" + ("..." if len(gpt) > 120 else ""),
                         "size": len(gpt),
                     })
@@ -356,7 +356,7 @@ class DatasetsController:
             "samples": samples,
             "total_samples": total_count,
             "total_chars": sum(s.get("size", 0) for s in samples),
-            "languages": {"vlm": total_count} if is_vlm else {"text": total_count},
+            "languages": {"visual": total_count} if is_visual else {"text": total_count},
         }
 
     def export_dataset(self, dataset_id: str, format: str = "jsonl") -> Optional[Path]:

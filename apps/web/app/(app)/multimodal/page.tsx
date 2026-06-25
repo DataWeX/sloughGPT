@@ -10,7 +10,8 @@ import { Label } from '@/components/ui/label'
 import { StatCard, KpiGrid, Skeleton, ProgressBar } from '@/components/ui'
 import { IconRefresh, IconUpload, IconTrash, IconCheck } from '@/components/ui'
 import { cn } from '@/lib/cn'
-import { multimodalController, type MultimodalCapabilities, type TrainingReport, type TrainingStatus } from '@/lib/multimodal-controller'
+import { multimodalController, visualController } from '@/lib/controllers'
+import type { MultimodalCapabilities, TrainingReport, TrainingStatus } from '@/lib/multimodal-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
@@ -23,8 +24,8 @@ export default function MultimodalPage() {
   const [uploading, setUploading] = useState(false)
   const [batchUploading, setBatchUploading] = useState(false)
   const [batchDirPath, setBatchDirPath] = useState('')
-  const [vlmDatasetName, setVlmDatasetName] = useState('')
-  const [vlmImageDir, setVlmImageDir] = useState('')
+  const [visualDatasetName, setVisualDatasetName] = useState('')
+  const [visualImageDir, setVisualImageDir] = useState('')
   const [creatingDataset, setCreatingDataset] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [generatedImage, setGeneratedImage] = useState<string | null>(null)
@@ -33,20 +34,20 @@ export default function MultimodalPage() {
   const [transcript, setTranscript] = useState<string | null>(null)
   const [synthesizing, setSynthesizing] = useState(false)
   const [synthText, setSynthText] = useState('')
-  const [vlmInferring, setVlmInferring] = useState(false)
-  const [vlmOutput, setVlmOutput] = useState<string | null>(null)
-  const [vlmPrompt, setVlmPrompt] = useState('Describe this image in detail.')
-  const [vlmLoaded, setVlmLoaded] = useState(false)
-  const [vlmTrainDataPath, setVlmTrainDataPath] = useState('')
-  const [vlmTraining, setVlmTraining] = useState(false)
-  const [vlmTrainStatus, setVlmTrainStatus] = useState<string>('idle')
-  const [vlmTrainProgress, setVlmTrainProgress] = useState<number | null>(null)
-  const [vlmTrainCurrentStage, setVlmTrainCurrentStage] = useState<string | null>(null)
-  const [vlmTrainLoss, setVlmTrainLoss] = useState<number | null>(null)
-  const [vlmTrainResult, setVlmTrainResult] = useState<any>(null)
-  const [vlmTrainError, setVlmTrainError] = useState<string | null>(null)
-  const [vlmModelDir, setVlmModelDir] = useState('models/vlm-finetuned')
-  const [vlmLoadLoading, setVlmLoadLoading] = useState(false)
+  const [visualInferring, setVisualInferring] = useState(false)
+  const [visualOutput, setVisualOutput] = useState<string | null>(null)
+  const [visualPrompt, setVisualPrompt] = useState('Describe this image in detail.')
+  const [visualLoaded, setVisualLoaded] = useState(false)
+  const [visualTrainDataPath, setVisualTrainDataPath] = useState('')
+  const [visualTraining, setVisualTraining] = useState(false)
+  const [visualTrainStatus, setVisualTrainStatus] = useState<string>('idle')
+  const [visualTrainProgress, setVisualTrainProgress] = useState<number | null>(null)
+  const [visualTrainCurrentStage, setVisualTrainCurrentStage] = useState<string | null>(null)
+  const [visualTrainLoss, setVisualTrainLoss] = useState<number | null>(null)
+  const [visualTrainResult, setVisualTrainResult] = useState<any>(null)
+  const [visualTrainError, setVisualTrainError] = useState<string | null>(null)
+  const [visualModelDir, setVisualModelDir] = useState('models/visual-finetuned')
+  const [visualLoadLoading, setVisualLoadLoading] = useState(false)
   const [dpoRunning, setDpoRunning] = useState(false)
   const [dpoStatus, setDpoStatus] = useState<string>('idle')
   const [dpoResult, setDpoResult] = useState<any>(null)
@@ -54,31 +55,43 @@ export default function MultimodalPage() {
   const [dpoLastRun, setDpoLastRun] = useState<string | null>(null)
   const [dpoAccepted, setDpoAccepted] = useState(0)
   const [dpoRejected, setDpoRejected] = useState(0)
-  const vlmImageInputRef = useRef<HTMLInputElement>(null)
-  const [vlmImageBase64, setVlmImageBase64] = useState<string | null>(null)
+  const [visualCheckpoints, setVisualCheckpoints] = useState<any[]>([])
+  const [ckptLoading, setCkptLoading] = useState(false)
+  const [deletingCkpt, setDeletingCkpt] = useState<string | null>(null)
+  const [loadingCkpt, setLoadingCkpt] = useState<string | null>(null)
+  const visualImageInputRef = useRef<HTMLInputElement>(null)
+  const [visualImageBase64, setVisualImageBase64] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const batchFileInputRef = useRef<HTMLInputElement>(null)
   const audioInputRef = useRef<HTMLInputElement>(null)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
+  const fetchCheckpoints = useCallback(async () => {
+    try {
+      const res = await visualController.listCheckpoints()
+      setVisualCheckpoints(res.checkpoints || [])
+    } catch { /* ignore */ }
+  }, [])
+
   const fetchAll = useCallback(async () => {
     try {
-      const [c, r, s, vlmStatus] = await Promise.all([
+      const [c, r, s, visualStatus] = await Promise.all([
         multimodalController.getCapabilities(),
         multimodalController.getTrainingReport().catch(() => null),
         multimodalController.getTrainingStatus().catch(() => null),
-        multimodalController.getVLMStatus().catch(() => ({ loaded: false })),
+        visualController.getVisualStatus().catch(() => ({ loaded: false })),
       ])
       setCaps(c)
       setReport(r)
       setTrainStatus(s)
-      setVlmLoaded(vlmStatus.loaded)
+      setVisualLoaded(visualStatus.loaded)
+      fetchCheckpoints()
     } catch {
       addToast('Failed to load data', 'error')
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [addToast, fetchCheckpoints])
 
   const startPolling = useCallback(() => {
     if (pollIntervalRef.current) return
@@ -170,17 +183,17 @@ export default function MultimodalPage() {
     }
   }
 
-  const handleCreateVLMDataset = async () => {
-    if (!vlmDatasetName.trim() || !vlmImageDir.trim()) return
+  const handleCreateVisualDataset = async () => {
+    if (!visualDatasetName.trim() || !visualImageDir.trim()) return
     setCreatingDataset(true)
     try {
-      const result = await multimodalController.createVLMDataset(
-        vlmDatasetName.trim(),
-        vlmImageDir.trim(),
+      const result = await visualController.createVisualDataset(
+        visualDatasetName.trim(),
+        visualImageDir.trim(),
       )
       addToast(`Dataset "${result.dataset}" created: ${result.entries} entries`, 'success')
-      setVlmDatasetName('')
-      setVlmImageDir('')
+      setVisualDatasetName('')
+      setVisualImageDir('')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Dataset creation failed'
       addToast(msg, 'error')
@@ -189,20 +202,20 @@ export default function MultimodalPage() {
     }
   }
 
-  const pollVLMTrain = useCallback(async () => {
+  const pollVisualTrain = useCallback(async () => {
     try {
-      const status = await multimodalController.getVLMTrainStatus()
-      setVlmTrainStatus(status.status)
-      setVlmTrainProgress(status.progress)
-      setVlmTrainCurrentStage(status.current_stage)
-      setVlmTrainLoss(status.current_loss)
+      const status = await visualController.getVisualTrainStatus()
+      setVisualTrainStatus(status.status)
+      setVisualTrainProgress(status.progress)
+      setVisualTrainCurrentStage(status.current_stage)
+      setVisualTrainLoss(status.current_loss)
       if (status.status === 'completed') {
-        setVlmTrainResult(status.result)
-        setVlmTraining(false)
-        addToast('VLM training complete', 'success')
+        setVisualTrainResult(status.result)
+        setVisualTraining(false)
+        addToast('Visual training complete', 'success')
       } else if (status.status === 'error') {
-        setVlmTrainError(status.error || 'Training failed')
-        setVlmTraining(false)
+        setVisualTrainError(status.error || 'Training failed')
+        setVisualTraining(false)
         addToast(status.error || 'Training failed', 'error')
       }
     } catch {
@@ -211,52 +224,52 @@ export default function MultimodalPage() {
   }, [addToast])
 
   useEffect(() => {
-    if (vlmTrainStatus === 'running') {
-      const interval = setInterval(pollVLMTrain, 3000)
+    if (visualTrainStatus === 'running') {
+      const interval = setInterval(pollVisualTrain, 3000)
       return () => clearInterval(interval)
     }
-  }, [vlmTrainStatus, pollVLMTrain])
+  }, [visualTrainStatus, pollVisualTrain])
 
-  const handleVLMTrain = async () => {
-    if (!vlmTrainDataPath.trim() || vlmTraining) return
-    setVlmTraining(true)
-    setVlmTrainResult(null)
-    setVlmTrainError(null)
-    setVlmTrainStatus('running')
+  const handleVisualTrain = async () => {
+    if (!visualTrainDataPath.trim() || visualTraining) return
+    setVisualTraining(true)
+    setVisualTrainResult(null)
+    setVisualTrainError(null)
+    setVisualTrainStatus('running')
     try {
-      const dataPath = vlmTrainDataPath.trim().startsWith('/')
-        ? vlmTrainDataPath.trim()
-        : `datasets/${vlmTrainDataPath.trim().replace(/^datasets\//, '')}/corpus.jsonl`
-      const result = await multimodalController.startVLMTrain({
+      const dataPath = visualTrainDataPath.trim().startsWith('/')
+        ? visualTrainDataPath.trim()
+        : `datasets/${visualTrainDataPath.trim().replace(/^datasets\//, '')}/corpus.jsonl`
+      const result = await visualController.startVisualTrain({
         data_path: dataPath,
       })
-      addToast(`VLM training started: ${result.job_id}`, 'success')
+      addToast(`Visual training started: ${result.job_id}`, 'success')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Training failed'
-      setVlmTrainError(msg)
-      setVlmTrainStatus('error')
-      setVlmTraining(false)
+      setVisualTrainError(msg)
+      setVisualTrainStatus('error')
+      setVisualTraining(false)
       addToast(msg, 'error')
     }
   }
 
-  const handleVLMLoad = async () => {
-    setVlmLoadLoading(true)
+  const handleVisualLoad = async () => {
+    setVisualLoadLoading(true)
     try {
-      const result = await multimodalController.loadVLMModel(vlmModelDir.trim() || undefined)
-      setVlmLoaded(true)
+      const result = await visualController.loadVisualModel(visualModelDir.trim() || undefined)
+      setVisualLoaded(true)
       addToast(result.message || 'Model loaded', 'success')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Loading failed'
       addToast(msg, 'error')
     } finally {
-      setVlmLoadLoading(false)
+      setVisualLoadLoading(false)
     }
   }
 
   const pollDPOStatus = useCallback(async () => {
     try {
-      const s = await multimodalController.getDPOStatus()
+      const s = await visualController.getDPOStatus()
       setDpoStatus(s.status)
       setDpoLastRun(s.last_run)
       setDpoAccepted(s.accepted_count)
@@ -291,7 +304,7 @@ export default function MultimodalPage() {
     setDpoResult(null)
     setDpoStatus('running')
     try {
-      const result = await multimodalController.triggerDPO()
+      const result = await visualController.triggerDPO()
       addToast(`DPO training started: ${result.job_id || result.status}`, 'success')
       setDpoStatus('running')
     } catch (err: unknown) {
@@ -347,32 +360,32 @@ export default function MultimodalPage() {
     }
   }
 
-  const handleVLMImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVisualImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
     reader.onload = () => {
       const dataUrl = reader.result as string
-      setVlmImageBase64(dataUrl)
+      setVisualImageBase64(dataUrl)
       addToast(`Selected "${file.name}"`, 'info')
     }
     reader.readAsDataURL(file)
   }
 
-  const handleVLMInfer = async () => {
-    if (!vlmImageBase64) { addToast('Select an image first', 'error'); return }
-    setVlmInferring(true)
-    setVlmOutput(null)
+  const handleVisualInfer = async () => {
+    if (!visualImageBase64) { addToast('Select an image first', 'error'); return }
+    setVisualInferring(true)
+    setVisualOutput(null)
     try {
-      const base64 = vlmImageBase64.split(',')[1] || vlmImageBase64
-      const result = await multimodalController.vlmInference(base64, vlmPrompt)
-      setVlmOutput(result.text)
+      const base64 = visualImageBase64.split(',')[1] || visualImageBase64
+      const result = await visualController.visualInference(base64, visualPrompt)
+      setVisualOutput(result.text)
       addToast(`Generated ${result.tokens_generated} tokens in ${(result.elapsed_ms / 1000).toFixed(1)}s`, 'success')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Something went wrong'
       addToast(msg, 'error')
     } finally {
-      setVlmInferring(false)
+      setVisualInferring(false)
     }
   }
 
@@ -382,7 +395,7 @@ export default function MultimodalPage() {
     { label: 'Vision model', ok: !!caps.vision_model },
     { label: 'Speech model', ok: !!caps.speech_model },
     { label: 'Trained', ok: caps.trained },
-    { label: 'Vision model loaded', ok: vlmLoaded },
+    { label: 'Vision model loaded', ok: visualLoaded },
   ] : []
 
   return (
@@ -573,47 +586,47 @@ export default function MultimodalPage() {
               </CardContent>
             </Card>
 
-            {/* VLM Dataset Creation */}
+            {/* Visual Dataset Creation */}
             <Card>
               <CardHeader><CardTitle className="text-base">Image description dataset</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-xs text-muted-foreground">Create a training dataset from a folder of images. The AI writes descriptions for each image automatically.</p>
                 <div className="flex items-center gap-2">
                   <Input
-                    value={vlmDatasetName}
-                    onChange={e => setVlmDatasetName(e.target.value)}
+                    value={visualDatasetName}
+                    onChange={e => setVisualDatasetName(e.target.value)}
                     placeholder="Dataset name"
                     className="h-8 text-xs flex-1"
-                    aria-label="VLM dataset name"
+                    aria-label="Visual dataset name"
                   />
                   <Input
-                    value={vlmImageDir}
-                    onChange={e => setVlmImageDir(e.target.value)}
+                    value={visualImageDir}
+                    onChange={e => setVisualImageDir(e.target.value)}
                     placeholder="/path/to/images"
                     className="h-8 text-xs flex-1"
-                    aria-label="Image directory for VLM dataset"
+                    aria-label="Image directory for visual dataset"
                   />
                 </div>
                 <Button
                   size="sm"
                   className="h-8 text-xs"
-                  onClick={handleCreateVLMDataset}
-                  disabled={!vlmDatasetName.trim() || !vlmImageDir.trim() || creatingDataset}
+                  onClick={handleCreateVisualDataset}
+                  disabled={!visualDatasetName.trim() || !visualImageDir.trim() || creatingDataset}
                 >
                   {creatingDataset ? 'Creating…' : 'Create dataset'}
                 </Button>
               </CardContent>
             </Card>
 
-            {/* VLM Training */}
+            {/* Visual Training */}
             <Card>
               <CardHeader><CardTitle className="text-base">Train vision model</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                <p className="text-xs text-muted-foreground">Train a vision-language model on an image description dataset created above.</p>
+                <p className="text-xs text-muted-foreground">Train a visual model on an image description dataset created above.</p>
                 <div className="flex items-center gap-2">
                   <Input
-                    value={vlmTrainDataPath}
-                    onChange={e => setVlmTrainDataPath(e.target.value)}
+                    value={visualTrainDataPath}
+                    onChange={e => setVisualTrainDataPath(e.target.value)}
                     placeholder="datasets/my-dataset/corpus.jsonl"
                     className="h-8 text-xs flex-1"
                     aria-label="Training data path"
@@ -621,61 +634,61 @@ export default function MultimodalPage() {
                   <Button
                     size="sm"
                     className="h-8 text-xs shrink-0"
-                    onClick={handleVLMTrain}
-                    disabled={!vlmTrainDataPath.trim() || vlmTraining || vlmTrainStatus === 'running'}
+                    onClick={handleVisualTrain}
+                    disabled={!visualTrainDataPath.trim() || visualTraining || visualTrainStatus === 'running'}
                   >
-                    {vlmTraining || vlmTrainStatus === 'running' ? 'Training…' : 'Start training'}
+                    {visualTraining || visualTrainStatus === 'running' ? 'Training…' : 'Start training'}
                   </Button>
                 </div>
-                {vlmTrainStatus === 'running' && (
+                {visualTrainStatus === 'running' && (
                   <div className="space-y-1 pt-1">
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{vlmTrainCurrentStage || 'Training…'}</span>
-                      {vlmTrainLoss !== null && <span>Loss: {vlmTrainLoss.toFixed(4)}</span>}
+                      <span>{visualTrainCurrentStage || 'Training…'}</span>
+                      {visualTrainLoss !== null && <span>Loss: {visualTrainLoss.toFixed(4)}</span>}
                     </div>
                     <ProgressBar
-                      value={vlmTrainProgress || 0}
+                      value={visualTrainProgress || 0}
                       max={100}
                       variant="default"
                     />
                   </div>
                 )}
-                {vlmTrainResult && (
+                {visualTrainResult && (
                   <div className="p-2 rounded bg-success/10 border border-success/20 text-xs text-success">
                     Training complete
                   </div>
                 )}
-                {vlmTrainError && (
+                {visualTrainError && (
                   <div className="p-2 rounded bg-destructive/10 border border-destructive/20 text-xs text-destructive">
-                    {vlmTrainError}
+                    {visualTrainError}
                   </div>
                 )}
               </CardContent>
             </Card>
 
-            {/* VLM Model Load */}
+            {/* Visual Model Load */}
             <Card>
               <CardHeader><CardTitle className="text-base">Load trained model</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                <p className="text-xs text-muted-foreground">Load a trained vision-language model for inference testing.</p>
+                <p className="text-xs text-muted-foreground">Load a trained visual model for inference testing.</p>
                 <div className="flex items-center gap-2">
                   <Input
-                    value={vlmModelDir}
-                    onChange={e => setVlmModelDir(e.target.value)}
-                    placeholder="models/vlm-finetuned"
+                    value={visualModelDir}
+                    onChange={e => setVisualModelDir(e.target.value)}
+                    placeholder="models/visual-finetuned"
                     className="h-8 text-xs flex-1"
                     aria-label="Model directory"
                   />
                   <Button
                     size="sm"
                     className="h-8 text-xs shrink-0"
-                    onClick={handleVLMLoad}
-                    disabled={vlmLoadLoading}
+                    onClick={handleVisualLoad}
+                    disabled={visualLoadLoading}
                   >
-                    {vlmLoadLoading ? 'Loading…' : 'Load model'}
+                    {visualLoadLoading ? 'Loading…' : 'Load model'}
                   </Button>
                 </div>
-                {vlmLoaded && (
+                {visualLoaded && (
                   <p className="text-xs text-success flex items-center gap-1">
                     <IconCheck className="h-3.5 w-3.5" />
                     Vision model loaded and ready for inference
@@ -684,7 +697,76 @@ export default function MultimodalPage() {
               </CardContent>
             </Card>
 
-            {/* VLM DPO */}
+            {/* Visual Checkpoints */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Visual Checkpoints</CardTitle>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => { setCkptLoading(true); fetchCheckpoints().finally(() => setCkptLoading(false)) }}>
+                    <IconRefresh className="h-3.5 w-3.5" />
+                    Refresh
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {visualCheckpoints.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No checkpoints saved yet.</p>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {visualCheckpoints.map((cp: any) => (
+                      <div key={cp.name} className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-xs">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium truncate">{cp.name}</p>
+                          <p className="text-muted-foreground">
+                            {cp.llm || '—'} · {cp.final_loss != null ? `loss ${cp.final_loss.toFixed(4)}` : ''}{cp.total_steps ? ` · ${cp.total_steps} steps` : ''}{cp.mean_accuracy != null ? ` · acc ${(cp.mean_accuracy * 100).toFixed(0)}%` : ''}{cp.size_mb ? ` · ${cp.size_mb.toFixed(1)} MB` : ''}
+                          </p>
+                          {cp.description && <p className="text-muted-foreground truncate mt-0.5">{cp.description}</p>}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs"
+                            onClick={async () => {
+                              setLoadingCkpt(cp.name)
+                              try {
+                                const res = await visualController.loadCheckpoint(cp.name)
+                                addToast(`Checkpoint "${res.name}" loaded`, 'success')
+                                fetchCheckpoints()
+                              } catch { addToast('Failed to load checkpoint', 'error') }
+                              finally { setLoadingCkpt(null) }
+                            }}
+                            disabled={loadingCkpt === cp.name}
+                          >
+                            {loadingCkpt === cp.name ? '…' : 'Load'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs text-error"
+                            onClick={async () => {
+                              if (!window.confirm(`Delete checkpoint "${cp.name}"?`)) return
+                              setDeletingCkpt(cp.name)
+                              try {
+                                await visualController.deleteCheckpoint(cp.name)
+                                addToast('Checkpoint deleted', 'success')
+                                fetchCheckpoints()
+                              } catch { addToast('Failed to delete checkpoint', 'error') }
+                              finally { setDeletingCkpt(null) }
+                            }}
+                            disabled={deletingCkpt === cp.name}
+                          >
+                            {deletingCkpt === cp.name ? '…' : <IconTrash className="h-3.5 w-3.5" />}
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Visual DPO */}
             <Card>
               <CardHeader><CardTitle className="text-base">DPO fine-tune</CardTitle></CardHeader>
               <CardContent className="space-y-3">
@@ -739,13 +821,13 @@ export default function MultimodalPage() {
               </CardContent>
             </Card>
 
-            {/* VLM Inference */}
+            {/* Visual Inference */}
             <Card>
               <CardHeader><CardTitle className="text-base">Test the vision model</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-xs text-muted-foreground">
                   Upload an image and ask a question about it.
-                  {vlmLoaded ? (
+                  {visualLoaded ? (
                     <span className="text-success ml-1">Vision model is loaded.</span>
                   ) : (
                     <span className="text-muted-foreground ml-1">Train a vision model on the Training page first.</span>
@@ -756,45 +838,45 @@ export default function MultimodalPage() {
                     variant="outline"
                     size="sm"
                     className="h-8 text-xs"
-                    onClick={() => vlmImageInputRef.current?.click()}
-                    disabled={!vlmLoaded || vlmInferring}
+                    onClick={() => visualImageInputRef.current?.click()}
+                    disabled={!visualLoaded || visualInferring}
                   >
                     <IconUpload className="h-3.5 w-3.5 mr-1" />
-                    {vlmImageBase64 ? 'Change image' : 'Select image'}
+                    {visualImageBase64 ? 'Change image' : 'Select image'}
                   </Button>
                   <input
-                    ref={vlmImageInputRef}
+                    ref={visualImageInputRef}
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={handleVLMImageSelect}
+                    onChange={handleVisualImageSelect}
                   />
                 </div>
-                {vlmImageBase64 && (
+                {visualImageBase64 && (
                   <div className="flex items-center gap-2">
-                    <img src={vlmImageBase64} alt="Selected" className="h-16 w-16 rounded object-cover border border-border/50" />
+                    <img src={visualImageBase64} alt="Selected" className="h-16 w-16 rounded object-cover border border-border/50" />
                     <span className="text-xs text-muted-foreground">Image selected for inference</span>
                   </div>
                 )}
                 <div className="flex items-center gap-2">
                   <Input
-                    value={vlmPrompt}
-                    onChange={e => setVlmPrompt(e.target.value)}
+                    value={visualPrompt}
+                    onChange={e => setVisualPrompt(e.target.value)}
                     placeholder="Describe this image in detail..."
                     className="h-8 text-xs flex-1"
                   />
                   <Button
                     size="sm"
                     className="h-8 text-xs shrink-0"
-                    onClick={handleVLMInfer}
-                    disabled={!vlmLoaded || !vlmImageBase64 || vlmInferring}
+                    onClick={handleVisualInfer}
+                    disabled={!visualLoaded || !visualImageBase64 || visualInferring}
                   >
-                    {vlmInferring ? 'Generating…' : 'Generate'}
+                    {visualInferring ? 'Generating…' : 'Generate'}
                   </Button>
                 </div>
-                {vlmOutput && (
+                {visualOutput && (
                   <div className="rounded-md border border-border/40 bg-muted/30 p-3 text-xs leading-relaxed max-h-48 overflow-y-auto">
-                    {vlmOutput}
+                    {visualOutput}
                   </div>
                 )}
               </CardContent>

@@ -1,10 +1,18 @@
 """
-Agents Router - Full CRUD for AI agent definitions with execution.
+Agents Router - Full CRUD for AI agent definitions with execution and orchestration.
 """
 
+import json
+import logging
+
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List
+
+from domains.api.sse_envelope import sse_event, sse_complete, sse_error
+
+logger = logging.getLogger("man.routers.agents")
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -116,3 +124,155 @@ async def execute_agent(agent_id: str, req: ExecuteRequest):
     if "error" in result:
         raise HTTPException(status_code=404, detail=result["error"])
     return result
+
+
+# ── Orchestration ─────────────────────────────────────────────────────
+
+
+class OrchestrateRequest(BaseModel):
+    goal: str = Field(..., min_length=1, description="The goal for multi-agent orchestration")
+    context: str = Field(default="", description="Additional context for the orchestrator")
+
+
+@router.post("/orchestrate")
+async def orchestrate_agents(req: OrchestrateRequest):
+    """Orchestrate multiple agents on a goal with SSE streaming.
+
+    Streams plan → per-level task execution → composition → complete.
+    Tasks without dependencies run in parallel within each level.
+    """
+    from domains.agents.multi import MultiAgentOrchestrator
+
+    async def event_stream():
+        try:
+            orch = MultiAgentOrchestrator()
+            yield sse_event(
+                stream="agent-orchestrate",
+                phase="PLAN",
+                status="working",
+                data={"goal": req.goal},
+                message="Planning orchestration...",
+            )
+
+            # Plan
+            tasks = orch._plan(req.goal, req.context or "")
+            if not tasks:
+                yield sse_event(
+                    stream="agent-orchestrate",
+                    phase="PLAN",
+                    status="error",
+                    data={"error": "Could not plan this goal"},
+                    message="Planning failed",
+                )
+                return
+
+            task_dicts = [t.to_dict() for t in tasks]
+            yield sse_event(
+                stream="agent-orchestrate",
+                phase="PLAN",
+                status="success",
+                data={"tasks": task_dicts, "task_count": len(tasks)},
+                message=f"Planned {len(tasks)} subtasks",
+            )
+
+            # Execute level by level
+            task_map = {t.id: t for t in tasks}
+            levels = orch._compute_levels(tasks)
+            results_ctx: dict = {}
+
+            yield sse_event(
+                stream="agent-orchestrate",
+                phase="EXECUTE",
+                status="working",
+                data={"levels": len(levels)},
+                message="Starting execution",
+            )
+
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+
+            for level_idx, task_ids in enumerate(levels):
+                yield sse_event(
+                    stream="agent-orchestrate",
+                    phase="EXECUTE",
+                    status="working",
+                    data={"level": level_idx, "tasks": task_ids},
+                    message=f"Executing level {level_idx + 1}/{len(levels)} ({len(task_ids)} tasks)",
+                )
+
+                with ThreadPoolExecutor(max_workers=len(task_ids)) as pool:
+                    future_map = {}
+                    for tid in task_ids:
+                        task = task_map[tid]
+                        task.status = "in_progress"
+                        dep_context = orch._build_dep_context(task, task_map, results_ctx)
+                        future = pool.submit(orch._run_agent, task, req.goal, dep_context)
+                        future_map[future] = task
+
+                    for future in as_completed(future_map):
+                        task = future_map[future]
+                        try:
+                            result = future.result()
+                            task.result = result
+                            task.status = "completed"
+                            results_ctx[task.id] = result
+                            yield sse_event(
+                                stream="agent-orchestrate",
+                                phase="EXECUTE",
+                                status="success",
+                                data={
+                                    "task_id": task.id,
+                                    "agent": task.assigned_agent,
+                                    "description": task.description,
+                                    "result_preview": result[:200],
+                                },
+                                message=f"Completed: {task.description}",
+                            )
+                        except Exception as e:
+                            error = str(e)
+                            task.error = error
+                            task.status = "failed"
+                            results_ctx[task.id] = f"[error: {error}]"
+                            yield sse_event(
+                                stream="agent-orchestrate",
+                                phase="EXECUTE",
+                                status="error",
+                                data={
+                                    "task_id": task.id,
+                                    "agent": task.assigned_agent,
+                                    "description": task.description,
+                                    "error": error,
+                                },
+                                message=f"Failed: {task.description}",
+                            )
+
+            # Compose
+            yield sse_event(
+                stream="agent-orchestrate",
+                phase="COMPOSE",
+                status="working",
+                message="Composing final response...",
+            )
+
+            final = orch._compose(req.goal, tasks)
+
+            yield sse_complete(
+                stream="agent-orchestrate",
+                phase="COMPLETE",
+                data={
+                    "response": final,
+                    "tasks": [t.to_dict() for t in tasks],
+                    "completed": sum(1 for t in tasks if t.status == "completed"),
+                    "failed": sum(1 for t in tasks if t.status == "failed"),
+                },
+                message="Orchestration complete",
+            )
+
+        except Exception as e:
+            logger.exception("Orchestration error")
+            yield sse_error(
+                stream="agent-orchestrate",
+                phase="ERROR",
+                error=str(e),
+            )
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")

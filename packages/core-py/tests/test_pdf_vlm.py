@@ -13,7 +13,7 @@ class TestPDFVLMAPISchemas:
     """Test PDF-related Pydantic schemas (fast, no models)."""
 
     def test_pdf_analysis_request_defaults(self):
-        from apps.api.server.routers.vlm import PDFAnalysisRequest
+        from apps.api.server.routers.visual import PDFAnalysisRequest
         req = PDFAnalysisRequest(pdf_path="/tmp/test.pdf")
         assert req.pdf_path == "/tmp/test.pdf"
         assert req.question == "Summarize this document."
@@ -21,7 +21,7 @@ class TestPDFVLMAPISchemas:
         assert req.max_new_tokens == 512
 
     def test_pdf_analysis_request_overrides(self):
-        from apps.api.server.routers.vlm import PDFAnalysisRequest
+        from apps.api.server.routers.visual import PDFAnalysisRequest
         req = PDFAnalysisRequest(
             pdf_path="/data/doc.pdf",
             question="What are the key findings?",

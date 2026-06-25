@@ -239,11 +239,16 @@ def _autoload_model(cfg: ServerConfig):
             max_concurrent=1,
             generate_timeout=120.0,
         )
-        from domains.models.provider import register_provider, HFModelProvider
+        from domains.models.provider import register_provider, HFModelProvider, ProviderRouter, VisionProcessor
         model_server = registry.get(cfg.autoload_model)
         provider = HFModelProvider(model, tokenizer, model_id_str=cfg.autoload_model, model_server=model_server)
         register_provider("hf-default", provider)
-        logger.info("Autoload: registered with ModelRegistry + provider")
+
+        router = ProviderRouter()
+        router.add_processor(VisionProcessor("multimodal"))
+        router.set_text_provider("hf-default")
+        register_provider("default", router)
+        logger.info("Autoload: registered with ModelRegistry + provider + default router")
     except Exception as e:
         logger.warning("Autoload: registry registration failed: %s", e)
 

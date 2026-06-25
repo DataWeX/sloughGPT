@@ -5,13 +5,15 @@ Agent System - CRUD management for agent definitions.
 import json
 import logging
 import os
-from typing import Dict, List, Optional, Any
+from typing import Callable, Dict, List, Optional, Any
 
 from . import Agent, AgentConfig, ToolCapability, get_agent
 
 logger = logging.getLogger("man.agents")
 
 AGENTS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "data", "agents")
+
+_API_BASE = "http://localhost:8000"
 
 
 def _ensure_dir():
@@ -23,12 +25,12 @@ def _path(name: str) -> str:
 
 
 DEFAULT_AGENTS: Dict[str, Dict[str, Any]] = {
-    "assistant": {
-        "name": "Assistant",
+    "general": {
+        "name": "General",
         "description": "General purpose AI assistant",
         "instructions": "You are a helpful AI assistant. Answer questions clearly and concisely.",
-        "tools": ["memory", "file_search"],
-        "avatar": "A",
+        "tools": ["memory"],
+        "avatar": "G",
     },
     "coder": {
         "name": "Coder",
@@ -51,7 +53,30 @@ DEFAULT_AGENTS: Dict[str, Dict[str, Any]] = {
         "tools": ["memory"],
         "avatar": "W",
     },
+    "analyst": {
+        "name": "Analyst",
+        "description": "Data analysis and structured reasoning",
+        "instructions": "You are a data analyst. Break down complex problems and present findings clearly.",
+        "tools": ["memory", "file_search"],
+        "avatar": "A",
+    },
 }
+
+
+def _default_inference_fn(prompt: str, max_tokens: int = 200) -> Dict[str, Any]:
+    """Default inference function calling the local API."""
+    try:
+        import requests
+        r = requests.post(f"{_API_BASE}/inference/generate", json={
+            "prompt": prompt,
+            "max_new_tokens": max_tokens,
+            "temperature": 0.7,
+        }, timeout=30)
+        if r.status_code == 200:
+            return r.json()
+        return {"error": f"HTTP {r.status_code}"}
+    except Exception as e:
+        return {"error": str(e)}
 
 
 class AgentSystem:
@@ -62,6 +87,7 @@ class AgentSystem:
     def __init__(self):
         _ensure_dir()
         self._agent = get_agent()
+        self._agent.set_inference_fn(_default_inference_fn)
         self._load_defaults()
 
     def _load_defaults(self):
@@ -97,6 +123,13 @@ class AgentSystem:
             return None
         return {"id": agent_id, **data}
 
+    def get_instructions(self, agent_id: str) -> str:
+        """Get the system instructions for an agent (for chat injection)."""
+        data = self._load(agent_id)
+        if data is None:
+            return ""
+        return data.get("instructions", "")
+
     def create(self, agent_id: str, name: str, description: str,
                instructions: str = "", tools: Optional[List[str]] = None,
                avatar: str = "") -> dict:
@@ -131,16 +164,22 @@ class AgentSystem:
         return False
 
     async def execute(self, agent_id: str, request: str, session_id: str = "",
-                user_id: str = "default") -> dict:
+                      user_id: str = "default") -> dict:
         """Execute an agent on a user request."""
         agent_data = self.get(agent_id)
         if agent_data is None:
             return {"error": f"Agent '{agent_id}' not found", "success": False}
 
-        tools = agent_data.get("tools", [])
-        config = AgentConfig(tools=[ToolCapability(t) for t in tools if t in [c.value for c in ToolCapability]])
-        self._agent.config = config
-        return await self._agent.execute(request, session_id, user_id)
+        # Build fresh config per call (thread-safe)
+        tool_names = agent_data.get("tools", [])
+        tools = [ToolCapability(t) for t in tool_names if t in [c.value for c in ToolCapability]]
+        config = AgentConfig(
+            tools=tools,
+            instructions=agent_data.get("instructions", ""),
+        )
+        # Create a fresh Agent with per-call config to avoid shared-state races
+        fresh_agent = Agent(config=config, inference_fn=self._agent._inference_fn)
+        return await fresh_agent.execute(request, session_id, user_id)
 
 
 _default_system: Optional[AgentSystem] = None

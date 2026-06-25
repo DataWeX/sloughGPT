@@ -6,4 +6,5 @@ export interface ChatMessage {
   content: string
   timestamp: Date
   images?: ImageAttachment[]
+  isError?: boolean
 }

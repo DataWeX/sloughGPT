@@ -12,6 +12,7 @@ export interface Conversation {
   updated_at: string
   pinned: boolean
   starred: boolean
+  archived?: boolean
   message_count: number
   messages?: Array<{ id: string; role: string; content: string; timestamp?: string | number }>
   user_id?: string
@@ -21,6 +22,21 @@ export interface Conversation {
   updatedAt?: string
 }
 
+export interface SearchMatch {
+  role: string
+  content: string
+  timestamp: string
+}
+
+export interface SearchResult {
+  id: string
+  name: string
+  created_at: string
+  updated_at: string
+  match_count: number
+  matches: SearchMatch[]
+}
+
 export interface Session {
   id: string
   name: string
@@ -28,14 +44,20 @@ export interface Session {
   updated_at: string
   starred?: boolean
   pinned?: boolean
+  archived?: boolean
   messages?: Array<{ id?: string; role: string; content: string; timestamp?: string }>
   source?: string
 }
 
 export const sessionController = {
-  async list(): Promise<Session[]> {
-    const data = await apiGet<{ sessions: Session[] }>('/chat/sessions')
+  async list(archived?: boolean): Promise<Session[]> {
+    const suffix = archived !== undefined ? `?archived=${archived}` : ''
+    const data = await apiGet<{ sessions: Session[] }>(`/chat/sessions${suffix}`)
     return data.sessions || []
+  },
+
+  async listArchived(): Promise<Session[]> {
+    return sessionController.list(true)
   },
 
   async getCurrent(): Promise<Session | null> {
@@ -58,12 +80,18 @@ export const sessionController = {
     return apiPost<Session>('/chat/sessions', { name, session_id: id })
   },
 
-  async update(id: string, data: { name?: string; starred?: boolean; pinned?: boolean }): Promise<void> {
+  async update(id: string, data: { name?: string; starred?: boolean; pinned?: boolean; archived?: boolean }): Promise<void> {
     await apiPut(`/chat/sessions/${id}`, data)
   },
 
   async delete(id: string): Promise<void> {
     await apiDelete(`/chat/sessions/${id}`)
+  },
+
+  async search(q: string, limit = 20): Promise<SearchResult[]> {
+    if (!q.trim()) return []
+    const data = await apiGet<{ results: SearchResult[] }>(`/chat/sessions/search?q=${encodeURIComponent(q)}&limit=${limit}`)
+    return data.results || []
   },
 
   async saveContext(id: string, messages: { role: string; content: string }[]): Promise<void> {

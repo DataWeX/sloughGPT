@@ -13,7 +13,7 @@ class DatasetInfo(BaseModel):
     size_bytes: int = 0
     size_formatted: str = "Empty"
     num_samples: int = 0
-    vlm_metadata: Optional[Dict[str, Any]] = None
+    visual_metadata: Optional[Dict[str, Any]] = None
 
 
 class DatasetCreate(BaseModel):

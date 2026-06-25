@@ -362,6 +362,7 @@ class AgentConfig:
     security: Optional[SecurityConfig] = None
     max_iterations: int = 10
     timeout: int = 120
+    instructions: str = ""
 
 
 class Agent:
@@ -371,13 +372,22 @@ class Agent:
     The agent uses ToolRunner internally, tools are NOT
     exposed via API. Frontend sends requests to agent,
     agent decides which tools to use.
+    
+    When an ``inference_fn`` is provided, ``_plan_execution`` uses LLM-based
+    reasoning to plan tool usage. Falls back to keyword matching otherwise.
     """
     
-    def __init__(self, config: Optional[AgentConfig] = None):
+    def __init__(self, config: Optional[AgentConfig] = None,
+                 inference_fn: Optional[Callable] = None):
         self.config = config or AgentConfig()
         security = SecurityBoundary(self.config.security)
         self._runner = ToolRunner(security)
+        self._inference_fn = inference_fn
         self._sessions: Dict[str, Dict[str, Any]] = {}
+    
+    def set_inference_fn(self, fn: Callable) -> None:
+        """Set or replace the inference function for LLM planning."""
+        self._inference_fn = fn
     
     async def execute(
         self,
@@ -410,14 +420,33 @@ class Agent:
                 "result": result,
             })
         
-        # Generate response
-        response = self._compose_response(user_request, results)
+        # Generate response (use inference if no tools ran)
+        if not results and self._inference_fn:
+            response = self._generate_response(user_request, context)
+        else:
+            response = self._compose_response(user_request, results)
         
         return {
             "response": response,
             "tools_used": results,
             "session_id": session_id,
         }
+    
+    def _generate_response(self, request: str, context: ToolExecutionContext) -> str:
+        """Generate a response via LLM when no tools are needed."""
+        try:
+            agent_instructions = getattr(self.config, 'instructions', '')
+            system = f"You are an AI assistant.\n{agent_instructions}" if agent_instructions else "You are an AI assistant."
+            prompt = f"{system}\n\nUser: {request}\nAssistant:"
+            result = self._inference_fn(prompt)
+            if isinstance(result, dict) and "text" in result:
+                return result["text"]
+            if isinstance(result, str):
+                return result
+            return str(result)
+        except Exception as e:
+            logger.warning("Inference failed: %s", e)
+            return self._compose_response(request, [])
     
     def _get_session(
         self,
@@ -440,16 +469,22 @@ class Agent:
         """
         Plan which tools to use.
         
-        This would be enhanced with actual LLM reasoning.
-        For now, simple keyword matching.
+        Uses LLM reasoning when ``inference_fn`` is available,
+        falls back to keyword matching otherwise.
         """
+        if self._inference_fn:
+            return await self._plan_with_llm(request)
+        return self._plan_with_keywords(request)
+    
+    def _plan_with_keywords(
+        self,
+        request: str,
+    ) -> List[tuple[str, Dict[str, Any]]]:
+        """Plan tools using simple keyword matching."""
         plan = []
         lower = request.lower()
         
-        # Simple planning based on keywords
-        # In production, this uses LLM to decide
         if "code" in lower or "execute" in lower or "run" in lower:
-            # Look for code blocks
             code_match = re.search(r"```(\w+)?\n(.+?)```", request, re.DOTALL)
             if code_match:
                 plan.append((
@@ -466,13 +501,45 @@ class Agent:
                 ))
         
         if "cite" in lower or "source" in lower:
-            # Would extract sources from context
             plan.append((
                 ToolCapability.CITATION.value,
                 {"text": request, "sources": []},
             ))
         
         return plan
+    
+    async def _plan_with_llm(
+        self,
+        request: str,
+    ) -> List[tuple[str, Dict[str, Any]]]:
+        """Plan tools using LLM reasoning."""
+        tool_names = [c.value for c in ToolCapability]
+        prompt = (
+            f"Given this user request, decide which tools (if any) to use.\n"
+            f"Available tools: {', '.join(tool_names)}\n"
+            f"User request: {request}\n"
+            f"Return a JSON array of {{'tool': str, 'args': dict}} objects, "
+            f"or an empty array [] if no tools are needed.\n"
+            f"Return ONLY the JSON, no other text."
+        )
+        try:
+            resp = self._inference_fn(prompt)
+            text = resp.get("text", "") if isinstance(resp, dict) else str(resp)
+            text = text.strip()
+            # Extract JSON array
+            match = re.search(r"\[.*?\]", text, re.DOTALL)
+            if match:
+                plan = json.loads(match.group())
+            else:
+                return []
+            return [
+                (item["tool"], item.get("args", {}))
+                for item in plan
+                if isinstance(item, dict) and "tool" in item
+            ]
+        except Exception as e:
+            logger.warning("LLM planning failed: %s", e)
+            return self._plan_with_keywords(request)
     
     def _compose_response(
         self,

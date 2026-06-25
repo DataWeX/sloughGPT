@@ -36,11 +36,13 @@ export function CommandPalette() {
       { id: 'nav-training', label: 'Teach me', description: 'Teach your agent new things', icon: '🎓', category: 'navigation', run: () => router.push('/training') },
       { id: 'nav-datasets', label: 'Datasets', description: 'Manage training data', icon: '📊', category: 'navigation', run: () => router.push('/datasets') },
       { id: 'nav-knowledge', label: 'Knowledge', description: 'Agent memory', icon: '📚', category: 'navigation', run: () => router.push('/knowledge') },
+      { id: 'nav-vision', label: 'Vision Studio', description: 'Image analysis and generation', icon: '🎨', category: 'navigation', run: () => router.push('/vision') },
       { id: 'nav-settings', label: 'Settings', description: 'App settings', icon: '⚙️', category: 'navigation', run: () => router.push('/settings') },
       { id: 'nav-advanced', label: 'Advanced', description: 'Monitoring, tokenizer, benchmarks', icon: '🔧', category: 'navigation', run: () => router.push('/monitoring') },
     ]
     const acts: CommandAction[] = [
       { id: 'act-newchat', label: 'New Chat', description: 'Start a new conversation', icon: '➕', category: 'action', run: () => { window.dispatchEvent(new CustomEvent('new-chat')); router.push('/chat') } },
+      { id: 'act-search', label: 'Search Conversations', description: 'Search across all conversations', icon: '🔍', category: 'action', run: () => { setOpen(false); window.dispatchEvent(new CustomEvent('search-conversations')) } },
     ]
     const conv: CommandAction[] = recentSessions.map(s => ({
       id: `conv-${s.id}`, label: s.name, description: 'Open conversation', icon: '💭', category: 'conversation' as const, run: () => router.push(`/chat?session=${s.id}`),

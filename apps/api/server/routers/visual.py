@@ -1,13 +1,19 @@
 """
-VLM Router — Vision-Language Model inference + DPO training endpoints.
+Visual Router — Visual AI inference + DPO training + video training endpoints.
 
 Provides:
-- ``POST /vlm/generate`` — image-conditioned text generation
-- ``POST /vlm/dpo`` — trigger DPO training on the active HF model
-- ``GET /vlm/status`` — VLM and DPO status
+- ``POST /visual/generate`` — image-conditioned text generation
+- ``POST /visual/dpo`` — trigger DPO training on the active HF model
+- ``GET /visual/status`` — Visual AI and DPO status
+- ``POST /visual/train-video`` — start video captioning training
+- ``GET /visual/train-video/status`` — poll video training progress
+- ``POST /visual/video-infer`` — generate caption from video file
 
 DPO training uses feedback from the chat (thumbs up/down) to fine-tune
 the active HuggingFace model (Qwen) with LoRA adapters.
+
+Video training uses SloNet-based VideoCaptionTrainer to learn from
+video → caption pairs in JSONL format.
 """
 
 from __future__ import annotations
@@ -25,9 +31,9 @@ import torch
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger("man.vlm_router")
+logger = logging.getLogger("man.visual_router")
 
-router = APIRouter(prefix="/vlm", tags=["vlm"])
+router = APIRouter(prefix="/visual", tags=["visual"])
 
 # ── Global state ───────────────────────────────────────────────────
 _vlm_inference = None
@@ -94,6 +100,20 @@ class PDFAnalysisRequest(BaseModel):
     temperature: float = Field(0.7, ge=0.0, le=2.0)
 
 
+class VideoTrainRequest(BaseModel):
+    data_path: str = Field(..., description="Path to JSONL with {video_path, caption} entries")
+    epochs: int = Field(5, ge=1, le=100)
+    batch_size: int = Field(2, ge=1, le=16)
+    learning_rate: float = Field(3e-4, ge=1e-6, le=1.0)
+    output_dir: str = Field("models/video-training", description="Output directory for checkpoints")
+
+
+class VideoInferRequest(BaseModel):
+    video_path: str = Field(..., description="Server path to video file")
+    max_len: int = Field(50, ge=10, le=200)
+    temperature: float = Field(0.8, ge=0.0, le=2.0)
+
+
 _TRAINING_STATE = {
     "status": "idle",
     "job_id": None,
@@ -102,6 +122,18 @@ _TRAINING_STATE = {
     "error": None,
 }
 _training_lock = Lock()
+
+_VIDEO_TRAINING_STATE = {
+    "status": "idle",
+    "job_id": None,
+    "current_epoch": 0,
+    "current_step": 0,
+    "total_steps": 0,
+    "current_loss": None,
+    "result": None,
+    "error": None,
+}
+_video_training_lock = Lock()
 
 
 # ── Helpers ────────────────────────────────────────────────────────
@@ -263,7 +295,7 @@ async def load_vlm(req: VLMLoadRequest):
     containing ``vlm_config.json``, ``connector.pt``, and ``final/``.
 
     Registers the VLM both as:
-    - ``_vlm_inference`` for ``/vlm/generate`` endpoint
+    - ``_vlm_inference`` for ``/visual/generate`` endpoint
     - ``VLMProvider`` for chat via the default provider router
     """
     global _vlm_inference
@@ -331,7 +363,7 @@ async def analyze_pdf(req: PDFAnalysisRequest):
             )
             return {"status": "ok", "analysis": text}
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="VLM checkpoint not found. Train a VLM model first via /vlm/train.")
+        raise HTTPException(status_code=404, detail="Visual checkpoint not found. Train a Visual AI model first via /visual/train.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -378,7 +410,7 @@ async def analyze_pdf_upload(
             )
             return {"status": "ok", "analysis": text}
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="VLM checkpoint not found. Train a VLM model first via /vlm/train.")
+        raise HTTPException(status_code=404, detail="Visual checkpoint not found. Train a Visual AI model first via /visual/train.")
     finally:
         if tmp_path.exists():
             tmp_path.unlink()
@@ -388,7 +420,7 @@ async def analyze_pdf_upload(
 async def train_vlm(req: VLMTrainRequest):
     """Start VLM training in background. Returns job ID and status.
 
-    Training runs in a daemon thread. Poll ``GET /vlm/train/status``
+    Training runs in a daemon thread. Poll ``GET /visual/train/status``
     for progress.
 
     The dataset at ``data_path`` must be a JSONL file with:
@@ -456,6 +488,137 @@ async def train_status():
         }
 
 
+# ── Video Training Endpoints ──────────────────────────────────────────
+
+
+@router.post("/train-video")
+async def train_video(req: VideoTrainRequest):
+    """Start video captioning training in background.
+
+    Training runs on a daemon thread. Poll ``GET /visual/train-video/status``
+    for progress.
+
+    The dataset at ``data_path`` must be a JSONL file with:
+      ``{"video_path": "/path/to/video.mp4", "caption": "description"}``
+    """
+    with _video_training_lock:
+        if _VIDEO_TRAINING_STATE["status"] == "running":
+            raise HTTPException(status_code=409, detail="Video training already in progress")
+        _VIDEO_TRAINING_STATE["status"] = "running"
+        _VIDEO_TRAINING_STATE["error"] = None
+        _VIDEO_TRAINING_STATE["result"] = None
+
+    job_id = f"video_{int(time.time())}"
+    _VIDEO_TRAINING_STATE["job_id"] = job_id
+    total_steps = [0]
+
+    def _progress(epoch, step, loss, total):
+        total_steps[0] = total
+        with _video_training_lock:
+            _VIDEO_TRAINING_STATE["current_epoch"] = epoch
+            _VIDEO_TRAINING_STATE["current_step"] = step
+            _VIDEO_TRAINING_STATE["total_steps"] = total
+            _VIDEO_TRAINING_STATE["current_loss"] = float(loss)
+
+    def _run():
+        try:
+            from domains.training.video_trainer import VideoCaptionTrainer
+
+            trainer = VideoCaptionTrainer(
+                max_frames=8,
+                lr=req.learning_rate,
+            )
+            result = trainer.train(
+                data_path=req.data_path,
+                epochs=req.epochs,
+                batch_size=req.batch_size,
+                lr=req.learning_rate,
+                output_dir=req.output_dir,
+                progress_callback=_progress,
+            )
+            with _video_training_lock:
+                _VIDEO_TRAINING_STATE["status"] = "completed" if result.get("status") == "completed" else "error"
+                _VIDEO_TRAINING_STATE["result"] = result
+            logger.info("Video training %s: %s", result.get("status"), req.data_path)
+        except Exception as e:
+            with _video_training_lock:
+                _VIDEO_TRAINING_STATE["status"] = "error"
+                _VIDEO_TRAINING_STATE["error"] = str(e)
+            logger.error("Video training failed: %s", e)
+
+    import threading
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+
+    return {
+        "status": "started",
+        "job_id": job_id,
+        "data_path": req.data_path,
+        "output_dir": req.output_dir,
+    }
+
+
+@router.get("/train-video/status")
+async def train_video_status():
+    """Get video training status."""
+    with _video_training_lock:
+        return {
+            "status": _VIDEO_TRAINING_STATE["status"],
+            "job_id": _VIDEO_TRAINING_STATE["job_id"],
+            "current_epoch": _VIDEO_TRAINING_STATE["current_epoch"],
+            "current_step": _VIDEO_TRAINING_STATE["current_step"],
+            "total_steps": _VIDEO_TRAINING_STATE["total_steps"],
+            "current_loss": _VIDEO_TRAINING_STATE["current_loss"],
+            "result": _VIDEO_TRAINING_STATE["result"],
+            "error": _VIDEO_TRAINING_STATE["error"],
+        }
+
+
+@router.post("/video-infer")
+async def video_infer(req: VideoInferRequest):
+    """Generate a caption for a video file on the server.
+
+    Uses the latest trained video checkpoint. Returns the generated
+    caption text.
+    """
+    try:
+        from domains.training.video_trainer import VideoCaptionTrainer, list_video_checkpoints
+
+        checkpoints = list_video_checkpoints()
+        if not checkpoints:
+            # Try default output dir
+            checkpoints = list_video_checkpoints(str(Path("models/video-training")))
+
+        if not checkpoints:
+            raise HTTPException(
+                status_code=400,
+                detail="No trained video model found. Train a model first via /visual/train-video.",
+            )
+
+        # Load the most recent checkpoint
+        latest = checkpoints[0]
+        trainer = VideoCaptionTrainer()
+        trainer.load_checkpoint(latest["path"])
+
+        t0 = time.time()
+        text = trainer.generate(
+            video_path=req.video_path,
+            max_len=req.max_len,
+            temperature=req.temperature,
+        )
+        elapsed = (time.time() - t0) * 1000
+
+        return {
+            "text": text,
+            "checkpoint": latest["name"],
+            "elapsed_ms": round(elapsed, 1),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/status")
 async def vlm_status():
     """Get VLM and DPO status (no model loading triggered)."""
@@ -465,6 +628,17 @@ async def vlm_status():
             "job_id": _TRAINING_STATE["job_id"],
             "result": _TRAINING_STATE["result"],
             "error": _TRAINING_STATE["error"],
+        }
+    with _video_training_lock:
+        video_train_state = {
+            "status": _VIDEO_TRAINING_STATE["status"],
+            "job_id": _VIDEO_TRAINING_STATE["job_id"],
+            "current_epoch": _VIDEO_TRAINING_STATE["current_epoch"],
+            "current_step": _VIDEO_TRAINING_STATE["current_step"],
+            "total_steps": _VIDEO_TRAINING_STATE["total_steps"],
+            "current_loss": _VIDEO_TRAINING_STATE["current_loss"],
+            "result": _VIDEO_TRAINING_STATE["result"],
+            "error": _VIDEO_TRAINING_STATE["error"],
         }
     return {
         "vlm_loaded": _vlm_inference is not None,
@@ -476,4 +650,5 @@ async def vlm_status():
             accepted_count=_dpo_state["accepted_count"],
             rejected_count=_dpo_state["rejected_count"],
         ).model_dump(),
+        "video_training": video_train_state,
     }

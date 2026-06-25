@@ -23,14 +23,8 @@ const { mockApiGet, mockApiPost, mockApiPut, mockApiDelete, mockApiPatch }
   }))
 
 // Hoisted mock – runs at top level, before any imports
-vi.mock('./http-client', () => ({
-  __esModule: true,
-  apiGet: mockApiGet,
-  apiPost: mockApiPost,
-  apiPut: mockApiPut,
-  apiDelete: mockApiDelete,
-  apiPatch: mockApiPatch,
-  apiClient: {
+vi.mock('./http-client', () => {
+  const makeClient = () => ({
     defaults: { baseURL: 'http://127.0.0.1:9' },
     get: vi.fn(),
     post: vi.fn(),
@@ -39,8 +33,19 @@ vi.mock('./http-client', () => ({
     patch: vi.fn(),
     interceptors: { request: { use: vi.fn(), eject: vi.fn() }, response: { use: vi.fn(), eject: vi.fn() } },
     headers: { common: {} as Record<string, string> },
-  },
-}))
+  })
+
+  return {
+    __esModule: true,
+    apiGet: mockApiGet,
+    apiPost: mockApiPost,
+    apiPut: mockApiPut,
+    apiDelete: mockApiDelete,
+    apiPatch: mockApiPatch,
+    apiClient: makeClient(),
+    createApiClient: vi.fn(() => makeClient()),
+  }
+})
 
 export function setupApiMocks() {
   // No-op: mock is already in place at top level

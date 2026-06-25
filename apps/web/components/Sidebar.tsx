@@ -14,6 +14,8 @@ import {
   IconCompare,
   IconTraining,
   IconTokenizer,
+  IconAgents,
+  IconExport,
 } from '@/components/icons/NavIcons'
 import { IconChevronDown } from '@/components/ui'
 import { cn } from '@/lib/cn'
@@ -29,11 +31,13 @@ const workspaceItems = [
   { path: '/models', key: 'nav.models', Icon: IconModels },
   { path: '/datasets', key: 'nav.datasets', Icon: IconActivity },
   { path: '/knowledge', key: 'nav.knowledge', Icon: IconSearch },
+  { path: '/agents', key: 'nav.agents', Icon: IconAgents },
   { path: '/compare', key: 'nav.compare', Icon: IconCompare },
   { path: '/settings', key: 'nav.settings', Icon: IconSettings },
 ] as const
 
 const systemItems = [
+  { path: '/export', key: 'nav.export', Icon: IconExport },
   { path: '/monitoring', key: 'nav.monitoring', Icon: IconActivity },
   { path: '/tokenizer', key: 'nav.tokenizer', Icon: IconTokenizer },
 ] as const

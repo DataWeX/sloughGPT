@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { SearchInput } from '@/components/ui/input'
 import {
   IconSearch, IconStar, IconPin, IconChat, IconTrash, IconEdit,
-  IconDownload, IconPlus, IconMore,
+  IconDownload, IconPlus, IconMore, IconFolder,
 } from '@/components/ui'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -39,6 +39,48 @@ function truncateMessage(content: string, maxLen = 60): string {
   return firstLine.length > maxLen ? firstLine.slice(0, maxLen) + '…' : firstLine
 }
 
+function parseConversationJSON(data: any): { name: string; messages: { role: string; content: string }[] }[] {
+  const arr = Array.isArray(data) ? data : [data]
+  return arr.flatMap((item: any) => {
+    if (!item.messages || !Array.isArray(item.messages)) return []
+    return [{
+      name: item.name || item.id || `Imported ${new Date().toLocaleDateString()}`,
+      messages: item.messages.map((m: any) => ({
+        role: m.role === 'user' || m.role === 'assistant' ? m.role : 'user',
+        content: typeof m.content === 'string' ? m.content : '',
+      })),
+    }]
+  })
+}
+
+function parseConversationMD(text: string): { name: string; messages: { role: string; content: string }[] }[] {
+  const blocks = text.split(/(?=^# )/m)
+  return blocks.filter(b => b.trim()).map(block => {
+    const lines = block.split('\n')
+    const name = lines[0].replace(/^#\s*/, '').trim() || 'Imported'
+    const messages: { role: string; content: string }[] = []
+    let currentRole: 'user' | 'assistant' | null = null
+    let currentContent: string[] = []
+    for (const line of lines.slice(1)) {
+      const userMatch = line.match(/^\*\*(user|User)\*\*:\s*(.*)/)
+      const asstMatch = line.match(/^\*\*(assistant|Assistant)\*\*:\s*(.*)/)
+      if (userMatch || asstMatch) {
+        if (currentRole && currentContent.length > 0) {
+          messages.push({ role: currentRole, content: currentContent.join('\n').trim() })
+        }
+        currentRole = userMatch ? 'user' : 'assistant'
+        currentContent = [userMatch ? userMatch[2] : asstMatch![2]]
+      } else if (currentRole) {
+        currentContent.push(line)
+      }
+    }
+    if (currentRole && currentContent.length > 0) {
+      messages.push({ role: currentRole, content: currentContent.join('\n').trim() })
+    }
+    return { name, messages }
+  }).filter(c => c.messages.length > 0)
+}
+
 export default function ConversationsPage() {
   const router = useRouter()
   const addToast = useToastStore(s => s.addToast)
@@ -47,6 +89,11 @@ export default function ConversationsPage() {
   const [search, setSearch] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
+  const [archiving, setArchiving] = useState(false)
+  const [filter, setFilter] = useState<'all' | 'active' | 'archived'>('active')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{ ok: number; fail: number; names: string[] } | null>(null)
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
@@ -60,6 +107,7 @@ export default function ConversationsPage() {
         updated_at: s.updated_at,
         pinned: s.pinned || false,
         starred: s.starred || false,
+        archived: s.archived || false,
         message_count: s.messages?.length || 0,
         messages: (s.messages || []).map(m => ({
           id: m.id || '',
@@ -79,13 +127,16 @@ export default function ConversationsPage() {
   useEffect(() => { fetchAll() }, [fetchAll])
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return conversations
+    let list = conversations
+    if (filter === 'active') list = list.filter(c => !c.archived)
+    else if (filter === 'archived') list = list.filter(c => c.archived)
+    if (!search.trim()) return list
     const q = search.toLowerCase()
-    return conversations.filter(c =>
+    return list.filter(c =>
       c.name.toLowerCase().includes(q) ||
       c.messages?.some(m => m.content.toLowerCase().includes(q))
     )
-  }, [conversations, search])
+  }, [conversations, search, filter])
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -122,6 +173,13 @@ export default function ConversationsPage() {
     } catch { addToast('Failed to delete conversation', 'error') }
   }
 
+  const handleArchive = async (id: string, archived: boolean) => {
+    try {
+      await sessionController.update(id, { archived })
+      setConversations(prev => prev.map(c => c.id === id ? { ...c, archived } : c))
+    } catch { addToast('Failed to archive conversation', 'error') }
+  }
+
   const handleRename = async (id: string) => {
     const conv = conversations.find(c => c.id === id)
     if (!conv) return
@@ -152,6 +210,69 @@ export default function ConversationsPage() {
     addToast(`Deleted ${deleted} conversation${deleted !== 1 ? 's' : ''}`, deleted > 0 ? 'info' : 'error')
   }
 
+  const handleBatchArchive = async () => {
+    if (selectedIds.size === 0) return
+    setArchiving(true)
+    let archived = 0
+    for (const id of selectedIds) {
+      try {
+        await sessionController.update(id, { archived: true })
+        archived++
+      } catch { /* skip failed */ }
+    }
+    setConversations(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, archived: true } : c))
+    setSelectedIds(new Set())
+    setArchiving(false)
+    addToast(`Archived ${archived} conversation${archived !== 1 ? 's' : ''}`, archived > 0 ? 'info' : 'error')
+  }
+
+  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    setImportResult(null)
+    try {
+      const text = await file.text()
+      let parsed: { name: string; messages: { role: string; content: string }[] }[]
+
+      if (file.name.endsWith('.json')) {
+        const data = JSON.parse(text)
+        parsed = parseConversationJSON(data)
+      } else if (file.name.endsWith('.md')) {
+        parsed = parseConversationMD(text)
+      } else {
+        addToast('Unsupported file format — use .json or .md', 'error')
+        setImporting(false)
+        return
+      }
+
+      if (parsed.length === 0) {
+        addToast('No conversations found in file', 'error')
+        setImporting(false)
+        return
+      }
+
+      let ok = 0; let fail = 0; const names: string[] = []
+      for (const conv of parsed) {
+        try {
+          await sessionController.create(conv.name)
+          ok++
+          names.push(conv.name)
+        } catch {
+          fail++
+        }
+      }
+      setImportResult({ ok, fail, names })
+      addToast(`Imported ${ok} of ${parsed.length} conversations`, fail > 0 ? 'info' : 'success')
+      if (ok > 0) void fetchAll()
+    } catch (err: any) {
+      addToast(`Import failed: ${err.message}`, 'error')
+    } finally {
+      setImporting(false)
+      e.target.value = ''
+    }
+  }
+
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev)
@@ -179,11 +300,14 @@ export default function ConversationsPage() {
     URL.revokeObjectURL(url)
   }
 
-  const starred = sorted.filter(c => c.starred)
-  const pinned = sorted.filter(c => c.pinned && !c.starred)
-  const rest = sorted.filter(c => !c.pinned && !c.starred)
+  const activeList = sorted.filter(c => !c.archived)
+  const starred = activeList.filter(c => c.starred)
+  const pinned = activeList.filter(c => c.pinned && !c.starred)
+  const rest = activeList.filter(c => !c.pinned && !c.starred)
+  const archivedList = sorted.filter(c => c.archived)
 
   return (
+    <>
     <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader
         left={
@@ -201,7 +325,25 @@ export default function ConversationsPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <CardTitle className="text-base">All conversations</CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-base">Conversations</CardTitle>
+                  <div className="flex items-center rounded-md border border-border/40 bg-muted/20 p-0.5">
+                    {(['active', 'all', 'archived'] as const).map(f => (
+                      <button
+                        key={f}
+                        onClick={() => setFilter(f)}
+                        className={cn(
+                          "text-[11px] px-2 py-0.5 rounded-sm transition-colors",
+                          filter === f
+                            ? "bg-background shadow-sm text-foreground font-medium"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        {f === 'active' ? 'Active' : f === 'archived' ? 'Archived' : 'All'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 {sorted.length > 0 && (
                   <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
                     <input
@@ -216,13 +358,32 @@ export default function ConversationsPage() {
                   </label>
                 )}
               </div>
-              <Button
-                size="sm"
-                onClick={() => router.push('/chat')}
-              >
-                <IconPlus className="h-3.5 w-3.5 mr-1" />
-                New chat
-              </Button>
+              <div className="flex items-center gap-1">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json,.md"
+                  className="hidden"
+                  onChange={handleFileImport}
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs"
+                  disabled={importing}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <IconDownload className="h-3.5 w-3.5 mr-1 rotate-180" />
+                  Import
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => router.push('/chat')}
+                >
+                  <IconPlus className="h-3.5 w-3.5 mr-1" />
+                  New chat
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -243,6 +404,16 @@ export default function ConversationsPage() {
                     onClick={() => setSelectedIds(new Set())}
                   >
                     Cancel
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={handleBatchArchive}
+                    disabled={archiving}
+                  >
+                    <IconFolder className="h-3 w-3 mr-1" />
+                    {archiving ? 'Archiving...' : 'Archive selected'}
                   </Button>
                   <Button
                     variant="outline"
@@ -288,6 +459,7 @@ export default function ConversationsPage() {
                         onSelect={() => handleNavigate(c.id)}
                         onPin={(p) => handlePin(c.id, p)}
                         onStar={(s) => handleStar(c.id, s)}
+                        onArchive={(a) => handleArchive(c.id, a)}
                         onDelete={() => handleDelete(c.id)}
                         onRename={() => handleRename(c.id)}
                         onExport={(f) => handleExport(c, f)}
@@ -307,6 +479,7 @@ export default function ConversationsPage() {
                         onSelect={() => handleNavigate(c.id)}
                         onPin={(p) => handlePin(c.id, p)}
                         onStar={(s) => handleStar(c.id, s)}
+                        onArchive={(a) => handleArchive(c.id, a)}
                         onDelete={() => handleDelete(c.id)}
                         onRename={() => handleRename(c.id)}
                         onExport={(f) => handleExport(c, f)}
@@ -326,6 +499,27 @@ export default function ConversationsPage() {
                         onSelect={() => handleNavigate(c.id)}
                         onPin={(p) => handlePin(c.id, p)}
                         onStar={(s) => handleStar(c.id, s)}
+                        onArchive={(a) => handleArchive(c.id, a)}
+                        onDelete={() => handleDelete(c.id)}
+                        onRename={() => handleRename(c.id)}
+                        onExport={(f) => handleExport(c, f)}
+                      />
+                    ))}
+                  </Section>
+                )}
+
+                {archivedList.length > 0 && (
+                  <Section label="Archived">
+                    {archivedList.map(c => (
+                      <Row
+                        key={c.id}
+                        conversation={c}
+                        selected={selectedIds.has(c.id)}
+                        onToggleSelect={() => toggleSelect(c.id)}
+                        onSelect={() => handleNavigate(c.id)}
+                        onPin={(p) => handlePin(c.id, p)}
+                        onStar={(s) => handleStar(c.id, s)}
+                        onArchive={(a) => handleArchive(c.id, a)}
                         onDelete={() => handleDelete(c.id)}
                         onRename={() => handleRename(c.id)}
                         onExport={(f) => handleExport(c, f)}
@@ -337,8 +531,30 @@ export default function ConversationsPage() {
             )}
           </CardContent>
         </Card>
-      </div>
+        </div>
     </div>
+
+      {importResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setImportResult(null)}>
+          <div className="bg-card rounded-lg border shadow-lg w-full max-w-md mx-4 p-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium">Import complete</h3>
+              <button className="text-muted-foreground hover:text-foreground text-xs" onClick={() => setImportResult(null)}>Close</button>
+            </div>
+            <div className="text-xs text-muted-foreground mb-2">
+              {importResult.ok} imported, {importResult.fail} failed
+            </div>
+            {importResult.names.length > 0 && (
+              <div className="space-y-1 max-h-60 overflow-y-auto">
+                {importResult.names.map((name, i) => (
+                  <div key={i} className="text-xs bg-muted/40 rounded px-2 py-1 truncate">{name}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -360,6 +576,7 @@ function Row({
   onSelect,
   onPin,
   onStar,
+  onArchive,
   onDelete,
   onRename,
   onExport,
@@ -370,6 +587,7 @@ function Row({
   onSelect: () => void
   onPin: (pinned: boolean) => void
   onStar: (starred: boolean) => void
+  onArchive: (archived: boolean) => void
   onDelete: () => void
   onRename: () => void
   onExport: (format: 'md' | 'json') => void
@@ -404,6 +622,7 @@ function Row({
         <div className="flex items-center gap-1.5">
           {c.pinned && <IconPin className="h-3 w-3 text-primary shrink-0" />}
           {c.starred && <IconStar className="h-3 w-3 text-warning shrink-0" filled />}
+          {c.archived && <span className="text-[10px] text-muted-foreground/60 border border-border/40 rounded px-1 shrink-0">Archived</span>}
           <p className="text-sm font-medium truncate text-foreground">{c.name}</p>
         </div>
         {lastMsg && (
@@ -444,12 +663,16 @@ function Row({
               <IconPin className="mr-2 h-3 w-3" />
               {c.pinned ? 'Unpin' : 'Pin to top'}
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onExport('md') }} className="text-xs py-1.5">
               <IconDownload className="mr-2 h-3 w-3" /> Export MD
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onExport('json') }} className="text-xs py-1.5">
               <IconDownload className="mr-2 h-3 w-3" /> Export JSON
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onArchive(!c.archived) }} className="text-xs py-1.5">
+              <IconFolder className="mr-2 h-3 w-3" />
+              {c.archived ? 'Restore' : 'Archive'}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onDelete() }} className="text-destructive focus:text-destructive text-xs py-1.5">

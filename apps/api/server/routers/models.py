@@ -128,49 +128,6 @@ async def unload_model():
     return result
 
 
-@router.post("/vlm-load")
-async def load_vlm(model_dir: str, model_id: str = "vlm"):
-    """Load a trained VLM as a chat provider.
-
-    Args:
-        model_dir: Path to VLM output directory (contains final/, connector.pt, vlm_config.json)
-        model_id: Identifier for the loaded model
-
-    Returns:
-        Status and model info
-    """
-    from pathlib import Path as _Path
-    from domains.models.provider import load_vlm_provider, register_provider, get_provider
-
-    d = _Path(model_dir)
-    if not (d / "final").is_dir():
-        raise HTTPException(status_code=400, detail=f"No final/ directory in {model_dir}")
-    if not (d / "connector.pt").is_file():
-        raise HTTPException(status_code=400, detail=f"No connector.pt in {model_dir}")
-    if not (d / "vlm_config.json").is_file():
-        raise HTTPException(status_code=400, detail=f"No vlm_config.json in {model_dir}")
-
-    try:
-        provider = load_vlm_provider(str(d), model_id_str=model_id)
-        register_provider("vlm", provider)
-
-        # Switch the default router to use VLM as the text provider
-        default_router = get_provider("default")
-        if default_router is not None and hasattr(default_router, "set_text_provider"):
-            default_router.set_text_provider("vlm")
-            logger.info("Default router now using VLM provider: %s", model_id)
-
-        return {
-            "status": "loaded",
-            "model_id": model_id,
-            "type": "vlm",
-            "vision_encoder": provider.metadata.get("vision_encoder"),
-            "llm": provider.metadata.get("llm"),
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load VLM: {e}")
-
-
 @router.get("/current")
 async def current_model():
     """Get current model info"""

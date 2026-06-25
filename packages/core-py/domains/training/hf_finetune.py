@@ -13,6 +13,8 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from domains.training.trainer_protocol import TrainResult
+
 import torch
 from torch.utils.data import Dataset
 from transformers import (
@@ -98,6 +100,17 @@ class HFFineTuner:
         result = tuner.train(on_progress=print)
     """
 
+    _is_training: bool = False
+
+    @property
+    def is_training(self) -> bool:
+        """Whether training is in progress."""
+        return self._is_training
+
+    def stop(self) -> None:
+        """Request early stopping."""
+        self._is_training = False
+
     def __init__(
         self,
         model_name: str,
@@ -139,14 +152,14 @@ class HFFineTuner:
     def train(
         self,
         on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
-    ) -> Dict[str, Any]:
+    ) -> TrainResult:
         """Run the fine-tuning loop.
 
         Args:
-            on_progress: Callback with progress info dict (epoch, loss, step, etc.)
+            on_progress: Optional callback receiving progress dicts.
 
         Returns:
-            Dict with keys: status, model_path, final_loss, total_steps
+            TrainResult with status, model_path, final_loss, total_steps.
         """
         logger.info(
             "Loading model %s on %s (LoRA=%s, rank=%d)",
@@ -265,7 +278,11 @@ class HFFineTuner:
         )
 
         logger.info("Starting training for %d epochs", self.epochs)
-        train_result = trainer.train()
+        self._is_training = True
+        try:
+            train_result = trainer.train()
+        finally:
+            self._is_training = False
 
         final_loss = train_result.training_loss if hasattr(train_result, "training_loss") else None
         final_step = train_result.global_step if hasattr(train_result, "global_step") else total_steps
@@ -292,12 +309,12 @@ class HFFineTuner:
             final_loss, final_step, save_path,
         )
 
-        return {
-            "status": "completed",
-            "model_path": save_path,
-            "final_loss": final_loss,
-            "total_steps": final_step,
-        }
+        return TrainResult(
+            status="completed",
+            model_path=save_path,
+            final_loss=final_loss,
+            total_steps=final_step,
+        )
 
 
 class RewardFn:
@@ -371,6 +388,17 @@ class GRPOTrainer:
         )
         result = trainer.train(on_progress=print)
     """
+
+    _is_training: bool = False
+
+    @property
+    def is_training(self) -> bool:
+        """Whether training is in progress."""
+        return self._is_training
+
+    def stop(self) -> None:
+        """Request early stopping."""
+        self._is_training = False
 
     def __init__(
         self,
@@ -475,14 +503,15 @@ class GRPOTrainer:
     def train(
         self,
         on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
-    ) -> Dict[str, Any]:
+    ) -> TrainResult:
         """Run GRPO training.
 
         Args:
             on_progress: Callback with progress info dict.
 
         Returns:
-            Dict with status, model_path, final_loss, reward_history, total_steps.
+            TrainResult with status, model_path, final_loss, total_steps.
+            Additional GRPO-specific fields in ``metrics`` (final_reward, reward_history).
         """
         logger.info(
             "GRPO: loading model %s on %s (generations=%d, lr=%.2e, kl=%.2f)",
@@ -535,54 +564,60 @@ class GRPOTrainer:
         output_path = Path(self.output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
-        for epoch in range(self.epochs):
-            model.train()
-            epoch_rewards: List[float] = []
-            epoch_losses: List[float] = []
+        self._is_training = True
+        try:
+            for epoch in range(self.epochs):
+                model.train()
+                epoch_rewards: List[float] = []
+                epoch_losses: List[float] = []
 
-            for batch_start in range(0, len(prompts), self.batch_size):
-                batch_prompts = prompts[batch_start:batch_start + self.batch_size]
+                for batch_start in range(0, len(prompts), self.batch_size):
+                    batch_prompts = prompts[batch_start:batch_start + self.batch_size]
 
-                for prompt in batch_prompts:
-                    completions = self._generate_group(model, tokenizer, prompt, self.num_generations)
+                    if not self._is_training:
+                        logger.info("GRPO training stopped early")
+                        break
 
-                    scores = []
-                    for c in completions:
-                        scores.append(self.reward_fn(c))
-                    rewards_tensor = torch.tensor(scores, dtype=torch.float32, device=self.device)
-                    advantages = self._compute_advantages(rewards_tensor)
+                    for prompt in batch_prompts:
+                        completions = self._generate_group(model, tokenizer, prompt, self.num_generations)
 
-                    # Compute log-probs for each completion
-                    model_log_probs_list = []
-                    ref_log_probs_list = []
+                        scores = []
+                        for c in completions:
+                            scores.append(self.reward_fn(c))
+                        rewards_tensor = torch.tensor(scores, dtype=torch.float32, device=self.device)
+                        advantages = self._compute_advantages(rewards_tensor)
 
-                    for c in completions:
-                        full_text = prompt + c
-                        inputs = tokenizer(
-                            full_text, return_tensors="pt", truncation=True,
-                            max_length=256 + self.max_new_tokens,
-                        )
-                        input_ids = inputs["input_ids"].to(self.device)
-                        attention_mask = inputs.get("attention_mask", torch.ones_like(input_ids)).to(self.device)
+                        # Compute log-probs for each completion
+                        model_log_probs_list = []
+                        ref_log_probs_list = []
 
-                        prompt_inputs = tokenizer(
-                            prompt, return_tensors="pt", truncation=True, max_length=256,
-                        )
-                        prompt_len = prompt_inputs["input_ids"].shape[1]
+                        for c in completions:
+                            full_text = prompt + c
+                            inputs = tokenizer(
+                                full_text, return_tensors="pt", truncation=True,
+                                max_length=256 + self.max_new_tokens,
+                            )
+                            input_ids = inputs["input_ids"].to(self.device)
+                            attention_mask = inputs.get("attention_mask", torch.ones_like(input_ids)).to(self.device)
 
-                        with torch.no_grad():
-                            ref_out = ref_model(input_ids, attention_mask=attention_mask)
-                            ref_logits = ref_out.logits[:, prompt_len - 1:-1, :]
-                            ref_log_probs = torch.log_softmax(ref_logits, dim=-1)
-                            ref_token_ids = input_ids[:, prompt_len:]
-                            ref_selected = ref_log_probs.gather(2, ref_token_ids.unsqueeze(-1)).squeeze(-1)
-                            ref_log_probs_list.append(ref_selected.sum())
+                            prompt_inputs = tokenizer(
+                                prompt, return_tensors="pt", truncation=True, max_length=256,
+                            )
+                            prompt_len = prompt_inputs["input_ids"].shape[1]
 
-                        model_out = model(input_ids, attention_mask=attention_mask)
-                        model_logits = model_out.logits[:, prompt_len - 1:-1, :]
-                        model_log_probs = torch.log_softmax(model_logits, dim=-1)
-                        model_selected = model_log_probs.gather(2, ref_token_ids.unsqueeze(-1)).squeeze(-1)
-                        model_log_probs_list.append(model_selected.sum())
+                            with torch.no_grad():
+                                ref_out = ref_model(input_ids, attention_mask=attention_mask)
+                                ref_logits = ref_out.logits[:, prompt_len - 1:-1, :]
+                                ref_log_probs = torch.log_softmax(ref_logits, dim=-1)
+                                ref_token_ids = input_ids[:, prompt_len:]
+                                ref_selected = ref_log_probs.gather(2, ref_token_ids.unsqueeze(-1)).squeeze(-1)
+                                ref_log_probs_list.append(ref_selected.sum())
+
+                            model_out = model(input_ids, attention_mask=attention_mask)
+                            model_logits = model_out.logits[:, prompt_len - 1:-1, :]
+                            model_log_probs = torch.log_softmax(model_logits, dim=-1)
+                            model_selected = model_log_probs.gather(2, ref_token_ids.unsqueeze(-1)).squeeze(-1)
+                            model_log_probs_list.append(model_selected.sum())
 
                     model_log_probs_t = torch.stack(model_log_probs_list)
                     ref_log_probs_t = torch.stack(ref_log_probs_list)
@@ -625,28 +660,29 @@ class GRPOTrainer:
                 epoch + 1, self.epochs, avg_reward, avg_loss,
             )
 
-        # Save model
-        safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in Path(self.prompts_path).stem)[:60]
-        save_path = str(output_path / f"{safe_name}_final")
-        model.save_pretrained(save_path)
-        tokenizer.save_pretrained(save_path)
+            # Save model
+            safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in Path(self.prompts_path).stem)[:60]
+            save_path = str(output_path / f"{safe_name}_final")
+            model.save_pretrained(save_path)
+            tokenizer.save_pretrained(save_path)
 
-        final_reward = sum(all_rewards[-len(prompts):]) / max(len(prompts), 1) if all_rewards else 0.0
-        final_loss = epoch_losses[-1] if epoch_losses else 0.0
+            final_reward = sum(all_rewards[-len(prompts):]) / max(len(prompts), 1) if all_rewards else 0.0
+            final_loss = epoch_losses[-1] if epoch_losses else 0.0
 
-        logger.info(
-            "GRPO complete. final_reward=%.4f, final_loss=%.4f, saved to %s",
-            final_reward, final_loss, save_path,
-        )
+            logger.info(
+                "GRPO complete. final_reward=%.4f, final_loss=%.4f, saved to %s",
+                final_reward, final_loss, save_path,
+            )
 
-        return {
-            "status": "completed",
-            "model_path": save_path,
-            "final_reward": final_reward,
-            "final_loss": final_loss,
-            "total_steps": total_steps,
-            "reward_history": reward_history,
-        }
+            return TrainResult(
+                status="completed",
+                model_path=save_path,
+                final_loss=final_loss,
+                total_steps=total_steps,
+                metrics={"final_reward": final_reward, "reward_history": reward_history},
+            )
+        finally:
+            self._is_training = False
 
 
 def create_hf_finetuner(

@@ -23,5 +23,17 @@ declare namespace Cypress {
 
     /** Mock all endpoints via individual mocks */
     mockAll(): Chainable<null>
+
+    /** Mock VLM checkpoints, status, DPO, and train endpoints */
+    mockVisual(): Chainable<null>
+
+    /** Mock multimodal capabilities, training report, and reset */
+    mockMultimodal(): Chainable<null>
+
+    /** Mock /agents CRUD and execute endpoints */
+    mockAgents(overrides?: any[]): Chainable<null>
+
+    /** Mock /models/export/formats and /models/export endpoints */
+    mockExport(): Chainable<null>
   }
 }

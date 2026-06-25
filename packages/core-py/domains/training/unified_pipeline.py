@@ -15,12 +15,14 @@ import logging
 import math
 import threading
 import time
+import warnings
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
 
+from domains.training.trainer_protocol import TrainResult, TrainerProtocol
 from domains.training.sequence import (
     TrainingSequence,
     TrainingSequenceState,
@@ -240,11 +242,29 @@ class UnifiedTrainingPipeline:
         result = pipeline.run(on_progress=my_callback)
     """
 
+    _is_training: bool = False
+    _cancel_event: Optional[threading.Event] = None
+
+    @property
+    def is_training(self) -> bool:
+        """Whether training is in progress."""
+        return self._is_training
+
+    def stop(self) -> None:
+        """Request early stopping."""
+        self._is_training = False
+        if self._cancel_event is not None:
+            self._cancel_event.set()
+
     def __init__(
         self,
         config: Union[UnifiedTrainingConfig, Dict[str, Any]],
         run_config: Optional[TrainingRunConfig] = None,
     ):
+        warnings.warn(
+            "UnifiedTrainingPipeline is deprecated — use SloughGPTTrainer instead",
+            DeprecationWarning, stacklevel=2,
+        )
         if isinstance(config, dict):
             config = UnifiedTrainingConfig(**config)
         self.config: UnifiedTrainingConfig = config
@@ -313,7 +333,7 @@ class UnifiedTrainingPipeline:
         self,
         on_progress: Optional[Callable[[TrainingProgress], None]] = None,
         cancel_event: Optional[threading.Event] = None,
-    ) -> Dict[str, Any]:
+    ) -> TrainResult:
         """Run the full pipeline through all enabled phases.
 
         Args:
@@ -322,11 +342,11 @@ class UnifiedTrainingPipeline:
                 ``KeyboardInterrupt`` during the next progress emission to abort.
 
         Returns:
-            Dict with keys: status, message, model_path, final_loss, total_steps,
-            phases, elapsed, checkpoint, metrics
+            TrainResult with status, model_path, final_loss, total_steps, checkpoint, metrics.
         """
         self._cancel_event = cancel_event
         self._start_time = time.time()
+        self._is_training = True
         logger.info("Starting unified pipeline: method=%s, data=%s", self._method, self.config.data_path)
 
         try:
@@ -341,12 +361,19 @@ class UnifiedTrainingPipeline:
             )
             self._emit_progress(on_progress)
             logger.info("Pipeline cancelled after %.1fs", elapsed)
-            return {"status": "cancelled", "cancelled": True, "elapsed": elapsed, "message": "Training cancelled by user"}
+            return TrainResult(
+                success=False,
+                status="cancelled",
+                metrics={"cancelled": True, "elapsed": elapsed},
+                error="Training cancelled by user",
+            )
+        finally:
+            self._is_training = False
 
     def _run_body(
         self,
         on_progress: Optional[Callable[[TrainingProgress], None]] = None,
-    ) -> Dict[str, Any]:
+    ) -> TrainResult:
         # --- initialize TrainingStatusTracker ---
         try:
             from domains.training.status import TrainingStatusTracker, CompletionStatus
@@ -367,6 +394,8 @@ class UnifiedTrainingPipeline:
             self._emit_progress(on_progress)
             self._run_generate_data()
             self.state.complete_phase(TrainingSequence.GENERATE_DATA)
+            if not self._is_training:
+                return self._early_exit("Training stopped during data generation")
         else:
             self.state.skip_phase(TrainingSequence.GENERATE_DATA, "Skipped by config")
 
@@ -377,6 +406,8 @@ class UnifiedTrainingPipeline:
             self._emit_progress(on_progress)
             self._run_distill()
             self.state.complete_phase(TrainingSequence.DISTILL)
+            if not self._is_training:
+                return self._early_exit("Training stopped during distillation")
         elif self.config.distill:
             self.state.skip_phase(TrainingSequence.DISTILL, "Skipped by config")
         else:
@@ -405,15 +436,16 @@ class UnifiedTrainingPipeline:
                     metrics={"error": "no_data", "total_steps": train_result.get("total_steps", 0)},
                 )
                 self._emit_progress(on_progress)
-                return {
-                    "status": "error",
-                    "message": f"Training produced no data — dataset too small",
-                    "model_path": "",
-                    "final_loss": None,
-                    "total_steps": 0,
-                    "checkpoint": "",
-                    "metrics": {},
-                }
+                return TrainResult(
+                    success=False,
+                    status="error",
+                    error="Training produced no data — dataset too small",
+                    final_loss=None,
+                    total_steps=0,
+                    model_path="",
+                    checkpoint_name="",
+                    metrics={},
+                )
 
             # Update status tracker
             if self.tracker is not None:
@@ -430,6 +462,9 @@ class UnifiedTrainingPipeline:
             self.state.skip_phase(TrainingSequence.TRAIN, "Skipped by config")
             train_result = {}
 
+        if not self._is_training:
+            return self._early_exit("Training stopped")
+
         # --- EVALUATE ---
         eval_result = {}
         if not self.run_config.skip_evaluate:
@@ -441,6 +476,8 @@ class UnifiedTrainingPipeline:
                 TrainingSequence.EVALUATE,
                 metrics=eval_result.get("metrics", {}),
             )
+            if not self._is_training:
+                return self._early_exit("Training stopped during evaluation")
         else:
             self.state.skip_phase(TrainingSequence.EVALUATE, "Skipped by config")
 
@@ -490,17 +527,25 @@ class UnifiedTrainingPipeline:
                 Path(save_path).parent.mkdir(parents=True, exist_ok=True)
                 self.tracker.save_report(save_path)
 
-        result = {
-            "status": "completed",
-            "message": f"Training complete in {elapsed:.1f}s",
-            "model_path": deploy_path,
-            "final_loss": final_loss,
-            "total_steps": final_steps,
-            "phases": [pr.to_dict() for pr in self.state.phase_results],
-            "elapsed": elapsed,
-            "checkpoint": ckpt,
-            "metrics": train_result.get("metrics", {}),
-        }
+        phase_list = [pr.to_dict() for pr in self.state.phase_results]
+        result = TrainResult(
+            success=True,
+            status="completed",
+            final_loss=final_loss,
+            total_steps=final_steps,
+            model_path=deploy_path,
+            checkpoint_name=ckpt,
+            method=self._method,
+            message=f"Training complete in {elapsed:.1f}s",
+            elapsed=elapsed,
+            phases=phase_list,
+            metrics={
+                "phases": phase_list,
+                "elapsed": elapsed,
+                "message": f"Training complete in {elapsed:.1f}s",
+                **(train_result.get("metrics", {}) if isinstance(train_result, dict) else train_result.metrics if hasattr(train_result, "metrics") else {}),
+            },
+        )
         # Attach tracker report if available (convert enums to values)
         if self.tracker is not None:
             try:
@@ -517,11 +562,28 @@ class UnifiedTrainingPipeline:
                     return obj
 
                 report = asdict(self.tracker.get_report())
-                result["tracker_report"] = _json_safe(report)
+                result.metrics["tracker_report"] = _json_safe(report)
             except Exception:
                 pass
-        logger.info("Pipeline complete: %s", result["message"])
+        logger.info("Pipeline complete: %s", result.metrics.get("message", ""))
         return result
+
+    def _early_exit(self, reason: str) -> TrainResult:
+        """Return early when training is stopped."""
+        elapsed = time.time() - self._start_time
+        self._update_progress(
+            "complete",
+            status="complete",
+            message=f"{reason} after {elapsed:.1f}s",
+            metrics={"stopped": True, "elapsed": elapsed},
+        )
+        self._emit_progress(None)
+        return TrainResult(
+            success=False,
+            status="stopped",
+            error=reason,
+            metrics={"stopped": True, "elapsed": elapsed},
+        )
 
     def _run_generate_data(self):
         """GENERATE_DATA phase: prepare dataset."""
@@ -566,7 +628,7 @@ class UnifiedTrainingPipeline:
     def _run_train(
         self,
         on_progress: Optional[Callable[[TrainingProgress], None]] = None,
-    ) -> Dict[str, Any]:
+    ) -> TrainResult:
         """TRAIN phase: dispatch to the appropriate trainer based on method."""
         method = self._method
 
@@ -582,7 +644,7 @@ class UnifiedTrainingPipeline:
     def _train_hf(
         self,
         on_progress: Optional[Callable[[TrainingProgress], None]] = None,
-    ) -> Dict[str, Any]:
+    ) -> TrainResult:
         """Train via HuggingFace HFFineTuner."""
         from domains.training.hf_finetune import HFFineTuner
 
@@ -621,19 +683,21 @@ class UnifiedTrainingPipeline:
         result = tuner.train(on_progress=_hf_progress)
         self._trainer_instance = tuner
 
-        return {
-            "status": result.get("status", "completed"),
-            "model_path": result.get("model_path", output_dir),
-            "final_loss": result.get("final_loss"),
-            "total_steps": result.get("total_steps", 0),
-            "checkpoint": result.get("checkpoint", result.get("checkpoint_name", "")),
-            "metrics": {},
-        }
+        return TrainResult(
+            success=result.get("status", "completed") != "error",
+            status=result.get("status", "completed"),
+            model_path=result.get("model_path", output_dir),
+            final_loss=result.get("final_loss"),
+            total_steps=result.get("total_steps", 0),
+            checkpoint_name=result.get("checkpoint", result.get("checkpoint_name", "")),
+            method="hf",
+            metrics={},
+        )
 
     def _train_turbo(
         self,
         on_progress: Optional[Callable[[TrainingProgress], None]] = None,
-    ) -> Dict[str, Any]:
+    ) -> TrainResult:
         """Train via TurboTrainer."""
         from domains.training.turbo_trainer import TurboTrainer, TurboConfig
 
@@ -668,19 +732,21 @@ class UnifiedTrainingPipeline:
         result = trainer.train(on_progress=_turbo_progress)
         self._trainer_instance = trainer
 
-        return {
-            "status": result.get("status", "completed"),
-            "model_path": result.get("model_path", self.config.output_dir),
-            "final_loss": result.get("final_loss"),
-            "total_steps": result.get("total_steps", step_counter[0]),
-            "checkpoint": result.get("checkpoint", result.get("checkpoint_name", "")),
-            "metrics": {},
-        }
+        return TrainResult(
+            success=result.get("status", "completed") != "error",
+            status=result.get("status", "completed"),
+            model_path=result.get("model_path", self.config.output_dir),
+            final_loss=result.get("final_loss"),
+            total_steps=result.get("total_steps", step_counter[0]),
+            checkpoint_name=result.get("checkpoint", result.get("checkpoint_name", "")),
+            method="turbo",
+            metrics={},
+        )
 
     def _train_distill_student(
         self,
         on_progress: Optional[Callable[[TrainingProgress], None]] = None,
-    ) -> Dict[str, Any]:
+    ) -> TrainResult:
         """Train a student model via distillation."""
         from domains.training.distillation import DistillationTrainer, DistillationConfig
         from domains.training.slonet import Tensor
@@ -700,7 +766,14 @@ class UnifiedTrainingPipeline:
 
         if teacher is None or student is None:
             logger.warning("Distillation requires teacher_model and student_model in trainer_kwargs")
-            return {"status": "skipped", "final_loss": None, "total_steps": 0}
+            return TrainResult(
+                success=False,
+                status="skipped",
+                final_loss=None,
+                total_steps=0,
+                method="distill",
+                metrics={},
+            )
 
         trainer = DistillationTrainer(teacher, student, distill_config)
 
@@ -722,19 +795,21 @@ class UnifiedTrainingPipeline:
                 on_progress(self.progress)
 
         final_loss = sum(losses) / max(len(losses), 1) if losses else None
-        return {
-            "status": "completed",
-            "final_loss": final_loss,
-            "total_steps": steps,
-            "model_path": self.config.output_dir,
-            "checkpoint": "",
-            "metrics": {},
-        }
+        return TrainResult(
+            success=True,
+            status="completed",
+            final_loss=final_loss,
+            total_steps=steps,
+            model_path=self.config.output_dir,
+            checkpoint_name="",
+            method="distill",
+            metrics={},
+        )
 
     def _train_slonet(
         self,
         on_progress: Optional[Callable[[TrainingProgress], None]] = None,
-    ) -> Dict[str, Any]:
+    ) -> TrainResult:
         """Train via SloughGPTTrainer (native SloNet / nanoGPT)."""
         from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
 
@@ -809,9 +884,11 @@ class UnifiedTrainingPipeline:
 
         self._trainer_instance = trainer
 
-        # Extract final loss from trainer (SloughGPTTrainer returns best_eval_loss)
+        # Extract final loss from trainer (TrainResult or dict)
         final_loss = None
-        if isinstance(result, dict):
+        if isinstance(result, TrainResult):
+            final_loss = result.final_loss or result.best_eval_loss
+        elif isinstance(result, dict):
             be = result.get("best_eval_loss")
             fl = result.get("final_loss")
             final_loss = fl if fl is not None else be
@@ -827,14 +904,13 @@ class UnifiedTrainingPipeline:
         # Skip soul export if no steps completed
         if total_steps == 0:
             logger.info("Zero steps completed — skipping soul export")
-            return {
-                "status": "no_data",
-                "model_path": self.config.checkpoint_dir,
-                "final_loss": None,
-                "total_steps": 0,
-                "checkpoint": "",
-                "metrics": {"loss_history": []},
-            }
+            return TrainResult(
+                success=False,
+                status="no_data",
+                model_path=self.config.checkpoint_dir,
+                total_steps=0,
+                metrics={"loss_history": []},
+            )
         # Export .soul if soul_name is configured
         if self.config.soul_name and hasattr(trainer, "model") and trainer.model is not None:
             try:
@@ -880,14 +956,16 @@ class UnifiedTrainingPipeline:
                 import traceback
                 logger.warning("Soul export skipped: %s\n%s", e, traceback.format_exc())
 
-        return {
-            "status": "completed",
-            "model_path": self.config.checkpoint_dir,
-            "final_loss": final_loss,
-            "total_steps": step_counter[0],
-            "checkpoint": checkpoint_name,
-            "metrics": {"loss_history": loss_history[-200:]},
-        }
+        return TrainResult(
+            success=True,
+            status="completed",
+            final_loss=final_loss,
+            total_steps=step_counter[0],
+            model_path=self.config.checkpoint_dir,
+            checkpoint_name=checkpoint_name,
+            method=self._method,
+            metrics={"loss_history": loss_history[-200:]},
+        )
 
     def _run_evaluate(self) -> Dict[str, Any]:
         """EVALUATE phase: compute eval metrics."""
@@ -945,7 +1023,21 @@ class FederatedRLTrainer:
     """Federated reinforcement learning trainer (stub).
 
     Intended for privacy-preserving federated fine-tuning with RLHF alignment.
+
+    .. deprecated::
+        Use ``SloughGPTTrainer`` instead.
     """
+
+    _is_training: bool = False
+
+    @property
+    def is_training(self) -> bool:
+        """Whether training is in progress."""
+        return self._is_training
+
+    def stop(self) -> None:
+        """Request early stopping."""
+        self._is_training = False
 
     def __init__(
         self,
@@ -954,6 +1046,10 @@ class FederatedRLTrainer:
         local_epochs: int = 3,
         **kwargs,
     ):
+        warnings.warn(
+            "FederatedRLTrainer is deprecated — use SloughGPTTrainer instead",
+            DeprecationWarning, stacklevel=2,
+        )
         self.num_clients = num_clients
         self.aggregation = aggregation
         self.local_epochs = local_epochs
@@ -962,15 +1058,16 @@ class FederatedRLTrainer:
     def train(
         self,
         on_progress: Optional[Callable[[TrainingProgress], None]] = None,
-    ) -> Dict[str, Any]:
+    ) -> TrainResult:
         """Run federated training (stub — returns placeholder result).
 
         Args:
             on_progress: Optional progress callback.
 
         Returns:
-            Dict with status, message, rounds.
+            TrainResult with status and rounds.
         """
+        self._is_training = True
         logger.info(
             "Federated training: %d clients, %s aggregation, %d local epochs",
             self.num_clients,
@@ -984,11 +1081,13 @@ class FederatedRLTrainer:
         )
         if on_progress:
             on_progress(progress)
-        return {
-            "status": "completed",
-            "message": "Federated RL training placeholder",
-            "rounds": self.num_clients,
-        }
+        self._is_training = False
+        return TrainResult(
+            success=True,
+            status="completed",
+            method="federated",
+            metrics={"rounds": self.num_clients, "message": "Federated RL training placeholder"},
+        )
 
 
 # =============================================================================

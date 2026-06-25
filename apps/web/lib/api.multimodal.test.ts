@@ -14,6 +14,7 @@ import { setupApiMocks, apiClient } from './__test-helper'
 setupApiMocks()
 
 import { multimodalController } from './multimodal-controller'
+import { visualController } from './visual-controller'
 
 describe('multimodalController.getCapabilities', () => {
   beforeEach(() => { vi.clearAllMocks() })
@@ -137,10 +138,10 @@ describe('multimodalController.trainBatchFromDir', () => {
   })
 })
 
-describe('multimodalController.createVLMDataset', () => {
+describe('visualController.createVisualDataset', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('POSTs /multimodal/vlm-dataset with config', async () => {
+  it('POSTs /multimodal/visual-dataset with config', async () => {
     apiClient.apiPost.mockResolvedValue({
       status: 'created',
       dataset: 'my-dataset',
@@ -149,11 +150,11 @@ describe('multimodalController.createVLMDataset', () => {
       auto_captioned: true,
     })
 
-    const result = await multimodalController.createVLMDataset('my-dataset', '/data/images')
+    const result = await visualController.createVisualDataset('my-dataset', '/data/images')
     expect(result.status).toBe('created')
     expect(result.entries).toBe(15)
     expect(result.auto_captioned).toBe(true)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/multimodal/vlm-dataset', {
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/multimodal/visual-dataset', {
       name: 'my-dataset',
       image_dir: '/data/images',
       caption_prompt: 'Describe this image in detail.',
@@ -170,10 +171,10 @@ describe('multimodalController.createVLMDataset', () => {
       auto_captioned: false,
     })
 
-    const result = await multimodalController.createVLMDataset('custom-dataset', '/path', 'What do you see?', false)
+    const result = await visualController.createVisualDataset('custom-dataset', '/path', 'What do you see?', false)
     expect(result.entries).toBe(5)
     expect(result.auto_captioned).toBe(false)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/multimodal/vlm-dataset', {
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/multimodal/visual-dataset', {
       name: 'custom-dataset',
       image_dir: '/path',
       caption_prompt: 'What do you see?',
@@ -182,23 +183,23 @@ describe('multimodalController.createVLMDataset', () => {
   })
 })
 
-describe('modelController.loadVLM', () => {
+describe('modelController.loadVisualModel', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('POSTs /models/vlm-load with query params', async () => {
+  it('POSTs /models/visual-load with query params', async () => {
     const { modelController } = await import('./model-controller')
     apiClient.apiPost.mockResolvedValue({
       status: 'loaded',
-      model_id: 'vlm',
-      type: 'vlm',
+      model_id: 'visual',
+      type: 'visual',
       vision_encoder: 'google/siglip-base-patch16-224',
       llm: 'Qwen/Qwen2.5-0.5B-Instruct',
     })
 
-    const result = await modelController.loadVLM('/path/to/vlm-dir', 'my-vlm')
+    const result = await modelController.loadVisualModel('/path/to/visual-dir', 'my-visual')
     expect(result.status).toBe('loaded')
-    expect(result.type).toBe('vlm')
+    expect(result.type).toBe('visual')
     expect(result.vision_encoder).toContain('siglip')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/models/vlm-load?model_dir=%2Fpath%2Fto%2Fvlm-dir&model_id=my-vlm')
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/models/visual-load?model_dir=%2Fpath%2Fto%2Fvisual-dir&model_id=my-visual')
   })
 })

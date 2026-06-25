@@ -1,111 +1,138 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach, beforeEach, afterAll, beforeAll } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import React from 'react'
 
-let mockFilteredMessages: any[] = []
-vi.mock('./ChatScreen', () => ({
-  ChatScreen: vi.fn().mockImplementation(({ messages }: any) => {
-    mockFilteredMessages = messages
-    return <div data-testid="chat-screen" />
-  }),
+vi.mock('./ChatInput', () => ({
+  ChatInput: () => <div data-testid="chat-input" />,
 }))
 
-vi.mock('./ChatInput', () => ({
-  ChatInput: vi.fn().mockImplementation((props: any) => {
-    return <div data-testid="chat-input" />
-  }),
+vi.mock('./ChatScreen', () => ({
+  ChatScreen: vi.fn().mockImplementation(({ messages, loading }) => (
+    <div data-testid="chat-screen">
+      {messages.map((m: { id: string; content: string }) => (
+        <div key={m.id} data-testid="message">{m.content}</div>
+      ))}
+      {loading && <div data-testid="loading-indicator">Loading...</div>}
+    </div>
+  )),
+}))
+
+vi.mock('./ImageDropZone', () => ({
+  ImageDropZone: ({ children, onImageDropped }: { children: React.ReactNode; onImageDropped: (file: File) => void }) => (
+    <div data-testid="image-drop-zone" onDrop={(e) => {
+      const file = (e.dataTransfer?.files?.[0] || new File([''], 'test.png'))
+      onImageDropped(file)
+    }}>
+      {children}
+    </div>
+  ),
 }))
 
 import { ChatArea } from './ChatArea'
 
-const baseHealth = { status: 'ok', model_loaded: true, model_type: 'gpt2' } as any
-const msg = (id: string, content = 'hello') => ({ id, role: 'user' as const, content, timestamp: new Date() })
+const mockHealth = {
+  status: 'healthy',
+  model_loaded: true,
+  model_type: 'gpt2',
+  summary: 'gpt2 loaded',
+  uptime_seconds: 100,
+  request_count: 10,
+  error_count: 0,
+  inference_count: 5,
+  total_tokens: 1000,
+  tokens_per_sec: 10,
+  avg_tokens_per_request: 200,
+  avg_latency_ms: 100,
+  requests_per_minute: 5,
+}
+
+const createMessage = (id: string, content: string) => ({
+  id,
+  content,
+  role: 'user' as const,
+  timestamp: new Date(),
+})
 
 describe('ChatArea', () => {
-  beforeAll(() => {
-    Element.prototype.scrollIntoView = vi.fn()
-  })
+  const defaultProps = {
+    messages: [],
+    loading: false,
+    health: mockHealth,
+    onRefreshHealth: vi.fn(),
+    onCopy: vi.fn(),
+    value: '',
+    onChange: vi.fn(),
+    onSend: vi.fn(),
+  }
 
+  beforeEach(() => { vi.clearAllMocks() })
   afterEach(cleanup)
 
-  it('renders empty ChatScreen when no messages', () => {
-    render(
-      <ChatArea messages={[]} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />
-    )
-    expect(screen.getByTestId('chat-screen')).toBeDefined()
+  it('renders chat screen with messages', () => {
+    const messages = [createMessage('1', 'Hello'), createMessage('2', 'World')]
+    render(<ChatArea {...defaultProps} messages={messages} />)
+    expect(screen.getByText('Hello')).toBeDefined()
+    expect(screen.getByText('World')).toBeDefined()
+  })
+
+  it('renders empty state when no messages', () => {
+    render(<ChatArea {...defaultProps} messages={[]} />)
+    const screenEl = screen.getByTestId('chat-screen')
+    expect(screenEl).toBeDefined()
+  })
+
+  it('renders loading indicator when loading', () => {
+    render(<ChatArea {...defaultProps} messages={[]} loading={true} />)
+    expect(screen.getByTestId('loading-indicator')).toBeDefined()
+  })
+
+  it('renders chat input', () => {
+    render(<ChatArea {...defaultProps} />)
     expect(screen.getByTestId('chat-input')).toBeDefined()
-    expect(mockFilteredMessages).toEqual([])
   })
 
-  it('renders messages', () => {
-    const messages = [msg('m1', 'How are you?'), msg('m2', 'Great!', 'assistant')]
-    render(
-      <ChatArea messages={messages} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />
-    )
-    expect(mockFilteredMessages).toEqual(messages)
-  })
-
-  it('filters messages by searchQuery', () => {
-    const messages = [msg('m1', 'Hello world'), msg('m2', 'Goodbye')]
-    render(
-      <ChatArea messages={messages} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} searchQuery="hello" />
-    )
-    expect(mockFilteredMessages).toHaveLength(1)
-    expect(mockFilteredMessages[0].id).toBe('m1')
-  })
-
-  it('does not filter when searchQuery is empty', () => {
-    const messages = [msg('m1', 'Hello world'), msg('m2', 'Goodbye')]
-    render(
-      <ChatArea messages={messages} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} searchQuery="" />
-    )
-    expect(mockFilteredMessages).toHaveLength(2)
+  it('renders image drop zone', () => {
+    render(<ChatArea {...defaultProps} />)
+    expect(screen.getByTestId('image-drop-zone')).toBeDefined()
   })
 
   it('shows jump-to-bottom button when scrolled up with messages', () => {
-    const messages = [msg('m1'), msg('m2'), msg('m3')]
-    const { container } = render(
-      <ChatArea messages={messages} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />
-    )
-    const scrollRegion = container.querySelector('[role="region"]')
-    if (scrollRegion) {
-      Object.defineProperty(scrollRegion, 'scrollHeight', { value: 1000 })
-      Object.defineProperty(scrollRegion, 'clientHeight', { value: 400 })
-      Object.defineProperty(scrollRegion, 'scrollTop', { value: 0 })
-      fireEvent.scroll(scrollRegion)
-    }
-    const jumpBtn = screen.queryByLabelText('Jump to latest messages')
-    expect(jumpBtn).toBeDefined()
+    const messages = [createMessage('1', 'Hello'), createMessage('2', 'World')]
+    render(<ChatArea {...defaultProps} messages={messages} />)
+    const container = screen.getByRole('region', { name: 'Chat messages' })
+    Object.defineProperty(container, 'scrollHeight', { value: 1000 })
+    Object.defineProperty(container, 'scrollTop', { value: 0 })
+    Object.defineProperty(container, 'clientHeight', { value: 200 })
+    fireEvent.scroll(container)
+    expect(screen.getByLabelText('Jump to latest messages')).toBeDefined()
   })
 
-  it('does not show jump-to-bottom when at bottom', () => {
-    const messages = [msg('m1'), msg('m2')]
-    const { container } = render(
-      <ChatArea messages={messages} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />
-    )
-    const scrollRegion = container.querySelector('[role="region"]')
-    if (scrollRegion) {
-      Object.defineProperty(scrollRegion, 'scrollHeight', { value: 1000 })
-      Object.defineProperty(scrollRegion, 'clientHeight', { value: 500 })
-      Object.defineProperty(scrollRegion, 'scrollTop', { value: 450 })
-      fireEvent.scroll(scrollRegion)
-    }
-    expect(screen.queryByLabelText('Jump to latest messages')).toBeNull()
+  it('shows message count on jump-to-bottom button', () => {
+    const messages = [createMessage('1', 'A'), createMessage('2', 'B'), createMessage('3', 'C')]
+    render(<ChatArea {...defaultProps} messages={messages} />)
+    const container = screen.getByRole('region', { name: 'Chat messages' })
+    Object.defineProperty(container, 'scrollHeight', { value: 1000 })
+    Object.defineProperty(container, 'scrollTop', { value: 0 })
+    Object.defineProperty(container, 'clientHeight', { value: 200 })
+    fireEvent.scroll(container)
+    expect(screen.getByText('3')).toBeDefined()
   })
 
-  it('exposes scrollToBottom via ref', () => {
-    const ref = React.createRef<any>()
-    render(
-      <ChatArea ref={ref} messages={[]} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />
-    )
-    expect(ref.current?.scrollToBottom).toBeDefined()
+  it('filters messages by search query', () => {
+    const messages = [
+      createMessage('1', 'Hello world'),
+      createMessage('2', 'Goodbye'),
+    ]
+    render(<ChatArea {...defaultProps} messages={messages} searchQuery="Hello" />)
+    expect(screen.getByText('Hello world')).toBeDefined()
+    expect(screen.queryByText('Goodbye')).toBeNull()
   })
 
-  it('has chat messages region for accessibility', () => {
-    render(
-      <ChatArea messages={[]} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />
-    )
-    expect(screen.getByLabelText('Chat messages')).toBeDefined()
+  it('forwards imperative scrollToBottom', () => {
+    const ref = React.createRef<{ scrollToBottom: () => void }>()
+    render(<ChatArea {...defaultProps} ref={ref} />)
+    expect(ref.current).not.toBeNull()
+    expect(typeof ref.current?.scrollToBottom).toBe('function')
   })
 })

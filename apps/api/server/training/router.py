@@ -20,7 +20,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from training.jobs import training_jobs
 from training.resolution import resolve_training_inputs
-from training.schemas import TrainingRequest, TrainRequest, TrainResolveRequest, HFTrainingRequest, VLMRequest, UnifiedStartRequest, QuickTrainRequest
+from training.schemas import TrainingRequest, TrainRequest, TrainResolveRequest, HFTrainingRequest, UnifiedStartRequest, QuickTrainRequest, VisualTrainingRequest
 from training.controller import get_training_controller, TrainingState
 from training.webhooks import (
     get_webhook_store,
@@ -801,6 +801,139 @@ async def start_hf_training(request: HFTrainingRequest):
     }
 
 
+@router.post("/training/visual-start")
+async def start_visual_training(request: VisualTrainingRequest):
+    """Train a vision-language model on image-text pairs.
+
+    Creates a VLM job in the training job registry and runs
+    VLMTrainer in a background thread. Poll ``GET /training/jobs``
+    for progress.
+
+    The ``dataset`` field must match a folder under ``datasets/``
+    containing a JSONL file with ``image_path`` and ``caption``
+    fields (or ``conversations`` array).
+    """
+    job_id = f"vlm_{len(training_jobs) + 1}_{int(time.time())}"
+
+    _repo_root = Path(__file__).resolve().parents[4]
+    _datasets_dir = _repo_root / "datasets"
+    ds_dir = _datasets_dir / request.dataset
+    data_path = ds_dir / "corpus.jsonl"
+    if not data_path.is_file():
+        data_path = ds_dir / "input.txt"
+    if not data_path.is_file():
+        # Try finding any .jsonl
+        jsonl_files = list(ds_dir.glob("*.jsonl"))
+        if jsonl_files:
+            data_path = jsonl_files[0]
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Dataset not found: {request.dataset}. Import a dataset with images first.",
+            )
+
+    output_dir = str(_repo_root / f"models/vlm-finetuned/{request.dataset}_{int(time.time())}")
+
+    name = request.name or f"VLM-{request.dataset}"
+    job: dict[str, Any] = {
+        "id": job_id,
+        "name": name,
+        "model": f"vlm:{request.vision_encoder}+{request.llm}",
+        "dataset": request.dataset,
+        "data_path": str(data_path),
+        "status": "queued",
+        "progress": 0,
+        "epochs": request.stage1_epochs + request.stage2_epochs,
+        "current_epoch": 0,
+        "loss": None,
+        "output_dir": output_dir,
+        "stage": "queued",
+        "build_type": "vlm",
+    }
+    training_jobs[job_id] = job
+
+    def run_visual_training() -> None:
+        jid = job_id
+        try:
+            training_jobs[jid]["status"] = "running"
+            get_job_store().create(jid, name, request.model_dump(), request.dataset)
+            get_job_store().mark_started(jid)
+
+            from domains.training.multimodal import VLMTrainer, VLMConfig
+
+            config = VLMConfig(
+                stage1_epochs=request.stage1_epochs,
+                stage2_epochs=request.stage2_epochs,
+                batch_size=request.batch_size,
+                stage1_lr=request.learning_rate,
+                stage2_lr=request.learning_rate * 0.02,
+                lora_rank=request.lora_rank,
+                output_dir=output_dir,
+                vision_encoder=request.vision_encoder,
+                llm=request.llm,
+            )
+
+            def on_progress(info: dict[str, Any]) -> None:
+                rec = training_jobs.get(jid)
+                if not rec:
+                    return
+                rec["progress"] = info.get("progress_pct", rec.get("progress", 0))
+                rec["current_epoch"] = info.get("epoch", rec.get("current_epoch", 0))
+                rec["loss"] = info.get("loss", rec.get("loss"))
+                rec["stage"] = info.get("stage", rec.get("stage", "training"))
+                loss_val = info.get("loss")
+                if loss_val is not None:
+                    rec.setdefault("loss_history", []).append({
+                        "step": rec.get("current_epoch", 0),
+                        "value": float(loss_val),
+                        "type": "train",
+                    })
+                get_job_store().update_progress(
+                    jid,
+                    rec["progress"],
+                    epoch=int(rec["current_epoch"]),
+                    loss=rec["loss"],
+                )
+
+            trainer = VLMTrainer(config)
+            result = trainer.train(
+                data_path=str(data_path),
+                progress_callback=on_progress,
+            )
+
+            status = result.get("status", "completed")
+            training_jobs[jid]["status"] = "completed" if status == "completed" else "failed"
+            training_jobs[jid]["progress"] = 100
+            training_jobs[jid]["loss"] = result.get("final_loss", result.get("loss"))
+            training_jobs[jid]["model_path"] = output_dir
+
+            if status == "completed":
+                get_job_store().mark_completed(jid, checkpoint_path=output_dir)
+                logger.info("VLM training completed: %s", name)
+            else:
+                training_jobs[jid]["error"] = result.get("error", "Unknown error")
+                get_job_store().mark_failed(jid, result.get("error", "Unknown error"))
+
+        except Exception as exc:
+            logger.exception("VLM training job %s failed", job_id)
+            if jid in training_jobs:
+                training_jobs[jid]["status"] = "failed"
+                training_jobs[jid]["error"] = str(exc)
+            try:
+                get_job_store().mark_failed(jid, str(exc))
+            except Exception:
+                pass
+
+    thread = threading.Thread(target=run_visual_training, daemon=True)
+    thread.start()
+
+    return {
+        "job_id": job_id,
+        "status": "queued",
+        "message": f"VLM training queued: {name}",
+    }
+
+
 @router.post("/training/quick")
 async def quick_train(request: QuickTrainRequest):
     """One-click training: pick a dataset, we handle everything.
@@ -994,138 +1127,6 @@ async def quick_train(request: QuickTrainRequest):
         "explanation": config.explanation,
     }
 
-
-@router.post("/training/vlm-start")
-async def start_vlm_training(request: VLMRequest):
-    """Multimodal VLM training: vision encoder + LLM with trainable connector.
-
-    Two-stage pipeline:
-      1. Connector pretrain (LLM frozen, vision optionally frozen)
-      2. Full LoRA fine-tune
-
-    Dataset must be a JSONL with image-text pairs under ``datasets/<name>/``.
-    """
-    import os
-
-    job_id = f"vlm_job_{len(training_jobs) + 1}_{int(time.time())}"
-
-    # Resolve dataset path
-    _repo_root = Path(__file__).resolve().parents[4]
-    data_path = _repo_root / "datasets" / request.dataset / "corpus.jsonl"
-    if not data_path.is_file():
-        raise HTTPException(
-            status_code=400,
-            detail=f"VLM dataset not found: {data_path}. Expected JSONL with image_path + conversations.",
-        )
-
-    output_dir = str(_repo_root / f"models/vlm/{request.dataset}_{int(time.time())}")
-
-    job: dict[str, Any] = {
-        "id": job_id,
-        "name": request.name or f"VLM-{request.dataset}",
-        "type": "vlm",
-        "vision_encoder": request.vision_encoder,
-        "llm": request.llm,
-        "dataset": request.dataset,
-        "data_path": str(data_path),
-        "status": "queued",
-        "progress": 0,
-        "stage": "queued",
-        "loss": None,
-        "output_dir": output_dir,
-        "loss_history": [],
-    }
-    training_jobs[job_id] = job
-
-    req = request
-
-    def run_vlm_training() -> None:
-        jid = job_id
-        try:
-            training_jobs[jid]["status"] = "running"
-            training_jobs[jid]["stage"] = "loading"
-
-            from domains.training.multimodal import VLMConfig, VLMTrainer
-
-            config = VLMConfig(
-                vision_encoder=req.vision_encoder,
-                llm=req.llm,
-                connector_hidden_dim=req.connector_hidden_dim,
-                max_seq_length=req.max_seq_length,
-                stage1_epochs=req.stage1_epochs,
-                stage2_epochs=req.stage2_epochs,
-                stage1_lr=req.stage1_lr,
-                stage2_lr=req.stage2_lr,
-                batch_size=req.batch_size,
-                use_lora=req.use_lora,
-                lora_rank=req.lora_rank,
-                lora_alpha=req.lora_alpha,
-                freeze_vision=req.freeze_vision,
-                gradient_accumulation_steps=req.gradient_accumulation_steps,
-                warmup_steps=req.warmup_steps,
-                weight_decay=req.weight_decay,
-                output_dir=output_dir,
-            )
-
-            trainer = VLMTrainer(config)
-
-            def on_progress(info):
-                loss_val = info.get("loss")
-                training_jobs[jid].update({
-                    "stage": info.get("stage", "training"),
-                    "progress": info.get("progress_pct", 0),
-                    "loss": loss_val,
-                    "current_epoch": info.get("epoch", 0),
-                    "global_step": info.get("step", 0),
-                })
-                if loss_val is not None:
-                    training_jobs[jid].setdefault("loss_history", []).append({"step": info.get("step", 0), "value": float(loss_val), "type": "train"})
-
-            result = trainer.train(data_path=str(data_path), on_progress=on_progress)
-            training_jobs[jid].update({
-                "status": result.get("status", "completed"),
-                "progress": 100,
-                "loss": result.get("final_loss"),
-                "model_path": result.get("model_path"),
-                "sou_path": result.get("sou_path"),
-                "output_dir": output_dir,
-                "type": "vlm",
-            })
-
-            # Copy .sou to checkpoints directory so it appears in the catalog
-            sou_path = result.get("sou_path")
-            if sou_path:
-                try:
-                    import shutil
-                    from pathlib import Path as _P
-                    _ckpt_dir = _P(__file__).resolve().parents[4] / "models" / "auto-training"
-                    _ckpt_dir.mkdir(parents=True, exist_ok=True)
-                    sou_file = _P(sou_path)
-                    if sou_file.is_file():
-                        dest = _ckpt_dir / sou_file.name
-                        shutil.copy2(str(sou_file), str(dest))
-                        meta_src = sou_file.with_suffix(".sou.meta.json")
-                        if meta_src.is_file():
-                            shutil.copy2(str(meta_src), str(_ckpt_dir / meta_src.name))
-                        logger.info("VLM .sou copied to checkpoints: %s", dest)
-                except Exception as copy_err:
-                    logger.warning("VLM .sou copy failed: %s", copy_err)
-
-        except Exception as e:
-            logger.exception("VLM training failed for job %s: %s", jid, e)
-            training_jobs[jid].update({
-                "status": "failed",
-                "error": str(e),
-            })
-
-    thread = threading.Thread(target=run_vlm_training, daemon=True)
-    thread.start()
-
-    return {
-        "job_id": job_id,
-        "status": "queued",
-        "message": f"VLM training started: {request.vision_encoder} + {request.llm} on {request.dataset}",
-    }
 
 
 @router.post("/training/from-feedback")
@@ -1671,33 +1672,6 @@ async def list_builds():
                 "created_at": job.get("started_at", ""),
                 "finished_at": job.get("completed_at", ""),
             })
-
-    # 5. VLM fine-tuned model directories under models/vlm/
-    _vlm_dir = _repo_root / "models" / "vlm"
-    if _vlm_dir.is_dir():
-        for d in sorted(_vlm_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
-            if d.is_dir() and d.name not in seen:
-                seen.add(d.name)
-                config_path = d / "vlm_config.json"
-                size_mb = sum(f.stat().st_size for f in d.rglob("*") if f.is_file()) / (1024 * 1024)
-                config = {}
-                if config_path.exists():
-                    try:
-                        config = json.loads(config_path.read_text())
-                    except Exception:
-                        pass
-                builds.append({
-                    "name": d.name,
-                    "build_type": "vlm",
-                    "model_path": str(d),
-                    "size_mb": round(size_mb, 1),
-                    "created_at": datetime.fromtimestamp(d.stat().st_mtime).isoformat(),
-                    "vision_encoder": config.get("vision_encoder", ""),
-                    "llm": config.get("llm", ""),
-                    "dataset": config.get("training_dataset", ""),
-                    "connector_hidden_dim": config.get("connector_hidden_dim"),
-                    "use_lora": config.get("use_lora", False),
-                })
 
     # 4. HF fine-tuned model directories on disk (for builds not tracked in memory)
     if _hf_finetuned_dir.is_dir():

@@ -236,9 +236,14 @@ export function ChatScreen() {
           <View style={styles.drawer}>
             <View style={styles.drawerHeader}>
               <Text style={styles.drawerTitle}>Conversations</Text>
-              <TouchableOpacity onPress={() => setShowDrawer(false)}>
-                <Text style={styles.drawerClose}>×</Text>
-              </TouchableOpacity>
+              <View style={{flexDirection: 'row', alignItems: 'center', gap: 12}}>
+                <TouchableOpacity onPress={() => { createSession(); setShowDrawer(false); }}>
+                  <Text style={{fontSize: 20, color: colors.primary}}>+</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setShowDrawer(false)}>
+                  <Text style={styles.drawerClose}>×</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             <FlatList
               data={sessions}

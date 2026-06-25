@@ -58,7 +58,19 @@ export function VisionStudioDialog({
     accuracy_history: number[]
     mean_accuracy: number
     last_accuracy: number
-  } | null>(null)
+  } | null>(() => {
+    if (initialCaps && (initialCaps.images_learned ?? 0) > 0) {
+      return {
+        images_learned: initialCaps.images_learned ?? 0,
+        vocab_size: initialCaps.vocab_size ?? 0,
+        caption_history: [],
+        accuracy_history: [],
+        mean_accuracy: initialCaps.mean_accuracy ?? 0,
+        last_accuracy: initialCaps.mean_accuracy ?? 0,
+      }
+    }
+    return null
+  })
   const [resetLoading, setResetLoading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [retryLoading, setRetryLoading] = useState(false)
@@ -327,7 +339,7 @@ export function VisionStudioDialog({
                         Low confidence — consider retrying
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        The model isn't confident about this result. Try again — the model may produce a better result on a second pass.
+                        The model isn&apos;t confident about this result. Try again — the model may produce a better result on a second pass.
                       </p>
                       <Button size="sm" variant="outline" onClick={retryAnalyze} disabled={retryLoading} className="h-7 text-xs">
                         <IconRefresh className="h-3 w-3 mr-1" />

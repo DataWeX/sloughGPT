@@ -16,6 +16,7 @@ export interface ChatSession {
   synced: boolean
   starred: boolean
   pinned: boolean
+  archived?: boolean
 }
 
 interface StoredChatMessage {
@@ -34,6 +35,7 @@ interface StoredChatSession {
   synced: boolean
   pinned: boolean
   starred: boolean
+  archived?: boolean
 }
 
 interface PendingMessage {
@@ -98,13 +100,14 @@ export const chatDB = {
     await db.sessions.delete(id)
   },
 
-  async updateSession(id: string, updates: { starred?: boolean; name?: string; pinned?: boolean }): Promise<void> {
+  async updateSession(id: string, updates: { starred?: boolean; name?: string; pinned?: boolean; archived?: boolean }): Promise<void> {
     const session = await db.sessions.get(id)
     if (session) {
       await db.sessions.update(id, {
         ...(updates.starred !== undefined && { starred: updates.starred }),
         ...(updates.name !== undefined && { name: updates.name }),
         ...(updates.pinned !== undefined && { pinned: updates.pinned }),
+        ...(updates.archived !== undefined && { archived: updates.archived }),
         updatedAt: new Date().toISOString(),
       })
     }

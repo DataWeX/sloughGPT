@@ -3,7 +3,7 @@ Session Router - Chat session management.
 Delegates to message_feedback in main.py for storage (in-process singleton).
 """
 import logging
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any, AsyncIterator
@@ -147,7 +147,7 @@ async def get_session_inspector(session_id: str):
 
 
 @router.post("/{session_id}/regenerate")
-async def regenerate_session(session_id: str) -> StreamingResponse:
+async def regenerate_session(session_id: str, request: Request) -> StreamingResponse:
     """Regenerate the last assistant response for a session.
 
     Loads stored session messages, calls the provider to regenerate
@@ -177,6 +177,9 @@ async def regenerate_session(session_id: str) -> StreamingResponse:
                     max_tokens=512,
                     temperature=0.8,
                 ):
+                    if await request.is_disconnected():
+                        logger.info("Client disconnected from regenerate stream (request)", extra={"context": {"session_id": session_id}})
+                        return
                     if token:
                         full_response += token
                         yield sse_token("chat", token)

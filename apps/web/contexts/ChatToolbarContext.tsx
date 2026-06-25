@@ -30,6 +30,7 @@ interface SearchGroup {
   onNextMatch: () => void
   showMobile: boolean
   setShowMobile: (v: boolean) => void
+  searchInputRef?: React.RefObject<HTMLInputElement | null>
 }
 
 interface ModelGroup {

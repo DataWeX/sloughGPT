@@ -10,6 +10,9 @@ export default defineConfig({
     video: false,
     screenshotOnRunFailure: true,
     defaultCommandTimeout: 15_000,
+    pageLoadTimeout: 120000,
+    experimentalMemoryManagement: true,
+    numTestsKeptInMemory: 1,
     setupNodeEvents() {
       // extend plugins here if needed
     },

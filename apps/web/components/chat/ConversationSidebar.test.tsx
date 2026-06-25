@@ -1,54 +1,294 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import React from 'react'
+
+vi.mock('next/link', () => ({
+  default: ({ children, href, onClick }: { children: React.ReactNode; href: string; onClick?: () => void }) => (
+    <a href={href} onClick={onClick}>{children}</a>
+  ),
+}))
+
+vi.mock('@/components/ui/button', () => ({
+  Button: ({ children, onClick, variant, size, className }: any) => (
+    <button onClick={onClick} className={className} data-variant={variant} data-size={size}>{children}</button>
+  ),
+}))
+
+vi.mock('@/components/ui', () => {
+  const iconMock = (name: string) => { const C = () => <span data-testid={`icon-${name}`}>{name}</span>; C.displayName = `Icon${name}`; return C }
+  return {
+    IconPlus: iconMock('plus'),
+    IconStar: ({ filled }: any) => <span data-testid="icon-star" data-filled={String(filled)}>star</span>,
+    IconPin: iconMock('pin'),
+    IconChat: iconMock('chat'),
+    IconChevronRight: iconMock('chevron-right'),
+    IconX: iconMock('x'),
+    IconSearch: iconMock('search'),
+    IconFolder: iconMock('folder'),
+  }
+})
+
 import { ConversationSidebar } from './ConversationSidebar'
+import type { Conversation } from '@/lib/session-controller'
 
-afterEach(cleanup)
-
-const conversations = [
-  { id: '1', name: 'Chat 1', messages: [], createdAt: '2026-06-20T10:00:00Z', updatedAt: '2026-06-21T10:00:00Z', synced: true, starred: false, pinned: false },
-  { id: '2', name: 'Starred Chat', messages: [], createdAt: '2026-06-19T10:00:00Z', updatedAt: '2026-06-20T10:00:00Z', synced: true, starred: true, pinned: false },
-  { id: '3', name: 'Chat 3', messages: [], createdAt: '2026-06-18T10:00:00Z', updatedAt: '2026-06-19T10:00:00Z', synced: true, starred: false, pinned: false },
-]
+const createConv = (id: string, overrides: Partial<Conversation> = {}): Conversation => ({
+  id,
+  name: `Conversation ${id}`,
+  session_id: id,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+  starred: false,
+  pinned: false,
+  message_count: 1,
+  messages: [{ id: 'm1', role: 'user', content: 'Hello', timestamp: Date.now() }],
+  ...overrides,
+})
 
 describe('ConversationSidebar', () => {
-  const onLoad = vi.fn()
+  const onLoadConversation = vi.fn()
   const onNewChat = vi.fn()
+  const onDeleteConversation = vi.fn()
   const onClose = vi.fn()
 
-  it('renders header with title', () => {
-    render(<ConversationSidebar conversations={[]} currentConversationId="" onLoadConversation={onLoad} onNewChat={onNewChat} open={true} onClose={onClose} />)
-    expect(screen.getAllByText('Conversations').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('New').length).toBeGreaterThanOrEqual(1)
+  const defaultProps = {
+    conversations: [],
+    currentConversationId: undefined,
+    onLoadConversation,
+    onNewChat,
+    onDeleteConversation,
+    open: false,
+    onClose,
+  }
+
+  beforeEach(() => { vi.clearAllMocks() })
+  afterEach(cleanup)
+
+  it('renders desktop sidebar', () => {
+    render(<ConversationSidebar {...defaultProps} />)
+    const aside = document.querySelector('aside')
+    expect(aside).toBeDefined()
+    expect(aside!.className).toContain('hidden lg:flex')
   })
 
-  it('shows empty state when no conversations', () => {
-    render(<ConversationSidebar conversations={[]} currentConversationId="" onLoadConversation={onLoad} onNewChat={onNewChat} open={true} onClose={onClose} />)
-    expect(screen.getAllByText(/No conversations yet/).length).toBeGreaterThanOrEqual(1)
+  it('shows empty state message', () => {
+    render(<ConversationSidebar {...defaultProps} />)
+    expect(screen.getByText(/No conversations yet/)).toBeDefined()
   })
 
-  it('renders starred conversations first', () => {
-    render(<ConversationSidebar conversations={conversations} currentConversationId="" onLoadConversation={onLoad} onNewChat={onNewChat} open={true} onClose={onClose} />)
-    expect(screen.getAllByText('Starred').length).toBeGreaterThanOrEqual(1)
+  it('shows search input when conversations exist', () => {
+    const conversations = [createConv('1'), createConv('2')]
+    render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    expect(screen.getByLabelText('Search conversations')).toBeDefined()
   })
 
-  it('calls onLoadConversation and onClose when clicking a conversation', () => {
-    render(<ConversationSidebar conversations={conversations} currentConversationId="" onLoadConversation={onLoad} onNewChat={onNewChat} open={true} onClose={onClose} />)
-    const items = screen.getAllByText(/Chat 1|Starred Chat|Chat 3/)
-    fireEvent.click(items[0])
-    expect(onLoad).toHaveBeenCalled()
+  it('shows New button', () => {
+    const conversations = [createConv('1')]
+    render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    expect(screen.getByText('New')).toBeDefined()
+  })
+
+  it('calls onNewChat when New button clicked', () => {
+    const conversations = [createConv('1')]
+    render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    fireEvent.click(screen.getByText('New'))
+    expect(onNewChat).toHaveBeenCalledTimes(1)
+  })
+
+  it('calls onLoadConversation when conversation clicked', () => {
+    const conversations = [createConv('1')]
+    render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    fireEvent.click(screen.getByText('Conversation 1'))
+    expect(onLoadConversation).toHaveBeenCalledWith('1')
+  })
+
+  it('calls onClose when conversation selected', () => {
+    const conversations = [createConv('1')]
+    render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    fireEvent.click(screen.getByText('Conversation 1'))
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows starred section for starred conversations', () => {
+    const conversations = [
+      createConv('1', { starred: true, name: 'Starred Chat' }),
+      createConv('2', { name: 'Regular Chat' }),
+    ]
+    render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    expect(screen.getByText('Starred')).toBeDefined()
+    expect(screen.getByText('Recent')).toBeDefined()
+    expect(screen.getByText('Starred Chat')).toBeDefined()
+    expect(screen.getByText('Regular Chat')).toBeDefined()
+  })
+
+  it('highlights active conversation', () => {
+    const conversations = [createConv('1')]
+    render(
+      <ConversationSidebar
+        {...defaultProps}
+        conversations={conversations}
+        currentConversationId="1"
+      />
+    )
+    const convEl = screen.getByText('Conversation 1').closest('[role="button"]')
+    expect(convEl?.className).toContain('bg-primary/10')
+  })
+
+  it('filters conversations by search', () => {
+    const conversations = [createConv('1', { name: 'Apple pie' }), createConv('2', { name: 'Banana bread' })]
+    render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    const searchInput = screen.getByLabelText('Search conversations')
+    fireEvent.change(searchInput, { target: { value: 'Apple' } })
+    expect(screen.getByText('Apple pie')).toBeDefined()
+    expect(screen.queryByText('Banana bread')).toBeNull()
+  })
+
+  it('shows no-match message on search', () => {
+    const conversations = [createConv('1', { name: 'Apple' })]
+    render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    const searchInput = screen.getByLabelText('Search conversations')
+    fireEvent.change(searchInput, { target: { value: 'zzz' } })
+    expect(screen.getByText(/No conversations match/)).toBeDefined()
+  })
+
+  it('calls onDeleteConversation when delete button clicked', () => {
+    const conversations = [createConv('1')]
+    render(
+      <ConversationSidebar
+        {...defaultProps}
+        conversations={conversations}
+        onDeleteConversation={onDeleteConversation}
+      />
+    )
+    const deleteBtn = screen.getByLabelText('Delete Conversation 1')
+    fireEvent.click(deleteBtn)
+    expect(onDeleteConversation).toHaveBeenCalledWith('1')
+  })
+
+  it('shows mobile drawer when open is true', () => {
+    render(<ConversationSidebar {...defaultProps} open={true} />)
+    const overlay = document.querySelector('.fixed.inset-0')
+    expect(overlay).toBeDefined()
+  })
+
+  it('closes mobile drawer when overlay clicked', () => {
+    render(<ConversationSidebar {...defaultProps} open={true} />)
+    const overlay = document.querySelector('.absolute.inset-0')
+    fireEvent.click(overlay!)
     expect(onClose).toHaveBeenCalled()
   })
 
-  it('calls onNewChat when clicking New button', () => {
-    render(<ConversationSidebar conversations={conversations} currentConversationId="" onLoadConversation={onLoad} onNewChat={onNewChat} open={true} onClose={onClose} />)
-    fireEvent.click(screen.getAllByText('New')[0])
-    expect(onNewChat).toHaveBeenCalled()
+  it('shows close button in mobile drawer', () => {
+    render(<ConversationSidebar {...defaultProps} open={true} />)
+    expect(screen.getByLabelText('Close sidebar')).toBeDefined()
+  })
+
+  it('closes mobile drawer when close button clicked', () => {
+    render(<ConversationSidebar {...defaultProps} open={true} />)
+    fireEvent.click(screen.getByLabelText('Close sidebar'))
     expect(onClose).toHaveBeenCalled()
   })
 
-  it('does not render when open is false', () => {
-    const { container } = render(<ConversationSidebar conversations={conversations} currentConversationId="" onLoadConversation={onLoad} onNewChat={onNewChat} open={false} onClose={onClose} />)
-    expect(container.querySelector('[class*="w-0"]')).toBeTruthy()
+  it('shows conversation metadata (msg count, date)', () => {
+    const conversations = [createConv('1')]
+    render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    expect(screen.getByText(/1 msgs/)).toBeDefined()
+  })
+
+  it('shows pin icon for pinned conversations', () => {
+    const conversations = [createConv('1', { pinned: true, name: 'Pinned Chat' })]
+    render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    expect(screen.getByTestId('icon-pin')).toBeDefined()
+  })
+
+  it('shows star icon for starred conversations', () => {
+    const conversations = [createConv('1', { starred: true, name: 'Starred Chat' })]
+    render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    expect(screen.getByTestId('icon-star')).toBeDefined()
+  })
+
+  it('renders View all conversations link', () => {
+    render(<ConversationSidebar {...defaultProps} />)
+    const link = screen.getByText('View all conversations')
+    expect(link).toBeDefined()
+  })
+
+  it('calls onClose when view all conversations clicked', () => {
+    render(<ConversationSidebar {...defaultProps} />)
+    const link = screen.getByText('View all conversations')
+    fireEvent.click(link)
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('handles Enter key on conversation row', () => {
+    const conversations = [createConv('1')]
+    render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    const convEl = screen.getByText('Conversation 1').closest('[role="button"]')
+    expect(convEl).not.toBeNull()
+    fireEvent.keyDown(convEl!, { key: 'Enter' })
+    expect(onLoadConversation).toHaveBeenCalledWith('1')
+  })
+
+  it('displays truncated message preview', () => {
+    const longText = 'A'.repeat(50)
+    const conversations = [createConv('1', {
+      messages: [{ id: 'm1', role: 'user', content: longText, timestamp: Date.now() }],
+    })]
+    render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    const expected = 'A'.repeat(36) + '…'
+    expect(screen.getByText(expected)).toBeDefined()
+  })
+
+  it('hides message preview when last message has no content', () => {
+    const conversations = [createConv('1', {
+      messages: [{ id: 'm1', role: 'user', content: '', timestamp: Date.now() }],
+    })]
+    const { container } = render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    const lineClamp = container.querySelector('.line-clamp-1')
+    expect(lineClamp).toBeNull()
+  })
+
+  it('double-clicking conversation name opens rename input', () => {
+    const conversations = [createConv('1')]
+    const { container } = render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    const nameEl = screen.getByText('Conversation 1')
+    fireEvent.doubleClick(nameEl)
+    const input = container.querySelector('input[aria-label="Rename conversation"]')
+    expect(input).not.toBeNull()
+  })
+
+  it('saves rename on Enter', () => {
+    const onRename = vi.fn()
+    const conversations = [createConv('1')]
+    const { container } = render(
+      <ConversationSidebar
+        {...defaultProps}
+        conversations={conversations}
+        onRenameConversation={onRename}
+      />
+    )
+    fireEvent.doubleClick(screen.getByText('Conversation 1'))
+    const input = container.querySelector('input[aria-label="Rename conversation"]') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'Renamed' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onRename).toHaveBeenCalledWith('1', 'Renamed')
+  })
+
+  it('cancels rename on Escape', () => {
+    const onRename = vi.fn()
+    const conversations = [createConv('1', { name: 'Original' })]
+    const { container } = render(
+      <ConversationSidebar
+        {...defaultProps}
+        conversations={conversations}
+        onRenameConversation={onRename}
+      />
+    )
+    fireEvent.doubleClick(screen.getByText('Original'))
+    const input = container.querySelector('input[aria-label="Rename conversation"]') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'Changed' } })
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(onRename).not.toHaveBeenCalled()
+    expect(screen.getByText('Original')).toBeDefined()
   })
 })

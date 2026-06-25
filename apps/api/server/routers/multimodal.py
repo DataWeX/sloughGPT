@@ -78,7 +78,7 @@ async def get_learning_progress():
     learning = getattr(mgr, "_learning_count", 0)
     engine = getattr(mgr, "_multimodal_engine", None)
     trained = getattr(engine, "_trained", False) if engine else False
-    vocab_size = len(engine.text.vocab) if engine and hasattr(engine, "text") else 0
+    vocab_size = len(engine.text.bpe.vocab) if engine and hasattr(engine, "text") else 0
     buf = getattr(mgr, "_replay_buffer", None)
     return {
         "images_learned": learning,
@@ -95,7 +95,7 @@ async def get_training_report():
     history = getattr(mgr, "_caption_history", [])
     learning = getattr(mgr, "_learning_count", 0)
     engine = getattr(mgr, "_multimodal_engine", None)
-    vocab_size = len(engine.text.vocab) if engine and hasattr(engine, "text") else 0
+    vocab_size = len(engine.text.bpe.vocab) if engine and hasattr(engine, "text") else 0
     buf = getattr(mgr, "_replay_buffer", None)
     unique = len(set(history)) if history else 0
     accuracy_history = getattr(mgr, "_accuracy_history", [])
@@ -520,100 +520,3 @@ async def synthesize_speech(text: str = Form(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)}")
 
-
-# ── VLM Dataset Creation ───────────────────────────────────────────────────
-
-class VLMDatasetCreateRequest(BaseModel):
-    """Request body for creating a VLM dataset from a directory of images."""
-    name: str
-    image_dir: str
-    caption_prompt: str = "Describe this image in detail."
-    auto_caption: bool = True
-
-
-@router.post("/vlm-dataset")
-async def create_vlm_dataset(req: VLMDatasetCreateRequest):
-    """Create a VLM training dataset from a directory of images.
-
-    Scans the image directory, optionally generates captions using the multimodal
-    engine, and writes a JSONL file suitable for VLM training.
-
-    Args:
-        name: Dataset name (saved to datasets/<name>/corpus.jsonl)
-        image_dir: Path to directory containing images
-        caption_prompt: Prompt to use for auto-captioning
-        auto_caption: If True, generate captions using the multimodal engine
-
-    Returns:
-        Status with entry count and dataset path
-    """
-    repo_root = Path(__file__).resolve().parents[4]
-    image_path = Path(req.image_dir).expanduser()
-    if not image_path.is_absolute():
-        image_path = repo_root / image_path
-
-    if not image_path.is_dir():
-        raise HTTPException(status_code=400, detail=f"Image directory not found: {image_path}")
-
-    exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
-    image_files = [f for f in image_path.iterdir() if f.suffix.lower() in exts]
-    if not image_files:
-        raise HTTPException(status_code=400, detail=f"No images found in {image_path}")
-
-    mgr = None
-    if req.auto_caption:
-        try:
-            mgr = _ensure_initialized()
-        except Exception:
-            mgr = None
-
-    entries = []
-    for img_file in sorted(image_files):
-        rel_path = str(img_file.relative_to(repo_root)) if img_file.is_relative_to(repo_root) else str(img_file)
-
-        if mgr is not None:
-            try:
-                from PIL import Image
-                img = Image.open(img_file).convert("RGB")
-                caption = mgr.caption_image(img)
-                caption_text = caption.text
-            except Exception:
-                caption_text = req.caption_prompt
-        else:
-            caption_text = req.caption_prompt
-
-        entries.append({
-            "image_path": rel_path,
-            "conversations": [
-                {"from": "human", "value": req.caption_prompt},
-                {"from": "gpt", "value": caption_text},
-            ],
-        })
-
-    dataset_dir = repo_root / "datasets" / req.name
-    dataset_dir.mkdir(parents=True, exist_ok=True)
-    corpus_path = dataset_dir / "corpus.jsonl"
-
-    with open(corpus_path, "w", encoding="utf-8") as f:
-        for entry in entries:
-            f.write(json.dumps(entry) + "\n")
-
-    # Write VLM metadata marker so dataset picker can show compatibility
-    vlm_meta = {
-        "type": "vlm",
-        "image_dir": str(image_path),
-        "image_count": len(image_files),
-        "auto_captioned": mgr is not None,
-    }
-    with open(dataset_dir / ".vlm_metadata.json", "w") as f:
-        json.dump(vlm_meta, f)
-
-    logger.info("Created VLM dataset: %s (%d entries)", corpus_path, len(entries))
-
-    return {
-        "status": "created",
-        "dataset": req.name,
-        "path": str(corpus_path),
-        "entries": len(entries),
-        "auto_captioned": mgr is not None,
-    }

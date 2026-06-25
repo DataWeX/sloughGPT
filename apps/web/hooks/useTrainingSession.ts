@@ -26,8 +26,8 @@ export interface TrainingSessionState {
   unifiedFinalLoss: number | null
   unifiedTotalSteps: number | null
   unifiedElapsed: number | null
-  vlmOutputDir: string | null
-  vlmSouPath: string | null
+  visualOutputDir: string | null
+  visualSouPath: string | null
 }
 
 export interface UseTrainingSessionReturn extends TrainingSessionState {
@@ -54,7 +54,7 @@ export interface UseTrainingSessionReturn extends TrainingSessionState {
   startFineTune: (params: {
     model: string; dataset: string; epochs: number; batchSize: number; lr: number; useLoRA: boolean
   }, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void, onComplete?: () => void) => void
-  startVLMTraining: (params: {
+  startVisualTraining: (params: {
     dataset: string; visionEncoder: string; llm: string; stage1Epochs: number; stage2Epochs: number; useLoRA: boolean
   }, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void, onComplete?: () => void) => void
   startTurboTrain: (datasetId: string, config: {
@@ -70,12 +70,12 @@ export interface UseTrainingSessionReturn extends TrainingSessionState {
 
 export function useTrainingSession(): UseTrainingSessionReturn {
   const ftPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const vlmPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const visualPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     return () => {
       if (ftPollRef.current) { clearInterval(ftPollRef.current); ftPollRef.current = null }
-      if (vlmPollRef.current) { clearInterval(vlmPollRef.current); vlmPollRef.current = null }
+      if (visualPollRef.current) { clearInterval(visualPollRef.current); visualPollRef.current = null }
     }
   }, [])
 
@@ -104,8 +104,8 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   const [unifiedTotalSteps, setUnifiedTotalSteps] = useState<number | null>(null)
   const [unifiedElapsed, setUnifiedElapsed] = useState<number | null>(null)
 
-  const [vlmOutputDir, setVlmOutputDir] = useState<string | null>(null)
-  const [vlmSouPath, setVlmSouPath] = useState<string | null>(null)
+  const [visualOutputDir, setVisualOutputDir] = useState<string | null>(null)
+  const [visualSouPath, setVisualSouPath] = useState<string | null>(null)
 
   const esRef = useRef<EventSource | null>(null)
 
@@ -115,7 +115,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     setFinetunedModelPath(null); setFinetunedModelLoss(null)
     setDistillCheckpoint(null); setDistillFinalLoss(null); setDistillEpochs(null)
     setUnifiedModelPath(null); setUnifiedFinalLoss(null); setUnifiedTotalSteps(null); setUnifiedElapsed(null)
-    setVlmOutputDir(null); setVlmSouPath(null)
+    setVisualOutputDir(null); setVisualSouPath(null)
     setPhase('idle'); setProgress(0); setLoss(null); setEpoch(0); setTotalEpochs(0)
     setMessage(''); setLossHistory([]); setEvalResult(null)
   }, [])
@@ -123,7 +123,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   const stopTraining = useCallback(() => {
     esRef.current?.close(); esRef.current = null
     if (ftPollRef.current) { clearInterval(ftPollRef.current); ftPollRef.current = null }
-    if (vlmPollRef.current) { clearInterval(vlmPollRef.current); vlmPollRef.current = null }
+    if (visualPollRef.current) { clearInterval(visualPollRef.current); visualPollRef.current = null }
     trainingJobsController.stopAutoTrain().catch(() => {})
     trainingJobsController.stopUnified().catch(() => {})
     resetTraining()
@@ -224,20 +224,20 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     }).catch(() => addToast('Something went wrong starting training', 'error'))
   }, [])
 
-  const startVLMTraining = useCallback((
+  const startVisualTraining = useCallback((
     params: { dataset: string; visionEncoder: string; llm: string; stage1Epochs: number; stage2Epochs: number; useLoRA: boolean },
     addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
     onComplete?: () => void,
   ) => {
     setFinetunedModelPath(null); setFinetunedModelLoss(null)
-    trainingJobsController.startVLMTrain({
+    trainingJobsController.startVisualTrain({
       dataset: params.dataset,
       vision_encoder: params.visionEncoder,
       llm: params.llm,
       stage1_epochs: params.stage1Epochs,
       stage2_epochs: params.stage2Epochs,
       use_lora: params.useLoRA,
-      name: `vlm-${params.dataset}-${Date.now()}`,
+      name: `visual-${params.dataset}-${Date.now()}`,
     }).then(resp => {
       const jobId = resp.job_id
       addToast(resp.message || 'Image model training queued', 'info')
@@ -247,26 +247,26 @@ export function useTrainingSession(): UseTrainingSessionReturn {
           const resp2 = await fetch(`${PUBLIC_API_URL}/training/jobs`)
           const jobs = await resp2.json()
           const myJob = (jobs || []).find((j: { id: string }) => j.id === jobId)
-          if (!myJob) { clearInterval(pollId); vlmPollRef.current = null; return }
+          if (!myJob) {             clearInterval(pollId); visualPollRef.current = null; return }
           if (myJob.status === 'completed') {
-            clearInterval(pollId); vlmPollRef.current = null; setPhase('complete'); setProgress(100)
+            clearInterval(pollId); visualPollRef.current = null; setPhase('complete'); setProgress(100)
             setFinetunedModelPath(myJob.model_path || '')
             setFinetunedModelLoss(myJob.loss || null)
-            setVlmOutputDir(myJob.output_dir || null)
-            setVlmSouPath(myJob.sou_path || null)
+            setVisualOutputDir(myJob.output_dir || null)
+            setVisualSouPath(myJob.sou_path || null)
             addToast('Image model training complete', 'success')
             onComplete?.()
           } else if (myJob.status === 'failed') {
-            clearInterval(pollId); vlmPollRef.current = null; setPhase('error')
+            clearInterval(pollId); visualPollRef.current = null; setPhase('error')
             addToast(myJob.error || 'Image model training failed', 'error')
           } else if (myJob.loss != null) {
             setLoss(myJob.loss); setProgress(myJob.progress || 0); setEpoch(myJob.current_epoch || 0)
             setMessage(myJob.stage || '')
           }
-        } catch { clearInterval(pollId); vlmPollRef.current = null }
+        } catch { clearInterval(pollId); visualPollRef.current = null }
       }, 3000)
-      vlmPollRef.current = pollId
-      setTimeout(() => { clearInterval(pollId); vlmPollRef.current = null }, 600000)
+      visualPollRef.current = pollId
+      setTimeout(() => { clearInterval(pollId); visualPollRef.current = null }, 600000)
     }).catch(() => addToast('Something went wrong starting image model training', 'error'))
   }, [])
 
@@ -371,7 +371,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     finetunedModelPath, finetunedModelLoss, distillCheckpoint, distillFinalLoss, distillEpochs,
     turboPhase, turboResult, turboError,
     unifiedModelPath, unifiedFinalLoss, unifiedTotalSteps, unifiedElapsed,
-    vlmOutputDir, vlmSouPath,
+    visualOutputDir, visualSouPath,
     setPhase, setLoss, setProgress, setEpoch, setTotalEpochs, setMessage,
     setLossHistory, setEvalResult,
     setFinetunedModelPath, setFinetunedModelLoss,
@@ -379,6 +379,6 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     setTurboPhase, setTurboResult, setTurboError,
     trainingRunning, turboRunning: turboPhase === 'training',
     resetTraining, stopTraining,
-    startSSETraining, startFineTune, startVLMTraining, startTurboTrain, startUnifiedTraining,
+    startSSETraining, startFineTune, startVisualTraining, startTurboTrain, startUnifiedTraining,
   }
 }

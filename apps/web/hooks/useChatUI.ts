@@ -13,6 +13,7 @@ export function useChatUI() {
   const [voiceMode, setVoiceMode] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const chatScreenRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   const toggleSettings = useCallback(() => {
     setShowSettings(prev => !prev)
@@ -38,6 +39,7 @@ export function useChatUI() {
     voiceMode, setVoiceMode,
     sidebarOpen, setSidebarOpen,
     chatScreenRef,
+    searchInputRef,
     toggleSettings,
     handleSearchChange,
     handleSearchClear,

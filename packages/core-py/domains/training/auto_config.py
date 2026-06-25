@@ -62,7 +62,7 @@ class TrainingConfig:
     model: str = "gpt2"
 
     # How to train
-    method: str = "finetune"  # "distill" | "finetune" | "vlm"
+    method: str = "finetune"  # "distill" | "finetune" | "visual"
     epochs: int = 3
     batch_size: int = 4
     learning_rate: float = 2e-4

@@ -20,8 +20,10 @@ export interface MessageBubbleProps {
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void
+  onSuggestionClick?: (text: string) => void
   messageId?: string
   isStreaming?: boolean
+  isError?: boolean
   searchQuery?: string
   model?: string
   'aria-live'?: 'polite' | 'assertive' | 'off'
@@ -59,8 +61,10 @@ export const MessageBubble = memo(function MessageBubble({
   onThumbsUp,
   onThumbsDown,
   onEdit,
+  onSuggestionClick,
   messageId,
   isStreaming = false,
+  isError = false,
   searchQuery,
   model,
   'aria-live': ariaLive,
@@ -106,7 +110,7 @@ export const MessageBubble = memo(function MessageBubble({
   }
 
   const hasContent = displayContent && displayContent.trim().length > 0
-  const showActions = role === 'assistant' && hasContent && !isStreaming
+  const showActions = role === 'assistant' && hasContent && !isStreaming && !isError
   const id = messageId || 'msg'
 
   return (
@@ -142,7 +146,8 @@ export const MessageBubble = memo(function MessageBubble({
           role === 'user'
             ? 'bg-primary text-primary-foreground rounded-br-sm shadow-sm'
             : 'bg-card text-foreground rounded-bl-sm border border-border/40 shadow-sm',
-          isStreaming && role === 'assistant' && "ring-1 ring-primary/10"
+          isStreaming && role === 'assistant' && "ring-1 ring-primary/10",
+          isError && role === 'assistant' && "ring-1 ring-destructive/40 border-destructive/30"
         )}
       >
         {/* role indicator */}
@@ -151,9 +156,14 @@ export const MessageBubble = memo(function MessageBubble({
           role === 'user' ? 'text-primary-foreground/60 text-right' : 'text-muted-foreground/50'
         )}>
           {role === 'user' ? 'You' : 'Assistant'}
-          {role === 'assistant' && model && (
+          {role === 'assistant' && model && !isError && (
             <span className="ml-1.5 text-[9px] font-mono text-muted-foreground/40 group-hover:opacity-100 opacity-0 transition-opacity">
               {model}
+            </span>
+          )}
+          {isError && (
+            <span className="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive text-[10px] font-medium">
+              Interrupted
             </span>
           )}
         </span>
@@ -268,14 +278,16 @@ export const MessageBubble = memo(function MessageBubble({
         )}
       </div>
 
-      {showActions && (
+      {(showActions || isError) && (
         <MessageActions
           content={content}
           messageId={id}
+          role={role}
           onCopy={onCopy}
           onRegenerate={onRegenerate}
           onThumbsUp={onThumbsUp}
           onThumbsDown={onThumbsDown}
+          onSuggestionClick={onSuggestionClick}
         />
       )}
       
@@ -284,6 +296,7 @@ export const MessageBubble = memo(function MessageBubble({
           content={content}
           messageId={id}
           onEdit={() => setIsEditing(true)}
+          onSuggestionClick={onSuggestionClick}
         />
       )}
     </div>

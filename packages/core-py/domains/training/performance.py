@@ -20,8 +20,10 @@ from __future__ import annotations
 import os
 import time
 import math
+import warnings
 from typing import Optional, Dict, Any, List, Tuple, Callable
 from dataclasses import dataclass, field
+from domains.training.trainer_protocol import TrainResult
 from contextlib import contextmanager
 from functools import lru_cache
 import logging
@@ -513,7 +515,21 @@ class OptimizedInferenceEngine:
 
 
 class OptimizedTrainer:
-    """Training loop with all performance optimizations."""
+    """Training loop with all performance optimizations.
+
+    Satisfies :class:`TrainerProtocol` structurally.
+    """
+
+    _is_training: bool = False
+
+    @property
+    def is_training(self) -> bool:
+        """Whether training is in progress."""
+        return self._is_training
+
+    def stop(self) -> None:
+        """Request early stopping."""
+        self._is_training = False
 
     def __init__(
         self,
@@ -523,6 +539,10 @@ class OptimizedTrainer:
         val_dataset: Optional[Dataset] = None,
         device: str = "auto",
     ):
+        warnings.warn(
+            "OptimizedTrainer is deprecated — use SloughGPTTrainer instead",
+            DeprecationWarning, stacklevel=2,
+        )
         self.model = model
         self.config = config
         self.device = get_optimal_device() if device == "auto" else device
@@ -676,15 +696,16 @@ class OptimizedTrainer:
         resume: bool = False,
         resume_path: Optional[str] = None,
         on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
-    ) -> Dict[str, Any]:
+    ) -> TrainResult:
         """Training loop implementing TrainerProtocol."""
         import time as time_module
 
+        self._is_training = True
         best_loss = float("inf")
         start_time = time_module.time()
         last_log_time = start_time
 
-        while self._step_count < self.config.max_steps:
+        while self._step_count < self.config.max_steps and self._is_training:
             step_start = time_module.time()
             loss = self.train_step()
             step_time = time_module.time() - step_start
@@ -706,8 +727,16 @@ class OptimizedTrainer:
 
             best_loss = min(best_loss, loss)
 
+        self._is_training = False
         total_time = time_module.time() - start_time
-        return {"best_loss": best_loss, "global_step": self._step_count, "total_time": total_time}
+        return TrainResult(
+            success=True,
+            status="completed",
+            best_eval_loss=best_loss,
+            global_step=self._step_count,
+            total_steps=self._step_count,
+            metrics={"best_loss": best_loss, "total_time": total_time},
+        )
 
 
 class PerformanceMonitor:

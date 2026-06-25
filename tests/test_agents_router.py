@@ -21,7 +21,8 @@ TestClient = pytest.importorskip("fastapi.testclient").TestClient
 @pytest.fixture(scope="module")
 def client():
     from main import app
-    return app, TestClient(app)
+    with TestClient(app) as tc:
+        yield app, tc
 
 
 def test_list_agents(client):
@@ -89,3 +90,54 @@ def test_delete_agent_not_found_returns_404(client):
     app, tc = client
     resp = tc.delete("/agents/nonexistent")
     assert resp.status_code == 404
+
+
+# ── Orchestration tests ──────────────────────────────────────────────
+
+
+def test_orchestrate_empty_goal_returns_422(client):
+    app, tc = client
+    resp = tc.post("/agents/orchestrate", json={"goal": ""})
+    assert resp.status_code == 422
+
+
+def test_orchestrate_returns_sse_stream(client):
+    app, tc = client
+    import json
+    resp = tc.post("/agents/orchestrate", json={"goal": "write a poem"})
+    assert resp.status_code == 200
+    assert resp.headers.get("content-type", "").startswith("text/event-stream")
+    # Parse SSE events
+    events = []
+    for line in resp.iter_lines():
+        if line.startswith("data: "):
+            events.append(json.loads(line[6:]))
+        elif line == "":
+            continue
+    # Should have plan, execute, compose, complete events
+    assert len(events) >= 3
+    assert events[0]["stream"] == "agent-orchestrate"
+    assert events[0]["phase"] == "PLAN"
+    # Last event should be complete
+    assert events[-1]["status"] == "complete"
+    assert "response" in events[-1]["data"]
+
+
+def test_orchestrate_executes_subtasks(client):
+    app, tc = client
+    import json
+    resp = tc.post("/agents/orchestrate", json={"goal": "summarize AI trends"})
+    events = []
+    for line in resp.iter_lines():
+        if line.startswith("data: "):
+            events.append(json.loads(line[6:]))
+        elif line == "":
+            continue
+    # Find execute events — tasks should be planned
+    plan_event = events[0] if events[0]["phase"] == "PLAN" else None
+    if plan_event and plan_event["status"] == "success":
+        assert plan_event["data"]["task_count"] >= 1
+    # Complete event should have final response
+    complete = events[-1]
+    assert complete["status"] == "complete"
+    assert complete["phase"] == "COMPLETE"

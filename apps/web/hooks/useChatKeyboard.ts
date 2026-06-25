@@ -13,6 +13,8 @@ interface KeyboardDeps {
   loadingRef: React.MutableRefObject<AbortController | null>
   newChatRef: React.MutableRefObject<(() => void) | null>
   handleRegenerateRef: React.MutableRefObject<(() => Promise<void>) | null>
+  searchInputRef?: React.RefObject<HTMLInputElement | null>
+  handleSearchChange?: (v: string) => void
 }
 
 export function useChatKeyboard(deps: KeyboardDeps) {
@@ -20,6 +22,7 @@ export function useChatKeyboard(deps: KeyboardDeps) {
     loading, currentError, showSettings,
     setToolPanelOpen, setShowSettings, setLoading, setCurrentError,
     loadingRef, newChatRef, handleRegenerateRef,
+    searchInputRef, handleSearchChange,
   } = deps
 
   const depsRef = useRef(deps)
@@ -53,6 +56,14 @@ export function useChatKeyboard(deps: KeyboardDeps) {
       if (e.key === 'r' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         d.handleRegenerateRef.current?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+        e.preventDefault()
+        d.searchInputRef?.current?.focus()
+      }
+      if (e.key === '/' && !(e.metaKey || e.ctrlKey) && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault()
+        d.searchInputRef?.current?.focus()
       }
     }
     window.addEventListener('keydown', handleKeyDown)

@@ -5,11 +5,13 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { IconSearch, IconX, IconMessage } from '@/components/ui'
 import { chatDB, type ChatSession, type ChatMessage as DBChatMessage } from '@/lib/db'
+import { sessionController, type SearchResult as RemoteSearchResult } from '@/lib/session-controller'
 import { cn } from '@/lib/cn'
 
 interface SearchResult {
   session: ChatSession
   matches: DBChatMessage[]
+  remote?: boolean
 }
 
 interface ConversationSearchProps {
@@ -22,7 +24,7 @@ function truncate(text: string, len = 80): string {
   return text.length > len ? text.slice(0, len) + '…' : text
 }
 
-function snippet(content: string, query: string, maxLen = 100): string {
+function snippet(content: string, query: string, maxLen = 100): React.ReactNode {
   const q = query.toLowerCase()
   const idx = content.toLowerCase().indexOf(q)
   if (idx === -1) return truncate(content, maxLen)
@@ -35,7 +37,7 @@ function snippet(content: string, query: string, maxLen = 100): string {
   const parts = s.split(new RegExp(`(${escaped})`, 'gi'))
   return parts.map((part, i) =>
     part.toLowerCase() === q ? <mark key={i} className="bg-primary/20 rounded px-0.5">{part}</mark> : part
-  ) as unknown as string
+  )
 }
 
 export function ConversationSearch({ open, onClose, onNavigate }: ConversationSearchProps) {
@@ -45,12 +47,46 @@ export function ConversationSearch({ open, onClose, onNavigate }: ConversationSe
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  function remoteMatchToLocal(rm: RemoteSearchResult): SearchResult {
+    return {
+      session: {
+        id: rm.id,
+        name: rm.name,
+        messages: rm.matches.map(m => ({
+          id: `remote-${rm.id}-${m.timestamp}`,
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          timestamp: new Date(m.timestamp),
+        })),
+        createdAt: rm.created_at,
+        updatedAt: rm.updated_at,
+        synced: true,
+        starred: false,
+        pinned: false,
+      },
+      matches: rm.matches.map(m => ({
+        id: `remote-${rm.id}-${m.timestamp}`,
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+        timestamp: new Date(m.timestamp),
+      })),
+      remote: true,
+    }
+  }
+
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) { setResults([]); return }
     setLoading(true)
     try {
-      const res = await chatDB.searchAllSessions(q)
-      setResults(res)
+      const [local, remote] = await Promise.all([
+        chatDB.searchAllSessions(q),
+        sessionController.search(q, 10).catch(() => [] as RemoteSearchResult[]),
+      ])
+
+      // Merge: local takes priority, remote fills gaps
+      const localIds = new Set(local.map(r => r.session.id))
+      const remoteResults = remote.filter(r => !localIds.has(r.id)).map(remoteMatchToLocal)
+      setResults([...local, ...remoteResults])
     } finally {
       setLoading(false)
     }
@@ -127,6 +163,9 @@ export function ConversationSearch({ open, onClose, onNavigate }: ConversationSe
                   <div className="flex items-center gap-2 mb-1">
                     <IconMessage className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     <span className="text-sm font-medium truncate">{r.session.name}</span>
+                    {r.remote && (
+                      <span className="text-[10px] text-muted-foreground/40 border border-border/30 rounded px-1 ml-1 shrink-0">remote</span>
+                    )}
                     <span className="text-[10px] text-muted-foreground/50 ml-auto shrink-0">
                       {r.matches.length} match{r.matches.length !== 1 ? 'es' : ''}
                     </span>

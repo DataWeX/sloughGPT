@@ -109,11 +109,11 @@ class MultimodalManager:
         # Pre-train on synthetic seed images in background (non-blocking)
         if self._multimodal_engine is not None and not getattr(self._multimodal_engine, '_trained', False):
             import threading
-            t = threading.Thread(target=_pretrain_on_seed_images, args=(self,), daemon=True)
+            t = threading.Thread(target=self._pretrain_engine, daemon=True, kwargs={"epochs": 10, "samples": 216})
             t.start()
 
         self._initialized = True
-        logger.info("Multimodal initialized (seed training running in background)")
+        logger.info("Multimodal initialized")
 
     def _count_trained_images(self) -> int:
         """Estimate training count from saved state."""
@@ -192,17 +192,119 @@ class MultimodalManager:
         "concentric rings of alternating thickness in the middle area",
     ]
 
-    def _pick_seed_caption(self, embed_data: np.ndarray) -> str:
-        hash_val = int(np.sum(embed_data.flatten()[:4] * np.array([1, 10, 100, 1000])))
-        idx = abs(hash_val) % len(self._SEED_CAPTIONS)
-        return self._SEED_CAPTIONS[idx]
+    def _gen_synthetic_data(self, count: int) -> tuple:
+        """Generate synthetic image-caption pairs for seed training.
 
-    def _build_feature_caption(self, embed_data: np.ndarray) -> str:
-        active = [i for i, v in enumerate(embed_data.flatten()[:8]) if abs(v) > 0.25]
-        if active:
-            return f"features: {', '.join(str(i) for i in active[:6])}"
-        mean_act = float(np.mean(np.abs(embed_data)))
-        return f"activation: {mean_act:.3f}"
+        Uses 6 colors × 3 shapes × 4 backgrounds × 3 templates = 216 combinations.
+        """
+        from PIL import Image, ImageDraw
+        rng = np.random.RandomState(42)
+
+        colors = {"red": (255,50,50), "green": (50,180,50), "blue": (50,50,255),
+                  "yellow": (255,255,50), "purple": (180,50,180), "orange": (255,150,50)}
+        shapes = ["circle", "square", "triangle"]
+        backgrounds = {"black": (30,30,30), "gray": (100,100,100), "beige": (210,200,170), "white": (230,230,230)}
+        templates = [
+            "{color} {shape} on {bg} background",
+            "{color} {shape} centered on {bg} background",
+            "{color} {shape} over {bg} background",
+        ]
+
+        images, captions = [], []
+        color_names = list(colors.keys())
+        bg_names = list(backgrounds.keys())
+
+        for i in range(count):
+            c = color_names[i % len(color_names)]
+            s = shapes[i % len(shapes)]
+            b = bg_names[(i // 3) % len(bg_names)]
+            t = templates[(i // 12) % len(templates)]
+            cap = t.format(color=c, shape=s, bg=b)
+
+            img = Image.new("RGB", (224, 224), backgrounds[b])
+            draw = ImageDraw.Draw(img)
+            cx, cy = 112, 112
+            color_rgb = colors[c]
+            r = 40
+            if s == "circle":
+                draw.ellipse([cx-r, cy-r, cx+r, cy+r], fill=color_rgb)
+            elif s == "square":
+                draw.rectangle([cx-r, cy-r, cx+r, cy+r], fill=color_rgb)
+            elif s == "triangle":
+                draw.polygon([(cx, cy-r), (cx-r, cy+r), (cx+r, cy+r)], fill=color_rgb)
+
+            arr = np.array(img, dtype=np.float32) / 255.0
+            images.append(arr)
+            captions.append(cap)
+
+        return np.stack(images), captions
+
+    def _pretrain_engine(self, epochs: int = 10, samples: int = 216,
+                         batch_size: int = 8, lr: float = 5e-4) -> float:
+        """Run multi-epoch batched synthetic training to initialize the engine.
+
+        Generates shape-caption pairs and trains both vision encoder and
+        transformer decoder for the given number of epochs.
+
+        Returns final loss.
+        """
+        engine = self._multimodal_engine
+        if engine is None:
+            return float("inf")
+
+        images, captions = self._gen_synthetic_data(samples)
+        n = len(images)
+        logger.info("Pretraining on %d synthetic image-caption pairs (%d epochs, batch_size=%d)",
+                     n, epochs, batch_size)
+
+        # Build vocab from our captions
+        engine.text.build_vocab(captions)
+
+        final_loss = float("inf")
+        for ep in range(epochs):
+            idx = np.random.permutation(n)
+            epoch_loss = 0.0
+            steps = 0
+            for start in range(0, n, batch_size):
+                batch_idx = idx[start:start + batch_size]
+                batch_imgs = images[batch_idx]
+                batch_caps = [captions[i] for i in batch_idx]
+
+                # Tokenize
+                token_ids = []
+                max_len = 0
+                for c in batch_caps:
+                    ids = engine.text.encode(c)
+                    token_ids.append(ids)
+                    max_len = max(max_len, len(ids))
+
+                # Pad to max_len
+                batch_tokens = np.zeros((len(batch_caps), max_len), dtype=np.int64)
+                for i, ids in enumerate(token_ids):
+                    batch_tokens[i, :len(ids)] = ids
+
+                # Train step — vision encoder + transformer decoder
+                loss = engine.train_step(batch_imgs, batch_tokens, lr=lr)
+                epoch_loss += loss
+                steps += 1
+
+            avg_loss = epoch_loss / max(steps, 1)
+            final_loss = avg_loss
+            if (ep + 1) % 5 == 0 or ep == 0:
+                logger.info("  Pretrain epoch %d/%d — loss: %.4f", ep + 1, epochs, avg_loss)
+
+                sample_input = images[:1]
+                result = engine.generate(sample_input, max_len=16, temperature=0.5)
+                logger.info("    Sample: %s → %s", captions[0][:30], result.text.strip()[:40])
+
+        # Fill replay buffer with training data
+        for i in range(min(samples, len(images))):
+            self._replay_buffer.add(images[i:i+1], captions[i])
+
+        engine._trained = True
+        engine.save(extra_meta={"images_learned": self._learning_count})
+        logger.info("Pretrain complete — final loss: %.4f, engine saved", final_loss)
+        return final_loss
 
     def caption_image(
         self,
@@ -272,7 +374,7 @@ class MultimodalManager:
                 logger.debug(f"Decoder train skipped: {train_err}")
 
             # Store in replay buffer for future diverse training
-            buf.add(embed.data.copy(), raw_text)
+            buf.add(img_np.copy(), raw_text)
 
             # Step 4: Periodically train decoder on diverse replay samples
             if self._learning_count > 0 and self._learning_count % 5 == 0:
@@ -327,60 +429,7 @@ class MultimodalManager:
         return {"language": "en-US"}
 
 
-def _generate_seed_image(size: int = 64, caption_index: int = -1) -> 'Image.Image':
-    """Generate a synthetic image with random colored shapes for seed training.
 
-    Args:
-        size: image size in pixels
-        caption_index: optional index into _SEED_CAPTIONS to produce a slightly
-                       correlated image (not perfect — just rough visual match)
-    """
-    from PIL import Image, ImageDraw
-    import random
-
-    rng = random.Random(caption_index) if caption_index >= 0 else random
-
-    img = Image.new('RGB', (size, size), (rng.randint(40, 60),) * 3)
-    draw = ImageDraw.Draw(img)
-    colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0),
-              (255, 0, 255), (0, 255, 255), (255, 128, 0), (128, 0, 255)]
-    shapes = ['rectangle', 'ellipse', 'line', 'polygon']
-    for _ in range(rng.randint(3, 6)):
-        x1, y1 = rng.randint(0, size - 20), rng.randint(0, size - 20)
-        x2, y2 = x1 + rng.randint(10, 30), y1 + rng.randint(10, 30)
-        color = rng.choice(colors)
-        shape = rng.choice(shapes)
-        if shape == 'rectangle':
-            draw.rectangle([x1, y1, x2, y2], fill=color, outline=(255, 255, 255))
-        elif shape == 'ellipse':
-            draw.ellipse([x1, y1, x2, y2], fill=color, outline=(255, 255, 255))
-        elif shape == 'line':
-            draw.line([x1, y1, x2, y2], fill=color, width=3)
-        else:
-            draw.polygon([(x1, y1), (x2, y1), ((x1 + x2) // 2, y2)], fill=color, outline=(255, 255, 255))
-    return img
-
-
-def _pretrain_on_seed_images(manager: MultimodalManager, count: int = 30) -> None:
-    """Generate and train on synthetic seed images so the vision model works out of the box.
-
-    Uses the expanded seed caption list (30 captions) to bootstrap a richer
-    vocabulary for the decoder.
-    """
-    logger.info("Pre-training vision model on %d synthetic seed images...", count)
-    for i in range(count):
-        try:
-            seed_idx = i % len(manager._SEED_CAPTIONS)
-            img = _generate_seed_image(caption_index=seed_idx)
-            cap = manager.caption_image(img)
-            logger.debug("Seed %d/%d: %s", i + 1, count, cap.text[:40])
-        except Exception as e:
-            logger.warning("Seed training image %d failed: %s", i + 1, e)
-    try:
-        manager._multimodal_engine.save(extra_meta={"images_learned": manager._learning_count})
-        logger.info("Seed pre-training complete: %d images learned", manager._learning_count)
-    except Exception as e:
-        logger.warning("Failed to save pre-trained engine: %s", e)
 
 
 # Global singleton

@@ -3,8 +3,9 @@ import { useEffect, useRef } from 'react'
 import { useApiMonitor } from '@/lib/api-monitor-store'
 import { PUBLIC_API_URL } from '@/lib/config'
 
-const POLL_INTERVAL = 3000
-const REQUEST_TIMEOUT = 3000
+const POLL_INTERVAL = 8000
+const REQUEST_TIMEOUT = 10000
+const MAX_FAILURES = 3
 
 interface HealthSummary {
   score: number
@@ -17,6 +18,7 @@ export function useBackendWatcher() {
   const setStatus = useApiMonitor((s) => s.setStatus)
   const wasOffline = useRef(false)
   const lastScoreStatus = useRef<string | null>(null)
+  const failureCount = useRef(0)
 
   useEffect(() => {
     let cancelled = false
@@ -36,10 +38,13 @@ export function useBackendWatcher() {
         if (!res.ok) throw new Error(String(res.status))
 
         const data: HealthSummary = await res.json()
+        failureCount.current = 0
 
         if (wasOffline.current) {
           wasOffline.current = false
           setStatus('connected')
+          const { useToastStore } = await import('@/lib/toast-store')
+          useToastStore.getState().addToast('Server reconnected', 'success')
         } else {
           setStatus('connected')
         }
@@ -59,8 +64,11 @@ export function useBackendWatcher() {
         }
       } catch {
         clearTimeout(timeout)
+        failureCount.current += 1
         wasOffline.current = true
-        setStatus('reloading')
+        if (failureCount.current >= MAX_FAILURES) {
+          setStatus('reloading')
+        }
       }
 
       if (!cancelled) timer = setTimeout(check, POLL_INTERVAL)

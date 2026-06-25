@@ -174,36 +174,6 @@ class QuickTrainRequest(BaseModel):
     device: Optional[str] = None
 
 
-class VLMRequest(BaseModel):
-    """Multimodal VLM training request: vision encoder + LLM with trainable connector.
-
-    Trains in two stages:
-      1. Connector pretrain (LLM frozen)
-      2. Full LoRA fine-tune (LLM unfrozen)
-
-    Dataset must be a JSONL file under ``datasets/<name>/`` with image-text pairs.
-    """
-
-    dataset: str
-    vision_encoder: str = "google/siglip-base-patch16-224"
-    llm: str = "Qwen/Qwen2.5-0.5B-Instruct"
-    connector_hidden_dim: int = 1024
-    max_seq_length: int = 512
-    stage1_epochs: int = 1
-    stage2_epochs: int = 2
-    stage1_lr: float = 1e-3
-    stage2_lr: float = 2e-5
-    batch_size: int = 4
-    use_lora: bool = True
-    lora_rank: int = 8
-    lora_alpha: int = 16
-    freeze_vision: bool = True
-    gradient_accumulation_steps: int = 1
-    warmup_steps: int = 100
-    weight_decay: float = 0.01
-    name: str = "vlm-job"
-
-
 class UnifiedStartRequest(BaseModel):
     """Request body for /training/unified-start.
 
@@ -249,6 +219,26 @@ class UnifiedStartRequest(BaseModel):
     skip_deploy: bool = False
 
     device: str = "auto"
+
+
+class VisualTrainingRequest(BaseModel):
+    """Train a vision-language model on image-text pairs.
+
+    Uses VLMTrainer to train a vision encoder + LLM connector
+    in two stages. The ``dataset`` field must match a folder
+    under ``datasets/`` containing JSONL with image_path/caption pairs.
+    """
+
+    dataset: str
+    vision_encoder: str = "google/siglip-base-patch16-224"
+    llm: str = "Qwen/Qwen2.5-0.5B-Instruct"
+    stage1_epochs: int = 1
+    stage2_epochs: int = 2
+    use_lora: bool = True
+    batch_size: int = 4
+    learning_rate: float = 1e-3
+    lora_rank: int = 8
+    name: str = ""
 
 
 

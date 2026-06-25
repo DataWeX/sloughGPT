@@ -1,7 +1,7 @@
 """
 Inference Router - Chat and text generation endpoints
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List, AsyncIterator, Any
@@ -88,6 +88,7 @@ class ChatRequest(BaseModel):
     knowledge: Optional[List[str]] = None
     images: Optional[List[str]] = Field(default=None, description="Base64 encoded images")
     use_context_core: bool = Field(default=True, description="Use ContextCore for multi-layer context")
+    agent_id: Optional[str] = Field(default=None, description="Agent ID for role-based system instructions")
 
 
 class ChatResponse(BaseModel):
@@ -216,7 +217,7 @@ async def generate(req: GenerateRequest) -> GenerateResponse:
 
 
 @router.post("/inference/generate/stream")
-async def generate_stream(req: GenerateRequest) -> StreamingResponse:
+async def generate_stream(req: GenerateRequest, request: Request) -> StreamingResponse:
     """Streaming generation — yields tokens as SSE."""
     from startup_progress import STARTUP_PHASE
     
@@ -249,6 +250,9 @@ async def generate_stream(req: GenerateRequest) -> StreamingResponse:
                 top_k=req.top_k,
                 repetition_penalty=req.repetition_penalty,
             ):
+                if await request.is_disconnected():
+                    logger.info("Client disconnected from generate stream")
+                    return
                 if token:
                     token_count += 1
                     yield sse_token("generate", token)
@@ -437,7 +441,7 @@ async def load_soul(request: LoadSoulRequest):
 
 
 @router.post("/chat/stream")
-async def chat_stream(req: ChatRequest) -> StreamingResponse:
+async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
     """Stream chat responses with multi-layer context + live knowledge enrichment."""
     from startup_progress import STARTUP_PHASE
     
@@ -538,6 +542,26 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
                 else:
                     provider_messages.insert(0, {"role": "system", "content": frame.system_prompt})
         
+        # ── Inject agent instructions into system prompt ──
+        if req.agent_id:
+            try:
+                from domains.agents.system import get_agent_system
+                agent_sys = get_agent_system()
+                agent_instructions = agent_sys.get_instructions(req.agent_id)
+                if agent_instructions:
+                    agent_msg = {"role": "system", "content": f"[AGENT: {req.agent_id}]\n{agent_instructions}"}
+                    # Replace existing agent system message or insert before knowledge
+                    replaced = False
+                    for i, m in enumerate(provider_messages):
+                        if m["role"] == "system" and m["content"].startswith("[AGENT:"):
+                            provider_messages[i] = agent_msg
+                            replaced = True
+                            break
+                    if not replaced:
+                        provider_messages.insert(0, agent_msg)
+            except Exception:
+                logger.warning("Failed to inject agent instructions", exc_info=True)
+        
         # ── Emit single "ready" event with enrichment + context info ──
         ready_data: dict[str, Any] = {}
         if know_result["source"] != "none":
@@ -555,15 +579,7 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
         
         try:
             from domains.models.provider import get_provider
-            # Use VLM provider when images are present and VLM is loaded
-            if req.images:
-                vlm_provider = get_provider("vlm")
-                if vlm_provider is not None:
-                    provider = vlm_provider
-                else:
-                    provider = get_provider("default")
-            else:
-                provider = get_provider("default")
+            provider = get_provider("default")
             
             if provider is not None:
                 if req.knowledge:
@@ -583,6 +599,10 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
                             cancel_event=cancel_event,
                             repetition_penalty=1.3,
                         ):
+                            if await request.is_disconnected():
+                                cancel_event.set()
+                                logger.info("Client disconnected from chat stream (request)", extra={"context": {"session_id": session_id}})
+                                return
                             if token:
                                 full_response += token
                                 yield sse_token("chat", token)
@@ -642,6 +662,10 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
                 try:
                     try:
                         for text in streamer:
+                            if await request.is_disconnected():
+                                cancel_event.set()
+                                logger.info("Client disconnected from chat stream (fallback, request)", extra={"context": {"session_id": session_id}})
+                                return
                             if text:
                                 full_response += text
                                 yield sse_token("chat", text)
@@ -794,6 +818,17 @@ async def chat(req: ChatRequest) -> ChatResponse:
     # Use ChatDomain for generation + logging
     chat_domain = get_chat_domain()
     
+    # Inject agent instructions into system prompt if provided
+    if req.agent_id:
+        try:
+            from domains.agents.system import get_agent_system
+            agent_sys = get_agent_system()
+            agent_instructions = agent_sys.get_instructions(req.agent_id)
+            if agent_instructions:
+                system_prompt = f"{system_prompt}\n\n[AGENT: {req.agent_id}]\n{agent_instructions}" if system_prompt else f"[AGENT: {req.agent_id}]\n{agent_instructions}"
+        except Exception:
+            logger.warning("Failed to inject agent instructions", exc_info=True)
+    
     # Inject knowledge into system prompt if provided
     if req.knowledge:
         knowledge_str = "\n".join(f"- {k}" for k in req.knowledge)
@@ -856,8 +891,71 @@ def _build_session_cache() -> list:
 
 
 @router.get("/chat/sessions")
-async def list_sessions():
-    return {"sessions": _build_session_cache()}
+async def list_sessions(archived: Optional[bool] = None):
+    sessions = _build_session_cache()
+    if archived is not None:
+        sessions = [s for s in sessions if s.get("archived", False) == archived]
+    return {"sessions": sessions}
+
+
+@router.get("/chat/sessions/search")
+async def search_sessions(q: str = "", limit: int = 20):
+    """Full-text search across all conversation files.
+
+    Searches session names and message content. Returns session
+    summaries with matching message excerpts.
+    """
+    if not q.strip():
+        return {"results": []}
+
+    q_lower = q.lower().strip()
+    results = []
+
+    # Search both possible session directories
+    search_dirs = [SESSIONS_DIR, Path(__file__).parent.parent.parent.parent / "data" / "conversations"]
+    seen = set()
+
+    for sdir in search_dirs:
+        if not sdir.is_dir():
+            continue
+        for f in sorted(sdir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+            if len(results) >= limit:
+                break
+            try:
+                data = json.loads(f.read_text())
+                sid = data.get("id") or data.get("session_id") or f.stem
+                if sid in seen:
+                    continue
+                seen.add(sid)
+                name = data.get("name", "") or ""
+                messages = data.get("messages", [])
+                matches = []
+
+                if q_lower in name.lower():
+                    matches.append({"role": "session", "content": name, "timestamp": data.get("updated_at", "")})
+
+                for msg in messages:
+                    content = msg.get("content", "")
+                    if q_lower in content.lower():
+                        matches.append({
+                            "role": msg.get("role", "unknown"),
+                            "content": content,
+                            "timestamp": msg.get("timestamp", ""),
+                        })
+
+                if matches:
+                    results.append({
+                        "id": sid,
+                        "name": name or sid,
+                        "created_at": data.get("created_at", ""),
+                        "updated_at": data.get("updated_at", ""),
+                        "match_count": len(matches),
+                        "matches": matches[:3],  # Top 3 matches per session
+                    })
+            except (json.JSONDecodeError, OSError):
+                continue
+
+    return {"results": results, "query": q, "total": len(results)}
 
 
 @router.get("/chat/sessions/current")

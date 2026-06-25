@@ -21,6 +21,8 @@ import { useBackendWatcher } from './useBackendWatcher'
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
 
+const POLL_MS = 8000
+
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
@@ -33,7 +35,7 @@ describe('useBackendWatcher', () => {
     vi.useFakeTimers()
   })
 
-  it('polls health/summary on mount and sets connected', async () => {
+  it('polls health/summary on mount and repeats', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ score: 100, status: 'healthy', summary: 'All good', model_loaded: true }),
@@ -41,7 +43,7 @@ describe('useBackendWatcher', () => {
     renderHook(() => useBackendWatcher())
     expect(mockFetch).toHaveBeenCalledTimes(1)
     expect(mockFetch.mock.calls[0][0]).toContain('/health/summary')
-    await vi.advanceTimersByTimeAsync(3500)
+    await vi.advanceTimersByTimeAsync(POLL_MS + 100)
     expect(mockFetch).toHaveBeenCalledTimes(2)
   })
 
@@ -55,26 +57,56 @@ describe('useBackendWatcher', () => {
     expect(mockSetStatus).toHaveBeenCalledWith('connected')
   })
 
-  it('sets reloading when fetch fails', async () => {
+  it('defers reloading until 3 consecutive failures', async () => {
     mockFetch.mockRejectedValue(new Error('network down'))
     renderHook(() => useBackendWatcher())
-    await vi.advanceTimersByTimeAsync(100)
+    // Immediate check = failure 1. First timer advance = failure 2 (no reloading yet).
+    await vi.advanceTimersByTimeAsync(POLL_MS)
+    expect(mockSetStatus).not.toHaveBeenCalledWith('reloading')
+    // Second timer advance = failure 3 → reloading
+    mockSetStatus.mockClear()
+    await vi.advanceTimersByTimeAsync(POLL_MS)
     expect(mockSetStatus).toHaveBeenCalledWith('reloading')
   })
 
-  it('sets connected after offline recovery', async () => {
-    mockFetch.mockRejectedValueOnce(new Error('down'))
-    const { rerender } = renderHook(() => useBackendWatcher())
-    await vi.advanceTimersByTimeAsync(100)
+  it('does not set reloading after success following failures', async () => {
+    mockFetch
+      .mockRejectedValueOnce(new Error('down'))
+      .mockRejectedValueOnce(new Error('down'))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ score: 100, status: 'healthy', summary: 'Back', model_loaded: true }),
+      })
+      .mockRejectedValue(new Error('down'))
+    renderHook(() => useBackendWatcher())
+    // 2 failures (not enough for reloading), then success
+    await vi.advanceTimersByTimeAsync(POLL_MS * 2 + 100)
+    expect(mockFetch).toHaveBeenCalledTimes(3)
+    // The 3rd call (success) should have set 'connected'
+    expect(mockSetStatus).toHaveBeenCalledWith('connected')
+    // And NOT set 'reloading'
+    expect(mockSetStatus).not.toHaveBeenCalledWith('reloading')
+  })
+
+  it('shows reconnect toast after offline recovery', async () => {
+    mockFetch
+      .mockRejectedValue(new Error('down'))
+    renderHook(() => useBackendWatcher())
+    // 3 consecutive failures
+    await vi.advanceTimersByTimeAsync(POLL_MS * 3 + 100)
     expect(mockSetStatus).toHaveBeenCalledWith('reloading')
+    expect(mockSetStatus).not.toHaveBeenCalledWith('connected')
+
     mockSetStatus.mockClear()
+    mockFetch.mockReset()
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ score: 100, status: 'healthy', summary: 'Back', model_loaded: true }),
+      json: () => Promise.resolve({ score: 100, status: 'healthy', summary: 'Ok', model_loaded: true }),
     })
-    await vi.advanceTimersByTimeAsync(3500)
-    await vi.advanceTimersByTimeAsync(100)
+    // Next poll succeeds
+    await vi.advanceTimersByTimeAsync(POLL_MS)
     expect(mockSetStatus).toHaveBeenCalledWith('connected')
+    expect(mockAddToast).toHaveBeenCalledWith('Server reconnected', 'success')
   })
 
   it('shows toast on first degraded status transition', async () => {
@@ -88,9 +120,7 @@ describe('useBackendWatcher', () => {
         json: () => Promise.resolve({ score: 60, status: 'degraded', summary: 'High latency', model_loaded: true }),
       })
     renderHook(() => useBackendWatcher())
-    await vi.advanceTimersByTimeAsync(100)
-    await vi.advanceTimersByTimeAsync(3500)
-    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(POLL_MS + 100)
     expect(mockAddToast).toHaveBeenCalledWith('High latency', 'info')
   })
 
@@ -102,14 +132,14 @@ describe('useBackendWatcher', () => {
     const { unmount } = renderHook(() => useBackendWatcher())
     unmount()
     const callCount = mockFetch.mock.calls.length
-    await vi.advanceTimersByTimeAsync(10000)
+    await vi.advanceTimersByTimeAsync(POLL_MS * 2)
     expect(mockFetch.mock.calls.length).toBe(callCount)
   })
 
-  it('sets reloading when response not ok', async () => {
+  it('sets reloading after 3 non-ok responses', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 503 })
     renderHook(() => useBackendWatcher())
-    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(POLL_MS * 3 + 100)
     expect(mockSetStatus).toHaveBeenCalledWith('reloading')
   })
 })

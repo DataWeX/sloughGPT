@@ -15,7 +15,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from ...__init__ import (
+from .types import (
     BaseComponent,
     ComponentException,
     DatabaseConfig,
@@ -412,14 +412,48 @@ class DatabaseManager(BaseComponent, IDatabaseManager):
         return connection
 
     async def _connect_postgresql(self, config: DatabaseConfig) -> Any:
-        """Connect to PostgreSQL database"""
-        # Placeholder for PostgreSQL connection
-        raise ComponentException("PostgreSQL connection not implemented")
+        """Connect to PostgreSQL database."""
+        try:
+            import asyncpg
+
+            dsn = (
+                f"postgresql://{config.username}:{config.password}@"
+                f"{config.host}:{config.port}/{config.database}"
+            )
+            pool = await asyncpg.create_pool(
+                dsn,
+                min_size=config.pool_min,
+                max_size=config.pool_max,
+                timeout=config.connect_timeout,
+            )
+            self.logger.info("Connected to PostgreSQL: %s:%s/%s", config.host, config.port, config.database)
+            return pool
+        except ImportError:
+            raise ComponentException("asyncpg is not installed — run: pip install asyncpg")
+        except Exception as e:
+            raise ComponentException(f"PostgreSQL connection failed: {e}")
 
     async def _connect_redis(self, config: DatabaseConfig) -> Any:
-        """Connect to Redis database"""
-        # Placeholder for Redis connection
-        raise ComponentException("Redis connection not implemented")
+        """Connect to Redis database."""
+        try:
+            import redis.asyncio as redis_async
+
+            client = redis_async.Redis(
+                host=config.host,
+                port=config.port or 6379,
+                username=config.username,
+                password=config.password,
+                ssl=config.ssl_enabled,
+                socket_connect_timeout=config.connect_timeout,
+                decode_responses=True,
+            )
+            await client.ping()
+            self.logger.info("Connected to Redis: %s:%s", config.host, config.port or 6379)
+            return client
+        except ImportError:
+            raise ComponentException("redis is not installed — run: pip install redis")
+        except Exception as e:
+            raise ComponentException(f"Redis connection failed: {e}")
 
     async def _get_connection(self) -> Optional[DatabaseConnection]:
         """Get an available connection"""

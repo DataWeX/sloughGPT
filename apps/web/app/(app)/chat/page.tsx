@@ -11,15 +11,20 @@ import { useChatModelSettings } from '@/hooks/useChatModelSettings'
 import { useChatKeyboard } from '@/hooks/useChatKeyboard'
 import { useChatMessages } from '@/hooks/useChatMessages'
 import { computeSearchMatches } from '@/lib/chat-utils'
+import type { ChatMessage } from '@/lib/chat-utils'
 import { modelController } from '@/lib/model-controller'
+import { chatController } from '@/lib/chat-controller'
 import { generationConfigController } from '@/lib/generation-config-controller'
 import { AGENTS } from '@/lib/agents'
 import { useFeedbackStore } from '@/lib/feedback-store'
 import { useToastStore } from '@/lib/toast-store'
 import { addGlobalError } from '@/lib/error-store'
+import { imagesController } from '@/lib/images-controller'
+import { filesController } from '@/lib/files-controller'
 import {
   ChatSettings, ChatArea, ErrorBanner,
 } from '@/components/chat'
+import { ModeBar } from '@/components/chat/ModeBar'
 import { ChatToolbar } from '@/components/chat/ChatToolbar'
 import { ChatToolPanel } from '@/components/chat/ChatToolPanel'
 import { ConversationSidebar } from '@/components/chat/ConversationSidebar'
@@ -49,6 +54,17 @@ export default function ChatPage() {
   const engine = useChatLocalEngine(showToast)
   const model = useChatModelSettings(showToast, refreshHealth)
   const [modelDescriptions, setModelDescriptions] = useState<Record<string, string>>({})
+  const [chatMode, setChatMode] = useState<'chat' | 'write' | 'decide' | 'explain' | 'translate' | 'brainstorm' | 'wellness' | 'create' | 'read' | 'talk'>('chat')
+  const [writeTone, setWriteTone] = useState('Friendly')
+  const [writeType, setWriteType] = useState('Email')
+  const [decideStructure, setDecideStructure] = useState('Pros & Cons')
+  const [explainDifficulty, setExplainDifficulty] = useState('Simple')
+  const [translateLangPair, setTranslateLangPair] = useState('EN→ES')
+  const [brainstormTopic, setBrainstormTopic] = useState('Name Ideas')
+  const [wellnessType, setWellnessType] = useState('Sleep Story')
+  const [createStyle, setCreateStyle] = useState('Realistic')
+  const [readFileData, setReadFileData] = useState<{ text: string; filename: string; pages: number } | null>(null)
+  const [readLoading, setReadLoading] = useState(false)
 
   const chat = useChatMessages({
     model: model.model,
@@ -85,6 +101,8 @@ export default function ChatPage() {
     loadingRef: chat.loadingRef,
     newChatRef: chat.newChatRef,
     handleRegenerateRef: chat.handleRegenerateRef,
+    searchInputRef: ui.searchInputRef,
+    handleSearchChange: ui.handleSearchChange,
   })
 
   // ── Computed (cross-hook) ──────────────────────────────────────────────────
@@ -129,6 +147,16 @@ export default function ChatPage() {
       setModelDescriptions(desc)
     }).catch(() => {})
   }, [])
+
+  const [suggestions, setSuggestions] = useState<{ text: string; icon: string }[]>([])
+
+  useEffect(() => {
+    if (health && health !== 'offline' && health.model_loaded) {
+      chatController.getSuggestions().then(setSuggestions)
+    } else {
+      setSuggestions([])
+    }
+  }, [health])
 
   useEffect(() => {
     const handler = () => {
@@ -190,6 +218,107 @@ export default function ChatPage() {
   const modelValue = useChatModelValue({ model, agents, vision, chat, showToast })
   const uiValue = useChatUIValue({ ui, showToast })
 
+  const handleWriteSend = useCallback(async () => {
+    if (chatMode === 'write' && chat.input.trim()) {
+      const instruction = `Write a ${writeTone.toLowerCase()} ${writeType.toLowerCase()} about: `
+      chat.sendMessage(instruction + chat.input.trim())
+      chat.setInput('')
+    } else if (chatMode === 'decide' && chat.input.trim()) {
+      const instruction = `Help me decide using ${decideStructure.toLowerCase()}: `
+      chat.sendMessage(instruction + chat.input.trim())
+      chat.setInput('')
+    } else if (chatMode === 'explain' && chat.input.trim()) {
+      const instruction = `Explain this at a ${explainDifficulty.toLowerCase()} level (as if explaining to a ${explainDifficulty.toLowerCase()} learner): `
+      chat.sendMessage(instruction + chat.input.trim())
+      chat.setInput('')
+    } else if (chatMode === 'translate' && chat.input.trim()) {
+      const [src, tgt] = translateLangPair.split('→')
+      const instruction = `Translate this from ${src} to ${tgt}: `
+      chat.sendMessage(instruction + chat.input.trim())
+      chat.setInput('')
+    } else if (chatMode === 'brainstorm' && chat.input.trim()) {
+      const instruction = `Let's brainstorm ${brainstormTopic.toLowerCase()}. Be creative, give me ideas in a friendly list format: `
+      chat.sendMessage(instruction + chat.input.trim())
+      chat.setInput('')
+    } else if (chatMode === 'wellness' && chat.input.trim()) {
+      const prompts: Record<string, string> = {
+        'Sleep Story': 'Tell me a calming sleep story',
+        'Meditation': 'Guide me through a short meditation',
+        'Breathing': 'Guide me through a breathing exercise',
+        'Affirmation': 'Share a positive affirmation',
+      }
+      const instruction = `Respond in a gentle, soothing tone. ${prompts[wellnessType] || 'Help me feel calm'}: `
+      chat.sendMessage(instruction + chat.input.trim())
+      chat.setInput('')
+    } else if (chatMode === 'create' && chat.input.trim()) {
+      const text = chat.input.trim()
+      chat.setInput('')
+      // Add user message immediately
+      const userMsg: ChatMessage = {
+        id: Date.now().toString(), role: 'user', content: text, timestamp: new Date(),
+      }
+      const pendingId = (Date.now() + 1).toString()
+      const pendingMsg: ChatMessage = {
+        id: pendingId, role: 'assistant', content: '✨ **Creating your image...**', timestamp: new Date(),
+      }
+      chat.setMessages(prev => [...prev, userMsg, pendingMsg])
+      chat.setLoading(true)
+      // Generate image
+      try {
+        const result = await imagesController.generate(text, createStyle.toLowerCase())
+        chat.setMessages(prev => prev.map(m =>
+          m.id === pendingId
+            ? { ...m, content: `Here's your ${createStyle.toLowerCase()} image:\n\n![${text}](${result.image})` }
+            : m
+        ))
+      } catch (err: any) {
+        chat.setMessages(prev => prev.map(m =>
+          m.id === pendingId
+            ? { ...m, content: `❌ Sorry, I couldn't create that image. ${err?.message || 'Please try again.'}` }
+            : m
+        ))
+      } finally {
+        chat.setLoading(false)
+      }
+    } else if (chatMode === 'read' && chat.input.trim()) {
+      if (!readFileData) {
+        useToastStore.getState().addToast('Upload a file first, then ask your question', 'info')
+        return
+      }
+      const question = chat.input.trim()
+      chat.setInput('')
+      const fullPrompt = `[I'm asking about the file "${readFileData.filename}"]\n\nHere is the file content:\n${readFileData.text.slice(0, 12000)}\n\n---\n\nMy question: ${question}`
+      chat.sendMessage(fullPrompt)
+    } else {
+      chat.sendMessage()
+    }
+  }, [chatMode, writeTone, writeType, decideStructure, explainDifficulty, translateLangPair, brainstormTopic, wellnessType, createStyle, readFileData, chat])
+
+  const handleReadFile = useCallback(async (file: File) => {
+    setReadLoading(true)
+    try {
+      const result = await filesController.extract(file)
+      setReadFileData({ text: result.text, filename: result.filename, pages: result.pages })
+      const fileName = result.filename
+      const pageInfo = result.extension === '.pdf' ? ` (${result.pages} pages)` : ''
+      // Add a system message confirming the file was read
+      chat.setMessages(prev => [...prev, {
+        id: `file-${Date.now()}`, role: 'assistant', content: `📄 **Read: ${fileName}**${pageInfo}\n\nGot it! I've read ${result.chars.toLocaleString()} characters${pageInfo ? ` across ${result.pages} pages` : ''}. What do you want to know?`, timestamp: new Date(),
+      }])
+    } catch (err: any) {
+      useToastStore.getState().addToast(`Couldn't read file: ${err?.message || 'Unknown error'}`, 'error')
+    } finally {
+      setReadLoading(false)
+    }
+  }, [chat])
+
+  // Open voice overlay when Talk mode is selected
+  useEffect(() => {
+    if (chatMode === 'talk') {
+      ui.setVoiceMode(true)
+    }
+  }, [chatMode, ui])
+
   return (
     <ChatProvider health={healthValue} model={modelValue} ui={uiValue}>
     <a href="#chat-messages" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-background focus:border focus:rounded-lg focus:shadow-lg">
@@ -201,10 +330,16 @@ export default function ChatPage() {
         currentConversationId={chat.sessionIdRef.current}
         onLoadConversation={chat.loadSession}
         onNewChat={chat.newChat}
+        onDeleteConversation={chat.deleteSession}
+        onStarConversation={chat.starSession}
+        onPinConversation={chat.pinSession}
+        onArchiveConversation={chat.archiveSession}
+        archivedCount={chat.archivedCount}
+        onRenameConversation={chat.renameSession}
         open={ui.sidebarOpen}
         onClose={() => ui.setSidebarOpen(false)}
       />
-      <main className="flex flex-1 min-h-0 overflow-hidden rounded-none lg:rounded-lg border border-border/30 bg-background shadow-sm" aria-label="Chat">
+      <main className="flex flex-1 min-h-0 overflow-hidden rounded-none lg:rounded-lg border border-border/30 bg-[hsl(var(--chat-bg))] shadow-sm" aria-label="Chat">
         <div className="flex flex-col flex-1 min-h-0 min-w-0 max-w-full overflow-hidden">
           <ChatToolbarProvider value={toolbarValue}>
             <ChatToolbar />
@@ -237,12 +372,67 @@ export default function ChatPage() {
             />
           )}
 
+          <ModeBar
+            mode={chatMode}
+            tone={writeTone}
+            type={writeType}
+            decideStructure={decideStructure}
+            difficulty={explainDifficulty}
+            langPair={translateLangPair}
+            brainstormTopic={brainstormTopic}
+            wellnessType={wellnessType}
+            createStyle={createStyle}
+            onModeChange={setChatMode}
+            onToneChange={setWriteTone}
+            onTypeChange={setWriteType}
+            onDecideStructureChange={setDecideStructure}
+            onDifficultyChange={setExplainDifficulty}
+            onLangPairChange={setTranslateLangPair}
+            onBrainstormTopicChange={setBrainstormTopic}
+            onWellnessTypeChange={setWellnessType}
+            onCreateStyleChange={setCreateStyle}
+          />
+
+          {chatMode === 'read' && (
+            <div className="px-3 py-2 border-b border-border/10 bg-muted/5">
+              {!readFileData ? (
+                <div className="flex flex-col items-center gap-2 py-6 border-2 border-dashed border-border/30 rounded-lg text-center cursor-pointer hover:border-primary/40 hover:bg-muted/10 transition-colors" onDragOver={e => e.preventDefault()} onDrop={async e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleReadFile(f) }}>
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.txt,.md,.csv,.json"
+                    className="hidden"
+                    id="read-file-input"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleReadFile(f) }}
+                  />
+                  <label htmlFor="read-file-input" className="cursor-pointer flex flex-col items-center gap-1">
+                    <span className="text-2xl">📄</span>
+                    <span className="text-sm font-medium">{readLoading ? 'Reading your file...' : 'Drop a file here or click to upload'}</span>
+                    <span className="text-[11px] text-muted-foreground">PDF, Word, TXT, MD, CSV, JSON</span>
+                  </label>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-base">📄</span>
+                  <span className="font-medium truncate max-w-[200px]">{readFileData.filename}</span>
+                  {readFileData.pages > 1 && <span className="text-xs text-muted-foreground">({readFileData.pages} pages)</span>}
+                  <button
+                    onClick={() => { setReadFileData(null); chat.setMessages(prev => prev.filter(m => !m.id.startsWith('file-'))) }}
+                    className="ml-auto text-xs text-muted-foreground hover:text-foreground px-2 py-0.5 rounded hover:bg-muted/10"
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           <ChatArea
             messages={chat.messages}
             loading={chat.loading}
             sessionLoading={chat.sessionLoading}
             model={model.model}
             health={health}
+            suggestions={suggestions}
             onRefreshHealth={refreshHealth}
             onCopy={chat.handleCopy}
             onRegenerate={chat.handleRegenerate}
@@ -253,7 +443,7 @@ export default function ChatPage() {
             onSuggestionClick={chat.handleSuggestionClick}
             value={chat.input}
             onChange={chat.setInput}
-            onSend={chat.sendMessage}
+            onSend={handleWriteSend}
             onStop={() => {
               if (chat.loadingRef.current) {
                 chat.loadingRef.current.abort()
@@ -337,7 +527,7 @@ export default function ChatPage() {
             chat.setInput(text)
             await chat.sendMessage(text)
           }}
-          onClose={() => ui.setVoiceMode(false)}
+          onClose={() => { ui.setVoiceMode(false); setChatMode('chat') }}
         />
       )}
     </div>

@@ -1,15 +1,17 @@
 'use client'
 
+import React from 'react'
 import { IconSearch, IconX } from '@/components/ui'
 import { useChatToolbarContext } from '@/contexts/ChatToolbarContext'
 
 export function ChatSearchBar() {
   const ctx = useChatToolbarContext()
-  const { query: searchQuery, onChange: onSearchChange, onClear, matchIndex, matchCount, onPrevMatch, onNextMatch } = ctx.search
+  const { query: searchQuery, onChange: onSearchChange, onClear, matchIndex, matchCount, onPrevMatch, onNextMatch, searchInputRef } = ctx.search
   return (
     <div className="relative w-36 sm:w-44">
       <IconSearch className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground/60 pointer-events-none" aria-hidden />
       <input
+        ref={searchInputRef as React.Ref<HTMLInputElement> | undefined}
         type="text"
         placeholder="Search..."
         value={searchQuery}

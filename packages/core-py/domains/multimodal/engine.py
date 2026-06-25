@@ -15,6 +15,7 @@ logger = logging.getLogger("man.multimodal.engine")
 from domains.training.slonet import (
     Tensor, SloNet, SloConv2D, SloMaxPool2D, SloLinear,
     SloLSTM, SloEmbedding, SloLayerNorm, SloTransformerBlock, SloCrossAttention,
+    SloMultiHeadAttention, SloFeedForward, SloRMSNorm, SloDropout, SloLayer,
     SloAdam, softmax as _softmax, relu as _relu,
     flatten as _flatten, tensor as _tensor,
     cross_entropy as _cross_entropy, sigmoid as _sigmoid,
@@ -31,53 +32,25 @@ class MultimodalOutput:
 
 
 class TextDecoder:
-    """Learns its own vocabulary and generates text from image embeddings."""
+    """Learns its own BPE vocabulary and generates text from image embeddings."""
 
-    def __init__(self, embed_dim=256, hidden_dim=512, vocab_size=4096):
+    def __init__(self, embed_dim=256, hidden_dim=512, vocab_size=512):
         self.embed_dim = embed_dim
         self.hidden_dim = hidden_dim
         self.vocab_size = vocab_size
         self.bpe = BPETokenizer(vocab_size=vocab_size)
-        self.vocab: List[str] = []
-        self.stoi: dict = {}
-        self.itos: dict = {}
 
     def build_vocab(self, texts: List[str]):
-        """Build vocabulary from training texts using BPE."""
+        """Build BPE vocabulary from training texts."""
         self.bpe.train(texts)
-        # Also maintain word-level fallback for compatibility
-        vocab_set = set()
-        for t in texts:
-            for w in t.lower().split():
-                vocab_set.add(w)
-        vocab_set.update(["<BOS>", "<EOS>", "<PAD>"])
-        self.vocab = sorted(vocab_set)
-        self.stoi = {w: i for i, w in enumerate(self.vocab)}
-        self.itos = {i: w for w, i in self.stoi.items()}
 
     def encode(self, text: str) -> List[int]:
         """Encode text using BPE tokenizer."""
-        if self.bpe._built:
-            return self.bpe.encode(text)
-        # Fallback to word-level encoding
-        tokens = [self.stoi.get("<BOS>", 0)]
-        for w in text.lower().split():
-            tokens.append(self.stoi.get(w, self.stoi.get("<PAD>", 0)))
-        tokens.append(self.stoi.get("<EOS>", 0))
-        return tokens
+        return self.bpe.encode(text)
 
     def decode(self, token_ids: List[int]) -> str:
-        """Decode token IDs back to text."""
-        if self.bpe._built:
-            return self.bpe.decode(token_ids)
-        # Fallback to word-level decoding
-        words = []
-        for tid in token_ids:
-            w = self.itos.get(tid, "")
-            if w in ("<BOS>", "<EOS>", "<PAD>", ""):
-                continue
-            words.append(w)
-        return " ".join(words)
+        """Decode token IDs back to text using BPE."""
+        return self.bpe.decode(token_ids)
 
 
 class MultimodalEngine:
@@ -91,14 +64,17 @@ class MultimodalEngine:
     SAVE_PATH = "data/multimodal/multimodal_engine.npz"
     _model_id = "multimodal-v1"
 
-    def __init__(self, embed_dim=256, hidden_dim=512, n_vit_layers=4, n_heads=8):
+    def __init__(self, embed_dim=256, hidden_dim=512, n_vit_layers=3, n_heads=4,
+                 n_decoder_layers=3, n_audio_layers=2):
         self.vision = VisionEncoder(embed_dim, n_heads, n_vit_layers)
+        self.audio = AudioEncoder(embed_dim, n_heads, n_audio_layers)
         self.text = TextDecoder(embed_dim, hidden_dim)
-        self.decoder = DecoderLSTM(
+        self.decoder = SloTransformerDecoder(
             vocab_size=0,
             embed_dim=embed_dim,
             hidden_dim=hidden_dim,
-            n_heads=max(1, n_heads // 2),
+            n_heads=n_heads,
+            n_layers=n_decoder_layers,
         )
         self._trained = False
 
@@ -165,31 +141,32 @@ class MultimodalEngine:
 
     def embed(self, text: str):
         """Image caption → embedding (identity, since captions ARE embeddings here)."""
-        if not self._trained:
+        if not self._trained or not self.text.bpe._built:
             return [0.0] * 128
-        for word in self.text.vocab:
-            if word in text.lower():
-                idx = self.text.stoi.get(word, 0)
-                vec = [0.0] * 128
-                vec[idx % 128] = 1.0
-                return vec
-        return [0.0] * 128
+        tokens = self.text.bpe.encode(text)
+        if not tokens:
+            return [0.0] * 128
+        vec = [0.0] * 128
+        vec[tokens[0] % 128] = 1.0
+        return vec
 
     @property
     def metadata(self):
         return {
-            "vocab_size": len(self.text.vocab) if hasattr(self.text, "vocab") else 0,
+            "vocab_size": len(self.text.bpe.vocab) if self.text.bpe._built else 0,
             "trained": self._trained,
             "embed_dim": self.vision.embed_dim,
         }
 
     def build_vocab(self, texts: List[str]):
         self.text.build_vocab(texts)
-        self.decoder = DecoderLSTM(
-            vocab_size=len(self.text.vocab),
+        bpe_vocab_size = len(self.text.bpe.vocab)
+        self.decoder = SloTransformerDecoder(
+            vocab_size=bpe_vocab_size,
             embed_dim=self.text.embed_dim,
-            hidden_dim=self.text.hidden_dim,
-            n_heads=max(1, self.vision.n_heads // 2),
+            hidden_dim=self.decoder.hidden_dim,
+            n_heads=self.decoder.n_heads,
+            n_layers=self.decoder.n_layers,
         )
 
     def save(self, path: str = "", extra_meta: dict = None) -> str:
@@ -199,7 +176,6 @@ class MultimodalEngine:
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
         weights = {}
-        # Save vision transformer weights
         weights["vision_cls_token"] = self.vision.cls_token.data
         weights["vision_pos_embed"] = self.vision.pos_embed.data
         weights["vision_patch_proj_w"] = self.vision.patch_proj.weight.data
@@ -209,20 +185,30 @@ class MultimodalEngine:
         for i, block in enumerate(self.vision.blocks):
             for j, p in enumerate(block.parameters()):
                 weights[f"vision_block{i}_{j}"] = p.data
-        # Save decoder weights
+        weights["audio_cls_token"] = self.audio.cls_token.data
+        weights["audio_pos_embed"] = self.audio.pos_embed.data
+        weights["audio_patch_proj_w"] = self.audio.patch_proj.weight.data
+        weights["audio_patch_proj_b"] = self.audio.patch_proj.bias.data
+        weights["audio_norm_w"] = self.audio.norm.weight.data
+        weights["audio_norm_b"] = self.audio.norm.bias.data
+        for i, block in enumerate(self.audio.blocks):
+            for j, p in enumerate(block.parameters()):
+                weights[f"audio_block{i}_{j}"] = p.data
         for i, p in enumerate(self.decoder.parameters()):
             weights[f"decoder_{i}"] = p.data
         np.savez_compressed(path, **weights)
 
         meta = {
-            "vocab": self.text.vocab,
+            "bpe_vocab": self.text.bpe.vocab,
+            "bpe_merges": self.text.bpe.merges,
+            "bpe_vocab_size": self.text.bpe.vocab_size,
             "embed_dim": self.vision.embed_dim,
             "hidden_dim": self.decoder.hidden_dim,
             "n_vit_layers": len(self.vision.blocks),
+            "n_audio_layers": len(self.audio.blocks),
             "n_heads": self.vision.n_heads,
+            "n_decoder_layers": self.decoder.n_layers,
             "trained": self._trained,
-            "stoi": self.text.stoi,
-            "itos": {str(k): v for k, v in self.text.itos.items()},
         }
         if extra_meta:
             meta.update(extra_meta)
@@ -245,22 +231,33 @@ class MultimodalEngine:
         with open(meta_path) as f:
             meta = json.load(f)
 
-        n_vit_layers = meta.get("n_vit_layers", 4)
-        n_heads = meta.get("n_heads", 8)
+        n_vit_layers = meta.get("n_vit_layers", 3)
+        n_heads = meta.get("n_heads", 4)
+        n_decoder_layers = meta.get("n_decoder_layers", 3)
+        n_audio_layers = meta.get("n_audio_layers", 2)
+        embed_dim = meta["embed_dim"]
+        hidden_dim = meta["hidden_dim"]
         engine = cls(
-            embed_dim=meta["embed_dim"],
-            hidden_dim=meta["hidden_dim"],
+            embed_dim=embed_dim,
+            hidden_dim=hidden_dim,
             n_vit_layers=n_vit_layers,
             n_heads=n_heads,
+            n_decoder_layers=n_decoder_layers,
+            n_audio_layers=n_audio_layers,
         )
-        engine.text.vocab = list(meta["vocab"])
-        engine.text.stoi = meta["stoi"]
-        engine.text.itos = {int(k): v for k, v in meta["itos"].items()}
-        engine.decoder = DecoderLSTM(
-            vocab_size=len(engine.text.vocab),
-            embed_dim=meta["embed_dim"],
-            hidden_dim=meta["hidden_dim"],
-            n_heads=max(1, n_heads // 2),
+        # Restore BPE tokenizer
+        engine.text.bpe.vocab = meta["bpe_vocab"]
+        engine.text.bpe.merges = [tuple(m) for m in meta.get("bpe_merges", [])]
+        engine.text.bpe.vocab_size = meta.get("bpe_vocab_size", engine.text.vocab_size)
+        engine.text.bpe.itos = {i: tok for tok, i in engine.text.bpe.vocab.items()}
+        engine.text.bpe._built = True
+        bpe_vocab_size = len(engine.text.bpe.vocab)
+        engine.decoder = SloTransformerDecoder(
+            vocab_size=bpe_vocab_size,
+            embed_dim=embed_dim,
+            hidden_dim=hidden_dim,
+            n_heads=n_heads,
+            n_layers=n_decoder_layers,
         )
         engine._trained = meta.get("trained", False)
 
@@ -279,6 +276,21 @@ class MultimodalEngine:
                 if j < len(params):
                     params[j].data = data[f"vision_block{i}_{j}"]
                 j += 1
+        # Load audio encoder weights
+        if "audio_cls_token" in data:
+            engine.audio.cls_token.data = data["audio_cls_token"]
+            engine.audio.pos_embed.data = data["audio_pos_embed"]
+            engine.audio.patch_proj.weight.data = data["audio_patch_proj_w"]
+            engine.audio.patch_proj.bias.data = data["audio_patch_proj_b"]
+            engine.audio.norm.weight.data = data["audio_norm_w"]
+            engine.audio.norm.bias.data = data["audio_norm_b"]
+            for i, block in enumerate(engine.audio.blocks):
+                j = 0
+                while f"audio_block{i}_{j}" in data:
+                    params = block.parameters()
+                    if j < len(params):
+                        params[j].data = data[f"audio_block{i}_{j}"]
+                    j += 1
         # Load decoder weights
         d_idx = 0
         for p in engine.decoder.parameters():
@@ -294,79 +306,162 @@ class MultimodalEngine:
     def embed_dim(self):
         return self.vision.embed_dim
 
-    def forward(self, images_np: np.ndarray, token_ids: np.ndarray) -> Tuple[Tensor, Tensor]:
+    def _concat_modalities(self, images_np: Optional[np.ndarray] = None, audio_np: Optional[np.ndarray] = None,
+                           audio_patches: Optional[np.ndarray] = None) -> Tuple[Tensor, Tensor, List]:
+        """Produce (embed, patches, optimizers) from optional image and audio inputs.
+
+        Returns:
+            embed: (B, 1, embed_dim) — cls token from lead modality (image > audio)
+            patches: (B, total_patches, embed_dim) — concatenated patch embeddings
+            optimizers: list of optimizers to step
+        """
+        patches_list = []
+        optimizers = [self.decoder.optimizer]
+
+        if images_np is not None:
+            img_embed = self.vision.forward(images_np)
+            img_patches = self.vision.get_patch_embeddings(images_np)
+            patches_list.append(img_patches)
+            optimizers.append(self.vision.optimizer)
+        else:
+            img_embed = None
+
+        aud_embed = None
+        if audio_patches is not None:
+            aud_patches = self.audio._embed_patches(audio_patches)
+            patches_list.append(aud_patches)
+            optimizers.append(self.audio.optimizer)
+            aud_embed = aud_patches[:, 0:1, :]
+        elif audio_np is not None:
+            aud_patches = self.audio.get_patch_embeddings(audio_np)
+            patches_list.append(aud_patches)
+            optimizers.append(self.audio.optimizer)
+            # CLS token from patch embeddings (avoids 2nd transformer pass)
+            aud_embed = aud_patches[:, 0:1, :]
+
+        if len(patches_list) == 0:
+            raise ValueError("At least one of images_np or audio_np must be provided")
+
+        embed = img_embed if img_embed is not None else aud_embed
+
+        # Concatenate all patch embeddings along sequence dimension
+        all_patches = Tensor(
+            np.concatenate([p.data for p in patches_list], axis=1),
+            requires_grad=True,
+            _children=tuple(patches_list),
+        )
+        return embed, all_patches, optimizers
+
+    def forward(self, images_np: np.ndarray, token_ids: np.ndarray,
+                audio_np: Optional[np.ndarray] = None) -> Tuple[Tensor, Tensor]:
         img_embed = self.vision.forward(images_np)
-        logits, _ = self.decoder.forward(img_embed, token_ids)
+        patches = None
+        if audio_np is not None:
+            aud_patches = self.audio.get_patch_embeddings(audio_np)
+            img_patches = self.vision.get_patch_embeddings(images_np)
+            patches = Tensor(
+                np.concatenate([img_patches.data, aud_patches.data], axis=1),
+                requires_grad=True,
+                _children=(img_patches, aud_patches),
+            )
+        logits, _ = self.decoder.forward(img_embed, token_ids, patches)
         return logits, img_embed
+
+    def precompute_audio_patches(self, audio_np: np.ndarray) -> np.ndarray:
+        """Precompute audio raw patches (B, N, input_dim) without STFT per epoch."""
+        return self.audio.extract_patches(audio_np)
 
     def train_step(
         self,
-        images_np: np.ndarray,
-        text_tokens: np.ndarray,
+        images_np: Optional[np.ndarray] = None,
+        text_tokens: Optional[np.ndarray] = None,
+        lr: Optional[float] = None,
+        audio_np: Optional[np.ndarray] = None,
+        audio_patches: Optional[np.ndarray] = None,
     ) -> float:
-        # Get both cls token and full patch embeddings
-        img_embed = self.vision.forward(images_np)  # (B, 1, embed_dim)
-        img_patches = self.vision.get_patch_embeddings(images_np)  # (B, num_patches+1, embed_dim)
-        logits, _ = self.decoder.forward(img_embed, text_tokens[:, :-1], img_patches)
+        if text_tokens is None:
+            raise ValueError("text_tokens is required")
+        embed, patches, optimizers = self._concat_modalities(images_np, audio_np, audio_patches)
+        logits, _ = self.decoder.forward(embed, text_tokens[:, :-1], patches)
         targets = _tensor(text_tokens[:, 1:].reshape(-1), requires_grad=False)
         loss = _cross_entropy(logits, targets)
         loss.backward()
-        self.decoder.optimizer.step(self.decoder.parameters())
-        self.decoder.optimizer.step(self.vision.parameters())
-        for p in self.decoder.parameters() + self.vision.parameters():
-            p.grad = None
+        if lr is not None:
+            old_lrs = {id(opt): opt.lr for opt in optimizers}
+            for opt in optimizers:
+                opt.lr = lr
+        for opt in optimizers:
+            opt.step(self._params_for_optimizer(opt, embed, patches))
+        if lr is not None:
+            for opt in optimizers:
+                opt.lr = old_lrs[id(opt)]
+        for opt in optimizers:
+            for p in self._params_for_optimizer(opt, embed, patches):
+                p.grad = None
         self._trained = True
         return float(loss.data)
 
-    def generate(self, image_np: np.ndarray, max_len: int = 20, temperature: float = 1.0) -> MultimodalOutput:
-        img_embed = self.vision.forward(image_np)  # (B, 1, embed_dim)
-        img_patches = self.vision.get_patch_embeddings(image_np)  # (B, num_patches+1, embed_dim)
-        bos = self.text.stoi.get("<BOS>", 0)
+    def _params_for_optimizer(self, opt, embed, patches):
+        if opt is self.decoder.optimizer:
+            return self.decoder.parameters()
+        if opt is self.vision.optimizer:
+            return self.vision.parameters()
+        if opt is self.audio.optimizer:
+            return self.audio.parameters()
+        return []
+
+    def generate(self, image_np: Optional[np.ndarray] = None, max_len: int = 20,
+                 temperature: float = 1.0, audio_np: Optional[np.ndarray] = None,
+                 audio_patches: Optional[np.ndarray] = None) -> MultimodalOutput:
+        embed, patches, _ = self._concat_modalities(image_np, audio_np, audio_patches)
+        bos = 0
+        eos = 1
         tokens = [bos]
 
         for _ in range(max_len):
             inp = _tensor(np.array([tokens]), requires_grad=False)
-            logits, _ = self.decoder.forward(img_embed, inp, img_patches)
+            logits, _ = self.decoder.forward(embed, inp, patches)
+            logits_2d = logits.data.reshape(-1, logits.data.shape[-1])  # (seq_len, vocab_size)
+            last_pos = logits_2d[-1]  # (vocab_size,)
             if temperature > 0 and self._trained:
-                probs = _softmax(logits / temperature)
+                probs = _softmax(_tensor(last_pos[np.newaxis, :], requires_grad=False) / temperature)
                 probs_np = probs.data.flatten()
                 probs_np = np.maximum(probs_np, 1e-8)
-                # Repetition penalty: down-weight already generated tokens
                 for t in tokens[1:]:
                     if 0 <= t < len(probs_np):
                         probs_np[t] *= 0.4
                 probs_np /= probs_np.sum()
                 next_tok = int(np.random.choice(len(probs_np), p=probs_np))
             else:
-                scores = logits.data[-1].copy()
+                scores = last_pos.copy()
                 for t in tokens[1:]:
                     if 0 <= t < len(scores):
                         scores[t] -= 5.0
                 next_tok = int(np.argmax(scores))
-            if next_tok == self.text.stoi.get("<EOS>", 0):
+            if next_tok == eos:
                 break
             tokens.append(next_tok)
 
         text = self.text.decode(tokens)
-        conf = float(np.mean(np.abs(img_embed.data)))
+        conf = float(np.mean(np.abs(embed.data)))
         return MultimodalOutput(text=text, confidence=conf)
 
 
 class VisionEncoder:
     """ViT-style image encoder with patch positional embeddings.
     
-    Processes 224x224 RGB images by splitting into 16x16 patches,
+    Processes 224x224 RGB images by splitting into 32x32 patches (49 patches),
     projecting each patch to embed_dim, and adding positional embeddings.
     Output: (B, num_patches+1, embed_dim) with class token.
     """
-    PATCH_SIZE = 16
+    PATCH_SIZE = 32
     IMAGE_SIZE = 224
 
-    def __init__(self, embed_dim=256, n_heads=8, n_layers=4):
+    def __init__(self, embed_dim=256, n_heads=8, n_layers=3):
         self.embed_dim = embed_dim
         self.n_heads = n_heads
-        self.patch_dim = 3 * self.PATCH_SIZE * self.PATCH_SIZE  # 3 * 16 * 16 = 768
-        self.num_patches = (self.IMAGE_SIZE // self.PATCH_SIZE) ** 2  # 14*14 = 196
+        self.patch_dim = 3 * self.PATCH_SIZE * self.PATCH_SIZE  # 3 * 32 * 32 = 3072
+        self.num_patches = (self.IMAGE_SIZE // self.PATCH_SIZE) ** 2  # 7*7 = 49
         self.cls_token = Tensor(np.random.randn(1, 1, embed_dim).astype(np.float32) * 0.02, requires_grad=True)
         self.pos_embed = Tensor(np.random.randn(1, self.num_patches + 1, embed_dim).astype(np.float32) * 0.02, requires_grad=True)
         self.patch_proj = SloLinear(self.patch_dim, embed_dim)
@@ -433,101 +528,333 @@ class VisionEncoder:
         return [p for p in params if p.requires_grad]
 
 
-class DecoderLSTM:
-    """LSTM text decoder with cross-attention to image features.
-    
-    Image patch embeddings are used as context for cross-attention at each timestep.
-    The cls token initializes h0/c0 as before, but cross-attention allows the decoder
-    to attend to specific image regions while generating each token.
+class AudioEncoder:
+    """Spectrogram-based audio encoder feeding into the transformer decoder.
+
+    Takes raw audio waveform -> mel spectrogram -> patches -> embeddings -> CLS token.
+    Output: (B, num_patches+1, embed_dim) — same shape as VisionEncoder for cross-attention.
     """
 
-    def __init__(self, vocab_size, embed_dim=256, hidden_dim=512, n_heads=4):
-        self.vocab_size = vocab_size
-        self.embed_dim = embed_dim
-        self.hidden_dim = hidden_dim
+    SAMPLE_RATE = 16000
+    N_MELS = 80
+    N_FFT = 512
+    HOP_LENGTH = 160  # 10ms at 16kHz
+    PATCH_SECONDS = 0.5  # seconds of audio per patch
+    MAX_SECONDS = 30     # max audio duration
 
-        self.embedding = SloEmbedding(max(1, vocab_size), embed_dim)
-        self.proj_h = SloLinear(embed_dim, hidden_dim)
-        self.proj_c = SloLinear(embed_dim, hidden_dim)
-        self.W_ih = SloLinear(embed_dim, 4 * hidden_dim)
-        self.W_hh = SloLinear(hidden_dim, 4 * hidden_dim)
-        # Cross-attention: query from hidden state, key/value from image patches
-        # Need projection to match image embed_dim to hidden_dim
-        self.img_proj = SloLinear(embed_dim, hidden_dim)
-        self.cross_attn = SloCrossAttention(hidden_dim, n_heads, name="decoder_cross_attn")
-        self.fc_out = SloLinear(hidden_dim, max(1, vocab_size))
+    def __init__(self, embed_dim=256, n_heads=4, n_layers=2):
+        self.embed_dim = embed_dim
+        self.n_heads = n_heads
+        patches_per_sec = self.SAMPLE_RATE / self.HOP_LENGTH  # 100 frames/sec
+        self.frames_per_patch = int(patches_per_sec * self.PATCH_SECONDS)  # 500 frames
+        self.max_patches = int(self.MAX_SECONDS / self.PATCH_SECONDS)  # 6
+        self.input_dim = self.N_MELS * self.frames_per_patch  # 80 * 500 = 40000
+        self.cls_token = Tensor(np.random.randn(1, 1, embed_dim).astype(np.float32) * 0.02, requires_grad=True)
+        self.pos_embed = Tensor(np.random.randn(1, self.max_patches + 1, embed_dim).astype(np.float32) * 0.02, requires_grad=True)
+        self.patch_proj = SloLinear(self.input_dim, embed_dim)
+        self.norm = SloLayerNorm(embed_dim)
+        self.blocks = [
+            SloTransformerBlock(embed_dim, n_heads, use_rope=True, dropout=0.1, name=f"aud_block_{i}")
+            for i in range(n_layers)
+        ]
         self.optimizer = SloAdam(lr=3e-4)
-        self._trained = False
+
+    def _mel_spectrogram(self, waveform: np.ndarray) -> np.ndarray:
+        """Compute mel spectrogram from raw waveform. Returns (N_MELS, T).
+        Vectorized STFT via strided frames + batch FFT."""
+        n_fft = self.N_FFT
+        hop = self.HOP_LENGTH
+        window = np.hanning(n_fft)
+
+        num_frames = (len(waveform) - n_fft) // hop + 1
+        if num_frames <= 0:
+            return np.zeros((self.N_MELS, 1), dtype=np.float32)
+
+        # Vectorized frame extraction via strided view
+        shape = (num_frames, n_fft)
+        strides = (waveform.strides[0] * hop, waveform.strides[0])
+        frames = np.lib.stride_tricks.as_strided(waveform, shape=shape, strides=strides)
+        frames = frames * window  # (num_frames, n_fft)
+        spec = np.abs(np.fft.rfft(frames, axis=1)).T  # (n_fft//2+1, num_frames)
+
+        sr = self.SAMPLE_RATE
+        n_mels = self.N_MELS
+        # Vectorized mel filterbank
+        f_max = sr / 2.0
+        mel_pts = np.linspace(0, 2595.0 * np.log10(1 + f_max / 700.0), n_mels + 2)
+        hz_pts = 700.0 * (10.0 ** (mel_pts / 2595.0) - 1.0)
+        fft_bins = ((n_fft + 1) * hz_pts / sr).astype(int)
+        mel_basis = np.zeros((n_mels, n_fft // 2 + 1), dtype=np.float32)
+        for i in range(n_mels):
+            l, c, r = fft_bins[i], fft_bins[i+1], fft_bins[i+2]
+            denom_l = max(c - l, 1)
+            denom_r = max(r - c, 1)
+            if r > l:
+                idx = np.arange(l, r)
+                vals = np.where(idx < c, (idx - l) / denom_l, (r - idx) / denom_r)
+                mel_basis[i, l:r] = vals
+
+        mel_spec = mel_basis @ spec
+        mel_spec = np.log(np.maximum(mel_spec, 1e-8))
+        return mel_spec
+
+    def extract_patches(self, waveform_np: np.ndarray) -> np.ndarray:
+        """Convert (B, T) audio to (B, num_patches, input_dim) patches."""
+        if waveform_np.ndim == 1:
+            waveform_np = waveform_np.reshape(1, -1)
+        B = waveform_np.shape[0]
+        patches_list = []
+        for b in range(B):
+            mel = self._mel_spectrogram(waveform_np[b])
+            T = mel.shape[1]
+            fp = self.frames_per_patch
+            n = min(T // fp, self.max_patches)
+            if n == 0:
+                pad = fp - T
+                mel = np.pad(mel, ((0, 0), (0, pad)), mode='constant')
+                n = 1
+            batch_patches = []
+            for i in range(n):
+                seg = mel[:, i*fp:(i+1)*fp].reshape(-1)
+                batch_patches.append(seg)
+            patches_list.append(np.stack(batch_patches))
+        max_n = max(p.shape[0] for p in patches_list)
+        out = np.zeros((B, max_n, self.input_dim), dtype=np.float32)
+        for b, p in enumerate(patches_list):
+            out[b, :p.shape[0]] = p
+        return out
+
+    def forward(self, waveform_np: np.ndarray) -> Tensor:
+        """Audio -> patches -> transformer -> CLS token embedding. Returns (B, 1, embed_dim)."""
+        patches = self.extract_patches(waveform_np)
+        B, N = patches.shape[0], patches.shape[1]
+        x = self.patch_proj.forward(_tensor(patches, requires_grad=False))
+        cls_tokens_data = self.cls_token.data.repeat(B, axis=0)
+        cls_tokens = Tensor(cls_tokens_data, requires_grad=True, _children=(self.cls_token,))
+        x_data = np.concatenate([cls_tokens.data, x.data], axis=1)
+        if N < self.max_patches:
+            x_data = np.pad(x_data, ((0,0), (0, self.max_patches - N), (0,0)), mode='constant')
+        x_data = x_data + self.pos_embed.data[:, :x_data.shape[1], :]
+        x = Tensor(x_data, requires_grad=True, _children=(x, self.pos_embed, cls_tokens))
+        for block in self.blocks:
+            x, _ = block.forward(x)
+        cls_out = x[:, 0:1, :]
+        cls_out = self.norm.forward(cls_out)
+        return cls_out
+
+    def get_patch_embeddings(self, waveform_np: np.ndarray) -> Tensor:
+        """Return all patch embeddings (B, num_patches+1, embed_dim) for cross-attention."""
+        patches = self.extract_patches(waveform_np)
+        return self._embed_patches(patches)
+
+    def _embed_patches(self, patches: np.ndarray) -> Tensor:
+        """Embed pre-extracted patches (B, N, input_dim) → (B, N+1, embed_dim).
+        Can be called with precomputed patches to avoid recomputing STFT."""
+        B, N = patches.shape[0], patches.shape[1]
+        x = self.patch_proj.forward(_tensor(patches, requires_grad=False))
+        cls_tokens_data = self.cls_token.data.repeat(B, axis=0)
+        cls_tokens = Tensor(cls_tokens_data, requires_grad=True, _children=(self.cls_token,))
+        x_data = np.concatenate([cls_tokens.data, x.data], axis=1)
+        if N < self.max_patches:
+            x_data = np.pad(x_data, ((0,0), (0, self.max_patches - N), (0,0)), mode='constant')
+        x_data = x_data + self.pos_embed.data[:, :x_data.shape[1], :]
+        x = Tensor(x_data, requires_grad=True, _children=(x, self.pos_embed, cls_tokens))
+        for block in self.blocks:
+            x, _ = block.forward(x)
+        return self.norm.forward(x)
 
     def parameters(self):
-        ps = self.embedding.parameters()
-        ps += self.proj_h.parameters() + self.proj_c.parameters()
-        ps += self.W_ih.parameters() + self.W_hh.parameters()
-        ps += self.img_proj.parameters()
-        ps += self.cross_attn.parameters()
-        ps += self.fc_out.parameters()
-        return [p for p in ps if p.requires_grad]
+        params = [self.cls_token, self.pos_embed]
+        params += self.patch_proj.parameters()
+        params += self.norm.parameters()
+        for block in self.blocks:
+            params += block.parameters()
+        return [p for p in params if p.requires_grad]
 
-    def forward(self, img_embed: Tensor, token_ids: Tensor, img_patches: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:
+
+class SloTransformerDecoderBlock(SloLayer):
+    """Transformer decoder block with causal self-attention + cross-attention + FFN.
+
+    Architecture:
+        x → self_attn_norm → masked self-attention → + residual
+          → cross_attn_norm → cross-attention (to image patches) → + residual
+          → ff_norm → FFN → + residual
+
+    All sub-layers use pre-norm (norm before each sub-layer).
+    """
+
+    def __init__(self, d_model: int, n_heads: int, dim_ff: int = None,
+                 use_rope: bool = False, max_seq_len: int = 2048,
+                 rope_base: float = 10000.0, dropout: float = 0.1, name=""):
+        super().__init__(name or f"TransformerDecoder{d_model}")
+        dim_ff = dim_ff or d_model * 4
+        self.d_model = d_model
+        self.n_heads = n_heads
+        self.head_dim = d_model // n_heads
+
+        self.self_attn_norm = SloRMSNorm(d_model, name=name + "_self_attn_norm")
+        self.self_attn = SloMultiHeadAttention(
+            d_model, n_heads, use_rope=use_rope,
+            max_seq_len=max_seq_len, rope_base=rope_base,
+            name=name + "_self_attn",
+        )
+        self.cross_attn_norm = SloRMSNorm(d_model, name=name + "_cross_attn_norm")
+        self.cross_attn = SloCrossAttention(d_model, n_heads, name=name + "_cross_attn")
+        self.ff_norm = SloRMSNorm(d_model, name=name + "_ff_norm")
+        self.ff = SloFeedForward(d_model, dim_ff, name=name + "_ff")
+        self.drop = SloDropout(dropout) if dropout > 0 else None
+
+    def train(self, mode: bool = True):
+        self.self_attn_norm.train(mode)
+        self.self_attn.train(mode)
+        self.cross_attn_norm.train(mode)
+        self.cross_attn.train(mode)
+        self.ff_norm.train(mode)
+        self.ff.train(mode)
+        if self.drop:
+            self.drop.train(mode)
+
+    def forward(self, x: Tensor, context: Optional[Tensor] = None,
+                mask: Optional[Tensor] = None,
+                kv_cache: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+                start_pos: int = 0) -> Tensor:
         """
         Args:
-            img_embed: (B, 1, embed_dim) cls token for h0/c0 init
-            token_ids: (B, seq_len) token IDs
+            x: (B, seq_len, d_model) input from previous layer
+            context: (B, img_tokens, d_model) image patch embeddings for cross-attention
+            mask: causal attention mask (B, 1, seq_len, seq_len) or None
+            kv_cache: optional (K, V) cache tuple for self-attention
+            start_pos: starting position in sequence (for incremental decoding)
+        Returns:
+            output: (B, seq_len, d_model)
+        """
+        h = self.self_attn_norm.forward(x)
+        h, _ = self.self_attn.forward(h, h, h, mask, kv_cache=kv_cache, start_pos=start_pos)
+        if self.drop:
+            h = self.drop.forward(h)
+        x = x + h
+
+        if context is not None:
+            h = self.cross_attn_norm.forward(x)
+            h = self.cross_attn.forward(h, context)
+            if self.drop:
+                h = self.drop.forward(h)
+            x = x + h
+
+        h = self.ff_norm.forward(x)
+        h = self.ff.forward(h)
+        if self.drop:
+            h = self.drop.forward(h)
+        x = x + h
+        return x
+
+    def parameters(self) -> List[Tensor]:
+        ps = self.self_attn_norm.parameters() + self.self_attn.parameters()
+        ps += self.cross_attn_norm.parameters() + self.cross_attn.parameters()
+        ps += self.ff_norm.parameters() + self.ff.parameters()
+        if self.drop:
+            ps += self.drop.parameters()
+        return ps
+
+
+def _causal_mask(seq_len: int, dtype=np.float32) -> Tensor:
+    """Create a causal attention mask: upper triangular filled with -inf.
+
+    Shape: (1, 1, seq_len, seq_len). Token i can only attend to j <= i.
+    Broadcasts over batch and head dimensions.
+    """
+    mask = np.triu(np.full((seq_len, seq_len), -1e9, dtype=dtype), k=1)
+    return _tensor(mask.reshape(1, 1, seq_len, seq_len), requires_grad=False)
+
+
+class SloTransformerDecoder(SloLayer):
+    """Transformer text decoder with cross-attention to image features.
+
+    Architecture:
+        token_ids → embedding → RoPE
+          → N× SloTransformerDecoderBlock (self-attn → cross-attn → FFN)
+          → output projection → logits
+
+    Supports parallel training (teacher forcing with causal mask)
+    and autoregressive generation (one token at a time with KV cache).
+    """
+
+    def __init__(self, vocab_size: int, embed_dim: int = 256, hidden_dim: int = 512,
+                 n_heads: int = 8, n_layers: int = 4, max_seq_len: int = 512,
+                 dropout: float = 0.1, name=""):
+        super().__init__(name or f"TransformerDecoder{hidden_dim}")
+        self.vocab_size = max(1, vocab_size)
+        self.embed_dim = embed_dim
+        self.hidden_dim = hidden_dim
+        self.n_heads = n_heads
+        self.n_layers = n_layers
+
+        self.embedding = SloEmbedding(self.vocab_size, embed_dim)
+        self.input_proj = SloLinear(embed_dim, hidden_dim, name=name + "_input_proj")
+        self.blocks = [
+            SloTransformerDecoderBlock(
+                hidden_dim, n_heads,
+                use_rope=True, max_seq_len=max_seq_len,
+                dropout=dropout, name=name + f"_block_{i}",
+            )
+            for i in range(n_layers)
+        ]
+        self.output_norm = SloRMSNorm(hidden_dim, name=name + "_output_norm")
+        self.fc_out = SloLinear(hidden_dim, self.vocab_size, name=name + "_fc_out")
+        self.img_proj = SloLinear(embed_dim, hidden_dim, name=name + "_img_proj")
+        self.optimizer = SloAdam(lr=3e-4)
+
+    def parameters(self) -> List[Tensor]:
+        ps = self.embedding.parameters()
+        ps += self.input_proj.parameters()
+        for block in self.blocks:
+            ps += block.parameters()
+        ps += self.output_norm.parameters()
+        ps += self.fc_out.parameters()
+        ps += self.img_proj.parameters()
+        return [p for p in ps if p.requires_grad]
+
+    def forward(self, img_embed: Tensor, token_ids: Tensor,
+                img_patches: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:
+        """
+        Args:
+            img_embed: (B, 1, embed_dim) cls token (used for KV cache init, not directly as state)
+            token_ids: (B, seq_len) token IDs (teacher forcing in training)
             img_patches: (B, num_patches+1, embed_dim) full patch embeddings for cross-attention
+
+        Returns:
+            logits: (seq_len, vocab_size) output logits
+            last_out: (B, hidden_dim) last hidden state
         """
         if token_ids.data.ndim == 1:
             token_ids_data = token_ids.data.reshape(1, -1)
         else:
             token_ids_data = token_ids.data
 
-        # Project img_embed to hidden dim and reshape to (B, hidden_dim)
-        h = self.proj_h.forward(img_embed)
-        c = self.proj_c.forward(img_embed)
-        if h.data.ndim == 3:
-            h = Tensor(h.data.reshape(h.data.shape[0], -1), requires_grad=True, _children=(h,))
-        if c.data.ndim == 3:
-            c = Tensor(c.data.reshape(c.data.shape[0], -1), requires_grad=True, _children=(c,))
-        all_logits = []
+        B, seq_len = token_ids_data.shape
 
-        for t in range(token_ids_data.shape[1]):
-            tok_t = int(np.clip(token_ids_data[0, t], 0, max(1, self.vocab_size - 1)))
-            idx = _tensor(np.array([[tok_t]]), requires_grad=False)
-            emb_t = self.embedding.forward(idx)
-            # Reshape embedding to (B, embed_dim)
-            if emb_t.data.ndim == 3:
-                emb_t = Tensor(emb_t.data.reshape(emb_t.data.shape[0], -1), requires_grad=False)
+        # Embed tokens and project to hidden_dim
+        tok_clipped = np.clip(token_ids_data, 0, self.vocab_size - 1).astype(np.int64)
+        emb = self.embedding.forward(_tensor(tok_clipped, requires_grad=False))
+        x = self.input_proj.forward(emb)
 
-            gates_ih = self.W_ih.forward(emb_t)
-            gates_hh = self.W_hh.forward(h)
-            gates_data = gates_ih.data + gates_hh.data
+        # Project image patches from embed_dim to hidden_dim
+        context = None
+        if img_patches is not None:
+            context = self.img_proj.forward(img_patches)
 
-            hd = self.hidden_dim
-            gi = _sigmoid(_tensor(gates_data[:, :hd], requires_grad=False))
-            gf = _sigmoid(_tensor(gates_data[:, hd:2*hd], requires_grad=False))
-            gg = _tensor(np.tanh(gates_data[:, 2*hd:3*hd]), requires_grad=False)
-            go = _sigmoid(_tensor(gates_data[:, 3*hd:], requires_grad=False))
+        # Create causal mask for parallel training
+        mask = _causal_mask(seq_len)
 
-            c_new = gf * c + gi * gg
-            h = go * Tensor(np.tanh(c_new.data), requires_grad=False)
-            c = c_new
+        # Pass through decoder blocks
+        for block in self.blocks:
+            x = block.forward(x, context, mask)
 
-            # Cross-attention if image patches provided
-            if img_patches is not None:
-                # Project image patches from embed_dim to hidden_dim
-                img_ctx = self.img_proj.forward(img_patches)
-                # Reshape h to (B, 1, hidden_dim) for cross-attention
-                h_3d = Tensor(h.data.reshape(h.data.shape[0], 1, -1), requires_grad=True, _children=(h,))
-                h_3d = self.cross_attn.forward(h_3d, img_ctx)
-                # Back to (B, hidden_dim)
-                h = Tensor(h_3d.data.reshape(h_3d.data.shape[0], -1), requires_grad=True, _children=(h_3d,))
-
-            # Reshape h to (1, hidden_dim) for fc_out
-            h_for_fc = h if h.data.ndim == 2 else Tensor(h.data.reshape(h.data.shape[0], -1), requires_grad=True, _children=(h,))
-            all_logits.append(self.fc_out.forward(h_for_fc))
-
-        logits_data = np.concatenate([l.data for l in all_logits], axis=0)
-        logits = _tensor(logits_data, requires_grad=True)
-        return logits, h
+        # Output projection — keep graph by NOT calling .data
+        x = self.output_norm.forward(x)
+        logits = self.fc_out.forward(x)  # (B, seq_len, vocab_size)
+        last_out = x[:, -1:, :]  # (B, 1, hidden_dim), keep graph
+        return logits, last_out
 
 
 # =============================================================================
@@ -535,66 +862,68 @@ class DecoderLSTM:
 # =============================================================================
 
 class ReplayBuffer:
-    """Stores past (embedding, caption) pairs for diverse decoder training.
+    """Stores past (image, caption) pairs for diverse multimodal training.
 
-    When full, oldest entries are evicted. Sampling prioritizes captions
-    that appear less frequently (diverse sampling).
+    Stores raw images (1, H, W, C) alongside captions so the full vision
+    encoder + decoder pipeline can be trained on replay. When full, oldest
+    entries are evicted. Sampling prioritizes captions that appear less
+    frequently (diverse sampling).
     """
 
     def __init__(self, capacity: int = 100):
         self.capacity = capacity
-        self.embeddings: list = []
+        self.images: list = []
         self.captions: list = []
         self._counts: dict = {}
 
-    def add(self, embedding: np.ndarray, caption: str):
-        if len(self.embeddings) >= self.capacity:
-            removed_emb = self.embeddings.pop(0)
+    def add(self, image: np.ndarray, caption: str):
+        if len(self.images) >= self.capacity:
+            self.images.pop(0)
             removed_cap = self.captions.pop(0)
             old = self._counts.get(removed_cap, 1)
             if old > 1:
                 self._counts[removed_cap] = old - 1
             else:
                 self._counts.pop(removed_cap, None)
-        self.embeddings.append(embedding.copy())
+        self.images.append(image.copy())
         self.captions.append(caption)
         self._counts[caption] = self._counts.get(caption, 0) + 1
 
     def sample(self, n: int = 8) -> Tuple[List[np.ndarray], List[str]]:
-        if len(self.embeddings) < n:
-            return self.embeddings.copy(), self.captions.copy()
-        # Diversity weighting: rarer captions get higher weight
+        if len(self.images) < n:
+            return self.images.copy(), self.captions.copy()
         total = len(self.captions)
         weights = np.array([1.0 / (self._counts.get(c, 1) + 1) for c in self.captions])
         weights /= weights.sum()
         idx = np.random.choice(total, size=n, p=weights, replace=False)
-        return [self.embeddings[i] for i in idx], [self.captions[i] for i in idx]
+        return [self.images[i] for i in idx], [self.captions[i] for i in idx]
 
     @property
     def size(self):
-        return len(self.embeddings)
+        return len(self.images)
 
 
 def augment_image(img_np: np.ndarray) -> np.ndarray:
-    """Apply random augmentation to a single image (1, C, H, W).
+    """Apply random augmentation to a single image (B, H, W, C).
 
-    Augmentations: horizontal flip, random crop, color jitter.
-    All pure NumPy — no external dependencies.
+    Accepts and returns VisionEncoder-compatible format (batch, height,
+    width, channels). Augmentations: horizontal flip, random crop, color
+    jitter. All pure NumPy — no external dependencies.
     """
     img = img_np.copy()
-    _, _, h, w = img.shape
+    _, h, w, _ = img.shape
 
-    # Random horizontal flip (50% chance)
+    # Random horizontal flip (50% chance) — flip width axis
     if np.random.rand() < 0.5:
-        img = img[:, :, :, ::-1]
+        img = img[:, :, ::-1, :]
 
     # Random crop with reflection padding
     if np.random.rand() < 0.5:
         pad = 4
-        padded = np.pad(img, ((0, 0), (0, 0), (pad, pad), (pad, pad)), mode='reflect')
+        padded = np.pad(img, ((0, 0), (pad, pad), (pad, pad), (0, 0)), mode='reflect')
         top = np.random.randint(0, 2 * pad + 1)
         left = np.random.randint(0, 2 * pad + 1)
-        img = padded[:, :, top:top + h, left:left + w]
+        img = padded[:, top:top + h, left:left + w, :]
 
     # Color jitter
     if np.random.rand() < 0.8:
@@ -676,8 +1005,8 @@ def contrastive_step(engine: MultimodalEngine, img_np: np.ndarray, buffer: Repla
     embed1 = engine.vision.forward(v1)
     embed2 = engine.vision.forward(v2)
 
-    neg_embs, _ = buffer.sample(min(buffer.size, 16))
-    negatives = [_tensor(e, requires_grad=False) for e in neg_embs]
+    neg_imgs, _ = buffer.sample(min(buffer.size, 16))
+    negatives = [engine.vision.forward(img) for img in neg_imgs]
 
     loss = contrastive_loss(embed1, embed2, negatives, temperature=0.5)
     loss.backward()
@@ -689,7 +1018,11 @@ def contrastive_step(engine: MultimodalEngine, img_np: np.ndarray, buffer: Repla
 
 
 def replay_train_step(engine: MultimodalEngine, buffer: ReplayBuffer, batch_size: int = 4) -> float:
-    """Train decoder on a diverse sample from the replay buffer.
+    """Train decoder + vision on a diverse sample from the replay buffer.
+
+    Uses ``engine.train_step()`` which passes image patches for
+    cross-attention — the transformer decoder's cross-attention layers
+    learn to attend to image regions.
 
     Returns:
         average loss
@@ -697,39 +1030,35 @@ def replay_train_step(engine: MultimodalEngine, buffer: ReplayBuffer, batch_size
     if buffer.size < 2:
         return 0.0
 
-    embs, caps = buffer.sample(batch_size)
+    images, caps = buffer.sample(batch_size)
     total_loss = 0.0
     count = 0
 
-    for emb, cap in zip(embs, caps):
+    for img, cap in zip(images, caps):
         try:
             tokens = engine.text.encode(cap)
             if len(tokens) < 3:
                 continue
             tokens_arr = np.array([tokens], dtype=np.int64)
-            logits, _ = engine.forward(emb.reshape(1, 3, 32, 32), tokens_arr[:, :-1])
-            targets = _tensor(tokens_arr[:, 1:].reshape(-1), requires_grad=False)
-            loss = _cross_entropy(logits, targets)
-            loss.backward()
-            engine.decoder.optimizer.step(engine.decoder.parameters())
-            for p in engine.decoder.parameters():
-                p.grad = None
-            total_loss += float(loss.data)
+            loss_val = engine.train_step(img, tokens_arr)
+            total_loss += loss_val
             count += 1
         except Exception:
             continue
 
     if count > 0:
-        engine._trained = True
         return total_loss / count
     return 0.0
 
 
-def get_multimodal_engine(embed_dim=256, hidden_dim=512, n_vit_layers=4, n_heads=8) -> MultimodalEngine:
+def get_multimodal_engine(embed_dim=256, hidden_dim=512, n_vit_layers=4, n_heads=8,
+                          n_decoder_layers=4, n_audio_layers=2) -> MultimodalEngine:
     """Get a new multimodal engine."""
     return MultimodalEngine(
         embed_dim=embed_dim,
         hidden_dim=hidden_dim,
         n_vit_layers=n_vit_layers,
         n_heads=n_heads,
+        n_decoder_layers=n_decoder_layers,
+        n_audio_layers=n_audio_layers,
     )

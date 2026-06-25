@@ -34,8 +34,8 @@ import type { ChatToolbarContextValue } from '@/contexts/ChatToolbarContext'
 import type { Soul } from '@/lib/souls-controller'
 
 const souls: Soul[] = [
-  { name: 'friendly', description: 'Warm and approachable', traits: ['warmth', 'empathy'] },
-  { name: 'witty', description: 'Sharp and clever', traits: ['humor', 'intelligence'] },
+  { name: 'friendly', description: 'Warm and approachable', traits: ['warmth', 'empathy'], personality: { warmth: 0.8 } },
+  { name: 'witty', description: 'Sharp and clever', traits: ['humor', 'intelligence'], personality: { humor: 0.9 } },
 ]
 
 function makeCtx(overrides: { souls?: Soul[]; current?: Soul | null; onSelect?: ReturnType<typeof vi.fn> } = {}): ChatToolbarContextValue {

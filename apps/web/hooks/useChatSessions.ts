@@ -17,10 +17,12 @@ export interface UseChatSessionsReturn {
   sessions: ChatSession[]
   setSessions: React.Dispatch<React.SetStateAction<ChatSession[]>>
   sidebarConversations: Conversation[]
+  archivedCount: number
   loadSession: (sessionId: string) => Promise<void>
   deleteSession: (sessionId: string) => Promise<void>
   starSession: (sessionId: string, starred: boolean) => Promise<void>
   pinSession: (sessionId: string, pinned: boolean) => Promise<void>
+  archiveSession: (sessionId: string, archived: boolean) => Promise<void>
   renameSession: (sessionId: string, newName: string) => Promise<void>
   duplicateSession: (sessionId: string) => Promise<void>
   saveSessionToStorage: (msgs: ChatMessage[], sessionId: string) => Promise<void>
@@ -130,6 +132,13 @@ export function useChatSessions(opts: {
     showToast(pinned ? 'Conversation pinned' : 'Conversation unpinned')
   }, [showToast])
 
+  const archiveSession = useCallback(async (sessionId: string, archived: boolean) => {
+    await chatDB.updateSession(sessionId, { archived })
+    sessionController.update(sessionId, { archived }).catch(console.error)
+    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, archived } : s))
+    showToast(archived ? 'Conversation archived' : 'Conversation restored')
+  }, [showToast])
+
   const renameSession = useCallback(async (sessionId: string, newName: string) => {
     await chatDB.updateSession(sessionId, { name: newName })
     sessionController.update(sessionId, { name: newName }).catch(console.error)
@@ -153,7 +162,11 @@ export function useChatSessions(opts: {
     }
   }, [showToast])
 
-  const sidebarConversations: Conversation[] = (Array.isArray(sessions) ? sessions : []).map(s => ({
+  const archivedCount = (Array.isArray(sessions) ? sessions : []).filter(s => s.archived).length
+
+  const sidebarConversations: Conversation[] = (Array.isArray(sessions) ? sessions : [])
+    .filter(s => !s.archived)
+    .map(s => ({
     id: s.id, name: s.name || 'Untitled', session_id: s.id,
     created_at: s.createdAt || new Date().toISOString(),
     updated_at: s.updatedAt || new Date().toISOString(),
@@ -168,9 +181,9 @@ export function useChatSessions(opts: {
 
   return {
     sessions, setSessions,
-    sidebarConversations,
+    sidebarConversations, archivedCount,
     loadSession,
-    deleteSession, starSession, pinSession, renameSession, duplicateSession,
+    deleteSession, starSession, pinSession, archiveSession, renameSession, duplicateSession,
     saveSessionToStorage,
   }
 }

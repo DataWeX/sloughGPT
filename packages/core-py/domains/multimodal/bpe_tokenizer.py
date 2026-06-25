@@ -84,9 +84,12 @@ class BPETokenizer:
             if char not in self.vocab:
                 self.vocab[char] = len(self.vocab)
         
-        # Learn merges until vocab_size reached
-        num_merges = self.vocab_size - len(self.vocab)
-        for _ in range(num_merges):
+        # Learn merges until vocab_size reached.
+        # Cap merges to prevent over-merging on small datasets
+        # (which would produce single-token whole phrases).
+        # Use at most 2× the character vocabulary size.
+        max_merges = min(self.vocab_size - len(self.vocab), len(char_vocab))
+        for _ in range(max_merges):
             pairs = self._get_stats(word_vocab)
             if not pairs:
                 break

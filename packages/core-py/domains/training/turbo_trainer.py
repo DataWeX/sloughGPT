@@ -15,10 +15,13 @@ import math
 import os
 import sys
 import time
+import warnings
 import numpy as np
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
+
+from domains.training.trainer_protocol import TrainResult
 
 logger = logging.getLogger("man.turbo_trainer")
 
@@ -160,7 +163,22 @@ class _ProgressCallback:
 
 
 class TurboTrainer:
+    _is_training: bool = False
+
+    @property
+    def is_training(self) -> bool:
+        """Whether training is in progress."""
+        return self._is_training
+
+    def stop(self) -> None:
+        """Request early stopping."""
+        self._is_training = False
+
     def __init__(self, config: Optional[Union[TurboConfig, Dict[str, Any]]] = None):
+        warnings.warn(
+            "TurboTrainer is deprecated — use UnifiedTrainingPipeline or SloughGPTTrainer instead",
+            DeprecationWarning, stacklevel=2,
+        )
         if config is None:
             self.config = TurboConfig()
         elif isinstance(config, dict):
@@ -194,7 +212,7 @@ class TurboTrainer:
             return "hf"
         return "transformer"
 
-    def train(self, on_progress: Optional[Callable[[Dict[str, Any]], None]] = None, **overrides) -> Dict[str, Any]:
+    def train(self, on_progress: Optional[Callable[[Dict[str, Any]], None]] = None, **overrides) -> TrainResult:
         for k, v in overrides.items():
             if hasattr(self.config, k):
                 setattr(self.config, k, v)
@@ -262,7 +280,7 @@ class TurboTrainer:
 
         return EncDecModel(self.config)
 
-    def _train_transformer(self, on_progress: Optional[Callable]) -> Dict[str, Any]:
+    def _train_transformer(self, on_progress: Optional[Callable]) -> TrainResult:
         from domains.training.tokenizer import SloBPE
 
         tok = SloBPE()
@@ -353,16 +371,16 @@ class TurboTrainer:
         tok.save(str(out_dir / "tokenizer.json"))
 
         logger.info("Training complete — saved to %s", out_dir)
-        return {
-            "status": "completed",
-            "model_path": str(out_dir),
-            "method": "transformer",
-            "final_loss": float(avg_loss),
-            "total_steps": step,
-            "epochs": epoch + 1,
-        }
+        return TrainResult(
+            status="completed",
+            model_path=str(out_dir),
+            method="transformer",
+            final_loss=float(avg_loss),
+            total_steps=step,
+            epochs_completed=epoch + 1,
+        )
 
-    def _train_nanogpt(self, on_progress: Optional[Callable]) -> Dict[str, Any]:
+    def _train_nanogpt(self, on_progress: Optional[Callable]) -> TrainResult:
         if not TORCH_AVAILABLE:
             raise ImportError("torch required for NanoGPT training")
 
@@ -486,16 +504,16 @@ class TurboTrainer:
             }, f, indent=2)
 
         logger.info("NanoGPT training complete — saved to %s", output_path)
-        return {
-            "status": "completed",
-            "model_path": str(output_path),
-            "method": "nanogpt",
-            "final_loss": avg_loss,
-            "total_steps": step,
-            "epochs": epoch + 1,
-        }
+        return TrainResult(
+            status="completed",
+            model_path=str(output_path),
+            method="nanogpt",
+            final_loss=avg_loss,
+            total_steps=step,
+            epochs_completed=epoch + 1,
+        )
 
-    def _train_hf(self, on_progress: Optional[Callable]) -> Dict[str, Any]:
+    def _train_hf(self, on_progress: Optional[Callable]) -> TrainResult:
         from .hf_finetune import HFFineTuner
 
         model_name = self.config.model_spec
@@ -524,7 +542,7 @@ class TurboTrainer:
         )
         return tuner.train(on_progress=on_progress)
 
-    def _train_slonet(self, on_progress: Optional[Callable]) -> Dict[str, Any]:
+    def _train_slonet(self, on_progress: Optional[Callable]) -> TrainResult:
         from .slonet import SloAdam, cross_entropy, tensor, import_from_sou
         from .tokenizer import SloBPE
 
@@ -589,11 +607,11 @@ class TurboTrainer:
         metadata = {"final_loss": float(avg_loss), "steps": step, "epochs": epochs}
         export_to_sou(model, str(output_path / "model.soul"), metadata=metadata)
 
-        return {
-            "status": "completed",
-            "model_path": str(output_path),
-            "method": "slonet",
-            "final_loss": float(avg_loss),
-            "total_steps": step,
-            "epochs": epochs,
-        }
+        return TrainResult(
+            status="completed",
+            model_path=str(output_path),
+            method="slonet",
+            final_loss=float(avg_loss),
+            total_steps=step,
+            epochs_completed=epochs,
+        )

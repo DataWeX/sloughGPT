@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { cn } from '@/lib/cn'
 
 interface MenuItem {
-  label: string
+  label?: string
   icon?: React.ReactNode
   onClick?: () => void
   destructive?: boolean

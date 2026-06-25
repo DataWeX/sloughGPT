@@ -75,7 +75,7 @@ export interface WebhookStats {
 
 export interface TrainingBuild {
   name: string
-  build_type: 'auto-train' | 'lora' | 'hf-finetune' | 'hf-finetuned-dir' | 'vlm'
+  build_type: 'auto-train' | 'lora' | 'hf-finetune' | 'hf-finetuned-dir' | 'vlm' | 'visual'
   job_id?: string
   model?: string
   dataset?: string
@@ -200,7 +200,7 @@ export const trainingJobsController = {
     return apiGet(`/training/jobs/${jobId}/summary`)
   },
 
-  async startVLMTrain(params: {
+  async startVisualTrain(params: {
     dataset: string
     vision_encoder?: string
     llm?: string
@@ -216,7 +216,7 @@ export const trainingJobsController = {
     freeze_vision?: boolean
     name?: string
   }): Promise<{ job_id: string; status: string; message: string }> {
-    return apiPost('/training/vlm-start', params)
+    return apiPost('/training/visual-start', params)
   },
 
   async stop(id: string): Promise<void> {

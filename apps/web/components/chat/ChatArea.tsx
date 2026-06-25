@@ -14,6 +14,7 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   loading: boolean
   sessionLoading?: boolean
   health: ApiHealthSnapshot
+  suggestions?: { text: string; icon: string }[]
   onRefreshHealth: () => void
   onCopy: (text: string) => void
   onRegenerate?: () => void
@@ -40,6 +41,7 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
     loading,
     sessionLoading,
     health,
+    suggestions,
     onRefreshHealth,
     onCopy,
     onRegenerate,
@@ -153,6 +155,7 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
               sessionLoading={sessionLoading}
               model={model}
               health={health}
+              suggestions={suggestions}
               onRefreshHealth={onRefreshHealth}
               onCopy={onCopy}
               onRegenerate={onRegenerate}

@@ -8,7 +8,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['lib/**/*.test.ts', 'hooks/**/*.test.{ts,tsx}', 'components/**/*.test.tsx'],
+    include: ['lib/**/*.test.ts', 'hooks/**/*.test.{ts,tsx}', 'components/**/*.test.tsx', 'app/**/*.test.{ts,tsx}'],
     passWithNoTests: true,
     setupFiles: ['./vitest-setup.ts'],
   },

@@ -3,13 +3,13 @@ import { renderHook, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const {
-  mockStartAutoTrain, mockStopAutoTrain, mockStartHFFineTune, mockStartVLMTrain,
+  mockStartAutoTrain, mockStopAutoTrain, mockStartHFFineTune, mockStartVisualTrain,
   mockStartTurboTrain, mockStartUnified, mockStopUnified,
 } = vi.hoisted(() => ({
   mockStartAutoTrain: vi.fn(),
   mockStopAutoTrain: vi.fn(() => Promise.resolve()),
   mockStartHFFineTune: vi.fn(),
-  mockStartVLMTrain: vi.fn(),
+  mockStartVisualTrain: vi.fn(),
   mockStartTurboTrain: vi.fn(),
   mockStartUnified: vi.fn(),
   mockStopUnified: vi.fn(() => Promise.resolve()),
@@ -20,7 +20,7 @@ vi.mock('@/lib/controllers', () => ({
     startAutoTrain: mockStartAutoTrain,
     stopAutoTrain: mockStopAutoTrain,
     startHFFineTune: mockStartHFFineTune,
-    startVLMTrain: mockStartVLMTrain,
+    startVisualTrain: mockStartVisualTrain,
     startTurboTrain: mockStartTurboTrain,
     startUnified: mockStartUnified,
     stopUnified: mockStopUnified,
@@ -173,20 +173,20 @@ describe('useTrainingSession', () => {
     expect(result.current.turboPhase).toBe('error')
   })
 
-  it('startVLMTraining polls for completion', async () => {
+  it('startVisualTraining polls for completion', async () => {
     vi.useFakeTimers()
-    mockStartVLMTrain.mockResolvedValue({ job_id: 'vlm-1', message: 'Queued' })
+    mockStartVisualTrain.mockResolvedValue({ job_id: 'visual-1', message: 'Queued' })
     globalThis.fetch = vi.fn().mockResolvedValue({ json: () => Promise.resolve([
-      { id: 'vlm-1', status: 'completed', model_path: '/vlm/final', loss: 0.8, output_dir: '/out', sou_path: '/out/model.sou' },
+      { id: 'visual-1', status: 'completed', model_path: '/visual/final', loss: 0.8, output_dir: '/out', sou_path: '/out/model.sou' },
     ])})
 
     const { result } = renderHook(() => useTrainingSession())
-    await act(async () => { result.current.startVLMTraining({ dataset: 'vlm_data', visionEncoder: 'vit', llm: 'gpt2', stage1Epochs: 2, stage2Epochs: 2, useLoRA: true }, mockAddToast) })
+    await act(async () => { result.current.startVisualTraining({ dataset: 'visual_data', visionEncoder: 'vit', llm: 'gpt2', stage1Epochs: 2, stage2Epochs: 2, useLoRA: true }, mockAddToast) })
     await act(async () => { vi.advanceTimersByTime(3000) })
 
     expect(result.current.phase).toBe('complete')
-    expect(result.current.vlmOutputDir).toBe('/out')
-    expect(result.current.vlmSouPath).toBe('/out/model.sou')
+    expect(result.current.visualOutputDir).toBe('/out')
+    expect(result.current.visualSouPath).toBe('/out/model.sou')
     expect(mockAddToast).toHaveBeenCalledWith('Image model training complete', 'success')
     vi.useRealTimers()
   })

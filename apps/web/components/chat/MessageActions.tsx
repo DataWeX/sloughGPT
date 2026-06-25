@@ -9,11 +9,13 @@ import { cn } from '@/lib/cn'
 interface MessageActionsProps {
   content: string
   messageId: string
+  role?: 'user' | 'assistant'
   onCopy?: (text: string) => void
   onRegenerate?: () => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string) => void
+  onSuggestionClick?: (text: string) => void
 }
 
 function ThumbsUpIcon({ className, animated }: { className?: string; animated?: boolean }) {
@@ -97,11 +99,12 @@ function ConfettiBurst({ active }: { active: boolean }) {
   )
 }
 
-export function MessageActions({ content, messageId, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit }: MessageActionsProps) {
+export function MessageActions({ content, messageId, role, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, onSuggestionClick }: MessageActionsProps) {
   const [copied, setCopied] = useState(false)
   const [thumbsUp, setThumbsUp] = useState(false)
   const [thumbsDown, setThumbsDown] = useState(false)
   const [celebrate, setCelebrate] = useState(false)
+  const [speaking, setSpeaking] = useState(false)
 
   const handleCopy = useCallback(async () => {
     if (!content || !onCopy) return
@@ -132,6 +135,22 @@ export function MessageActions({ content, messageId, onCopy, onRegenerate, onThu
     }
     onThumbsDown?.(messageId)
   }, [thumbsDown, messageId, onThumbsDown])
+
+  const handleSpeak = useCallback(() => {
+    if (!('speechSynthesis' in window)) return
+    if (speaking) {
+      window.speechSynthesis.cancel()
+      setSpeaking(false)
+      return
+    }
+    const utterance = new SpeechSynthesisUtterance(content)
+    utterance.rate = 0.9
+    utterance.pitch = 1.0
+    utterance.onend = () => setSpeaking(false)
+    utterance.onerror = () => setSpeaking(false)
+    window.speechSynthesis.speak(utterance)
+    setSpeaking(true)
+  }, [content, speaking])
 
   return (
     <div
@@ -191,6 +210,26 @@ export function MessageActions({ content, messageId, onCopy, onRegenerate, onThu
         </Button>
       )}
 
+      {role === 'assistant' && 'speechSynthesis' in window && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={handleSpeak}
+          className={cn('transition-all duration-200', speaking && 'text-primary')}
+          aria-label={speaking ? 'Stop reading aloud' : 'Read aloud'}
+        >
+          {speaking ? (
+            <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+            </svg>
+          ) : (
+            <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 8.5v7a4.49 4.49 0 002.5-3.5zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+            </svg>
+          )}
+        </Button>
+      )}
+
       {onEdit && (
         <Button
           variant="ghost"
@@ -200,6 +239,45 @@ export function MessageActions({ content, messageId, onCopy, onRegenerate, onThu
         >
           <IconEdit className="h-3.5 w-3.5" />
         </Button>
+      )}
+
+      {onSuggestionClick && (
+        <>
+          <span className="w-px h-4 mx-0.5 bg-border/50" aria-hidden="true" />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => onSuggestionClick(`Rewrite this:\n\n${content}`)}
+            aria-label="Rewrite this message"
+            title="Rewrite"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => onSuggestionClick(`Explain this simply:\n\n${content}`)}
+            aria-label="Explain this message"
+            title="Explain"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => onSuggestionClick(`Translate this to Spanish:\n\n${content}`)}
+            aria-label="Translate to Spanish"
+            title="Translate"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </Button>
+        </>
       )}
     </div>
   )

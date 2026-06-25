@@ -197,13 +197,13 @@ describe('trainingJobsController.getSummary', () => {
   })
 })
 
-describe('trainingJobsController.startVLMTrain', () => {
+describe('trainingJobsController.startVisualTrain', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('POSTs to /training/vlm-start', async () => {
-    apiClient.apiPost.mockResolvedValue({ job_id: 'vlm1', status: 'ok', message: 'started' })
-    await trainingJobsController.startVLMTrain({ dataset: 'images' })
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/vlm-start', { dataset: 'images' })
+  it('POSTs to /training/visual-start', async () => {
+    apiClient.apiPost.mockResolvedValue({ job_id: 'visual1', status: 'ok', message: 'started' })
+    await trainingJobsController.startVisualTrain({ dataset: 'images' })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/visual-start', { dataset: 'images' })
   })
 })
 

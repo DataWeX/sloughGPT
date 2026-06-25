@@ -28,6 +28,7 @@ const SHORTCUTS: Shortcut[] = [
   
   // General shortcuts
   { keys: ['?'], description: 'Show keyboard shortcuts', category: 'General' },
+  { keys: ['Ctrl', 'K'], description: 'Command palette', category: 'General' },
   
   // Navigation shortcuts
   { keys: ['Ctrl', '1'], description: 'Chat', category: 'Navigation' },

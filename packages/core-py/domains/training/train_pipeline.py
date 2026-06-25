@@ -42,6 +42,7 @@ try:
     from domains.models import SloughGPTModel
 except (ImportError, ModuleNotFoundError):
     SloughGPTModel = None  # type: ignore[assignment,misc]
+from domains.training.trainer_protocol import TrainResult
 from domains.training.checkpoint_utils import (
     extract_state_dict,
     normalize_raw_checkpoint,
@@ -386,6 +387,17 @@ class SloughGPTTrainer:
 
     Eval semantics: ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
     """
+
+    _is_training: bool = False
+
+    @property
+    def is_training(self) -> bool:
+        """Whether training is in progress."""
+        return self._is_training
+
+    def stop(self) -> None:
+        """Request early stopping."""
+        self._is_training = False
 
     def __init__(
         self,
@@ -932,8 +944,13 @@ class SloughGPTTrainer:
             except Exception:
                 logger.exception("on_progress callback failed")
 
+        self._is_training = True
         for epoch in range(self.current_epoch, self.config.epochs):
             self.current_epoch = epoch
+
+            if not self._is_training:
+                logger.info("Training stopped at epoch %d", epoch)
+                break
 
             if is_main:
                 logger.info(f"\nEpoch {epoch + 1}/{self.config.epochs}")
@@ -1030,7 +1047,14 @@ class SloughGPTTrainer:
                     step=int(self.global_step),
                 )
 
-        return {"best_eval_loss": self._best_val_loss, "global_step": self.global_step}
+        self._is_training = False
+        return TrainResult(
+            success=self._best_val_loss is not None,
+            best_eval_loss=self._best_val_loss,
+            global_step=self.global_step,
+            final_loss=self._best_val_loss,
+            total_steps=self.global_step,
+        )
 
     def save_checkpoint(self, metrics: Optional[Dict[str, float]] = None, is_final: bool = False):
         """Save a checkpoint."""

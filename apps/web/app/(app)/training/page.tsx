@@ -33,6 +33,20 @@ function datasetLabel(ds: Dataset): string {
 type InputMode = 'dataset' | 'text'
 type Method = 'distill' | 'finetune' | 'vlm' | 'unified'
 
+function EstimatedTime({ method, datasetId, datasets, epochs, batchSize, sampleCount }: {
+  method: string; datasetId: string | null; datasets: Dataset[]; epochs: number; batchSize: number; sampleCount?: number
+}) {
+  const ds = datasets.find(d => d.id === datasetId)
+  const samples = sampleCount ?? ds?.samples ?? 0
+  if (!datasetId || samples === 0) return null
+  const steps = Math.ceil(samples / batchSize) * epochs
+  const secsPerStep = method === 'finetune' ? 90 : 2
+  const total = steps * secsPerStep
+  if (total < 60) return <p className="text-[11px] text-muted-foreground/60">~{total}s on CPU</p>
+  if (total < 3600) return <p className="text-[11px] text-muted-foreground/60">~{Math.ceil(total / 60)}m on CPU</p>
+  return <p className="text-[11px] text-muted-foreground/60">~{(total / 3600).toFixed(1)}h on CPU</p>
+}
+
 export default function TrainingPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -55,24 +69,43 @@ export default function TrainingPage() {
   const [quickComplete, setQuickComplete] = useState(false)
 
   // ===== Advanced config =====
-  const [method, setMethod] = useState<Method>('distill')
-  const [inputMode, setInputMode] = useState<InputMode>('dataset')
-  const [textInput, setTextInput] = useState('')
+  const TRAINING_CONFIG_KEY = 'sloughgpt-training-config'
+  const loadSavedConfig = useCallback(() => {
+    try {
+      const saved = localStorage.getItem(TRAINING_CONFIG_KEY)
+      return saved ? JSON.parse(saved) : null
+    } catch { return null }
+  }, [])
+  const saved = useRef(loadSavedConfig())
+
+  const [method, setMethod] = useState<Method>(saved.current?.method ?? 'distill')
+  const [inputMode, setInputMode] = useState<InputMode>(saved.current?.inputMode ?? 'dataset')
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [algo, setAlgo] = useState('bpe')
-  const [unifiedDistill, setUnifiedDistill] = useState(false)
-  const [trainingEpochs, setTrainingEpochs] = useState(5)
-  const [trainingLR, setTrainingLR] = useState(1e-3)
-  const [trainingBatchSize, setTrainingBatchSize] = useState(64)
+  const [algo, setAlgo] = useState(saved.current?.algo ?? 'bpe')
+  const [unifiedDistill, setUnifiedDistill] = useState(saved.current?.unifiedDistill ?? false)
+  const [trainingEpochs, setTrainingEpochs] = useState(saved.current?.trainingEpochs ?? 5)
+  const [trainingLR, setTrainingLR] = useState(saved.current?.trainingLR ?? 1e-3)
+  const [trainingBatchSize, setTrainingBatchSize] = useState(saved.current?.trainingBatchSize ?? 64)
   const [availableModels, setAvailableModels] = useState<string[]>([])
-  const [selectedModel, setSelectedModel] = useState('')
-  const [useLoRA, setUseLoRA] = useState(true)
+  const [selectedModel, setSelectedModel] = useState(saved.current?.selectedModel ?? '')
+  const [useLoRA, setUseLoRA] = useState(saved.current?.useLoRA ?? true)
+
+  const [textInput, setTextInput] = useState('')
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(TRAINING_CONFIG_KEY, JSON.stringify({
+        method, inputMode, algo, unifiedDistill, trainingEpochs, trainingLR,
+        trainingBatchSize, selectedModel, useLoRA,
+      }))
+    } catch {}
+  }, [method, inputMode, algo, unifiedDistill, trainingEpochs, trainingLR, trainingBatchSize, selectedModel, useLoRA])
 
   // ===== VLM config =====
-  const [vlmVisionEncoder, setVlmVisionEncoder] = useState('google/siglip-base-patch16-224')
-  const [vlmLLM, setVlmLLM] = useState('Qwen/Qwen2.5-0.5B-Instruct')
-  const [vlmStage1Epochs, setVlmStage1Epochs] = useState(1)
-  const [vlmStage2Epochs, setVlmStage2Epochs] = useState(2)
+  const [visualVisionEncoder, setVlmVisionEncoder] = useState('google/siglip-base-patch16-224')
+  const [visualLLM, setVlmLLM] = useState('Qwen/Qwen2.5-0.5B-Instruct')
+  const [visualStage1Epochs, setVlmStage1Epochs] = useState(1)
+  const [visualStage2Epochs, setVlmStage2Epochs] = useState(2)
 
   // ===== Turbo config =====
   const [showTurboAdvanced, setShowTurboAdvanced] = useState(false)
@@ -142,12 +175,12 @@ export default function TrainingPage() {
         useLoRA,
       }, addToast, () => { clearOptimistic(); checkpoints.fetchJobs() })
     } else if (method === 'vlm') {
-      session.startVLMTraining({
+      session.startVisualTraining({
         dataset: datasets.selectedDataset,
-        visionEncoder: vlmVisionEncoder,
-        llm: vlmLLM,
-        stage1Epochs: vlmStage1Epochs,
-        stage2Epochs: vlmStage2Epochs,
+        visionEncoder: visualVisionEncoder,
+        llm: visualLLM,
+        stage1Epochs: visualStage1Epochs,
+        stage2Epochs: visualStage2Epochs,
         useLoRA,
       }, addToast, () => { clearOptimistic(); checkpoints.fetchJobs() })
     } else if (method === 'unified') {
@@ -167,8 +200,8 @@ export default function TrainingPage() {
       })
     }
   }, [method, inputMode, textInput, algo, trainingEpochs, trainingLR, trainingBatchSize,
-      selectedModel, useLoRA, unifiedDistill, datasets.selectedDataset, vlmVisionEncoder, vlmLLM,
-      vlmStage1Epochs, vlmStage2Epochs, addToast, session, checkpoints])
+      selectedModel, useLoRA, unifiedDistill, datasets.selectedDataset, visualVisionEncoder, visualLLM,
+      visualStage1Epochs, visualStage2Epochs, addToast, session, checkpoints])
 
   const startTurboTrain = useCallback(async () => {
     if (!datasets.selectedDataset) { addToast('Select a dataset first', 'error'); return }
@@ -291,7 +324,7 @@ export default function TrainingPage() {
     modelController.list().then(models => {
       const ids = models.map(m => m.id)
       setAvailableModels(ids)
-      setSelectedModel(prev => prev || ids[0] || '')
+      setSelectedModel((prev: string) => prev || ids[0] || '')
     }).catch(() => addToast('Could not load model list — training may be limited', 'info'))
   }, [addToast])
 
@@ -507,9 +540,9 @@ export default function TrainingPage() {
                     {session.unifiedElapsed != null && <p>Time: {session.unifiedElapsed.toFixed(1)}s</p>}
                   </div>
                 )}
-                {session.vlmOutputDir && (
+                {session.visualOutputDir && (
                   <div className="text-xs text-muted-foreground space-y-1">
-                    <p>VLM: <span className="font-mono">{session.vlmOutputDir}</span></p>
+                    <p>Visual: <span className="font-mono">{session.visualOutputDir}</span></p>
                     {session.finetunedModelLoss != null && <p>Final loss: {session.finetunedModelLoss.toFixed(4)}</p>}
                   </div>
                 )}
@@ -561,11 +594,11 @@ export default function TrainingPage() {
                       {loadingFinetunedModel ? 'Loading...' : 'Load model for chat'}
                     </Button>
                   )}
-                  {session.vlmOutputDir && (
+                  {session.visualOutputDir && (
                     <Button size="sm" variant="outline" onClick={async () => {
                       setLoadingFinetunedModel(true)
                       try {
-                        await modelController.loadVLM(session.vlmOutputDir!)
+                        await modelController.loadVisualModel(session.visualOutputDir!)
                         addToast('Vision model loaded', 'success')
                       } catch {
                         addToast('Failed to load vision model', 'error')
@@ -641,6 +674,14 @@ export default function TrainingPage() {
                   <Button size="sm" disabled={canStart} onClick={() => startTraining()}>
                     {method === 'unified' ? 'Start unified training' : method === 'distill' ? (inputMode === 'text' && textInput.trim() ? 'Train on pasted text' : 'Start') : 'Start'}
                   </Button>
+                  <EstimatedTime
+                    method={method}
+                    datasetId={datasets.selectedDataset}
+                    datasets={datasets.datasets}
+                    epochs={trainingEpochs}
+                    batchSize={trainingBatchSize}
+                    sampleCount={datasets.datasetPreview?.total_samples}
+                  />
                 </div>
               </>
             )}
@@ -680,14 +721,19 @@ export default function TrainingPage() {
 
                     {/* Text input (advanced) */}
                     {inputMode === 'text' && method !== 'vlm' && method !== 'unified' && (
-                      <textarea
-                        value={textInput}
-                        onChange={e => setTextInput(e.target.value)}
-                        placeholder="Paste any text to train on — stories, docs, conversations, code..."
-                        rows={4}
-                        className="w-full rounded-md border border-border/60 bg-background p-3 text-xs font-mono text-foreground resize-y min-h-[80px]"
-                        aria-label="Training text input"
-                      />
+                      <div className="relative">
+                        <textarea
+                          value={textInput}
+                          onChange={e => setTextInput(e.target.value)}
+                          placeholder="Paste any text to train on — stories, docs, conversations, code..."
+                          rows={4}
+                          className="w-full rounded-md border border-border/60 bg-background p-3 pb-7 text-xs font-mono text-foreground resize-y min-h-[80px]"
+                          aria-label="Training text input"
+                        />
+                        <span className="absolute bottom-1.5 right-2 text-[10px] text-muted-foreground/50 tabular-nums" aria-live="polite">
+                          {textInput.length > 0 ? `${textInput.length.toLocaleString()} chars · ~${Math.ceil(textInput.length / 4)} tokens` : ''}
+                        </span>
+                      </div>
                     )}
 
                     {/* Model selector (for fine-tune / unified) */}
@@ -705,7 +751,7 @@ export default function TrainingPage() {
                       <div className="grid grid-cols-2 gap-3 p-3 rounded-lg border border-border/40 bg-muted/20">
                         <div className="flex flex-col gap-1">
                           <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Vision Encoder</label>
-                          <select value={vlmVisionEncoder} onChange={e => setVlmVisionEncoder(e.target.value)} className="h-7 rounded-md border border-border/60 bg-background px-2 text-[11px] font-mono" aria-label="Vision encoder model">
+                          <select value={visualVisionEncoder} onChange={e => setVlmVisionEncoder(e.target.value)} className="h-7 rounded-md border border-border/60 bg-background px-2 text-[11px] font-mono" aria-label="Vision encoder model">
                             <option value="google/siglip-base-patch16-224">SigLIP Base (patch16)</option>
                             <option value="google/siglip-large-patch16-384">SigLIP Large (patch16)</option>
                             <option value="openai/clip-vit-base-patch32">CLIP ViT-B/32</option>
@@ -713,15 +759,15 @@ export default function TrainingPage() {
                         </div>
                         <div className="flex flex-col gap-1">
                           <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Language Model</label>
-                          <input value={vlmLLM} onChange={e => setVlmLLM(e.target.value)} className="h-7 rounded-md border border-border/60 bg-background px-2 text-[11px] font-mono" placeholder="Qwen/Qwen2.5-0.5B-Instruct" />
+                          <input value={visualLLM} onChange={e => setVlmLLM(e.target.value)} className="h-7 rounded-md border border-border/60 bg-background px-2 text-[11px] font-mono" placeholder="Qwen/Qwen2.5-0.5B-Instruct" />
                         </div>
                         <div className="flex flex-col gap-1">
                           <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Stage 1 Epochs (connector)</label>
-                          <input type="number" min={1} max={10} value={vlmStage1Epochs} onChange={e => setVlmStage1Epochs(Number(e.target.value))} className="h-7 rounded-md border border-border/60 bg-background px-2 text-[11px] w-20" />
+                          <input type="number" min={1} max={10} value={visualStage1Epochs} onChange={e => setVlmStage1Epochs(Number(e.target.value))} className="h-7 rounded-md border border-border/60 bg-background px-2 text-[11px] w-20" />
                         </div>
                         <div className="flex flex-col gap-1">
                           <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Stage 2 Epochs (full)</label>
-                          <input type="number" min={1} max={50} value={vlmStage2Epochs} onChange={e => setVlmStage2Epochs(Number(e.target.value))} className="h-7 rounded-md border border-border/60 bg-background px-2 text-[11px] w-20" />
+                          <input type="number" min={1} max={50} value={visualStage2Epochs} onChange={e => setVlmStage2Epochs(Number(e.target.value))} className="h-7 rounded-md border border-border/60 bg-background px-2 text-[11px] w-20" />
                         </div>
                       </div>
                     )}
@@ -1002,7 +1048,7 @@ export default function TrainingPage() {
                           b.build_type === 'lora' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : '',
                           b.build_type === 'vlm' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' : '',
                         )}>
-                          {b.build_type === 'auto-train' ? 'Auto' : b.build_type === 'hf-finetune' ? 'HF' : b.build_type === 'hf-finetuned-dir' ? 'Dir' : b.build_type === 'vlm' ? 'VLM' : 'Adv'}
+                          {b.build_type === 'auto-train' ? 'Auto' : b.build_type === 'hf-finetune' ? 'HF' : b.build_type === 'hf-finetuned-dir' ? 'Dir' : b.build_type === 'vlm' ? 'Visual' : 'Adv'}
                         </span>
                       </div>
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground mt-0.5">
@@ -1022,10 +1068,10 @@ export default function TrainingPage() {
                       )}
                       {b.build_type === 'vlm' && (
                         <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={async () => {
-                          try { await modelController.loadVLM(b.model_path!); addToast(`Vision model loaded: ${b.name}`, 'success') }
+                          try { await modelController.loadVisualModel(b.model_path!); addToast(`Vision model loaded: ${b.name}`, 'success') }
                           catch { addToast('Failed to load vision model', 'error') }
                         }}>
-                          VLM Chat
+                          Visual Chat
                         </Button>
                       )}
                       {b.model_path && b.build_type !== 'vlm' && (

@@ -1,20 +1,4 @@
-"""
-VLM Inference Engine: loads a trained SigLIP + MLP connector + Qwen LoRA model
-for image-conditioned text generation.
-
-Architecture:
-  Image → SigLIP encoder → MLP connector → vision embeddings
-                                         ↕  concatenated
-  Text  → Qwen tokenizer  → Qwen embed    →
-                                  ↓
-                          Qwen LM head → generated tokens
-
-Usage:
-    vlm = VLMInference("models/vlm-finetuned")
-    text = vlm.generate(image, "Describe this image")
-"""
-
-from __future__ import annotations
+"""VLMInference — load and run trained VLM models for image-text generation."""
 
 import json
 import logging
@@ -23,252 +7,159 @@ from pathlib import Path
 from typing import Optional
 
 import torch
+import torch.nn as nn
 from transformers import AutoModel, AutoModelForCausalLM, AutoTokenizer
 
 logger = logging.getLogger("man.vlm_inference")
 
 
-from domains.training.multimodal import MLPConnector
+class VisionConnector(nn.Module):
+    """Linear projection from vision encoder hidden dim to LLM hidden dim."""
+
+    def __init__(self, vision_dim: int, llm_dim: int):
+        super().__init__()
+        self.proj = nn.Linear(vision_dim, llm_dim, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.proj(x)
 
 
 class VLMInference:
-    """Vision-Language Model inference engine.
+    """Loaded VLM model ready for image-conditioned text generation.
 
-    Loads a trained checkpoint from ``VLMTrainer`` and provides
-    image-conditioned text generation.
-
-    Args:
-        model_dir: Path to the ``VLMTrainer`` output directory containing
-            ``vlm_config.json``, ``connector.pt``, and the ``final/`` subdirectory
-            with LoRA adapter weights.
-        device: Torch device (default: auto-detect)
-        dtype: Torch dtype (default: float32)
+    Loads the vision encoder, trained connector, and LoRA-tuned LLM
+    from a VLM training output directory.
     """
 
-    def __init__(
-        self,
-        model_dir: str = "models/vlm-finetuned",
-        device: Optional[str] = None,
-        dtype: torch.dtype = torch.float32,
-    ):
+    def __init__(self, model_dir: str, device: str = "cpu"):
         self.model_dir = Path(model_dir)
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self.dtype = dtype
+        self.device = torch.device(device)
 
-        # Validate checkpoint exists
         config_path = self.model_dir / "vlm_config.json"
         if not config_path.exists():
-            raise FileNotFoundError(
-                f"No VLM checkpoint found at {self.model_dir} (missing vlm_config.json). "
-                "Train a VLM model first via the VLM trainer."
-            )
+            raise FileNotFoundError(f"VLM config not found: {config_path}")
 
         with open(config_path) as f:
-            cfg = json.load(f)
+            self.config = json.load(f)
 
-        vision_encoder = cfg.get("vision_encoder", "google/siglip-base-patch16-224")
-        llm_name = cfg.get("llm", "Qwen/Qwen2.5-0.5B-Instruct")
-        final_dir = self.model_dir / "final"
+        self._load_models()
 
-        logger.info(
-            "Loading VLM: vision=%s llm=%s final=%s",
-            vision_encoder, llm_name, final_dir,
-        )
-
-        # ── Load vision encoder ──────────────────────────────────
-        raw_vision = AutoModel.from_pretrained(
-            vision_encoder, trust_remote_code=True,
-        ).to(self.device).eval()
-        if hasattr(raw_vision, "vision_model"):
-            self.vision_model = raw_vision.vision_model
-        else:
-            self.vision_model = raw_vision
-        vcfg = self.vision_model.config
-        vision_dim = getattr(vcfg, "hidden_size", None) or getattr(vcfg, "d_model", 768)
-
-        # ── Load LLM (Qwen) with LoRA adapters ───────────────────
-        # Load base model first, then merge LoRA adapters
-        self.lm = AutoModelForCausalLM.from_pretrained(
-            str(final_dir) if final_dir.exists() else llm_name,
+    def _load_models(self):
+        cfg = self.config
+        logger.info("Loading vision encoder: %s", cfg["vision_encoder"])
+        self.vision_encoder = AutoModel.from_pretrained(
+            cfg["vision_encoder"],
             trust_remote_code=True,
-            dtype=self.dtype,
         ).to(self.device).eval()
-        llm_dim = self.lm.config.hidden_size
 
-        # ── Load connector ───────────────────────────────────────
-        connector_path = self.model_dir / "connector.pt"
-        self.connector = MLPConnector(vision_dim, llm_dim).to(self.device).eval()
-        if connector_path.exists():
-            self.connector.load_state_dict(
-                torch.load(str(connector_path), map_location=self.device, weights_only=True),
-            )
-            logger.info("Loaded connector weights from %s", connector_path)
-        else:
-            logger.warning("No connector weights found at %s — using random init", connector_path)
+        logger.info("Loading LLM: %s", cfg["llm"])
+        self.llm = AutoModelForCausalLM.from_pretrained(
+            cfg["llm"],
+            trust_remote_code=True,
+            torch_dtype=torch.float32,
+        ).to(self.device)
 
-        # ── Tokenizer ───────────────────────────────────────────
-        tokenizer_path = final_dir if final_dir.exists() else llm_name
         self.tokenizer = AutoTokenizer.from_pretrained(
-            str(tokenizer_path), trust_remote_code=True,
+            cfg["llm"],
+            trust_remote_code=True,
         )
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        # Number of vision tokens (CLS + patch tokens for SigLIP 224px)
-        self._n_vision = 1 + (224 // 16) ** 2  # 1 CLS + 196 patches
+        # Build connector
+        vision_dim = self.vision_encoder.config.hidden_size
+        llm_dim = self.llm.config.hidden_size
+        self.connector = VisionConnector(vision_dim, llm_dim)
 
-        logger.info(
-            "VLM loaded: vision_dim=%d llm_dim=%d device=%s",
-            vision_dim, llm_dim, self.device,
-        )
+        connector_path = self.model_dir / "connector.pt"
+        if connector_path.exists():
+            self.connector.load_state_dict(torch.load(connector_path, map_location=self.device, weights_only=True))
+            logger.info("Loaded connector weights from %s", connector_path)
 
-    def _process_image(self, image) -> torch.Tensor:
-        """Process a PIL image into vision embeddings.
+        self.connector.to(self.device).eval()
 
-        Args:
-            image: PIL Image or numpy array (H, W, 3)
+        # Load LoRA adapter
+        lora_path = self.model_dir / "lora"
+        if lora_path.exists():
+            from peft import PeftModel
+            self.llm = PeftModel.from_pretrained(self.llm, str(lora_path))
+            logger.info("Loaded LoRA adapter from %s", lora_path)
 
-        Returns:
-            Vision embeddings tensor (1, n_vision, llm_dim)
-        """
-        from PIL import Image
-        import torchvision.transforms as T
-
-        if not isinstance(image, Image.Image):
-            image = Image.fromarray(image).convert("RGB")
-        else:
-            image = image.convert("RGB")
-
-        transform = T.Compose([
-            T.Resize((224, 224)),
-            T.ToTensor(),
-            T.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-        ])
-        pixel_values = transform(image).unsqueeze(0).to(self.device)
-
-        with torch.no_grad():
-            vision_out = self.vision_model(pixel_values=pixel_values)
-            vision_embeds = vision_out.last_hidden_state  # (1, 197, vision_dim)
-            vision_embeds = self.connector(vision_embeds)  # (1, 197, llm_dim)
-
-        return vision_embeds
+        self.llm.eval()
 
     @torch.no_grad()
     def generate(
         self,
-        image,
-        text: str = "Describe this image in detail.",
+        image_base64: str,
+        prompt: str = "Describe this image in detail.",
         max_new_tokens: int = 128,
         temperature: float = 0.7,
         top_p: float = 0.9,
-        repetition_penalty: float = 1.1,
-    ) -> str:
+    ) -> dict:
         """Generate text conditioned on an image.
 
         Args:
-            image: PIL Image or numpy array
-            text: Text prompt
-            max_new_tokens: Maximum tokens to generate
-            temperature: Sampling temperature (0 = greedy)
-            top_p: Nucleus sampling threshold
-            repetition_penalty: Penalty for repeated tokens (>1 = more penalty)
+            image_base64: Base64-encoded JPEG/PNG image.
+            prompt: Text prompt describing what to generate.
+            max_new_tokens: Maximum tokens to generate.
+            temperature: Sampling temperature.
+            top_p: Nucleus sampling threshold.
 
         Returns:
-            Generated text string
+            dict with ``text``, ``tokens_generated``, ``elapsed_ms``.
         """
-        # Process image
-        vision_embeds = self._process_image(image)
-        n_vision = vision_embeds.shape[1]
+        import base64
+        import io
+        from PIL import Image
+        from transformers import AutoImageProcessor
 
-        # Tokenize text
-        messages = [{"role": "user", "content": text}]
-        chat_text = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True,
+        t0 = time.time()
+
+        # Decode image
+        image_data = base64.b64decode(image_base64)
+        image = Image.open(io.BytesIO(image_data)).convert("RGB")
+
+        # Get vision embedding
+        processor = AutoImageProcessor.from_pretrained(self.config["vision_encoder"])
+        inputs = processor(images=image, return_tensors="pt").to(self.device)
+        outputs = self.vision_encoder(**inputs)
+
+        if hasattr(outputs, "pooler_output") and outputs.pooler_output is not None:
+            vision_emb = outputs.pooler_output
+        else:
+            vision_emb = outputs.last_hidden_state[:, 0, :]
+
+        projected = self.connector(vision_emb.to(torch.float32))
+
+        # Tokenize prompt
+        prompt_ids = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+        input_embeds = self.llm.get_input_embeddings()(prompt_ids["input_ids"])
+        vision_token = projected.unsqueeze(1)
+        combined = torch.cat([vision_token, input_embeds], dim=1)
+
+        attention_mask = torch.cat([
+            torch.ones((1, 1), device=self.device),
+            prompt_ids["attention_mask"],
+        ], dim=1)
+
+        # Generate
+        generated = self.llm.generate(
+            inputs_embeds=combined,
+            attention_mask=attention_mask,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            do_sample=True,
+            pad_token_id=self.tokenizer.pad_token_id,
+            eos_token_id=self.tokenizer.eos_token_id,
         )
-        text_ids = self.tokenizer(
-            chat_text, return_tensors="pt", truncation=True,
-            max_length=512,
-        ).input_ids.to(self.device)
 
-        # Get text embeddings
-        text_embeds = self.lm.get_input_embeddings()(text_ids)  # (1, seq_len, llm_dim)
+        # Decode (skip the vision token)
+        text = self.tokenizer.decode(generated[0], skip_special_tokens=True)
+        elapsed_ms = int((time.time() - t0) * 1000)
 
-        # Combine: prepend vision embeddings
-        combined = torch.cat([vision_embeds, text_embeds], dim=1)  # (1, n_vision+seq_len, llm_dim)
-
-        # Generate autoregressively
-        generated = text_ids
-        past_len = combined.shape[1]
-
-        for _ in range(max_new_tokens):
-            # Full forward pass with combined embeddings
-            outputs = self.lm(
-                inputs_embeds=combined,
-                use_cache=False,
-                return_dict=True,
-            )
-            logits = outputs.logits[:, -1, :]  # (1, vocab_size)
-
-            # Apply temperature
-            if temperature > 0:
-                logits = logits / temperature
-
-            # Apply repetition penalty
-            if repetition_penalty != 1.0:
-                for token_id in set(generated[0].tolist()):
-                    logits[:, token_id] /= repetition_penalty
-
-            # Top-p (nucleus) sampling
-            if top_p < 1.0 and temperature > 0:
-                sorted_logits, sorted_indices = torch.sort(logits, descending=True)
-                cumulative_probs = torch.cumsum(torch.softmax(sorted_logits, dim=-1), dim=-1)
-                sorted_indices_to_remove = cumulative_probs > top_p
-                sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
-                sorted_indices_to_remove[..., 0] = 0
-                indices_to_remove = sorted_indices_to_remove.scatter(
-                    1, sorted_indices, sorted_indices_to_remove,
-                )
-                logits[indices_to_remove] = float("-inf")
-
-            # Sample
-            if temperature > 0:
-                probs = torch.softmax(logits, dim=-1)
-                next_token = torch.multinomial(probs, num_samples=1)
-            else:
-                next_token = logits.argmax(dim=-1, keepdim=True)
-
-            generated = torch.cat([generated, next_token], dim=1)
-            next_embed = self.lm.get_input_embeddings()(next_token)
-            combined = torch.cat([combined, next_embed], dim=1)
-
-            # Stop at EOS
-            if next_token.item() == self.tokenizer.eos_token_id:
-                break
-
-            # Safety limit
-            if combined.shape[1] > 1024:
-                break
-
-        # Decode, skipping input tokens
-        input_len = text_ids.shape[1]
-        output_ids = generated[0, input_len:].tolist()
-        try:
-            eos_pos = output_ids.index(self.tokenizer.eos_token_id)
-            output_ids = output_ids[:eos_pos]
-        except ValueError:
-            pass
-
-        return self.tokenizer.decode(output_ids, skip_special_tokens=True).strip()
-
-    def generate_batch(
-        self,
-        images: list,
-        texts: list[str],
-        max_new_tokens: int = 64,
-        temperature: float = 0.7,
-    ) -> list[str]:
-        """Generate for multiple image-text pairs sequentially."""
-        return [
-            self.generate(img, txt, max_new_tokens=max_new_tokens, temperature=temperature)
-            for img, txt in zip(images, texts)
-        ]
+        return {
+            "text": text,
+            "tokens_generated": len(generated[0]),
+            "elapsed_ms": elapsed_ms,
+        }

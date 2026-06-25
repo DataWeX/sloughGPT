@@ -56,6 +56,7 @@ export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatTool
       onNextMatch: config.handleNextMatch,
       showMobile: ui.showMobileSearch,
       setShowMobile: ui.setShowMobileSearch,
+      searchInputRef: ui.searchInputRef,
     },
     model: {
       availableModels: model.availableModels,

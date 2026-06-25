@@ -16,6 +16,7 @@ import threading
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse, FileResponse
+from fastapi import Request
 from pydantic import BaseModel, Field
 import json
 import logging
@@ -599,7 +600,7 @@ async def status():
 
 
 @router.get("/stream")
-async def stream():
+async def stream(request: Request):
     """
     Stream auto-training as SSE via UnifiedTrainingPipeline (method='slonet').
 
@@ -697,6 +698,13 @@ async def stream():
         worker_task = loop.run_in_executor(None, _training_worker)
         try:
             while True:
+                # Check for disconnect before each queue wait
+                if await request.is_disconnected():
+                    if _auto_train_cancel_event is not None:
+                        _auto_train_cancel_event.set()
+                    worker_task.cancel()
+                    logger.info("Client disconnected from auto-train stream")
+                    return
                 event = await queue.get()
                 yield event
                 if event.startswith("data: "):

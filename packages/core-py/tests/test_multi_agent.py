@@ -210,6 +210,84 @@ class TestMultiAgentOrchestrator:
         assert tasks[0]["status"] == "failed"
 
 
+# ── Parallel execution tests ──────────────────────────────────────────
+
+
+class TestParallelExecution:
+    def test_compute_levels_all_independent(self):
+        orch = MultiAgentOrchestrator()
+        tasks = [
+            AgentTask(id="1", description="a", assigned_agent="researcher", depends_on=[]),
+            AgentTask(id="2", description="b", assigned_agent="writer", depends_on=[]),
+        ]
+        levels = orch._compute_levels(tasks)
+        assert len(levels) == 1
+        assert set(levels[0]) == {"1", "2"}
+
+    def test_compute_levels_linear_chain(self):
+        orch = MultiAgentOrchestrator()
+        tasks = [
+            AgentTask(id="1", description="a", assigned_agent="researcher", depends_on=[]),
+            AgentTask(id="2", description="b", assigned_agent="writer", depends_on=["1"]),
+            AgentTask(id="3", description="c", assigned_agent="coder", depends_on=["2"]),
+        ]
+        levels = orch._compute_levels(tasks)
+        assert len(levels) == 3
+        assert levels[0] == ["1"]
+        assert levels[1] == ["2"]
+        assert levels[2] == ["3"]
+
+    def test_compute_levels_diamond(self):
+        orch = MultiAgentOrchestrator()
+        tasks = [
+            AgentTask(id="1", description="root", assigned_agent="researcher", depends_on=[]),
+            AgentTask(id="2", description="branch_a", assigned_agent="writer", depends_on=["1"]),
+            AgentTask(id="3", description="branch_b", assigned_agent="coder", depends_on=["1"]),
+            AgentTask(id="4", description="merge", assigned_agent="critic", depends_on=["2", "3"]),
+        ]
+        levels = orch._compute_levels(tasks)
+        assert len(levels) == 3
+        assert levels[0] == ["1"]
+        assert set(levels[1]) == {"2", "3"}
+        assert levels[2] == ["4"]
+
+    def test_compute_levels_circular_deps_broken(self):
+        orch = MultiAgentOrchestrator()
+        tasks = [
+            AgentTask(id="1", description="a", assigned_agent="researcher", depends_on=["2"]),
+            AgentTask(id="2", description="b", assigned_agent="writer", depends_on=["1"]),
+        ]
+        levels = orch._compute_levels(tasks)
+        # Can't resolve — runs all remaining in a single level
+        assert len(levels) == 1
+        assert set(levels[0]) == {"1", "2"}
+
+    def test_build_dep_context_with_results(self):
+        orch = MultiAgentOrchestrator()
+        task = AgentTask(id="2", description="write", assigned_agent="writer", depends_on=["1"])
+        task_map = {
+            "1": AgentTask(id="1", description="research", assigned_agent="researcher"),
+            "2": task,
+        }
+        results = {"1": "found important data"}
+        ctx = orch._build_dep_context(task, task_map, results)
+        assert "researcher" in ctx
+        assert "found important data" in ctx
+
+    def test_build_dep_context_no_completed(self):
+        orch = MultiAgentOrchestrator()
+        task = AgentTask(id="1", description="research", assigned_agent="researcher", depends_on=[])
+        ctx = orch._build_dep_context(task, {}, {})
+        assert ctx == ""
+
+    def test_build_dep_context_missing_dep(self):
+        orch = MultiAgentOrchestrator()
+        task = AgentTask(id="2", description="write", assigned_agent="writer", depends_on=["ghost"])
+        task_map = {"2": task}
+        ctx = orch._build_dep_context(task, task_map, {})
+        assert ctx == ""
+
+
 # ── Singleton tests ───────────────────────────────────────────────────
 
 

@@ -385,10 +385,12 @@ class InferenceEngine:
             except Exception:
                 pass
 
-        input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
+        loop = asyncio.get_running_loop()
+        input_ids = await loop.run_in_executor(
+            None, lambda: self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
+        )
         generated = []
         past_key_values = None
-        loop = asyncio.get_running_loop()
 
         with torch.no_grad():
             for step in range(max_new_tokens):

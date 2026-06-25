@@ -74,3 +74,82 @@ describe('agentsController.execute', () => {
     expect(apiClient.apiPost).toHaveBeenCalledWith('/agents/a1/execute', { request: 'hello', session_id: '' })
   })
 })
+
+describe('agentsController.orchestrate', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  function mockFetchSSE(events: string[]) {
+    const encoder = new TextEncoder()
+    const chunks = events.map(e => encoder.encode(`data: ${e}\n\n`))
+    const stream = new ReadableStream({
+      async start(controller) {
+        for (const chunk of chunks) {
+          controller.enqueue(chunk)
+        }
+        controller.close()
+      },
+    })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      body: stream,
+      status: 200,
+      headers: new Headers(),
+    } as Response)
+  }
+
+  it('POSTs to /agents/orchestrate with goal and context', async () => {
+    mockFetchSSE([
+      JSON.stringify({ stream: 'agent-orchestrate', phase: 'PLAN', status: 'success', data: { tasks: [{ id: '1', description: 'research', agent: 'researcher', status: 'pending', result_preview: '', depends_on: [] }], task_count: 1 } }),
+      JSON.stringify({ stream: 'agent-orchestrate', phase: 'EXECUTE', status: 'success', data: { task_id: '1', agent: 'researcher', description: 'research', result_preview: 'findings...' } }),
+      JSON.stringify({ stream: 'agent-orchestrate', phase: 'COMPOSE', status: 'working' }),
+      JSON.stringify({ stream: 'agent-orchestrate', phase: 'COMPLETE', status: 'complete', data: { response: 'final result', tasks: [] } }),
+    ])
+
+    const planFn = vi.fn()
+    const statusFn = vi.fn()
+    const composeFn = vi.fn()
+    const completeFn = vi.fn()
+
+    await agentsController.orchestrate('test goal', 'context', {
+      onPlan: planFn,
+      onTaskStatus: statusFn,
+      onCompose: composeFn,
+      onComplete: completeFn,
+      onError: vi.fn(),
+    })
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:9/agents/orchestrate',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ goal: 'test goal', context: 'context' }),
+      }),
+    )
+    expect(planFn).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ id: '1' })]))
+    expect(statusFn).toHaveBeenCalled()
+    expect(composeFn).toHaveBeenCalled()
+    expect(completeFn).toHaveBeenCalledWith('final result', [])
+  })
+
+  it('calls onError on HTTP error', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: 'Server Error',
+    } as Response)
+
+    const errorFn = vi.fn()
+    await agentsController.orchestrate('test', '', { onComplete: vi.fn(), onError: errorFn })
+    expect(errorFn).toHaveBeenCalledWith('HTTP 500: Server Error')
+  })
+
+  it('calls onError on stream error event', async () => {
+    mockFetchSSE([
+      JSON.stringify({ stream: 'agent-orchestrate', phase: 'ERROR', status: 'error', data: { error: 'LLM failed' } }),
+    ])
+
+    const errorFn = vi.fn()
+    await agentsController.orchestrate('test', '', { onComplete: vi.fn(), onError: errorFn })
+    expect(errorFn).toHaveBeenCalledWith('LLM failed')
+  })
+})

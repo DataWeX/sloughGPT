@@ -4,6 +4,7 @@ import { forwardRef, useState, useEffect } from 'react'
 import { MessageBubble } from './MessageBubble'
 import { EmptyState } from './EmptyState'
 import { SystemBanner } from './SystemBanner'
+import { ReasoningPanel } from './ReasoningPanel'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import type { ChatMessage } from './types'
 import { cn } from '@/lib/cn'
@@ -13,6 +14,7 @@ interface ChatScreenProps {
   loading: boolean
   sessionLoading?: boolean
   health: ApiHealthSnapshot
+  suggestions?: { text: string; icon: string }[]
   onRefreshHealth: () => void
   onCopy: (text: string) => void
   onRegenerate?: () => void
@@ -26,7 +28,7 @@ interface ChatScreenProps {
 }
 
 export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
-  function ChatScreen({ messages, loading, sessionLoading, health, onRefreshHealth, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, searchQuery, onSuggestionClick, className, model }, ref) {
+  function ChatScreen({ messages, loading, sessionLoading, health, suggestions, onRefreshHealth, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, searchQuery, onSuggestionClick, className, model }, ref) {
     const isOffline = health === 'offline'
     const hasModel = health !== null && health !== 'offline' && health.model_loaded
     const [emptyFading, setEmptyFading] = useState(false)
@@ -67,7 +69,7 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
 
         {messages.length === 0 && !isOffline && !sessionLoading && (
           <div className={cn("transition-all duration-300", emptyFading && "opacity-0 scale-95")}>
-            <EmptyState hasModel={hasModel} onSuggestionClick={onSuggestionClick} />
+            <EmptyState hasModel={hasModel} suggestions={suggestions} onSuggestionClick={onSuggestionClick} />
           </div>
         )}
 
@@ -99,8 +101,10 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
                 onThumbsDown={onThumbsDown}
                 onEdit={onEdit}
                 onRegenerate={showRegenerate ? onRegenerate : undefined}
+                onSuggestionClick={onSuggestionClick}
                 searchQuery={searchQuery}
                 isStreaming={isStreaming}
+                isError={message.isError}
                 aria-live={isStreaming ? 'polite' : undefined}
               />
             )
@@ -108,12 +112,20 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
 
           {!loading && messages.length > 0 && messages[messages.length - 1].role === 'assistant' && onSuggestionClick && (() => {
             const last = messages[messages.length - 1].content.toLowerCase()
+            const secondToLast = messages.length > 1 ? messages[messages.length - 2].content.toLowerCase() : ''
             const hasCode = last.includes('```')
-            const suggestions = hasCode
-              ? ['Explain this code', 'Simplify this', 'How do I test this?']
-              : last.length < 200
-                ? ['Tell me more', 'Give an example', 'Why is that?']
-                : ['Summarize this', 'Explain like I\'m 5', 'Tell me more']
+            const isFileUpload = secondToLast.includes('📎') || secondToLast.includes('uploaded')
+            const isSummary = last.length > 200 && !hasCode && !isFileUpload
+            let suggestions: string[]
+            if (isFileUpload) {
+              suggestions = ['Summarize this', 'What are the key points?', 'Explain in simple terms', 'What does this mean for me?']
+            } else if (hasCode) {
+              suggestions = ['Explain this code', 'Simplify this', 'How do I test this?']
+            } else if (isSummary) {
+              suggestions = ['Summarize this', 'Explain like I\'m 5', 'Tell me more', 'Give an example']
+            } else {
+              suggestions = ['Tell me more', 'Give an example', 'Why is that?']
+            }
             return (
               <div className="flex flex-wrap gap-1.5 px-3 sm:px-4" role="group" aria-label="Suggested follow-ups">
                 {suggestions.map(s => (
@@ -130,13 +142,7 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
           })()}
           
           {loading && messages.length > 0 && messages[messages.length - 1].role !== 'assistant' && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground/60 py-2" role="status" aria-live="polite">
-              <span className="relative inline-flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/40" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-              </span>
-              <span>Thinking{model ? ` (${model})` : ''}…</span>
-            </div>
+            <ReasoningPanel isThinking={true} className="py-1" />
           )}
           
           <div ref={ref} />

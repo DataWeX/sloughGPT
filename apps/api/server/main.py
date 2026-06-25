@@ -323,7 +323,7 @@ def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> 
                 max_concurrent=1,
                 generate_timeout=120.0,
             )
-            from domains.models.provider import register_provider, HFModelProvider
+            from domains.models.provider import register_provider, HFModelProvider, ProviderRouter, VisionProcessor
 
             model_server = registry.get(request.model_id)
             provider = HFModelProvider(
@@ -333,6 +333,13 @@ def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> 
             )
             register_provider("hf-default", provider)
             logger.info("hf-default provider re-registered with ModelServer: %s", request.model_id)
+
+            # Wire default provider router with VisionProcessor for image captioning
+            router = ProviderRouter()
+            router.add_processor(VisionProcessor("multimodal"))
+            router.set_text_provider("hf-default")
+            register_provider("default", router)
+            logger.info("Default provider router registered with VisionProcessor")
         except Exception as e:
             logger.warning("Failed to register with ModelRegistry: %s", e)
 
@@ -553,11 +560,16 @@ if __name__ == "__main__":
     if args.reload:
         uvicorn_kw["reload"] = True
         uvicorn_kw["app"] = "main:app"
-        uvicorn_kw["reload_includes"] = ["*.py"]
+        uvicorn_kw["reload_includes"] = [
+            "apps/api/server/**/*.py",
+            "packages/core-py/domains/**/*.py",
+        ]
         uvicorn_kw["reload_excludes"] = [
             ".*/**", "node_modules/**", "__pycache__/**", "*.pyc",
             ".git/**", ".venv/**", "venv/**", "env/**",
             "build/**", "dist/**", ".next/**", "data/**", "datasets/**", "models/**",
+            "tests/**", "logs/**", "checkpoints/**",
+            "apps/web/**", "apps/cli/**",
         ]
 
     try:

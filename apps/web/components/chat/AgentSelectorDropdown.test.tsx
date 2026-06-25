@@ -24,8 +24,8 @@ import { ChatToolbarProvider } from '@/contexts/ChatToolbarContext'
 import type { ChatToolbarContextValue } from '@/contexts/ChatToolbarContext'
 
 const agents: AgentDef[] = [
-  { id: 'researcher', name: 'Researcher', description: 'Deep research agent' },
-  { id: 'writer', name: 'Writer', description: 'Creative writer' },
+  { id: 'researcher', name: 'Researcher', description: 'Deep research agent', instructions: 'Research thoroughly.' },
+  { id: 'writer', name: 'Writer', description: 'Creative writer', instructions: 'Write creatively.' },
 ]
 
 function makeCtx(overrides: { agents?: AgentDef[]; current?: AgentDef | null; onSelect?: ReturnType<typeof vi.fn> } = {}): ChatToolbarContextValue {

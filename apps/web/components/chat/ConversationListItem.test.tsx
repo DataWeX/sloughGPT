@@ -6,9 +6,11 @@ import { ConversationListItem } from './ConversationListItem'
 afterEach(cleanup)
 
 const baseConv = {
-  id: 'c1', name: 'Test Chat', messages: [{ id: 'm1', role: 'user' as const, content: 'Hello world', timestamp: new Date() }],
-  createdAt: '2026-06-21T10:00:00Z', updatedAt: '2026-06-21T12:00:00Z',
-  synced: true, starred: false, pinned: false,
+  id: 'c1', name: 'Test Chat', session_id: 'c1',
+  created_at: '2026-06-21T10:00:00Z', updated_at: '2026-06-21T12:00:00Z',
+  message_count: 1,
+  messages: [{ id: 'm1', role: 'user' as const, content: 'Hello world', timestamp: '2026-06-21T12:00:00Z' }],
+  starred: false, pinned: false,
 }
 
 describe('ConversationListItem', () => {

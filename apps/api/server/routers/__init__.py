@@ -58,7 +58,10 @@ def get_all_routers() -> List[APIRouter]:
     from . import self_train
     from . import errors as error_logger
     from . import mobile
-    from . import vlm
+    from . import images
+    from . import files
+    from . import voice
+    from . import visual
 
     _cached_routers = [
         auth.router, auto_train.router, models.router, inference.router,
@@ -73,6 +76,9 @@ def get_all_routers() -> List[APIRouter]:
         learner.router, self_train.router,
         error_logger.router,
         mobile.router,
-        vlm.router,
+        images.router,
+        files.router,
+        voice.router,
+        visual.router,
     ]
     return _cached_routers

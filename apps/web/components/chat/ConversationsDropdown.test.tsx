@@ -10,9 +10,9 @@ import { ChatToolbarProvider } from '@/contexts/ChatToolbarContext'
 import type { ChatToolbarContextValue } from '@/contexts/ChatToolbarContext'
 
 const convs = [
-  { id: 'c1', name: 'Chat A', messages: [{ role: 'user' as const, content: 'Hello', id: 'm1', timestamp: new Date() }], updated_at: '2026-06-21T10:00:00Z', starred: false, pinned: false, message_count: 1 },
-  { id: 'c2', name: 'Chat B', messages: [{ role: 'user' as const, content: 'World', id: 'm2', timestamp: new Date() }], updated_at: '2026-06-20T10:00:00Z', starred: true, pinned: false, message_count: 1 },
-  { id: 'c3', name: 'Chat C', messages: [{ role: 'user' as const, content: 'Test', id: 'm3', timestamp: new Date() }], updated_at: '2026-06-19T10:00:00Z', starred: false, pinned: true, message_count: 1 },
+  { id: 'c1', name: 'Chat A', session_id: 'c1', created_at: '2026-06-21T10:00:00Z', messages: [{ role: 'user' as const, content: 'Hello', id: 'm1', timestamp: '2026-06-21T10:00:00Z' }], updated_at: '2026-06-21T10:00:00Z', starred: false, pinned: false, message_count: 1 },
+  { id: 'c2', name: 'Chat B', session_id: 'c2', created_at: '2026-06-20T10:00:00Z', messages: [{ role: 'user' as const, content: 'World', id: 'm2', timestamp: '2026-06-20T10:00:00Z' }], updated_at: '2026-06-20T10:00:00Z', starred: true, pinned: false, message_count: 1 },
+  { id: 'c3', name: 'Chat C', session_id: 'c3', created_at: '2026-06-19T10:00:00Z', messages: [{ role: 'user' as const, content: 'Test', id: 'm3', timestamp: '2026-06-19T10:00:00Z' }], updated_at: '2026-06-19T10:00:00Z', starred: false, pinned: true, message_count: 1 },
 ]
 
 function makeCtx(overrides: { conversations?: typeof convs; onLoad?: ReturnType<typeof vi.fn>; onNewChat?: ReturnType<typeof vi.fn> } = {}): ChatToolbarContextValue {

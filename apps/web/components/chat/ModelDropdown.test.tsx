@@ -3,14 +3,26 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import React from 'react'
 
-const mockCtx = {
+const mockCtx: {
+  model: {
+    availableModels: string[];
+    current: string | null;
+    loading: string | null;
+    generating: boolean;
+    infoMap: Record<string, { cached?: boolean; size_gb?: number }>;
+    descriptions: Record<string, string>;
+    downloadProgress: Record<string, any>;
+    onSelect: ReturnType<typeof vi.fn>;
+    onUnload: ReturnType<typeof vi.fn>;
+  }
+} = {
   model: {
     availableModels: ['gpt2', 'gpt2-medium', 'gpt2-large'],
     current: 'gpt2',
     loading: null,
     generating: false,
-    infoMap: {} as Record<string, { cached?: boolean; size_gb?: number }>,
-    descriptions: {} as Record<string, string>,
+    infoMap: {},
+    descriptions: {},
     downloadProgress: {},
     onSelect: vi.fn(),
     onUnload: vi.fn(),

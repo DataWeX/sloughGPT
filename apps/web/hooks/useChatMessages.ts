@@ -358,6 +358,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
           userId: userIdRef.current, sessionId: sessionIdRef.current,
           images: userImages.length > 0 ? userImages.map(img => img.dataUrl) : undefined,
           signal: loadingRef.current.signal,
+          agentId: currentAgent?.id || undefined,
           onToken: (token: string) => {
             let cleanedToken = token
             if (assistantContentLen < 50) {
@@ -379,7 +380,11 @@ export function useChatMessages(config: ChatMessagesConfig) {
           onError: (status: number, text?: string) => {
             flushTokens()
             setCurrentError(getErrorInfo(status, text || 'Stream error'))
-            setMessages(prev => prev.filter(msg => msg.id !== assistantId))
+            setMessages(prev => prev.map(msg =>
+              msg.id === assistantId
+                ? { ...msg, content: msg.content || '(response interrupted)', isError: true }
+                : msg
+            ))
             setLoading(false)
           },
           onKnowledge: (source: string, count: number) => {
@@ -403,7 +408,11 @@ export function useChatMessages(config: ChatMessagesConfig) {
         devDebug('Stream aborted by user')
       } else {
         setCurrentError(getErrorInfo(0, err instanceof Error ? err.message : 'Network error'))
-        setMessages(prev => prev.filter(msg => msg.id !== assistantId))
+        setMessages(prev => prev.map(msg =>
+          msg.id === assistantId
+            ? { ...msg, content: msg.content || '(response interrupted)', isError: true }
+            : msg
+        ))
       }
     } finally {
       setLoading(false)
@@ -533,6 +542,8 @@ export function useChatMessages(config: ChatMessagesConfig) {
     deleteSession: sessions.deleteSession,
     starSession: sessions.starSession,
     pinSession: sessions.pinSession,
+    archiveSession: sessions.archiveSession,
+    archivedCount: sessions.archivedCount,
     renameSession: sessions.renameSession,
     duplicateSession: sessions.duplicateSession,
     handleRegenerate,

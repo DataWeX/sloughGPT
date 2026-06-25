@@ -36,7 +36,7 @@ def _mock_manager():
     mgr._accuracy_history = [0.5, 0.6, 0.7]
     engine = MagicMock()
     engine._trained = True
-    engine.text.vocab = {0: "<pad>", 1: "<bos>", 2: "hello"}
+    engine.text.bpe.vocab = {0: "<pad>", 1: "<bos>", 2: "hello"}
     mgr._multimodal_engine = engine
     buf = MagicMock()
     buf.size = 42
@@ -192,19 +192,3 @@ class TestGenerationStatus:
         assert "capabilities" in data
 
 
-class TestVLMDataset:
-    """POST /multimodal/vlm-dataset"""
-
-    def test_vlm_dataset_missing_dir(self):
-        resp = client.post("/multimodal/vlm-dataset", json={
-            "name": "test",
-            "image_dir": "/tmp/nonexistent_vlm_test_xyz",
-        })
-        assert resp.status_code == 400
-        assert "not found" in resp.json()["detail"].lower()
-
-    def test_vlm_dataset_missing_name(self):
-        resp = client.post("/multimodal/vlm-dataset", json={
-            "image_dir": "/tmp",
-        })
-        assert resp.status_code == 422

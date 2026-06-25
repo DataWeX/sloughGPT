@@ -168,6 +168,15 @@ export const chatController = {
     }
     return prompt + 'Assistant:'
   },
+
+  async getSuggestions(): Promise<{ text: string; icon: string }[]> {
+    try {
+      const data = await apiGet<{ suggestions?: { text: string; icon: string }[] }>('/chat/suggestions')
+      return data.suggestions || []
+    } catch {
+      return []
+    }
+  },
 }
 
 export type { ChatResponse }

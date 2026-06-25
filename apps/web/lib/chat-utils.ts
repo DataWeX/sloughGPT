@@ -9,6 +9,7 @@ export interface ChatMessage {
   content: string
   timestamp: Date
   images?: ImageAttachment[]
+  isError?: boolean
 }
 
 export interface ImageAttachment {
@@ -26,6 +27,7 @@ export interface ChatSession {
   synced: boolean
   starred: boolean
   pinned: boolean
+  archived?: boolean
 }
 
 export interface DownloadProgressInfo {

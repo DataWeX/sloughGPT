@@ -16,7 +16,8 @@ vi.mock('@/lib/error-store', () => ({
 import { ErrorBoundary } from './ErrorBoundary'
 
 function ThrowError() {
-  throw new Error('Test error')
+  React.useEffect(() => { throw new Error('Test error') }, [])
+  return null
 }
 
 describe('ErrorBoundary', () => {

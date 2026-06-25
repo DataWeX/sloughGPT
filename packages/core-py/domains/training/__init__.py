@@ -367,6 +367,9 @@ __all__ = [
     # Distributed training
     "DistributedTrainer",
     "DistributedConfig",
+    # Trainer protocol
+    "TrainerProtocol",
+    "TrainResult",
     # HuggingFace
     "HuggingFaceManager",
     "HuggingFaceDatasetManager",
@@ -495,6 +498,8 @@ def __getattr__(name):
         "import_data": ".data_import",
         "TurboTrainer": ".turbo_trainer",
         "TurboConfig": ".turbo_trainer",
+        "TrainerProtocol": ".trainer_protocol",
+        "TrainResult": ".trainer_protocol",
         # Export modules
         "export_model": ".export",
         "ExportConfig": ".export",

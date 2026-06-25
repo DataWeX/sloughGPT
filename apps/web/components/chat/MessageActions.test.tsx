@@ -2,15 +2,30 @@
  * @vitest-environment jsdom
  */
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, cleanup, fireEvent } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, act } from '@testing-library/react'
 import { MessageActions } from './MessageActions'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 beforeEach(() => {
   Object.assign(navigator, {
     clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
   })
+  // stub speechSynthesis + SpeechSynthesisUtterance for jsdom
+  if (!('speechSynthesis' in window)) {
+    const mockUtterance = vi.fn()
+    ;(window as any).SpeechSynthesisUtterance = mockUtterance
+    ;(window as any).speechSynthesis = {
+      speak: vi.fn(),
+      cancel: vi.fn(),
+      speaking: false,
+      paused: false,
+      pending: false,
+    }
+  }
 })
 
 describe('MessageActions', () => {
@@ -144,6 +159,7 @@ describe('MessageActions', () => {
       <MessageActions
         content="text"
         messageId="m1"
+        role="assistant"
         onCopy={vi.fn()}
         onRegenerate={vi.fn()}
         onThumbsUp={vi.fn()}
@@ -156,5 +172,67 @@ describe('MessageActions', () => {
     expect(container.querySelector('button[aria-label="Mark as helpful"]')).toBeInTheDocument()
     expect(container.querySelector('button[aria-label="Mark as unhelpful"]')).toBeInTheDocument()
     expect(container.querySelector('button[aria-label="Edit and resend message"]')).toBeInTheDocument()
+    expect(container.querySelector('button[aria-label="Read aloud"]')).toBeInTheDocument()
+  })
+
+  it('renders read aloud button for assistant role', () => {
+    render(<MessageActions content="hello" messageId="m1" role="assistant" />)
+    expect(screen.getByRole('button', { name: /read aloud/i })).toBeInTheDocument()
+  })
+
+  it('does not render read aloud button without role', () => {
+    render(<MessageActions content="hello" messageId="m1" />)
+    expect(screen.queryByRole('button', { name: /read aloud/i })).not.toBeInTheDocument()
+  })
+
+  it('does not render read aloud button for user role', () => {
+    render(<MessageActions content="hello" messageId="m1" role="user" />)
+    expect(screen.queryByRole('button', { name: /read aloud/i })).not.toBeInTheDocument()
+  })
+
+  it('calls speechSynthesis.speak when read aloud clicked', () => {
+    const speak = vi.fn()
+    window.speechSynthesis.speak = speak
+    render(<MessageActions content="hello world" messageId="m1" role="assistant" />)
+    fireEvent.click(screen.getByRole('button', { name: /read aloud/i }))
+    expect(speak).toHaveBeenCalledTimes(1)
+    // SpeechSynthesisUtterance should have been constructed with the content
+    expect(window.SpeechSynthesisUtterance).toHaveBeenCalledWith('hello world')
+  })
+
+  it('cancels speech when clicked again', () => {
+    const cancel = vi.fn()
+    window.speechSynthesis.cancel = cancel
+    render(<MessageActions content="hello" messageId="m1" role="assistant" />)
+    const btn = screen.getByRole('button', { name: /read aloud/i })
+    fireEvent.click(btn)
+    // after first click, speaking is true — click again to cancel
+    fireEvent.click(btn)
+    expect(cancel).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows stop icon when speaking', () => {
+    render(<MessageActions content="hello" messageId="m1" role="assistant" />)
+    const btn = screen.getByRole('button', { name: /read aloud/i })
+    fireEvent.click(btn)
+    // after click, speaking is true, label should change
+    expect(screen.getByRole('button', { name: /stop reading aloud/i })).toBeInTheDocument()
+  })
+})
+
+// Add a test for when speechSynthesis is not available
+describe('MessageActions without speechSynthesis', () => {
+  beforeEach(() => {
+    delete (window as any).speechSynthesis
+    delete (window as any).SpeechSynthesisUtterance
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('does not render read aloud button when speechSynthesis is unavailable', () => {
+    render(<MessageActions content="hello" messageId="m1" role="assistant" />)
+    expect(screen.queryByRole('button', { name: /read aloud/i })).not.toBeInTheDocument()
   })
 })

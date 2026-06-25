@@ -2,6 +2,7 @@
 Health Controller - Business logic for system health
 """
 import json
+import time
 from typing import Dict, Any, Tuple, Optional
 import psutil
 from datetime import datetime
@@ -54,9 +55,13 @@ def _get_inference_stats() -> Dict[str, Any]:
 
 class HealthController:
     """Controller for system health"""
-    
+
+    _CACHE_TTL = 2.0  # seconds
+
     def __init__(self):
         self._start_time = datetime.now()
+        self._cache: Dict[str, Any] = {}
+        self._cache_time: float = 0.0
     
     def get_basic_health(self) -> Dict[str, Any]:
         """Get basic health status with flow-based summary."""
@@ -94,7 +99,11 @@ class HealthController:
         return result
     
     def get_detailed_health(self) -> Dict[str, Any]:
-        """Get detailed health with system metrics and GPU info."""
+        """Get detailed health with system metrics and GPU info (cached up to CACHE_TTL seconds)."""
+        now = time.monotonic()
+        if self._cache and (now - self._cache_time) < self._CACHE_TTL:
+            return self._cache
+
         cpu = psutil.cpu_percent(interval=0.1)
         mem = psutil.virtual_memory()
         model_loaded, model_type = _get_model_info()
@@ -164,7 +173,7 @@ class HealthController:
             memory_history = []
             rate_violations = []
 
-        return {
+        result = {
             "status": "healthy",
             "uptime_seconds": uptime,
             "timestamp": datetime.now().isoformat(),
@@ -202,6 +211,9 @@ class HealthController:
                 + (f" {error_count} errors." if error_count > 0 else "")
             ) if model_loaded else "Server running, no model loaded.",
         }
+        self._cache = result
+        self._cache_time = now
+        return result
 
     def get_liveness(self) -> Dict[str, Any]:
         """Kubernetes liveness probe"""
