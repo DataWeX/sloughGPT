@@ -1,0 +1,245 @@
+// @vitest-environment jsdom
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
+import React from 'react'
+
+vi.mock('@/components/ui/dialog', () => ({
+  Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) => (open ? <div>{children}</div> : null),
+  DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogDescription: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}))
+
+vi.mock('@/components/ui', () => ({
+  Spinner: () => <div data-testid="spinner" />,
+  IconCheck: () => <div data-testid="icon-check" />,
+}))
+
+const mocks = vi.hoisted(() => ({
+  mockImportFromGitHub: vi.fn(),
+  mockImportFromHuggingFace: vi.fn(),
+  mockImportFromISBN: vi.fn(),
+  mockImportFromURL: vi.fn(),
+  mockImportFromLocal: vi.fn(),
+  mockImportFromKaggle: vi.fn(),
+  mockImportFromCSV: vi.fn(),
+  mockSearchGitHubRepos: vi.fn(),
+  mockSearchBooks: vi.fn(),
+}))
+
+vi.mock('@/lib/dataset-controller', () => ({
+  datasetController: {
+    importFromGitHub: mocks.mockImportFromGitHub,
+    importFromHuggingFace: mocks.mockImportFromHuggingFace,
+    importFromISBN: mocks.mockImportFromISBN,
+    importFromURL: mocks.mockImportFromURL,
+    importFromLocal: mocks.mockImportFromLocal,
+    importFromKaggle: mocks.mockImportFromKaggle,
+    importFromCSV: mocks.mockImportFromCSV,
+    searchGitHubRepos: mocks.mockSearchGitHubRepos,
+    searchBooks: mocks.mockSearchBooks,
+  },
+}))
+
+import { DatasetImportModal } from './DatasetImportModal'
+
+describe('DatasetImportModal', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+  afterEach(cleanup)
+
+  it('renders dialog when open', () => {
+    render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    expect(screen.getByText('Import Dataset')).toBeDefined()
+  })
+
+  it('does not render when closed', () => {
+    const { container } = render(
+      <DatasetImportModal open={false} onOpenChange={() => {}} onImportComplete={() => {}} />,
+    )
+    expect(container.innerHTML).toBe('')
+  })
+
+  it('renders source option buttons', () => {
+    render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    expect(screen.getByText('GitHub')).toBeDefined()
+    expect(screen.getByText('HuggingFace')).toBeDefined()
+    expect(screen.getByText('Kaggle')).toBeDefined()
+    expect(screen.getByText('URL')).toBeDefined()
+    expect(screen.getByText('Server Path')).toBeDefined()
+  })
+
+  it('renders name input', () => {
+    render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    expect(screen.getByLabelText('Dataset Name')).toBeDefined()
+  })
+
+  it('shows extension toggles for GitHub source', () => {
+    render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    expect(screen.getByText('.py')).toBeDefined()
+    expect(screen.getByText('.js')).toBeDefined()
+    expect(screen.getByText('.ts')).toBeDefined()
+  })
+
+  it('shows GitHub URL input when GitHub source selected', () => {
+    render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    expect(screen.getByLabelText('GitHub Repository URL')).toBeDefined()
+  })
+
+  it('shows HuggingFace ID input when HF source selected', () => {
+    render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    fireEvent.click(screen.getByText('HuggingFace'))
+    expect(screen.getByLabelText('HuggingFace Dataset ID')).toBeDefined()
+  })
+
+  it('shows Server Path input when Local source selected', () => {
+    render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    fireEvent.click(screen.getByText('Server Path'))
+    expect(screen.getByLabelText('Server Path')).toBeDefined()
+  })
+
+  it('shows Kaggle dataset ID input when Kaggle source selected', () => {
+    render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    fireEvent.click(screen.getByText('Kaggle'))
+    expect(screen.getByLabelText('Kaggle Dataset ID')).toBeDefined()
+  })
+
+  it('shows CSV URL input when CSV source selected', () => {
+    render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    fireEvent.click(screen.getByText('CSV'))
+    expect(screen.getByLabelText('CSV File URL')).toBeDefined()
+  })
+
+  it('shows error for empty GitHub URL on Import', async () => {
+    const { rerender } = render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    fireEvent.click(screen.getByText('Import'))
+    await waitFor(() => {
+      expect(screen.getByText('GitHub URL is required')).toBeDefined()
+    })
+  })
+
+  it('shows error for empty HuggingFace dataset ID', async () => {
+    render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    fireEvent.click(screen.getByText('HuggingFace'))
+    fireEvent.click(screen.getByText('Import'))
+    await waitFor(() => {
+      expect(screen.getByText('HuggingFace dataset ID is required')).toBeDefined()
+    })
+  })
+
+  it('shows error for empty server path', async () => {
+    render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    fireEvent.click(screen.getByText('Server Path'))
+    fireEvent.click(screen.getByText('Import'))
+    await waitFor(() => {
+      expect(screen.getByText('Server path is required')).toBeDefined()
+    })
+  })
+
+  it('shows error for empty Kaggle dataset ID', async () => {
+    render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    fireEvent.click(screen.getByText('Kaggle'))
+    fireEvent.click(screen.getByText('Import'))
+    await waitFor(() => {
+      expect(screen.getByText(/Kaggle dataset ID is required/)).toBeDefined()
+    })
+  })
+
+  it('shows loading state during GitHub import', async () => {
+    mocks.mockImportFromGitHub.mockImplementation(() => new Promise(() => {}))
+    render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    const urlInput = screen.getByLabelText('GitHub Repository URL')
+    fireEvent.change(urlInput, { target: { value: 'https://github.com/user/repo' } })
+    fireEvent.click(screen.getByText('Import'))
+    await waitFor(() => {
+      expect(screen.getByText('Importing...')).toBeDefined()
+    })
+  })
+
+  it('shows success message after import', async () => {
+    mocks.mockImportFromGitHub.mockResolvedValue({ dataset_id: 'my-dataset', message: 'Imported 5 files (12,345 chars)' })
+    render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    const urlInput = screen.getByLabelText('GitHub Repository URL')
+    fireEvent.change(urlInput, { target: { value: 'https://github.com/user/repo' } })
+    fireEvent.click(screen.getByText('Import'))
+    expect(await screen.findByText('Imported 5 files (12,345 chars)')).toBeDefined()
+  })
+
+  it('calls onImportComplete after successful import', async () => {
+    const onComplete = vi.fn()
+    mocks.mockImportFromGitHub.mockResolvedValue({ dataset_id: 'my-dataset', message: 'done' })
+    vi.useFakeTimers()
+    render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={onComplete} />)
+    const urlInput = screen.getByLabelText('GitHub Repository URL')
+    fireEvent.change(urlInput, { target: { value: 'https://github.com/user/repo' } })
+    fireEvent.click(screen.getByText('Import'))
+    await vi.waitFor(() => {
+      expect(mocks.mockImportFromGitHub).toHaveBeenCalled()
+    })
+    vi.advanceTimersByTime(2000)
+    expect(onComplete).toHaveBeenCalledWith('my-dataset')
+    vi.useRealTimers()
+  })
+
+  it('calls onOpenChange(false) on Cancel button', () => {
+    const onClose = vi.fn()
+    render(<DatasetImportModal open={true} onOpenChange={onClose} onImportComplete={() => {}} />)
+    fireEvent.click(screen.getByText('Cancel'))
+    expect(onClose).toHaveBeenCalledWith(false)
+  })
+
+  it('searches for GitHub repos', async () => {
+    mocks.mockSearchGitHubRepos.mockResolvedValue({
+      repos: [
+        { id: 1, name: 'test-repo', full_name: 'user/test-repo', url: 'https://github.com/user/test-repo', stars: 42, language: 'Python', description: 'A test repo' },
+      ],
+    })
+    render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    const urlInput = screen.getByLabelText('GitHub Repository URL')
+    fireEvent.change(urlInput, { target: { value: 'user/test-repo' } })
+    fireEvent.click(screen.getByText('Search'))
+    await waitFor(() => {
+      expect(screen.getByText('test-repo')).toBeDefined()
+    })
+  })
+
+  it('selects a GitHub repo from search results', async () => {
+    mocks.mockSearchGitHubRepos.mockResolvedValue({
+      repos: [
+        { id: 1, name: 'test-repo', full_name: 'user/test-repo', url: 'https://github.com/user/test-repo', stars: 42, language: 'Python', description: 'A test repo' },
+      ],
+    })
+    render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    const urlInput = screen.getByLabelText('GitHub Repository URL')
+    fireEvent.change(urlInput, { target: { value: 'user/test-repo' } })
+    fireEvent.click(screen.getByText('Search'))
+    await waitFor(() => {
+      expect(screen.getByText('test-repo')).toBeDefined()
+    })
+    fireEvent.click(screen.getByText('test-repo'))
+    await waitFor(() => {
+      expect(screen.queryByText('test-repo')).not.toBeInTheDocument()
+    })
+  })
+
+  it('auto-populates name from path for local source', () => {
+    render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    fireEvent.click(screen.getByText('Server Path'))
+    const pathInput = screen.getByLabelText('Server Path')
+    fireEvent.change(pathInput, { target: { value: '/Users/test/my_data' } })
+    expect(screen.getByDisplayValue('my_data')).toBeDefined()
+  })
+
+  it('resets form on close', () => {
+    const onClose = vi.fn()
+    const { rerender } = render(
+      <DatasetImportModal open={true} onOpenChange={onClose} onImportComplete={() => {}} />,
+    )
+    fireEvent.click(screen.getByText('Server Path'))
+    fireEvent.change(screen.getByLabelText('Server Path'), { target: { value: '/some/path' } })
+    rerender(<DatasetImportModal open={true} onOpenChange={onClose} onImportComplete={() => {}} />)
+    fireEvent.click(screen.getByText('GitHub'))
+    expect(screen.getByLabelText('GitHub Repository URL')).toBeDefined()
+  })
+})

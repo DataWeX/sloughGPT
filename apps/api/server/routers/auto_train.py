@@ -673,6 +673,11 @@ async def stream(request: Request):
                     ckpt, fl, ts, extra={"context": {"checkpoint": ckpt, "final_loss": fl, "steps": ts}},
                 )
                 _enforce_checkpoint_budget()
+                # If the pipeline didn't emit a "complete" SSE event (e.g. _early_exit
+                # passed None for on_progress), send one now so the SSE consumer unblocks.
+                _enqueue(sse_complete("auto-train",
+                    data={"checkpoint": ckpt, "final_loss": fl, "total_steps": ts},
+                    message=f"Training complete — checkpoint={ckpt} loss={fl} steps={ts}"))
             elif result.get("cancelled"):
                 autotrain_logger.info("Auto-train cancelled by user", extra={"context": {"action": "cancel"}})
                 _enqueue(sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled"))

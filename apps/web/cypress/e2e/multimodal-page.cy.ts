@@ -1,0 +1,25 @@
+describe('Multimodal page', () => {
+  beforeEach(() => {
+    cy.on('uncaught:exception', () => false)
+    cy.mockHealth({ model_loaded: true })
+    cy.mockVisual()
+    cy.mockMultimodal()
+    cy.visit('/multimodal', { timeout: 30000 })
+  })
+
+  it('renders all cards, manages checkpoints', () => {
+    cy.contains('h1', 'Multimodal', { timeout: 20000 }).should('be.visible')
+    cy.contains('Train vision model', { timeout: 20000 }).scrollIntoView().should('be.visible')
+    cy.contains('Load trained model', { timeout: 20000 }).scrollIntoView({ ensureScrollable: false }).should('be.visible')
+    cy.contains('Capabilities').scrollIntoView({ ensureScrollable: false })
+    cy.contains('Vision model').should('be.visible')
+    cy.wait('@visualCheckpoints', { timeout: 20000 }).its('response.statusCode').should('eq', 200)
+    cy.contains('Visual Checkpoints', { timeout: 20000 }).scrollIntoView({ ensureScrollable: false }).should('be.visible')
+    cy.contains('visual-v2').should('be.visible')
+    cy.contains('visual-v1').should('be.visible')
+    cy.get('div[class*="max-h-64"] button').contains('Load').first().click({ force: true })
+    cy.wait('@visualLoad').its('response.statusCode').should('eq', 200)
+    cy.get('div[class*="max-h-64"] button[class*="text-error"]').first().click({ force: true })
+    cy.wait('@visualDelete').its('response.statusCode').should('eq', 200)
+  })
+})
