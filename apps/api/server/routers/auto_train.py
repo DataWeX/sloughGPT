@@ -657,8 +657,9 @@ async def stream(request: Request):
             if _auto_train_cancel_event is not None and _auto_train_cancel_event.is_set():
                 raise _AutoTrainCancelled("Training cancelled by user")
             sse = progress.to_sse_event(stream_name="auto-train")
-            sse_str = "data: " + json.dumps(sse) + "\n\n"
-            _enqueue(sse_str)
+            _enqueue(sse_event("auto-train", sse.get("phase", "PROGRESS"),
+                               sse.get("status", "working"), data=sse.get("data"),
+                               meta=sse.get("meta", {})))
 
         try:
             state.running = True
@@ -701,8 +702,13 @@ async def stream(request: Request):
 
     async def event_generator():
         worker_task = loop.run_in_executor(None, _training_worker)
+        deadline = time.time() + 3600  # 1-hour safety timeout
         try:
             while True:
+                if time.time() > deadline:
+                    logger.error("Auto-train SSE timed out after 1 hour — no completion event received")
+                    yield sse_error("auto-train", "TIMEOUT", "Training SSE stream timed out")
+                    return
                 # Check for disconnect before each queue wait
                 if await request.is_disconnected():
                     if _auto_train_cancel_event is not None:
@@ -710,7 +716,7 @@ async def stream(request: Request):
                     worker_task.cancel()
                     logger.info("Client disconnected from auto-train stream")
                     return
-                event = await queue.get()
+                event = await _asyncio.wait_for(queue.get(), timeout=30.0)
                 yield event
                 if event.startswith("data: "):
                     try:
@@ -729,6 +735,9 @@ async def stream(request: Request):
                     break
 
             await worker_task
+        except _asyncio.TimeoutError:
+            logger.error("Auto-train SSE queue timed out — no event for 30s")
+            yield sse_error("auto-train", "TIMEOUT", "No training progress for 30 seconds")
         except Exception:
             pass
 
