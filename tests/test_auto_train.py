@@ -1,12 +1,15 @@
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 
 @pytest.fixture
 def client():
-    from apps.api.server.main import app
-    with TestClient(app) as c:
-        yield c
+    app = FastAPI()
+    from routers.auto_train import router
+    app.include_router(router)
+    # No lifespan — just the router under test
+    return TestClient(app)
 
 
 class TestAutoTrainStart:
