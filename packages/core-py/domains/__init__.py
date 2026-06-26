@@ -7,6 +7,9 @@ Subdomains:
 - companion: Personality management (from companion.py)
 """
 
+import time
+from typing import Any, Dict, Optional, Protocol, runtime_checkable
+
 from .chat.domain import ChatDomain, get_chat_domain
 from .benchmark.domain import BenchmarkDomain, get_benchmark_domain
 
@@ -29,6 +32,66 @@ class ComponentException(Exception):
     pass
 
 
+# --- Cognitive domain shared types ---
+
+@runtime_checkable
+class ICognitiveProcessor(Protocol):
+    """Protocol for cognitive processing."""
+    async def process(self, input_data: Any) -> Any: ...
+
+@runtime_checkable
+class IMemoryManager(Protocol):
+    """Protocol for memory management."""
+    async def store(self, key: str, value: Any) -> None: ...
+    async def recall(self, key: str) -> Any: ...
+
+@runtime_checkable
+class IMetacognitiveMonitor(Protocol):
+    """Protocol for metacognitive monitoring."""
+    async def monitor(self, state: Any) -> None: ...
+
+@runtime_checkable
+class IReasoningEngine(Protocol):
+    """Protocol for reasoning."""
+    async def reason(self, context: Any) -> Any: ...
+
+
+class Memory:
+    """Represents a memory entry."""
+    def __init__(self, key: str, value: Any, memory_type: str = "episodic", importance: float = 0.5):
+        self.key = key
+        self.value = value
+        self.content = value
+        self.memory_type = memory_type
+        self.importance = importance
+        self.retrieval_count = 0
+        self.last_accessed = time.time()
+        self.metadata: Dict[str, Any] = {}
+
+
+class ThoughtType:
+    """Enum-like class for thought types."""
+    PERCEPTION = "perception"
+    REASONING = "reasoning"
+    CREATIVITY = "creativity"
+    REFLECTION = "reflection"
+    DECISION = "decision"
+
+
+class BaseDomain:
+    """Base domain class. Every domain extends this."""
+    def __init__(self, domain_name: str) -> None:
+        self.domain_name = domain_name
+
+class DomainException(Exception):
+    """Base exception for domain errors."""
+    pass
+
+
+# Re-export Thought from soul module for cognitive backward compat
+from .soul.base import Thought
+
+
 __all__ = [
     "ChatDomain",
     "get_chat_domain",
@@ -36,4 +99,12 @@ __all__ = [
     "CompanionSystem",
     "BaseComponent",
     "ComponentException",
+    "ICognitiveProcessor",
+    "IMemoryManager",
+    "IMetacognitiveMonitor",
+    "IReasoningEngine",
+    "Memory",
+    "ThoughtType",
+    "BaseDomain",
+    "DomainException",
 ]

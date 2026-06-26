@@ -6,7 +6,8 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def client():
     from apps.api.server.main import app
-    return TestClient(app)
+    with TestClient(app) as c:
+        yield c
 
 
 @pytest.fixture
