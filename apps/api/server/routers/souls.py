@@ -5,12 +5,26 @@ Encapsulates router state in ``SloRouterState`` dataclass rather than module-lev
 mutable globals. Actual soul state lives in ``SloManager`` singleton.
 """
 from dataclasses import dataclass
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from typing import Optional, Any, Dict
 from pydantic import BaseModel
-from pydantic import BaseModel
 import json, asyncio, numpy as np, logging
+
+try:
+    from domains.api.sse_envelope import sse_event, sse_token, sse_error, sse_complete
+except ImportError:
+    def sse_event(stream, phase, status, data=None, meta=None, message=""):
+        return "data: " + json.dumps({
+            "stream": stream, "phase": phase, "status": status,
+            "data": data or {}, "meta": meta or {}, "message": message
+        }) + "\n\n"
+    def sse_token(stream, token, meta=None):
+        return sse_event(stream, "STREAMING", "working", {"token": token}, meta or {})
+    def sse_error(stream, phase, error, meta=None):
+        return sse_event(stream, phase, "error", {"error": error}, meta or {}, f"Error: {error}")
+    def sse_complete(stream, phase="COMPLETE", data=None, meta=None, message="Done"):
+        return sse_event(stream, phase, "complete", data or {}, meta or {}, message)
 
 try:
     from domains.models import SloughGPTModel
@@ -110,7 +124,7 @@ class SloChatRequest(BaseModel):
 
 
 @router.post("/chat")
-async def soul_chat(req: SloChatRequest):
+async def soul_chat(req: SloChatRequest, request: Request):
     """Chat using a SloughGPTModel checkpoint (PyTorch-trained transformer).
 
     Loads the .soul file (PyTorch ZIP format), creates a SloughGPTModel with matching
@@ -154,6 +168,9 @@ async def soul_chat(req: SloChatRequest):
             generated = list(enc_prompt)
 
             for _ in range(req.max_new_tokens):
+                if await request.is_disconnected():
+                    return
+
                 seq = np.array([generated[-128:]], dtype=np.int64)
 
                 logits_arr, _ = model.forward(seq, targets=None)
@@ -182,14 +199,14 @@ async def soul_chat(req: SloChatRequest):
                 token_text = decode([next_tok])
 
                 if token_text.strip():
-                    yield f"data: {json.dumps({'token': token_text, 'done': False})}\n\n"
+                    yield sse_token("souls-chat", token_text)
 
                 if next_tok == 0:
                     break
 
                 await asyncio.sleep(0)
 
-            yield f"data: {json.dumps({'token': '', 'done': True})}\n\n"
+            yield sse_complete("souls-chat", data={"response": decode(generated)})
 
         return StreamingResponse(stream(), media_type="text/event-stream")
 
