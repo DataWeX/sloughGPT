@@ -57,7 +57,11 @@ export function useChatKeyboard(deps: KeyboardDeps) {
         e.preventDefault()
         d.handleRegenerateRef.current?.()
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f' && e.shiftKey) {
+        e.preventDefault()
+        window.dispatchEvent(new CustomEvent('search-conversations'))
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f' && !e.shiftKey) {
         e.preventDefault()
         d.searchInputRef?.current?.focus()
       }

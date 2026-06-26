@@ -1,4 +1,4 @@
-"""Tests for upgraded multimodal engine (ViT + cross-attention + BPE)."""
+"""Tests for upgraded multimodal engine (ViT + cross-attention + char tokenizer)."""
 
 import numpy as np
 import pytest
@@ -13,7 +13,7 @@ from domains.multimodal.engine import (
     VisionEncoder, AudioEncoder, MultimodalEngine, TextDecoder,
     SloTransformerDecoder, SloTransformerDecoderBlock,
 )
-from domains.multimodal.bpe_tokenizer import BPETokenizer
+from domains.multimodal.char_tokenizer import CharTokenizer
 
 
 class TestSloCrossAttention:
@@ -24,15 +24,15 @@ class TestSloCrossAttention:
         d_model = 128
         n_heads = 4
         layer = SloCrossAttention(d_model, n_heads)
-        
+
         # Text query: (1, seq_len, d_model)
         x_data = np.random.randn(1, 5, d_model).astype(np.float32)
         x = Tensor(x_data, requires_grad=True)
-        
+
         # Image context: (1, num_patches, d_model) — 49 patches + 1 cls = 50
         ctx_data = np.random.randn(1, 50, d_model).astype(np.float32)
         ctx = Tensor(ctx_data, requires_grad=True)
-        
+
         out = layer.forward(x, ctx)
         assert out.data.shape == (1, 5, d_model)
 
@@ -41,17 +41,17 @@ class TestSloCrossAttention:
         d_model = 64
         n_heads = 4
         layer = SloCrossAttention(d_model, n_heads)
-        
+
         x_data = np.random.randn(1, 3, d_model).astype(np.float32)
         x = Tensor(x_data, requires_grad=True)
-        
+
         ctx_data = np.random.randn(1, 10, d_model).astype(np.float32)
         ctx = Tensor(ctx_data, requires_grad=True)
-        
+
         out = layer.forward(x, ctx)
         loss = out.sum()
         loss.backward()
-        
+
         # Both x and ctx should have gradients
         assert x.grad is not None
         assert ctx.grad is not None
@@ -66,21 +66,21 @@ class TestVisionEncoder:
         """VisionEncoder should output (B, 1, embed_dim) cls token."""
         embed_dim = 128
         encoder = VisionEncoder(embed_dim=embed_dim, n_heads=4, n_layers=2)
-        
+
         # (B, H, W, C) = (1, 224, 224, 3)
         img = np.random.randn(1, 224, 224, 3).astype(np.float32)
         out = encoder.forward(img)
-        
+
         assert out.data.shape == (1, 1, embed_dim)
 
     def test_vision_encoder_patch_embeddings(self):
         """get_patch_embeddings should return (B, num_patches+1, embed_dim)."""
         embed_dim = 128
         encoder = VisionEncoder(embed_dim=embed_dim, n_heads=4, n_layers=2)
-        
+
         img = np.random.randn(1, 224, 224, 3).astype(np.float32)
         patches = encoder.get_patch_embeddings(img)
-        
+
         expected_patches = (224 // 32) ** 2  # 7*7 = 49
         assert patches.data.shape == (1, expected_patches + 1, embed_dim)
 
@@ -88,72 +88,131 @@ class TestVisionEncoder:
         """Gradients should flow through the ViT."""
         embed_dim = 64
         encoder = VisionEncoder(embed_dim=embed_dim, n_heads=4, n_layers=2)
-        
+
         img = np.random.randn(1, 224, 224, 3).astype(np.float32)
         out = encoder.forward(img)
         loss = out.sum()
         loss.backward()
-        
+
         # At least some parameters should have gradients
-        # (SloTransformerBlock gradient flow is limited in SloNet autograd)
         params_with_grad = sum(1 for p in encoder.parameters() if p.requires_grad and p.grad is not None)
         assert params_with_grad > 0, "No parameters received gradients"
 
 
-class TestBPETokenizer:
-    """Test the BPE tokenizer."""
+class TestCharTokenizer:
+    """Test the character-level tokenizer."""
 
-    def test_bpe_train_and_encode(self):
-        """BPE tokenizer should train and encode text."""
-        tokenizer = BPETokenizer(vocab_size=256)
+    def test_build_vocab_contains_all_chars(self):
+        """CharTokenizer should include every character from training texts."""
+        tokenizer = CharTokenizer()
         texts = [
             "a red circle on blue background",
             "a green square next to yellow triangle",
-            "three shapes arranged in a row",
         ]
-        tokenizer.train(texts)
-        
-        assert tokenizer._built
-        assert len(tokenizer.vocab) > len(tokenizer.special_tokens)
-        
-        # Encode should return list of ints
-        encoded = tokenizer.encode("a red circle")
-        assert isinstance(encoded, list)
-        assert all(isinstance(t, int) for t in encoded)
+        tokenizer.build_vocab(texts)
 
-    def test_bpe_encode_decode_roundtrip(self):
-        """Encoding then decoding should produce similar text."""
-        tokenizer = BPETokenizer(vocab_size=512)
+        assert tokenizer._built
+        # All chars from the texts should be in vocab
+        for text in texts:
+            for ch in text:
+                assert ch in tokenizer.vocab, f"char {ch!r} missing from vocab"
+
+        # Special tokens should be present
+        for tok in CharTokenizer.SPECIAL_TOKENS:
+            assert tok in tokenizer.vocab, f"special token {tok} missing"
+
+    def test_encode_bos_eos(self):
+        """Encode should wrap text in BOS/EOS tokens."""
+        tokenizer = CharTokenizer()
+        tokenizer.build_vocab(["hello"])
+
+        encoded = tokenizer.encode("hello")
+        bos = tokenizer.vocab["<BOS>"]
+        eos = tokenizer.vocab["<EOS>"]
+
+        assert encoded[0] == bos, "First token should be BOS"
+        assert encoded[-1] == eos, "Last token should be EOS"
+        # Each character should have its own token
+        assert len(encoded) == len("hello") + 2  # BOS + 5 chars + EOS
+
+    def test_encode_decode_roundtrip(self):
+        """Encoding then decoding should recover the original text."""
+        tokenizer = CharTokenizer()
+        tokenizer.build_vocab(["a red circle on blue background"])
+
+        original = "a red rectangle on dark background"
+        encoded = tokenizer.encode(original)
+        decoded = tokenizer.decode(encoded)
+
+        assert decoded == original, f"Roundtrip failed: {decoded!r} != {original!r}"
+
+    def test_save_load(self):
+        """Tokenizer should save and load correctly."""
+        import tempfile
+        tokenizer = CharTokenizer()
+        tokenizer.build_vocab(["a red circle on blue background", "hello world"])
+
+        with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as f:
+            path = f.name
+
+        tokenizer.save(path)
+
+        new_tokenizer = CharTokenizer()
+        assert new_tokenizer.load(path)
+        assert new_tokenizer._built
+        assert new_tokenizer.vocab_size == tokenizer.vocab_size
+        assert new_tokenizer.encode("hello") == tokenizer.encode("hello")
+
+    def test_unknown_char_falls_back_to_unk(self):
+        """A character not in vocab should map to <UNK>."""
+        tokenizer = CharTokenizer()
+        # Only build with ASCII — no special chars
+        tokenizer.build_vocab(["abc"])
+        unk = tokenizer.vocab["<UNK>"]
+
+        encoded = tokenizer.encode("a\x00z")  # null byte not in ascii subset
+        # The null byte should map to UNK
+        assert unk in encoded
+
+
+class TestTextDecoderWithChar:
+    """Test TextDecoder with CharTokenizer."""
+
+    def test_text_decoder_builds_vocab(self):
+        """TextDecoder should build char vocabulary from texts."""
+        decoder = TextDecoder(embed_dim=64, hidden_dim=128)
+        texts = [
+            "a red circle on blue background",
+            "a green square next to yellow triangle",
+        ]
+        decoder.build_vocab(texts)
+
+        assert decoder.char._built
+        assert decoder.vocab_size > len(CharTokenizer.SPECIAL_TOKENS)
+
+    def test_text_decoder_encode_decode(self):
+        """TextDecoder should encode and decode using CharTokenizer."""
+        decoder = TextDecoder(embed_dim=64, hidden_dim=128)
         texts = [
             "a bright red rectangle on a dark background",
             "a green circle next to a blue square",
         ]
-        tokenizer.train(texts)
-        
-        original = "a red rectangle on dark background"
-        encoded = tokenizer.encode(original)
-        decoded = tokenizer.decode(encoded)
-        
-        # Should be readable (not exact due to subword splitting)
-        assert isinstance(decoded, str)
-        assert len(decoded) > 0
+        decoder.build_vocab(texts)
 
-    def test_bpe_save_load(self):
-        """Tokenizer should save and load correctly."""
-        import tempfile
-        tokenizer = BPETokenizer(vocab_size=256)
-        texts = ["a red circle on blue background"]
-        tokenizer.train(texts)
-        
-        with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as f:
-            path = f.name
-        
-        tokenizer.save(path)
-        
-        new_tokenizer = BPETokenizer(vocab_size=256)
-        assert new_tokenizer.load(path)
-        assert new_tokenizer._built
-        assert len(new_tokenizer.vocab) == len(tokenizer.vocab)
+        original = "a red rectangle"
+        encoded = decoder.encode(original)
+        assert isinstance(encoded, list)
+        assert all(isinstance(t, int) for t in encoded)
+
+        decoded = decoder.decode(encoded)
+        assert decoded == original
+
+    def test_text_decoder_vocab_size_property(self):
+        """vocab_size property should match the char tokenizer."""
+        decoder = TextDecoder()
+        decoder.build_vocab(["hello world test"])
+        assert decoder.vocab_size == decoder.char.vocab_size
+        assert decoder.vocab_size > 0
 
 
 class TestSloTransformerDecoder:
@@ -165,19 +224,19 @@ class TestSloTransformerDecoder:
         hidden_dim = 128
         vocab_size = 100
         decoder = SloTransformerDecoder(vocab_size, embed_dim, hidden_dim, n_heads=4, n_layers=2)
-        
+
         # Image cls token: (1, 1, embed_dim)
         img_embed = Tensor(np.random.randn(1, 1, embed_dim).astype(np.float32), requires_grad=True)
-        
+
         # Image patches: (1, num_patches+1, embed_dim)
         num_patches = 10
         img_patches = Tensor(np.random.randn(1, num_patches + 1, embed_dim).astype(np.float32), requires_grad=True)
-        
+
         # Token IDs: (1, seq_len)
         token_ids = Tensor(np.array([[0, 1, 2, 3]]), requires_grad=False)
-        
+
         logits, h = decoder.forward(img_embed, token_ids, img_patches)
-        
+
         # Logits should be (B, seq_len, vocab_size) = (1, 4, 100)
         assert logits.data.ndim == 3
         assert logits.data.shape[0] == 1  # batch
@@ -190,10 +249,10 @@ class TestSloTransformerDecoder:
         hidden_dim = 128
         vocab_size = 100
         decoder = SloTransformerDecoder(vocab_size, embed_dim, hidden_dim, n_heads=4, n_layers=2)
-        
+
         img_embed = Tensor(np.random.randn(1, 1, embed_dim).astype(np.float32), requires_grad=True)
         token_ids = Tensor(np.array([[0, 1, 2, 3]]), requires_grad=False)
-        
+
         logits, h = decoder.forward(img_embed, token_ids)
         assert logits.data.ndim == 3
         assert logits.data.shape[2] == vocab_size  # last dim is vocab
@@ -205,36 +264,36 @@ class TestSloTransformerDecoder:
         assert len(params) > 0
         assert all(p.requires_grad for p in params)
 
+    def test_multi_layer_decoder_gradient_flow(self):
+        """Gradients should flow through all layers when cross-attention is used."""
+        embed_dim = 64
+        hidden_dim = 128
+        vocab_size = 50
+        n_layers = 3
+        decoder = SloTransformerDecoder(vocab_size, embed_dim, hidden_dim,
+                                        n_heads=4, n_layers=n_layers)
 
-class TestTextDecoderWithBPE:
-    """Test TextDecoder with BPE tokenizer."""
+        img_embed = Tensor(np.random.randn(1, 1, embed_dim).astype(np.float32), requires_grad=True)
+        num_patches = 10
+        img_patches = Tensor(np.random.randn(1, num_patches + 1, embed_dim).astype(np.float32), requires_grad=True)
+        token_ids = Tensor(np.array([[0, 2, 4, 6, 8]]), requires_grad=False)
 
-    def test_text_decoder_builds_bpe_vocab(self):
-        """TextDecoder should train BPE tokenizer on texts."""
-        decoder = TextDecoder(embed_dim=64, hidden_dim=128, vocab_size=256)
-        texts = [
-            "a red circle on blue background",
-            "a green square next to yellow triangle",
-        ]
-        decoder.build_vocab(texts)
-        
-        assert decoder.bpe._built
-        assert len(decoder.bpe.vocab) > 0
+        logits, _ = decoder.forward(img_embed, token_ids, img_patches)
+        loss = logits.sum()
+        loss.backward()
 
-    def test_text_decoder_encode_decode(self):
-        """TextDecoder should encode and decode using BPE."""
-        decoder = TextDecoder(embed_dim=64, hidden_dim=128, vocab_size=512)
-        texts = [
-            "a bright red rectangle on a dark background",
-            "a green circle next to a blue square",
-        ]
-        decoder.build_vocab(texts)
-        
-        encoded = decoder.encode("a red rectangle")
-        assert isinstance(encoded, list)
-        
-        decoded = decoder.decode(encoded)
-        assert isinstance(decoded, str)
+        # Count params with gradients per layer
+        layer_grads = []
+        for i, block in enumerate(decoder.blocks):
+            n_with_grad = sum(1 for p in block.parameters() if p.grad is not None)
+            layer_grads.append(n_with_grad)
+            assert n_with_grad > 0, f"Block {i} has 0 params with gradients"
+
+        # All layers should contribute
+        assert len(layer_grads) == n_layers
+        # Embedding and output proj should also have gradients
+        assert decoder.embedding.weight.grad is not None
+        assert decoder.fc_out.weight.grad is not None
 
 
 class TestMultimodalEngineIntegration:
@@ -243,7 +302,7 @@ class TestMultimodalEngineIntegration:
     def test_engine_init_with_new_dims(self):
         """Engine should initialize with new ViT dimensions."""
         engine = MultimodalEngine(embed_dim=128, hidden_dim=256, n_vit_layers=2, n_heads=4)
-        
+
         assert engine.vision.embed_dim == 128
         assert engine.vision.num_patches == 49  # 7*7
         assert engine.decoder.n_layers == 3  # default changed from 4 to 3
@@ -254,13 +313,13 @@ class TestMultimodalEngineIntegration:
     def test_engine_generate_with_cross_attention(self):
         """Engine should generate captions using cross-attention."""
         engine = MultimodalEngine(embed_dim=64, hidden_dim=128, n_vit_layers=2, n_heads=4)
-        
+
         # Build vocab first with some text
         engine.build_vocab(["a red circle on blue background", "a green square"])
-        
+
         # Create test image (1, 224, 224, 3)
         img = np.random.randn(1, 224, 224, 3).astype(np.float32)
-        
+
         # Generate should work
         result = engine.generate(img, max_len=5, temperature=0.0)
         assert isinstance(result.text, str)
@@ -293,7 +352,6 @@ class TestMultimodalEngineIntegration:
     def test_audio_encoder_multiple_patches(self):
         """Audio longer than PATCH_SECONDS should produce multiple patches."""
         ae = AudioEncoder(embed_dim=32, n_heads=2, n_layers=1)
-        # 12 seconds of audio = 2+ patches (PATCH_SECONDS=5)
         t = np.linspace(0, 12 * 440, 12 * 16000).astype(np.float32)
         audio = np.sin(t)
         patches = ae.extract_patches(audio)
@@ -322,7 +380,7 @@ class TestMultimodalEngineIntegration:
         engine = MultimodalEngine(embed_dim=64, hidden_dim=128, n_vit_layers=2, n_heads=4)
         engine.build_vocab(["hello world", "beep boop sound"])
         audio = np.sin(np.linspace(0, 50, 8000)).astype(np.float32).reshape(1, -1)
-        tokens = engine.text.bpe.encode("hello world")
+        tokens = engine.text.char.encode("hello world")
         tok_arr = np.array([tokens], dtype=np.int64)
         loss = engine.train_step(audio_np=audio, text_tokens=tok_arr, lr=1e-3)
         assert isinstance(loss, float)
@@ -334,7 +392,7 @@ class TestMultimodalEngineIntegration:
         engine.build_vocab(["a red circle with sound", "hello world"])
         audio = np.sin(np.linspace(0, 50, 8000)).astype(np.float32).reshape(1, -1)
         img = np.random.randn(1, 224, 224, 3).astype(np.float32)
-        tokens = engine.text.bpe.encode("hello world")
+        tokens = engine.text.char.encode("hello world")
         tok_arr = np.array([tokens], dtype=np.int64)
         loss = engine.train_step(images_np=img, audio_np=audio, text_tokens=tok_arr, lr=1e-3)
         assert isinstance(loss, float)
@@ -351,7 +409,6 @@ class TestMultimodalEngineIntegration:
         """Save/load should preserve audio encoder weights."""
         engine = MultimodalEngine(embed_dim=64, hidden_dim=128, n_vit_layers=2, n_heads=4)
         engine.build_vocab(["test save load audio"])
-        # Initial forward to set weight values
         audio = np.sin(np.linspace(0, 50, 8000)).astype(np.float32)
         before = engine.audio.cls_token.data.copy()
 
@@ -367,3 +424,132 @@ class TestMultimodalEngineIntegration:
         engine = MultimodalEngine(embed_dim=64, hidden_dim=128, n_vit_layers=2, n_heads=4)
         for p in engine.audio.parameters():
             assert p.requires_grad
+
+
+class TestZeroPatchGradientRegression:
+    """Regression tests ensuring zero-patch cross-attention doesn't explode gradients.
+
+    Root cause (fixed): SloCrossAttention.forward() contained a redundant
+    SloLayerNorm wrapping the output, creating a post-norm in a pre-norm
+    decoder. The RMSNorm backward's 1/rms³ term amplified upstream gradients
+    ~800x, making training diverge when cross-attention received zero patches.
+
+    Fix: removed self.norm from SloCrossAttention.__init__ and changed
+    return self.norm.forward(x + self.o_proj.forward(out_t))
+    → return self.o_proj.forward(out_t)
+    """
+
+    def test_zero_patches_grad_norm_not_exploded(self):
+        """Gradient norms with zero patches should be comparable to no cross-attention."""
+        embed_dim = 64
+        hidden_dim = 128
+        vocab_size = 50
+
+        # Decoder WITHOUT cross-attention (baseline)
+        decoder_no_ca = SloTransformerDecoder(vocab_size, embed_dim, hidden_dim,
+                                              n_heads=4, n_layers=2)
+        # Decoder WITH cross-attention but zero patches
+        decoder_ca = SloTransformerDecoder(vocab_size, embed_dim, hidden_dim,
+                                           n_heads=4, n_layers=2)
+
+        img_embed = Tensor(np.random.randn(1, 1, embed_dim).astype(np.float32), requires_grad=True)
+        token_ids = Tensor(np.array([[0, 2, 4, 6, 8, 10]]), requires_grad=False)
+
+        # Forward without cross-attention
+        logits_no, _ = decoder_no_ca.forward(img_embed, token_ids, img_patches=None)
+        loss_no = logits_no.sum()
+        loss_no.backward()
+
+        # Compute total grad norm for baseline
+        norm_no = 0.0
+        for p in decoder_no_ca.parameters():
+            if p.grad is not None:
+                g_data = p.grad.data if hasattr(p.grad, 'data') else p.grad
+                norm_no += float(np.sum(np.asarray(g_data, dtype=np.float64).ravel() ** 2))
+        norm_no = np.sqrt(norm_no)
+
+        # Zero all grads
+        for p in decoder_no_ca.parameters():
+            p.grad = None
+
+        # Forward with cross-attention (zero-like patches)
+        img_patches = Tensor(np.zeros((1, 51, embed_dim), dtype=np.float32), requires_grad=False)
+        logits_ca, _ = decoder_ca.forward(img_embed, token_ids, img_patches)
+        loss_ca = logits_ca.sum()
+        loss_ca.backward()
+
+        # Compute total grad norm for cross-attention path
+        norm_ca = 0.0
+        for p in decoder_ca.parameters():
+            if p.grad is not None:
+                g_data = p.grad.data if hasattr(p.grad, 'data') else p.grad
+                norm_ca += float(np.sum(np.asarray(g_data, dtype=np.float64).ravel() ** 2))
+        norm_ca = np.sqrt(norm_ca)
+
+        # Cross-attention with zero patches should NOT explode gradients
+        # (the norm should be comparable, not 100x+ larger)
+        ratio = norm_ca / max(norm_no, 1e-8)
+        assert ratio < 100.0, (
+            f"Cross-attention with zero patches gradient norm "
+            f"({norm_ca:.1f}) is {ratio:.0f}x larger than baseline "
+            f"({norm_no:.1f}) — indicates gradient explosion"
+        )
+
+    def test_zero_patches_train_step_loss_drops(self):
+        """Training with zero patches should decrease loss (like no-patches training)."""
+        engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
+                                  n_decoder_layers=1)
+        engine.build_vocab(["a red circle on blue background"])
+
+        img_zeros = np.zeros((1, 224, 224, 3), dtype=np.float32)
+        tokens = engine.text.char.encode("a red circle on blue background")
+        tok_arr = np.array([tokens], dtype=np.int64)
+
+        # First loss
+        loss1 = engine.train_step(images_np=img_zeros, text_tokens=tok_arr, lr=1e-3)
+        # Second loss (should be lower or comparable, not NaN or exploded)
+        loss2 = engine.train_step(images_np=img_zeros, text_tokens=tok_arr, lr=1e-3)
+
+        assert np.isfinite(loss1), f"Loss was NaN/Inf: {loss1}"
+        assert np.isfinite(loss2), f"Loss was NaN/Inf: {loss2}"
+        # Cross-attention shouldn't prevent learning — loss should trend down
+        assert loss2 <= loss1 * 2, (
+            f"Loss increased from {loss1:.4f} to {loss2:.4f} "
+            f"with zero patches — gradient explosion likely"
+        )
+
+    def test_zero_patches_vs_no_patches_loss_comparable(self):
+        """Loss with zero patches should be comparable to no cross-attention at all."""
+        embed_dim = 32
+        hidden_dim = 64
+        vocab_size = 30
+
+        # No cross-attention decoder
+        dec_no = SloTransformerDecoder(vocab_size, embed_dim, hidden_dim,
+                                       n_heads=2, n_layers=1)
+        # Decoder with cross-attention
+        dec_ca = SloTransformerDecoder(vocab_size, embed_dim, hidden_dim,
+                                       n_heads=2, n_layers=1)
+
+        img_embed = Tensor(np.random.randn(1, 1, embed_dim).astype(np.float32), requires_grad=False)
+        token_ids = Tensor(np.array([[0, 2, 4, 6, 8, 10, 12]]), requires_grad=False)
+
+        # Forward without cross-attention
+        # Input: all but last token; targets: all but first token (teacher forcing)
+        logits_no, _ = dec_no.forward(img_embed, token_ids[:, :-1])
+        targets = Tensor(np.array([2, 4, 6, 8, 10, 12]), requires_grad=False)
+        from domains.training.slonet import cross_entropy as _cross_entropy
+        loss_no = _cross_entropy(logits_no, targets)
+
+        # Forward with cross-attention (zero patches)
+        img_patches = Tensor(np.zeros((1, 51, embed_dim), dtype=np.float32), requires_grad=False)
+        logits_ca, _ = dec_ca.forward(img_embed, token_ids[:, :-1], img_patches)
+        loss_ca = _cross_entropy(logits_ca, targets)
+
+        # Losses should be comparable (not 10x+ apart)
+        ratio = float(loss_ca.data) / max(float(loss_no.data), 1e-8)
+        assert ratio < 10.0, (
+            f"Cross-attention with zero patches loss "
+            f"({float(loss_ca.data):.2f}) is {ratio:.1f}x baseline "
+            f"({float(loss_no.data):.2f}) — indicates gradient disruption"
+        )

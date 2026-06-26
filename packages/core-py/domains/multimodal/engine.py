@@ -22,7 +22,7 @@ from domains.training.slonet import (
     zeros, ones,
 )
 
-from .bpe_tokenizer import BPETokenizer
+from .char_tokenizer import CharTokenizer
 
 
 @dataclass
@@ -32,25 +32,32 @@ class MultimodalOutput:
 
 
 class TextDecoder:
-    """Learns its own BPE vocabulary and generates text from image embeddings."""
+    """Learns a character-level vocabulary and generates text from image embeddings.
 
-    def __init__(self, embed_dim=256, hidden_dim=512, vocab_size=512):
+    Uses CharTokenizer — simple, deterministic, produces consistent token
+    lengths (one token per character). Ideal for small-vocabulary debugging.
+    """
+
+    def __init__(self, embed_dim=256, hidden_dim=512):
         self.embed_dim = embed_dim
         self.hidden_dim = hidden_dim
-        self.vocab_size = vocab_size
-        self.bpe = BPETokenizer(vocab_size=vocab_size)
+        self.char = CharTokenizer()
 
     def build_vocab(self, texts: List[str]):
-        """Build BPE vocabulary from training texts."""
-        self.bpe.train(texts)
+        """Build character vocabulary from training texts."""
+        self.char.build_vocab(texts)
 
     def encode(self, text: str) -> List[int]:
-        """Encode text using BPE tokenizer."""
-        return self.bpe.encode(text)
+        """Encode text using char tokenizer."""
+        return self.char.encode(text)
 
     def decode(self, token_ids: List[int]) -> str:
-        """Decode token IDs back to text using BPE."""
-        return self.bpe.decode(token_ids)
+        """Decode token IDs back to text using char tokenizer."""
+        return self.char.decode(token_ids)
+
+    @property
+    def vocab_size(self) -> int:
+        return self.char.vocab_size
 
 
 class MultimodalEngine:
@@ -141,9 +148,9 @@ class MultimodalEngine:
 
     def embed(self, text: str):
         """Image caption → embedding (identity, since captions ARE embeddings here)."""
-        if not self._trained or not self.text.bpe._built:
+        if not self._trained or not self.text.char._built:
             return [0.0] * 128
-        tokens = self.text.bpe.encode(text)
+        tokens = self.text.char.encode(text)
         if not tokens:
             return [0.0] * 128
         vec = [0.0] * 128
@@ -153,16 +160,16 @@ class MultimodalEngine:
     @property
     def metadata(self):
         return {
-            "vocab_size": len(self.text.bpe.vocab) if self.text.bpe._built else 0,
+            "vocab_size": self.text.vocab_size,
             "trained": self._trained,
             "embed_dim": self.vision.embed_dim,
         }
 
     def build_vocab(self, texts: List[str]):
         self.text.build_vocab(texts)
-        bpe_vocab_size = len(self.text.bpe.vocab)
+        char_vocab_size = self.text.vocab_size
         self.decoder = SloTransformerDecoder(
-            vocab_size=bpe_vocab_size,
+            vocab_size=char_vocab_size,
             embed_dim=self.text.embed_dim,
             hidden_dim=self.decoder.hidden_dim,
             n_heads=self.decoder.n_heads,
@@ -199,9 +206,7 @@ class MultimodalEngine:
         np.savez_compressed(path, **weights)
 
         meta = {
-            "bpe_vocab": self.text.bpe.vocab,
-            "bpe_merges": self.text.bpe.merges,
-            "bpe_vocab_size": self.text.bpe.vocab_size,
+            "char_vocab": [c for c in self.text.char.vocab if c not in set(CharTokenizer.SPECIAL_TOKENS)],
             "embed_dim": self.vision.embed_dim,
             "hidden_dim": self.decoder.hidden_dim,
             "n_vit_layers": len(self.vision.blocks),
@@ -245,15 +250,12 @@ class MultimodalEngine:
             n_decoder_layers=n_decoder_layers,
             n_audio_layers=n_audio_layers,
         )
-        # Restore BPE tokenizer
-        engine.text.bpe.vocab = meta["bpe_vocab"]
-        engine.text.bpe.merges = [tuple(m) for m in meta.get("bpe_merges", [])]
-        engine.text.bpe.vocab_size = meta.get("bpe_vocab_size", engine.text.vocab_size)
-        engine.text.bpe.itos = {i: tok for tok, i in engine.text.bpe.vocab.items()}
-        engine.text.bpe._built = True
-        bpe_vocab_size = len(engine.text.bpe.vocab)
+        # Restore char tokenizer
+        chars = meta.get("char_vocab", [])
+        engine.text.char.build_vocab(chars or ["a", "b", "c"])
+        char_vocab_size = engine.text.vocab_size
         engine.decoder = SloTransformerDecoder(
-            vocab_size=bpe_vocab_size,
+            vocab_size=char_vocab_size,
             embed_dim=embed_dim,
             hidden_dim=hidden_dim,
             n_heads=n_heads,

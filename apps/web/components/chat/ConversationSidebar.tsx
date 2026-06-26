@@ -146,9 +146,17 @@ function SidebarContent({
             No conversations yet. Click + New to start.
           </p>
         ) : q && filtered.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-8 px-3">
-            No conversations match &ldquo;{q}&rdquo;
-          </p>
+          <div className="text-center py-6 px-3 space-y-3">
+            <p className="text-xs text-muted-foreground">
+              No conversations match &ldquo;{q}&rdquo;
+            </p>
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('search-conversations'))}
+              className="text-xs text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
+            >
+              Search all conversations
+            </button>
+          </div>
         ) : (
           <>
             {starred.length > 0 && (
