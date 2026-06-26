@@ -68,7 +68,9 @@ export default function ChatPage() {
   const [createStyle, setCreateStyle] = useState('Realistic')
   const [readFileData, setReadFileData] = useState<{ text: string; filename: string; pages: number } | null>(null)
   const [readLoading, setReadLoading] = useState(false)
-  const [customSystemPrompt, setCustomSystemPrompt] = useState('')
+  const [customSystemPrompt, setCustomSystemPrompt] = useState(() => {
+    try { return localStorage.getItem('chat:customSystemPrompt') || '' } catch { return '' }
+  })
   const [systemPromptOpen, setSystemPromptOpen] = useState(false)
 
   const chat = useChatMessages({
@@ -224,6 +226,11 @@ export default function ChatPage() {
   const healthValue = useChatHealthValue({ health, refreshHealth })
   const modelValue = useChatModelValue({ model, agents, vision, chat, showToast })
   const uiValue = useChatUIValue({ ui, showToast })
+
+  const handleSaveSystemPrompt = useCallback((value: string) => {
+    setCustomSystemPrompt(value)
+    try { localStorage.setItem('chat:customSystemPrompt', value) } catch {}
+  }, [])
 
   const handleWriteSend = useCallback(async () => {
     if (chatMode === 'write' && chat.input.trim()) {
@@ -542,7 +549,7 @@ export default function ChatPage() {
         open={systemPromptOpen}
         onOpenChange={setSystemPromptOpen}
         value={customSystemPrompt}
-        onSave={setCustomSystemPrompt}
+        onSave={handleSaveSystemPrompt}
       />
     </div>
     </ChatProvider>
