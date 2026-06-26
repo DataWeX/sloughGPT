@@ -818,6 +818,120 @@ async def start_hf_training(request: HFTrainingRequest):
 
 
 
+# ── Visual Training ────────────────────────────────────────────────
+
+
+class VisualTrainRequest(BaseModel):
+    dataset: str
+    vision_encoder: str = "slonet"
+    llm: str = "gpt2"
+    connector_hidden_dim: int = 512
+    max_seq_length: int = 128
+    stage1_epochs: int = 5
+    stage2_epochs: int = 10
+    stage1_lr: float = 5e-4
+    stage2_lr: float = 2e-4
+    batch_size: int = 4
+    use_lora: bool = False
+    lora_rank: int = 8
+    freeze_vision: bool = True
+    name: str | None = None
+
+
+@router.post("/training/visual-start")
+async def start_visual_training(request: VisualTrainRequest):
+    """Start a vision-language model (VLM) fine-tune on a visual dataset.
+
+    Uses the video trainer's VideoCaptionTrainer on an image-caption
+    dataset, running stage-1 connector tuning then stage-2 full fine-tune.
+    """
+    import uuid
+    job_id = str(uuid.uuid4())[:8]
+
+    datasets_dir = Path(__file__).resolve().parents[4] / "datasets"
+    data_path = datasets_dir / request.dataset
+    if not data_path.exists():
+        data_path = datasets_dir / f"{request.dataset}.jsonl"
+    if not data_path.exists():
+        raise HTTPException(status_code=400, detail=f"Dataset not found: {request.dataset}")
+    data_path_str = str(data_path)
+
+    out_stem = request.name or f"vlm_{job_id}"
+    output_dir = Path("models/video-training/checkpoints")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    job: dict[str, Any] = {
+        "id": job_id,
+        "name": request.name or f"VLM-{job_id}",
+        "model": f"{request.vision_encoder}+{request.llm}",
+        "dataset": request.dataset,
+        "status": "queued",
+        "progress": 0,
+        "epochs": request.stage1_epochs + request.stage2_epochs,
+        "current_epoch": 0,
+        "global_step": 0,
+        "loss": None,
+        "error": None,
+        "result": None,
+        "loss_history": [],
+    }
+    training_jobs[job_id] = job
+
+    def run_visual_training() -> None:
+        try:
+            from domains.training.video_trainer import VideoCaptionTrainer
+
+            trainer = VideoCaptionTrainer()
+            trainer.build_vocab()
+
+            def on_progress(info: dict[str, Any]) -> None:
+                rec = training_jobs.get(job_id)
+                if not rec:
+                    return
+                rec["current_epoch"] = info.get("epoch", 0)
+                rec["global_step"] = info.get("step", 0)
+                loss = info.get("loss")
+                if loss is not None:
+                    rec["loss"] = float(loss)
+                    rec.setdefault("loss_history", []).append(
+                        {"step": info.get("step", 0), "value": float(loss)}
+                    )
+                rec["progress"] = info.get("progress", rec.get("progress", 0))
+
+            result = trainer.train(
+                data_path=data_path_str,
+                epochs=request.stage1_epochs + request.stage2_epochs,
+                batch_size=request.batch_size,
+                learning_rate=request.stage1_lr,
+                on_progress=on_progress,
+                output_dir=str(output_dir),
+            )
+
+            training_jobs[job_id]["status"] = "completed"
+            training_jobs[job_id]["progress"] = 100
+            training_jobs[job_id]["result"] = result
+
+            # Save checkpoint
+            ckpt_path = output_dir / f"{out_stem}.npz"
+            trainer.save_checkpoint(str(ckpt_path))
+            training_jobs[job_id]["checkpoint"] = str(ckpt_path)
+
+        except Exception as exc:
+            logger.exception("Visual training job %s failed", job_id)
+            if job_id in training_jobs:
+                training_jobs[job_id]["status"] = "failed"
+                training_jobs[job_id]["error"] = str(exc)
+
+    thread = threading.Thread(target=run_visual_training, daemon=True)
+    thread.start()
+
+    return {
+        "job_id": job_id,
+        "status": "queued",
+        "message": f"Visual training started on {request.dataset}",
+    }
+
+
 @router.post("/training/quick")
 async def quick_train(request: QuickTrainRequest):
     """One-click training: pick a dataset, we handle everything.

@@ -1768,7 +1768,6 @@ class SloCrossAttention(SloLayer):
         self.k_proj = SloLinear(d_model, d_model, name=name + "_k")
         self.v_proj = SloLinear(d_model, d_model, name=name + "_v")
         self.o_proj = SloLinear(d_model, d_model, name=name + "_o")
-        self.norm = SloLayerNorm(d_model, name=name + "_norm")
         self.soul_traits = {"curiosity": 0.5, "creativity": 0.5}
 
     def forward(self, x: Tensor, context: Tensor, mask: Optional[Tensor] = None) -> Tensor:
@@ -1816,12 +1815,11 @@ class SloCrossAttention(SloLayer):
                 V.grad = Tensor(g_V) if V.grad is None else V.grad + Tensor(g_V)
 
         out_t._backward_fn = bk
-        return self.norm.forward(x + self.o_proj.forward(out_t))
+        return self.o_proj.forward(out_t)
 
     def parameters(self) -> List[Tensor]:
         return (self.q_proj.parameters() + self.k_proj.parameters() +
-                self.v_proj.parameters() + self.o_proj.parameters() +
-                self.norm.parameters())
+                self.v_proj.parameters() + self.o_proj.parameters())
 
 
 class SloFeedForward(SloLayer):

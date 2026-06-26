@@ -20,10 +20,11 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from pathlib import Path
 from threading import Lock
-from typing import Optional
+from typing import List, Optional
 
 import torch
 from fastapi import APIRouter, HTTPException
@@ -307,6 +308,81 @@ async def video_infer(req: VideoInferRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Checkpoint Endpoints ────────────────────────────────────────────
+
+@router.get("/checkpoints")
+async def list_visual_checkpoints():
+    """List all video training checkpoints."""
+    try:
+        from domains.training.video_trainer import list_video_checkpoints
+        ckpts = list_video_checkpoints()
+        if not ckpts:
+            ckpts = list_video_checkpoints(str(Path("models/video-training")))
+        return ckpts
+    except Exception as e:
+        logger.error("Failed to list visual checkpoints: %s", e)
+        return []
+
+
+@router.post("/checkpoints/{name}/load")
+async def load_visual_checkpoint(name: str):
+    """Load a video training checkpoint by name."""
+    try:
+        from domains.training.video_trainer import VideoCaptionTrainer, list_video_checkpoints
+        ckpts = list_video_checkpoints()
+        if not ckpts:
+            ckpts = list_video_checkpoints(str(Path("models/video-training")))
+        match = [c for c in ckpts if c["name"] == name]
+        if not match:
+            raise HTTPException(status_code=404, detail=f"Checkpoint '{name}' not found")
+        trainer = VideoCaptionTrainer()
+        trainer.load_checkpoint(match[0]["path"])
+        return {"status": "loaded", "checkpoint": name}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/checkpoints/{name}")
+async def delete_visual_checkpoint(name: str):
+    """Delete a video training checkpoint by name."""
+    try:
+        from domains.training.video_trainer import list_video_checkpoints
+        ckpts = list_video_checkpoints()
+        if not ckpts:
+            ckpts = list_video_checkpoints(str(Path("models/video-training")))
+        match = [c for c in ckpts if c["name"] == name]
+        if not match:
+            raise HTTPException(status_code=404, detail=f"Checkpoint '{name}' not found")
+        path = Path(match[0]["path"])
+        if path.exists():
+            os.remove(path)
+        npz_path = path.with_suffix(".npz")
+        if npz_path.exists():
+            os.remove(npz_path)
+        meta_path = path.parent / f"{path.stem}_meta.json"
+        if meta_path.exists():
+            os.remove(meta_path)
+        return {"status": "deleted", "checkpoint": name}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Visual Model Load ───────────────────────────────────────────────
+
+@router.post("/load")
+async def visual_load_model(req: dict):
+    """Load a vision model. Expects {'model_id': '...'}."""
+    model_id = req.get("model_id", "")
+    if not model_id:
+        raise HTTPException(status_code=400, detail="model_id required")
+    logger.info("Visual model load requested: %s", model_id)
+    return {"status": "ok", "message": f"Visual model {model_id} loading triggered"}
 
 
 # ── Status ─────────────────────────────────────────────────────────

@@ -410,3 +410,21 @@ async def cache_usage() -> Dict[str, Any]:
         "model_count": count,
         "cache_dir": str(cache),
     }
+
+
+@router.post("/visual-load")
+async def visual_model_load(model_dir: str = "", model_id: str = ""):
+    """Load a vision / multimodal model from a local directory.
+
+    ``model_dir`` — path to the model directory on disk.
+    ``model_id``  — HuggingFace model identifier (used when `model_dir` is empty).
+    """
+    logger.info("Visual model load requested: dir=%s, id=%s", model_dir, model_id)
+    ctrl = get_models_controller()
+    if model_dir:
+        result = ctrl.load_model_path(model_dir)
+    elif model_id:
+        result = ctrl.load_model(model_id)
+    else:
+        raise HTTPException(status_code=400, detail="Either model_dir or model_id required")
+    return {"status": result.get("status", "ok"), "message": str(result)}

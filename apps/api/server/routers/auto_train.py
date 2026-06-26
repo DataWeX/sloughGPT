@@ -14,6 +14,7 @@ mutable globals.
 from dataclasses import dataclass, field
 import threading
 from typing import Optional
+from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi import Request
@@ -878,6 +879,22 @@ async def load_checkpoint(name: str):
         import traceback
         autotrain_logger.error("Failed to load checkpoint %s: %s", cp.name, e, extra={"context": {"checkpoint": cp.name, "error": str(e), "traceback": traceback.format_exc()}})
         return {"status": "error", "name": cp.name, "error": str(e)}
+
+
+@router.get("/log")
+async def auto_train_log():
+    """Return the auto-training log content, if available."""
+    log_path = Path("logs/auto_train.log")
+    if log_path.exists():
+        text = log_path.read_text()
+        lines = text.splitlines()
+        return {"lines": lines[-200:], "total": len(lines)}
+    alt = Path("models/auto-training/train.log")
+    if alt.exists():
+        text = alt.read_text()
+        lines = text.splitlines()
+        return {"lines": lines[-200:], "total": len(lines)}
+    return {"lines": [], "total": 0}
 
 
 @router.get("/checkpoints/{name}/download")

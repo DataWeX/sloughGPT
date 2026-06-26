@@ -999,6 +999,19 @@ async def delete_session(session_id: str):
     raise HTTPException(status_code=404, detail="Session not found")
 
 
+@router.get("/suggestions")
+async def chat_suggestions():
+    """Return a set of contextual chat suggestions."""
+    return [
+        "What can you help me with?",
+        "Tell me about yourself",
+        "Write a short poem",
+        "Explain quantum computing simply",
+        "Help me debug my code",
+        "Summarize a topic for me",
+    ]
+
+
 @router.get("/providers")
 async def list_model_providers():
     """List all registered model providers with capabilities."""

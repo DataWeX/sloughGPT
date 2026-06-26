@@ -1,16 +1,20 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/tags'
 import { StatCard, KpiGrid, Skeleton } from '@/components/ui/display'
+import { Chip } from '@/components/ui/tags'
+import { Input, Textarea } from '@/components/ui'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { IconRefresh, IconTrash, IconCheck } from '@/components/ui'
+import { IconRefresh, IconTrash, IconCheck, IconSend, IconBrain, IconCopy, IconX } from '@/components/ui'
+import { Spinner } from '@/components/ui/specialized'
 import { cn } from '@/lib/cn'
 import { modelController } from '@/lib/model-controller'
 import { benchmarkController, type BenchmarkResult } from '@/lib/benchmark-controller'
+import { generateController } from '@/lib/generate-controller'
 import { useToastStore } from '@/lib/toast-store'
 
 interface ModelEntry {
@@ -18,6 +22,14 @@ interface ModelEntry {
   name: string
   loaded: boolean
   sizeGb?: number
+}
+
+interface OutputResult {
+  model: string
+  text: string
+  tokens: number
+  elapsedMs: number
+  error?: string
 }
 
 export default function ComparePage() {
@@ -101,6 +113,64 @@ export default function ComparePage() {
       }))
       .sort((a, b) => b.throughput - a.throughput)
   }, [completedResults, models])
+
+  const [selectedForOutput, setSelectedForOutput] = useState<Set<string>>(new Set())
+  const [outputPrompt, setOutputPrompt] = useState('')
+  const [outputResults, setOutputResults] = useState<Record<string, OutputResult>>({})
+  const [outputLoading, setOutputLoading] = useState(false)
+  const [outputExpanded, setOutputExpanded] = useState<Set<string>>(new Set())
+
+  const toggleOutputModel = (id: string) => {
+    setSelectedForOutput(prev => {
+      const n = new Set(prev)
+      if (n.has(id)) n.delete(id); else n.add(id)
+      return n
+    })
+  }
+
+  const runOutputComparison = useCallback(async () => {
+    if (!outputPrompt.trim() || selectedForOutput.size < 1) return
+    setOutputLoading(true)
+    setOutputResults({})
+    const prompt = outputPrompt.trim()
+    const startTime = Date.now()
+    const promises = Array.from(selectedForOutput).map(async (modelId) => {
+      const reqStart = Date.now()
+      try {
+        const res = await generateController.generate({ prompt, model: modelId, max_new_tokens: 128 })
+        return {
+          model: modelId,
+          text: res.text || '(empty response)',
+          tokens: res.tokens_generated ?? 0,
+          elapsedMs: Date.now() - reqStart,
+        } as OutputResult
+      } catch (e: any) {
+        return {
+          model: modelId,
+          text: '',
+          tokens: 0,
+          elapsedMs: Date.now() - reqStart,
+          error: String(e?.message || e),
+        } as OutputResult
+      }
+    })
+    const results = await Promise.all(promises)
+    const map: Record<string, OutputResult> = {}
+    for (const r of results) map[r.model] = r
+    setOutputResults(map)
+    setOutputLoading(false)
+  }, [outputPrompt, selectedForOutput])
+
+  const copyOutputResult = (text: string) => {
+    navigator.clipboard.writeText(text)
+    addToast('Copied to clipboard', 'success')
+  }
+
+  const clearOutputComparison = () => {
+    setOutputResults({})
+    setOutputPrompt('')
+    setOutputExpanded(new Set())
+  }
 
   const metricColumns: {
     label: string
@@ -305,6 +375,117 @@ export default function ComparePage() {
         )}
 
         {/* Chart view */}
+        {/* Output Comparison — side-by-side model responses */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Output Comparison</CardTitle>
+              {Object.keys(outputResults).length > 0 && (
+                <Button variant="ghost" size="sm" onClick={clearOutputComparison}>
+                  <IconX className="h-3.5 w-3.5 mr-1" />
+                  Clear
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Textarea
+              value={outputPrompt}
+              onChange={e => setOutputPrompt(e.target.value)}
+              placeholder="Enter a prompt to compare model outputs..."
+              className="min-h-[80px] text-sm"
+              aria-label="Comparison prompt"
+            />
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-muted-foreground mr-1">Models:</span>
+              {models.map(m => (
+                <Chip
+                  key={m.id}
+                  label={m.name}
+                  selected={selectedForOutput.has(m.id)}
+                  onClick={() => toggleOutputModel(m.id)}
+                />
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={runOutputComparison}
+                disabled={outputLoading || !outputPrompt.trim() || selectedForOutput.size < 1}
+              >
+                  {outputLoading ? (
+                  <><Spinner size="sm" className="mr-1" /> Generating…</>
+                ) : (
+                  <><IconSend className="h-3.5 w-3.5 mr-1" /> Compare</>
+                )}
+              </Button>
+              {outputLoading && (
+                <span className="text-xs text-muted-foreground animate-pulse">
+                  Querying {selectedForOutput.size} model{selectedForOutput.size !== 1 ? 's' : ''}…
+                </span>
+              )}
+            </div>
+            {Object.keys(outputResults).length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                {Object.entries(outputResults).map(([modelId, r]) => {
+                  const modelName = models.find(m => m.id === modelId)?.name || modelId
+                  const isExpanded = outputExpanded.has(modelId)
+                  const textLen = r.text.length
+                  const truncated = textLen > 300 && !isExpanded
+                  return (
+                    <div
+                      key={modelId}
+                      className={cn(
+                        "rounded-lg border p-3 space-y-2",
+                        r.error ? "border-destructive/30 bg-destructive/5" : "border-border/60 bg-card/50"
+                      )}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <IconBrain className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-sm font-medium">{modelName}</span>
+                          {r.error ? (
+                            <Badge label="Error" variant="error" size="sm" />
+                          ) : (
+                            <Badge label={`${r.tokens} tok`} variant="default" size="sm" />
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-muted-foreground">{(r.elapsedMs / 1000).toFixed(1)}s</span>
+                          {!r.error && (
+                            <Button variant="ghost" size="icon-sm" className="h-6 w-6" onClick={() => copyOutputResult(r.text)} aria-label="Copy response">
+                              <IconCopy className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      {r.error ? (
+                        <p className="text-xs text-destructive">{r.error}</p>
+                      ) : (
+                        <div>
+                          <p className="text-xs leading-relaxed whitespace-pre-wrap">
+                            {truncated ? r.text.slice(0, 300) + '…' : r.text}
+                          </p>
+                          {truncated && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 text-xs mt-1 px-0"
+                              onClick={() => setOutputExpanded(prev => { const n = new Set(prev); n.add(modelId); return n })}
+                            >
+                              Show all ({textLen} chars)
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {completedResults.length >= 2 && (
           <Card>
             <CardHeader>

@@ -520,3 +520,66 @@ async def synthesize_speech(text: str = Form(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)}")
 
+
+# ── Visual Dataset ─────────────────────────────────────────────────
+
+class VisualDatasetRequest(BaseModel):
+    name: str
+    image_dir: str
+    caption_prompt: str = "Describe this image in detail."
+    auto_caption: bool = True
+
+
+@router.post("/visual-dataset")
+async def create_visual_dataset(req: VisualDatasetRequest):
+    """Create a visual training dataset from a directory of images.
+
+    Scans ``image_dir`` for image files, optionally auto-captions them
+    using the multimodal manager, and saves a JSONL dataset.
+    """
+    image_dir = Path(req.image_dir)
+    if not image_dir.exists():
+        raise HTTPException(status_code=400, detail=f"Image directory not found: {req.image_dir}")
+
+    extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+    image_files = sorted([f for f in image_dir.iterdir() if f.suffix.lower() in extensions])
+    if not image_files:
+        raise HTTPException(status_code=400, detail=f"No image files found in {req.image_dir}")
+
+    datasets_dir = Path(__file__).resolve().parents[4] / "datasets"
+    datasets_dir.mkdir(parents=True, exist_ok=True)
+    output_path = datasets_dir / f"{req.name}.jsonl"
+
+    entries = 0
+    auto_captioned = False
+
+    if req.auto_caption:
+        try:
+            mgr = _ensure_initialized()
+            auto_captioned = True
+        except Exception:
+            auto_captioned = False
+
+    with open(output_path, "w") as f:
+        for img_path in image_files:
+            entry = {"image_path": str(img_path), "caption": ""}
+            if req.auto_caption and auto_captioned:
+                try:
+                    caps = mgr.caption_image(str(img_path))
+                    if caps:
+                        entry["caption"] = caps[0].text
+                except Exception:
+                    entry["caption"] = ""
+            f.write(json.dumps(entry) + "\n")
+            entries += 1
+
+    logger.info("Created visual dataset: %s (%d entries)", req.name, entries)
+
+    return {
+        "status": "created",
+        "dataset": req.name,
+        "path": str(output_path),
+        "entries": entries,
+        "auto_captioned": auto_captioned,
+    }
+
