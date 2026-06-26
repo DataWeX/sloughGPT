@@ -221,24 +221,4 @@ class UnifiedStartRequest(BaseModel):
     device: str = "auto"
 
 
-class VisualTrainingRequest(BaseModel):
-    """Train a vision-language model on image-text pairs.
-
-    Uses VLMTrainer to train a vision encoder + LLM connector
-    in two stages. The ``dataset`` field must match a folder
-    under ``datasets/`` containing JSONL with image_path/caption pairs.
-    """
-
-    dataset: str
-    vision_encoder: str = "google/siglip-base-patch16-224"
-    llm: str = "Qwen/Qwen2.5-0.5B-Instruct"
-    stage1_epochs: int = 1
-    stage2_epochs: int = 2
-    use_lora: bool = True
-    batch_size: int = 4
-    learning_rate: float = 1e-3
-    lora_rank: int = 8
-    name: str = ""
-
-
 

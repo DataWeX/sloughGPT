@@ -96,6 +96,7 @@ const createContextValue = (overrides: Partial<ChatToolbarContextValue> = {}): C
     onExportMarkdown: vi.fn(),
     onCopyMarkdown: vi.fn(),
     onSaveAsDataset: vi.fn(),
+    onSystemPrompt: vi.fn(),
     hasMessages: false,
     messageCount: 0,
   },

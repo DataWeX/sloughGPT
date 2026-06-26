@@ -33,6 +33,7 @@ function makeCtx(overrides: Partial<ChatToolbarContextValue['actions']> = {}): C
     onExportMarkdown: vi.fn(),
     onCopyMarkdown: undefined,
     onSaveAsDataset: undefined,
+    onSystemPrompt: vi.fn(),
     hasMessages: true,
     messageCount: 0,
     ...overrides,
@@ -121,5 +122,19 @@ describe('ChatMoreMenu', () => {
     fireEvent.click(screen.getByLabelText('More options'))
     fireEvent.click(screen.getByText('Tools Panel'))
     expect(onToggleTools).toHaveBeenCalled()
+  })
+
+  it('shows System Prompt menu item', () => {
+    renderWithCtx()
+    fireEvent.click(screen.getByLabelText('More options'))
+    expect(screen.getByText('System Prompt')).toBeDefined()
+  })
+
+  it('calls onSystemPrompt when System Prompt selected', () => {
+    const onSystemPrompt = vi.fn()
+    renderWithCtx({ onSystemPrompt })
+    fireEvent.click(screen.getByLabelText('More options'))
+    fireEvent.click(screen.getByText('System Prompt'))
+    expect(onSystemPrompt).toHaveBeenCalled()
   })
 })

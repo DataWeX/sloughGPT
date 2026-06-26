@@ -13,6 +13,7 @@ interface StreamChatParams {
   images?: string[]
   signal?: AbortSignal
   agentId?: string
+  knowledge?: string[]
   onToken: (token: string) => void
   onComplete: () => void
   onError: (status: number, text?: string) => void
@@ -39,6 +40,7 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
       user_id: userId,
       session_id: sessionId,
       images,
+      knowledge: params.knowledge,
       agent_id: params.agentId || undefined,
     }),
     signal,

@@ -27,6 +27,7 @@ interface UseChatToolbarValueConfig {
   handleSelectAgentWithToast: (agent: any) => void
   modelDescriptions: Record<string, string>
   showToast: (message: string, type?: string) => void
+  onSystemPrompt: () => void
 }
 
 export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatToolbarContextValue {
@@ -97,6 +98,7 @@ export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatTool
       onToggleTools: () => ui.setToolPanelOpen(prev => !prev),
       onExportMarkdown: chat.handleExportMarkdown,
       onCopyMarkdown: chat.handleCopyMarkdown,
+      onSystemPrompt: config.onSystemPrompt,
       onSaveAsDataset: async () => {
         try {
           const msgs = chat.messages

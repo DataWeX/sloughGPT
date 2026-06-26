@@ -29,10 +29,13 @@ import { ChatToolbar } from '@/components/chat/ChatToolbar'
 import { ChatToolPanel } from '@/components/chat/ChatToolPanel'
 import { ConversationSidebar } from '@/components/chat/ConversationSidebar'
 import { DownloadDialog } from '@/components/chat/DownloadDialog'
+import { SystemPromptDialog } from '@/components/chat/SystemPromptDialog'
 import { ChatProvider } from '@/contexts/ChatContext'
 import { ChatToolbarProvider } from '@/contexts/ChatToolbarContext'
 import { useChatToolbarValue } from '@/hooks/useChatToolbarValue'
 import { useChatHealthValue, useChatModelValue, useChatUIValue } from '@/hooks/useChatContextValue'
+
+import { Button } from '@/components/ui/button'
 
 const VoiceChatMode = dynamic(() => import('@/components/chat/VoiceChatMode').then(m => m.VoiceChatMode), { ssr: false })
 const ConversationViewer = dynamic(() => import('@/components/chat/ConversationViewer').then(m => m.ConversationViewer), { ssr: false })
@@ -65,6 +68,8 @@ export default function ChatPage() {
   const [createStyle, setCreateStyle] = useState('Realistic')
   const [readFileData, setReadFileData] = useState<{ text: string; filename: string; pages: number } | null>(null)
   const [readLoading, setReadLoading] = useState(false)
+  const [customSystemPrompt, setCustomSystemPrompt] = useState('')
+  const [systemPromptOpen, setSystemPromptOpen] = useState(false)
 
   const chat = useChatMessages({
     model: model.model,
@@ -80,6 +85,7 @@ export default function ChatPage() {
     recordFeedback,
     fetchStats,
     fetchAdapterStats,
+    customSystemPrompt,
     onVisionUpdate: (caps, history, vocab) => {
       vision.setVisionCaps(caps)
       vision.setVisionCaptionHistory(history)
@@ -212,6 +218,7 @@ export default function ChatPage() {
     handleSelectAgentWithToast,
     modelDescriptions,
     showToast,
+    onSystemPrompt: () => setSystemPromptOpen(true),
   })
 
   const healthValue = useChatHealthValue({ health, refreshHealth })
@@ -530,6 +537,13 @@ export default function ChatPage() {
           onClose={() => { ui.setVoiceMode(false); setChatMode('chat') }}
         />
       )}
+
+      <SystemPromptDialog
+        open={systemPromptOpen}
+        onOpenChange={setSystemPromptOpen}
+        value={customSystemPrompt}
+        onSave={setCustomSystemPrompt}
+      />
     </div>
     </ChatProvider>
   )

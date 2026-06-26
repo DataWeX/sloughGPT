@@ -34,20 +34,6 @@ export default function MultimodalPage() {
   const [transcript, setTranscript] = useState<string | null>(null)
   const [synthesizing, setSynthesizing] = useState(false)
   const [synthText, setSynthText] = useState('')
-  const [visualInferring, setVisualInferring] = useState(false)
-  const [visualOutput, setVisualOutput] = useState<string | null>(null)
-  const [visualPrompt, setVisualPrompt] = useState('Describe this image in detail.')
-  const [visualLoaded, setVisualLoaded] = useState(false)
-  const [visualTrainDataPath, setVisualTrainDataPath] = useState('')
-  const [visualTraining, setVisualTraining] = useState(false)
-  const [visualTrainStatus, setVisualTrainStatus] = useState<string>('idle')
-  const [visualTrainProgress, setVisualTrainProgress] = useState<number | null>(null)
-  const [visualTrainCurrentStage, setVisualTrainCurrentStage] = useState<string | null>(null)
-  const [visualTrainLoss, setVisualTrainLoss] = useState<number | null>(null)
-  const [visualTrainResult, setVisualTrainResult] = useState<any>(null)
-  const [visualTrainError, setVisualTrainError] = useState<string | null>(null)
-  const [visualModelDir, setVisualModelDir] = useState('models/visual-finetuned')
-  const [visualLoadLoading, setVisualLoadLoading] = useState(false)
   const [dpoRunning, setDpoRunning] = useState(false)
   const [dpoStatus, setDpoStatus] = useState<string>('idle')
   const [dpoResult, setDpoResult] = useState<any>(null)
@@ -55,43 +41,28 @@ export default function MultimodalPage() {
   const [dpoLastRun, setDpoLastRun] = useState<string | null>(null)
   const [dpoAccepted, setDpoAccepted] = useState(0)
   const [dpoRejected, setDpoRejected] = useState(0)
-  const [visualCheckpoints, setVisualCheckpoints] = useState<any[]>([])
-  const [ckptLoading, setCkptLoading] = useState(false)
-  const [deletingCkpt, setDeletingCkpt] = useState<string | null>(null)
-  const [loadingCkpt, setLoadingCkpt] = useState<string | null>(null)
-  const visualImageInputRef = useRef<HTMLInputElement>(null)
-  const [visualImageBase64, setVisualImageBase64] = useState<string | null>(null)
+  const [checkpoints, setCheckpoints] = useState<Array<{ name: string; saved_at: string; metrics?: Record<string, unknown> }>>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const batchFileInputRef = useRef<HTMLInputElement>(null)
   const audioInputRef = useRef<HTMLInputElement>(null)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
-  const fetchCheckpoints = useCallback(async () => {
-    try {
-      const res = await visualController.listCheckpoints()
-      setVisualCheckpoints(res.checkpoints || [])
-    } catch { /* ignore */ }
-  }, [])
-
   const fetchAll = useCallback(async () => {
     try {
-      const [c, r, s, visualStatus] = await Promise.all([
+      const [c, r, s] = await Promise.all([
         multimodalController.getCapabilities(),
         multimodalController.getTrainingReport().catch(() => null),
         multimodalController.getTrainingStatus().catch(() => null),
-        visualController.getVisualStatus().catch(() => ({ loaded: false })),
       ])
       setCaps(c)
       setReport(r)
       setTrainStatus(s)
-      setVisualLoaded(visualStatus.loaded)
-      fetchCheckpoints()
     } catch {
       addToast('Failed to load data', 'error')
     } finally {
       setLoading(false)
     }
-  }, [addToast, fetchCheckpoints])
+  }, [addToast])
 
   const startPolling = useCallback(() => {
     if (pollIntervalRef.current) return
@@ -202,71 +173,6 @@ export default function MultimodalPage() {
     }
   }
 
-  const pollVisualTrain = useCallback(async () => {
-    try {
-      const status = await visualController.getVisualTrainStatus()
-      setVisualTrainStatus(status.status)
-      setVisualTrainProgress(status.progress)
-      setVisualTrainCurrentStage(status.current_stage)
-      setVisualTrainLoss(status.current_loss)
-      if (status.status === 'completed') {
-        setVisualTrainResult(status.result)
-        setVisualTraining(false)
-        addToast('Visual training complete', 'success')
-      } else if (status.status === 'error') {
-        setVisualTrainError(status.error || 'Training failed')
-        setVisualTraining(false)
-        addToast(status.error || 'Training failed', 'error')
-      }
-    } catch {
-      // silent
-    }
-  }, [addToast])
-
-  useEffect(() => {
-    if (visualTrainStatus === 'running') {
-      const interval = setInterval(pollVisualTrain, 3000)
-      return () => clearInterval(interval)
-    }
-  }, [visualTrainStatus, pollVisualTrain])
-
-  const handleVisualTrain = async () => {
-    if (!visualTrainDataPath.trim() || visualTraining) return
-    setVisualTraining(true)
-    setVisualTrainResult(null)
-    setVisualTrainError(null)
-    setVisualTrainStatus('running')
-    try {
-      const dataPath = visualTrainDataPath.trim().startsWith('/')
-        ? visualTrainDataPath.trim()
-        : `datasets/${visualTrainDataPath.trim().replace(/^datasets\//, '')}/corpus.jsonl`
-      const result = await visualController.startVisualTrain({
-        data_path: dataPath,
-      })
-      addToast(`Visual training started: ${result.job_id}`, 'success')
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Training failed'
-      setVisualTrainError(msg)
-      setVisualTrainStatus('error')
-      setVisualTraining(false)
-      addToast(msg, 'error')
-    }
-  }
-
-  const handleVisualLoad = async () => {
-    setVisualLoadLoading(true)
-    try {
-      const result = await visualController.loadVisualModel(visualModelDir.trim() || undefined)
-      setVisualLoaded(true)
-      addToast(result.message || 'Model loaded', 'success')
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Loading failed'
-      addToast(msg, 'error')
-    } finally {
-      setVisualLoadLoading(false)
-    }
-  }
-
   const pollDPOStatus = useCallback(async () => {
     try {
       const s = await visualController.getDPOStatus()
@@ -305,7 +211,7 @@ export default function MultimodalPage() {
     setDpoStatus('running')
     try {
       const result = await visualController.triggerDPO()
-      addToast(`DPO training started: ${result.job_id || result.status}`, 'success')
+      addToast(`DPO training started: ${result.status || ''}`, 'success')
       setDpoStatus('running')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'DPO trigger failed'
@@ -360,34 +266,6 @@ export default function MultimodalPage() {
     }
   }
 
-  const handleVisualImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      const dataUrl = reader.result as string
-      setVisualImageBase64(dataUrl)
-      addToast(`Selected "${file.name}"`, 'info')
-    }
-    reader.readAsDataURL(file)
-  }
-
-  const handleVisualInfer = async () => {
-    if (!visualImageBase64) { addToast('Select an image first', 'error'); return }
-    setVisualInferring(true)
-    setVisualOutput(null)
-    try {
-      const base64 = visualImageBase64.split(',')[1] || visualImageBase64
-      const result = await visualController.visualInference(base64, visualPrompt)
-      setVisualOutput(result.text)
-      addToast(`Generated ${result.tokens_generated} tokens in ${(result.elapsed_ms / 1000).toFixed(1)}s`, 'success')
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Something went wrong'
-      addToast(msg, 'error')
-    } finally {
-      setVisualInferring(false)
-    }
-  }
 
   const capList: { label: string; ok: boolean }[] = caps ? [
     { label: 'Speech-to-text', ok: caps.speech_to_text },
@@ -395,7 +273,6 @@ export default function MultimodalPage() {
     { label: 'Vision model', ok: !!caps.vision_model },
     { label: 'Speech model', ok: !!caps.speech_model },
     { label: 'Trained', ok: caps.trained },
-    { label: 'Vision model loaded', ok: visualLoaded },
   ] : []
 
   return (
@@ -607,162 +484,6 @@ export default function MultimodalPage() {
                     aria-label="Image directory for visual dataset"
                   />
                 </div>
-                <Button
-                  size="sm"
-                  className="h-8 text-xs"
-                  onClick={handleCreateVisualDataset}
-                  disabled={!visualDatasetName.trim() || !visualImageDir.trim() || creatingDataset}
-                >
-                  {creatingDataset ? 'Creating…' : 'Create dataset'}
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Visual Training */}
-            <Card>
-              <CardHeader><CardTitle className="text-base">Train vision model</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-xs text-muted-foreground">Train a visual model on an image description dataset created above.</p>
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={visualTrainDataPath}
-                    onChange={e => setVisualTrainDataPath(e.target.value)}
-                    placeholder="datasets/my-dataset/corpus.jsonl"
-                    className="h-8 text-xs flex-1"
-                    aria-label="Training data path"
-                  />
-                  <Button
-                    size="sm"
-                    className="h-8 text-xs shrink-0"
-                    onClick={handleVisualTrain}
-                    disabled={!visualTrainDataPath.trim() || visualTraining || visualTrainStatus === 'running'}
-                  >
-                    {visualTraining || visualTrainStatus === 'running' ? 'Training…' : 'Start training'}
-                  </Button>
-                </div>
-                {visualTrainStatus === 'running' && (
-                  <div className="space-y-1 pt-1">
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{visualTrainCurrentStage || 'Training…'}</span>
-                      {visualTrainLoss !== null && <span>Loss: {visualTrainLoss.toFixed(4)}</span>}
-                    </div>
-                    <ProgressBar
-                      value={visualTrainProgress || 0}
-                      max={100}
-                      variant="default"
-                    />
-                  </div>
-                )}
-                {visualTrainResult && (
-                  <div className="p-2 rounded bg-success/10 border border-success/20 text-xs text-success">
-                    Training complete
-                  </div>
-                )}
-                {visualTrainError && (
-                  <div className="p-2 rounded bg-destructive/10 border border-destructive/20 text-xs text-destructive">
-                    {visualTrainError}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Visual Model Load */}
-            <Card>
-              <CardHeader><CardTitle className="text-base">Load trained model</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-xs text-muted-foreground">Load a trained visual model for inference testing.</p>
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={visualModelDir}
-                    onChange={e => setVisualModelDir(e.target.value)}
-                    placeholder="models/visual-finetuned"
-                    className="h-8 text-xs flex-1"
-                    aria-label="Model directory"
-                  />
-                  <Button
-                    size="sm"
-                    className="h-8 text-xs shrink-0"
-                    onClick={handleVisualLoad}
-                    disabled={visualLoadLoading}
-                  >
-                    {visualLoadLoading ? 'Loading…' : 'Load model'}
-                  </Button>
-                </div>
-                {visualLoaded && (
-                  <p className="text-xs text-success flex items-center gap-1">
-                    <IconCheck className="h-3.5 w-3.5" />
-                    Vision model loaded and ready for inference
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Visual Checkpoints */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Visual Checkpoints</CardTitle>
-                  <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => { setCkptLoading(true); fetchCheckpoints().finally(() => setCkptLoading(false)) }}>
-                    <IconRefresh className="h-3.5 w-3.5" />
-                    Refresh
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {visualCheckpoints.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No checkpoints saved yet.</p>
-                ) : (
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {visualCheckpoints.map((cp: any) => (
-                      <div key={cp.name} className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-xs">
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium truncate">{cp.name}</p>
-                          <p className="text-muted-foreground">
-                            {cp.llm || '—'} · {cp.final_loss != null ? `loss ${cp.final_loss.toFixed(4)}` : ''}{cp.total_steps ? ` · ${cp.total_steps} steps` : ''}{cp.mean_accuracy != null ? ` · acc ${(cp.mean_accuracy * 100).toFixed(0)}%` : ''}{cp.size_mb ? ` · ${cp.size_mb.toFixed(1)} MB` : ''}
-                          </p>
-                          {cp.description && <p className="text-muted-foreground truncate mt-0.5">{cp.description}</p>}
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 text-xs"
-                            onClick={async () => {
-                              setLoadingCkpt(cp.name)
-                              try {
-                                const res = await visualController.loadCheckpoint(cp.name)
-                                addToast(`Checkpoint "${res.name}" loaded`, 'success')
-                                fetchCheckpoints()
-                              } catch { addToast('Failed to load checkpoint', 'error') }
-                              finally { setLoadingCkpt(null) }
-                            }}
-                            disabled={loadingCkpt === cp.name}
-                          >
-                            {loadingCkpt === cp.name ? '…' : 'Load'}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 text-xs text-error"
-                            onClick={async () => {
-                              if (!window.confirm(`Delete checkpoint "${cp.name}"?`)) return
-                              setDeletingCkpt(cp.name)
-                              try {
-                                await visualController.deleteCheckpoint(cp.name)
-                                addToast('Checkpoint deleted', 'success')
-                                fetchCheckpoints()
-                              } catch { addToast('Failed to delete checkpoint', 'error') }
-                              finally { setDeletingCkpt(null) }
-                            }}
-                            disabled={deletingCkpt === cp.name}
-                          >
-                            {deletingCkpt === cp.name ? '…' : <IconTrash className="h-3.5 w-3.5" />}
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </CardContent>
             </Card>
 
@@ -813,70 +534,6 @@ export default function MultimodalPage() {
                 {dpoError && (
                   <div className="p-2 rounded bg-destructive/10 border border-destructive/20 text-xs text-destructive">
                     {dpoError}
-                  </div>
-                )}
-                {dpoLastRun && dpoResult && (
-                  <p className="text-[10px] text-muted-foreground">Last run: {dpoLastRun}</p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Visual Inference */}
-            <Card>
-              <CardHeader><CardTitle className="text-base">Test the vision model</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-xs text-muted-foreground">
-                  Upload an image and ask a question about it.
-                  {visualLoaded ? (
-                    <span className="text-success ml-1">Vision model is loaded.</span>
-                  ) : (
-                    <span className="text-muted-foreground ml-1">Train a vision model on the Training page first.</span>
-                  )}
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 text-xs"
-                    onClick={() => visualImageInputRef.current?.click()}
-                    disabled={!visualLoaded || visualInferring}
-                  >
-                    <IconUpload className="h-3.5 w-3.5 mr-1" />
-                    {visualImageBase64 ? 'Change image' : 'Select image'}
-                  </Button>
-                  <input
-                    ref={visualImageInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleVisualImageSelect}
-                  />
-                </div>
-                {visualImageBase64 && (
-                  <div className="flex items-center gap-2">
-                    <img src={visualImageBase64} alt="Selected" className="h-16 w-16 rounded object-cover border border-border/50" />
-                    <span className="text-xs text-muted-foreground">Image selected for inference</span>
-                  </div>
-                )}
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={visualPrompt}
-                    onChange={e => setVisualPrompt(e.target.value)}
-                    placeholder="Describe this image in detail..."
-                    className="h-8 text-xs flex-1"
-                  />
-                  <Button
-                    size="sm"
-                    className="h-8 text-xs shrink-0"
-                    onClick={handleVisualInfer}
-                    disabled={!visualLoaded || !visualImageBase64 || visualInferring}
-                  >
-                    {visualInferring ? 'Generating…' : 'Generate'}
-                  </Button>
-                </div>
-                {visualOutput && (
-                  <div className="rounded-md border border-border/40 bg-muted/30 p-3 text-xs leading-relaxed max-h-48 overflow-y-auto">
-                    {visualOutput}
                   </div>
                 )}
               </CardContent>

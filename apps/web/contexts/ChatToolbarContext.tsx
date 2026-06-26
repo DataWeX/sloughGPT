@@ -78,6 +78,7 @@ interface ActionsGroup {
   onExportMarkdown: () => void
   onCopyMarkdown?: () => void
   onSaveAsDataset?: () => void
+  onSystemPrompt: () => void
   hasMessages: boolean
   messageCount: number
 }

@@ -20,6 +20,7 @@ import type { SoulNetWebGPU, SoulTransformerWebGPU } from '@/lib/soulnet-webgpu'
 import type { AgentDef } from '@/lib/agents'
 import type { Soul } from '@/lib/souls-controller'
 import type { MultimodalCapabilities } from '@/lib/multimodal-controller'
+import { useAppStore, getKnowledgeContext } from '@/lib/store'
 import { useChatSessions } from './useChatSessions'
 
 const DRAFT_PREFIX = 'man_draft_'
@@ -47,6 +48,7 @@ interface ChatMessagesConfig {
   fetchAdapterStats: () => void
   onVisionUpdate: (caps: MultimodalCapabilities | null, history: string[], vocab: number | undefined) => void
   onKnowledgeUpdate: (ctx: { count: number; context: string }) => void
+  customSystemPrompt?: string
 }
 
 export function useChatMessages(config: ChatMessagesConfig) {
@@ -54,7 +56,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     model, temperature, maxTokens, currentSoul,
     currentAgent, useLocalEngine, engineRef, engineLoadingRef,
     initLocalEngine, showToast, recordFeedback,
-    onVisionUpdate, onKnowledgeUpdate,
+    onVisionUpdate, onKnowledgeUpdate, customSystemPrompt,
   } = config
 
   // ── Core state ───────────────────────────────────────────────────────────
@@ -277,14 +279,8 @@ export function useChatMessages(config: ChatMessagesConfig) {
     if ((!text.trim() && images.length === 0) || loading) return
     const userImages = [...images]
 
-    let customContext = ''
-    try {
-      const settingsStored = localStorage.getItem('man_settings')
-      if (settingsStored) {
-        const settings = JSON.parse(settingsStored)
-        customContext = settings.customContext || ''
-      }
-    } catch {}
+    const appState = useAppStore.getState()
+    const customContext = appState.settings.customContext
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(), role: 'user', content: text.trim(),
@@ -304,6 +300,12 @@ export function useChatMessages(config: ChatMessagesConfig) {
     setLoading(true)
 
     const parts: string[] = []
+    if (customSystemPrompt) {
+      parts.push(`[System Override]\n${customSystemPrompt}`)
+    }
+    if (customContext) {
+      parts.push(`[Custom Instructions]\n${customContext}`)
+    }
     if (currentSoul) {
       parts.push(`[Personality: ${currentSoul.name}]`)
       if (currentSoul.description) parts.push(currentSoul.description)
@@ -317,6 +319,8 @@ export function useChatMessages(config: ChatMessagesConfig) {
       if (currentAgent.instructions) parts.push(currentAgent.instructions)
     }
     const systemPrompt = parts.join('\n\n')
+    const knowledgeCtx = getKnowledgeContext()
+    const knowledgeFacts = appState.injectedKnowledge.map((k: { content: string }) => k.content)
 
     const messagesWithNew = [...messagesRef.current, userMessage, assistantMessage]
     sessions.saveSessionToStorage(messagesWithNew, sessionIdRef.current).catch(console.error)
@@ -352,13 +356,15 @@ export function useChatMessages(config: ChatMessagesConfig) {
       } else {
         let assistantContentLen = 0
         let streamComplete = false
+        const finalSystemPrompt = knowledgeCtx ? systemPrompt + knowledgeCtx : systemPrompt
         await streamChatResponse({
           messages: messagesWithNew.map(m => ({ role: m.role, content: m.content })),
-          model, systemPrompt, maxTokens, temperature,
+          model, systemPrompt: finalSystemPrompt, maxTokens, temperature,
           userId: userIdRef.current, sessionId: sessionIdRef.current,
           images: userImages.length > 0 ? userImages.map(img => img.dataUrl) : undefined,
           signal: loadingRef.current.signal,
           agentId: currentAgent?.id || undefined,
+          knowledge: knowledgeFacts.length > 0 ? knowledgeFacts : undefined,
           onToken: (token: string) => {
             let cleanedToken = token
             if (assistantContentLen < 50) {
@@ -460,10 +466,13 @@ export function useChatMessages(config: ChatMessagesConfig) {
   }, [sessionSaved])
 
   useEffect(() => {
+    let ignore = false
     const handler = async () => {
       try {
         const backendSessions = await (await import('@/lib/session-controller')).sessionController.list()
+        if (ignore) return
         const localSessions = await chatDB.loadSessions()
+        if (ignore) return
         const merged: ChatSession[] = [
           ...(Array.isArray(backendSessions) ? backendSessions : []).map((s): ChatSession => ({
             id: s.id, name: s.name || `Chat ${s.id}`,
@@ -476,14 +485,18 @@ export function useChatMessages(config: ChatMessagesConfig) {
           })),
           ...localSessions.filter(l => !Array.isArray(backendSessions) || !backendSessions.find((b: { id: string }) => b.id === l.id)),
         ]
+        if (ignore) return
         sessions.setSessions(merged)
       } catch (err) {
+        if (ignore) return
         useErrorStore.getState().addError(err, { source: 'Chat Sessions' })
         const localSessions = await chatDB.loadSessions()
+        if (ignore) return
         sessions.setSessions(localSessions)
       }
     }
     handler()
+    return () => { ignore = true }
   }, [])
 
   useEffect(() => {

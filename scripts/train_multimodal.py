@@ -124,11 +124,11 @@ def train(args):
     
     print("Initializing MultimodalEngine...")
     engine = get_multimodal_engine(
-        embed_dim=64,
-        hidden_dim=128,
-        n_vit_layers=2,
+        embed_dim=128,
+        hidden_dim=256,
+        n_vit_layers=3,
         n_heads=4,
-        n_decoder_layers=2,
+        n_decoder_layers=3,
         n_audio_layers=2,
     )
 
@@ -173,8 +173,13 @@ def train(args):
     print(f"\nTraining for {args.epochs} epochs...")
     losses_v, losses_a = [], []
     n_v, n_a = len(train_images), len(train_waveforms)
+    n_epochs = args.epochs
 
-    for epoch in range(args.epochs):
+    for epoch in range(n_epochs):
+        # Cosine LR schedule: 3e-4 → 3e-5
+        frac = epoch / max(n_epochs - 1, 1)
+        lr = 3e-5 + 0.5 * (3e-4 - 3e-5) * (1 + np.cos(np.pi * frac))
+
         # ── Vision batch ──
         idx_v = np.random.permutation(n_v)
         epoch_loss_v = 0.0
@@ -186,7 +191,7 @@ def train(args):
                 if len(tokens) < 2:
                     continue
                 tokens_arr = np.array([tokens], dtype=np.int64)
-                loss_val = engine.train_step(train_images[j:j+1], tokens_arr)
+                loss_val = engine.train_step(train_images[j:j+1], tokens_arr, lr=lr)
                 epoch_loss_v += loss_val
                 steps_v += 1
             buffer.add(train_images[batch_idx[0]:batch_idx[0]+1], train_captions_v[batch_idx[0]])
@@ -205,6 +210,7 @@ def train(args):
                 loss_val = engine.train_step(
                     audio_patches=audio_patches_list[j],
                     text_tokens=tokens_arr,
+                    lr=lr,
                 )
                 epoch_loss_a += loss_val
                 steps_a += 1
@@ -224,6 +230,7 @@ def train(args):
                 images_np=train_images[vi:vi+1],
                 audio_patches=audio_patches_list[ai],
                 text_tokens=tokens_arr,
+                lr=lr,
             )
             combined_loss += loss_val
             combined_steps += 1

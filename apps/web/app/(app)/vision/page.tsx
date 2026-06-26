@@ -151,7 +151,7 @@ export default function VisionPage() {
     try {
       const { visualController } = await import('@/lib/visual-controller')
       const res = await visualController.listCheckpoints()
-      setVlmCheckpoints(res.checkpoints || [])
+      setVlmCheckpoints(res || [])
     } catch { /* silent */ }
     finally { setVlmCkptLoading(false) }
   }, [])

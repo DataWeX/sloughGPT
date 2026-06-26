@@ -371,6 +371,44 @@ class MultimodalEngine:
         """Precompute audio raw patches (B, N, input_dim) without STFT per epoch."""
         return self.audio.extract_patches(audio_np)
 
+    def _maybe_set_lr(self, lr: Optional[float], optimizers: list):
+        """Temporarily override optimiser LR if provided."""
+        if lr is not None:
+            for opt in optimizers:
+                opt.lr = lr
+
+    def _maybe_restore_lr(self, lr: Optional[float], optimizers: list, old_lrs: dict):
+        if lr is not None:
+            for opt in optimizers:
+                opt.lr = old_lrs.get(id(opt), opt.lr)
+
+    def _clip_gradients(self, params: list, max_norm: float = 1.0):
+        """Clip gradients by global norm."""
+        total_norm = 0.0
+        for p in params:
+            if p.grad is not None:
+                g_data = p.grad.data if hasattr(p.grad, 'data') else p.grad
+                total_norm += float(np.sum(np.asarray(g_data, dtype=np.float64).ravel() ** 2))
+        total_norm = np.sqrt(total_norm)
+        if total_norm > max_norm and total_norm > 0:
+            scale = float(max_norm / total_norm)
+            for p in params:
+                if p.grad is not None:
+                    g_data = p.grad.data if hasattr(p.grad, 'data') else p.grad
+                    g_data *= scale
+
+    def _zero_grad(self, optimizers: list):
+        for opt in optimizers:
+            for p in self._params_for_optimizer(opt, None, None):
+                p.grad = None
+
+    def _sum_grads(self, params: list, scale: float):
+        """Scale all gradients by a factor (in-place)."""
+        for p in params:
+            if p.grad is not None:
+                g_data = p.grad.data if hasattr(p.grad, 'data') else p.grad
+                g_data *= scale
+
     def train_step(
         self,
         images_np: Optional[np.ndarray] = None,
@@ -386,20 +424,75 @@ class MultimodalEngine:
         targets = _tensor(text_tokens[:, 1:].reshape(-1), requires_grad=False)
         loss = _cross_entropy(logits, targets)
         loss.backward()
+        old_lrs = {}
         if lr is not None:
             old_lrs = {id(opt): opt.lr for opt in optimizers}
-            for opt in optimizers:
-                opt.lr = lr
+            self._maybe_set_lr(lr, optimizers)
+        # Gradient clipping
+        for opt in optimizers:
+            self._clip_gradients(self._params_for_optimizer(opt, None, None))
         for opt in optimizers:
             opt.step(self._params_for_optimizer(opt, embed, patches))
-        if lr is not None:
-            for opt in optimizers:
-                opt.lr = old_lrs[id(opt)]
-        for opt in optimizers:
-            for p in self._params_for_optimizer(opt, embed, patches):
-                p.grad = None
+        self._maybe_restore_lr(lr, optimizers, old_lrs)
+        self._zero_grad(optimizers)
         self._trained = True
         return float(loss.data)
+
+    def train_batch(
+        self,
+        samples: list,
+        lr: Optional[float] = None,
+    ) -> float:
+        """Accumulate gradients over multiple samples then step once.
+
+        Each sample is ``(images_np, text_tokens, audio_np, audio_patches)``
+        where ``audio_np`` and ``audio_patches`` are optional (None).  Gradients
+        are summed (not averaged) across the batch, then clipped and applied.
+
+        Returns:
+            mean loss across samples
+        """
+        if not samples:
+            return 0.0
+
+        # Determine which optimisers are needed from the first sample
+        first_img, first_tok, first_aud_np, first_aud_pt = samples[0]
+        _, _, all_opts = self._concat_modalities(first_img, first_aud_np, first_aud_pt)
+        # Zero all relevant param gradients before accumulation
+        self._zero_grad(all_opts)
+
+        total_loss = 0.0
+        n = 0
+        old_lrs = {} if lr is None else {id(o): o.lr for o in all_opts}
+        if lr is not None:
+            self._maybe_set_lr(lr, all_opts)
+
+        for images_np, text_tokens, audio_np, audio_patches in samples:
+            if text_tokens is None:
+                continue
+            embed, patches, _ = self._concat_modalities(images_np, audio_np, audio_patches)
+            logits, _ = self.decoder.forward(embed, text_tokens[:, :-1], patches)
+            targets = _tensor(text_tokens[:, 1:].reshape(-1), requires_grad=False)
+            loss = _cross_entropy(logits, targets)
+            # Scale loss by 1/N so the sum ≈ mean (even gradient contribution)
+            loss = loss * (1.0 / len(samples))
+            loss.backward()
+            total_loss += float(loss.data) * len(samples)
+            n += 1
+
+        if n == 0:
+            return 0.0
+
+        # Gradient clipping
+        for opt in all_opts:
+            self._clip_gradients(self._params_for_optimizer(opt, None, None))
+        # Single step
+        for opt in all_opts:
+            opt.step(self._params_for_optimizer(opt, None, None))
+        self._maybe_restore_lr(lr, all_opts, old_lrs)
+        self._zero_grad(all_opts)
+        self._trained = True
+        return total_loss / n
 
     def _params_for_optimizer(self, opt, embed, patches):
         if opt is self.decoder.optimizer:
@@ -1010,6 +1103,7 @@ def contrastive_step(engine: MultimodalEngine, img_np: np.ndarray, buffer: Repla
 
     loss = contrastive_loss(embed1, embed2, negatives, temperature=0.5)
     loss.backward()
+    engine._clip_gradients(engine.vision.parameters(), max_norm=1.0)
     engine.vision.optimizer.step(engine.vision.parameters())
     for p in engine.vision.parameters():
         p.grad = None

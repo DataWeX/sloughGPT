@@ -15,7 +15,7 @@ export default function VisualPage() {
   const addToast = useToastStore(s => s.addToast)
 
   // ── State ──────────────────────────────────────────────────────
-  const [visualStatus, setVisualStatus] = useState<{ loaded: boolean; model?: string; vision_encoder?: string; llm?: string } | null>(null)
+  const [visualStatus, setVisualStatus] = useState<any>(null)
   const [trainStatus, setTrainStatus] = useState<any>(null)
   const [dpoStatus, setDpoStatus] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -83,7 +83,7 @@ export default function VisualPage() {
         visualController.getVisualTrainStatus().catch(() => null),
         visualController.getDPOStatus().catch(() => null),
       ])
-      setVisualStatus(vs)
+      setVisualStatus(vs as any)
       setTrainStatus(ts)
       setDpoStatus(ds)
     } catch {}
@@ -95,7 +95,7 @@ export default function VisualPage() {
     setLoadingCheckpoints(true)
     try {
       const result = await visualController.listCheckpoints()
-      setCheckpoints(result.checkpoints)
+      setCheckpoints(result)
     } catch {} finally {
       setLoadingCheckpoints(false)
     }
@@ -118,9 +118,9 @@ export default function VisualPage() {
     setInferRunning(true)
     setInferResult(null)
     try {
-      const result = await visualController.visualInference(inferImage, inferPrompt)
+      const result = await visualController.visualInference({ image_path: inferImage, max_len: 256 })
       setInferResult(result.text)
-      addToast(`Visual inference: ${result.tokens_generated} tokens in ${result.elapsed_ms}ms`, 'success')
+      addToast(`Visual inference: ${result.elapsed_ms}ms`, 'success')
     } catch (err: any) {
       addToast(`Inference failed: ${err.message}`, 'error')
     } finally {
@@ -150,8 +150,7 @@ export default function VisualPage() {
     try {
       const result = await visualController.startVisualTrain({
         data_path: trainingDataPath,
-        stage1_epochs: stage1Epochs,
-        stage2_epochs: stage2Epochs,
+        epochs: stage1Epochs,
       })
       addToast(`Training started: ${result.job_id}`, 'success')
       fetchAll()

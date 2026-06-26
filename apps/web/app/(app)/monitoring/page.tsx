@@ -65,7 +65,7 @@ export default function SystemHealthPage() {
       setBenchQuality(bq && 'coherence_score' in bq ? { ...bq as any, status: 'ok', total_responses: 0, avg_length: 0, empty_rate: 0 } : null)
       setBenchStats(bs as any)
       setDpoStatus(dsRes)
-      setVisualStatus(vs ? { visual_loaded: vs.loaded, training: { status: vs.model ? 'idle' : 'none' } } : null)
+      setVisualStatus(null)
       setLastUpdated(new Date().toLocaleTimeString())
       if (m) {
         setChartHistory(prev => {
