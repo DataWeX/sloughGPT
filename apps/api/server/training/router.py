@@ -18,9 +18,23 @@ from pydantic import BaseModel
 
 from fastapi import APIRouter, HTTPException, Request
 
+try:
+    from domains.api.sse_envelope import sse_event, sse_error, sse_complete
+except ImportError:
+    def sse_event(stream, phase, status, data=None, meta=None, message=""):
+        import json as _j
+        return "data: " + _j.dumps({
+            "stream": stream, "phase": phase, "status": status,
+            "data": data or {}, "meta": meta or {}, "message": message
+        }) + "\n\n"
+    def sse_error(stream, phase, error, meta=None):
+        return sse_event(stream, phase, "error", {"error": error}, meta or {}, f"Error: {error}")
+    def sse_complete(stream, phase="COMPLETE", data=None, meta=None, message="Done"):
+        return sse_event(stream, phase, "complete", data or {}, meta or {}, message)
+
 from training.jobs import training_jobs
 from training.resolution import resolve_training_inputs
-from training.schemas import TrainingRequest, TrainRequest, TrainResolveRequest, HFTrainingRequest, UnifiedStartRequest, QuickTrainRequest, VisualTrainingRequest
+from training.schemas import TrainingRequest, TrainRequest, TrainResolveRequest, HFTrainingRequest, UnifiedStartRequest, QuickTrainRequest
 from training.controller import get_training_controller, TrainingState
 from training.webhooks import (
     get_webhook_store,
@@ -801,137 +815,7 @@ async def start_hf_training(request: HFTrainingRequest):
     }
 
 
-@router.post("/training/visual-start")
-async def start_visual_training(request: VisualTrainingRequest):
-    """Train a vision-language model on image-text pairs.
 
-    Creates a VLM job in the training job registry and runs
-    VLMTrainer in a background thread. Poll ``GET /training/jobs``
-    for progress.
-
-    The ``dataset`` field must match a folder under ``datasets/``
-    containing a JSONL file with ``image_path`` and ``caption``
-    fields (or ``conversations`` array).
-    """
-    job_id = f"vlm_{len(training_jobs) + 1}_{int(time.time())}"
-
-    _repo_root = Path(__file__).resolve().parents[4]
-    _datasets_dir = _repo_root / "datasets"
-    ds_dir = _datasets_dir / request.dataset
-    data_path = ds_dir / "corpus.jsonl"
-    if not data_path.is_file():
-        data_path = ds_dir / "input.txt"
-    if not data_path.is_file():
-        # Try finding any .jsonl
-        jsonl_files = list(ds_dir.glob("*.jsonl"))
-        if jsonl_files:
-            data_path = jsonl_files[0]
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Dataset not found: {request.dataset}. Import a dataset with images first.",
-            )
-
-    output_dir = str(_repo_root / f"models/vlm-finetuned/{request.dataset}_{int(time.time())}")
-
-    name = request.name or f"VLM-{request.dataset}"
-    job: dict[str, Any] = {
-        "id": job_id,
-        "name": name,
-        "model": f"vlm:{request.vision_encoder}+{request.llm}",
-        "dataset": request.dataset,
-        "data_path": str(data_path),
-        "status": "queued",
-        "progress": 0,
-        "epochs": request.stage1_epochs + request.stage2_epochs,
-        "current_epoch": 0,
-        "loss": None,
-        "output_dir": output_dir,
-        "stage": "queued",
-        "build_type": "vlm",
-    }
-    training_jobs[job_id] = job
-
-    def run_visual_training() -> None:
-        jid = job_id
-        try:
-            training_jobs[jid]["status"] = "running"
-            get_job_store().create(jid, name, request.model_dump(), request.dataset)
-            get_job_store().mark_started(jid)
-
-            from domains.training.multimodal import VLMTrainer, VLMConfig
-
-            config = VLMConfig(
-                stage1_epochs=request.stage1_epochs,
-                stage2_epochs=request.stage2_epochs,
-                batch_size=request.batch_size,
-                stage1_lr=request.learning_rate,
-                stage2_lr=request.learning_rate * 0.02,
-                lora_rank=request.lora_rank,
-                output_dir=output_dir,
-                vision_encoder=request.vision_encoder,
-                llm=request.llm,
-            )
-
-            def on_progress(info: dict[str, Any]) -> None:
-                rec = training_jobs.get(jid)
-                if not rec:
-                    return
-                rec["progress"] = info.get("progress_pct", rec.get("progress", 0))
-                rec["current_epoch"] = info.get("epoch", rec.get("current_epoch", 0))
-                rec["loss"] = info.get("loss", rec.get("loss"))
-                rec["stage"] = info.get("stage", rec.get("stage", "training"))
-                loss_val = info.get("loss")
-                if loss_val is not None:
-                    rec.setdefault("loss_history", []).append({
-                        "step": rec.get("current_epoch", 0),
-                        "value": float(loss_val),
-                        "type": "train",
-                    })
-                get_job_store().update_progress(
-                    jid,
-                    rec["progress"],
-                    epoch=int(rec["current_epoch"]),
-                    loss=rec["loss"],
-                )
-
-            trainer = VLMTrainer(config)
-            result = trainer.train(
-                data_path=str(data_path),
-                progress_callback=on_progress,
-            )
-
-            status = result.get("status", "completed")
-            training_jobs[jid]["status"] = "completed" if status == "completed" else "failed"
-            training_jobs[jid]["progress"] = 100
-            training_jobs[jid]["loss"] = result.get("final_loss", result.get("loss"))
-            training_jobs[jid]["model_path"] = output_dir
-
-            if status == "completed":
-                get_job_store().mark_completed(jid, checkpoint_path=output_dir)
-                logger.info("VLM training completed: %s", name)
-            else:
-                training_jobs[jid]["error"] = result.get("error", "Unknown error")
-                get_job_store().mark_failed(jid, result.get("error", "Unknown error"))
-
-        except Exception as exc:
-            logger.exception("VLM training job %s failed", job_id)
-            if jid in training_jobs:
-                training_jobs[jid]["status"] = "failed"
-                training_jobs[jid]["error"] = str(exc)
-            try:
-                get_job_store().mark_failed(jid, str(exc))
-            except Exception:
-                pass
-
-    thread = threading.Thread(target=run_visual_training, daemon=True)
-    thread.start()
-
-    return {
-        "job_id": job_id,
-        "status": "queued",
-        "message": f"VLM training queued: {name}",
-    }
 
 
 @router.post("/training/quick")
@@ -1976,7 +1860,7 @@ async def unified_start(req: UnifiedStartRequest):
 
 
 @router.get("/training/unified-stream")
-async def unified_stream():
+async def unified_stream(request: Request):
     """
     SSE endpoint that runs the unified training pipeline and streams phase progress.
 
@@ -1990,10 +1874,8 @@ async def unified_stream():
     global _unified_config
     if _unified_config is None:
         return StreamingResponse(
-            iter(["data: " + json.dumps({
-                "stream": "unified-train", "phase": "idle", "status": "error",
-                "data": {"error": "No config — POST /training/unified-start first"},
-            }) + "\n\n"]),
+            iter([sse_error("unified-train", "idle",
+                            "No config — POST /training/unified-start first")]),
             media_type="text/event-stream",
         )
 
@@ -2027,46 +1909,53 @@ async def unified_stream():
             def on_progress(progress):
                 if _unified_cancel_event is not None and _unified_cancel_event.is_set():
                     raise _UnifiedCancelled("Training cancelled by user")
-                event = json.dumps(progress.to_sse_event("unified-train"))
-                _enqueue("data: " + event + "\n\n")
+                sse = progress.to_sse_event("unified-train")
+                _enqueue(sse_event("unified-train",
+                    progress.phase, progress.status,
+                    data=sse.get("data", {}), meta=sse.get("meta", {})))
 
             pipeline.run(on_progress=on_progress)
         except _UnifiedCancelled:
             logger.info("Unified pipeline cancelled by user")
-            _enqueue("data: " + json.dumps({
-                "stream": "unified-train",
-                "phase": "complete",
-                "status": "complete",
-                "data": {"cancelled": True, "message": "Training cancelled by user"},
-                "message": "Training cancelled",
-            }) + "\n\n")
+            _enqueue(sse_complete("unified-train",
+                data={"cancelled": True, "message": "Training cancelled by user"},
+                message="Training cancelled"))
         except Exception as e:
             logger.exception("Unified pipeline worker error: %s", e)
-            _enqueue("data: " + json.dumps({
-                "stream": "unified-train",
-                "phase": "failed",
-                "status": "error",
-                "data": {"error": str(e)},
-                "message": f"Error: {e}",
-            }) + "\n\n")
+            _enqueue(sse_error("unified-train", "failed", str(e)))
         finally:
             _unified_cancel_event = None
 
     async def event_generator():
         worker_task = loop.run_in_executor(None, _worker)
-        while True:
-            event = await queue.get()
-            yield event
-            if event.startswith("data: "):
-                try:
-                    ev = json.loads(event[6:])
-                    if ev.get("status") in ("complete", "error"):
-                        break
-                except json.JSONDecodeError:
-                    pass
+        deadline = time.time() + 3600
         try:
-            await worker_task
-        except Exception:
-            pass
+            while True:
+                if time.time() > deadline:
+                    logger.error("Unified SSE timed out — no completion in 1 hour")
+                    yield sse_error("unified-train", "TIMEOUT", "Stream timed out")
+                    return
+                if await request.is_disconnected():
+                    if _unified_cancel_event is not None:
+                        _unified_cancel_event.set()
+                    worker_task.cancel()
+                    logger.info("Client disconnected from unified stream")
+                    return
+                event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                yield event
+                if event.startswith("data: "):
+                    try:
+                        ev = json.loads(event[6:])
+                        if ev.get("status") in ("complete", "error"):
+                            break
+                    except json.JSONDecodeError:
+                        pass
+            try:
+                await worker_task
+            except Exception:
+                pass
+        except asyncio.TimeoutError:
+            logger.error("Unified SSE queue timed out — no event for 30s")
+            yield sse_error("unified-train", "TIMEOUT", "No training progress for 30 seconds")
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
