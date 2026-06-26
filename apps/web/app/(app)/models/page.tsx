@@ -14,6 +14,7 @@ import { catalogIdMatchesRuntime } from '@/lib/inference-display'
 import { useToastStore } from '@/lib/toast-store'
 import { modelController } from '@/lib/model-controller'
 import { soulsController } from '@/lib/souls-controller'
+import { generateController } from '@/lib/generate-controller'
 import type { Soul, Checkpoint } from '@/lib/souls-controller'
 import { cn } from '@/lib/cn'
 import SoulVisualizer from '@/components/souls/SoulVisualizer'
@@ -50,6 +51,7 @@ const FORMAT_BADGES: Record<string, { label: string; variant?: string }> = {
 export default function ModelsPage() {
   const router = useRouter()
   const [loadingModel, setLoadingModel] = useState<string | null>(null)
+  const [warmingModel, setWarmingModel] = useState<string | null>(null)
   const [switchingSoul, setSwitchingSoul] = useState<string | null>(null)
   const [traitWeights, setTraitWeights] = useState<Record<string, any> | null>(null)
   const [mounted, setMounted] = useState(false)
@@ -75,11 +77,25 @@ export default function ModelsPage() {
     setLoadingModel(modelId)
     try {
       const data = await loadModel(modelId)
-      addToast(data.error ?? `${data.model_id ?? modelId} ready`, data.error ? 'error' : 'success')
+      if (data.error) {
+        addToast(data.error, 'error')
+        return
+      }
+      addToast(`${data.model_id ?? modelId} ready`, 'success')
+      setLoadingModel(null)
+      setWarmingModel(modelId)
+      try {
+        await generateController.generate({ prompt: 'Hello', max_new_tokens: 2 })
+      } catch {
+        // warmup failure is non-fatal
+      }
+      setWarmingModel(null)
     } catch (err) {
       addToast(err instanceof Error ? err.message : String(err), 'error')
+      setLoadingModel(null)
     } finally {
       setLoadingModel(null)
+      setWarmingModel(null)
       await refreshHealth()
       await refetchModels()
     }
@@ -490,8 +506,8 @@ export default function ModelsPage() {
                         {model.source === 'local' ? (
                           <span className="text-[10px] text-muted-foreground">Local</span>
                         ) : (
-                          <Button size="sm" variant={isLoaded ? 'outline' : 'default'} className="h-7 text-xs px-3" disabled={isLoading} onClick={(e) => { e.stopPropagation(); handleLoadModel(model.id) }}>
-                            {isLoading ? '…' : isLoaded ? 'Loaded' : 'Load'}
+                          <Button size="sm" variant={isLoaded ? 'outline' : 'default'} className="h-7 text-xs px-3" disabled={isLoading || warmingModel === model.id} onClick={(e) => { e.stopPropagation(); handleLoadModel(model.id) }}>
+                            {isLoading ? '…' : warmingModel === model.id ? 'Warming…' : isLoaded ? 'Loaded' : 'Load'}
                           </Button>
                         )}
                       </div>

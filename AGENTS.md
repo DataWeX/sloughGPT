@@ -2199,7 +2199,43 @@ Wrote 60 tests across the last 4 untested lib files: dev-log (17), piston-api (7
 
 ---
 
-## Session 2026-06-24 — Trainer Protocol Migration (TrainResult)
+## Session 2026-06-26 — Cross-Attention Gradient Explosion Fixed
+
+### Summary
+Found and fixed an **800x gradient explosion** in `SloCrossAttention.forward()` caused by a redundant `SloLayerNorm` wrapping the output. The post-norm in a pre-norm decoder architecture created a ~1000x gradient amplification through the backward path: upstream gradient → LayerNorm.backward → RMSNorm.backward, where the RMSNorm backward's `1/rms³` term blew up.
+
+### Root Cause
+`packages/core-py/domains/training/slonet.py:1819` — `SloCrossAttention.forward()` returned `self.norm.forward(x + self.o_proj.forward(out_t))`, where:
+- `self.norm` was a `SloLayerNorm` wrapping the residual
+- The gradient flows backward: `g_upstream → LayerNorm.backward → g_at_(x+o_proj)`
+- At the internal residual `x + o_proj(out_t)`: gradient splits to `x` (direct path, unchanging) and `o_proj(out_t)` (through attention backward = 0 for zero patches)
+- The direct path through `x` goes unchanged into `RMSNorm.backward` in the decoder block
+- RMSNorm backward: `gx = g/rms - x·sum(g·x)/(N·rms³)` — the `rms³` denominator amplifies the gradient
+
+### Evidence
+| Config | Before | After | Reduction |
+|--------|--------|-------|-----------|
+| No patches — total grad norm | 11.1 | 11.1 | — |
+| Zero patches — total grad norm | 4312.7 | **10.4** | **414x** |
+| Zero patches — self-attn grad | 4269.2 | **5.1** | **837x** |
+
+### Fix
+Two edits to `SloCrossAttention` in `slonet.py`:
+1. Removed `self.norm = SloLayerNorm(d_model)` from `__init__` (line 1771)
+2. Changed `return self.norm.forward(x + self.o_proj.forward(out_t))` → `return self.o_proj.forward(out_t)` (line 1818)
+
+The decoder's `SloTransformerDecoderBlock` already applies pre-norm (RMSNorm before each sub-layer) and external residual (`x = x + h`), so the internal LayerNorm+residual was redundant.
+
+### Verification
+- All 26 multimodal engine tests pass
+- Cross-attention gradient flow test (`test_cross_attention_gradient_flow`) passes
+- Gradient norms are now comparable with/without cross-attention (total ~10-11)
+- Diffusion test passes (no shape change)
+- **Training confirmed**: with zero patches — loss drops from 3.17 → 0.92 (vs 1.47 without). Cross-attention no longer blocks LM learning.
+- 35 multimodal tests pass (26 engine + 9 generation)
+
+### Blocked
+- **Cross-attention STILL disrupts decoder LM learning** — even with gradient explosion fixed, pure decoder (no patches) achieves loss 1.02 on 2 char-level captions, but adding cross-attention to zero patches gives loss 3.17. The issue is in the `SloCrossAttention` manual backward graph: g_Q and g_V/K are correctly zero for constant K/V, but the attention mechanism's interaction with the residual stream in `o_proj.out_t._backward_fn` may still create incorrect gradient paths through the softmax derivatives. Need to verify: (1) gradient path through o_proj → out_t → _backward_fn → Q → q_proj → x, (2) whether the manual `bk` function's returned gradient (or lack thereof) creates a gradient mismatch at the input.
 
 ### Summary
 Created `TrainerProtocol` with standard `TrainResult` return type. Migrated `UnifiedTrainingPipeline.run()` from returning raw dicts to returning `TrainResult`. Added backward-compatible dict access (`__getitem__`, `__contains__`, `.get()`). All 108 training tests pass.
