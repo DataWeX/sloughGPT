@@ -2234,8 +2234,8 @@ The decoder's `SloTransformerDecoderBlock` already applies pre-norm (RMSNorm bef
 - **Training confirmed**: with zero patches — loss drops from 3.17 → 0.92 (vs 1.47 without). Cross-attention no longer blocks LM learning.
 - 35 multimodal tests pass (26 engine + 9 generation)
 
-### Blocked
-- **Cross-attention STILL disrupts decoder LM learning** — even with gradient explosion fixed, pure decoder (no patches) achieves loss 1.02 on 2 char-level captions, but adding cross-attention to zero patches gives loss 3.17. The issue is in the `SloCrossAttention` manual backward graph: g_Q and g_V/K are correctly zero for constant K/V, but the attention mechanism's interaction with the residual stream in `o_proj.out_t._backward_fn` may still create incorrect gradient paths through the softmax derivatives. Need to verify: (1) gradient path through o_proj → out_t → _backward_fn → Q → q_proj → x, (2) whether the manual `bk` function's returned gradient (or lack thereof) creates a gradient mismatch at the input.
+### Resolved ✅
+- **Cross-attention disrupts decoder LM learning** — root cause was `_layernorm` backward not reducing weight gradient over batch/seq dims. Weight `(64,)` received `(1,61,64)` gradient, corrupting cross-attention parameters. Fixed with `.sum(axis=sum_axes)`. Now: zero patches loss 0.676, audio patches 0.879 (1.3x — normal overhead).
 
 ### Summary
 Created `TrainerProtocol` with standard `TrainResult` return type. Migrated `UnifiedTrainingPipeline.run()` from returning raw dicts to returning `TrainResult`. Added backward-compatible dict access (`__getitem__`, `__contains__`, `.get()`). All 108 training tests pass.
