@@ -44,6 +44,10 @@ _session_cache: Optional[list] = None
 _session_cache_ts: float = 0
 _session_cache_ttl = 2.0  # seconds
 
+# In-memory session cache for hot path — avoids sync disk I/O on every chat message
+_session_memory_cache: dict[str, dict] = {}
+_session_dirty: set[str] = set()
+
 # Lazy import to avoid circular deps
 _context_core = None
 _vector_store_ref = None
@@ -125,8 +129,8 @@ def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 
         return {"facts": [], "source": "none", "topics": []}
 
 
-def _load_session(session_id: str) -> dict:
-    """Load session data from disk."""
+def _load_session_from_disk(session_id: str) -> dict:
+    """Load session data from disk (cold path)."""
     session_file = SESSIONS_DIR / f"{session_id}.json"
     if session_file.exists():
         with open(session_file) as f:
@@ -134,14 +138,71 @@ def _load_session(session_id: str) -> dict:
     return {"id": session_id, "messages": [], "created_at": datetime.datetime.now().isoformat(), "updated_at": datetime.datetime.now().isoformat()}
 
 
+def _get_session(session_id: str) -> dict:
+    """Get session data from memory cache or disk (hot path uses cache)."""
+    if session_id in _session_memory_cache:
+        return _session_memory_cache[session_id]
+    data = _load_session_from_disk(session_id)
+    _session_memory_cache[session_id] = data
+    return data
+
+
 def _save_session(session_id: str, data: dict) -> None:
-    """Save session data to disk."""
+    """Save session — updates memory cache, queues async disk write."""
     global _session_cache
-    _session_cache = None  # invalidate cache
+    _session_cache = None  # invalidate session list cache
     data["updated_at"] = datetime.datetime.now().isoformat()
+    _session_memory_cache[session_id] = data
+    _session_dirty.add(session_id)
+
+
+async def _flush_session_to_disk(session_id: str) -> None:
+    """Write a single dirty session to disk in thread pool."""
+    data = _session_memory_cache.get(session_id)
+    if data is None:
+        _session_dirty.discard(session_id)
+        return
     session_file = SESSIONS_DIR / f"{session_id}.json"
-    with open(session_file, "w") as f:
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, _write_session_file, session_file, data)
+    _session_dirty.discard(session_id)
+
+
+def _write_session_file(path: Path, data: dict) -> None:
+    """Sync file write (runs in executor)."""
+    with open(path, "w") as f:
         json.dump(data, f, indent=2)
+
+
+async def flush_dirty_sessions() -> int:
+    """Flush all dirty sessions to disk. Returns count flushed."""
+    dirty = list(_session_dirty)
+    if not dirty:
+        return 0
+    for sid in dirty:
+        await _flush_session_to_disk(sid)
+    return len(dirty)
+
+
+_background_flush_task: Optional[asyncio.Task] = None
+
+
+def _start_background_flush() -> None:
+    """Start periodic flush of dirty sessions every 10s."""
+    global _background_flush_task
+    if _background_flush_task is not None and not _background_flush_task.done():
+        return
+    async def _flush_loop():
+        while True:
+            await asyncio.sleep(10)
+            try:
+                await flush_dirty_sessions()
+            except Exception:
+                pass
+    try:
+        _background_flush_task = asyncio.create_task(_flush_loop())
+    except RuntimeError:
+        pass  # No running event loop
 
 
 @router.post("/generate/demo")
@@ -497,9 +558,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                     logger.info("Stored %d injected knowledge items in vector store", stored, extra={"context": {"count": stored}})
             except Exception as e:
                 logger.warning("Failed to store injected knowledge: %s", e, extra={"context": {"error": str(e)}})
-        # Skip knowledge enrichment in streaming to avoid blocking the event loop.
-        # Knowledge is loaded lazily and the first call can take 20+ seconds.
-        know_result = {"facts": [], "source": "none", "topics": []}
+        # Build provider messages from request
         provider_messages = [{"role": m.role, "content": m.content} for m in req.messages]
         if req.images:
             content_parts = [{"type": "text", "text": user_msg}]
@@ -512,7 +571,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
         
         session_id = req.session_id or f"session_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
         
-        session_data = _load_session(session_id)
+        session_data = _get_session(session_id)
         session_data.setdefault("messages", []).append({
             "role": "user",
             "content": user_msg,
@@ -534,8 +593,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
         if ctx_core and req.use_context_core and not skip_context:
             ctx_core.set_session_id(session_id)
             ctx_core.add_message("user", user_msg)
-            frame = await asyncio.to_thread(
-                ctx_core.build_context_frame,
+            frame = await ctx_core.build_context_frame(
                 include_rag=True,
                 include_memory=True,
                 query=user_msg,
@@ -618,20 +676,11 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
         except Exception:
             logger.warning("Tool execution failed", exc_info=True)
 
-        # ── Emit single "ready" event with enrichment + context info ──
-        ready_data: dict[str, Any] = {}
-        if know_result["source"] != "none":
-            req.knowledge = know_result["facts"]
-            logger.info("Knowledge: %d facts from %s", len(know_result['facts']), know_result['source'], extra={"context": {"fact_count": len(know_result['facts']), "source": know_result['source']}})
-            ready_data["source"] = know_result["source"]
-            ready_data["topics"] = know_result["topics"]
-            ready_data["fact_count"] = len(know_result["facts"])
+        # ── Emit context info if available ──
         if context_info:
-            ready_data["context"] = context_info
-        if ready_data:
             yield _sse_event("chat", "STREAMING", "working",
-                data=ready_data,
-                message=f"Found {ready_data.get('fact_count', 0)} facts, {len(context_info.get('layers', []))} context layers" if ready_data else "")
+                data={"context": context_info},
+                message=f"{len(context_info.get('layers', []))} context layers")
         
         try:
             from domains.models.provider import get_provider
@@ -770,13 +819,14 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
             except Exception:
                 pass
             
-            # Save response
+            # Save response (memory cache + async disk flush)
             session_data["messages"].append({
                 "role": "assistant",
                 "content": full_response,
                 "timestamp": datetime.datetime.now().isoformat(),
             })
             _save_session(session_id, session_data)
+            await _flush_session_to_disk(session_id)
             
             # Update ContextCore with response
             if ctx_core and req.use_context_core:
@@ -1027,6 +1077,7 @@ async def get_current_session():
 async def upsert_session(session_id: str, req: dict):
     """Create or update a session."""
     _save_session(session_id, req)
+    await _flush_session_to_disk(session_id)
     return {"status": "saved", "session_id": session_id}
 
 
@@ -1035,12 +1086,13 @@ async def create_session(req: dict):
     """Create a new session."""
     session_id = req.get("session_id") or str(uuid.uuid4())
     _save_session(session_id, req)
+    await _flush_session_to_disk(session_id)
     return {"status": "created", "session_id": session_id}
 
 
 @router.get("/chat/sessions/{session_id}")
 async def get_session(session_id: str):
-    data = _load_session(session_id)
+    data = _get_session(session_id)
     if not data.get("messages"):
         raise HTTPException(status_code=404, detail="Session not found")
     return data

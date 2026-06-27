@@ -1,6 +1,8 @@
 """
 Task queue with worker pool, priority scheduling, pause/resume, cancels,
 SSE events, and dependency tracking for agent workflows.
+Emits events on the EventBus: task.enqueued, task.started, task.completed,
+task.failed, task.cancelled, task.paused, task.resumed, task.progress.
 """
 
 from __future__ import annotations
@@ -148,6 +150,14 @@ class TaskQueue:
         self._sse_callbacks: list[Callable[[str, Task], None]] = []
         self._dispatcher_task: asyncio.Task | None = None
 
+        # Event bus integration
+        self._event_bus = None
+        try:
+            from domains.infrastructure.event_bus import get_event_bus
+            self._event_bus = get_event_bus()
+        except Exception:
+            pass
+
         # Stop event
         self._stop_event = asyncio.Event()
 
@@ -158,6 +168,25 @@ class TaskQueue:
             "failed": 0,
             "cancelled": 0,
         }
+
+    def _emit_event(self, event_name: str, task: Task, extra: dict | None = None):
+        if self._event_bus:
+            data = {
+                "task_id": task.id,
+                "task_name": task.name,
+                "task_type": task.task_type,
+                "status": task.status.value,
+                "progress": task.progress,
+                "error": task.error,
+            }
+            if extra:
+                data.update(extra)
+            try:
+                asyncio.ensure_future(
+                    self._event_bus.emit(event_name, data, source="task_queue")
+                )
+            except Exception:
+                pass
 
     # ── Lifecycle ──
 
@@ -190,6 +219,8 @@ class TaskQueue:
                 cb(event, task)
             except Exception:
                 pass
+        bus_event = f"task.{event}"
+        self._emit_event(bus_event, task)
 
     # ── Enqueue ──
 

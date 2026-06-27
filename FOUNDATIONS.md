@@ -8,7 +8,7 @@ Each builds on the previous.
 | Layer | Issue | Status | Built |
 |-------|-------|--------|-------|
 | Task Queue | — | ✅ | `domains/infrastructure/task_queue.py` |
-| Event Bus | [#36](https://github.com/DataWeX/sloughGPT/issues/36) | ❌ | — |
+| Event Bus | [#36](https://github.com/DataWeX/sloughGPT/issues/36) | ✅ | `domains/infrastructure/event_bus.py` |
 | Config System | [#31](https://github.com/DataWeX/sloughGPT/issues/31) | ❌ | — |
 | Error Taxonomy | [#35](https://github.com/DataWeX/sloughGPT/issues/35) | ❌ | — |
 | Rate Limiter | [#32](https://github.com/DataWeX/sloughGPT/issues/32) | ❌ | — |
