@@ -10,6 +10,7 @@ Each builds on the previous.
 | Task Queue | — | ✅ | `domains/infrastructure/task_queue.py` |
 | Event Bus | [#36](https://github.com/DataWeX/sloughGPT/issues/36) | ✅ | `domains/infrastructure/event_bus.py` |
 | Config System | [#31](https://github.com/DataWeX/sloughGPT/issues/31) | ✅ | `domains/infrastructure/config.py` |
+| Error Taxonomy | [#35](https://github.com/DataWeX/sloughGPT/issues/35) | ✅ | `domains/infrastructure/errors.py` |
 | Error Taxonomy | [#35](https://github.com/DataWeX/sloughGPT/issues/35) | ❌ | — |
 | Rate Limiter | [#32](https://github.com/DataWeX/sloughGPT/issues/32) | ❌ | — |
 | Data Repository | [#34](https://github.com/DataWeX/sloughGPT/issues/34) | ❌ | — |
