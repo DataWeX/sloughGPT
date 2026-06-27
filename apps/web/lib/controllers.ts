@@ -26,6 +26,8 @@ export { tokenizerController } from './tokenizer-controller'
 export { exportController } from './export-controller'
 export { voiceController } from './voice-controller'
 
+export { toolsController } from './tools-controller'
+
 export type { ModelInfo, ModelStatus, ModelLoadResponse, HealthStatus } from './model-controller'
 export type { ChatMessage } from './chat-controller'
 export type { TrainingJob, TrainingStatus, RecoverableJob, Webhook, WebhookStats } from './training-controller'

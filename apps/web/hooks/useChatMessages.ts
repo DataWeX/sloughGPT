@@ -20,6 +20,7 @@ import type { SoulNetWebGPU, SoulTransformerWebGPU } from '@/lib/soulnet-webgpu'
 import type { AgentDef } from '@/lib/agents'
 import type { Soul } from '@/lib/souls-controller'
 import type { MultimodalCapabilities } from '@/lib/multimodal-controller'
+import type { ToolCallEvent } from '@/lib/stream-chat-response'
 import { useAppStore, getKnowledgeContext } from '@/lib/store'
 import { useChatSessions } from './useChatSessions'
 
@@ -67,6 +68,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
   const [images, setImages] = useState<ImageAttachment[]>([])
   const [sessionSaved, setSessionSaved] = useState(false)
   const [currentError, setCurrentError] = useState<ReturnType<typeof getErrorInfo> | null>(null)
+  const [toolEvents, setToolEvents] = useState<ToolCallEvent[]>([])
 
   // ── Refs for callback access (read-only, never mutated inside setState) ──
   const messagesRef = useRef<ChatMessage[]>([])
@@ -297,6 +299,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     localStorage.removeItem(`${DRAFT_PREFIX}${sessionIdRef.current}`)
     setImages([])
     setCurrentError(null)
+    setToolEvents([])
     setLoading(true)
 
     const parts: string[] = []
@@ -400,6 +403,9 @@ export function useChatMessages(config: ChatMessagesConfig) {
             setMessages(prev => prev.map(msg =>
               msg.id === assistantId && !msg.content ? { ...msg, content: 'Thinking...' } : msg
             ))
+          },
+          onToolCall: (event) => {
+            setToolEvents(prev => [...prev, event])
           },
         })
         if (streamComplete) {
@@ -542,6 +548,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     images,
     sessionSaved,
     currentError, setCurrentError,
+    toolEvents,
     messagesRef,
     loadingRef,
     sessionIdRef,

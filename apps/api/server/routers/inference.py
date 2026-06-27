@@ -440,6 +440,17 @@ async def load_soul(request: LoadSoulRequest):
         return {"status": "error", "message": str(e)}
 
 
+@router.get("/chat/tools")
+async def list_chat_tools():
+    """List all available tools that can be invoked during chat."""
+    try:
+        from domains.agents.tools import get_tool_registry
+        return {"tools": get_tool_registry().list_tools()}
+    except Exception as e:
+        logger.warning("Failed to list tools: %s", e)
+        return {"tools": []}
+
+
 @router.post("/chat/stream")
 async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
     """Stream chat responses with multi-layer context + live knowledge enrichment."""
@@ -562,6 +573,51 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
             except Exception:
                 logger.warning("Failed to inject agent instructions", exc_info=True)
         
+        # ── Tool intent detection & execution ──
+        tool_result_data = None
+        try:
+            from domains.agents.tools import get_tool_registry
+            tool_reg = get_tool_registry()
+            tool_intent = tool_reg.detect_tool_intent(user_msg)
+            if tool_intent:
+                tool_name, tool_args = tool_intent
+                spec = tool_reg.get(tool_name)
+                if spec and spec.requires_approval:
+                    # Yield approval request — frontend will show dialog and POST /chat/execute-tool
+                    yield _sse_event("chat", "TOOL_APPROVAL", "pending",
+                        data={"tool": tool_name, "args": tool_args, "requires_approval": True},
+                        message=f"Approval needed: {tool_name}")
+                else:
+                    yield _sse_event("chat", "TOOL", "working",
+                        data={"tool": tool_name, "args": tool_args, "status": "executing"},
+                        message=f"Running tool: {tool_name}")
+                    result = await tool_reg.execute(tool_name, tool_args)
+                    tool_result_data = {
+                        "tool": tool_name,
+                        "status": "success" if result.success else "error",
+                        "output": result.output,
+                        "error": result.error,
+                        "duration_ms": round(result.duration_ms, 1),
+                    }
+                    if result.success:
+                        yield _sse_event("chat", "TOOL", "complete",
+                            data=tool_result_data,
+                            message=f"Tool {tool_name} completed in {result.duration_ms:.0f}ms")
+                        provider_messages.append({
+                            "role": "system",
+                            "content": f"[TOOL RESULT: {tool_name}]\n{result.output}\n[/TOOL RESULT]"
+                        })
+                    else:
+                        yield _sse_event("chat", "TOOL", "error",
+                            data=tool_result_data,
+                            message=f"Tool {tool_name} failed: {result.error}")
+                        provider_messages.append({
+                            "role": "system",
+                            "content": f"[TOOL RESULT: {tool_name}]\nError: {result.error}\n[/TOOL RESULT]"
+                        })
+        except Exception:
+            logger.warning("Tool execution failed", exc_info=True)
+
         # ── Emit single "ready" event with enrichment + context info ──
         ready_data: dict[str, Any] = {}
         if know_result["source"] != "none":

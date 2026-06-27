@@ -5,6 +5,8 @@ import { MessageBubble } from './MessageBubble'
 import { EmptyState } from './EmptyState'
 import { SystemBanner } from './SystemBanner'
 import { ReasoningPanel } from './ReasoningPanel'
+import { ToolCallPanel } from './ToolCallPanel'
+import type { ToolCallEvent } from '@/lib/stream-chat-response'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import type { ChatMessage } from './types'
 import { cn } from '@/lib/cn'
@@ -15,6 +17,7 @@ interface ChatScreenProps {
   sessionLoading?: boolean
   health: ApiHealthSnapshot
   suggestions?: { text: string; icon: string }[]
+  toolEvents?: ToolCallEvent[]
   onRefreshHealth: () => void
   onCopy: (text: string) => void
   onRegenerate?: () => void
@@ -28,7 +31,7 @@ interface ChatScreenProps {
 }
 
 export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
-  function ChatScreen({ messages, loading, sessionLoading, health, suggestions, onRefreshHealth, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, searchQuery, onSuggestionClick, className, model }, ref) {
+  function ChatScreen({ messages, loading, sessionLoading, health, suggestions, toolEvents, onRefreshHealth, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, searchQuery, onSuggestionClick, className, model }, ref) {
     const isOffline = health === 'offline'
     const hasModel = health !== null && health !== 'offline' && health.model_loaded
     const [emptyFading, setEmptyFading] = useState(false)
@@ -70,6 +73,12 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
         {messages.length === 0 && !isOffline && !sessionLoading && (
           <div className={cn("transition-all duration-300", emptyFading && "opacity-0 scale-95")}>
             <EmptyState hasModel={hasModel} suggestions={suggestions} onSuggestionClick={onSuggestionClick} />
+          </div>
+        )}
+
+        {toolEvents && toolEvents.length > 0 && (
+          <div className="mx-auto w-full max-w-2xl px-3 sm:px-4 pb-1">
+            <ToolCallPanel events={toolEvents} />
           </div>
         )}
 

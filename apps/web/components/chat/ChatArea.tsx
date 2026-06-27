@@ -6,6 +6,7 @@ import { ChatScreen } from './ChatScreen'
 import { ImageDropZone } from './ImageDropZone'
 import type { ChatInputProps } from './ChatInput'
 import type { ChatMessage } from './types'
+import type { ToolCallEvent } from '@/lib/stream-chat-response'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import { cn } from '@/lib/cn'
 
@@ -15,6 +16,7 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   sessionLoading?: boolean
   health: ApiHealthSnapshot
   suggestions?: { text: string; icon: string }[]
+  toolEvents?: ToolCallEvent[]
   onRefreshHealth: () => void
   onCopy: (text: string) => void
   onRegenerate?: () => void
@@ -42,6 +44,7 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
     sessionLoading,
     health,
     suggestions,
+    toolEvents,
     onRefreshHealth,
     onCopy,
     onRegenerate,
@@ -164,6 +167,7 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
               onEdit={onEdit}
               searchQuery={searchQuery}
               onSuggestionClick={onSuggestionClick}
+              toolEvents={toolEvents}
             />
 
             {filteredMessages.length > 0 && !isNearBottom && (

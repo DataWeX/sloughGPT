@@ -2,6 +2,15 @@
 
 import { API_CHAT_ENDPOINT } from '@/lib/config'
 
+export interface ToolCallEvent {
+  tool: string
+  status: 'executing' | 'success' | 'error'
+  output?: string
+  error?: string
+  duration_ms?: number
+  args?: Record<string, unknown>
+}
+
 interface StreamChatParams {
   messages: { role: string; content: string }[]
   model: string
@@ -19,13 +28,14 @@ interface StreamChatParams {
   onError: (status: number, text?: string) => void
   onKnowledge?: (source: string, count: number) => void
   onThinking?: () => void
+  onToolCall?: (event: ToolCallEvent) => void
 }
 
 export async function streamChatResponse(params: StreamChatParams): Promise<void> {
   const {
     messages, model, systemPrompt, maxTokens, temperature,
     userId, sessionId, images, signal,
-    onToken, onComplete, onError, onKnowledge, onThinking,
+    onToken, onComplete, onError, onKnowledge, onThinking, onToolCall,
   } = params
 
   const response = await fetch(API_CHAT_ENDPOINT, {
@@ -85,13 +95,30 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
           continue
         }
 
+        const d = envelope.data ?? {}
+
+        // ── Tool call events (must come before generic error check) ──
+        if (envelope.phase === 'TOOL') {
+          if (d.tool && typeof d.tool === 'string') {
+            const toolEvent: ToolCallEvent = {
+              tool: d.tool as string,
+              status: (envelope.status === 'complete' ? 'success' : envelope.status === 'error' ? 'error' : 'executing') as ToolCallEvent['status'],
+              output: d.output as string | undefined,
+              error: d.error as string | undefined,
+              duration_ms: d.duration_ms as number | undefined,
+              args: d.args as Record<string, unknown> | undefined,
+            }
+            onToolCall?.(toolEvent)
+          }
+          continue
+        }
+
         if (envelope.status === 'error') {
           const errStr = typeof envelope.data?.error === 'string' ? envelope.data.error : undefined
           onError(500, envelope.message || errStr || 'Stream error')
           return
         }
 
-        const d = envelope.data ?? {}
         if (d.source && typeof d.source === 'string') {
           const fc = typeof d.fact_count === 'number' ? d.fact_count : 0
           onKnowledge?.(d.source, fc)

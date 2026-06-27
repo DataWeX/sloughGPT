@@ -137,7 +137,10 @@ class HFFineTuner:
         self.use_lora = use_lora
         self.lora_rank = lora_rank
         self.lora_alpha = lora_alpha
-        self.lora_target_modules = lora_target_modules or ["q_proj", "v_proj"]
+        if lora_target_modules is not None:
+            self.lora_target_modules = lora_target_modules
+        else:
+            self.lora_target_modules = self._infer_lora_targets(model_name)
         self.epochs = epochs
         self.batch_size = batch_size
         self.learning_rate = learning_rate
@@ -148,6 +151,23 @@ class HFFineTuner:
         self.save_steps = save_steps
         self.logging_steps = logging_steps
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+
+    @staticmethod
+    def _infer_lora_targets(model_name: str) -> List[str]:
+        """
+        Infer LoRA target modules from model name/architecture.
+
+        GPT-2 uses ``c_attn`` (combined QKV), ``c_fc``, ``c_proj``.
+        LLaMA/Qwen/SmolLM use ``q_proj``, ``v_proj``, ``k_proj``, ``o_proj``.
+        Falcon uses ``query_key_value``.
+        """
+        name_lower = model_name.lower()
+        if "gpt2" in name_lower:
+            return ["c_attn", "c_fc", "c_proj"]
+        if "falcon" in name_lower:
+            return ["query_key_value", "dense", "dense_h_to_4h", "dense_4h_to_h"]
+        # LLaMA / Qwen / SmolLM / Mistral / Phi style
+        return ["q_proj", "v_proj", "k_proj", "o_proj"]
 
     def train(
         self,

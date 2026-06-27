@@ -1289,7 +1289,17 @@ export default function TrainingPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-3" onClick={e => e.stopPropagation()}>
-                      {job.status === 'running' && <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-success" /></span>}
+                      {job.status === 'running' && (
+                        <>
+                          <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-success" /></span>
+                          <Button size="sm" variant="ghost" className="h-6 text-xs text-destructive hover:text-destructive" onClick={async () => {
+                            try { await trainingController.stop(job.id); addToast('Stopped', 'info'); void checkpoints.fetchJobs() }
+                            catch { addToast('Failed to stop job', 'error') }
+                          }}>
+                            Stop
+                          </Button>
+                        </>
+                      )}
                       {job.status === 'completed' && (
                         <>
                           {job.checkpoint && (
@@ -1304,6 +1314,16 @@ export default function TrainingPage() {
                         </>
                       )}
                       {job.status === 'failed' && <span className="text-xs text-destructive shrink-0">Failed</span>}
+                      <Button size="sm" variant="ghost" className="h-6 text-xs text-muted-foreground hover:text-destructive" onClick={async () => {
+                        if (!confirm(`Delete job "${job.name || job.id}"?`)) return
+                        try {
+                          await trainingController.delete(job.id)
+                          addToast('Job deleted', 'info')
+                          void checkpoints.fetchJobs()
+                        } catch { addToast('Failed to delete job', 'error') }
+                      }}>
+                        Delete
+                      </Button>
                     </div>
                   </div>
                   )

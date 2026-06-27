@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/display'
 import { Badge } from '@/components/ui/badge'
 import { StatCard, KpiGrid } from '@/components/strui'
 import { LossChart, type LossPoint, type RewardPoint } from '@/components/training/LossChart'
-import { IconTrash, IconRefresh } from '@/components/ui'
+import { IconTrash, IconRefresh, IconDownload } from '@/components/ui'
 import { trainingJobsController, type TrainingJob } from '@/lib/training-controller'
 import { modelController } from '@/lib/model-controller'
 import { useToastStore } from '@/lib/toast-store'
@@ -154,9 +154,23 @@ export default function TrainingJobDetailPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     {job.checkpoint && job.status === 'completed' && (
-                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleLoadCheckpoint}>
-                        Load saved version
-                      </Button>
+                      <>
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleLoadCheckpoint}>
+                          Load saved version
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={async () => {
+                          try {
+                            const blob = await trainingJobsController.downloadTrainingJob(job.id)
+                            const url = URL.createObjectURL(blob)
+                            const a = document.createElement('a')
+                            a.href = url; a.download = `${job.id}.checkpoint`
+                            a.click(); URL.revokeObjectURL(url)
+                            addToast('Checkpoint downloaded', 'success')
+                          } catch { addToast('Download failed', 'error') }
+                        }}>
+                          <IconDownload className="h-3 w-3 mr-1" /> Export
+                        </Button>
+                      </>
                     )}
                     <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => router.push('/chat')}>
                       Try in chat

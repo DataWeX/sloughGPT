@@ -455,6 +455,7 @@ export default function ChatPage() {
             onEdit={chat.handleEditMessage}
             searchQuery={ui.searchQuery}
             onSuggestionClick={chat.handleSuggestionClick}
+            toolEvents={chat.toolEvents}
             value={chat.input}
             onChange={chat.setInput}
             onSend={handleWriteSend}

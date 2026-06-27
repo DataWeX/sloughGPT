@@ -150,15 +150,15 @@ def train(args):
     print(f"  First waveform: {train_waveforms[0].shape}")
     print(f"  Example: {train_captions_a[0]}")
 
-    # Build vocabulary from all unique captions to prevent BPE over-merge
-    print("\nBuilding BPE vocabulary from all captions...")
+    # Build character-level vocabulary from all captions
+    print("\nBuilding character vocabulary from all captions...")
     engine.build_vocab(all_captions)
-    print(f"  BPE vocab size: {len(engine.text.bpe.vocab)}")
+    print(f"  Char vocab size: {engine.text.vocab_size}")
 
-    # Verify no single-token captions
+    # Verify token lengths are reasonable (char level: one token per char + BOS/EOS)
     for cap in all_captions[:10]:
         tokens = engine.text.encode(cap)
-        assert len(tokens) >= 2, f"BPE over-merged: {cap} → {tokens} (len={len(tokens)})"
+        assert len(tokens) == len(cap) + 2, f"Char token len mismatch: {cap} → {len(tokens)} tokens (expected {len(cap)+2})"
 
     # Precompute audio patches to avoid STFT per epoch
     print("Precomputing audio patches (avoids STFT per epoch)...")

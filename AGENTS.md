@@ -7,6 +7,7 @@ Before any edit, read the relevant docs for the area. Use `opencode doc-aware` t
 - Core → `docs/DEVELOPER_GUIDE.md`, `docs/AI_SOFTWARE_ENGINEERING.md`
 - SDK → `docs/API.md`
 - Infra → `docs/DEPLOYMENT.md`, `docs/DEPLOYMENT_CHECKLIST.md`
+- Foundations → `FOUNDATIONS.md` (pre-LLM infrastructure layers, build order: task-queue → event-bus → config → errors → rate-limiter → repo → lifecycle)
 - CLI → `docs/integration/CLI_README.md`
 - Config → `docs/ENVIRONMENT.md`
 Full map in `.opencode/agents/doc-aware-engineer.md`.
