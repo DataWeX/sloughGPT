@@ -180,6 +180,10 @@ def train(args):
         frac = epoch / max(n_epochs - 1, 1)
         lr = 3e-5 + 0.5 * (3e-4 - 3e-5) * (1 + np.cos(np.pi * frac))
 
+        # Temperature annealing: 2.0 → 1.0 over training
+        # (softer targets early for exploration, sharper later for convergence)
+        temp = 2.0 - 1.0 * frac  # 2.0 → 1.0
+
         # ── Vision batch ──
         idx_v = np.random.permutation(n_v)
         epoch_loss_v = 0.0
@@ -191,7 +195,7 @@ def train(args):
                 if len(tokens) < 2:
                     continue
                 tokens_arr = np.array([tokens], dtype=np.int64)
-                loss_val = engine.train_step(train_images[j:j+1], tokens_arr, lr=lr)
+                loss_val = engine.train_step(train_images[j:j+1], tokens_arr, lr=lr, temperature=temp)
                 epoch_loss_v += loss_val
                 steps_v += 1
             buffer.add(train_images[batch_idx[0]:batch_idx[0]+1], train_captions_v[batch_idx[0]])
@@ -211,6 +215,7 @@ def train(args):
                     audio_patches=audio_patches_list[j],
                     text_tokens=tokens_arr,
                     lr=lr,
+                    temperature=temp,
                 )
                 epoch_loss_a += loss_val
                 steps_a += 1
@@ -231,6 +236,7 @@ def train(args):
                 audio_patches=audio_patches_list[ai],
                 text_tokens=tokens_arr,
                 lr=lr,
+                temperature=temp,
             )
             combined_loss += loss_val
             combined_steps += 1
@@ -249,7 +255,7 @@ def train(args):
         losses_a.append(avg_loss_a)
 
         if (epoch + 1) % max(1, args.epochs // 10) == 0 or epoch == 0:
-            print(f"\nEpoch {epoch+1}/{args.epochs}:")
+            print(f"\nEpoch {epoch+1}/{args.epochs} (lr={lr:.1e}, temp={temp:.2f}):")
             print(f"  Vision:  loss={avg_loss_v:.4f} ({steps_v} steps)")
             print(f"  Audio:   loss={avg_loss_a:.4f} ({steps_a} steps)")
             print(f"  V+A:     loss={avg_loss_c:.4f} ({combined_steps} steps)")

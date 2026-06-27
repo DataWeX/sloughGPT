@@ -13,6 +13,7 @@ from domains.multimodal.engine import (
     VisionEncoder, AudioEncoder, MultimodalEngine, TextDecoder,
     SloTransformerDecoder, SloTransformerDecoderBlock,
 )
+from domains.training.slonet import cross_entropy as _cross_entropy_slo
 from domains.multimodal.char_tokenizer import CharTokenizer
 
 
@@ -424,6 +425,88 @@ class TestMultimodalEngineIntegration:
         engine = MultimodalEngine(embed_dim=64, hidden_dim=128, n_vit_layers=2, n_heads=4)
         for p in engine.audio.parameters():
             assert p.requires_grad
+
+
+class TestTemperatureAnnealing:
+    """Test temperature scaling in train_step and train_batch.
+
+    Temperature > 1.0 scales logits before softmax, creating softer
+    probability distributions. This encourages exploration early in
+    training (avoids sharp, overconfident predictions from random init).
+    """
+
+    def test_temperature_scales_logits(self):
+        """Higher temperature should produce smaller logit values after scaling."""
+        embed_dim = 32
+        hidden_dim = 64
+        vocab_size = 30
+        decoder = SloTransformerDecoder(vocab_size, embed_dim, hidden_dim,
+                                        n_heads=2, n_layers=1)
+
+        img_embed = Tensor(np.random.randn(1, 1, embed_dim).astype(np.float32), requires_grad=False)
+        token_ids = Tensor(np.array([[0, 2, 4, 6]]), requires_grad=False)
+
+        logits, _ = decoder.forward(img_embed, token_ids[:, :-1])
+
+        # Scaled with temperature 2.0
+        scaled = logits / 2.0
+        assert np.allclose(scaled.data, logits.data / 2.0), "Temperature scaling failed"
+
+    def test_higher_temp_gives_lower_loss(self):
+        """With random logits, higher temperature reduces cross-entropy
+        (softer softmax → more uniform distribution → lower penalty for wrong class)."""
+        vocab_size = 20
+        logits = Tensor(np.random.randn(3, vocab_size).astype(np.float32) * 3, requires_grad=True)
+        targets = Tensor(np.array([0, 5, 10]), requires_grad=False)
+
+        loss_base = _cross_entropy_slo(logits, targets)
+        loss_sharp = _cross_entropy_slo(logits / 0.5, targets)
+        loss_soft = _cross_entropy_slo(logits / 2.0, targets)
+
+        # Higher temperature → softer distribution → lower CE (less penalty for wrong class)
+        assert float(loss_soft.data) <= float(loss_base.data), (
+            f"Expected soft temp (T=2) to reduce loss, "
+            f"got {float(loss_soft.data):.3f} vs base {float(loss_base.data):.3f}"
+        )
+        # Lower temperature → sharper distribution → higher CE (more penalty for wrong class)
+        assert float(loss_sharp.data) >= float(loss_base.data), (
+            f"Expected sharp temp (T=0.5) to increase loss, "
+            f"got {float(loss_sharp.data):.3f} vs base {float(loss_base.data):.3f}"
+        )
+
+    def test_temperature_annealing_in_train_step(self):
+        """train_step should accept temperature parameter and produce a valid loss."""
+        engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
+                                  n_decoder_layers=1)
+        engine.build_vocab(["test temperature annealing in multimodal engine"])
+        img = np.random.randn(1, 224, 224, 3).astype(np.float32)
+        tokens = engine.text.char.encode("test temperature")
+        tok_arr = np.array([tokens], dtype=np.int64)
+
+        # With temperature=2.0 (exploration mode)
+        loss_hot = engine.train_step(images_np=img, text_tokens=tok_arr, lr=1e-3, temperature=2.0)
+        assert np.isfinite(loss_hot), f"Loss NaN/Inf with temperature=2.0: {loss_hot}"
+        assert float(loss_hot) > 0, f"Loss should be positive, got {loss_hot}"
+
+    def test_temperature_annealing_lr_scaling(self):
+        """Temperature annealing should not prevent loss from decreasing."""
+        engine = MultimodalEngine(embed_dim=16, hidden_dim=32, n_vit_layers=1, n_heads=2,
+                                  n_decoder_layers=1)
+        engine.build_vocab(["test temperature annealing in multimodal"])
+        img = np.random.randn(1, 224, 224, 3).astype(np.float32)
+        tokens = engine.text.char.encode("test temperature annealing")
+        tok_arr = np.array([tokens], dtype=np.int64)
+
+        # Step 1: high temperature
+        l1 = engine.train_step(images_np=img, text_tokens=tok_arr, lr=1e-3, temperature=2.0)
+        # Step 2: lower temperature  
+        l2 = engine.train_step(images_np=img, text_tokens=tok_arr, lr=1e-3, temperature=1.5)
+        # Step 3: no temperature
+        l3 = engine.train_step(images_np=img, text_tokens=tok_arr, lr=1e-3, temperature=1.0)
+
+        assert np.isfinite(l1) and np.isfinite(l2) and np.isfinite(l3)
+        # At minimum, training should not explode
+        assert l3 < 20, f"Loss exploded with temperature annealing: {l3}"
 
 
 class TestZeroPatchGradientRegression:

@@ -50,6 +50,9 @@ export interface UseTrainingSessionReturn extends TrainingSessionState {
   trainingRunning: boolean
   resetTraining: () => void
   stopTraining: () => void
+  pauseTraining: () => Promise<void>
+  resumeTraining: () => Promise<void>
+  paused: boolean
   startSSETraining: (body: Record<string, unknown>, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void, onCheckpointUpdate?: () => void) => void
   startFineTune: (params: {
     model: string; dataset: string; epochs: number; batchSize: number; lr: number; useLoRA: boolean
@@ -107,11 +110,13 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   const [visualOutputDir, setVisualOutputDir] = useState<string | null>(null)
   const [visualSouPath, setVisualSouPath] = useState<string | null>(null)
 
+  const [paused, setPaused] = useState(false)
   const esRef = useRef<EventSource | null>(null)
 
   const trainingRunning = phase !== 'idle' && phase !== 'complete' && phase !== 'error'
 
   const resetTraining = useCallback(() => {
+    setPaused(false)
     setFinetunedModelPath(null); setFinetunedModelLoss(null)
     setDistillCheckpoint(null); setDistillFinalLoss(null); setDistillEpochs(null)
     setUnifiedModelPath(null); setUnifiedFinalLoss(null); setUnifiedTotalSteps(null); setUnifiedElapsed(null)
@@ -128,6 +133,20 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     trainingJobsController.stopUnified().catch(() => {})
     resetTraining()
   }, [resetTraining])
+
+  const pauseTraining = useCallback(async () => {
+    try {
+      await trainingJobsController.pauseTraining()
+      setPaused(true)
+    } catch { /* ignore */ }
+  }, [])
+
+  const resumeTraining = useCallback(async () => {
+    try {
+      await trainingJobsController.resumeTraining()
+      setPaused(false)
+    } catch { /* ignore */ }
+  }, [])
 
   const startSSETraining = useCallback((
     body: Record<string, unknown>,
@@ -372,13 +391,14 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     turboPhase, turboResult, turboError,
     unifiedModelPath, unifiedFinalLoss, unifiedTotalSteps, unifiedElapsed,
     visualOutputDir, visualSouPath,
+    paused,
     setPhase, setLoss, setProgress, setEpoch, setTotalEpochs, setMessage,
     setLossHistory, setEvalResult,
     setFinetunedModelPath, setFinetunedModelLoss,
     setDistillCheckpoint, setDistillFinalLoss, setDistillEpochs,
     setTurboPhase, setTurboResult, setTurboError,
     trainingRunning, turboRunning: turboPhase === 'training',
-    resetTraining, stopTraining,
+    resetTraining, stopTraining, pauseTraining, resumeTraining,
     startSSETraining, startFineTune, startVisualTraining, startTurboTrain, startUnifiedTraining,
   }
 }

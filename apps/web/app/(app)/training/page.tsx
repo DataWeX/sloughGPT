@@ -17,6 +17,7 @@ import { cn } from '@/lib/cn'
 import { formatSize } from '@/lib/chat-utils'
 import { TestModelDialog } from '@/components/training/TestModelDialog'
 import { LossChart } from '@/components/training/LossChart'
+import { TrainingLogViewer } from '@/components/training/TrainingLogViewer'
 import { useTrainingSession } from '@/hooks/useTrainingSession'
 import { useTrainingDatasets } from '@/hooks/useTrainingDatasets'
 import { useTrainingCheckpoints } from '@/hooks/useTrainingCheckpoints'
@@ -587,7 +588,20 @@ export default function TrainingPage() {
                     />
                   </div>
                 )}
-                <Button size="sm" variant="outline" onClick={session.stopTraining}>Stop training</Button>
+                {session.paused && (
+                  <div className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5 mt-1">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    Training paused
+                  </div>
+                )}
+                <div className="flex gap-2 pt-1">
+                  {session.paused ? (
+                    <Button size="sm" variant="outline" onClick={session.resumeTraining}>Resume</Button>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={session.pauseTraining}>Pause</Button>
+                  )}
+                  <Button size="sm" variant="outline" onClick={session.stopTraining}>Stop</Button>
+                </div>
               </div>
               )
             })()}
@@ -1082,6 +1096,32 @@ export default function TrainingPage() {
           </CardContent>
         </Card>
 
+        {/* Training Log */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Training Log</CardTitle>
+              <Button size="sm" variant="ghost" onClick={async () => {
+                const lines = await trainingController.getTrainingLog()
+                if (lines.length > 0) {
+                  const blob = new Blob([lines.join('\n')], { type: 'text/plain' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url; a.download = 'training-log.txt'
+                  a.click(); URL.revokeObjectURL(url)
+                } else {
+                  addToast('Log is empty', 'info')
+                }
+              }}>
+                Download
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <TrainingLogViewer />
+          </CardContent>
+        </Card>
+
         {/* Checkpoints */}
         {(checkpoints.checkpoints.length > 0 || checkpoints.loadingCheckpoints) && (
           <Card>
@@ -1313,7 +1353,14 @@ export default function TrainingPage() {
                           <span className="text-xs text-success shrink-0">Done</span>
                         </>
                       )}
-                      {job.status === 'failed' && <span className="text-xs text-destructive shrink-0">Failed</span>}
+                      {job.status === 'failed' && (
+                        <>
+                          <span className="text-xs text-destructive shrink-0">Failed</span>
+                          <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => router.push('/training')}>
+                            Retry
+                          </Button>
+                        </>
+                      )}
                       <Button size="sm" variant="ghost" className="h-6 text-xs text-muted-foreground hover:text-destructive" onClick={async () => {
                         if (!confirm(`Delete job "${job.name || job.id}"?`)) return
                         try {

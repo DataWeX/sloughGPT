@@ -129,6 +129,21 @@ export const trainingJobsController = {
     await apiPost('/auto-train/stop')
   },
 
+  async pauseTraining(): Promise<{ success: boolean }> {
+    return apiPost('/training/control/pause')
+  },
+
+  async getTrainingLog(): Promise<string[]> {
+    try {
+      const data = await apiGet<{ lines: string[] }>('/auto-train/log')
+      return data.lines ?? []
+    } catch { return [] }
+  },
+
+  async resumeTraining(): Promise<{ success: boolean }> {
+    return apiPost('/training/control/resume')
+  },
+
   async stopUnified(): Promise<void> {
     await apiPost('/training/unified-stop')
   },

@@ -417,7 +417,8 @@ class TestTaskManager:
 
 class TestManagersWithContextCore:
 
-    def test_all_managers_inject_into_frame(self, tmp_config):
+    @pytest.mark.asyncio
+    async def test_all_managers_inject_into_frame(self, tmp_config):
         from domains.infrastructure.context_core import ContextCore
 
         tmp_config.set("warmth", 0.9)
@@ -432,7 +433,7 @@ class TestManagersWithContextCore:
         )
         cc.set_session_id("test")
         cc.add_message("user", "hello")
-        frame = cc.build_context_frame(query="hello")
+        frame = await cc.build_context_frame(query="hello")
 
         assert "[PERSONALITY INSTRUCTIONS]" in frame.system_prompt
         assert "[STYLE INSTRUCTIONS]" in frame.system_prompt
@@ -455,12 +456,13 @@ class TestManagersWithContextCore:
         cc.add_message("user", "f")
         assert len(cc.working_memory) == 5
 
-    def test_without_managers_falls_back_gracefully(self, tmp_config):
+    @pytest.mark.asyncio
+    async def test_without_managers_falls_back_gracefully(self, tmp_config):
         from domains.infrastructure.context_core import ContextCore
         cc = ContextCore()  # no managers
         cc.set_session_id("test")
         cc.add_message("user", "hello")
-        frame = cc.build_context_frame(query="hello")
+        frame = await cc.build_context_frame(query="hello")
         # Default system prompt, no manager extras
         assert "[PERSONALITY INSTRUCTIONS]" not in frame.system_prompt
 

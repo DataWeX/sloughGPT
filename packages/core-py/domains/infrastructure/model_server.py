@@ -19,6 +19,7 @@ import logging
 import time
 import gc
 import os
+import functools
 from threading import Lock, Thread, Event
 from typing import Any, Optional, Callable
 from dataclasses import dataclass, field
@@ -254,6 +255,9 @@ class ModelServer:
         self._post_generate_hooks: list[Callable[[], None]] = []
         self._on_error_hooks: list[Callable[[Exception], None]] = []
 
+        # Tokenizer cache (LRU, 64 entries)
+        self._tokenize_cache: dict = {}
+
         # Device tracking
         self._device: Optional[str] = None
         self._check_device()
@@ -480,6 +484,24 @@ class ModelServer:
                 except Exception as e:
                     logger.warning("Post-gen hook failed: %s", e)
 
+    def _tokenize_cached(self, tokenizer, prompt: str) -> tuple:
+        """Tokenize with LRU cache to avoid redundant tokenization."""
+        cache_key = (prompt, id(tokenizer))
+        if cache_key in self._tokenize_cache:
+            ids, attn = self._tokenize_cache[cache_key]
+            import torch
+            return {"input_ids": torch.tensor([ids]), "attention_mask": torch.tensor([attn])}
+        import torch
+        inputs = tokenizer(prompt, return_tensors="pt")
+        self._tokenize_cache[cache_key] = (
+            inputs["input_ids"][0].tolist(),
+            inputs.get("attention_mask", inputs["input_ids"][0]).tolist() if inputs.get("attention_mask") is not None else None,
+        )
+        if len(self._tokenize_cache) > 64:
+            # Evict oldest
+            self._tokenize_cache.pop(next(iter(self._tokenize_cache)))
+        return inputs
+
     def _generate_sync(
         self,
         prompt: str,
@@ -517,7 +539,7 @@ class ModelServer:
             model = self._model_ref
             tokenizer = self._tokenizer
 
-        inputs = tokenizer(prompt, return_tensors="pt")
+        inputs = self._tokenize_cached(tokenizer, prompt)
         input_ids = inputs["input_ids"].to(self._device or "cpu")
         attention_mask = inputs.get("attention_mask")
         if attention_mask is not None:
@@ -574,7 +596,7 @@ class ModelServer:
             model = self._model_ref
             tokenizer = self._tokenizer
 
-        inputs = tokenizer(prompt, return_tensors="pt")
+        inputs = self._tokenize_cached(tokenizer, prompt)
         input_ids = inputs["input_ids"].to(self._device or "cpu")
         attention_mask = inputs.get("attention_mask")
         if attention_mask is not None:
@@ -690,7 +712,7 @@ class ModelServer:
                 model = self._model_ref
                 tokenizer = self._tokenizer
 
-            inputs = tokenizer(prompt, return_tensors="pt")
+            inputs = self._tokenize_cached(tokenizer, prompt)
             input_ids = inputs["input_ids"].to(self._device or "cpu")
             attention_mask = inputs.get("attention_mask")
             if attention_mask is not None:

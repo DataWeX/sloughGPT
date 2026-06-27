@@ -24,6 +24,32 @@ import logging
 import re
 import time
 
+# In-memory training log ring buffer
+class _LogBuffer(logging.Handler):
+    def __init__(self, capacity: int = 500):
+        super().__init__()
+        self.capacity = capacity
+        self._lines: list[str] = []
+        self._lock = threading.Lock()
+
+    def emit(self, record: logging.LogRecord) -> None:
+        msg = self.format(record)
+        with self._lock:
+            self._lines.append(msg)
+            if len(self._lines) > self.capacity:
+                self._lines.pop(0)
+
+    def get_lines(self, n: int = 200) -> list[str]:
+        with self._lock:
+            return self._lines[-n:]
+
+    def clear(self) -> None:
+        with self._lock:
+            self._lines.clear()
+
+_log_buffer = _LogBuffer()
+_log_buffer.setFormatter(logging.Formatter("%(asctime)s %(levelname)-8s %(message)s", datefmt="%H:%M:%S"))
+
 try:
     from domains.api.sse_envelope import sse_event, sse_error, sse_complete
 except ImportError:
@@ -64,6 +90,7 @@ MAX_CHECKPOINT_DISK_MB = 500  # Global checkpoint disk budget
 
 autotrain_logger = logging.getLogger("man.autotrain")
 autotrain_logger.setLevel(logging.INFO)
+autotrain_logger.addHandler(_log_buffer)
 
 
 def _enforce_checkpoint_budget():
@@ -883,18 +910,9 @@ async def load_checkpoint(name: str):
 
 @router.get("/log")
 async def auto_train_log():
-    """Return the auto-training log content, if available."""
-    log_path = Path("logs/auto_train.log")
-    if log_path.exists():
-        text = log_path.read_text()
-        lines = text.splitlines()
-        return {"lines": lines[-200:], "total": len(lines)}
-    alt = Path("models/auto-training/train.log")
-    if alt.exists():
-        text = alt.read_text()
-        lines = text.splitlines()
-        return {"lines": lines[-200:], "total": len(lines)}
-    return {"lines": [], "total": 0}
+    """Return the auto-training log content from the in-memory ring buffer."""
+    lines = _log_buffer.get_lines(200)
+    return {"lines": lines, "total": len(lines)}
 
 
 @router.get("/checkpoints/{name}/download")

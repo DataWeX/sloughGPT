@@ -140,6 +140,7 @@ def _load_session_from_disk(session_id: str) -> dict:
 
 def _get_session(session_id: str) -> dict:
     """Get session data from memory cache or disk (hot path uses cache)."""
+    _start_background_flush()
     if session_id in _session_memory_cache:
         return _session_memory_cache[session_id]
     data = _load_session_from_disk(session_id)

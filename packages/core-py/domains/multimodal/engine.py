@@ -418,12 +418,15 @@ class MultimodalEngine:
         lr: Optional[float] = None,
         audio_np: Optional[np.ndarray] = None,
         audio_patches: Optional[np.ndarray] = None,
+        temperature: float = 1.0,
     ) -> float:
         if text_tokens is None:
             raise ValueError("text_tokens is required")
         embed, patches, optimizers = self._concat_modalities(images_np, audio_np, audio_patches)
         logits, _ = self.decoder.forward(embed, text_tokens[:, :-1], patches)
         targets = _tensor(text_tokens[:, 1:].reshape(-1), requires_grad=False)
+        if temperature != 1.0:
+            logits = logits / temperature
         loss = _cross_entropy(logits, targets)
         loss.backward()
         old_lrs = {}
@@ -444,12 +447,19 @@ class MultimodalEngine:
         self,
         samples: list,
         lr: Optional[float] = None,
+        temperature: float = 1.0,
     ) -> float:
         """Accumulate gradients over multiple samples then step once.
 
         Each sample is ``(images_np, text_tokens, audio_np, audio_patches)``
         where ``audio_np`` and ``audio_patches`` are optional (None).  Gradients
         are summed (not averaged) across the batch, then clipped and applied.
+
+        Args:
+            samples: list of (images_np, text_tokens, audio_np, audio_patches) tuples
+            lr: optional learning rate override
+            temperature: softmax temperature for logit scaling (1.0 = standard CE).
+                         Values >1 create softer targets for better exploration.
 
         Returns:
             mean loss across samples
@@ -475,6 +485,8 @@ class MultimodalEngine:
             embed, patches, _ = self._concat_modalities(images_np, audio_np, audio_patches)
             logits, _ = self.decoder.forward(embed, text_tokens[:, :-1], patches)
             targets = _tensor(text_tokens[:, 1:].reshape(-1), requires_grad=False)
+            if temperature != 1.0:
+                logits = logits / temperature
             loss = _cross_entropy(logits, targets)
             # Scale loss by 1/N so the sum ≈ mean (even gradient contribution)
             loss = loss * (1.0 / len(samples))

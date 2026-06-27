@@ -278,7 +278,7 @@ Be concise, accurate, and helpful."""
                 pass
         threading.Thread(target=_do, daemon=True).start()
     
-    def get_rag_context(self, query: str) -> str:
+    async def get_rag_context(self, query: str) -> str:
         """Get RAG context from vector store."""
         if not self.rag_enabled:
             return ""
@@ -296,19 +296,13 @@ Be concise, accurate, and helpful."""
             return ""
         
         try:
-            import asyncio
             # Generate embedding for query
             if self._embedding_fn:
                 query_vec = self._embedding_fn(query)
             else:
                 query_vec = simple_embed(query)
             
-            # Query vector store — use new loop to avoid "already running" errors
-            loop = asyncio.new_event_loop()
-            try:
-                results = loop.run_until_complete(self._vector_store.query(query_vec, top_k=self.rag_top_k))
-            finally:
-                loop.close()
+            results = await self._vector_store.query(query_vec, top_k=self.rag_top_k)
             
             if not results:
                 return ""
@@ -327,7 +321,7 @@ Be concise, accurate, and helpful."""
                 return "\n".join(parts)
             return ""
     
-    def build_context_frame(
+    async def build_context_frame(
         self,
         include_rag: bool = True,
         include_memory: bool = True,
@@ -376,7 +370,7 @@ Be concise, accurate, and helpful."""
         
         # Layer 3: RAG
         if include_rag and self.rag_enabled:
-            rag_content = self.get_rag_context(query)
+            rag_content = await self.get_rag_context(query)
             if rag_content:
                 layer = ContextLayer(
                     layer_type="rag",
