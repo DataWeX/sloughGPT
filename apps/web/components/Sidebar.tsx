@@ -16,6 +16,7 @@ import {
   IconTokenizer,
   IconAgents,
   IconExport,
+  IconVision,
 } from '@/components/icons/NavIcons'
 import { IconChevronDown } from '@/components/ui'
 import { cn } from '@/lib/cn'
@@ -37,6 +38,7 @@ const workspaceItems = [
 ] as const
 
 const systemItems = [
+  { path: '/multimodal', key: 'nav.multimodal', Icon: IconVision },
   { path: '/export', key: 'nav.export', Icon: IconExport },
   { path: '/monitoring', key: 'nav.monitoring', Icon: IconActivity },
   { path: '/tokenizer', key: 'nav.tokenizer', Icon: IconTokenizer },

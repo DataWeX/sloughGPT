@@ -65,6 +65,7 @@ const translations: Record<Locale, Translations> = {
     'nav.tokenizer': 'Tokenizer',
     'nav.export': 'Export',
     'nav.vlm': 'Visual',
+    'nav.multimodal': 'Multimodal',
     'nav.agents': 'Agents',
 
     // Home page
@@ -234,6 +235,7 @@ const translations: Record<Locale, Translations> = {
     'nav.monitoring': 'Monitoreo',
     'nav.tokenizer': 'Tokenizador',
     'nav.export': 'Export',
+    'nav.multimodal': 'Multimodal',
     'nav.agents': 'Agentes',
 
     'home.title': 'Inicio',
@@ -390,6 +392,7 @@ const translations: Record<Locale, Translations> = {
     'nav.monitoring': 'Surveillance',
     'nav.tokenizer': 'Tokeniseur',
     'nav.export': 'Export',
+    'nav.multimodal': 'Multimodal',
     'nav.agents': 'Agents',
     'home.title': 'Accueil',
     'home.subtitle.connecting': 'Connexion...',
@@ -545,6 +548,7 @@ const translations: Record<Locale, Translations> = {
     'nav.monitoring': 'Überwachung',
     'nav.tokenizer': 'Tokenisierer',
     'nav.export': 'Export',
+    'nav.multimodal': 'Multimodal',
     'nav.agents': 'Agenten',
     'home.title': 'Startseite',
     'home.subtitle.connecting': 'Verbinde...',
@@ -700,6 +704,7 @@ const translations: Record<Locale, Translations> = {
     'nav.monitoring': '监控',
     'nav.tokenizer': '分词器',
     'nav.export': 'Export',
+    'nav.multimodal': '多模态',
     'nav.agents': '智能体',
     'home.title': '首页',
     'home.subtitle.connecting': '连接中...',
