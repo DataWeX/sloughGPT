@@ -752,3 +752,31 @@ html.dark {
     transform: scale(0.94);
   }
 }
+
+/* Voice chat listening animation */
+@keyframes listening-pulse {
+  0%, 100% { transform: scale(var(--ring-base, 1.2)); opacity: 0.1; }
+  50% { transform: scale(calc(var(--ring-base, 1.2) + 0.15)); opacity: 0.25; }
+}
+@keyframes listening-ripple {
+  0% { transform: scale(0.8); opacity: 0.4; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+@keyframes listening-bar {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+.listening-ring {
+  animation: listening-pulse 2s ease-in-out infinite;
+}
+.listening-ripple {
+  animation: listening-ripple 1.5s ease-out infinite;
+}
+.listening-bar {
+  animation: listening-bar 0.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .listening-ring, .listening-ripple, .listening-bar {
+    animation: none;
+  }
+}

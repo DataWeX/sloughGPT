@@ -65,7 +65,14 @@ class StartupOrchestrator:
 
         STARTUP_PHASE.update(phase="loading_model", step=2, message="Loading model weights...")
         logger.info("Phase 2/6: loading model %s in background", raw)
-        asyncio.create_task(asyncio.to_thread(_autoload_model, cfg))
+        self._model_load_task = asyncio.create_task(asyncio.to_thread(_autoload_model, cfg))
+        self._model_load_task.add_done_callback(self._on_model_load_done)
+
+    def _on_model_load_done(self, task: asyncio.Task):
+        try:
+            task.result()
+        except Exception as e:
+            logger.error("Model load task failed: %s", e, exc_info=True)
 
     def _phase3_wandb(self):
         """Start W&B metrics server (if available)."""

@@ -8,11 +8,19 @@ import { voiceController } from '@/lib/voice-controller'
 
 export type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking' | 'error'
 
-export interface VoiceChatCallbacks {
-  onMessage: (text: string) => void
+export interface VoiceExchange {
+  id: string
+  userText: string
+  assistantText: string
+  timestamp: number
 }
 
-// ── Speech Recognition Types (browser API) ─────────────────────────────
+export interface VoiceChatCallbacks {
+  onMessage: (text: string) => void
+  onExchange?: (exchange: VoiceExchange) => void
+}
+
+// ── Speech Recognition Types (browser API) �────────────────────────────
 
 interface SRInstance {
   continuous: boolean
@@ -27,17 +35,113 @@ interface SRInstance {
   onresult: ((e: any) => void) | null
 }
 
+// ── Constants ─────────────────────────────────────────────────────────
+
 const SILENCE_TIMEOUT_MS = 2000
 const AUTO_RESUME_DELAY_MS = 400
+const INTERRUPT_CHECK_MS = 100
+
+// ── Voice Settings ────────────────────────────────────────────────────
+
+export interface VoiceSettings {
+  /** Speech rate for browser TTS (0.5–2.0) */
+  rate: number
+  /** Pitch for browser TTS (0.5–2.0) */
+  pitch: number
+  /** Mic level threshold to trigger interrupt (0.05–0.5) */
+  interruptThreshold: number
+  /** Auto-resume listening after AI finishes speaking */
+  autoResume: boolean
+  /** Preferred voice name (browser TTS) */
+  voiceName: string | null
+}
+
+const DEFAULT_SETTINGS: VoiceSettings = {
+  rate: 0.95,
+  pitch: 1.0,
+  interruptThreshold: 0.15,
+  autoResume: true,
+  voiceName: null,
+}
+
+// ── Audio Level Monitor ───────────────────────────────────────────────
+
+function createAudioLevelMonitor(): {
+  start: (stream: MediaStream) => void
+  stop: () => void
+  getLevel: () => number
+  onLevel: ((level: number) => void) | null
+} {
+  let analyser: AnalyserNode | null = null
+  let source: MediaStreamAudioSourceNode | null = null
+  let ctx: AudioContext | null = null
+  let raf: number | null = null
+  let level = 0
+
+  return {
+    onLevel: null,
+    getLevel: () => level,
+    start(stream: MediaStream) {
+      try {
+        ctx = new AudioContext()
+        analyser = ctx.createAnalyser()
+        analyser.fftSize = 256
+        analyser.smoothingTimeConstant = 0.4
+        source = ctx.createMediaStreamSource(stream)
+        source.connect(analyser)
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount)
+        const tick = () => {
+          if (!analyser) return
+          analyser.getByteFrequencyData(dataArray)
+          let sum = 0
+          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i]
+          level = sum / dataArray.length / 255
+          this.onLevel?.(level)
+          raf = requestAnimationFrame(tick)
+        }
+        tick()
+      } catch {
+        // Web Audio not available
+      }
+    },
+    stop() {
+      if (raf !== null) cancelAnimationFrame(raf)
+      raf = null
+      source?.disconnect()
+      analyser = null
+      source = null
+      ctx?.close()
+      ctx = null
+      level = 0
+    },
+  }
+}
 
 // ── Hook ───────────────────────────────────────────────────────────────
 
-export function useVoiceChat({ onMessage }: VoiceChatCallbacks) {
+export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
   const [state, setState] = useState<VoiceState>('idle')
   const [interimText, setInterimText] = useState('')
   const [finalText, setFinalText] = useState('')
   const [responseText, setResponseText] = useState('')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [conversation, setConversation] = useState<VoiceExchange[]>([])
+  const [micLevel, setMicLevel] = useState(0)
+  const [settings, setSettingsState] = useState<VoiceSettings>(DEFAULT_SETTINGS)
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([])
+
+  // Load available browser voices
+  useEffect(() => {
+    const loadVoices = () => {
+      if ('speechSynthesis' in window) {
+        setAvailableVoices(window.speechSynthesis.getVoices())
+      }
+    }
+    loadVoices()
+    window.speechSynthesis?.addEventListener('voiceschanged', loadVoices)
+    return () => window.speechSynthesis?.removeEventListener('voiceschanged', loadVoices)
+  }, [])
 
   // Refs for imperative access inside callbacks
   const recognitionRef = useRef<SRInstance | null>(null)
@@ -45,12 +149,75 @@ export function useVoiceChat({ onMessage }: VoiceChatCallbacks) {
   const finalTextRef = useRef('')
   const stateRef = useRef<VoiceState>('idle')
   const onMessageRef = useRef(onMessage)
+  const onExchangeRef = useRef(onExchange)
+  const conversationRef = useRef<VoiceExchange[]>([])
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const speakingRef = useRef(false)
+  const audioMonitorRef = useRef(createAudioLevelMonitor())
+  const micStreamRef = useRef<MediaStream | null>(null)
+  const interruptCheckRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const settingsRef = useRef(settings)
 
-  // Keep callback ref in sync
+  // Keep settings ref in sync
+  useEffect(() => { settingsRef.current = settings }, [settings])
+
+  // Keep refs in sync
   useEffect(() => { onMessageRef.current = onMessage }, [onMessage])
-
-  // Sync stateRef
+  useEffect(() => { onExchangeRef.current = onExchange }, [onExchange])
   useEffect(() => { stateRef.current = state }, [state])
+
+  // ── Interrupt detection ─────────────────────────────────────────────
+
+  const startInterruptDetection = useCallback(() => {
+    if (interruptCheckRef.current) return
+    interruptCheckRef.current = setInterval(() => {
+      const level = audioMonitorRef.current.getLevel()
+      if (level > settingsRef.current.interruptThreshold && speakingRef.current) {
+        // User is speaking — interrupt AI
+        speakingRef.current = false
+        window.speechSynthesis?.cancel()
+        abortControllerRef.current?.abort()
+        abortControllerRef.current = null
+        // Resume listening after interrupt
+        setState('idle')
+        setTimeout(() => {
+          if (stateRef.current === 'idle') {
+            startListening()
+          }
+        }, AUTO_RESUME_DELAY_MS)
+      }
+    }, INTERRUPT_CHECK_MS)
+  }, [])
+
+  const stopInterruptDetection = useCallback(() => {
+    if (interruptCheckRef.current) {
+      clearInterval(interruptCheckRef.current)
+      interruptCheckRef.current = null
+    }
+  }, [])
+
+  // ── Start microphone + audio level monitoring ───────────────────────
+
+  const startMic = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      micStreamRef.current = stream
+      audioMonitorRef.current.onLevel = (level) => setMicLevel(level)
+      audioMonitorRef.current.start(stream)
+    } catch {
+      // Mic not available — visual-only mode
+    }
+  }, [])
+
+  const stopMic = useCallback(() => {
+    audioMonitorRef.current.stop()
+    audioMonitorRef.current.onLevel = null
+    setMicLevel(0)
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach(t => t.stop())
+      micStreamRef.current = null
+    }
+  }, [])
 
   // ── Silence timer ──────────────────────────────────────────────────
 
@@ -66,7 +233,7 @@ export function useVoiceChat({ onMessage }: VoiceChatCallbacks) {
 
   // ── Start Listening ────────────────────────────────────────────────
 
-  const startListening = useCallback(() => {
+  const startListening = useCallback(async () => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SR) {
       setErrorMessage('Speech recognition not supported — try Chrome or Safari')
@@ -79,6 +246,8 @@ export function useVoiceChat({ onMessage }: VoiceChatCallbacks) {
     setInterimText('')
     setResponseText('')
     setErrorMessage(null)
+
+    await startMic()
 
     const recognition: SRInstance = new SR()
     recognition.continuous = true
@@ -134,7 +303,7 @@ export function useVoiceChat({ onMessage }: VoiceChatCallbacks) {
 
     recognitionRef.current = recognition
     recognition.start()
-  }, [resetSilenceTimer])
+  }, [resetSilenceTimer, startMic])
 
   // ── Stop Listening ─────────────────────────────────────────────────
 
@@ -144,36 +313,60 @@ export function useVoiceChat({ onMessage }: VoiceChatCallbacks) {
       recognitionRef.current = null
     }
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+    stopMic()
     if (stateRef.current === 'listening') {
       setState('idle')
     }
-  }, [])
+  }, [stopMic])
 
-  // ── Speak response aloud ───────────────────────────────────────────
+  // ── Speak response aloud (with interrupt support) ───────────────────
 
   const speakResponse = useCallback(async (text: string): Promise<void> => {
-    // Try server-side TTS first
+    speakingRef.current = true
+    startInterruptDetection()
+
     try {
+      // Try server-side TTS first
       const result = await voiceController.tts(text)
       if (result.backend === 'hf-model' && result.audio) {
         await voiceController.playAudio(result.audio, result.sample_rate)
+        speakingRef.current = false
+        stopInterruptDetection()
         return
       }
     } catch {
       // Fall through to browser TTS
     }
 
-    // Browser speechSynthesis fallback
-    if (!('speechSynthesis' in window)) return
-    return new Promise((resolve) => {
-      const utterance = new SpeechSynthesisUtterance(text)
-      utterance.rate = 0.95
-      utterance.pitch = 1.0
-      utterance.onend = () => resolve()
-      utterance.onerror = () => resolve()
-      window.speechSynthesis.speak(utterance)
-    })
-  }, [])
+    // Browser speechSynthesis fallback — speak in sentences for interruptibility
+    if (!('speechSynthesis' in window)) {
+      speakingRef.current = false
+      stopInterruptDetection()
+      return
+    }
+
+    const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text]
+    const { rate, pitch, voiceName } = settingsRef.current
+    for (const sentence of sentences) {
+      if (!speakingRef.current) break // interrupted
+      await new Promise<void>((resolve) => {
+        const utterance = new SpeechSynthesisUtterance(sentence.trim())
+        utterance.rate = rate
+        utterance.pitch = pitch
+        // Select voice by name if specified
+        if (voiceName) {
+          const voice = window.speechSynthesis.getVoices().find(v => v.name === voiceName)
+          if (voice) utterance.voice = voice
+        }
+        utterance.onend = () => resolve()
+        utterance.onerror = () => resolve()
+        window.speechSynthesis.speak(utterance)
+      })
+    }
+
+    speakingRef.current = false
+    stopInterruptDetection()
+  }, [startInterruptDetection, stopInterruptDetection])
 
   // ── Handle Submit (text → AI → speak) ──────────────────────────────
 
@@ -185,12 +378,30 @@ export function useVoiceChat({ onMessage }: VoiceChatCallbacks) {
 
     onMessageRef.current(text)
 
+    // Create abort controller for interruptible generation
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
     try {
       let fullResponse = ''
       for await (const token of chatController.stream(text)) {
+        if (!speakingRef.current && stateRef.current === 'processing') {
+          // Check if we should start speaking (first sentence complete)
+        }
         fullResponse += token
         setResponseText(fullResponse)
       }
+
+      // Record exchange
+      const exchange: VoiceExchange = {
+        id: `voice-${Date.now()}`,
+        userText: text,
+        assistantText: fullResponse,
+        timestamp: Date.now(),
+      }
+      conversationRef.current = [...conversationRef.current, exchange]
+      setConversation([...conversationRef.current])
+      onExchangeRef.current?.(exchange)
 
       if (fullResponse && fullResponse.length > 1) {
         setState('speaking')
@@ -198,11 +409,19 @@ export function useVoiceChat({ onMessage }: VoiceChatCallbacks) {
       }
 
       // Auto-resume listening
-      setState('idle')
-      setTimeout(() => startListening(), AUTO_RESUME_DELAY_MS)
+      if (settingsRef.current.autoResume) {
+        setState('idle')
+        setTimeout(() => startListening(), AUTO_RESUME_DELAY_MS)
+      } else {
+        setState('idle')
+      }
     } catch (e: any) {
-      setErrorMessage(e.message || 'Generation failed')
-      setState('error')
+      if (e.name !== 'AbortError') {
+        setErrorMessage(e.message || 'Generation failed')
+        setState('error')
+      }
+    } finally {
+      abortControllerRef.current = null
     }
   }, [startListening, speakResponse])
 
@@ -214,21 +433,35 @@ export function useVoiceChat({ onMessage }: VoiceChatCallbacks) {
     } else if (state === 'idle' || state === 'error') {
       startListening()
     }
-    // processing/speaking: ignore toggle
+    // processing/speaking: toggle interrupts
+    if (state === 'speaking') {
+      speakingRef.current = false
+      window.speechSynthesis?.cancel()
+      abortControllerRef.current?.abort()
+      setState('idle')
+      setTimeout(() => startListening(), AUTO_RESUME_DELAY_MS)
+    }
   }, [state, startListening, stopListening])
+
+  // ── Settings update ─────────────────────────────────────────────────
+
+  const updateSettings = useCallback((partial: Partial<VoiceSettings>) => {
+    setSettingsState(prev => ({ ...prev, ...partial }))
+  }, [])
 
   // ── Cleanup on unmount ────────────────────────────────────────────
 
   useEffect(() => {
     return () => {
       stopListening()
+      stopInterruptDetection()
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
-      // Cancel any speech in progress
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel()
       }
+      abortControllerRef.current?.abort()
     }
-  }, [stopListening])
+  }, [stopListening, stopInterruptDetection])
 
   return {
     state,
@@ -236,6 +469,11 @@ export function useVoiceChat({ onMessage }: VoiceChatCallbacks) {
     finalText,
     responseText,
     errorMessage,
+    conversation,
+    micLevel,
+    settings,
+    availableVoices,
+    updateSettings,
     startListening,
     stopListening,
     handleToggle,
