@@ -272,6 +272,12 @@ export const trainingJobsController = {
     return apiGet<Record<string, unknown>>('/training/status')
   },
 
+  async trainFromFeedback(params?: { epochs?: number; batch_size?: number; learning_rate?: number; use_lora?: boolean }): Promise<{
+    status: string; job_id?: string; samples?: number; message?: string
+  }> {
+    return apiPost('/training/from-feedback', params ?? {})
+  },
+
   async exportFeedbackPairs(minQuality: number, targetCount: number): Promise<Record<string, unknown>> {
     return apiPost<Record<string, unknown>>('/training/export-text', { min_quality: minQuality, target_count: targetCount })
   },
