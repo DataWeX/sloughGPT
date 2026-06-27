@@ -54,6 +54,10 @@ export interface VoiceSettings {
   autoResume: boolean
   /** Preferred voice name (browser TTS) */
   voiceName: string | null
+  /** Push-to-talk mode: hold spacebar to listen */
+  pushToTalk: boolean
+  /** Speak sentences as they complete (don't wait for full response) */
+  streamingTTS: boolean
 }
 
 const DEFAULT_SETTINGS: VoiceSettings = {
@@ -62,6 +66,8 @@ const DEFAULT_SETTINGS: VoiceSettings = {
   interruptThreshold: 0.15,
   autoResume: true,
   voiceName: null,
+  pushToTalk: false,
+  streamingTTS: true,
 }
 
 // ── Audio Level Monitor ───────────────────────────────────────────────
@@ -384,12 +390,40 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
 
     try {
       let fullResponse = ''
-      for await (const token of chatController.stream(text)) {
-        if (!speakingRef.current && stateRef.current === 'processing') {
-          // Check if we should start speaking (first sentence complete)
+      let sentenceBuffer = ''
+      let sentenceQueue: string[] = []
+      let speaking = false
+
+      const flushSentence = async (sentence: string) => {
+        if (!sentence.trim()) return
+        if (settingsRef.current.streamingTTS && !speakingRef.current) {
+          speaking = true
+          setState('speaking')
+          await speakResponse(sentence.trim())
+          speaking = false
+          if (stateRef.current === 'speaking') setState('processing')
         }
+      }
+
+      for await (const token of chatController.stream(text)) {
         fullResponse += token
         setResponseText(fullResponse)
+
+        if (settingsRef.current.streamingTTS) {
+          // Accumulate tokens and detect sentence boundaries
+          sentenceBuffer += token
+          const sentenceMatch = sentenceBuffer.match(/^[^.!?]*[.!?]\s*/)
+          if (sentenceMatch) {
+            const sentence = sentenceMatch[0]
+            sentenceBuffer = sentenceBuffer.slice(sentence.length)
+            await flushSentence(sentence)
+          }
+        }
+      }
+
+      // Speak any remaining text in the buffer
+      if (settingsRef.current.streamingTTS && sentenceBuffer.trim()) {
+        await flushSentence(sentenceBuffer)
       }
 
       // Record exchange
@@ -403,7 +437,11 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
       setConversation([...conversationRef.current])
       onExchangeRef.current?.(exchange)
 
-      if (fullResponse && fullResponse.length > 1) {
+      // If streaming TTS already spoke everything, just finish
+      if (settingsRef.current.streamingTTS && speakingRef.current) {
+        // Wait for any in-progress speech to finish
+      } else if (fullResponse && fullResponse.length > 1) {
+        // Non-streaming: speak full response
         setState('speaking')
         await speakResponse(fullResponse)
       }
@@ -424,6 +462,47 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
       abortControllerRef.current = null
     }
   }, [startListening, speakResponse])
+
+  // ── Push-to-talk (hold spacebar to listen) ────────────────────────
+
+  const pushToTalkActiveRef = useRef(false)
+
+  useEffect(() => {
+    if (!settings.pushToTalk) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.code !== 'Space' || e.repeat) return
+
+      e.preventDefault()
+      if (!pushToTalkActiveRef.current && (stateRef.current === 'idle' || stateRef.current === 'error')) {
+        pushToTalkActiveRef.current = true
+        startListening()
+      }
+    }
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.code !== 'Space') return
+
+      e.preventDefault()
+      if (pushToTalkActiveRef.current) {
+        pushToTalkActiveRef.current = false
+        if (stateRef.current === 'listening') {
+          stopListening()
+          const text = finalTextRef.current.trim()
+          if (text) handleSubmit(text)
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
+  }, [settings.pushToTalk, startListening, stopListening, handleSubmit])
 
   // ── Toggle ─────────────────────────────────────────────────────────
 

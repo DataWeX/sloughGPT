@@ -135,6 +135,34 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
               </button>
             </div>
 
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-muted-foreground">Push-to-talk (Space)</label>
+              <button
+                onClick={() => updateSettings({ pushToTalk: !settings.pushToTalk })}
+                className={`w-9 h-5 rounded-full transition-colors ${
+                  settings.pushToTalk ? 'bg-primary' : 'bg-muted-foreground/30'
+                }`}
+              >
+                <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                  settings.pushToTalk ? 'translate-x-4.5' : 'translate-x-0.5'
+                }`} />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-muted-foreground">Stream speech (speak as ready)</label>
+              <button
+                onClick={() => updateSettings({ streamingTTS: !settings.streamingTTS })}
+                className={`w-9 h-5 rounded-full transition-colors ${
+                  settings.streamingTTS ? 'bg-primary' : 'bg-muted-foreground/30'
+                }`}
+              >
+                <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                  settings.streamingTTS ? 'translate-x-4.5' : 'translate-x-0.5'
+                }`} />
+              </button>
+            </div>
+
             {availableVoices.length > 0 && (
               <>
                 <div className="flex items-center justify-between">
@@ -231,14 +259,18 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
         <div className="mt-6 text-center space-y-2 max-w-lg">
           <p className="text-sm text-muted-foreground">
             {isListening
-              ? 'Speak naturally — auto-sends after 2s of silence'
+              ? settings.pushToTalk
+                ? 'Release spacebar to send'
+                : 'Speak naturally — auto-sends after 2s of silence'
               : isProcessing
                 ? 'Generating response...'
                 : isSpeaking
-                  ? 'Tap orb to interrupt'
+                  ? 'Tap orb or press Space to interrupt'
                   : responseText
                     ? 'Tap to continue'
-                    : 'Tap microphone to start'
+                    : settings.pushToTalk
+                      ? 'Hold Space to talk'
+                      : 'Tap microphone to start'
             }
           </p>
 
