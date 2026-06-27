@@ -1,0 +1,9 @@
+# Dev profile — overrides defaults for local development
+# Activate by setting MAN_ENV=dev
+
+server:
+  log_level: "DEBUG"
+  reload: true
+
+features:
+  web: true

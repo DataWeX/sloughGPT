@@ -1,0 +1,268 @@
+"""
+Config System — typed hierarchical config with env override, file defaults,
+per-environment profiles, and runtime reload via EventBus.
+
+Usage:
+    from domains.infrastructure.config import get_config
+    cfg = get_config()
+    cfg.model.name          # "Qwen/Qwen2.5-0.5B-Instruct"
+    cfg.model.device        # "cpu"
+    cfg.server.port         # 8000
+    cfg.log_level           # "INFO"
+
+Env overrides use double-underscore for nesting:
+    MAN_MODEL__NAME=gpt2    overrides config.model.name
+    MAN_SERVER__PORT=9000   overrides config.server.port
+"""
+
+from __future__ import annotations
+
+import os
+import logging
+import threading
+from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
+
+logger = logging.getLogger("man.config")
+
+# ── Nested Config Models ──
+
+
+class ModelConfig(BaseModel):
+    name: str = "Qwen/Qwen2.5-0.5B-Instruct"
+    device: str = "auto"
+    max_length: int = 1024
+    temperature: float = 0.7
+    top_p: float = 0.9
+    top_k: int = 50
+    repetition_penalty: float = 1.1
+    max_new_tokens: int = 200
+    use_slonet: bool = False
+    autoload: bool = True
+
+
+class ServerConfig(BaseModel):
+    host: str = "0.0.0.0"
+    port: int = 8000
+    log_level: str = "INFO"
+    reload: bool = False
+    request_timeout: float = 60.0
+    inference_pool_size: int = 2
+
+
+class FeaturesConfig(BaseModel):
+    auto_workflow: bool = True
+    health_monitor: bool = True
+    health_interval: int = 300
+    watchdog: bool = True
+    web: bool = False
+
+
+class AuthConfig(BaseModel):
+    jwt_secret: str = "dev-secret-change-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_expiration_hours: int = 24
+    api_keys_enabled: bool = False
+
+
+class StorageConfig(BaseModel):
+    data_dir: str = "data"
+    datasets_dir: str = "datasets"
+    models_dir: str = "models"
+    checkpoint_dir: str = "models/auto-training"
+
+
+class AppConfig(BaseModel):
+    """Top-level config — all sub-configs are nested here."""
+    model: ModelConfig = Field(default_factory=ModelConfig)
+    server: ServerConfig = Field(default_factory=ServerConfig)
+    features: FeaturesConfig = Field(default_factory=FeaturesConfig)
+    auth: AuthConfig = Field(default_factory=AuthConfig)
+    storage: StorageConfig = Field(default_factory=StorageConfig)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+_ENV_PREFIX = "MAN_"
+_SEPARATOR = "__"
+
+
+def _env_to_key(env_name: str) -> str:
+    """MAN_MODEL__NAME → model.name"""
+    rest = env_name[len(_ENV_PREFIX):]
+    parts = rest.lower().split(_SEPARATOR)
+    return ".".join(parts)
+
+
+def _apply_env_overrides(config: AppConfig) -> AppConfig:
+    """Walk environment variables, parse MAN_* keys, override config values."""
+    overrides: dict[str, Any] = {}
+    for key, value in os.environ.items():
+        if not key.startswith(_ENV_PREFIX):
+            continue
+        if key == _ENV_PREFIX.rstrip("_"):
+            continue
+        dot_path = _env_to_key(key)
+        overrides[dot_path] = value
+
+    if not overrides:
+        return config
+
+    current = config.model_dump()
+    for dot_path, value in overrides.items():
+        parts = dot_path.split(".")
+        target = current
+        for part in parts[:-1]:
+            if part not in target:
+                logger.warning("Unknown config key: %s (from env %s)", dot_path, _ENV_PREFIX + dot_path.upper().replace(".", _SEPARATOR))
+                break
+            target = target[part]
+        else:
+            leaf = parts[-1]
+            if leaf in target:
+                expected_type = type(target[leaf])
+                try:
+                    if expected_type is bool:
+                        target[leaf] = value.lower() in ("1", "true", "yes")
+                    elif expected_type is int:
+                        target[leaf] = int(value)
+                    elif expected_type is float:
+                        target[leaf] = float(value)
+                    else:
+                        target[leaf] = value
+                except (ValueError, TypeError):
+                    logger.warning("Cannot coerce %s=%s to %s", dot_path, value, expected_type.__name__)
+            else:
+                logger.warning("Unknown config key: %s (from env %s)", dot_path, _ENV_PREFIX + dot_path.upper().replace(".", _SEPARATOR))
+
+    return AppConfig.model_validate(current)
+
+
+def _load_yaml(path: Path) -> dict[str, Any]:
+    """Load a YAML file. Returns empty dict if file doesn't exist or parse fails."""
+    try:
+        import yaml
+        if path.exists():
+            with open(path) as f:
+                data = yaml.safe_load(f)
+                if isinstance(data, dict):
+                    return data
+    except Exception:
+        logger.warning("Failed to load config file: %s", path)
+    return {}
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    """Recursive dict merge — override values win."""
+    result = dict(base)
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+# ── Config Manager ──
+
+
+class ConfigManager:
+    """Manages config lifecycle: load, merge, reload, subscribe."""
+
+    def __init__(self, config_dir: str | Path | None = None):
+        self._config_dir = Path(config_dir) if config_dir else Path.cwd() / "config"
+        self._config_dir.mkdir(parents=True, exist_ok=True)
+        self._config: AppConfig = self._build()
+        self._lock = threading.Lock()
+        self._reload_callbacks: list[callable] = []
+
+    def _build(self) -> AppConfig:
+        """Load defaults + file overrides + env overrides."""
+        defaults = AppConfig().model_dump()
+
+        # Load YAML defaults file
+        yaml_data = _load_yaml(self._config_dir / "defaults.yaml")
+        merged = _deep_merge(defaults, yaml_data)
+
+        # Load profile override (MAN_ENV or MAN_PROFILE)
+        profile = os.environ.get("MAN_ENV") or os.environ.get("MAN_PROFILE") or ""
+        if profile:
+            profile_data = _load_yaml(self._config_dir / f"{profile}.yaml")
+            merged = _deep_merge(merged, profile_data)
+
+        config = AppConfig.model_validate(merged)
+        config = _apply_env_overrides(config)
+        return config
+
+    @property
+    def config(self) -> AppConfig:
+        return self._config
+
+    def reload(self) -> AppConfig:
+        """Reload config from disk + env. Fires callbacks and EventBus event."""
+        with self._lock:
+            new_config = self._build()
+            old_config = self._config
+            self._config = new_config
+
+        for cb in self._reload_callbacks:
+            try:
+                cb(new_config, old_config)
+            except Exception:
+                logger.exception("Config reload callback failed")
+
+        try:
+            from domains.infrastructure.event_bus import get_event_bus
+            bus = get_event_bus()
+            import asyncio
+            try:
+                asyncio.ensure_future(bus.emit("config.changed", {
+                    "old": old_config.model_dump() if hasattr(old_config, "model_dump") else {},
+                    "new": new_config.model_dump(),
+                }, source="config_manager"))
+            except Exception:
+                bus.emit_sync("config.changed", {
+                    "old": old_config.model_dump() if hasattr(old_config, "model_dump") else {},
+                    "new": new_config.model_dump(),
+                }, source="config_manager")
+        except Exception:
+            logger.warning("Could not emit config.changed event")
+
+        return new_config
+
+    def on_reload(self, callback: callable):
+        """Register a callback for config reloads. Receives (new, old)."""
+        self._reload_callbacks.append(callback)
+
+    def dump(self) -> dict[str, Any]:
+        return self._config.model_dump()
+
+
+# ── Singleton ──
+
+_default_manager: ConfigManager | None = None
+_manager_lock = threading.Lock()
+
+
+def get_config_manager() -> ConfigManager:
+    global _default_manager
+    if _default_manager is None:
+        with _manager_lock:
+            if _default_manager is None:
+                _default_manager = ConfigManager()
+    return _default_manager
+
+
+def set_config_manager(manager: ConfigManager):
+    global _default_manager
+    _default_manager = manager
+
+
+def get_config() -> AppConfig:
+    return get_config_manager().config
+
+
+def reload_config() -> AppConfig:
+    return get_config_manager().reload()

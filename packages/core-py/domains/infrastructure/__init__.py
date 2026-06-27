@@ -4,15 +4,16 @@ Infrastructure package exports.
 Provides:
   - SpacedRepetitionScheduler — memory scheduling
   - IpcChannel, IpcConfig, is_rust_available — inter-process communication
+  - ConfigManager, AppConfig, get_config — typed config with env override
+  - EventBus — typed async pub/sub
+  - TaskQueue, InProcessTaskQueue — async priority queue
 
 RAGEngine is at domains.cognitive.rag (deprecated here).
-Experiment tracking and model versioning are in domains/benchmark/domain.py
-and domains/training/status.py respectively.
 """
 from .spaced_repetition_engine import SpacedRepetitionScheduler
 from .ipc import IpcChannel, IpcConfig, is_rust_available
 
-# Lazy import for deprecated rag module — avoids heavy import chain on startup
+# Lazy import for deprecated rag module
 def __getattr__(name):
     if name in ("RAGEngine", "SLOKnowledgeGraph"):
         import warnings
