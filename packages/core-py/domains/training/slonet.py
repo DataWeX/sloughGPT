@@ -1905,10 +1905,17 @@ def _layernorm(x: Tensor, weight: Tensor, bias: Tensor, eps: float = 1e-5) -> Te
             y = ((d - mean) / np.sqrt(var + eps)) * weight.data + bias.data
         out = Tensor(y, requires_grad=x.requires_grad, _children=(x, weight, bias))
         def bk(g):
+            sum_axes = tuple(range(g.ndim - 1))
+            x_normed = (d - d.mean(axis=-1, keepdims=True)) / np.sqrt(var + eps)
             if x.requires_grad:
-                x.grad = Tensor(g * weight.data / np.sqrt(var + eps) if x.grad is None else x.grad.data + g * weight.data / np.sqrt(var + eps))
-            if weight.requires_grad: weight.grad = Tensor(g * d / np.sqrt(var + eps) if weight.grad is None else weight.grad.data + g * d / np.sqrt(var + eps))
-            if bias.requires_grad: bias.grad = Tensor(g.sum(axis=tuple(range(g.ndim-1))) if bias.grad is None else bias.grad.data + g.sum(axis=tuple(range(g.ndim-1))))
+                gx = g * weight.data / np.sqrt(var + eps)
+                x.grad = Tensor(gx if x.grad is None else x.grad.data + gx)
+            if weight.requires_grad:
+                gw = (g * x_normed).sum(axis=sum_axes)
+                weight.grad = Tensor(gw if weight.grad is None else weight.grad.data + gw)
+            if bias.requires_grad:
+                gb = g.sum(axis=sum_axes)
+                bias.grad = Tensor(gb if bias.grad is None else bias.grad.data + gb)
         out._backward_fn = bk
     return out
 

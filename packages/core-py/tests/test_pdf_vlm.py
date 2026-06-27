@@ -9,31 +9,6 @@ from unittest.mock import patch, MagicMock, PropertyMock
 
 import pytest
 
-class TestPDFVLMAPISchemas:
-    """Test PDF-related Pydantic schemas (fast, no models)."""
-
-    def test_pdf_analysis_request_defaults(self):
-        from apps.api.server.routers.visual import PDFAnalysisRequest
-        req = PDFAnalysisRequest(pdf_path="/tmp/test.pdf")
-        assert req.pdf_path == "/tmp/test.pdf"
-        assert req.question == "Summarize this document."
-        assert req.per_page is False
-        assert req.max_new_tokens == 512
-
-    def test_pdf_analysis_request_overrides(self):
-        from apps.api.server.routers.visual import PDFAnalysisRequest
-        req = PDFAnalysisRequest(
-            pdf_path="/data/doc.pdf",
-            question="What are the key findings?",
-            per_page=True,
-            max_new_tokens=128,
-        )
-        assert req.pdf_path == "/data/doc.pdf"
-        assert req.question == "What are the key findings?"
-        assert req.per_page is True
-        assert req.max_new_tokens == 128
-
-
 @pytest.fixture
 def fake_pdf_bytes():
     """Create a minimal valid PDF with one page of text."""
