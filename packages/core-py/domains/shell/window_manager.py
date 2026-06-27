@@ -681,14 +681,6 @@ class WindowManager:
             self.move_pane_to_workspace(idx)
             return
 
-        # Mod+Shift+Arrows — move floating window / swap panes
-        shift_mapping = {
-            393: (0, -1),  # Shift+Up
-            402: (0, 1),   # Shift+Down
-            393: (0, -1),
-            402: (0, 1),
-        }
-
     def _handle_pane_shell_key(self, key: int) -> None:
         """Handle keyboard input when pane is in shell mode."""
         p = self._workspace.focused_pane

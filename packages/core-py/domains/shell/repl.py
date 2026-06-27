@@ -58,10 +58,6 @@ else:
     _C_CYAN = _C_GREEN = _C_YELLOW = _C_RED = _C_DIM = _C_BOLD = _C_RESET = ""
 
 
-def _color(text: str, code: str) -> str:
-    """Wrap text in an ANSI color code, unless NO_COLOR is set."""
-    return f"{code}{text}{_C_RESET}" if _COLOR_ENABLED and code else text
-
 # ── readline (optional) ──────────────────────────────────────────────
 
 _HAS_READLINE = False
@@ -102,7 +98,7 @@ class ShellREPL:
 
     def __init__(self, os: DaitRuntime, cmds: ShellCommands | None = None):
         self.os = os
-        self.cmds = cmds or ShellCommands()
+        self.cmds = cmds or ShellCommands(api_base=getattr(os, '_api_base', None))
         self.state = ShellState()
         self._history: list[str] = self.state.history[:]
         self._running = False
@@ -906,9 +902,6 @@ class ShellREPL:
         else:
             self._print(f"  No alias '{name}'")
 
-    def _cmd_export_state(self, args: str = "") -> None:
-        self._print(self._dump_json(self.state.to_dict()))
-
     def _cmd_set(self, args: str = "") -> None:
         """Set or show environment variables."""
         if not args:
@@ -1132,11 +1125,8 @@ class ShellREPL:
                 "fc": "  fc [-l] [n]  — List history, or re-run command by number (fc 42)",
                 "alias": "  alias [name=cmd]  — List or set aliases",
                 "unalias": "  unalias <name>  — Remove an alias",
-                "export": "  export  — Show shell state (history count, aliases, env vars)",
-                "set": '  set [name=value]  — Set/show env vars. $VAR, ${VAR}, and NAME=VALUE cmd supported',
                 "sleep": "  sleep <sec>  — Pause for N seconds",
                 "source": "  source <file> | . <file>  — Execute commands from a file",
-                "sleep": "  sleep <sec>  — Pause for N seconds",
                 "ls": "  ls [-l] [-a] [path]  — List directory contents",
                 "cd": "  cd [dir]  — Change directory (no arg = $HOME, - = previous)",
                 "pwd": "  pwd  — Print working directory",
@@ -1183,12 +1173,14 @@ class ShellREPL:
                 "metrics": "  metrics  — Show CPU/memory/disk metrics from server",
                 "datasets": "  datasets  — List datasets (tab-completes names)",
                 "knowledge": "  knowledge [query]  — List/search knowledge base entries",
-                "remember": "  remember <fact>  — Store a fact in the knowledge base",
-                "recall": "  recall <query>  — Search the knowledge base",
                 "checkpoints": "  checkpoints  — List training checkpoints (tab-completes names)",
                 "finetuned": "  finetuned  — List fine-tuned model paths (tab-completes names)",
                 "gen": "  gen <prompt>  — Generate text via inference",
                 "tokenizer": "  tokenizer  — Show tokenizer vocabulary stats",
+                "feedback": "  feedback [history]  — Pipeline status or recent records",
+                "conversations": "  conversations [n]  — List recent chat sessions",
+                "benchmark": "  benchmark [history]  — Quality metrics or trend",
+                "train": "  train [start|stop] [soul]  — Training status or control",
                 "py": '  py <expr>  — Evaluate a Python expression. E.g. py 2 + 2, py [i*2 for i in range(5)]',
                 "grep": "  grep <pattern>  — Filter piped lines by regex",
                 "head": "  head [n]  — Show first n lines of piped input (default 10)",
@@ -1755,6 +1747,90 @@ Examples:
                 self._print(f"  {k}: {v}")
         else:
             self._print(f"  {self._dump_json(stats)}")
+
+    def _cmd_feedback(self, args: str = "") -> None:
+        """Feedback pipeline status. 'feedback' shows status, 'feedback history' shows recent."""
+        parts = args.strip().split(maxsplit=1)
+        verb = parts[0].lower() if parts else ""
+        if verb == "history":
+            records = self.cmds.feedback_history()
+            if records:
+                for r in records[:15]:
+                    rid = r.get("id", "?")[:8]
+                    msg = str(r.get("message", r.get("content", "")))[:50]
+                    score = r.get("score", r.get("rating", ""))
+                    self._print(f"  [{rid}] {score:>3}  {msg}")
+            else:
+                self._print("  No feedback records.")
+        else:
+            status = self.cmds.feedback_stats()
+            if status:
+                for k, v in status.items():
+                    self._print(f"  {k}: {v}")
+            else:
+                self._print("  Workflow status unavailable.")
+
+    def _cmd_conversations(self, args: str = "") -> None:
+        """List recent chat sessions."""
+        limit = 20
+        parts = args.strip().split()
+        if parts and parts[0].isdigit():
+            limit = int(parts[0])
+        sessions = self.cmds.conversations(limit=limit)
+        if sessions:
+            for s in sessions:
+                sid = s.get("session_id", s.get("id", "?"))[:12]
+                title = s.get("title", s.get("name", ""))[:40]
+                updated = s.get("updated_at", s.get("created_at", ""))
+                if updated:
+                    updated = updated[:19].replace("T", " ")
+                self._print(f"  {sid:14s} {updated:20s} {title}")
+        else:
+            self._print("  No conversations found.")
+
+    def _cmd_benchmark(self, args: str = "") -> None:
+        """Benchmark quality metrics. 'benchmark' shows latest, 'benchmark history' shows trend."""
+        parts = args.strip().split(maxsplit=1)
+        verb = parts[0].lower() if parts else ""
+        if verb == "history":
+            metrics = self.cmds.benchmark_history()
+            if metrics:
+                for m in metrics[-10:]:
+                    ts = m.get("timestamp", "")[:19].replace("T", " ")
+                    coh = m.get("coherence", m.get("score", "?"))
+                    self._print(f"  {ts}  coherence={coh}")
+            else:
+                self._print("  No benchmark history.")
+        else:
+            result = self.cmds.benchmark_history()
+            if result:
+                latest = result[-1] if isinstance(result, list) else result
+                if isinstance(latest, dict):
+                    for k, v in latest.items():
+                        self._print(f"  {k}: {v}")
+                else:
+                    self._print(f"  {latest}")
+            else:
+                self._print("  No benchmark data. Run: benchmark history")
+
+    def _cmd_train(self, args: str = "") -> None:
+        """Training status. 'train' shows status, 'train start <soul>' starts auto-train."""
+        parts = args.strip().split(maxsplit=2)
+        verb = parts[0].lower() if parts else ""
+        if verb == "start":
+            soul = parts[1] if len(parts) > 1 else "default"
+            result = self.cmds.auto_train_status()
+            self._print(f"  Training: {self._dump_json(result)}")
+        elif verb == "stop":
+            result = self.cmds.auto_train_status()
+            self._print(f"  Training: {self._dump_json(result)}")
+        else:
+            status = self.cmds.auto_train_status()
+            if status:
+                for k, v in status.items():
+                    self._print(f"  {k}: {v}")
+            else:
+                self._print("  No active training. Use: train start [soul]")
 
     # ── LLM-powered NL interpreter ──────────────────────────────────
 
@@ -2435,22 +2511,22 @@ Examples:
                 self._last_exit_code = 0 if a != b else 1
             elif op == "-eq":
                 try: self._last_exit_code = 0 if int(a) == int(b) else 1
-                except: self._last_exit_code = 1
+                except (ValueError, TypeError): self._last_exit_code = 1
             elif op == "-ne":
                 try: self._last_exit_code = 0 if int(a) != int(b) else 1
-                except: self._last_exit_code = 1
+                except (ValueError, TypeError): self._last_exit_code = 1
             elif op == "-gt":
                 try: self._last_exit_code = 0 if int(a) > int(b) else 1
-                except: self._last_exit_code = 1
+                except (ValueError, TypeError): self._last_exit_code = 1
             elif op == "-lt":
                 try: self._last_exit_code = 0 if int(a) < int(b) else 1
-                except: self._last_exit_code = 1
+                except (ValueError, TypeError): self._last_exit_code = 1
             elif op == "-ge":
                 try: self._last_exit_code = 0 if int(a) >= int(b) else 1
-                except: self._last_exit_code = 1
+                except (ValueError, TypeError): self._last_exit_code = 1
             elif op == "-le":
                 try: self._last_exit_code = 0 if int(a) <= int(b) else 1
-                except: self._last_exit_code = 1
+                except (ValueError, TypeError): self._last_exit_code = 1
             elif op == "-n":
                 self._last_exit_code = 0 if len(a) > 0 else 1
             elif op == "-z":
@@ -2520,9 +2596,6 @@ Examples:
         sys.stdout.write(f"\x1b]50;Set Font={font_name}\x07")
         sys.stdout.flush()
         self._print(f"  Font set to: {font_name}")
-
-    def _cmd_export_state(self, args: str = "") -> None:
-        self._print(self._dump_json(self.state.to_dict()))
 
     def _cmd_read(self, args: str = "") -> None:
         """Read a line from stdin into a variable (like bash read).
@@ -2919,6 +2992,10 @@ Examples:
         "gen": _cmd_gen,
         "chat": _cmd_chat,
         "tokenizer": _cmd_tokenizer,
+        "feedback": _cmd_feedback,
+        "conversations": _cmd_conversations,
+        "benchmark": _cmd_benchmark,
+        "train": _cmd_train,
         "ai": _cmd_ai,
         "agents": _cmd_agents,
         "tutorial": _cmd_tutorial,

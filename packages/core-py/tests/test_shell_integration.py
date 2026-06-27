@@ -133,8 +133,10 @@ class TestLocalCommands:
 
 
 def test_subprocess_shell_launches():
+    pkgs = repr(str(Path(__file__).resolve().parents[1]))
+    code = f"import sys; sys.path.insert(0, {pkgs}); from domains.shell.repl import ShellREPL; print('ok')"
     result = subprocess.run(
-        [sys.executable, "-c", "from domains.shell.repl import ShellREPL; print('ok')"],
+        [sys.executable, "-c", code],
         capture_output=True, text=True, timeout=10,
     )
     assert "ok" in result.stdout

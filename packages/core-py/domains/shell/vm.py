@@ -793,17 +793,6 @@ class VMRunner:
         return lines
 
 
-# ── Save/load program ─────────────────────────────────────────────────────
-
-
-def save_program(path: str, source: str) -> None:
-    Path(path).write_text(source)
-
-
-def load_program(path: str) -> str:
-    return Path(path).read_text()
-
-
 # ── Example Programs ───────────────────────────────────────────────────────
 
 

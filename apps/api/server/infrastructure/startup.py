@@ -170,6 +170,7 @@ class StartupOrchestrator:
 
     async def shutdown(self):
         """Clean up on server shutdown."""
+        logger.info("StartupOrchestrator.shutdown() called")
         try:
             from training.job_store import get_job_store
             store = get_job_store()
@@ -198,6 +199,8 @@ class StartupOrchestrator:
             await pool.shutdown()
         except Exception:
             pass
+
+        logger.info("StartupOrchestrator.shutdown() complete")
 
 
 def _autoload_model(cfg: ServerConfig):

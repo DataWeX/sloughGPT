@@ -232,7 +232,8 @@ def shell(ctx, command):
     from domains.shell.repl import ShellREPL
     from domains.shell.kernel import DaitRuntime
 
-    os = DaitRuntime()
+    api_base = f"http://{ctx.obj['host']}:{ctx.obj['port']}"
+    os = DaitRuntime(api_base=api_base)
     repl = ShellREPL(os)
     if command:
         commands, is_bg, should_time = repl._parse_pipeline(command)

@@ -91,8 +91,11 @@ async def lifespan(app_inst: FastAPI):
 
         orch = StartupOrchestrator(app_inst, cfg)
         await orch.run()
+        logger.info("Lifespan: startup complete, yielding to FastAPI")
         yield
+        logger.info("Lifespan: FastAPI shutting down, calling orch.shutdown()")
         await orch.shutdown()
+        logger.info("Lifespan: shutdown complete")
     except Exception as exc:
         logger.critical("Startup failed: %s", exc, exc_info=True)
         yield

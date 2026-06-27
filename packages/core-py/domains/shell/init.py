@@ -44,7 +44,7 @@ BUILTIN_SERVICES: dict[str, dict[str, Any]] = {
         "respawn_delay": 3.0,
         "runlevel": 2,
         "timeout": 60.0,
-        "health_check": "curl -sf http://localhost:8000/health",
+        "health_check": "curl -sf http://localhost:8000/health",  # resolved at boot via DaitRuntime._api_base
         "description": "AI model inference server (FastAPI)",
     },
     "agent-orchestrator": {

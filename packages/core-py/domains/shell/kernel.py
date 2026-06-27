@@ -201,8 +201,9 @@ class Kernel:
 class DaitRuntime:
     """Top-level runtime — wraps Kernel + resource management."""
 
-    def __init__(self):
+    def __init__(self, api_base: str | None = None):
         self.kernel = Kernel()
+        self._api_base = api_base or os.environ.get("SLGPT_API", "http://localhost:8000")
         self._model_loaded: bool = False
         self._model_name: str = ""
         self._current_soul: str = ""
@@ -217,7 +218,7 @@ class DaitRuntime:
         from .devices import create_default_devices
         from .vfs import get_vfs
         self._init = get_init_system()
-        self._devices = create_default_devices(get_kernel=lambda: self.kernel)
+        self._devices = create_default_devices(get_kernel=lambda: self.kernel, api_base=self._api_base)
         self._vfs = get_vfs()
         self._vfs.set_devices(self._devices)
         self._vfs.set_kernel(self.kernel)
@@ -238,7 +239,7 @@ class DaitRuntime:
     def _detect_health(self) -> None:
         try:
             import requests
-            r = requests.get("http://localhost:8000/health", timeout=2)
+            r = requests.get(f"{self._api_base}/health", timeout=2)
             if r.status_code == 200:
                 data = r.json()
                 self._model_loaded = data.get("model_loaded", False)

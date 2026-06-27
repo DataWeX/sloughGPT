@@ -72,10 +72,11 @@ class RandomDevice(AIDevice):
 
 class LLMDevice(AIDevice):
     name = "llm"
-    description = "AI text generation — read with prompt in args, write prompt and get response"
+    description = "Text generation — write a prompt, read the response"
 
-    def __init__(self, generate_fn: Callable[[str], str] | None = None):
+    def __init__(self, generate_fn: Callable[[str], str] | None = None, api_base: str | None = None):
         self._generate_fn = generate_fn
+        self._api_base = api_base or os.environ.get("SLGPT_API", "http://localhost:8000")
 
     def read(self, args: str = "") -> str:
         prompt = args.strip() or "continue this thought"
@@ -93,7 +94,7 @@ class LLMDevice(AIDevice):
         try:
             import requests
             r = requests.post(
-                "http://localhost:8000/inference/generate",
+                f"{self._api_base}/inference/generate",
                 json={"prompt": prompt, "max_new_tokens": 128},
                 timeout=30,
             )
@@ -141,8 +142,8 @@ class KnowledgeDevice(AIDevice):
     name = "knowledge"
     description = "Knowledge base — read returns random fact, write stores a fact"
 
-    def __init__(self, api_base: str = "http://localhost:8000"):
-        self._api_base = api_base
+    def __init__(self, api_base: str | None = None):
+        self._api_base = api_base or os.environ.get("SLGPT_API", "http://localhost:8000")
 
     def read(self, args: str = "") -> str:
         try:
@@ -304,20 +305,21 @@ class DeviceManager:
 
     @staticmethod
     def is_device_path(path: str) -> bool:
+        """Check if a path looks like a /dev/ device path."""
         return path.startswith("/dev/") or path.startswith("dev/")
 
 
 # ── Default devices ────────────────────────────────────────────────────────
 
 
-def create_default_devices(get_kernel: Callable | None = None) -> DeviceManager:
+def create_default_devices(get_kernel: Callable | None = None, api_base: str | None = None) -> DeviceManager:
     """Create and register all built-in device nodes."""
     mgr = DeviceManager()
     mgr.register(NullDevice())
     mgr.register(RandomDevice())
-    mgr.register(LLMDevice())
+    mgr.register(LLMDevice(api_base=api_base))
     mgr.register(EmbeddingDevice())
-    mgr.register(KnowledgeDevice())
+    mgr.register(KnowledgeDevice(api_base=api_base))
     mgr.register(VisionDevice())
     mgr.register(ProcDevice(get_kernel))
     return mgr
