@@ -186,10 +186,10 @@ export default function HomePage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
               <div>
                 <div className="flex justify-center mb-1">
-                  <span className={`w-2 h-2 rounded-full ${health && health !== 'offline' && (health as any).status === 'healthy' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                  <span className={`w-2 h-2 rounded-full ${health && health !== 'offline' && health.status === 'healthy' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
                 </div>
                 <p className="text-[10px] text-muted-foreground">API</p>
-                <p className="text-xs font-medium">{(health as any)?.status === 'healthy' ? 'Healthy' : 'Degraded'}</p>
+                <p className="text-xs font-medium">{health && health !== 'offline' && health.status === 'healthy' ? 'Healthy' : 'Degraded'}</p>
               </div>
               <div>
                 <p className="text-[10px] text-muted-foreground">Model</p>

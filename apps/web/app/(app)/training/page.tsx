@@ -448,14 +448,18 @@ export default function TrainingPage() {
     document.addEventListener('visibilitychange', onVisibility)
     let id: ReturnType<typeof setInterval>
     const tick = () => {
-      if (visibilityRef.current) void checkpoints.fetchCheckpoints()
+      if (visibilityRef.current) {
+        void checkpoints.fetchCheckpoints()
+        const hasRunning = allJobs.some(j => j.status === 'running')
+        if (hasRunning) void checkpoints.fetchJobs()
+      }
     }
     id = setInterval(tick, 10000)
     return () => {
       clearInterval(id)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [checkpoints])
+  }, [checkpoints, allJobs])
 
   useEffect(() => {
     modelController.list().then(models => {

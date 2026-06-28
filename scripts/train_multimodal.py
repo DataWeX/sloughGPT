@@ -122,65 +122,81 @@ def generate_audio_dataset(n: int, sample_rate: int = 16000) -> tuple:
 def train(args):
     np.random.seed(42)
     
-    if args.tiny:
-        embed_dim = 16
-        hidden_dim = 32
-        n_vit_layers = 1
-        n_heads = 2
-        n_decoder_layers = 1
-        n_audio_layers = 1
-        if args.epochs == 50:  # user didn't override
-            args.epochs = 100  # more epochs needed with small model
-        if args.samples == 100:
-            args.samples = 50  # fewer samples for fast iteration
+    if args.load:
+        print(f"Loading engine from {args.load}...")
+        engine = MultimodalEngine.load(args.load)
+        embed_dim = engine.vision.embed_dim
+        hidden_dim = engine.decoder.hidden_dim
+        n_vit_layers = len(engine.vision.blocks)
+        n_heads = engine.vision.n_heads
+        n_decoder_layers = len(engine.decoder.blocks)
+        n_audio_layers = len(engine.audio.blocks)
+        print(f"  Loaded: embed_dim={embed_dim}, hidden_dim={hidden_dim}, "
+              f"vit_layers={n_vit_layers}, decoder_layers={n_decoder_layers}")
+        print(f"  Previously trained: {engine._trained}")
+
+        # Regenerate data (same seed so deterministic)
+        print(f"Generating {args.samples} synthetic image–caption pairs...")
+        train_images, train_captions_v = generate_vision_dataset(args.samples)
+        n_audio = args.samples
+        train_waveforms, train_captions_a = generate_audio_dataset(n_audio)
+        all_captions = list(train_captions_v) + list(train_captions_a)
     else:
-        embed_dim = args.embed_dim or 128
-        hidden_dim = args.hidden_dim or 256
-        n_vit_layers = args.n_vit_layers or 3
-        n_heads = args.n_heads or 4
-        n_decoder_layers = args.n_decoder_layers or 3
-        n_audio_layers = args.n_audio_layers or 2
+        if args.tiny:
+            embed_dim = 16
+            hidden_dim = 32
+            n_vit_layers = 1
+            n_heads = 2
+            n_decoder_layers = 1
+            n_audio_layers = 1
+            if args.epochs == 50:
+                args.epochs = 100
+            if args.samples == 100:
+                args.samples = 50
+        else:
+            embed_dim = args.embed_dim or 128
+            hidden_dim = args.hidden_dim or 256
+            n_vit_layers = args.n_vit_layers or 3
+            n_heads = args.n_heads or 4
+            n_decoder_layers = args.n_decoder_layers or 3
+            n_audio_layers = args.n_audio_layers or 2
 
-    print("Initializing MultimodalEngine...")
-    print(f"  embed_dim={embed_dim}, hidden_dim={hidden_dim}, "
-          f"vit_layers={n_vit_layers}, decoder_layers={n_decoder_layers}, "
-          f"audio_layers={n_audio_layers}, heads={n_heads}")
-    engine = get_multimodal_engine(
-        embed_dim=embed_dim,
-        hidden_dim=hidden_dim,
-        n_vit_layers=n_vit_layers,
-        n_heads=n_heads,
-        n_decoder_layers=n_decoder_layers,
-        n_audio_layers=n_audio_layers,
-    )
+        print("Initializing MultimodalEngine...")
+        print(f"  embed_dim={embed_dim}, hidden_dim={hidden_dim}, "
+              f"vit_layers={n_vit_layers}, decoder_layers={n_decoder_layers}, "
+              f"audio_layers={n_audio_layers}, heads={n_heads}")
+        engine = get_multimodal_engine(
+            embed_dim=embed_dim,
+            hidden_dim=hidden_dim,
+            n_vit_layers=n_vit_layers,
+            n_heads=n_heads,
+            n_decoder_layers=n_decoder_layers,
+            n_audio_layers=n_audio_layers,
+        )
 
-    # Generate all training captions first (for vocab building)
-    all_captions = []
-    
-    # Vision data
-    print(f"Generating {args.samples} synthetic image–caption pairs...")
-    train_images, train_captions_v = generate_vision_dataset(args.samples)
-    all_captions.extend(train_captions_v)
-    print(f"  Images shape: {train_images.shape}")
-    print(f"  Example: {train_captions_v[0]}")
+        # Generate all training captions first (for vocab building)
+        all_captions = []
 
-    # Audio data
-    n_audio = args.samples  # same amount
-    print(f"Generating {n_audio} synthetic audio–caption pairs...")
-    train_waveforms, train_captions_a = generate_audio_dataset(n_audio)
-    all_captions.extend(train_captions_a)
-    print(f"  First waveform: {train_waveforms[0].shape}")
-    print(f"  Example: {train_captions_a[0]}")
+        # Vision data
+        print(f"Generating {args.samples} synthetic image–caption pairs...")
+        train_images, train_captions_v = generate_vision_dataset(args.samples)
+        all_captions.extend(train_captions_v)
+        print(f"  Images shape: {train_images.shape}")
+        print(f"  Example: {train_captions_v[0]}")
 
-    # Build character-level vocabulary from all captions
-    print("\nBuilding character vocabulary from all captions...")
-    engine.build_vocab(all_captions)
-    print(f"  Char vocab size: {engine.text.vocab_size}")
+        # Audio data
+        n_audio = args.samples
+        print(f"Generating {n_audio} synthetic audio–caption pairs...")
+        train_waveforms, train_captions_a = generate_audio_dataset(n_audio)
+        all_captions.extend(train_captions_a)
 
-    # Verify token lengths are reasonable (char level: one token per char + BOS/EOS)
-    for cap in all_captions[:10]:
-        tokens = engine.text.encode(cap)
-        assert len(tokens) == len(cap) + 2, f"Char token len mismatch: {cap} → {len(tokens)} tokens (expected {len(cap)+2})"
+        # Build vocab
+        print("\nBuilding character vocabulary from all captions...")
+        engine.build_vocab(all_captions)
+        print(f"  Char vocab size: {engine.text.vocab_size}")
+        for cap in all_captions[:10]:
+            tokens = engine.text.encode(cap)
+            assert len(tokens) == len(cap) + 2
 
     # Precompute audio patches to avoid STFT per epoch
     print("Precomputing audio patches (avoids STFT per epoch)...")
@@ -339,5 +355,6 @@ if __name__ == "__main__":
     parser.add_argument("--n-decoder-layers", type=int, default=None, help="Override decoder layers")
     parser.add_argument("--n-audio-layers", type=int, default=None, help="Override audio encoder layers")
     parser.add_argument("--n-heads", type=int, default=None, help="Override attention heads")
+    parser.add_argument("--load", type=str, default="", help="Path to saved engine .npz to resume training")
     args = parser.parse_args()
     train(args)

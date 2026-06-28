@@ -25,6 +25,8 @@ export { systemController } from './system-controller'
 export { tokenizerController } from './tokenizer-controller'
 export { exportController } from './export-controller'
 export { voiceController } from './voice-controller'
+export { imagesController } from './images-controller'
+export { filesController } from './files-controller'
 
 export { toolsController } from './tools-controller'
 

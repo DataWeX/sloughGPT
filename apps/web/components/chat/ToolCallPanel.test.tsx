@@ -2,6 +2,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { ToolCallPanel } from './ToolCallPanel'
+import type { ToolCallEvent } from '@/lib/stream-chat-response'
 
 afterEach(cleanup)
 
@@ -35,7 +36,7 @@ describe('ToolCallPanel', () => {
   })
 
   it('renders multiple events in order', () => {
-    const events = [
+    const events: ToolCallEvent[] = [
       { tool: 'web_search', status: 'success', output: 'results' },
       { tool: 'calculator', status: 'success', output: '4' },
     ]

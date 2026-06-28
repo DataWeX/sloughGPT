@@ -10,9 +10,7 @@ const nextConfig = {
     pagesBufferLength: 2,
   },
   async rewrites() {
-    return [
-      { source: '/auto-train/:path*', destination: 'http://localhost:8000/auto-train/:path*' }
-    ]
+    return []
   },
 }
 

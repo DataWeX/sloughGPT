@@ -54,7 +54,6 @@ export default function ModelsPage() {
   const [warmingModel, setWarmingModel] = useState<string | null>(null)
   const [switchingSoul, setSwitchingSoul] = useState<string | null>(null)
   const [traitWeights, setTraitWeights] = useState<Record<string, any> | null>(null)
-  const [mounted, setMounted] = useState(false)
   const [modelSearch, setModelSearch] = useState('')
   const { state: health, refresh: refreshHealth } = useApiHealth()
   const addToast = useToastStore(s => s.addToast)
@@ -199,7 +198,7 @@ export default function ModelsPage() {
     }
   }
 
-  useEffect(() => { setMounted(true); fetchTraitWeights(); fetchSnapshots(); modelController.getCacheUsage().then(setCacheUsage).catch(() => {}) }, [fetchTraitWeights, fetchSnapshots])
+  useEffect(() => { fetchTraitWeights(); fetchSnapshots(); modelController.getCacheUsage().then(setCacheUsage).catch(() => {}) }, [fetchTraitWeights, fetchSnapshots])
 
   const isOnline = health !== null && health !== 'offline'
   const subtitle = health === null ? 'Connecting...'
@@ -214,24 +213,6 @@ export default function ModelsPage() {
 
   return (
     <div className="sl-page mx-auto max-w-4xl">
-      <style>{`
-        @keyframes pulseGlow {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.3); }
-          50% { box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.1); }
-        }
-        @keyframes cardLift {
-          to { transform: translateY(-2px); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
-        }
-        .card-hover {
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        .card-hover:hover {
-          animation: cardLift 0.2s ease forwards;
-        }
-        .pulse-dot {
-          animation: pulseGlow 2s ease-in-out infinite;
-        }
-      `}</style>
       <AppRouteHeader
         className="items-start"
         left={<AppRouteHeaderLead title="Models & Personalities" subtitle={subtitle} />}
@@ -247,7 +228,7 @@ export default function ModelsPage() {
             <CardContent>
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <span className={cn("w-2 h-2 rounded-full", health.model_loaded ? "bg-success pulse-dot" : "bg-warning")} />
+                  <span className={cn("w-2 h-2 rounded-full", health.model_loaded ? "bg-success animate-pulse" : "bg-warning")} />
                   <span className="text-xs font-medium">{health.model_type || 'No model'}</span>
                 </div>
                 {currentSoul && (
@@ -288,7 +269,7 @@ export default function ModelsPage() {
                 { title: 'Adapters', desc: 'LoRA/DoRA fine-tuned adapters that stack on any base', icon: '🧩', count: checkpoints.filter((c: Checkpoint) => c.soul).length },
                 { title: 'Checkpoints', desc: 'Trained checkpoints that persist a model+personality snapshot', icon: '📦', count: checkpoints.length },
               ].map(layer => (
-                <div key={layer.title} className="rounded-lg border border-border/60 p-3 card-hover">
+                <div key={layer.title} className="rounded-lg border border-border/60 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-base">{layer.icon}</span>
                     <span className="text-sm font-medium">{layer.title}</span>
@@ -322,7 +303,7 @@ export default function ModelsPage() {
                 const soulCheckpoints = checkpoints?.filter((c: Checkpoint) => c.soul === s.name) ?? []
                 const isCurrent = currentSoul === s.name
                 return (
-                  <div key={s.name} className={cn("flex items-center justify-between p-3 rounded-lg border card-hover", isCurrent ? "border-primary/40 bg-primary/5" : "border-border/60")}>
+                  <div key={s.name} className={cn("flex items-center justify-between p-3 rounded-lg border transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm", isCurrent ? "border-primary/40 bg-primary/5" : "border-border/60")}>
                     <div className="flex items-center gap-3 min-w-0">
                       <div className={cn("w-2 h-2 rounded-full shrink-0", isCurrent ? "bg-primary" : "bg-muted-foreground/30")} />
                       <div className="min-w-0">
@@ -366,7 +347,7 @@ export default function ModelsPage() {
         )}
 
         {/* ── Personality Profile ── */}
-        {traitWeights && mounted && (
+        {traitWeights && (
           <Card className="relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.02] to-transparent pointer-events-none" />
             <CardHeader className="pb-2">
@@ -486,7 +467,7 @@ export default function ModelsPage() {
                     <div
                       key={model.id}
                       className={cn(
-                        "flex items-center justify-between p-3 rounded-lg border cursor-pointer card-hover",
+                        "flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm",
                         isLoaded ? "border-primary/40 bg-primary/5" : "border-border/60"
                       )}
                       onClick={() => router.push(`/model/${encodeURIComponent(model.id)}`)}

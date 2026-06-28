@@ -3,15 +3,7 @@
 import { useState } from 'react'
 import { cn } from '@/lib/cn'
 import { Card } from '@/components/ui'
-
-interface ToolCallEvent {
-  tool: string
-  status: 'executing' | 'success' | 'error'
-  output?: string
-  error?: string
-  duration_ms?: number
-  args?: Record<string, unknown>
-}
+import type { ToolCallEvent } from '@/lib/stream-chat-response'
 
 interface ToolCallPanelProps {
   events: ToolCallEvent[]

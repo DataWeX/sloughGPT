@@ -12,6 +12,7 @@ import { cn } from '@/lib/cn'
 import { modelController, type ModelInfo, type HealthStatus } from '@/lib/model-controller'
 import { benchmarkController, type BenchmarkResult } from '@/lib/benchmark-controller'
 import { useToastStore } from '@/lib/toast-store'
+import { apiGet } from '@/lib/http-client'
 
 export default function ModelDetailPage() {
   const params = useParams()
@@ -24,17 +25,20 @@ export default function ModelDetailPage() {
   const [loading, setLoading] = useState(true)
   const [benchmark, setBenchmark] = useState<BenchmarkResult | null>(null)
   const [benchmarking, setBenchmarking] = useState(false)
+  const [modelLogs, setModelLogs] = useState<string[]>([])
   const [loadState, setLoadState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
   const [uptime, setUptime] = useState<string | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval>>()
 
   const fetchData = useCallback(async () => {
     try {
-      const [models, h] = await Promise.all([
+      const [models, h, logsRes] = await Promise.all([
         modelController.list(),
         modelController.getHealth(),
+        apiGet<{ logs: string[] }>('/models/logs?limit=10').catch(() => ({ logs: [] })),
       ])
       setHealth(h)
+      setModelLogs(logsRes.logs)
       const m = models.find(m => m.id === modelId || m.name === modelId) || null
       setModel(m)
       setLoadState(h?.model_loaded && (h.model_type?.includes(modelId) ?? false) ? 'loaded' : 'idle')
@@ -266,6 +270,25 @@ export default function ModelDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Model activity logs */}
+            {modelLogs.length > 0 && (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-base">Recent Activity</CardTitle>
+                <Button size="sm" variant="ghost" onClick={() => apiGet<{ logs: string[] }>('/models/logs?limit=10').then(r => setModelLogs(r.logs)).catch(() => {})}>
+                  <IconRefresh className="h-3 w-3" />
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-0.5 max-h-32 overflow-y-auto">
+                  {modelLogs.map((log, i) => (
+                    <p key={i} className="text-[11px] font-mono text-muted-foreground/70 truncate">{log}</p>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+            )}
           </>
         )}
       </div>

@@ -49,15 +49,15 @@ export default function SystemHealthPage() {
     setError(null)
     try {
       const [d, m, i, di, ks, as, bq, bs, dsRes, vs] = await Promise.all([
-        systemController.getDetailedHealth(),
-        systemController.getMetrics(),
-        systemController.getInfo(),
-        systemController.getDisk(),
-        knowledgeController.stats(),
+        systemController.getDetailedHealth().catch(() => null),
+        systemController.getMetrics().catch(() => null),
+        systemController.getInfo().catch(() => null),
+        systemController.getDisk().catch(() => null),
+        knowledgeController.stats().catch(() => null),
         knowledgeController.getAdapterStatus().catch(() => null),
         benchmarkController.quality().catch(() => null),
         benchmarkController.stats().catch(() => null),
-        fetch(`${PUBLIC_API_URL}/visual/dpo/status`).then(r => r.json() as any).catch(() => null),
+        visualController.getDPOStatus().catch(() => null),
         visualController.getVisualStatus().catch(() => null),
       ])
       setDetailed(d)
@@ -66,7 +66,11 @@ export default function SystemHealthPage() {
       setDisk(di)
       setKnowledgeStats(ks)
       setAdapterStatus(as)
-      setBenchQuality(bq && 'coherence_score' in bq ? { ...bq as any, status: 'ok', total_responses: 0, avg_length: 0, empty_rate: 0 } : null)
+      if (bq && 'coherence_score' in bq) {
+        setBenchQuality(bq as any)
+      } else {
+        setBenchQuality(null)
+      }
       setBenchStats(bs as any)
       setDpoStatus(dsRes)
       setVisualStatus(null)

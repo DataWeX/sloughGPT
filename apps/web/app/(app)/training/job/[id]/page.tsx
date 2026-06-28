@@ -59,8 +59,8 @@ export default function TrainingJobDetailPage() {
     if (!jobId) return
     setSummaryLoading(true)
     try {
-      const text = await trainingJobsController.getSummary(jobId)
-      setSummaryText(text)
+      const res = await trainingJobsController.getSummary(jobId)
+      setSummaryText(res.summary)
     } catch {
       // summary is optional — no toast
     } finally {

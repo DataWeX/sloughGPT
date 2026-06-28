@@ -176,11 +176,6 @@ export const trainingJobsController = {
     }
   },
 
-  async getSummary(jobId: string): Promise<string> {
-    const res = await apiGet<{ summary?: string }>(`/training/jobs/${jobId}/summary`)
-    return res?.summary || ''
-  },
-
   async create(params: {
     name: string
     model: string

@@ -531,15 +531,16 @@ class MultimodalEngine:
     def generate(self, image_np: Optional[np.ndarray] = None, max_len: int = 20,
                  temperature: float = 1.0, audio_np: Optional[np.ndarray] = None,
                  audio_patches: Optional[np.ndarray] = None,
-                 beam_width: int = 1) -> MultimodalOutput:
+                 beam_width: int = 1, top_k: int = 0) -> MultimodalOutput:
         # Switch to eval mode for deterministic generation (disable dropout)
         self.eval()
         embed, patches, _ = self._concat_modalities(image_np, audio_np, audio_patches)
         bos, eos = 0, 1
         vocab_size = self.text.vocab_size
+        effective_k = top_k if top_k > 0 else vocab_size
 
         if beam_width <= 1:
-            # Greedy decoding (original path)
+            # Greedy decoding with optional top-k filtering
             tokens = [bos]
             for _ in range(max_len):
                 inp = _tensor(np.array([tokens]), requires_grad=False)
@@ -553,6 +554,12 @@ class MultimodalEngine:
                     for t in tokens[1:]:
                         if 0 <= t < len(probs_np):
                             probs_np[t] *= 0.4
+                    # Top-k filter
+                    if effective_k < vocab_size:
+                        top_idx = np.argsort(-probs_np)[:effective_k]
+                        mask = np.zeros_like(probs_np)
+                        mask[top_idx] = 1.0
+                        probs_np = probs_np * mask
                     probs_np /= probs_np.sum()
                     next_tok = int(np.random.choice(len(probs_np), p=probs_np))
                 else:
@@ -560,6 +567,12 @@ class MultimodalEngine:
                     for t in tokens[1:]:
                         if 0 <= t < len(scores):
                             scores[t] -= 5.0
+                    # Top-k filter
+                    if effective_k < vocab_size:
+                        top_idx = np.argsort(-scores)[:effective_k]
+                        mask = np.full(vocab_size, -1e9)
+                        mask[top_idx] = 0.0
+                        scores = scores + mask
                     next_tok = int(np.argmax(scores))
                 if next_tok == eos:
                     break

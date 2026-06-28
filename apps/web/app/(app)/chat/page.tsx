@@ -19,7 +19,9 @@ import { AGENTS } from '@/lib/agents'
 import { useFeedbackStore } from '@/lib/feedback-store'
 import { useToastStore } from '@/lib/toast-store'
 import { addGlobalError } from '@/lib/error-store'
+import { apiPost } from '@/lib/http-client'
 import { imagesController } from '@/lib/images-controller'
+import type { ImageStyle } from '@/lib/images-controller'
 import { filesController } from '@/lib/files-controller'
 import {
   ChatSettings, ChatArea, ErrorBanner,
@@ -188,12 +190,8 @@ export default function ChatPage() {
   }, [fetchStats, fetchAdapterStats, health, model, agents])
 
   useEffect(() => {
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-    fetch(`${API_URL}/vector/init`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: 'chromadb', dimension: 384 }),
-    }).catch((err) => addGlobalError(err, 'Chat:VectorInit'))
+    apiPost('/vector/init', { provider: 'chromadb', dimension: 384 })
+      .catch((err) => addGlobalError(err, 'Chat:VectorInit'))
   }, [])
 
   // ── Flyweights: clearChat / selectAgent with toast ────────────────────────
@@ -279,7 +277,7 @@ export default function ChatPage() {
       chat.setLoading(true)
       // Generate image
       try {
-        const result = await imagesController.generate(text, createStyle.toLowerCase())
+        const result = await imagesController.generate(text, createStyle.toLowerCase() as ImageStyle)
         chat.setMessages(prev => prev.map(m =>
           m.id === pendingId
             ? { ...m, content: `Here's your ${createStyle.toLowerCase()} image:\n\n![${text}](${result.image})` }

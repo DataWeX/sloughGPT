@@ -8,6 +8,8 @@ import { Tabs } from '@/components/ui/form'
 import { IconUpload, IconTrash, IconSend, IconDownload, IconX, IconRefresh, IconCheck } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { Skeleton } from '@/components/ui/display'
+import { multimodalController } from '@/lib/multimodal-controller'
+import { visualController } from '@/lib/visual-controller'
 
 interface AnalyzeResult {
   caption: string; confidence: number; tags: string[]
@@ -50,7 +52,6 @@ export default function VisionPage() {
 
   const refreshReport = useCallback(async () => {
     try {
-      const { multimodalController } = await import('@/lib/multimodal-controller')
       const report = await multimodalController.getTrainingReport()
       setTrainingReport({
         images_learned: report.images_learned, vocab_size: report.vocab_size,
@@ -72,7 +73,6 @@ export default function VisionPage() {
     reader.onload = () => setPreviewUrl(reader.result as string)
     reader.readAsDataURL(file)
     try {
-      const { multimodalController } = await import('@/lib/multimodal-controller')
       const result = await multimodalController.analyzeImage(file, vqaPrompt.trim() || undefined)
       setAnalyzeResult(result)
       refreshReport()
@@ -85,7 +85,6 @@ export default function VisionPage() {
     if (!previewUrl || retryLoading) return
     setRetryLoading(true); setAnalyzeError(null); setAnalyzeResult(null)
     try {
-      const { multimodalController } = await import('@/lib/multimodal-controller')
       const blobRes = await fetch(previewUrl)
       const blob = await blobRes.blob()
       const file = new File([blob], previewFileName || 'retry.png', { type: blob.type || 'image/png' })
@@ -112,7 +111,6 @@ export default function VisionPage() {
     if (!previewUrl || trainLoading) return
     setTrainLoading(true); setTrainResult(null)
     try {
-      const { multimodalController } = await import('@/lib/multimodal-controller')
       const blobRes = await fetch(previewUrl)
       const blob = await blobRes.blob()
       const file = new File([blob], previewFileName || 'upload.png', { type: blob.type || 'image/png' })
@@ -128,7 +126,6 @@ export default function VisionPage() {
     if (!genPrompt.trim() || genLoading) return
     setGenLoading(true); setGenResult(null); setGenError(null)
     try {
-      const { multimodalController } = await import('@/lib/multimodal-controller')
       const result = await multimodalController.generateImage(genPrompt.trim())
       if (result?.image) setGenResult(result.image)
     } catch { setGenError('Generation failed') }
@@ -138,7 +135,6 @@ export default function VisionPage() {
   const handleReset = useCallback(async () => {
     setResetLoading(true)
     try {
-      const { multimodalController } = await import('@/lib/multimodal-controller')
       await multimodalController.resetModel()
       setPreviewUrl(null); setAnalyzeResult(null); setTrainResult(null)
       refreshReport()
@@ -149,7 +145,6 @@ export default function VisionPage() {
   const refreshVlmCheckpoints = useCallback(async () => {
     setVlmCkptLoading(true)
     try {
-      const { visualController } = await import('@/lib/visual-controller')
       const res = await visualController.listCheckpoints()
       setVlmCheckpoints(res || [])
     } catch { /* silent */ }
@@ -159,7 +154,6 @@ export default function VisionPage() {
   const handleVlmLoad = useCallback(async (name: string) => {
     setVlmCkptLoadName(name)
     try {
-      const { visualController } = await import('@/lib/visual-controller')
       await visualController.loadCheckpoint(name)
       // Also register as a VLM provider
       await fetch('/visual/load', {
@@ -180,7 +174,7 @@ export default function VisionPage() {
   }, [])
 
   return (
-    <div className="sl-page mx-auto max-w-5xl">
+    <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader left={<AppRouteHeaderLead title="Vision Studio" />} />
       <div className="space-y-4">
         <Tabs
@@ -253,7 +247,7 @@ export default function VisionPage() {
                       className: analyzeResult.mean_accuracy >= 80 ? 'text-success' : analyzeResult.mean_accuracy >= 50 ? 'text-warning' : 'text-muted-foreground' },
                   ].map(s => (
                     <div key={s.label} className="p-2 rounded bg-muted/30 border border-border/40 text-center">
-                      <div className={'text-lg font-semibold ' + s.className}>{s.value}</div>
+                      <div className={cn('text-lg font-semibold', s.className)}>{s.value}</div>
                       <div className="text-[10px] text-muted-foreground">{s.label}</div>
                     </div>
                   ))}
@@ -380,7 +374,7 @@ export default function VisionPage() {
                       className: trainingReport.last_accuracy >= 80 ? 'text-success' : trainingReport.last_accuracy >= 50 ? 'text-warning' : 'text-muted-foreground' },
                   ].map(s => (
                     <div key={s.label} className="p-2 rounded bg-muted/30 border border-border/40 text-center">
-                      <div className={'text-lg font-semibold ' + s.className}>{s.value}</div>
+                      <div className={cn('text-lg font-semibold', s.className)}>{s.value}</div>
                       <div className="text-[10px] text-muted-foreground">{s.label}</div>
                     </div>
                   ))}
@@ -468,8 +462,7 @@ export default function VisionPage() {
                       <Button
                         size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive"
                         onClick={async () => {
-                          const { visualController } = await import('@/lib/visual-controller')
-                          await visualController.deleteCheckpoint(cp.name)
+                                              await visualController.deleteCheckpoint(cp.name)
                           refreshVlmCheckpoints()
                         }}
                       >
