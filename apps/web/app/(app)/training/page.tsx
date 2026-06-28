@@ -11,7 +11,6 @@ import { useToastStore } from '@/lib/toast-store'
 import { modelController, trainingController } from '@/lib/controllers'
 import { visualController } from '@/lib/visual-controller'
 import { feedbackController } from '@/lib/feedback-controller'
-import { userAdaptersController, type UserAdapterStats } from '@/lib/user-adapters-controller'
 import { datasetController } from '@/lib/controllers'
 import type { Dataset } from '@/lib/dataset-controller'
 import { DatasetImportModal } from '@/components/DatasetImportModal'
@@ -25,6 +24,8 @@ import { useTrainingSession } from '@/hooks/useTrainingSession'
 import { useTrainingDatasets } from '@/hooks/useTrainingDatasets'
 import { useTrainingCheckpoints } from '@/hooks/useTrainingCheckpoints'
 import { useTestDialog } from '@/hooks/useTestDialog'
+import { AdapterQualityCard } from '@/components/training/AdapterQualityCard'
+import { VisualCheckpointsCard } from '@/components/training/VisualCheckpointsCard'
 
 function datasetLabel(ds: Dataset): string {
   const size = formatSize(ds.size)
@@ -170,24 +171,6 @@ export default function TrainingPage() {
       addToast('Failed to start DPO training', 'error')
     }
   }, [addToast])
-
-  // ===== Adapter Quality =====
-  const [adapterStats, setAdapterStats] = useState<UserAdapterStats | null>(null)
-  const [aggregating, setAggregating] = useState(false)
-  const [aggResult, setAggResult] = useState<Awaited<ReturnType<typeof userAdaptersController.aggregateBest>> | null>(null)
-  const fetchAdapterStats = useCallback(async () => {
-    try { setAdapterStats(await userAdaptersController.list()) } catch {}
-  }, [])
-
-  // ===== Visual Checkpoints =====
-  const [visualCheckpoints, setVisualCheckpoints] = useState<any[]>([])
-  const [loadingVisualCkpts, setLoadingVisualCkpts] = useState(false)
-  const [loadingVisualCkptName, setLoadingVisualCkptName] = useState<string | null>(null)
-  const fetchVisualCheckpoints = useCallback(async () => {
-    setLoadingVisualCkpts(true)
-    try { setVisualCheckpoints(await visualController.listCheckpoints()) } catch {}
-    finally { setLoadingVisualCkpts(false) }
-  }, [])
 
   // ===== Fine-tuned model loading =====
   const [loadingFinetunedModel, setLoadingFinetunedModel] = useState(false)
@@ -431,8 +414,6 @@ export default function TrainingPage() {
     void checkpoints.fetchCheckpoints()
     void checkpoints.fetchBuilds()
     void checkpoints.fetchJobs()
-    void fetchAdapterStats()
-    void fetchVisualCheckpoints()
     const urlDataset = searchParams.get('dataset')
     if (urlDataset) {
       datasets.setSelectedDataset(urlDataset)
@@ -1224,142 +1205,8 @@ export default function TrainingPage() {
           </CardContent>
         </Card>
 
-        {/* Adapter Quality */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-base">Adapter Quality</CardTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Feedback loop adapters — aggregate to measure quality delta
-              </p>
-            </div>
-            <Button size="sm" disabled={aggregating} onClick={async () => {
-              setAggregating(true)
-              setAggResult(null)
-              try {
-                const res = await userAdaptersController.aggregateBest({ top_k: 10, min_feedback_count: 5 })
-                setAggResult(res)
-                addToast(res.eval?.verdict === 'accepted' ? 'Aggregation accepted — quality improved' : 'Aggregation complete', res.eval?.verdict === 'accepted' ? 'success' : 'info')
-              } catch {
-                addToast('Aggregation failed', 'error')
-              } finally { setAggregating(false); void fetchAdapterStats() }
-            }}>
-              {aggregating ? 'Aggregating...' : 'Aggregate adapters'}
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {adapterStats ? (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="rounded-lg border border-border/50 p-3">
-                  <p className="text-xs text-muted-foreground">Total users</p>
-                  <p className="text-lg font-semibold">{adapterStats.total_users}</p>
-                </div>
-                <div className="rounded-lg border border-border/50 p-3">
-                  <p className="text-xs text-muted-foreground">Total size</p>
-                  <p className="text-lg font-semibold">{adapterStats.total_size_mb.toFixed(1)} MB</p>
-                </div>
-                <div className="rounded-lg border border-border/50 p-3">
-                  <p className="text-xs text-muted-foreground">Avg per user</p>
-                  <p className="text-lg font-semibold">{adapterStats.avg_size_per_user_kb.toFixed(0)} KB</p>
-                </div>
-                <div className="rounded-lg border border-border/50 p-3">
-                  <p className="text-xs text-muted-foreground">Quality adapters</p>
-                  <p className="text-lg font-semibold">{adapterStats.auto_management?.quality_adapters_count ?? 0}</p>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Loading adapter stats...</p>
-            )}
-            {aggResult && aggResult.eval && (
-              <div className="rounded-lg border p-3 space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className={`text-sm font-medium ${aggResult.eval.verdict === 'accepted' ? 'text-success' : 'text-destructive'}`}>
-                    {aggResult.eval.verdict === 'accepted' ? '✓ Accepted' : '✗ Rejected'}
-                  </span>
-                  {aggResult.user_count != null && (
-                    <span className="text-xs text-muted-foreground">({aggResult.user_count} user adapters)</span>
-                  )}
-                </div>
-                {aggResult.eval.perplexity_delta != null && (
-                  <p className="text-xs text-muted-foreground">
-                    Perplexity Δ: <span className={aggResult.eval.perplexity_delta < 0 ? 'text-success' : 'text-destructive'}>
-                      {aggResult.eval.perplexity_delta > 0 ? '+' : ''}{aggResult.eval.perplexity_delta.toFixed(2)}
-                    </span>
-                    {aggResult.eval.bleu_delta != null && (
-                      <> &middot; BLEU Δ: <span className={aggResult.eval.bleu_delta > 0 ? 'text-success' : 'text-destructive'}>
-                        {aggResult.eval.bleu_delta > 0 ? '+' : ''}{aggResult.eval.bleu_delta.toFixed(2)}
-                      </span></>
-                    )}
-                  </p>
-                )}
-                {aggResult.eval.report && (
-                  <details className="text-xs">
-                    <summary className="cursor-pointer text-muted-foreground hover:text-foreground">View full report</summary>
-                    <pre className="mt-1 whitespace-pre-wrap font-mono text-[11px] text-muted-foreground max-h-40 overflow-y-auto rounded bg-muted/50 p-2">{aggResult.eval.report}</pre>
-                  </details>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Visual Checkpoints */}
-        {(visualCheckpoints.length > 0 || loadingVisualCkpts) && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Visual Checkpoints</CardTitle>
-            <Button size="sm" variant="ghost" onClick={fetchVisualCheckpoints} disabled={loadingVisualCkpts}>
-              {loadingVisualCkpts ? 'Loading...' : 'Refresh'}
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {visualCheckpoints.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-2">No visual checkpoints yet</p>
-            ) : (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {visualCheckpoints.map((ckpt: any) => {
-                  const isBusy = loadingVisualCkptName === ckpt.name
-                  return (
-                    <div key={ckpt.name} className="flex items-center justify-between rounded-lg border border-border/50 p-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{ckpt.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {ckpt.model ? ckpt.model : 'vision'}
-                          {ckpt.loss != null ? ` · ${ckpt.loss.toFixed(4)} loss` : ''}
-                          {ckpt.epochs ? ` · ${ckpt.epochs} epochs` : ''}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1 ml-2 shrink-0">
-                        <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={isBusy} onClick={async () => {
-                          setLoadingVisualCkptName(ckpt.name)
-                          try {
-                            await visualController.loadCheckpoint(ckpt.name)
-                            addToast(`Loaded visual checkpoint: ${ckpt.name}`, 'success')
-                          } catch { addToast('Failed to load visual checkpoint', 'error') }
-                          finally { setLoadingVisualCkptName(null); void fetchVisualCheckpoints() }
-                        }}>
-                          {isBusy ? 'Loading...' : 'Load'}
-                        </Button>
-                        <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" disabled={isBusy} onClick={async () => {
-                          if (!confirm(`Delete visual checkpoint "${ckpt.name}"?`)) return
-                          setLoadingVisualCkptName(ckpt.name)
-                          try {
-                            await visualController.deleteCheckpoint(ckpt.name)
-                            addToast(`Deleted: ${ckpt.name}`, 'info')
-                          } catch { addToast('Failed to delete visual checkpoint', 'error') }
-                          finally { setLoadingVisualCkptName(null); void fetchVisualCheckpoints() }
-                        }}>
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        )}
+        <AdapterQualityCard />
+        <VisualCheckpointsCard />
 
         {/* Webhooks */}
         <Card>

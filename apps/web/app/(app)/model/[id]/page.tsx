@@ -25,7 +25,7 @@ export default function ModelDetailPage() {
   const [loading, setLoading] = useState(true)
   const [benchmark, setBenchmark] = useState<BenchmarkResult | null>(null)
   const [benchmarking, setBenchmarking] = useState(false)
-  const [modelLogs, setModelLogs] = useState<string[]>([])
+  const [modelLogs, setModelLogs] = useState<any[]>([])
   const [loadState, setLoadState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
   const [uptime, setUptime] = useState<string | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval>>()
@@ -282,8 +282,8 @@ export default function ModelDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-0.5 max-h-32 overflow-y-auto">
-                  {modelLogs.map((log, i) => (
-                    <p key={i} className="text-[11px] font-mono text-muted-foreground/70 truncate">{log}</p>
+                  {modelLogs.map((log: any, i: number) => (
+                    <p key={i} className="text-[11px] font-mono text-muted-foreground/70 truncate">{typeof log === 'string' ? log : log.message || JSON.stringify(log)}</p>
                   ))}
                 </div>
               </CardContent>

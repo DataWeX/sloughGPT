@@ -168,8 +168,6 @@ export function ListeningIndicator({
   micLevel: number
   active: boolean
 }) {
-  if (!active) return null
-
   // Generate ring data based on mic level
   const rings = useMemo(() => {
     const count = 5
@@ -179,6 +177,8 @@ export function ListeningIndicator({
       color: `hsl(var(--primary) / ${0.15 - i * 0.02})`,
     }))
   }, [])
+
+  if (!active) return null
 
   return (
     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -222,8 +222,6 @@ export function ListeningBars({
   active: boolean
   barCount?: number
 }) {
-  if (!active) return null
-
   const bars = useMemo(() =>
     Array.from({ length: barCount }, (_, i) => ({
       delay: (i * 120) % 800,
@@ -231,6 +229,8 @@ export function ListeningBars({
     })),
     [barCount]
   )
+
+  if (!active) return null
 
   return (
     <div className="flex items-center justify-center gap-[3px] h-10" role="img" aria-label="Listening animation">

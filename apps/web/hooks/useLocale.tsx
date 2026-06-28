@@ -67,6 +67,7 @@ const translations: Record<Locale, Translations> = {
     'nav.vlm': 'Visual',
     'nav.multimodal': 'Multimodal',
     'nav.agents': 'Agents',
+    'nav.files': 'Files',
 
     // Home page
     'home.title': 'Home',
@@ -237,6 +238,7 @@ const translations: Record<Locale, Translations> = {
     'nav.export': 'Export',
     'nav.multimodal': 'Multimodal',
     'nav.agents': 'Agentes',
+    'nav.files': 'Archivos',
 
     'home.title': 'Inicio',
     'home.subtitle.connecting': 'Conectando...',
@@ -394,6 +396,7 @@ const translations: Record<Locale, Translations> = {
     'nav.export': 'Export',
     'nav.multimodal': 'Multimodal',
     'nav.agents': 'Agents',
+    'nav.files': 'Fichiers',
     'home.title': 'Accueil',
     'home.subtitle.connecting': 'Connexion...',
     'home.subtitle.ready': 'Prêt',
@@ -550,6 +553,7 @@ const translations: Record<Locale, Translations> = {
     'nav.export': 'Export',
     'nav.multimodal': 'Multimodal',
     'nav.agents': 'Agenten',
+    'nav.files': 'Dateien',
     'home.title': 'Startseite',
     'home.subtitle.connecting': 'Verbinde...',
     'home.subtitle.ready': 'Bereit',
@@ -706,6 +710,7 @@ const translations: Record<Locale, Translations> = {
     'nav.export': 'Export',
     'nav.multimodal': '多模态',
     'nav.agents': '智能体',
+    'nav.files': '文件',
     'home.title': '首页',
     'home.subtitle.connecting': '连接中...',
     'home.subtitle.ready': '准备就绪',

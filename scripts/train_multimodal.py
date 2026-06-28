@@ -143,8 +143,8 @@ def train(args):
         all_captions = list(train_captions_v) + list(train_captions_a)
     else:
         if args.tiny:
-            embed_dim = 16
-            hidden_dim = 32
+            embed_dim = 32
+            hidden_dim = 64
             n_vit_layers = 1
             n_heads = 2
             n_decoder_layers = 1
@@ -226,65 +226,71 @@ def train(args):
         idx_v = np.random.permutation(n_v)
         epoch_loss_v = 0.0
         steps_v = 0
-        for i in range(0, n_v, args.batch_size):
-            batch_idx = idx_v[i:i + args.batch_size]
-            for j in batch_idx:
-                tokens = engine.text.encode(train_captions_v[j])
-                if len(tokens) < 2:
-                    continue
-                tokens_arr = np.array([tokens], dtype=np.int64)
-                loss_val = engine.train_step(train_images[j:j+1], tokens_arr, lr=lr, temperature=temp)
-                epoch_loss_v += loss_val
-                steps_v += 1
-            buffer.add(train_images[batch_idx[0]:batch_idx[0]+1], train_captions_v[batch_idx[0]])
+        if not args.audio_only:
+            for i in range(0, n_v, args.batch_size):
+                batch_idx = idx_v[i:i + args.batch_size]
+                for j in batch_idx:
+                    tokens = engine.text.encode(train_captions_v[j])
+                    if len(tokens) < 2:
+                        continue
+                    tokens_arr = np.array([tokens], dtype=np.int64)
+                    loss_val = engine.train_step(train_images[j:j+1], tokens_arr, lr=lr, temperature=temp)
+                    epoch_loss_v += loss_val
+                    steps_v += 1
+                buffer.add(train_images[batch_idx[0]:batch_idx[0]+1], train_captions_v[batch_idx[0]])
 
         # ── Audio batch ──
         idx_a = np.random.permutation(n_a)
         epoch_loss_a = 0.0
         steps_a = 0
-        for i in range(0, n_a, args.batch_size):
-            batch_idx = idx_a[i:i + args.batch_size]
-            for j in batch_idx:
-                tokens = engine.text.encode(train_captions_a[j])
-                if len(tokens) < 2:
-                    continue
-                tokens_arr = np.array([tokens], dtype=np.int64)
-                loss_val = engine.train_step(
-                    audio_patches=audio_patches_list[j],
-                    text_tokens=tokens_arr,
-                    lr=lr,
-                    temperature=temp,
-                )
-                epoch_loss_a += loss_val
-                steps_a += 1
+        if not args.vision_only:
+            for i in range(0, n_a, args.batch_size):
+                batch_idx = idx_a[i:i + args.batch_size]
+                for j in batch_idx:
+                    tokens = engine.text.encode(train_captions_a[j])
+                    if len(tokens) < 2:
+                        continue
+                    tokens_arr = np.array([tokens], dtype=np.int64)
+                    loss_val = engine.train_step(
+                        audio_patches=audio_patches_list[j],
+                        text_tokens=tokens_arr,
+                        lr=lr,
+                        temperature=temp,
+                    )
+                    epoch_loss_a += loss_val
+                    steps_a += 1
 
         # ── Combined vision+audio batch ──
         combined_loss = 0.0
         combined_steps = 0
-        for _ in range(min(5, n_v, n_a)):
-            vi = np.random.randint(n_v)
-            ai = np.random.randint(n_a)
-            cap = f"{train_captions_v[vi]} and {train_captions_a[ai]}"
-            tokens = engine.text.encode(cap)
-            if len(tokens) < 3:
-                continue
-            tokens_arr = np.array([tokens], dtype=np.int64)
-            loss_val = engine.train_step(
-                images_np=train_images[vi:vi+1],
-                audio_patches=audio_patches_list[ai],
-                text_tokens=tokens_arr,
-                lr=lr,
-                temperature=temp,
-            )
-            combined_loss += loss_val
+        if not args.vision_only and not args.audio_only:
+            for _ in range(min(5, n_v, n_a)):
+                vi = np.random.randint(n_v)
+                ai = np.random.randint(n_a)
+                cap = f"{train_captions_v[vi]} and {train_captions_a[ai]}"
+                tokens = engine.text.encode(cap)
+                if len(tokens) < 3:
+                    continue
+                tokens_arr = np.array([tokens], dtype=np.int64)
+                loss_val = engine.train_step(
+                    images_np=train_images[vi:vi+1],
+                    audio_patches=audio_patches_list[ai],
+                    text_tokens=tokens_arr,
+                    lr=lr,
+                    temperature=temp,
+                )
+                combined_loss += loss_val
             combined_steps += 1
 
         # ── Replay & contrastive ──
-        replay_loss = replay_train_step(engine, buffer, batch_size=4)
-        sample_idx = np.random.randint(n_v)
-        contrast_loss = contrastive_step(
-            engine, train_images[sample_idx:sample_idx+1], buffer
-        )
+        replay_loss = 0.0
+        contrast_loss = 0.0
+        if not args.audio_only:
+            replay_loss = replay_train_step(engine, buffer, batch_size=4)
+            sample_idx = np.random.randint(n_v)
+            contrast_loss = contrastive_step(
+                engine, train_images[sample_idx:sample_idx+1], buffer
+            )
 
         avg_loss_v = epoch_loss_v / max(steps_v, 1)
         avg_loss_a = epoch_loss_a / max(steps_a, 1)
@@ -300,41 +306,45 @@ def train(args):
             print(f"  Replay:  {replay_loss:.4f}  Contrast: {contrast_loss:.4f}")
 
             # Generate vision sample
-            test_idx = np.random.randint(n_v)
-            result = engine.generate(train_images[test_idx:test_idx+1], max_len=12, temperature=0.0)
-            print(f"  Vision target:  {train_captions_v[test_idx]}")
-            print(f"  Vision gen:     {result.text}")
+            if not args.audio_only:
+                test_idx = np.random.randint(n_v)
+                result = engine.generate(train_images[test_idx:test_idx+1], max_len=12, temperature=0.0)
+                print(f"  Vision target:  {train_captions_v[test_idx]}")
+                print(f"  Vision gen:     {result.text}")
 
             # Generate audio sample
-            test_ai = np.random.randint(n_a)
-            result_a = engine.generate(audio_patches=audio_patches_list[test_ai], max_len=12, temperature=0.0)
-            print(f"  Audio target:   {train_captions_a[test_ai]}")
-            print(f"  Audio gen:      {result_a.text}")
+            if not args.vision_only:
+                test_ai = np.random.randint(n_a)
+                result_a = engine.generate(audio_patches=audio_patches_list[test_ai], max_len=12, temperature=0.0)
+                print(f"  Audio target:   {train_captions_a[test_ai]}")
+                print(f"  Audio gen:      {result_a.text}")
 
     # Final evaluation
     print(f"\n{'='*60}")
     print(f"Training complete.")
-    print(f"Vision loss:  {losses_v[0]:.4f} → {losses_v[-1]:.4f} ({(1-losses_v[-1]/max(losses_v[0],1e-8))*100:.1f}% reduction)")
-    print(f"Audio loss:   {losses_a[0]:.4f} → {losses_a[-1]:.4f} ({(1-losses_a[-1]/max(losses_a[0],1e-8))*100:.1f}% reduction)")
+    if losses_v:
+        print(f"Vision loss:  {losses_v[0]:.4f} → {losses_v[-1]:.4f} ({(1-losses_v[-1]/max(losses_v[0],1e-8))*100:.1f}% reduction)")
+    if losses_a:
+        print(f"Audio loss:   {losses_a[0]:.4f} → {losses_a[-1]:.4f} ({(1-losses_a[-1]/max(losses_a[0],1e-8))*100:.1f}% reduction)")
     print(f"{'='*60}")
 
-    # Generate multiple vision samples
-    print("\nVision sample generations:")
-    for i in range(min(5, n_v)):
-        result = engine.generate(train_images[i:i+1], max_len=15, temperature=0.3)
-        print(f"  [{i}] Target: {train_captions_v[i]}")
-        print(f"      Gen (greedy):    {result.text}")
-        result_beam = engine.generate(train_images[i:i+1], max_len=15, temperature=0.3, beam_width=3)
-        print(f"      Gen (beam 3):    {result_beam.text}")
+    if not args.audio_only:
+        print("\nVision sample generations:")
+        for i in range(min(5, n_v)):
+            result = engine.generate(train_images[i:i+1], max_len=15, temperature=0.3)
+            print(f"  [{i}] Target: {train_captions_v[i]}")
+            print(f"      Gen (greedy):    {result.text}")
+            result_beam = engine.generate(train_images[i:i+1], max_len=15, temperature=0.3, beam_width=3)
+            print(f"      Gen (beam 3):    {result_beam.text}")
 
-    # Generate multiple audio samples
-    print("\nAudio sample generations:")
-    for i in range(min(5, n_a)):
-        result = engine.generate(audio_patches=audio_patches_list[i], max_len=15, temperature=0.3)
-        print(f"  [{i}] Target: {train_captions_a[i]}")
-        print(f"      Gen (greedy):    {result.text}")
-        result_beam = engine.generate(audio_patches=audio_patches_list[i], max_len=15, temperature=0.3, beam_width=3)
-        print(f"      Gen (beam 3):    {result_beam.text}")
+    if not args.vision_only:
+        print("\nAudio sample generations:")
+        for i in range(min(5, n_a)):
+            result = engine.generate(audio_patches=audio_patches_list[i], max_len=15, temperature=0.3)
+            print(f"  [{i}] Target: {train_captions_a[i]}")
+            print(f"      Gen (greedy):    {result.text}")
+            result_beam = engine.generate(audio_patches=audio_patches_list[i], max_len=15, temperature=0.3, beam_width=3)
+            print(f"      Gen (beam 3):    {result_beam.text}")
 
     # Save
     print("\nSaving engine...")
@@ -356,5 +366,7 @@ if __name__ == "__main__":
     parser.add_argument("--n-audio-layers", type=int, default=None, help="Override audio encoder layers")
     parser.add_argument("--n-heads", type=int, default=None, help="Override attention heads")
     parser.add_argument("--load", type=str, default="", help="Path to saved engine .npz to resume training")
+    parser.add_argument("--vision-only", action="store_true", help="Train only vision (skip audio)")
+    parser.add_argument("--audio-only", action="store_true", help="Train only audio (skip vision)")
     args = parser.parse_args()
     train(args)
