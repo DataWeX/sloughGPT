@@ -37,8 +37,29 @@ from threading import Thread
 
 router = APIRouter(prefix="", tags=["inference"])
 
-SESSIONS_DIR = Path(__file__).parent.parent.parent.parent / "data" / "chat_sessions"
-SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+_SESSIONS_DIR = Path(__file__).parent.parent.parent.parent / "data" / "chat_sessions"
+_SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+
+# FileRepository-backed session store
+from domains.infrastructure.repository import FileRepository, Serializer
+
+
+class _SessionDictSerializer(Serializer[dict]):
+    """JSON serializer for session dict data."""
+
+    def serialize(self, obj: dict) -> dict:
+        return obj
+
+    def deserialize(self, data: dict) -> dict:
+        return data
+
+
+_session_repo = FileRepository[dict](
+    directory=str(_SESSIONS_DIR),
+    serializer=_SessionDictSerializer(),
+    key_suffix=".json",
+)
+_session_repo.enable_cache(ttl_seconds=2.0)
 
 _session_cache: Optional[list] = None
 _session_cache_ts: float = 0
@@ -130,11 +151,10 @@ def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 
 
 
 def _load_session_from_disk(session_id: str) -> dict:
-    """Load session data from disk (cold path)."""
-    session_file = SESSIONS_DIR / f"{session_id}.json"
-    if session_file.exists():
-        with open(session_file) as f:
-            return json.load(f)
+    """Load session data from disk via FileRepository (cold path)."""
+    data = _session_repo.get(session_id)
+    if data is not None:
+        return data
     return {"id": session_id, "messages": [], "created_at": datetime.datetime.now().isoformat(), "updated_at": datetime.datetime.now().isoformat()}
 
 
@@ -158,21 +178,14 @@ def _save_session(session_id: str, data: dict) -> None:
 
 
 async def _flush_session_to_disk(session_id: str) -> None:
-    """Write a single dirty session to disk in thread pool."""
+    """Write a single dirty session to disk via FileRepository."""
     data = _session_memory_cache.get(session_id)
     if data is None:
         _session_dirty.discard(session_id)
         return
-    session_file = SESSIONS_DIR / f"{session_id}.json"
     loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, _write_session_file, session_file, data)
+    await loop.run_in_executor(None, _session_repo.save, session_id, data)
     _session_dirty.discard(session_id)
-
-
-def _write_session_file(path: Path, data: dict) -> None:
-    """Sync file write (runs in executor)."""
-    with open(path, "w") as f:
-        json.dump(data, f, indent=2)
 
 
 async def flush_dirty_sessions() -> int:
@@ -972,25 +985,23 @@ def _build_session_cache() -> list:
     if _session_cache is not None and now - _session_cache_ts < _session_cache_ttl:
         return _session_cache
     sessions = []
-    for f in SESSIONS_DIR.glob("*.json"):
-        with open(f) as fp:
-            data = json.load(fp)
-            # Normalize: ensure every session has id, name, updated_at
-            sid = data.get("id") or data.get("session_id") or f.stem
-            data["id"] = sid
-            data.pop("session_id", None)
-            if not data.get("name"):
-                msgs = data.get("messages", [])
-                if msgs:
-                    first = msgs[0].get("content", "").split("\n")[0]
-                    data["name"] = first[:60]
-                else:
-                    data["name"] = sid
-            if not data.get("updated_at"):
-                data["updated_at"] = data.get("created_at") or datetime.datetime.fromtimestamp(
-                    f.stat().st_mtime
-                ).isoformat()
-            sessions.append(data)
+    for sid in _session_repo.keys():
+        data = _session_repo.get(sid)
+        if data is None:
+            continue
+        # Normalize: ensure every session has id, name, updated_at
+        data["id"] = sid
+        data.pop("session_id", None)
+        if not data.get("name"):
+            msgs = data.get("messages", [])
+            if msgs:
+                first = msgs[0].get("content", "").split("\n")[0]
+                data["name"] = first[:60]
+            else:
+                data["name"] = sid
+        if not data.get("updated_at"):
+            data["updated_at"] = data.get("created_at") or datetime.datetime.now().isoformat()
+        sessions.append(data)
     sessions.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
     _session_cache = sessions
     _session_cache_ts = now
@@ -1019,7 +1030,13 @@ async def search_sessions(q: str = "", limit: int = 20):
     results = []
 
     # Search both possible session directories
-    search_dirs = [SESSIONS_DIR, Path(__file__).parent.parent.parent.parent / "data" / "conversations"]
+    search_dirs: list[Path] = []
+    sessions_dir = Path(__file__).parent.parent.parent.parent / "data" / "chat_sessions"
+    if sessions_dir.is_dir():
+        search_dirs.append(sessions_dir)
+    conv_dir = Path(__file__).parent.parent.parent.parent / "data" / "conversations"
+    if conv_dir.is_dir():
+        search_dirs.append(conv_dir)
     seen = set()
 
     for sdir in search_dirs:
@@ -1101,24 +1118,25 @@ async def get_session(session_id: str):
 
 @router.delete("/chat/sessions/{session_id}")
 async def delete_session(session_id: str):
-    session_file = SESSIONS_DIR / f"{session_id}.json"
-    if session_file.exists():
-        session_file.unlink()
+    if _session_repo.delete(session_id):
+        _session_memory_cache.pop(session_id, None)
+        _session_dirty.discard(session_id)
         return {"status": "deleted", "session_id": session_id}
     raise HTTPException(status_code=404, detail="Session not found")
 
 
 @router.get("/suggestions")
+@router.get("/chat/suggestions")
 async def chat_suggestions():
     """Return a set of contextual chat suggestions."""
-    return [
-        "What can you help me with?",
-        "Tell me about yourself",
-        "Write a short poem",
-        "Explain quantum computing simply",
-        "Help me debug my code",
-        "Summarize a topic for me",
-    ]
+    return {"suggestions": [
+        {"text": "What can you help me with?", "icon": "💬"},
+        {"text": "Tell me about yourself", "icon": "👤"},
+        {"text": "Write a short poem", "icon": "✍️"},
+        {"text": "Explain quantum computing simply", "icon": "🔬"},
+        {"text": "Help me debug my code", "icon": "🐛"},
+        {"text": "Summarize a topic for me", "icon": "📝"},
+    ]}
 
 
 @router.get("/providers")

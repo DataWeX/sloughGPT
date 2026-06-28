@@ -7,11 +7,19 @@ Provides:
   - ConfigManager, AppConfig, get_config — typed config with env override
   - EventBus — typed async pub/sub
   - TaskQueue, InProcessTaskQueue — async priority queue
+  - LifecycleManager — ordered startup/shutdown with health gates
 
 RAGEngine is at domains.cognitive.rag (deprecated here).
 """
 from .spaced_repetition_engine import SpacedRepetitionScheduler
 from .ipc import IpcChannel, IpcConfig, is_rust_available
+from .lifecycle import (
+    LifecycleManager,
+    LifecyclePhase,
+    StartupHook,
+    ShutdownHook,
+    get_lifecycle_manager,
+)
 
 # Lazy import for deprecated rag module
 def __getattr__(name):

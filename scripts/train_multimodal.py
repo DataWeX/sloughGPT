@@ -122,14 +122,36 @@ def generate_audio_dataset(n: int, sample_rate: int = 16000) -> tuple:
 def train(args):
     np.random.seed(42)
     
+    if args.tiny:
+        embed_dim = 16
+        hidden_dim = 32
+        n_vit_layers = 1
+        n_heads = 2
+        n_decoder_layers = 1
+        n_audio_layers = 1
+        if args.epochs == 50:  # user didn't override
+            args.epochs = 100  # more epochs needed with small model
+        if args.samples == 100:
+            args.samples = 50  # fewer samples for fast iteration
+    else:
+        embed_dim = args.embed_dim or 128
+        hidden_dim = args.hidden_dim or 256
+        n_vit_layers = args.n_vit_layers or 3
+        n_heads = args.n_heads or 4
+        n_decoder_layers = args.n_decoder_layers or 3
+        n_audio_layers = args.n_audio_layers or 2
+
     print("Initializing MultimodalEngine...")
+    print(f"  embed_dim={embed_dim}, hidden_dim={hidden_dim}, "
+          f"vit_layers={n_vit_layers}, decoder_layers={n_decoder_layers}, "
+          f"audio_layers={n_audio_layers}, heads={n_heads}")
     engine = get_multimodal_engine(
-        embed_dim=128,
-        hidden_dim=256,
-        n_vit_layers=3,
-        n_heads=4,
-        n_decoder_layers=3,
-        n_audio_layers=2,
+        embed_dim=embed_dim,
+        hidden_dim=hidden_dim,
+        n_vit_layers=n_vit_layers,
+        n_heads=n_heads,
+        n_decoder_layers=n_decoder_layers,
+        n_audio_layers=n_audio_layers,
     )
 
     # Generate all training captions first (for vocab building)
@@ -285,14 +307,18 @@ def train(args):
     for i in range(min(5, n_v)):
         result = engine.generate(train_images[i:i+1], max_len=15, temperature=0.3)
         print(f"  [{i}] Target: {train_captions_v[i]}")
-        print(f"      Gen:    {result.text}")
+        print(f"      Gen (greedy):    {result.text}")
+        result_beam = engine.generate(train_images[i:i+1], max_len=15, temperature=0.3, beam_width=3)
+        print(f"      Gen (beam 3):    {result_beam.text}")
 
     # Generate multiple audio samples
     print("\nAudio sample generations:")
     for i in range(min(5, n_a)):
         result = engine.generate(audio_patches=audio_patches_list[i], max_len=15, temperature=0.3)
         print(f"  [{i}] Target: {train_captions_a[i]}")
-        print(f"      Gen:    {result.text}")
+        print(f"      Gen (greedy):    {result.text}")
+        result_beam = engine.generate(audio_patches=audio_patches_list[i], max_len=15, temperature=0.3, beam_width=3)
+        print(f"      Gen (beam 3):    {result_beam.text}")
 
     # Save
     print("\nSaving engine...")
@@ -306,5 +332,12 @@ if __name__ == "__main__":
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--samples", type=int, default=100)
     parser.add_argument("--buffer-capacity", type=int, default=50)
+    parser.add_argument("--tiny", action="store_true", help="Use tiny model for fast iteration (embed_dim=16, 1-layer)")
+    parser.add_argument("--embed-dim", type=int, default=None, help="Override embed_dim")
+    parser.add_argument("--hidden-dim", type=int, default=None, help="Override hidden_dim")
+    parser.add_argument("--n-vit-layers", type=int, default=None, help="Override vision transformer layers")
+    parser.add_argument("--n-decoder-layers", type=int, default=None, help="Override decoder layers")
+    parser.add_argument("--n-audio-layers", type=int, default=None, help="Override audio encoder layers")
+    parser.add_argument("--n-heads", type=int, default=None, help="Override attention heads")
     args = parser.parse_args()
     train(args)

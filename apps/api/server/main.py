@@ -81,6 +81,20 @@ server_state.gen_config = gen_config
 
 cfg = ServerConfig.from_env()
 
+# Wire new typed config system alongside existing config for migration
+try:
+    from domains.infrastructure.config import get_config, AppConfig
+    _new_cfg: AppConfig = get_config()
+    logger.info(
+        "Config: %s @ %s:%d (features=%s)",
+        _new_cfg.model.name,
+        _new_cfg.server.host,
+        _new_cfg.server.port,
+        {k: v for k, v in _new_cfg.features.model_dump().items() if not k.startswith("_")},
+    )
+except Exception as exc:
+    logger.warning("New config system unavailable: %s", exc)
+
 
 # ── Lifespan ────────────────────────────────────────────────────────
 @asynccontextmanager

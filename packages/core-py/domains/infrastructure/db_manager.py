@@ -12,7 +12,17 @@ import uuid
 from dataclasses import dataclass
 import logging
 
+from domains.infrastructure.repository import FileRepository, JsonSerializer
+
 logger = logging.getLogger("man.db_manager")
+
+_CONVERSATIONS_DIR = Path(__file__).resolve().parents[4] / "data" / "conversations"
+_conversation_repo = FileRepository[dict](
+    directory=str(_CONVERSATIONS_DIR),
+    serializer=JsonSerializer(dict),
+    key_suffix=".json",
+)
+_conversation_repo.enable_cache(ttl_seconds=2.0)
 
 # Database configuration
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./sloughgpt.db")
@@ -257,49 +267,33 @@ class DatabaseManager:
             return result
         return None
 
-    # ---------- File‑based fallback helpers (unchanged) ----------
+    # ---------- File‑based fallback helpers (FileRepository) ----------
     def _create_conversation_file(self, name, metadata):
         conv_id = str(uuid.uuid4())
         conv = {"id": conv_id, "name": name, "metadata": metadata, "messages": []}
-        Path("data/conversations").mkdir(parents=True, exist_ok=True)
-        with open(f"data/conversations/{conv_id}.json", "w") as f:
-            json.dump(conv, f)
+        _conversation_repo.save(conv_id, conv)
         return conv
 
     def _get_conversation_file(self, conv_id):
-        try:
-            with open(f"data/conversations/{conv_id}.json", "r") as f:
-                return json.load(f)
-        except:
-            return None
+        return _conversation_repo.get(conv_id)
 
     def _list_conversations_file(self):
-        Path("data/conversations").mkdir(parents=True, exist_ok=True)
-        convs = []
-        for f in Path("data/conversations").glob("*.json"):
-            with open(f) as fp:
-                convs.append(json.load(fp))
-        return convs
+        return _conversation_repo.list()
 
     def _delete_conversation_file(self, conv_id):
-        try:
-            Path(f"data/conversations/{conv_id}.json").unlink()
-            return True
-        except:
-            return False
+        return _conversation_repo.delete(conv_id)
 
     def _add_message_file(self, conv_id, role, content, metadata):
-        conv = self._get_conversation_file(conv_id)
+        conv = _conversation_repo.get(conv_id)
         if conv:
             msg = {"id": str(uuid.uuid4()), "role": role, "content": content, "metadata": metadata}
             conv["messages"].append(msg)
-            with open(f"data/conversations/{conv_id}.json", "w") as f:
-                json.dump(conv, f)
+            _conversation_repo.save(conv_id, conv)
             return msg
         return None
 
     def _get_messages_file(self, conv_id):
-        conv = self._get_conversation_file(conv_id)
+        conv = _conversation_repo.get(conv_id)
         if conv:
             return conv.get("messages", [])
         return []

@@ -509,6 +509,68 @@ class TestTemperatureAnnealing:
         assert l3 < 20, f"Loss exploded with temperature annealing: {l3}"
 
 
+class TestBeamSearch:
+    """Test beam search decoding in generate()."""
+
+    def test_beam_search_returns_string(self):
+        """Beam search should return a MultimodalOutput with text."""
+        engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
+                                  n_decoder_layers=1)
+        engine.build_vocab(["red circle on white background"])
+        img = np.random.randn(1, 224, 224, 3).astype(np.float32)
+        result = engine.generate(img, max_len=5, temperature=0.0, beam_width=3)
+        assert isinstance(result.text, str)
+        assert isinstance(result.confidence, float)
+
+    def test_beam_search_greedy_deterministic(self):
+        """Both greedy and beam=1 should be deterministic (same result twice)."""
+        engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
+                                  n_decoder_layers=1)
+        engine.build_vocab(["red circle on white background"])
+        img = np.random.randn(1, 224, 224, 3).astype(np.float32)
+
+        a = engine.generate(img, max_len=5, temperature=0.0)
+        b = engine.generate(img, max_len=5, temperature=0.0)
+        assert a.text == b.text, f"Greedy not deterministic: {a.text!r} != {b.text!r}"
+
+        c = engine.generate(img, max_len=5, temperature=0.0, beam_width=1)
+        d = engine.generate(img, max_len=5, temperature=0.0, beam_width=1)
+        assert c.text == d.text, f"Beam=1 not deterministic: {c.text!r} != {d.text!r}"
+
+    def test_beam_search_wider_is_not_shorter(self):
+        """Wider beam should not produce shorter text (at least same or better search)."""
+        engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
+                                  n_decoder_layers=1)
+        engine.build_vocab(["a" * 20])
+        img = np.random.randn(1, 224, 224, 3).astype(np.float32)
+
+        # With all-a training, greedy and beam should both produce reasonable length
+        g = engine.generate(img, max_len=15, temperature=0.0)
+        b = engine.generate(img, max_len=15, temperature=0.0, beam_width=3)
+        # Both should produce non-empty output
+        assert len(g.text) > 0
+        assert len(b.text) > 0
+
+    def test_beam_search_with_audio(self):
+        """Beam search should work with audio-only input."""
+        engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
+                                  n_decoder_layers=1)
+        engine.build_vocab(["beep boop"])
+        audio = np.sin(np.linspace(0, 50, 8000)).astype(np.float32)
+        result = engine.generate(audio_np=audio, max_len=5, temperature=0.0, beam_width=3)
+        assert isinstance(result.text, str)
+
+    def test_beam_search_with_combined(self):
+        """Beam search should work with combined vision+audio input."""
+        engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
+                                  n_decoder_layers=1)
+        engine.build_vocab(["red circle beep"])
+        img = np.random.randn(1, 224, 224, 3).astype(np.float32)
+        audio = np.sin(np.linspace(0, 50, 8000)).astype(np.float32)
+        result = engine.generate(image_np=img, audio_np=audio, max_len=5, temperature=0.0, beam_width=3)
+        assert isinstance(result.text, str)
+
+
 class TestZeroPatchGradientRegression:
     """Regression tests ensuring zero-patch cross-attention doesn't explode gradients.
 

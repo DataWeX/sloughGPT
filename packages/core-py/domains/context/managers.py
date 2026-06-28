@@ -18,6 +18,8 @@ from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 import threading
 
+from domains.infrastructure.repository import FileRepository, JsonSerializer
+
 _lock = threading.Lock()
 
 
@@ -57,6 +59,12 @@ class TraitWeightsConfig:
         self._weights: Dict[str, float] = {}
         self._snapshots_dir = self._path.parent / "trait_snapshots"
         self._snapshots_dir.mkdir(exist_ok=True)
+        self._snapshot_repo = FileRepository[dict](
+            directory=str(self._snapshots_dir),
+            serializer=JsonSerializer(dict),
+            key_suffix=".json",
+        )
+        self._snapshot_repo.enable_cache(ttl_seconds=5.0)
         self._load()
 
     # ── Access ───────────────────────────────────────────────────────
@@ -188,36 +196,32 @@ class TraitWeightsConfig:
     def list_snapshots(self) -> List[Dict[str, Any]]:
         """Return sorted snapshots with name and metadata."""
         results = []
-        for f in sorted(self._snapshots_dir.glob("*.json")):
-            meta = {"name": f.stem}
+        for sid in self._snapshot_repo.keys():
+            meta = {"name": sid}
             try:
-                data = json.loads(f.read_text())
-                if "_meta" in data:
+                data = self._snapshot_repo.get(sid)
+                if data and "_meta" in data:
                     meta.update(data["_meta"])
             except Exception:
                 pass
             results.append(meta)
-        return results
+        return sorted(results, key=lambda x: x.get("saved_at", ""))
 
     def save_snapshot(self, name: str) -> str:
         """Save current weights as a named snapshot. Returns path."""
         safe = name.replace(" ", "_").replace("/", "_")
-        path = self._snapshots_dir / f"{safe}.json"
         with _lock:
             data = {**self._weights}
             data["_meta"] = {"saved_at": datetime.now().isoformat(), "label": name}
-        with open(path, "w") as f:
-            json.dump(data, f, indent=2)
-        return str(path)
+        self._snapshot_repo.save(safe, data)
+        return str(self._snapshots_dir / f"{safe}.json")
 
     def load_snapshot(self, name: str) -> int:
         """Load weights from a named snapshot. Returns number of traits loaded."""
         safe = name.replace(" ", "_").replace("/", "_")
-        path = self._snapshots_dir / f"{safe}.json"
-        if not path.exists():
+        data = self._snapshot_repo.get(safe)
+        if not data:
             return 0
-        with open(path) as f:
-            data = json.load(f)
         data.pop("_meta", None)
         count = 0
         with _lock:
@@ -231,11 +235,9 @@ class TraitWeightsConfig:
     def delete_snapshot(self, name: str) -> bool:
         """Delete a named snapshot."""
         safe = name.replace(" ", "_").replace("/", "_")
-        path = self._snapshots_dir / f"{safe}.json"
-        if path.exists():
-            path.unlink()
-            return True
-        return False
+        if not self._snapshot_repo.exists(safe):
+            return False
+        return self._snapshot_repo.delete(safe)
 
     # ── Persistence ──────────────────────────────────────────────────
 

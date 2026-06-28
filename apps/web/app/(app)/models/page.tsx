@@ -156,6 +156,7 @@ export default function ModelsPage() {
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([])
   const [snapshotName, setSnapshotName] = useState('')
   const [refreshing, setRefreshing] = useState(false)
+  const [cacheUsage, setCacheUsage] = useState<{ total_gb: number; model_count: number } | null>(null)
 
   const fetchSnapshots = useCallback(async () => {
     try {
@@ -198,7 +199,7 @@ export default function ModelsPage() {
     }
   }
 
-  useEffect(() => { setMounted(true); fetchTraitWeights(); fetchSnapshots() }, [fetchTraitWeights, fetchSnapshots])
+  useEffect(() => { setMounted(true); fetchTraitWeights(); fetchSnapshots(); modelController.getCacheUsage().then(setCacheUsage).catch(() => {}) }, [fetchTraitWeights, fetchSnapshots])
 
   const isOnline = health !== null && health !== 'offline'
   const subtitle = health === null ? 'Connecting...'
@@ -521,6 +522,27 @@ export default function ModelsPage() {
                 </>
               )
             })()}
+          </CardContent>
+        </Card>
+
+        {/* Cache Usage */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Model Cache</CardTitle>
+            <Button size="sm" variant="ghost" onClick={() => modelController.getCacheUsage().then(setCacheUsage).catch(() => {})}>
+              <IconRefresh className="h-3.5 w-3.5" />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {cacheUsage ? (
+              <KpiGrid columns={3}>
+                <StatCard label="Cached Models" value={cacheUsage.model_count} />
+                <StatCard label="Disk Usage" value={`${cacheUsage.total_gb.toFixed(1)} GB`} />
+                <StatCard label="Loaded" value={health !== null && health !== 'offline' && health.model_loaded ? health.model_type || 'Yes' : 'None'} />
+              </KpiGrid>
+            ) : (
+              <p className="text-sm text-muted-foreground">Loading cache stats...</p>
+            )}
           </CardContent>
         </Card>
       </div>

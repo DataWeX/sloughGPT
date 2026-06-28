@@ -118,6 +118,10 @@ export const modelController = {
   async loadVisualModel(modelDir: string, modelId = 'visual'): Promise<{ status: string; model_id: string; type: string; vision_encoder?: string; llm?: string }> {
     return apiPost(`/models/visual-load?model_dir=${encodeURIComponent(modelDir)}&model_id=${encodeURIComponent(modelId)}`)
   },
+
+  async getCacheUsage(): Promise<{ total_bytes: number; total_gb: number; model_count: number; cache_dir: string }> {
+    return apiGet('/models/cache-usage')
+  },
 }
 
 export async function* streamModelEvents(

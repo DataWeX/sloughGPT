@@ -2,26 +2,25 @@
 Agent System - CRUD management for agent definitions.
 """
 
-import json
 import logging
 import os
-from typing import Callable, Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any
 
+from domains.infrastructure.repository import FileRepository, JsonSerializer
 from . import Agent, AgentConfig, ToolCapability, get_agent
 
 logger = logging.getLogger("man.agents")
 
 AGENTS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "data", "agents")
 
+_agent_repo = FileRepository[dict](
+    directory=AGENTS_DIR,
+    serializer=JsonSerializer(dict),
+    key_suffix=".json",
+)
+_agent_repo.enable_cache(ttl_seconds=5.0)
+
 _API_BASE = "http://localhost:8000"
-
-
-def _ensure_dir():
-    os.makedirs(AGENTS_DIR, exist_ok=True)
-
-
-def _path(name: str) -> str:
-    return os.path.join(AGENTS_DIR, f"{name}.json")
 
 
 DEFAULT_AGENTS: Dict[str, Dict[str, Any]] = {
@@ -85,47 +84,38 @@ class AgentSystem:
     """
 
     def __init__(self):
-        _ensure_dir()
         self._agent = get_agent()
         self._agent.set_inference_fn(_default_inference_fn)
         self._load_defaults()
 
     def _load_defaults(self):
         for aid, data in DEFAULT_AGENTS.items():
-            if not os.path.exists(_path(aid)):
-                self._save(aid, data)
+            if not _agent_repo.exists(aid):
+                _agent_repo.save(aid, data)
 
     def _save(self, agent_id: str, data: dict):
-        with open(_path(agent_id), "w") as f:
-            json.dump(data, f, indent=2)
+        _agent_repo.save(agent_id, data)
 
     def _load(self, agent_id: str) -> Optional[dict]:
-        path = _path(agent_id)
-        if not os.path.exists(path):
-            return None
-        with open(path) as f:
-            return json.load(f)
+        return _agent_repo.get(agent_id)
 
     def list(self) -> List[dict]:
-        _ensure_dir()
         agents = []
-        for fname in sorted(os.listdir(AGENTS_DIR)):
-            if fname.endswith(".json"):
-                agent_id = fname[:-5]
-                data = self._load(agent_id)
-                if data:
-                    agents.append({"id": agent_id, **data})
+        for sid in _agent_repo.keys():
+            data = _agent_repo.get(sid)
+            if data:
+                agents.append({"id": sid, **data})
         return agents
 
     def get(self, agent_id: str) -> Optional[dict]:
-        data = self._load(agent_id)
+        data = _agent_repo.get(agent_id)
         if data is None:
             return None
         return {"id": agent_id, **data}
 
     def get_instructions(self, agent_id: str) -> str:
         """Get the system instructions for an agent (for chat injection)."""
-        data = self._load(agent_id)
+        data = _agent_repo.get(agent_id)
         if data is None:
             return ""
         return data.get("instructions", "")
@@ -140,28 +130,23 @@ class AgentSystem:
             "tools": tools or ["memory"],
             "avatar": avatar or name[0] if name else "A",
         }
-        self._save(agent_id, data)
+        _agent_repo.save(agent_id, data)
         logger.info(f"Created agent: {agent_id}")
         return {"id": agent_id, **data}
 
     def update(self, agent_id: str, **kwargs) -> Optional[dict]:
-        data = self._load(agent_id)
+        data = _agent_repo.get(agent_id)
         if data is None:
             return None
         for key, value in kwargs.items():
             if value is not None and key in ("name", "description", "instructions", "tools", "avatar"):
                 data[key] = value
-        self._save(agent_id, data)
+        _agent_repo.save(agent_id, data)
         logger.info(f"Updated agent: {agent_id}")
         return {"id": agent_id, **data}
 
     def delete(self, agent_id: str) -> bool:
-        path = _path(agent_id)
-        if os.path.exists(path):
-            os.remove(path)
-            logger.info(f"Deleted agent: {agent_id}")
-            return True
-        return False
+        return _agent_repo.delete(agent_id)
 
     async def execute(self, agent_id: str, request: str, session_id: str = "",
                       user_id: str = "default") -> dict:

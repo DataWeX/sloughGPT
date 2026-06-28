@@ -39,6 +39,8 @@ export default function TrainingJobDetailPage() {
 
   const [job, setJob] = useState<TrainingJob | null>(null)
   const [loading, setLoading] = useState(true)
+  const [summaryText, setSummaryText] = useState<string | null>(null)
+  const [summaryLoading, setSummaryLoading] = useState(false)
 
   const fetchJob = useCallback(async () => {
     if (!jobId) return
@@ -53,10 +55,24 @@ export default function TrainingJobDetailPage() {
     }
   }, [jobId, addToast])
 
+  const fetchSummary = useCallback(async () => {
+    if (!jobId) return
+    setSummaryLoading(true)
+    try {
+      const text = await trainingJobsController.getSummary(jobId)
+      setSummaryText(text)
+    } catch {
+      // summary is optional — no toast
+    } finally {
+      setSummaryLoading(false)
+    }
+  }, [jobId])
+
   useEffect(() => {
     if (!jobId) { router.push('/training'); return }
     void fetchJob()
-  }, [jobId, fetchJob, router])
+    void fetchSummary()
+  }, [jobId, fetchJob, fetchSummary, router])
 
   // Poll if running
   useEffect(() => {
@@ -138,6 +154,26 @@ export default function TrainingJobDetailPage() {
                 <p className="text-sm font-medium text-success">{job.explanation}</p>
               </div>
             )}
+
+            {/* Summary card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Summary</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {summaryLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-full" />
+                    <Skeleton className="h-3 w-3/4" />
+                    <Skeleton className="h-3 w-1/2" />
+                  </div>
+                ) : summaryText ? (
+                  <div className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">{summaryText}</div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Summary not available</p>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Status + actions */}
             <Card>
@@ -242,7 +278,7 @@ export default function TrainingJobDetailPage() {
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Duration</p>
-                    <p className="text-xs mt-0.5">{formatDuration(job.created_at)} (running)</p>
+                    <p className="text-xs mt-0.5">{formatDuration(job.created_at, job.finished_at)}</p>
                   </div>
                   {job.checkpoint && (
                     <div className="col-span-2">

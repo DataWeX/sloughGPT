@@ -82,6 +82,17 @@ def get_configured_middleware() -> list[type[BaseHTTPMiddleware]]:
 
 
 def register_all_middleware(app: FastAPI):
-    """Register all middleware on a FastAPI instance."""
+    """Register all middleware on a FastAPI instance.
+
+    Includes RateLimitMiddleware from the rate limiter module.
+    """
     for cls in get_configured_middleware():
         app.add_middleware(cls)
+
+    # Wire rate limiter middleware
+    try:
+        from domains.infrastructure.rate_limiter import RateLimitMiddleware
+        app.add_middleware(RateLimitMiddleware)
+        logger.info("RateLimitMiddleware registered")
+    except Exception as exc:
+        logger.warning("RateLimitMiddleware skipped: %s", exc)

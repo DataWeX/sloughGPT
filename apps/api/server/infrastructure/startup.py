@@ -4,13 +4,16 @@ Startup orchestrator — phased initialization of all server subsystems.
 Manages the 6-phase startup with proper error isolation so one
 subsystem's failure never crashes the entire server.
 
+Integrates with LifecycleManager for phase state machine, health gates,
+graceful drain, and EventBus integration.
+
 Phases:
-  1. Logging setup
+  1. Logging setup (async, sequential)
   2. Model load (background)
   3. W&B metrics server (background)
   4. Multimodal engine (background)
-  5. Model registry
-  6. Router registration
+  5. Model registry (async, sequential)
+  6. Router registration (async, sequential)
 """
 
 from __future__ import annotations
@@ -29,22 +32,116 @@ logger = logging.getLogger("man.startup")
 
 
 class StartupOrchestrator:
-    """Phased server initialization with error isolation per subsystem."""
+    """Phased server initialization with LifecycleManager integration.
+
+    Each phase is registered as a startup hook on the lifecycle manager.
+    Background phases (model load, W&B, multimodal) are non-critical —
+    a failure there doesn't block the server from starting.
+
+    On shutdown, the lifecycle manager drains in-flight requests before
+    running cleanup hooks.
+    """
 
     def __init__(self, app: FastAPI, config: ServerConfig):
         self._app = app
         self._config = config
         self._wandb_task: Optional[asyncio.Task] = None
         self._registry: Any = None
+        self._lifecycle = None
+
+    async def _init_lifecycle(self):
+        """Lazy-init lifecycle manager with EventBus."""
+        if self._lifecycle is not None:
+            return
+        try:
+            from domains.infrastructure.event_bus import EventBus, EventPriority
+            from domains.infrastructure.lifecycle import (
+                LifecycleManager,
+                StartupHook,
+                ShutdownHook,
+                get_lifecycle_manager,
+            )
+
+            bus = EventBus(max_history=200)
+            self._lifecycle = get_lifecycle_manager(event_bus=bus)
+
+            # Register startup hooks for sequential phases
+            self._lifecycle.register_startup_hook(
+                StartupHook("logging", self._phase1_logging, depends_on=[], timeout=5.0, critical=False),
+            )
+            self._lifecycle.register_startup_hook(
+                StartupHook("model_registry", self._phase5_model_registry, depends_on=["logging"], timeout=10.0, critical=False),
+            )
+            self._lifecycle.register_startup_hook(
+                StartupHook("routers", self._phase6_routers, depends_on=["model_registry"], timeout=30.0, critical=True),
+            )
+
+            # Register shutdown hooks
+            self._lifecycle.register_shutdown_hook(
+                ShutdownHook("job_cleanup", self._shutdown_jobs, depends_on=[], timeout=10.0),
+            )
+            self._lifecycle.register_shutdown_hook(
+                ShutdownHook("wandb_cancel", self._shutdown_wandb, depends_on=[], timeout=5.0),
+            )
+            self._lifecycle.register_shutdown_hook(
+                ShutdownHook("registry_cleanup", self._shutdown_registry, depends_on=[], timeout=5.0),
+            )
+            self._lifecycle.register_shutdown_hook(
+                ShutdownHook("pool_shutdown", self._shutdown_pool, depends_on=[], timeout=10.0),
+            )
+
+            # Health gates
+            self._lifecycle.register_gate("model_loaded", lambda: self._is_model_loaded())
+            self._lifecycle.register_gate("routers_registered", lambda: self._routers_registered)
+
+            logger.info("LifecycleManager initialized with event bus")
+        except Exception as exc:
+            logger.warning("LifecycleManager init skipped: %s", exc)
+
+    @property
+    def lifecycle(self):
+        return self._lifecycle
+
+    def _is_model_loaded(self) -> bool:
+        """Check if a model is loaded (either via autoload or manually)."""
+        import state as server_state
+        return server_state.model is not None
 
     async def run(self):
-        """Execute all startup phases."""
-        await self._phase1_logging()
+        """Execute all startup phases via the lifecycle manager."""
+        try:
+            from domains.infrastructure.event_bus import EventBus
+            bus = EventBus(max_history=200)
+        except Exception:
+            bus = None
+
+        # Initialize lifecycle manager
+        await self._init_lifecycle()
+
+        # Start background phases (model load, W&B, multimodal)
         self._phase2_model_load()
         self._phase3_wandb()
         self._phase4_multimodal()
-        self._phase5_model_registry()
-        self._phase6_routers()
+
+        # Register health gate for background model load
+        import state as server_state
+        if self._lifecycle is not None:
+            self._lifecycle.register_gate(
+                "model_loaded",
+                lambda: self._is_model_loaded()
+            )
+
+        # Run sequential phases via lifecycle manager
+        if self._lifecycle is not None:
+            ok = await self._lifecycle.start(timeout=120.0)
+            if not ok:
+                logger.warning("Lifecycle startup incomplete — continuing anyway")
+        else:
+            # Fallback: run phases directly
+            await self._phase1_logging()
+            self._phase5_model_registry()
+            self._phase6_routers()
+
         await self._phase_ready()
 
     async def _phase1_logging(self):
@@ -159,7 +256,9 @@ class StartupOrchestrator:
                 "Phase 6/6: all routers registered (%d routes)",
                 len(self._app.routes),
             )
+            self._routers_registered = True
         except Exception as e:
+            self._routers_registered = False
             logger.error("Phase 6/6: router registration failed: %s", e)
             raise
 
@@ -168,8 +267,10 @@ class StartupOrchestrator:
         STARTUP_PHASE.update(phase="ready", step=7, message="Server ready")
         logger.info("Startup complete — server ready for requests")
 
-    async def shutdown(self):
-        """Clean up on server shutdown."""
+    # ── Shutdown hooks ──
+
+    async def _shutdown_jobs(self):
+        """Mark running training jobs as crashed on shutdown."""
         try:
             from training.job_store import get_job_store
             store = get_job_store()
@@ -179,6 +280,8 @@ class StartupOrchestrator:
         except Exception as e:
             logger.warning("Shutdown job cleanup: %s", e)
 
+    async def _shutdown_wandb(self):
+        """Cancel W&B server task."""
         if self._wandb_task is not None:
             self._wandb_task.cancel()
             try:
@@ -186,18 +289,37 @@ class StartupOrchestrator:
             except asyncio.CancelledError:
                 pass
 
+    async def _shutdown_registry(self):
+        """Reset model registry metrics."""
         try:
             from domains.infrastructure.model_registry import get_model_registry
             get_model_registry().reset_metrics()
         except Exception:
             pass
 
+    async def _shutdown_pool(self):
+        """Shut down inference pool."""
         try:
             from infrastructure.inference_pool import InferencePool
             pool = await InferencePool.get_instance()
             await pool.shutdown()
         except Exception:
             pass
+
+    async def shutdown(self):
+        """Clean up on server shutdown — uses lifecycle drain if available."""
+        if self._lifecycle is not None:
+            try:
+                await self._lifecycle.shutdown(timeout=30.0)
+                return
+            except Exception as e:
+                logger.warning("Lifecycle shutdown error: %s", e)
+
+        # Fallback: direct cleanup
+        await self._shutdown_jobs()
+        await self._shutdown_wandb()
+        await self._shutdown_registry()
+        await self._shutdown_pool()
 
 
 def _autoload_model(cfg: ServerConfig):

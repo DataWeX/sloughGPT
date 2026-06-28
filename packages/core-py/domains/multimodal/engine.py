@@ -85,6 +85,17 @@ class MultimodalEngine:
         )
         self._trained = False
 
+    def train(self, mode: bool = True):
+        self.decoder.train(mode)
+        if hasattr(self.vision, 'train'):
+            self.vision.train(mode)
+        if hasattr(self.audio, 'train'):
+            self.audio.train(mode)
+
+    def eval(self):
+        """Set all components to evaluation mode (disables dropout)."""
+        self.train(False)
+
     def _pil_to_np(self, img) -> np.ndarray:
         """Convert PIL Image to (1, 224, 224, 3) numpy array, normalized to [0,1]."""
         img = img.convert("RGB").resize((VisionEncoder.IMAGE_SIZE, VisionEncoder.IMAGE_SIZE))
@@ -519,37 +530,99 @@ class MultimodalEngine:
 
     def generate(self, image_np: Optional[np.ndarray] = None, max_len: int = 20,
                  temperature: float = 1.0, audio_np: Optional[np.ndarray] = None,
-                 audio_patches: Optional[np.ndarray] = None) -> MultimodalOutput:
+                 audio_patches: Optional[np.ndarray] = None,
+                 beam_width: int = 1) -> MultimodalOutput:
+        # Switch to eval mode for deterministic generation (disable dropout)
+        self.eval()
         embed, patches, _ = self._concat_modalities(image_np, audio_np, audio_patches)
-        bos = 0
-        eos = 1
-        tokens = [bos]
+        bos, eos = 0, 1
+        vocab_size = self.text.vocab_size
 
-        for _ in range(max_len):
-            inp = _tensor(np.array([tokens]), requires_grad=False)
-            logits, _ = self.decoder.forward(embed, inp, patches)
-            logits_2d = logits.data.reshape(-1, logits.data.shape[-1])  # (seq_len, vocab_size)
-            last_pos = logits_2d[-1]  # (vocab_size,)
-            if temperature > 0 and self._trained:
-                probs = _softmax(_tensor(last_pos[np.newaxis, :], requires_grad=False) / temperature)
-                probs_np = probs.data.flatten()
-                probs_np = np.maximum(probs_np, 1e-8)
-                for t in tokens[1:]:
-                    if 0 <= t < len(probs_np):
-                        probs_np[t] *= 0.4
-                probs_np /= probs_np.sum()
-                next_tok = int(np.random.choice(len(probs_np), p=probs_np))
+        if beam_width <= 1:
+            # Greedy decoding (original path)
+            tokens = [bos]
+            for _ in range(max_len):
+                inp = _tensor(np.array([tokens]), requires_grad=False)
+                logits, _ = self.decoder.forward(embed, inp, patches)
+                logits_2d = logits.data.reshape(-1, logits.data.shape[-1])
+                last_pos = logits_2d[-1]
+                if temperature > 0 and self._trained:
+                    probs = _softmax(_tensor(last_pos[np.newaxis, :], requires_grad=False) / temperature)
+                    probs_np = probs.data.flatten()
+                    probs_np = np.maximum(probs_np, 1e-8)
+                    for t in tokens[1:]:
+                        if 0 <= t < len(probs_np):
+                            probs_np[t] *= 0.4
+                    probs_np /= probs_np.sum()
+                    next_tok = int(np.random.choice(len(probs_np), p=probs_np))
+                else:
+                    scores = last_pos.copy()
+                    for t in tokens[1:]:
+                        if 0 <= t < len(scores):
+                            scores[t] -= 5.0
+                    next_tok = int(np.argmax(scores))
+                if next_tok == eos:
+                    break
+                tokens.append(next_tok)
+            text = self.text.decode(tokens)
+        else:
+            # Beam search: keep top-k hypotheses
+            beams = [(0.0, [bos])]  # (log_prob, tokens)
+            completed = []
+
+            for step in range(max_len):
+                candidates = []
+                for log_prob, seq in beams:
+                    inp = _tensor(np.array([seq]), requires_grad=False)
+                    logits, _ = self.decoder.forward(embed, inp, patches)
+                    last_pos = logits.data.reshape(-1, logits.data.shape[-1])[-1]
+
+                    # Penalize repetition on raw logits (same as greedy)
+                    scores = last_pos.copy()
+                    for t in seq[1:]:
+                        if 0 <= t < len(scores):
+                            scores[t] -= 5.0
+
+                    # Convert to log-probabilities
+                    mx = scores.max()
+                    shifted = scores - mx
+                    log_probs = shifted - np.log(np.exp(shifted).sum())
+
+                    # Expand with top-k candidates
+                    k = min(beam_width * 2, len(log_probs))
+                    top_idx = np.argsort(-log_probs)[:k]
+                    for idx in top_idx:
+                        cand_log_prob = log_prob + log_probs[idx]
+                        cand_seq = seq + [int(idx)]
+                        if idx == eos:
+                            completed.append((cand_log_prob, cand_seq))
+                        else:
+                            candidates.append((cand_log_prob, cand_seq))
+
+                if not candidates and completed:
+                    break
+
+                # Prune to top beam_width candidates
+                candidates.sort(key=lambda x: -x[0])
+                beams = candidates[:beam_width]
+
+                # Early stop if all beams hit EOS
+                if all(seq[-1] == eos for _, seq in beams):
+                    break
+
+                if step >= max_len - 1:
+                    for _, seq in beams:
+                        completed.append((0.0, seq))
+
+            # Pick best: prefer completed sequences, longest if tied
+            if completed:
+                completed.sort(key=lambda x: (-x[0], -len(x[1])))
+                best_seq = completed[0][1]
             else:
-                scores = last_pos.copy()
-                for t in tokens[1:]:
-                    if 0 <= t < len(scores):
-                        scores[t] -= 5.0
-                next_tok = int(np.argmax(scores))
-            if next_tok == eos:
-                break
-            tokens.append(next_tok)
+                best_seq = beams[0][1]
 
-        text = self.text.decode(tokens)
+            text = self.text.decode(best_seq)
+
         conf = float(np.mean(np.abs(embed.data)))
         return MultimodalOutput(text=text, confidence=conf)
 
@@ -579,6 +652,13 @@ class VisionEncoder:
             for i in range(n_layers)
         ]
         self.optimizer = SloAdam(lr=3e-4)
+
+    def train(self, mode: bool = True):
+        for block in self.blocks:
+            block.train(mode)
+
+    def eval(self):
+        self.train(False)
 
     def extract_patches(self, images_np: np.ndarray) -> np.ndarray:
         """Split (B, H, W, C) images into (B, num_patches, patch_dim) patches."""
@@ -665,6 +745,13 @@ class AudioEncoder:
             for i in range(n_layers)
         ]
         self.optimizer = SloAdam(lr=3e-4)
+
+    def train(self, mode: bool = True):
+        for block in self.blocks:
+            block.train(mode)
+
+    def eval(self):
+        self.train(False)
 
     def _mel_spectrogram(self, waveform: np.ndarray) -> np.ndarray:
         """Compute mel spectrogram from raw waveform. Returns (N_MELS, T).
@@ -920,6 +1007,15 @@ class SloTransformerDecoder(SloLayer):
         ps += self.fc_out.parameters()
         ps += self.img_proj.parameters()
         return [p for p in ps if p.requires_grad]
+
+    def train(self, mode: bool = True):
+        """Set training mode on all blocks (controls dropout)."""
+        for block in self.blocks:
+            block.train(mode)
+
+    def eval(self):
+        """Set evaluation mode (disables dropout)."""
+        self.train(False)
 
     def forward(self, img_embed: Tensor, token_ids: Tensor,
                 img_patches: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:

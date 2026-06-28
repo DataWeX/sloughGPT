@@ -11,10 +11,9 @@ Each builds on the previous.
 | Event Bus | [#36](https://github.com/DataWeX/sloughGPT/issues/36) | ✅ | `domains/infrastructure/event_bus.py` |
 | Config System | [#31](https://github.com/DataWeX/sloughGPT/issues/31) | ✅ | `domains/infrastructure/config.py` |
 | Error Taxonomy | [#35](https://github.com/DataWeX/sloughGPT/issues/35) | ✅ | `domains/infrastructure/errors.py` |
-| Error Taxonomy | [#35](https://github.com/DataWeX/sloughGPT/issues/35) | ❌ | — |
-| Rate Limiter | [#32](https://github.com/DataWeX/sloughGPT/issues/32) | ❌ | — |
-| Data Repository | [#34](https://github.com/DataWeX/sloughGPT/issues/34) | ❌ | — |
-| Lifecycle Manager | [#33](https://github.com/DataWeX/sloughGPT/issues/33) | ❌ | — |
+| Rate Limiter | [#32](https://github.com/DataWeX/sloughGPT/issues/32) | ✅ | `domains/infrastructure/rate_limiter.py` |
+| Data Repository | [#34](https://github.com/DataWeX/sloughGPT/issues/34) | ✅ | `domains/infrastructure/repository.py` |
+| Lifecycle Manager | [#33](https://github.com/DataWeX/sloughGPT/issues/33) | ✅ | `domains/infrastructure/lifecycle.py` |
 
 ## Why These Exist
 

@@ -11,6 +11,7 @@ export interface TrainingJob {
   status: string
   progress: number
   created_at: string
+  finished_at?: string
   model?: string
   dataset?: string
   epochs?: number
@@ -173,6 +174,11 @@ export const trainingJobsController = {
     } catch {
       return null
     }
+  },
+
+  async getSummary(jobId: string): Promise<string> {
+    const res = await apiGet<{ summary?: string }>(`/training/jobs/${jobId}/summary`)
+    return res?.summary || ''
   },
 
   async create(params: {
