@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { cn } from '@/lib/cn'
 import { PUBLIC_API_URL } from '@/lib/config'
+import { VoiceWaveform } from './VoiceWaveform'
 
 import { Button } from '@/components/ui/button'
 
@@ -172,6 +173,17 @@ export function VoiceInput({ onTranscript, disabled }: VoiceInputProps) {
       <span className="sr-only" aria-live="assertive" aria-atomic="true">
         {isListening ? 'Listening…' : ''}
       </span>
+      {isListening && (
+        <div className="hidden sm:flex items-center px-1" aria-hidden="true">
+          <VoiceWaveform
+            level={0.6}
+            bars={12}
+            variant="mic"
+            width={48}
+            height={20}
+          />
+        </div>
+      )}
       <Button
         variant="ghost"
         size="icon"

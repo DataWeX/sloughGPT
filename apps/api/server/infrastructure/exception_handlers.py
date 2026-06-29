@@ -65,11 +65,11 @@ async def _http_exception_handler(request: Request, exc: Exception) -> JSONRespo
 
 
 async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Catch-all for unexpected errors — returns 503 with correlation ID."""
+    """Catch-all for unexpected errors — returns 500 with correlation ID."""
     corr_id = getattr(request.state, "correlation_id", "-")
     logger.exception("Unhandled error on %s %s [%s]", request.method, request.url.path, corr_id)
     return JSONResponse(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "error": "Internal server error",
             "correlation_id": corr_id,

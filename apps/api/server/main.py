@@ -132,7 +132,7 @@ app.add_middleware(
 
 # Register structured middleware from the infrastructure package.
 from infrastructure.middleware import register_all_middleware  # noqa: E402
-register_all_middleware(app)
+register_all_middleware(app, request_timeout=cfg.request_timeout_seconds)
 
 # Feature routers are registered by StartupOrchestrator._phase6_routers()
 # during the lifespan context.  Tests that need routes without lifespan

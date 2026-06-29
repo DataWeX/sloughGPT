@@ -8,6 +8,8 @@ import os
 import threading
 from typing import Any, Callable, Dict, Optional
 
+from domains.infrastructure.config import get_config
+
 logger = logging.getLogger("man.wandb.server")
 
 _inference_lock = threading.Lock()
@@ -58,14 +60,15 @@ def _wandb_init_server_run() -> None:
 
     from domains.training.wandb_helpers import default_wandb_project
 
+    cfg = get_config().tracking
     wandb.init(
         project=default_wandb_project(),
-        entity=os.environ.get("WANDB_ENTITY") or None,
+        entity=cfg.wandb_entity or None,
         job_type="server",
-        name=os.environ.get("WANDB_SERVER_RUN_NAME") or f"api-{os.getpid()}",
+        name=cfg.wandb_server_run_name or f"api-{os.getpid()}",
         tags=["sloughgpt", "fastapi", "server"],
-        mode=os.environ.get("WANDB_MODE", "online"),
-        api_key=os.environ.get("WANDB_API_KEY"),
+        mode=cfg.wandb_mode,
+        api_key=cfg.wandb_api_key or None,
     )
 
 
@@ -98,7 +101,7 @@ async def start_wandb_server_background(
         logger.warning("wandb not installed; set MAN_WANDB_SERVER=0 or pip install wandb")
         return None
 
-    interval = float(os.environ.get("MAN_WANDB_SERVER_INTERVAL_SEC", "60"))
+    interval = float(get_config().tracking.wandb_server_interval)
 
     async def _loop() -> None:
         await asyncio.to_thread(_wandb_init_server_run)

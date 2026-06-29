@@ -7,15 +7,46 @@ registration in the FastAPI app.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 import uuid
 from typing import Awaitable, Callable
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, status
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger("man.middleware")
+
+# Default server-side request timeout (seconds).
+# Override via env var MAN_REQUEST_TIMEOUT in main.py.
+REQUEST_TIMEOUT_SECONDS = 60.0
+
+
+class RequestTimeoutMiddleware(BaseHTTPMiddleware):
+    """Enforces a server-side per-request timeout.
+
+    If a request handler takes longer than ``timeout`` seconds, the
+    middleware aborts it and returns 504 Gateway Timeout.
+    """
+
+    def __init__(self, app, timeout: float = REQUEST_TIMEOUT_SECONDS):
+        super().__init__(app)
+        self.timeout = timeout
+
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+        try:
+            return await asyncio.wait_for(call_next(request), timeout=self.timeout)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Request timeout (%0.1fs) on %s %s",
+                self.timeout, request.method, request.url.path,
+            )
+            return JSONResponse(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                content={"error": f"Request timed out after {self.timeout}s"},
+            )
 
 
 class RequestTimingMiddleware(BaseHTTPMiddleware):
@@ -69,25 +100,26 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             raise
 
 
-def get_configured_middleware() -> list[type[BaseHTTPMiddleware]]:
-    """Return middleware classes in registration order.
+def get_configured_middleware(request_timeout: float = REQUEST_TIMEOUT_SECONDS) -> list[tuple[type[BaseHTTPMiddleware], dict]]:
+    """Return middleware classes with kwargs in registration order.
 
-    Registration order: CorrelationId → Timing → RequestLogging.
+    Registration order: RequestTimeout → CorrelationId → Timing → RequestLogging.
     """
     return [
-        CorrelationIdMiddleware,
-        RequestTimingMiddleware,
-        RequestLoggingMiddleware,
+        (RequestTimeoutMiddleware, {"timeout": request_timeout}),
+        (CorrelationIdMiddleware, {}),
+        (RequestTimingMiddleware, {}),
+        (RequestLoggingMiddleware, {}),
     ]
 
 
-def register_all_middleware(app: FastAPI):
+def register_all_middleware(app: FastAPI, request_timeout: float = REQUEST_TIMEOUT_SECONDS):
     """Register all middleware on a FastAPI instance.
 
     Includes RateLimitMiddleware from the rate limiter module.
     """
-    for cls in get_configured_middleware():
-        app.add_middleware(cls)
+    for cls, kwargs in get_configured_middleware(request_timeout):
+        app.add_middleware(cls, **kwargs)
 
     # Wire rate limiter middleware
     try:

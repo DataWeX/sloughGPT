@@ -79,8 +79,10 @@ interface ActionsGroup {
   onCopyMarkdown?: () => void
   onSaveAsDataset?: () => void
   onSystemPrompt: () => void
+  onSearchConversations: () => void
   hasMessages: boolean
   messageCount: number
+  bookmarkCount: number
 }
 
 interface SidebarGroup {

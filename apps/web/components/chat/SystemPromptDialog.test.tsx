@@ -1,7 +1,19 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import React from 'react'
+
+const localStorageMock = (() => {
+  let store: Record<string, string> = {}
+  return {
+    getItem: (key: string) => store[key] ?? null,
+    setItem: (key: string, value: string) => { store[key] = value },
+    removeItem: (key: string) => { delete store[key] },
+    clear: () => { store = {} },
+  }
+})()
+
+vi.stubGlobal('localStorage', localStorageMock)
 
 vi.mock('@/components/ui/dialog', () => {
   function Dialog({ children, open }: any) { return open ? <div data-testid="dialog">{children}</div> : null }
@@ -13,8 +25,13 @@ vi.mock('@/components/ui/dialog', () => {
   return { Dialog, DialogContent, DialogHeader, DialogTitle, DialogPortal, DialogOverlay }
 })
 
+vi.mock('@/components/ui/input', () => ({
+  Input: ({ value, onChange, onKeyDown, ...props }: any) => (
+    <input value={value} onChange={onChange} onKeyDown={onKeyDown} {...props} />
+  ),
+}))
+
 import { SystemPromptDialog } from './SystemPromptDialog'
-import { Button } from '@/components/ui/button'
 
 vi.mock('@/components/ui/button', () => ({
   Button: vi.fn(({ children, onClick, ...props }: any) => (
@@ -23,6 +40,7 @@ vi.mock('@/components/ui/button', () => ({
 }))
 
 describe('SystemPromptDialog', () => {
+  beforeEach(() => localStorageMock.clear())
   afterEach(cleanup)
 
   it('renders when open', () => {
@@ -42,19 +60,34 @@ describe('SystemPromptDialog', () => {
     expect(textarea.value).toBe('Be helpful')
   })
 
-  it('calls onSave with draft value when Save clicked', () => {
+  it('shows preset buttons', () => {
+    render(<SystemPromptDialog open={true} onOpenChange={vi.fn()} value="" onSave={vi.fn()} />)
+    expect(screen.getByText('Helpful Assistant')).toBeDefined()
+    expect(screen.getByText('Code Expert')).toBeDefined()
+  })
+
+  it('applies preset text on preset click', () => {
+    render(<SystemPromptDialog open={true} onOpenChange={vi.fn()} value="" onSave={vi.fn()} />)
+    fireEvent.click(screen.getByText('Helpful Assistant'))
+    const textarea = screen.getByLabelText('System prompt') as HTMLTextAreaElement
+    expect(textarea.value).toContain('helpful')
+  })
+
+  it('calls onSave with draft value when Save changes clicked', () => {
     const onSave = vi.fn()
     render(<SystemPromptDialog open={true} onOpenChange={vi.fn()} value="" onSave={onSave} />)
     const textarea = screen.getByLabelText('System prompt')
     fireEvent.change(textarea, { target: { value: 'Be concise' } })
-    fireEvent.click(screen.getByText('Save'))
+    fireEvent.click(screen.getByText('Save changes'))
     expect(onSave).toHaveBeenCalledWith('Be concise')
   })
 
   it('closes dialog when Save clicked', () => {
     const onOpenChange = vi.fn()
     render(<SystemPromptDialog open={true} onOpenChange={onOpenChange} value="" onSave={vi.fn()} />)
-    fireEvent.click(screen.getByText('Save'))
+    const textarea = screen.getByLabelText('System prompt')
+    fireEvent.change(textarea, { target: { value: 'Be concise' } })
+    fireEvent.click(screen.getByText('Save changes'))
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 

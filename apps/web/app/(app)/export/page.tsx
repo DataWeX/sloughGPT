@@ -9,6 +9,7 @@ import { StatCard, KpiGrid } from '@/components/ui'
 import { IconDownload, IconCheck } from '@/components/ui'
 import { exportController } from '@/lib/controllers'
 import { modelController, type ModelInfo } from '@/lib/model-controller'
+import { sessionController } from '@/lib/session-controller'
 import { useToastStore } from '@/lib/toast-store'
 
 export default function ExportPage() {
@@ -61,6 +62,57 @@ export default function ExportPage() {
       addToast(`Export error: ${e.message}`, 'error')
     }
     setExporting(false)
+  }
+
+  const [exportingConv, setExportingConv] = useState(false)
+  const [convFormat, setConvFormat] = useState<'json' | 'md'>('json')
+
+  const handleExportConversations = async () => {
+    setExportingConv(true)
+    try {
+      const sessions = await sessionController.list()
+      const conversations = sessions.map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        created_at: s.created_at,
+        updated_at: s.updated_at,
+        messages: (s.messages || []).map((m: any) => ({
+          role: m.role,
+          content: m.content,
+          timestamp: m.timestamp,
+        })),
+      }))
+
+      let output: string
+      let mimeType: string
+      let ext: string
+
+      if (convFormat === 'json') {
+        output = JSON.stringify(conversations, null, 2)
+        mimeType = 'application/json'
+        ext = 'json'
+      } else {
+        output = conversations.map((c: any) => {
+          const header = `# ${c.name || 'Untitled'}`
+          const msgs = (c.messages || []).map((m: any) => `**${m.role}**: ${m.content}`).join('\n\n')
+          return `${header}\n\n${msgs}`
+        }).join('\n\n---\n\n')
+        mimeType = 'text/markdown'
+        ext = 'md'
+      }
+
+      const blob = new Blob([output], { type: mimeType })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `sloughgpt-conversations.${ext}`
+      a.click()
+      URL.revokeObjectURL(url)
+      addToast(`Exported ${conversations.length} conversations as ${ext.toUpperCase()}`, 'success')
+    } catch (e: any) {
+      addToast(`Export failed: ${e.message}`, 'error')
+    }
+    setExportingConv(false)
   }
 
   return (
@@ -153,6 +205,37 @@ export default function ExportPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Conversations export */}
+        <Card>
+          <CardHeader><CardTitle className="text-base">Export Conversations</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Download all your conversations as a single file. JSON preserves full structure; Markdown is human-readable.
+            </p>
+            <div className="flex items-center gap-2">
+              <div className="flex rounded-md border border-border/40 bg-muted/20 p-0.5">
+                {(['json', 'md'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setConvFormat(f)}
+                    className={`text-[11px] px-3 py-1 rounded-sm transition-colors ${
+                      convFormat === f
+                        ? 'bg-background shadow-sm text-foreground font-medium'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {f === 'json' ? 'JSON' : 'Markdown'}
+                  </button>
+                ))}
+              </div>
+              <Button size="sm" onClick={handleExportConversations} disabled={exportingConv}>
+                <IconDownload className="h-3.5 w-3.5 mr-1" />
+                {exportingConv ? 'Exporting...' : 'Download all'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

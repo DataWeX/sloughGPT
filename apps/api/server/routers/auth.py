@@ -70,8 +70,10 @@ class AuthResponse(BaseModel):
 # ---------- helpers ----------
 
 def _get_auth_deps():
-    from main import VALID_API_KEYS, JWT_EXPIRATION_HOURS, jwt_auth, audit_logger
-    return VALID_API_KEYS, JWT_EXPIRATION_HOURS, jwt_auth, audit_logger
+    from infrastructure.auth import get_jwt_auth, get_audit_logger
+    from settings import get_security_settings
+    sec = get_security_settings()
+    return sec.valid_api_keys, sec.jwt_expiration_hours, get_jwt_auth(), get_audit_logger
 
 
 def _get_current_user(authorization: Optional[str] = Header(None)) -> dict:

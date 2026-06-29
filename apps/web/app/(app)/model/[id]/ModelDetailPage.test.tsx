@@ -5,7 +5,7 @@ import React from 'react'
 
 const {
   mockPush, mockParams, mockModelList, mockGetHealth,
-  mockModelLoad, mockUnload, mockBenchRun, mockAddToast,
+  mockModelLoad, mockUnload, mockBenchRun, mockAddToast, mockApiGet,
 } = vi.hoisted(() => ({
   mockPush: vi.fn(),
   mockParams: vi.fn(),
@@ -15,6 +15,7 @@ const {
   mockUnload: vi.fn(),
   mockBenchRun: vi.fn(),
   mockAddToast: vi.fn(),
+  mockApiGet: vi.fn(),
 }))
 
 vi.mock('next/navigation', () => ({
@@ -35,8 +36,22 @@ vi.mock('@/lib/benchmark-controller', () => ({
   benchmarkController: { run: mockBenchRun },
 }))
 
+vi.mock('@/lib/http-client', () => ({
+  apiGet: mockApiGet,
+  apiPost: vi.fn(),
+  apiPatch: vi.fn(),
+  apiDelete: vi.fn(),
+}))
+
 vi.mock('@/lib/toast-store', () => ({
   useToastStore: (sel: any) => sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast },
+}))
+
+vi.mock('@/lib/generation-config-controller', () => ({
+  generationConfigController: {
+    get: vi.fn().mockResolvedValue({ temperature: 0.7, max_new_tokens: 256, top_p: 1.0, top_k: 50 }),
+    update: vi.fn().mockResolvedValue(undefined),
+  },
 }))
 
 import ModelDetailPage from './page'
@@ -86,6 +101,7 @@ beforeEach(() => {
   mockParams.mockReturnValue({ id: 'gpt2' })
   mockModelList.mockResolvedValue([mockModel])
   mockGetHealth.mockResolvedValue(mockHealthLoaded)
+  mockApiGet.mockResolvedValue({ logs: [] })
 })
 
 afterEach(cleanup)
@@ -191,5 +207,29 @@ describe('ModelDetailPage', () => {
     await waitFor(() => expect(screen.getByText('Load model')).toBeDefined())
     fireEvent.click(screen.getByText('Load model'))
     await waitFor(() => expect(screen.getByText('Error')).toBeDefined())
+  })
+
+  it('renders generation config card with sliders', async () => {
+    render(<ModelDetailPage />)
+    await waitFor(() => expect(screen.getByText('Generation Config')).toBeDefined())
+    expect(screen.getByText('Temperature')).toBeDefined()
+    expect(screen.getByText('Max tokens')).toBeDefined()
+    expect(screen.getByText('Top-p')).toBeDefined()
+    expect(screen.getByText('Top-k')).toBeDefined()
+  })
+
+  it('renders Save button on generation config card', async () => {
+    render(<ModelDetailPage />)
+    await waitFor(() => expect(screen.getByText('Save')).toBeDefined())
+  })
+
+  it('calls generationConfigController.update on Save click', async () => {
+    const { generationConfigController } = await import('@/lib/generation-config-controller')
+    render(<ModelDetailPage />)
+    await waitFor(() => expect(screen.getByText('Save')).toBeDefined())
+    fireEvent.click(screen.getByText('Save'))
+    await waitFor(() => {
+      expect(generationConfigController.update).toHaveBeenCalled()
+    })
   })
 })

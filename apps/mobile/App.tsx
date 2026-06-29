@@ -8,6 +8,7 @@ import {ChatScreen} from './src/screens/ChatScreen';
 import {ModelsScreen} from './src/screens/ModelsScreen';
 import {TrainingScreen} from './src/screens/TrainingScreen';
 import {KnowledgeScreen} from './src/screens/KnowledgeScreen';
+import {ActivityScreen} from './src/screens/ActivityScreen';
 import {SettingsScreen} from './src/screens/SettingsScreen';
 import {HealthScreen} from './src/screens/HealthScreen';
 import {AboutScreen} from './src/screens/AboutScreen';
@@ -27,6 +28,7 @@ const TAB_ICONS: Record<string, string> = {
   Models: '🧠',
   Train: '🏋️',
   Knowledge: '📚',
+  Activity: '📱',
   Settings: '⚙️',
 };
 
@@ -118,6 +120,7 @@ function AppInner() {
           <Tab.Screen name="Models" component={ModelsScreen} />
           <Tab.Screen name="Train" component={TrainingScreen} />
           <Tab.Screen name="Knowledge" component={KnowledgeScreen} />
+          <Tab.Screen name="Activity" component={ActivityScreen} />
           <Tab.Screen
             name="Settings"
             component={SettingsStack}

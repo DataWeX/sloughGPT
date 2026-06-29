@@ -6,6 +6,8 @@ import React from 'react'
 vi.mock('@/components/ui', () => ({
   IconX: () => <span data-testid="icon-x">x</span>,
   IconEye: () => <span data-testid="icon-eye">eye</span>,
+  IconStar: () => <span data-testid="icon-star">star</span>,
+  IconTrash: () => <span data-testid="icon-trash">trash</span>,
 }))
 
 vi.mock('@/components/ui/button', () => ({
@@ -37,6 +39,12 @@ vi.mock('./QuickPrompts', () => ({
     <div data-testid="quick-prompts">
       <button onClick={() => onUsePrompt('test prompt')}>Test Prompt</button>
     </div>
+  ),
+}))
+
+vi.mock('./ChatBookmarksPanel', () => ({
+  ChatBookmarksPanel: ({ bookmarks }: { bookmarks: any[] }) => (
+    <div data-testid="chat-bookmarks-panel">Bookmarks: {bookmarks.length}</div>
   ),
 }))
 
@@ -103,6 +111,7 @@ describe('ChatToolPanel', () => {
     expect(screen.getByText('Tools')).toBeDefined()
     expect(screen.getByTestId('knowledge-tab')).toBeDefined()
     expect(screen.getByTestId('quick-prompts')).toBeDefined()
+    expect(screen.getByTestId('chat-bookmarks-panel')).toBeDefined()
   })
 
   it('renders nothing when closed', () => {

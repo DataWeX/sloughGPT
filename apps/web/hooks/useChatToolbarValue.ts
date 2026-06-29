@@ -28,6 +28,8 @@ interface UseChatToolbarValueConfig {
   modelDescriptions: Record<string, string>
   showToast: (message: string, type?: string) => void
   onSystemPrompt: () => void
+  onSearchConversations: () => void
+  bookmarkCount: number
 }
 
 export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatToolbarContextValue {
@@ -99,6 +101,7 @@ export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatTool
       onExportMarkdown: chat.handleExportMarkdown,
       onCopyMarkdown: chat.handleCopyMarkdown,
       onSystemPrompt: config.onSystemPrompt,
+      onSearchConversations: config.onSearchConversations,
       onSaveAsDataset: async () => {
         try {
           const msgs = chat.messages
@@ -114,6 +117,7 @@ export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatTool
       },
       hasMessages: chat.messages.length > 0,
       messageCount: chat.messages.length,
+      bookmarkCount: config.bookmarkCount,
     },
     health: {
       status: health === null ? 'loading' : health === 'offline' ? 'offline' : health.model_loaded ? 'ok' : 'degraded',
@@ -126,5 +130,5 @@ export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatTool
       onToggle: () => ui.setSidebarOpen(prev => !prev),
       onClose: () => ui.setSidebarOpen(false),
     },
-  }), [chat, ui, model, agents, engine, health, matchCount, matchIds, handlePrevMatch, handleNextMatch, handleSelectAgentWithToast, modelDescriptions, showToast])
+  }), [chat, ui, model, agents, engine, health, matchCount, matchIds, handlePrevMatch, handleNextMatch, handleSelectAgentWithToast, modelDescriptions, showToast, config.onSearchConversations])
 }

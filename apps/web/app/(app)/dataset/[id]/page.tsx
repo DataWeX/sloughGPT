@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { StatCard, KpiGrid, Skeleton } from '@/components/ui/display'
 import { IconTrash, IconDownload, IconEdit, IconCheck, IconX, IconRefresh } from '@/components/ui'
-import { datasetController, type Dataset } from '@/lib/dataset-controller'
+import { datasetController, type Dataset, type DatasetStats } from '@/lib/dataset-controller'
 import { DatasetPreview } from '@/components/DatasetPreview'
 import { useToastStore } from '@/lib/toast-store'
 
@@ -30,6 +30,7 @@ export default function DatasetDetailPage() {
   const [loading, setLoading] = useState(true)
   const [renaming, setRenaming] = useState(false)
   const [renameText, setRenameText] = useState('')
+  const [stats, setStats] = useState<DatasetStats | null>(null)
 
   const fetchDataset = useCallback(async () => {
     setLoading(true)
@@ -43,10 +44,26 @@ export default function DatasetDetailPage() {
     }
   }, [datasetId, addToast])
 
+  const fetchStats = useCallback(async () => {
+    if (!datasetId) return
+    try {
+      const s = await datasetController.getStats(datasetId)
+      setStats(s)
+    } catch {
+      // stats are optional — silently ignore
+    }
+  }, [datasetId])
+
   useEffect(() => {
     if (!datasetId) { router.push('/datasets'); return }
     fetchDataset()
   }, [datasetId, fetchDataset, router])
+
+  useEffect(() => {
+    if (dataset) {
+      fetchStats()
+    }
+  }, [dataset, fetchStats])
 
   const startRename = () => {
     setRenameText(dataset?.name || '')
@@ -202,6 +219,29 @@ export default function DatasetDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Stats card */}
+            {stats && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Stats</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <KpiGrid columns={4}>
+                    <StatCard label="Format" value={stats.format || '—'} />
+                    <StatCard label="Rows (lines)" value={stats.lines?.toLocaleString() || '—'} />
+                    <StatCard label="Avg length" value={stats.avg_length ? `${stats.avg_length.toFixed(0)} chars` : '—'} />
+                    <StatCard label="Total chars" value={stats.chars?.toLocaleString() || '—'} />
+                  </KpiGrid>
+                  {stats.suggested_method && stats.suggested_method !== 'unknown' && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-xs text-muted-foreground">Recommended method:</span>
+                      <Badge variant="secondary" size="sm">{stats.suggested_method}</Badge>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Preview card */}
             <Card>

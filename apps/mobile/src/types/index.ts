@@ -74,3 +74,48 @@ export interface DetailedHealth {
 }
 
 export type ThemeMode = 'light' | 'dark' | 'system';
+
+// ── Activity Recognition ────────────────────────────────────────────────────
+
+export interface SensorReading {
+  timestamp: number;
+  accel: {x: number; y: number; z: number};
+  gyro: {x: number; y: number; z: number};
+}
+
+export interface SensorWindow {
+  data: number[][];  // time_steps x 6 [ax, ay, az, gx, gy, gz]
+  label?: number;
+}
+
+export interface ActivityPrediction {
+  activity: string;
+  class_id: number;
+  confidence: number;
+  probabilities: number[];
+}
+
+export interface ActivityStatus {
+  model_loaded: boolean;
+  num_recordings: number;
+  num_labels: number;
+  activities: string[];
+  device: string;
+}
+
+export interface ActivityRecording {
+  id: number;
+  path: string;
+  samples: number;
+  label: number;
+  activity: string;
+}
+
+export const ACTIVITY_NAMES = [
+  'stationary',
+  'walking',
+  'running',
+  'shaking',
+  'driving',
+  'cycling',
+];

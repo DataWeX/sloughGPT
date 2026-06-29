@@ -20,12 +20,14 @@ import { useToastStore } from '@/lib/toast-store'
 import { cn } from '@/lib/cn'
 import { KeyboardShortcutsModal } from '@/components/KeyboardShortcutsModal'
 import { DebugOverlay } from '@/components/DebugOverlay'
+import { WhatsNewDialog, getUnseenCount } from '@/components/WhatsNewDialog'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [showDebug, setShowDebug] = useState(false)
+  const [showWhatsNew, setShowWhatsNew] = useState(false)
   const toasts = useToastStore(s => s.toasts)
   const dismissToast = useToastStore(s => s.dismissToast)
   const clearToasts = useToastStore(s => s.clearToasts)
@@ -37,6 +39,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const handler = () => setShowShortcuts(true)
     window.addEventListener('toggle-shortcuts', handler)
     return () => window.removeEventListener('toggle-shortcuts', handler)
+  }, [])
+
+  useEffect(() => {
+    const handler = () => setShowWhatsNew(true)
+    window.addEventListener('toggle-whatsnew', handler)
+    return () => window.removeEventListener('toggle-whatsnew', handler)
   }, [])
 
   useEffect(() => {
@@ -138,6 +146,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <KeyboardShortcutsModal open={showShortcuts} onOpenChange={setShowShortcuts} />
         <DebugOverlay open={showDebug} onOpenChange={setShowDebug} />
         <CommandPalette />
+        <WhatsNewDialog open={showWhatsNew} onOpenChange={setShowWhatsNew} />
       </div>
     </DialogPrimitive.Root>
   )

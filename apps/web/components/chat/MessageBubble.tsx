@@ -26,6 +26,10 @@ export interface MessageBubbleProps {
   isError?: boolean
   searchQuery?: string
   model?: string
+  isBookmarked?: boolean
+  onBookmark?: (messageId: string) => void
+  onDelete?: (messageId: string) => void
+  collapsibleLength?: number
   'aria-live'?: 'polite' | 'assertive' | 'off'
 }
 
@@ -67,6 +71,10 @@ export const MessageBubble = memo(function MessageBubble({
   isError = false,
   searchQuery,
   model,
+  isBookmarked = false,
+  onBookmark,
+  onDelete,
+  collapsibleLength = 0,
   'aria-live': ariaLive,
 }: MessageBubbleProps) {
   const [displayContent, setDisplayContent] = useState(content)
@@ -74,6 +82,7 @@ export const MessageBubble = memo(function MessageBubble({
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(content)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
+  const [isCollapsed, setIsCollapsed] = useState(true)
   const bubbleRef = useRef<HTMLDivElement>(null)
   
   useEffect(() => {
@@ -83,6 +92,7 @@ export const MessageBubble = memo(function MessageBubble({
   useEffect(() => {
     setDisplayContent(content)
     setEditContent(content)
+    setIsCollapsed(true)
   }, [content])
 
   // Auto-scroll streaming content into view (throttled to ~200ms)
@@ -112,6 +122,8 @@ export const MessageBubble = memo(function MessageBubble({
   const hasContent = displayContent && displayContent.trim().length > 0
   const showActions = role === 'assistant' && hasContent && !isStreaming && !isError
   const id = messageId || 'msg'
+  const isCollapsible = collapsibleLength > 0 && displayContent.length > collapsibleLength && !isEditing && !isStreaming
+  const visibleContent = isCollapsible && isCollapsed ? displayContent.slice(0, collapsibleLength) : displayContent
 
   return (
     <div
@@ -205,9 +217,22 @@ export const MessageBubble = memo(function MessageBubble({
               <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">{highlightText(content, searchQuery)}</p>
             ) : (
               <article className="leading-relaxed text-sm" aria-label={`${role} message`}>
-                <Markdown content={displayContent} />
+                <Markdown content={visibleContent} />
+                {isCollapsible && isCollapsed && (
+                  <span className="text-muted-foreground/40 select-none">…</span>
+                )}
                 {isStreaming && (
                   <span className="inline-block ml-0.5 animate-pulse text-primary" aria-hidden="true">▊</span>
+                )}
+                {isCollapsible && (
+                  <button
+                    type="button"
+                    onClick={() => setIsCollapsed(!isCollapsed)}
+                    className="block mt-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+                    aria-expanded={!isCollapsed}
+                  >
+                    {isCollapsed ? `Show more (${displayContent.length - collapsibleLength} more)` : 'Show less'}
+                  </button>
                 )}
               </article>
             )
@@ -254,9 +279,24 @@ export const MessageBubble = memo(function MessageBubble({
               </div>
             </form>
           ) : (
-            <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">
-              {searchQuery ? highlightText(displayContent, searchQuery) : displayContent}
-            </p>
+            <div>
+              <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">
+                {searchQuery ? highlightText(visibleContent, searchQuery) : visibleContent}
+              </p>
+              {isCollapsible && isCollapsed && (
+                <span className="text-primary-foreground/50 select-none text-sm">…</span>
+              )}
+              {isCollapsible && (
+                <button
+                  type="button"
+                  onClick={() => setIsCollapsed(!isCollapsed)}
+                  className="mt-1 text-xs font-medium text-primary-foreground/70 hover:text-primary-foreground transition-colors"
+                  aria-expanded={!isCollapsed}
+                >
+                  {isCollapsed ? `Show more (${displayContent.length - collapsibleLength} more)` : 'Show less'}
+                </button>
+              )}
+            </div>
           )
         )}
         
@@ -288,6 +328,9 @@ export const MessageBubble = memo(function MessageBubble({
           onThumbsUp={onThumbsUp}
           onThumbsDown={onThumbsDown}
           onSuggestionClick={onSuggestionClick}
+          isBookmarked={isBookmarked}
+          onBookmark={onBookmark}
+          onDelete={onDelete}
         />
       )}
       
@@ -297,6 +340,7 @@ export const MessageBubble = memo(function MessageBubble({
           messageId={id}
           onEdit={() => setIsEditing(true)}
           onSuggestionClick={onSuggestionClick}
+          onDelete={onDelete}
         />
       )}
     </div>

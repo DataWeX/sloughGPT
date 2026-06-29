@@ -4,11 +4,12 @@ MLflow/W&B Integration for SloughGPT
 Experiment tracking and logging.
 """
 
-import os
 import logging
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
+
+from domains.infrastructure.config import get_config
 
 logger = logging.getLogger("man.tracking")
 
@@ -39,10 +40,11 @@ class TrackingConfig:
     tags: Optional[list] = None
 
     def __post_init__(self):
+        cfg = get_config().tracking
         if self.backend == TrackerBackend.WANDB:
-            self.api_key = self.api_key or os.getenv("WANDB_API_KEY")
+            self.api_key = self.api_key or cfg.wandb_api_key or None
         elif self.backend == TrackerBackend.MLFLOW:
-            self.tracking_uri = self.tracking_uri or os.getenv("MLFLOW_TRACKING_URI")
+            self.tracking_uri = self.tracking_uri or cfg.mlflow_tracking_uri or None
 
 
 class ExperimentTracker:
@@ -97,16 +99,16 @@ class ExperimentTracker:
                 "entity": self.config.entity,
                 "api_key": self.config.api_key,
             }
-            mode = os.environ.get("WANDB_MODE", "online")
+            cfg_t = get_config().tracking
+            mode = cfg_t.wandb_mode
             if mode:
                 kwargs["mode"] = mode
             if self.config.job_type:
                 kwargs["job_type"] = self.config.job_type
             if self.config.tags:
                 kwargs["tags"] = list(self.config.tags)
-            wandb_dir = os.environ.get("WANDB_DIR")
-            if wandb_dir:
-                kwargs["dir"] = wandb_dir
+            if cfg_t.wandb_dir:
+                kwargs["dir"] = cfg_t.wandb_dir
             kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
             wandb.init(**kwargs)

@@ -42,7 +42,14 @@ export function useChatSessions(opts: {
   const sessionCreatedRef = useRef(false)
 
   const saveSessionToStorage = useCallback(async (msgs: ChatMessage[], sessionId: string) => {
-    const sessionName = msgs[0]?.content?.slice(0, 30) || 'New Chat'
+    const sessionName = (() => {
+      const first = msgs.find(m => m.role === 'user')?.content || ''
+      if (!first) return 'New Chat'
+      const cleaned = first.replace(/^(hey|hi|hello|yo|sup)[\s,!.]*/i, '').trim()
+      const sentence = cleaned.split(/[.!?\n]/).filter(Boolean)[0]?.trim() || cleaned
+      const maxLen = 42
+      return sentence.length > maxLen ? sentence.slice(0, maxLen).trimEnd() + '…' : sentence
+    })()
     const storedMsgs = msgs.length > MAX_STORAGE_MESSAGES
       ? msgs.slice(-MAX_STORAGE_MESSAGES)
       : msgs

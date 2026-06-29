@@ -1,11 +1,12 @@
 'use client'
 import { useEffect, useRef } from 'react'
 import { useApiMonitor } from '@/lib/api-monitor-store'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { apiGet } from '@/lib/http-client'
 
 const POLL_INTERVAL = 8000
 const REQUEST_TIMEOUT = 10000
 const MAX_FAILURES = 3
+const RELOAD_DELAY_MS = 1500
 
 interface HealthSummary {
   score: number
@@ -16,6 +17,7 @@ interface HealthSummary {
 
 export function useBackendWatcher() {
   const setStatus = useApiMonitor((s) => s.setStatus)
+  const setHealthSummary = useApiMonitor((s) => s.setHealthSummary)
   const wasOffline = useRef(false)
   const lastScoreStatus = useRef<string | null>(null)
   const failureCount = useRef(0)
@@ -26,19 +28,15 @@ export function useBackendWatcher() {
 
     const check = async () => {
       if (cancelled) return
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT)
 
       try {
-        const res = await fetch(`${PUBLIC_API_URL}/health/summary`, {
-          signal: controller.signal,
-          cache: 'no-store',
+        const data = await apiGet<HealthSummary>('/health/summary', undefined, {
+          timeout: REQUEST_TIMEOUT,
+          silent: true,
         })
-        clearTimeout(timeout)
-        if (!res.ok) throw new Error(String(res.status))
-
-        const data: HealthSummary = await res.json()
+        if (cancelled) return
         failureCount.current = 0
+        setHealthSummary(data as any)
 
         if (wasOffline.current) {
           wasOffline.current = false
@@ -63,11 +61,16 @@ export function useBackendWatcher() {
           lastScoreStatus.current = data.status
         }
       } catch {
-        clearTimeout(timeout)
+        if (cancelled) return
         failureCount.current += 1
         wasOffline.current = true
         if (failureCount.current >= MAX_FAILURES) {
           setStatus('reloading')
+          // Auto-reload after a brief delay to recover from server restart
+          setTimeout(() => {
+            if (!cancelled) window.location.reload()
+          }, RELOAD_DELAY_MS)
+          return // stop polling — reload will restart it
         }
       }
 

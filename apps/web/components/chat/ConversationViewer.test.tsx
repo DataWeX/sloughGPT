@@ -11,6 +11,9 @@ vi.mock('@/components/ui', () => {
     IconThumbUp: iconMock('thumb-up'),
     IconThumbDown: iconMock('thumb-down'),
     IconChat: iconMock('chat'),
+    IconCopy: iconMock('copy'),
+    IconCheck: iconMock('check'),
+    IconDownload: iconMock('download'),
   }
 })
 
@@ -161,5 +164,49 @@ describe('ConversationViewer', () => {
     const dialog = screen.getByRole('dialog')
     const focusable = dialog.querySelectorAll('button')
     expect(focusable.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('renders export buttons when onExport provided', () => {
+    const onExport = vi.fn()
+    render(<ConversationViewer isOpen={true} onClose={onClose} messages={[msg('1')]} onExport={onExport} />)
+    expect(screen.getByRole('button', { name: /export as markdown/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /export as json/i })).toBeDefined()
+  })
+
+  it('does not render export buttons without onExport', () => {
+    render(<ConversationViewer isOpen={true} onClose={onClose} messages={[msg('1')]} />)
+    expect(screen.queryByRole('button', { name: /export as markdown/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /export as json/i })).toBeNull()
+  })
+
+  it('calls onExport with md when MD export clicked', () => {
+    const onExport = vi.fn()
+    render(<ConversationViewer isOpen={true} onClose={onClose} messages={[msg('1')]} onExport={onExport} />)
+    fireEvent.click(screen.getByRole('button', { name: /export as markdown/i }))
+    expect(onExport).toHaveBeenCalledWith('md')
+  })
+
+  it('calls onExport with json when JSON export clicked', () => {
+    const onExport = vi.fn()
+    render(<ConversationViewer isOpen={true} onClose={onClose} messages={[msg('1')]} onExport={onExport} />)
+    fireEvent.click(screen.getByRole('button', { name: /export as json/i }))
+    expect(onExport).toHaveBeenCalledWith('json')
+  })
+
+  it('renders copy button for each message', () => {
+    const messages = [msg('1', 'user', 'Hello'), msg('2', 'assistant', 'Hi')]
+    render(<ConversationViewer isOpen={true} onClose={onClose} messages={messages} />)
+    const copyButtons = screen.getAllByRole('button', { name: /copy message/i })
+    expect(copyButtons).toHaveLength(2)
+  })
+
+  it('shows char count for each message', () => {
+    const messages = [
+      { id: 'a', role: 'user' as const, content: 'Hello', timestamp: Date.now() },
+      { id: 'b', role: 'assistant' as const, content: 'Hi', timestamp: Date.now() },
+    ]
+    render(<ConversationViewer isOpen={true} onClose={onClose} messages={messages} />)
+    expect(screen.getByText('5 chars')).toBeDefined()
+    expect(screen.getByText('2 chars')).toBeDefined()
   })
 })

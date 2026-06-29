@@ -86,4 +86,29 @@ describe('ChatScreen', () => {
     render(<ChatScreen messages={[]} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
     expect(screen.getByTestId('empty-state').getAttribute('data-has-model')).toBe('true')
   })
+
+  it('renders date separator between same-day messages', () => {
+    const now = new Date()
+    const messages = [
+      { id: 'm1', role: 'user' as const, content: 'Hi', timestamp: now },
+      { id: 'm2', role: 'assistant' as const, content: 'Hello', timestamp: now },
+    ]
+    render(<ChatScreen messages={messages} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
+    expect(screen.getByText('Today')).toBeDefined()
+  })
+
+  it('renders date separator only once per day', () => {
+    const yesterday = new Date(Date.now() - 86400000)
+    const today = new Date()
+    const messages = [
+      { id: 'm1', role: 'user' as const, content: 'Old', timestamp: yesterday },
+      { id: 'm2', role: 'assistant' as const, content: 'Reply', timestamp: yesterday },
+      { id: 'm3', role: 'user' as const, content: 'New', timestamp: today },
+    ]
+    render(<ChatScreen messages={messages} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
+    const separators = screen.getAllByRole('separator')
+    expect(separators).toHaveLength(2)
+    expect(separators[0]).toHaveAttribute('aria-label', 'Yesterday')
+    expect(separators[1]).toHaveAttribute('aria-label', 'Today')
+  })
 })

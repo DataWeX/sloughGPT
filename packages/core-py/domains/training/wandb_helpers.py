@@ -6,25 +6,21 @@ import os
 from dataclasses import asdict, is_dataclass
 from typing import Any, Dict, Optional
 
-_WANDB_TRUTHY = frozenset({"1", "true", "yes", "on"})
-
-
-def env_flag(name: str) -> bool:
-    return os.environ.get(name, "").strip().lower() in _WANDB_TRUTHY
+from domains.infrastructure.config import get_config
 
 
 def wandb_training_enabled_from_env() -> bool:
     """Enable W&B for ``POST /training/start`` background jobs when API key or offline mode is usable."""
-    return env_flag("MAN_WANDB_TRAINING")
+    return get_config().tracking.wandb_training_enabled
 
 
 def wandb_server_enabled_from_env() -> bool:
-    """Enable long-lived W&B run for HTTP + inference aggregates (``MAN_WANDB_SERVER``)."""
-    return env_flag("MAN_WANDB_SERVER")
+    """Enable long-lived W&B run for HTTP + inference aggregates."""
+    return get_config().tracking.wandb_server_enabled
 
 
 def default_wandb_project() -> str:
-    return os.environ.get("WANDB_PROJECT", "sloughgpt")
+    return get_config().tracking.wandb_project
 
 
 def flatten_for_wandb_config(obj: Any, prefix: str = "") -> Dict[str, Any]:
@@ -75,11 +71,12 @@ def create_training_tracker_for_api_job(
         return None
 
     safe_name = f"{job_id}_{job_name}"[:128]
+    cfg = get_config().tracking
     tc = TrackingConfig(
         backend=TrackerBackend.WANDB,
         project=default_wandb_project(),
-        entity=os.environ.get("WANDB_ENTITY") or None,
-        api_key=os.environ.get("WANDB_API_KEY"),
+        entity=cfg.wandb_entity or None,
+        api_key=cfg.wandb_api_key or None,
         run_name=safe_name,
         job_type="train",
         tags=["sloughgpt", "api", "training"],

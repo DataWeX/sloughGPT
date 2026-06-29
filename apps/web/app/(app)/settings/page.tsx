@@ -90,6 +90,25 @@ export default function SettingsPage() {
                 step={50}
               />
             </div>
+            <div className="pt-2">
+              <Slider
+                label="Auto-collapse messages longer than"
+                value={settings.collapsibleMessageLength}
+                onChange={(v) => updateSettings({ collapsibleMessageLength: v })}
+                min={0}
+                max={2000}
+                step={50}
+                formatValue={(v) => v === 0 ? 'Disabled' : `${v} chars`}
+              />
+            </div>
+            <Slider
+              label="Message fold threshold"
+              value={settings.collapsibleMessageLength}
+              onChange={(v) => updateSettings({ collapsibleMessageLength: v })}
+              min={0}
+              max={2000}
+              step={50}
+            />
           </CardContent>
         </Card>
 
@@ -129,6 +148,37 @@ export default function SettingsPage() {
             </CardHeader>
           </Card>
         </Link>
+
+        {/* Chat commands reference */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Chat commands</CardTitle>
+            <CardDescription>Type <kbd className="inline-flex items-center rounded border border-border/40 bg-muted px-1.5 py-0.5 text-[11px] font-mono">/</kbd> in chat to open the command palette</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+              {[
+                ['/help', 'Show all commands'],
+                ['/clear', 'Clear the chat'],
+                ['/temp <n>', 'Set temperature (0–2)'],
+                ['/model <name>', 'Switch model'],
+                ['/soul <name>', 'Switch soul'],
+                ['/export', 'Export chat as MD'],
+                ['/file', 'Attach a file'],
+                ['/knowledge <q>', 'Search knowledge'],
+                ['/goto <path>', 'Navigate to page'],
+                ['/summarize', 'Summarise chat'],
+                ['/feedback +/- [r]', 'Rate response'],
+                ['/translate <lang>', 'Translate reply'],
+              ].map(([cmd, desc]) => (
+                <div key={cmd} className="flex items-center gap-2">
+                  <code className="text-xs text-primary font-mono shrink-0">{cmd}</code>
+                  <span className="text-xs text-muted-foreground truncate">{desc}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* System health */}
         <Link href="/monitoring" className="block">

@@ -23,7 +23,7 @@ function makeCtx(overrides: Partial<ChatToolbarContextValue['localEngine']> = {}
     knowledge: { showing: false, count: 0, context: '', onToggle: vi.fn() },
     agent: { agents: [], current: null, onSelect: vi.fn() },
     localEngine,
-    actions: { onVoiceMode: vi.fn(), onToggleTools: vi.fn(), onExportMarkdown: vi.fn(), onSystemPrompt: vi.fn(), hasMessages: false, messageCount: 0 },
+    actions: { onVoiceMode: vi.fn(), onToggleTools: vi.fn(), onExportMarkdown: vi.fn(), onSystemPrompt: vi.fn(), onSearchConversations: vi.fn(), hasMessages: false, messageCount: 0, bookmarkCount: 0 },
     health: { status: 'ok', summary: '', modelLoaded: false, modelType: '' },
     sidebar: { open: false, onToggle: vi.fn(), onClose: vi.fn() },
   }

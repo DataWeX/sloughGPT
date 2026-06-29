@@ -19,6 +19,7 @@ export interface ChatInputProps {
   onGeneratedImage?: (dataUrl: string, prompt: string) => void
   onPDFAnalysis?: (analysis: string, filename: string) => void
   onPDFError?: (error: string) => void
+  onExecuteCommand?: (cmd: any, args: string[]) => void
 }
 
 export function ChatInput({ 
@@ -35,6 +36,7 @@ export function ChatInput({
   onGeneratedImage,
   onPDFAnalysis,
   onPDFError,
+  onExecuteCommand,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -118,6 +120,7 @@ export function ChatInput({
           onPDFAnalysis={onPDFAnalysis}
           onPDFError={onPDFError}
           hasContent={hasContent}
+          onExecuteCommand={onExecuteCommand}
         />
       </div>
     </section>

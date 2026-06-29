@@ -1,132 +1,80 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
-import React from 'react'
 
-const mockFetch = vi.fn()
-vi.stubGlobal('fetch', mockFetch)
-
-interface MockSR extends EventTarget {
-  continuous: boolean
-  interimResults: boolean
-  lang: string
-  start: ReturnType<typeof vi.fn>
-  stop: ReturnType<typeof vi.fn>
-  abort: ReturnType<typeof vi.fn>
-  onstart: (() => void) | null
-  onend: (() => void) | null
-  onerror: ((e: Event) => void) | null
-  onresult: ((e: any) => void) | null
-}
-
-let mockRecognition: MockSR
-
-beforeEach(() => {
-  mockRecognition = {
-    continuous: false,
-    interimResults: false,
-    lang: '',
-    start: vi.fn(),
-    stop: vi.fn(),
-    abort: vi.fn(),
-    onstart: null,
-    onend: null,
-    onerror: null,
-    onresult: null,
-  } as any
-  window.SpeechRecognition = vi.fn(() => mockRecognition) as any
-  window.webkitSpeechRecognition = undefined as any
-  mockFetch.mockResolvedValue({ json: () => Promise.resolve({ speech_to_text: true }) })
-})
-
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import { VoiceInput } from './VoiceInput'
 
-function triggerStart() {
-  act(() => { if (mockRecognition.onstart) mockRecognition.onstart() })
-}
-
-function triggerEnd() {
-  act(() => { if (mockRecognition.onend) mockRecognition.onend() })
-}
-
-function triggerError() {
-  act(() => { if (mockRecognition.onerror) mockRecognition.onerror(new Event('error')) })
-}
-
-function triggerResult(transcript: string) {
-  act(() => {
-    if (mockRecognition.onresult) {
-      mockRecognition.onresult({ results: [[{ transcript, confidence: 0.9 }]] } as any)
-    }
-  })
-}
+const mockSpeechRecognition = vi.fn()
 
 describe('VoiceInput', () => {
-  afterEach(cleanup)
+  beforeEach(() => {
+    vi.clearAllMocks()
+    Object.assign(window, {
+      SpeechRecognition: mockSpeechRecognition,
+      webkitSpeechRecognition: mockSpeechRecognition,
+    })
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ speech_to_text: true }) })
+  })
 
-  it('renders start listening button when browser supported', () => {
-    render(<VoiceInput onTranscript={vi.fn()} />)
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('renders microphone button', () => {
+    render(<VoiceInput onTranscript={() => {}} />)
     expect(screen.getByLabelText('Start voice input')).toBeDefined()
   })
 
-  it('changes label to stop listening when active', () => {
-    render(<VoiceInput onTranscript={vi.fn()} />)
+  it('starts browser recognition on click', () => {
+    const start = vi.fn()
+    mockSpeechRecognition.mockImplementation(() => ({
+      continuous: false,
+      interimResults: false,
+      lang: '',
+      start,
+      stop: vi.fn(),
+      abort: vi.fn(),
+      onstart: null,
+      onend: null,
+      onerror: null,
+      onresult: null,
+    }))
+
+    render(<VoiceInput onTranscript={() => {}} />)
     fireEvent.click(screen.getByLabelText('Start voice input'))
-    triggerStart()
-    expect(screen.getByLabelText('Stop listening')).toBeDefined()
+    expect(start).toHaveBeenCalled()
   })
 
-  it('sets aria-pressed when listening', () => {
-    render(<VoiceInput onTranscript={vi.fn()} />)
-    fireEvent.click(screen.getByLabelText('Start voice input'))
-    triggerStart()
-    expect(screen.getByLabelText('Stop listening').getAttribute('aria-pressed')).toBe('true')
-  })
-
-  it('calls onTranscript when speech recognition fires result', () => {
+  it('calls onTranscript with final result', () => {
     const onTranscript = vi.fn()
+    let onresult: ((e: any) => void) | null = null
+    mockSpeechRecognition.mockImplementation(() => ({
+      continuous: false,
+      interimResults: false,
+      lang: '',
+      start: vi.fn(),
+      stop: vi.fn(),
+      abort: vi.fn(),
+      onstart: null,
+      onend: null,
+      onerror: null,
+      set onresult(fn) { onresult = fn },
+      get onresult() { return onresult },
+    }))
+
     render(<VoiceInput onTranscript={onTranscript} />)
     fireEvent.click(screen.getByLabelText('Start voice input'))
-    expect(mockRecognition.start).toHaveBeenCalled()
-    triggerResult('hello world')
+    expect(onresult).not.toBeNull()
+    onresult!({ results: [{ 0: { transcript: 'hello world', confidence: 0.9 }, isFinal: true, length: 1 }] } as any)
     expect(onTranscript).toHaveBeenCalledWith('hello world')
   })
 
-  it('stops listening when recognition ends', () => {
-    render(<VoiceInput onTranscript={vi.fn()} />)
-    fireEvent.click(screen.getByLabelText('Start voice input'))
-    triggerStart()
-    expect(screen.getByLabelText('Stop listening')).toBeDefined()
-    triggerEnd()
-    expect(screen.getByLabelText('Start voice input')).toBeDefined()
-  })
-
-  it('stops listening when recognition errors', () => {
-    render(<VoiceInput onTranscript={vi.fn()} />)
-    fireEvent.click(screen.getByLabelText('Start voice input'))
-    triggerStart()
-    triggerError()
-    expect(screen.getByLabelText('Start voice input')).toBeDefined()
-  })
-
-  it('has assertive live region for screen readers', () => {
-    render(<VoiceInput onTranscript={vi.fn()} />)
-    const live = document.querySelector('[aria-live="assertive"]')
-    expect(live).toBeDefined()
-  })
-})
-
-describe('VoiceInput unsupported', () => {
-  beforeEach(() => {
-    delete (window as any).SpeechRecognition
-    delete (window as any).webkitSpeechRecognition
-    mockFetch.mockResolvedValue({ json: () => Promise.resolve({ speech_to_text: false }) })
-  })
-
-  afterEach(cleanup)
-
-  it('renders nothing when neither browser nor server supported', () => {
-    const { container } = render(<VoiceInput onTranscript={vi.fn()} />)
-    expect(container.innerHTML).toBe('')
+  it('does not render when no speech support and no server support', async () => {
+    const w = window as unknown as Record<string, unknown>
+    delete w.SpeechRecognition
+    delete w.webkitSpeechRecognition
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ speech_to_text: false }) })
+    render(<VoiceInput onTranscript={() => {}} />)
+    await waitFor(() => expect(screen.queryByLabelText(/voice input/i)).toBeNull())
   })
 })

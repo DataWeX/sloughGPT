@@ -21,7 +21,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 export function ChatMoreMenu() {
   const ctx = useChatToolbarContext()
-  const { onVoiceMode, onToggleTools, onExportMarkdown, onCopyMarkdown, onSaveAsDataset, onSystemPrompt, hasMessages, messageCount } = ctx.actions
+  const { onVoiceMode, onToggleTools, onExportMarkdown, onCopyMarkdown, onSaveAsDataset, onSystemPrompt, onSearchConversations, hasMessages, messageCount } = ctx.actions
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -40,6 +40,9 @@ export function ChatMoreMenu() {
           )}
           {ctx.knowledge.count > 0 && (
             <div className="text-[10px] text-muted-foreground">{ctx.knowledge.count} knowledge facts</div>
+          )}
+          {ctx.actions.bookmarkCount > 0 && (
+            <div className="text-[10px] text-muted-foreground">{ctx.actions.bookmarkCount} bookmarks</div>
           )}
         </div>
 
@@ -95,6 +98,10 @@ export function ChatMoreMenu() {
         <DropdownMenuItem onSelect={onToggleTools}>
           <IconSettings className="mr-2 h-4 w-4" />
           Tools Panel
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onSearchConversations}>
+          <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+          Search Conversations
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onSystemPrompt}>
           <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>

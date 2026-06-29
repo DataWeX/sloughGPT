@@ -208,7 +208,15 @@ export default function TrainingJobDetailPage() {
                         </Button>
                       </>
                     )}
-                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => router.push('/chat')}>
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={async () => {
+                      if (job?.checkpoint) {
+                        try {
+                          await modelController.loadModelPath(job.checkpoint)
+                          addToast(`Loaded trained version: ${job.checkpoint}`, 'success')
+                        } catch { addToast('Failed to load model', 'error') }
+                      }
+                      router.push('/chat')
+                    }}>
                       Try in chat
                     </Button>
                   </div>

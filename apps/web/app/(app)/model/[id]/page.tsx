@@ -11,6 +11,7 @@ import { IconRefresh, IconTrash, IconCheck, IconCopy } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { modelController, type ModelInfo, type HealthStatus } from '@/lib/model-controller'
 import { benchmarkController, type BenchmarkResult } from '@/lib/benchmark-controller'
+import { generationConfigController, type GenerationConfig } from '@/lib/generation-config-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { apiGet } from '@/lib/http-client'
 
@@ -29,6 +30,14 @@ export default function ModelDetailPage() {
   const [loadState, setLoadState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
   const [uptime, setUptime] = useState<string | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval>>()
+  const [genConfig, setGenConfig] = useState<GenerationConfig>({
+    temperature: 0.7,
+    max_new_tokens: 256,
+    top_p: 1.0,
+    top_k: 50,
+  })
+  const [configLoading, setConfigLoading] = useState(true)
+  const [configSaving, setConfigSaving] = useState(false)
 
   const fetchData = useCallback(async () => {
     try {
@@ -52,6 +61,9 @@ export default function ModelDetailPage() {
   useEffect(() => {
     if (!modelId) { router.push('/models'); return }
     fetchData()
+    generationConfigController.get().then(cfg => {
+      if (cfg && typeof cfg.temperature === 'number') setGenConfig(cfg)
+    }).catch(() => {}).finally(() => setConfigLoading(false))
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [modelId, fetchData, router])
 
@@ -90,6 +102,18 @@ export default function ModelDetailPage() {
       addToast('Model stopped', 'info')
     } catch {
       addToast('Something went wrong', 'error')
+    }
+  }
+
+  const handleSaveConfig = async () => {
+    setConfigSaving(true)
+    try {
+      await generationConfigController.update(genConfig)
+      addToast('Generation config updated', 'success')
+    } catch {
+      addToast('Failed to save config', 'error')
+    } finally {
+      setConfigSaving(false)
     }
   }
 
@@ -186,6 +210,7 @@ export default function ModelDetailPage() {
                   <DetailItem label="Source" value={model?.source || 'huggingface'} />
                   <DetailItem label="Device" value={health?.device || '—'} />
                   {model?.size_gb && <DetailItem label="Size" value={`${model.size_gb.toFixed(2)} GB`} />}
+                  {model?.cached !== undefined && <DetailItem label="Cached" value={model.cached ? 'Yes' : 'No'} />}
                   {uptime && isLoaded && <DetailItem label="Uptime" value={uptime} />}
                   {health?.inference_count !== undefined && (
                     <DetailItem label="Inferences" value={health.inference_count.toString()} />
@@ -241,6 +266,35 @@ export default function ModelDetailPage() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Generation Config card */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Generation Config</CardTitle>
+                  <Button size="sm" className="h-7 text-xs" onClick={handleSaveConfig} disabled={configLoading || configSaving}>
+                    {configSaving ? 'Saving…' : 'Save'}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {configLoading ? (
+                  <div className="space-y-3">
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <ConfigSlider label="Temperature" value={genConfig.temperature} min={0} max={2} step={0.1} onChange={v => setGenConfig(p => ({ ...p, temperature: v }))} />
+                    <ConfigSlider label="Max tokens" value={genConfig.max_new_tokens} min={1} max={4096} step={1} onChange={v => setGenConfig(p => ({ ...p, max_new_tokens: v }))} />
+                    <ConfigSlider label="Top-p" value={genConfig.top_p ?? 1} min={0} max={1} step={0.05} onChange={v => setGenConfig(p => ({ ...p, top_p: v }))} />
+                    <ConfigSlider label="Top-k" value={genConfig.top_k ?? 50} min={0} max={200} step={1} onChange={v => setGenConfig(p => ({ ...p, top_k: v }))} />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Details card */}
             <Card>
@@ -301,6 +355,33 @@ function DetailItem({ label, value }: { label: string; value: string }) {
     <div className="min-w-0">
       <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">{label}</p>
       <p className="text-sm font-medium truncate">{value}</p>
+    </div>
+  )
+}
+
+function ConfigSlider({ label, value, min, max, step, onChange }: {
+  label: string
+  value: number
+  min: number
+  max: number
+  step: number
+  onChange: (v: number) => void
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <label className="text-xs text-muted-foreground">{label}</label>
+        <span className="text-xs font-mono tabular-nums">{value}</span>
+      </div>
+      <input
+        type="range"
+        value={value}
+        min={min}
+        max={max}
+        step={step}
+        onChange={e => onChange(parseFloat(e.target.value))}
+        className="w-full h-1.5 rounded-full appearance-none bg-muted cursor-pointer accent-primary"
+      />
     </div>
   )
 }

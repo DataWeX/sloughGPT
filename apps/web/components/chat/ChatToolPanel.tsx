@@ -9,14 +9,18 @@ import { useChatContext } from '@/contexts/ChatContext'
 import { KnowledgeTab } from './KnowledgeTab'
 import { VisionTabContent } from './VisionTabContent'
 import { QuickPrompts } from './QuickPrompts'
+import { ChatBookmarksPanel } from './ChatBookmarksPanel'
 
 interface ChatToolPanelProps {
   open: boolean
   onClose: () => void
   sessionId: string | null
+  bookmarks?: import('@/hooks/useChatBookmarks').BookmarkedMessage[]
+  onRemoveBookmark?: (id: string) => void
+  onClearBookmarks?: () => void
 }
 
-export function ChatToolPanel({ open, onClose, sessionId }: ChatToolPanelProps) {
+export function ChatToolPanel({ open, onClose, sessionId, bookmarks = [], onRemoveBookmark, onClearBookmarks }: ChatToolPanelProps) {
   const [showVision, setShowVision] = useState(false)
   const ctx = useChatContext()
 
@@ -91,6 +95,17 @@ export function ChatToolPanel({ open, onClose, sessionId }: ChatToolPanelProps) 
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Quick Prompts</span>
                   </div>
                   <QuickPrompts onUsePrompt={(text) => ctx.setInput(text)} />
+                </section>
+                <section>
+                  <ChatBookmarksPanel
+                    bookmarks={bookmarks}
+                    onRemove={onRemoveBookmark || (() => {})}
+                    onClear={onClearBookmarks || (() => {})}
+                    onJumpToMessage={(id) => {
+                      const el = document.getElementById(`msg-${id}`)
+                      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                    }}
+                  />
                 </section>
               </>
             )}

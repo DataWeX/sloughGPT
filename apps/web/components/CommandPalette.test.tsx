@@ -79,7 +79,9 @@ describe('CommandPalette', () => {
     const input = screen.getByPlaceholderText('Search conversations, models, pages...')
     fireEvent.keyDown(input, { key: 'ArrowDown' })
     fireEvent.keyDown(input, { key: 'ArrowDown' })
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
     fireEvent.keyDown(input, { key: 'Enter' })
+    // Third ArrowDown selects "Teaching" (training) at index 3
     expect(mockPush).toHaveBeenCalledWith('/training')
   })
 

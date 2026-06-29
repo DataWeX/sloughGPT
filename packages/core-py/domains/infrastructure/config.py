@@ -67,6 +67,29 @@ class AuthConfig(BaseModel):
     api_keys_enabled: bool = False
 
 
+class TrackingConfig(BaseModel):
+    """Experiment tracking (W&B, MLflow) configuration."""
+
+    provider: str = "none"
+    wandb_training_enabled: bool = False
+    wandb_server_enabled: bool = False
+    wandb_entity: str = ""
+    wandb_project: str = "sloughgpt"
+    wandb_api_key: str = ""
+    wandb_mode: str = "online"
+    wandb_dir: str = ""
+    wandb_server_interval: int = 60
+    wandb_server_run_name: str = ""
+    mlflow_tracking_uri: str = ""
+
+
+class EmbeddingConfig(BaseModel):
+    """Embedding provider configuration."""
+
+    provider: str = "n_gram"
+    openai_api_key: str = ""
+
+
 class StorageConfig(BaseModel):
     data_dir: str = "data"
     datasets_dir: str = "datasets"
@@ -80,6 +103,8 @@ class AppConfig(BaseModel):
     server: ServerConfig = Field(default_factory=ServerConfig)
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
+    tracking: TrackingConfig = Field(default_factory=TrackingConfig)
+    embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
 
     model_config = ConfigDict(extra="forbid")

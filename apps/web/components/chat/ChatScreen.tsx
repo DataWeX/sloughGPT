@@ -1,6 +1,6 @@
 'use client'
 
-import { forwardRef, useState, useEffect } from 'react'
+import React, { forwardRef, useState, useEffect } from 'react'
 import { MessageBubble } from './MessageBubble'
 import { EmptyState } from './EmptyState'
 import { SystemBanner } from './SystemBanner'
@@ -10,6 +10,22 @@ import type { ToolCallEvent } from '@/lib/stream-chat-response'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import type { ChatMessage } from './types'
 import { cn } from '@/lib/cn'
+
+function formatDateLabel(date: Date): string {
+  const now = new Date()
+  const input = new Date(date)
+  const diffDays = Math.floor((now.getTime() - input.getTime()) / 86400000)
+  if (diffDays === 0) return 'Today'
+  if (diffDays === 1) return 'Yesterday'
+  if (diffDays < 7) return input.toLocaleDateString(undefined, { weekday: 'long' })
+  return input.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function isDifferentDay(a: Date | string | number, b: Date | string | number): boolean {
+  const da = new Date(a)
+  const db = new Date(b)
+  return da.getFullYear() !== db.getFullYear() || da.getMonth() !== db.getMonth() || da.getDate() !== db.getDate()
+}
 
 interface ChatScreenProps {
   messages: ChatMessage[]
@@ -28,10 +44,14 @@ interface ChatScreenProps {
   onSuggestionClick?: (text: string) => void
   className?: string
   model?: string
+  isBookmarked?: (id: string) => boolean
+  onBookmark?: (messageId: string) => void
+  onDelete?: (messageId: string) => void
+  collapsibleLength?: number
 }
 
 export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
-  function ChatScreen({ messages, loading, sessionLoading, health, suggestions, toolEvents, onRefreshHealth, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, searchQuery, onSuggestionClick, className, model }, ref) {
+  function ChatScreen({ messages, loading, sessionLoading, health, suggestions, toolEvents, onRefreshHealth, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, searchQuery, onSuggestionClick, className, model, isBookmarked, onBookmark, onDelete, collapsibleLength }, ref) {
     const isOffline = health === 'offline'
     const hasModel = health !== null && health !== 'offline' && health.model_loaded
     const [emptyFading, setEmptyFading] = useState(false)
@@ -94,8 +114,20 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
             const isLast = originalIndex === messages.length - 1
             const showRegenerate = isLast && message.role === 'assistant' && onRegenerate
             const isStreaming = loading && isLast && message.role === 'assistant'
+            const prevMsg = index > 0 ? messages[index - 1] : null
+            const showDateDivider = !prevMsg || isDifferentDay(prevMsg.timestamp, message.timestamp)
             
             return (
+              <React.Fragment key={message.id}>
+              {showDateDivider && (
+                <div className="relative flex items-center py-2" role="separator" aria-label={formatDateLabel(new Date(message.timestamp))}>
+                  <div className="flex-1 border-t border-border/30" />
+                  <span className="mx-3 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted/30">
+                    {formatDateLabel(new Date(message.timestamp))}
+                  </span>
+                  <div className="flex-1 border-t border-border/30" />
+                </div>
+              )}
               <MessageBubble
                 key={message.id}
                 messageId={message.id}
@@ -115,7 +147,12 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
                 isStreaming={isStreaming}
                 isError={message.isError}
                 aria-live={isStreaming ? 'polite' : undefined}
+                isBookmarked={isBookmarked?.(message.id)}
+                onBookmark={onBookmark}
+                onDelete={onDelete}
+                collapsibleLength={collapsibleLength}
               />
+              </React.Fragment>
             )
           })}
 

@@ -274,7 +274,7 @@ export function DatasetImportModal({
                       key={repo.id}
                       variant="ghost"
                       onClick={() => selectRepo(repo)}
-                      className="flex w-full items-center justify-between border-b px-3 py-2 text-left last:border-b-0 justify-start"
+                      className="flex w-full items-center justify-between border-b px-3 py-2 text-left last:border-b-0"
                     >
                       <div>
                         <div className="font-medium">{repo.name}</div>
@@ -323,7 +323,7 @@ export function DatasetImportModal({
                     setUrl(book.isbn)
                     setBookResults([])
                   }}
-                  className="flex w-full items-center justify-between border-b px-3 py-2 text-left last:border-b-0 justify-start"
+                  className="flex w-full items-center justify-between border-b px-3 py-2 text-left last:border-b-0"
                 >
                   <div>
                     <div className="font-medium">{book.title}</div>

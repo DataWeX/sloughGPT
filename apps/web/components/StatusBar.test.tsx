@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 
 const mockHealthState = vi.fn()
 const mockGetCurrent = vi.fn()
@@ -21,15 +21,29 @@ vi.mock('@/components/souls/PersonalitySummary', () => ({
   deriveArchetype: vi.fn(() => ({ label: 'The Optimist' })),
 }))
 
+const mockGetUnseenCount = vi.fn()
+
+vi.mock('@/components/WhatsNewDialog', () => ({
+  getUnseenCount: () => mockGetUnseenCount(),
+}))
+
+const mockHealthSummary = { score: 85, summary: 'Healthy', tokens_per_sec: 15, model_loaded: true, model_type: 'gpt2', soul: 'friendly', uptime_seconds: 100, request_count: 50, error_count: 0, cpu_percent: 30, memory_percent: 40 }
+let storeSummary: typeof mockHealthSummary | null = mockHealthSummary
+
+vi.mock('@/lib/api-monitor-store', () => ({
+  useApiMonitor: (selector: (s: any) => any) => selector({ healthSummary: storeSummary }),
+}))
+
 import { StatusBar } from './StatusBar'
 
 describe('StatusBar', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    storeSummary = mockHealthSummary
+    mockGetUnseenCount.mockReturnValue(0)
     mockHealthState.mockReturnValue({ model_loaded: true, model_type: 'gpt2', inference_count: 42 })
     mockGetCurrent.mockResolvedValue({ name: 'friendly', description: 'Friendly soul' })
     mockGetTraitWeights.mockResolvedValue({ personality: { warmth: 0.7 }, cognition: {}, emotion: {} })
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ score: 85, summary: 'Healthy', tokens_per_sec: 15 }) })
   })
 
   afterEach(cleanup)
@@ -68,5 +82,27 @@ describe('StatusBar', () => {
     render(<StatusBar />)
     const link = screen.getByRole('link')
     expect(link.getAttribute('href')).toBe('/monitoring')
+  })
+
+  it('dispatches toggle-whatsnew event when whats-new button is clicked', () => {
+    const listener = vi.fn()
+    window.addEventListener('toggle-whatsnew', listener)
+    render(<StatusBar />)
+    const btn = screen.getByLabelText("What's new")
+    fireEvent.click(btn)
+    expect(listener).toHaveBeenCalled()
+    window.removeEventListener('toggle-whatsnew', listener)
+  })
+
+  it('shows unseen count badge when there are new features', () => {
+    mockGetUnseenCount.mockReturnValue(3)
+    render(<StatusBar />)
+    expect(screen.getByText('3')).toBeDefined()
+  })
+
+  it('caps unseen count badge at 9+', () => {
+    mockGetUnseenCount.mockReturnValue(15)
+    render(<StatusBar />)
+    expect(screen.getByText('9+')).toBeDefined()
   })
 })

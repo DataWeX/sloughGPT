@@ -165,6 +165,7 @@ describe('MessageActions', () => {
         onThumbsUp={vi.fn()}
         onThumbsDown={vi.fn()}
         onEdit={vi.fn()}
+        onDelete={vi.fn()}
       />
     )
     expect(container.querySelector('button[aria-label="Copy message"]')).toBeInTheDocument()
@@ -172,7 +173,25 @@ describe('MessageActions', () => {
     expect(container.querySelector('button[aria-label="Mark as helpful"]')).toBeInTheDocument()
     expect(container.querySelector('button[aria-label="Mark as unhelpful"]')).toBeInTheDocument()
     expect(container.querySelector('button[aria-label="Edit and resend message"]')).toBeInTheDocument()
+    expect(container.querySelector('button[aria-label="Delete message"]')).toBeInTheDocument()
     expect(container.querySelector('button[aria-label="Read aloud"]')).toBeInTheDocument()
+  })
+
+  it('renders delete button when onDelete provided', () => {
+    render(<MessageActions content="text" messageId="m1" onDelete={vi.fn()} />)
+    expect(screen.getByRole('button', { name: /delete message/i })).toBeInTheDocument()
+  })
+
+  it('does not render delete button without handler', () => {
+    render(<MessageActions content="text" messageId="m1" />)
+    expect(screen.queryByRole('button', { name: /delete message/i })).not.toBeInTheDocument()
+  })
+
+  it('calls onDelete with messageId when delete clicked', () => {
+    const onDelete = vi.fn()
+    render(<MessageActions content="text" messageId="m1" onDelete={onDelete} />)
+    fireEvent.click(screen.getByRole('button', { name: /delete message/i }))
+    expect(onDelete).toHaveBeenCalledWith('m1')
   })
 
   it('renders read aloud button for assistant role', () => {

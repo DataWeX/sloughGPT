@@ -27,6 +27,7 @@ export { exportController } from './export-controller'
 export { voiceController } from './voice-controller'
 export { imagesController } from './images-controller'
 export { filesController } from './files-controller'
+export { activityController } from './activity-controller'
 export type { FileItem, FileDetail, UploadResponse, FileListResponse, IngestResponse } from './files-controller'
 
 export { toolsController } from './tools-controller'

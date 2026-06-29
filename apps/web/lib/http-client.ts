@@ -26,6 +26,7 @@ export interface RequestOptions {
 const RETRYABLE_STATUSES = new Set([408, 429, 502, 503, 504])
 const MAX_RETRIES = 2
 const BASE_DELAY = 500
+const DEFAULT_TIMEOUT_MS = 15_000
 
 async function request<T>(
   method: string,
@@ -42,15 +43,24 @@ async function request<T>(
     if (token) headers['Authorization'] = `Bearer ${token}`
   }
 
+  const timeoutMs = opts?.timeout ?? DEFAULT_TIMEOUT_MS
   let retries = 0
   while (true) {
+    let signal = opts?.signal
+    let timer: ReturnType<typeof setTimeout> | undefined
+    if (!signal) {
+      const ac = new AbortController()
+      timer = setTimeout(() => ac.abort(), timeoutMs)
+      signal = ac.signal
+    }
     try {
       const res = await fetch(apiUrl, {
         method,
         headers,
         body: opts?.raw ? (body as BodyInit) : body != null ? JSON.stringify(body) : undefined,
-        signal: opts?.signal,
+        signal,
       })
+      if (timer) clearTimeout(timer)
 
       if (!res.ok) {
         const status = res.status
@@ -85,9 +95,13 @@ async function request<T>(
       if (!text) return undefined as T
       return JSON.parse(text) as T
     } catch (e: any) {
+      if (timer) clearTimeout(timer)
       if (e instanceof ApiError) throw e
       const status = 0
-      const message = e.message === 'Failed to fetch' ? 'Connection unavailable' : (e.message || 'Request failed')
+      const isTimeout = e.name === 'AbortError' || e.message?.includes('aborted')
+      const message = isTimeout
+        ? `Request timed out after ${timeoutMs / 1000}s`
+        : e.message === 'Failed to fetch' ? 'Connection unavailable' : (e.message || 'Request failed')
 
       if (!opts?.silent) {
         const apiErr = new ApiError(message, status)

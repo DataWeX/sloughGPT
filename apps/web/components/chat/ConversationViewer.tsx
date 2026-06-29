@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { IconX, IconTrash, IconThumbUp, IconThumbDown, IconChat } from '@/components/ui'
+import { IconX, IconTrash, IconThumbUp, IconThumbDown, IconChat, IconCopy, IconCheck, IconDownload } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { Button } from '@/components/ui/button'
 
@@ -41,6 +41,7 @@ export function ConversationViewer({
   onDelete,
 }: ConversationViewerProps) {
   const [messages, setMessages] = useState<ViewerMessage[]>(initialMessages || [])
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
 
@@ -132,6 +133,18 @@ export function ConversationViewer({
             </p>
           </div>
           <div className="flex items-center gap-1">
+            {onExport && (
+              <>
+                <Button variant="ghost" size="icon-sm" onClick={() => onExport('md')} aria-label="Export as Markdown" title="Export Markdown">
+                  <IconDownload className="h-4 w-4" />
+                  <span className="text-[10px] ml-0.5">MD</span>
+                </Button>
+                <Button variant="ghost" size="icon-sm" onClick={() => onExport('json')} aria-label="Export as JSON" title="Export JSON">
+                  <IconDownload className="h-4 w-4" />
+                  <span className="text-[10px] ml-0.5">JSON</span>
+                </Button>
+              </>
+            )}
 {onDelete && (
               <Button
                 variant="ghost"
@@ -196,6 +209,27 @@ export function ConversationViewer({
                   </div>
                   <div className="text-sm text-foreground whitespace-pre-wrap">
                     {message.content}
+                  </div>
+                  <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(message.content)
+                        setCopiedId(message.id)
+                        setTimeout(() => setCopiedId(null), 1500)
+                      }}
+                      className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label="Copy message"
+                    >
+                      {copiedId === message.id ? (
+                        <IconCheck className="h-3 w-3 text-success" />
+                      ) : (
+                        <IconCopy className="h-3 w-3" />
+                      )}
+                      {copiedId === message.id ? 'Copied' : 'Copy'}
+                    </button>
+                    <span className="text-[10px] text-muted-foreground/40">
+                      {message.content.length} chars
+                    </span>
                   </div>
                 </div>
               ))}

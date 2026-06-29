@@ -4,32 +4,24 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useApiHealth } from '@/hooks/useApiHealth'
 import { soulsController } from '@/lib/souls-controller'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { useApiMonitor } from '@/lib/api-monitor-store'
 import { cn } from '@/lib/cn'
 import { deriveArchetype } from '@/components/souls/PersonalitySummary'
-
-const API = PUBLIC_API_URL || 'http://localhost:8000'
-
-interface HealthSummary {
-  score: number
-  status: string
-  summary: string
-  model_loaded: boolean
-  model_type: string | null
-  soul: string | null
-  uptime_seconds: number
-  request_count: number
-  error_count: number
-  tokens_per_sec: number
-  cpu_percent: number | null
-  memory_percent: number | null
-}
+import { getUnseenCount } from '@/components/WhatsNewDialog'
 
 export function StatusBar() {
   const { state: health } = useApiHealth()
+  const summary = useApiMonitor((s) => s.healthSummary)
   const [soulName, setSoulName] = useState<string | null>(null)
   const [archetypeLabel, setArchetypeLabel] = useState<string | null>(null)
-  const [summary, setSummary] = useState<HealthSummary | null>(null)
+  const [unseenCount, setUnseenCount] = useState(0)
+
+  useEffect(() => {
+    setUnseenCount(getUnseenCount())
+    const handler = () => setUnseenCount(getUnseenCount())
+    window.addEventListener('whatsnew-updated', handler)
+    return () => window.removeEventListener('whatsnew-updated', handler)
+  }, [])
 
   useEffect(() => {
     if (health === null || health === 'offline') return
@@ -37,7 +29,6 @@ export function StatusBar() {
       if (s && 'name' in s) {
         const name = (s as any).name
         setSoulName(name)
-        // Fetch trait weights to derive archetype
         try {
           const w = await soulsController.getTraitWeights()
           if (w && !('error' in w)) {
@@ -48,20 +39,6 @@ export function StatusBar() {
       }
     }).catch(() => {})
   }, [health])
-
-  // Poll /health/summary every 10s for score
-  useEffect(() => {
-    let active = true
-    const poll = async () => {
-      try {
-        const r = await fetch(`${API}/health/summary`, { signal: AbortSignal.timeout(5000) })
-        if (r.ok && active) setSummary(await r.json())
-      } catch {}
-    }
-    poll()
-    const id = setInterval(poll, 10000)
-    return () => { active = false; clearInterval(id) }
-  }, [])
 
   const score = summary?.score
   const dot = health === null ? 'bg-muted-foreground/50' :
@@ -88,6 +65,19 @@ export function StatusBar() {
         )}
       </div>
       <div className="flex items-center gap-2 sm:gap-3">
+        <button
+          onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('toggle-whatsnew')) }}
+          className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-muted/60 transition-colors relative"
+          aria-label={unseenCount > 0 ? `${unseenCount} new feature${unseenCount === 1 ? '' : 's'}` : "What's new"}
+          title="What's new"
+        >
+          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M13 11h-2v-2h2v2zm0 6h-2v-6h2v6zm1-15H6v2h8V2zm4 4H2v14h16V6zM4 18V8h12v10H4z"/></svg>
+          {unseenCount > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] font-medium leading-none">
+              {unseenCount > 9 ? '9+' : unseenCount}
+            </span>
+          )}
+        </button>
         {summary?.tokens_per_sec ? (
           <span className="hidden sm:inline tabular-nums">{summary.tokens_per_sec.toFixed(0)} t/s</span>
         ) : health !== null && health !== 'offline' && health.inference_count != null ? (

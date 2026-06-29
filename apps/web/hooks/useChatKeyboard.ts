@@ -45,6 +45,10 @@ export function useChatKeyboard(deps: KeyboardDeps) {
         e.preventDefault()
         d.setToolPanelOpen(prev => !prev)
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b' && e.shiftKey) {
+        e.preventDefault()
+        d.setToolPanelOpen(prev => !prev)
+      }
       if (e.key === '?' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         d.setShowSettings(prev => !prev)

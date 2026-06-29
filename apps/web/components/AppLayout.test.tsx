@@ -26,6 +26,7 @@ vi.mock('@/components/chat/Toast', () => ({ ToastContainer: () => <div data-test
 vi.mock('@/components/CommandPalette', () => ({ CommandPalette: () => <div data-testid="command-palette" /> }))
 vi.mock('@/components/KeyboardShortcutsModal', () => ({ KeyboardShortcutsModal: ({ open }: any) => open ? <div data-testid="shortcuts-modal" /> : null }))
 vi.mock('@/components/DebugOverlay', () => ({ DebugOverlay: ({ open }: any) => open ? <div data-testid="debug-overlay" /> : null }))
+vi.mock('@/components/WhatsNewDialog', () => ({ WhatsNewDialog: ({ open }: any) => open ? <div data-testid="whatsnew-dialog" /> : null, getUnseenCount: () => 0 }))
 
 const { mockToastStore, mockApiMonitor } = vi.hoisted(() => ({
   mockToastStore: { toasts: [], dismissToast: vi.fn(), clearToasts: vi.fn() },
@@ -121,5 +122,18 @@ describe('AppLayout', () => {
   it('renders mobile header with hamburger', () => {
     render(<AppLayout><div /></AppLayout>)
     expect(screen.getByText('sloughGPT')).toBeDefined()
+  })
+
+  it('does not render whats-new dialog by default', () => {
+    render(<AppLayout><div /></AppLayout>)
+    expect(screen.queryByTestId('whatsnew-dialog')).toBeNull()
+  })
+
+  it('opens whats-new dialog on toggle-whatsnew event', async () => {
+    render(<AppLayout><div /></AppLayout>)
+    window.dispatchEvent(new CustomEvent('toggle-whatsnew'))
+    await waitFor(() => {
+      expect(screen.getByTestId('whatsnew-dialog')).toBeDefined()
+    })
   })
 })

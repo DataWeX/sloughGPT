@@ -7,6 +7,7 @@ import { soulsController } from '@/lib/souls-controller'
 import { sessionController } from '@/lib/session-controller'
 import { trainingController } from '@/lib/training-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
+import { feedbackController, type FeedbackStats } from '@/lib/feedback-controller'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 
 export interface HomePageData {
@@ -25,6 +26,7 @@ export interface HomePageData {
   setKnowledgeCount: React.Dispatch<React.SetStateAction<number>>
   inferenceCount: number | null
   healthSummary: string | null
+  feedbackStats: FeedbackStats | null
 }
 
 export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
@@ -38,6 +40,7 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
   const [recentJobs, setRecentJobs] = useState<Array<{ id: string; name: string; status: string; created_at?: string }>>([])
   const [testRunning, setTestRunning] = useState(false)
   const [testResponse, setTestResponse] = useState<string | null>(null)
+  const [feedbackStats, setFeedbackStats] = useState<FeedbackStats | null>(null)
 
   const inferenceCount = health && health !== 'offline' ? (health as HealthStatus).inference_count ?? 0 : null
   const healthSummary = health && health !== 'offline' ? (health as HealthStatus).model_type ?? null : null
@@ -81,6 +84,9 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
     knowledgeController.stats().then(s => {
       if (!cancelled.current) setKnowledgeCount(s.total_items)
     }).catch(() => {})
+    feedbackController.getFeedbackStats().then(s => {
+      if (!cancelled.current) setFeedbackStats(s)
+    }).catch(() => {})
     return () => { cancelled.current = true }
   }, [])
 
@@ -92,6 +98,6 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
     testRunning, testResponse,
     setTestRunning, setTestResponse,
     setKnowledgeCount, inferenceCount,
-    healthSummary,
+    healthSummary, feedbackStats,
   }
 }

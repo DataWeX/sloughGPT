@@ -1362,8 +1362,8 @@ class SloAdapterLayer(SloLayer):
 class SloConv2D(SloLayer):
     def __init__(self, in_ch, out_ch, kernel_size=3, stride=1, padding=0, name=""):
         super().__init__(name or f"Conv{in_ch}x{out_ch}")
-        kw = kernel_size if isinstance(kernel_size, int) else kernel_size[0]
-        kh = kernel_size if isinstance(kernel_size, int) else kernel_size[1]
+        kw = kernel_size if isinstance(kernel_size, int) else kernel_size[1]
+        kh = kernel_size if isinstance(kernel_size, int) else kernel_size[0]
         s = math.sqrt(2.0 / (kw * kh * in_ch))
         self.weight = randn((out_ch, in_ch, kh, kw), requires_grad=True)
         self.weight.data *= s
@@ -1956,30 +1956,44 @@ def _rmsnorm(x: Tensor, weight: Tensor, eps: float = 1e-5) -> Tensor:
 
 
 def _im2col(x: np.ndarray, kh: int, kw: int, stride: int) -> np.ndarray:
-    """Convert image to column matrix for fast conv (im2col)."""
+    """Convert image to column matrix for fast conv (im2col). Vectorized."""
     n, c, h, w = x.shape
     oh = (h - kh) // stride + 1
     ow = (w - kw) // stride + 1
-    cols = np.zeros((n * oh * ow, c * kh * kw), dtype=np.float32)
-    idx = 0
-    for i in range(n):
-        for oh_idx in range(oh):
-            for ow_idx in range(ow):
-                ih = oh_idx * stride
-                iw = ow_idx * stride
-                cols[idx] = x[i, :, ih:ih+kh, iw:iw+kw].flatten()
-                idx += 1
-    return cols
+    n_patches = n * oh * ow
+    feat_per_patch = c * kh * kw
+    r_idx = np.arange(n_patches, dtype=np.intp)
+    f_idx = np.arange(feat_per_patch, dtype=np.intp)
+    n_idx = r_idx[:, None] // (oh * ow)
+    spatial = r_idx[:, None] % (oh * ow)
+    oh_i = spatial // ow
+    ow_i = spatial % ow
+    kh_i = (f_idx[None, :] % (kh * kw)) // kw
+    kw_i = (f_idx[None, :] % (kh * kw)) % kw
+    c_idx = f_idx[None, :] // (kh * kw)
+    h_pos = oh_i * stride + kh_i
+    w_pos = ow_i * stride + kw_i
+    return x[n_idx, c_idx, h_pos, w_pos].reshape(n_patches, feat_per_patch)
 
 
 def _conv2d(x: Tensor, weight: Tensor, bias: Tensor, stride: int = 1, padding: int = 0):
-    """Fast conv2d using im2col + matmul (avoids nested Python loops). GPU-accelerated."""
+    """Fast conv2d using im2col + matmul (avoids nested Python loops). GPU-accelerated.
+
+    Args:
+        padding: int (same for H and W) or tuple (pad_h, pad_w).
+    """
     if x.data.ndim != 4: raise ValueError(f"Conv2D needs 4D input, got {x.data.ndim}D")
     n, c, h, w = x.data.shape
     oc, ic, kh, kw = weight.data.shape
     if ic != c: raise ValueError(f"Channel mismatch: {ic} != {c}")
 
-    if padding > 0:
+    if isinstance(padding, (tuple, list)):
+        pad_h, pad_w = padding[0], padding[1] if len(padding) > 1 else padding[0]
+        if pad_h > 0 or pad_w > 0:
+            x_padded = np.pad(x.data, ((0,0),(0,0),(pad_h,pad_h),(pad_w,pad_w)), mode='constant')
+        else:
+            x_padded = x.data
+    elif padding > 0:
         x_padded = np.pad(x.data, ((0,0),(0,0),(padding,padding),(padding,padding)), mode='constant')
     else:
         x_padded = x.data
@@ -2002,22 +2016,43 @@ def _conv2d(x: Tensor, weight: Tensor, bias: Tensor, stride: int = 1, padding: i
     if bias is not None:
         result = result + bias.data[:, None, None]
 
-    out = Tensor(result, requires_grad=x.requires_grad, _children=(x, weight, bias))
+    weight_req = weight.requires_grad
+    bias_req = bias is not None and bias.requires_grad
+    out = Tensor(result, requires_grad=not _NO_GRAD and (x.requires_grad or weight_req or bias_req), _children=(x, weight, bias))
     def bk(g):
         if x.requires_grad:
-            w_col_g = np.matmul(g.reshape(n * oh * ow, oc).T, cols)
+            dY_flat = g.reshape(n * oh * ow, oc)
+            dX_col = dY_flat @ weight.data.reshape(oc, -1)
+            # Vectorized col2im using np.add.at
+            n_patches = n * oh * ow
+            feat_per_patch = c * kh * kw
+            r_idx_b = np.arange(n_patches, dtype=np.intp)
+            f_idx_b = np.arange(feat_per_patch, dtype=np.intp)
+            n_idx_b = r_idx_b[:, None] // (oh * ow)
+            spatial_b = r_idx_b[:, None] % (oh * ow)
+            oh_i_b = spatial_b // ow
+            ow_i_b = spatial_b % ow
+            kh_i_b = (f_idx_b[None, :] % (kh * kw)) // kw
+            kw_i_b = (f_idx_b[None, :] % (kh * kw)) % kw
+            c_idx_b = f_idx_b[None, :] // (kh * kw)
+            h_pos_b = oh_i_b * stride + kh_i_b
+            w_pos_b = ow_i_b * stride + kw_i_b
             grad_in = np.zeros_like(x_padded)
-            for i in range(n):
-                for oh_idx in range(oh):
-                    for ow_idx in range(ow):
-                        ih = oh_idx * stride
-                        iw = ow_idx * stride
-                        grad_in[i, :, ih:ih+kh, iw:iw+kw] += w_col_g[:, i*(oh*ow)+(oh_idx*ow+ow_idx)].reshape(c, kh, kw)
-            if padding > 0:
+            n_idx_b_full = np.broadcast_to(n_idx_b, (n_patches, feat_per_patch))
+            c_idx_b_full = np.broadcast_to(c_idx_b, (n_patches, feat_per_patch))
+            np.add.at(grad_in, (n_idx_b_full.ravel(), c_idx_b_full.ravel(), h_pos_b.ravel(), w_pos_b.ravel()), dX_col.ravel())
+            if isinstance(padding, (tuple, list)):
+                pad_h, pad_w = padding[0], padding[1] if len(padding) > 1 else padding[0]
+                if pad_h > 0 or pad_w > 0:
+                    sl_h = slice(pad_h, -pad_h or None)
+                    sl_w = slice(pad_w, -pad_w or None)
+                    grad_in = grad_in[:, :, sl_h, sl_w]
+            elif padding > 0:
                 grad_in = grad_in[:, :, padding:-padding, padding:-padding]
             x.grad = Tensor(grad_in if x.grad is None else x.grad.data + grad_in)
         if weight.requires_grad:
-            gw = np.matmul(g.reshape(n, oc, oh*ow), cols).reshape(oc, c*kh*kw)
+            dY_flat = g.reshape(n * oh * ow, oc)
+            gw = (cols.T @ dY_flat).T.reshape(oc, c, kh, kw)
             weight.grad = Tensor(gw if weight.grad is None else weight.grad.data + gw)
         if bias is not None and bias.requires_grad:
             gb = g.sum(axis=(0, 2, 3))

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { IconPlus, IconStar, IconPin, IconChat, IconChevronRight, IconX, IconSearch, IconFolder } from '@/components/ui'
+import { IconPlus, IconStar, IconPin, IconChat, IconChevronRight, IconX, IconSearch, IconFolder, IconSort, IconCheck } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import type { Conversation } from '@/lib/session-controller'
 
@@ -72,12 +72,20 @@ function SidebarContent({
   isDrawer?: boolean
 }) {
   const [search, setSearch] = useState('')
+  const [sortMode, setSortMode] = useState<'updated' | 'name' | 'messages'>('updated')
+  const [sortOpen, setSortOpen] = useState(false)
 
   const sorted = useMemo(() => {
     return [...conversations].sort((a, b) => {
+      if (sortMode === 'name') {
+        return (a.name || '').localeCompare(b.name || '')
+      }
+      if (sortMode === 'messages') {
+        return (b.message_count ?? b.messages?.length ?? 0) - (a.message_count ?? a.messages?.length ?? 0)
+      }
       return new Date(b.updated_at || b.updatedAt || 0).getTime() - new Date(a.updated_at || a.updatedAt || 0).getTime()
     })
-  }, [conversations])
+  }, [conversations, sortMode])
 
   const q = search.toLowerCase().trim()
   const filtered = useMemo(() => {
@@ -94,7 +102,33 @@ function SidebarContent({
   }
 
   const starred = filtered.filter(c => c.starred).slice(0, 10)
-  const recent = filtered.filter(c => !c.starred).slice(0, 20)
+  const unstarred = filtered.filter(c => !c.starred)
+
+  function recencyGroup(dateStr: string | undefined): string {
+    if (!dateStr) return 'Older'
+    const diff = Date.now() - new Date(dateStr).getTime()
+    const days = diff / 86400000
+    if (days < 1) return 'Today'
+    if (days < 2) return 'Yesterday'
+    if (days < 7) return 'Last 7 days'
+    return 'Older'
+  }
+
+  const recencyGroups = useMemo(() => {
+    const groups: { label: string; conversations: Conversation[] }[] = []
+    const seen = new Set<string>()
+    for (const c of unstarred) {
+      const label = recencyGroup(c.updated_at || c.updatedAt)
+      if (!seen.has(label)) {
+        seen.add(label)
+        groups.push({ label, conversations: [] })
+      }
+      const group = groups.find(g => g.label === label)!
+      if (group.conversations.length < 15) group.conversations.push(c)
+    }
+    const order = ['Today', 'Yesterday', 'Last 7 days', 'Older']
+    return groups.sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label))
+  }, [unstarred])
 
   const handleSelect = (id: string) => {
     onLoadConversation(id)
@@ -104,7 +138,46 @@ function SidebarContent({
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border/50 shrink-0">
-        <span className="text-xs font-medium text-foreground">Conversations</span>
+        <div className="flex items-center gap-1">
+          <span className="text-xs font-medium text-foreground">Conversations</span>
+          <div className="relative">
+            <button
+              onClick={() => setSortOpen(!sortOpen)}
+              className={cn(
+                "h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 transition-colors",
+                sortMode !== 'updated' ? "text-primary" : "text-muted-foreground/60"
+              )}
+              aria-label="Sort conversations"
+              title={`Sort by: ${sortMode === 'updated' ? 'Last updated' : sortMode === 'name' ? 'Name' : 'Messages'}`}
+            >
+              <IconSort className="h-3 w-3" />
+            </button>
+            {sortOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setSortOpen(false)} />
+                <div className="absolute left-0 top-full mt-1 z-50 bg-background border border-border/60 rounded-lg shadow-lg py-1 min-w-[140px]">
+                  {([
+                    { value: 'updated', label: 'Last updated' },
+                    { value: 'name', label: 'Name' },
+                    { value: 'messages', label: 'Message count' },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => { setSortMode(opt.value); setSortOpen(false) }}
+                      className={cn(
+                        "w-full text-left px-3 py-1.5 text-xs hover:bg-muted/40 transition-colors flex items-center gap-2",
+                        sortMode === opt.value && "text-primary font-medium"
+                      )}
+                    >
+                      {sortMode === opt.value && <IconCheck className="h-3 w-3 shrink-0" />}
+                      <span className={sortMode !== opt.value ? "ml-5" : ""}>{opt.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
@@ -182,28 +255,28 @@ function SidebarContent({
                 </div>
               )}
 
-              <div>
-                {starred.length > 0 && (
+              {recencyGroups.map(group => (
+                <div key={group.label}>
                   <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider px-2 py-1">
-                    Recent
+                    {group.label}
                   </p>
-                )}
-                <div className="space-y-0.5">
-                  {recent.map(c => (
-                    <ConvRow
-                      key={c.id}
-                      conversation={c}
-                      isActive={c.id === currentConversationId}
-                      onSelect={() => handleSelect(c.id)}
-                      onDelete={(e) => handleDelete(e, c.id)}
-                      onStar={(e) => { e.stopPropagation(); onStarConversation?.(c.id, !c.starred) }}
-                      onPin={(e) => { e.stopPropagation(); onPinConversation?.(c.id, !c.pinned) }}
-                      onArchive={(e) => { e.stopPropagation(); onArchiveConversation?.(c.id, true) }}
-                      onRename={(name) => onRenameConversation?.(c.id, name)}
-                    />
-                  ))}
+                  <div className="space-y-0.5">
+                    {group.conversations.map(c => (
+                      <ConvRow
+                        key={c.id}
+                        conversation={c}
+                        isActive={c.id === currentConversationId}
+                        onSelect={() => handleSelect(c.id)}
+                        onDelete={(e) => handleDelete(e, c.id)}
+                        onStar={(e) => { e.stopPropagation(); onStarConversation?.(c.id, !c.starred) }}
+                        onPin={(e) => { e.stopPropagation(); onPinConversation?.(c.id, !c.pinned) }}
+                        onArchive={(e) => { e.stopPropagation(); onArchiveConversation?.(c.id, true) }}
+                        onRename={(name) => onRenameConversation?.(c.id, name)}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ))}
             </>
           )}
         </div>

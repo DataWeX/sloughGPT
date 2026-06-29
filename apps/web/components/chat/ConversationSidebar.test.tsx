@@ -26,6 +26,8 @@ vi.mock('@/components/ui', () => {
     IconX: iconMock('x'),
     IconSearch: iconMock('search'),
     IconFolder: iconMock('folder'),
+    IconSort: iconMock('sort'),
+    IconCheck: iconMock('check'),
   }
 })
 
@@ -116,7 +118,7 @@ describe('ConversationSidebar', () => {
     ]
     render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
     expect(screen.getByText('Starred')).toBeDefined()
-    expect(screen.getByText('Recent')).toBeDefined()
+    expect(screen.getByText('Today')).toBeDefined()
     expect(screen.getByText('Starred Chat')).toBeDefined()
     expect(screen.getByText('Regular Chat')).toBeDefined()
   })
@@ -290,5 +292,56 @@ describe('ConversationSidebar', () => {
     fireEvent.keyDown(input, { key: 'Escape' })
     expect(onRename).not.toHaveBeenCalled()
     expect(screen.getByText('Original')).toBeDefined()
+  })
+
+  it('sort button opens sort dropdown', () => {
+    const conversations = [createConv('1')]
+    render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    const sortBtn = screen.getByLabelText('Sort conversations')
+    fireEvent.click(sortBtn)
+    expect(screen.getByText('Last updated')).toBeDefined()
+    expect(screen.getByText('Name')).toBeDefined()
+    expect(screen.getByText('Message count')).toBeDefined()
+  })
+
+  it('sort by name orders alphabetically', () => {
+    const conversations = [
+      createConv('1', { name: 'Zebra', updated_at: '2026-01-01' }),
+      createConv('2', { name: 'Apple', updated_at: '2026-01-02' }),
+      createConv('3', { name: 'Mango', updated_at: '2026-01-03' }),
+    ]
+    render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    fireEvent.click(screen.getByLabelText('Sort conversations'))
+    fireEvent.click(screen.getByText('Name'))
+    const items = screen.getAllByText(/^(Apple|Mango|Zebra)$/)
+    expect(items[0]).toHaveProperty('textContent', 'Apple')
+    expect(items[1]).toHaveProperty('textContent', 'Mango')
+    expect(items[2]).toHaveProperty('textContent', 'Zebra')
+  })
+
+  it('sort by message count orders descending', () => {
+    const conversations = [
+      createConv('1', { name: 'Few', message_count: 2, updated_at: '2026-01-01' }),
+      createConv('2', { name: 'Many', message_count: 20, updated_at: '2026-01-02' }),
+      createConv('3', { name: 'Mid', message_count: 10, updated_at: '2026-01-03' }),
+    ]
+    render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    fireEvent.click(screen.getByLabelText('Sort conversations'))
+    fireEvent.click(screen.getByText('Message count'))
+    const items = screen.getAllByText(/^(Few|Many|Mid)$/)
+    expect(items[0]).toHaveProperty('textContent', 'Many')
+    expect(items[1]).toHaveProperty('textContent', 'Mid')
+    expect(items[2]).toHaveProperty('textContent', 'Few')
+  })
+
+  it('sort icon shows primary color when non-default sort active', () => {
+    const conversations = [createConv('1')]
+    render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    const sortBtn = screen.getByLabelText('Sort conversations')
+    expect(sortBtn.className).not.toContain('text-primary')
+    fireEvent.click(sortBtn)
+    fireEvent.click(screen.getByText('Name'))
+    const updatedBtn = screen.getByLabelText('Sort conversations')
+    expect(updatedBtn.className).toContain('text-primary')
   })
 })

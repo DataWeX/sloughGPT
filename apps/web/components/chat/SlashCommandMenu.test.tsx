@@ -3,121 +3,106 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import React from 'react'
 
-const mockCommands = [
-  { name: 'help', description: 'Show help', icon: '📖', category: 'general', action: vi.fn() },
-  { name: 'clear', description: 'Clear chat', icon: '🧹', category: 'general', action: vi.fn() },
-  { name: 'summarize', description: 'Summarize conversation', icon: '📝', category: 'tools', action: vi.fn() },
-]
-
-vi.mock('@/lib/slash-commands', () => ({
-  findMatchingCommands: (q: string) => {
-    if (!q) return mockCommands
-    return mockCommands.filter(c => c.name.includes(q.toLowerCase()))
-  },
+vi.mock('@/lib/chat-commands', () => ({
+  getAllCommands: () => [
+    { command: '/help', description: 'Show available commands', usage: '/help', execute: vi.fn() },
+    { command: '/clear', description: 'Clear the chat history', usage: '/clear', execute: vi.fn() },
+    { command: '/model', description: 'Switch the active model', usage: '/model <name>', execute: vi.fn() },
+    { command: '/temp', description: 'Set the temperature (0.0 – 2.0)', usage: '/temp <value>', execute: vi.fn() },
+  ],
 }))
 
 import { SlashCommandMenu } from './SlashCommandMenu'
 
 describe('SlashCommandMenu', () => {
-  const onSelect = vi.fn()
+  const onInsert = vi.fn()
   const onClose = vi.fn()
 
   beforeEach(() => { vi.clearAllMocks() })
   afterEach(cleanup)
 
-  it('renders nothing when not visible', () => {
-    const { container } = render(
-      <SlashCommandMenu query="" visible={false} onSelect={onSelect} onClose={onClose} />
-    )
-    expect(container.innerHTML).toBe('')
-  })
-
-  it('renders nothing when visible but no matches', () => {
-    const { container } = render(
-      <SlashCommandMenu query="zzz_nonexistent" visible={true} onSelect={onSelect} onClose={onClose} />
-    )
-    expect(container.innerHTML).toBe('')
-  })
-
-  it('renders matching commands', () => {
-    render(<SlashCommandMenu query="" visible={true} onSelect={onSelect} onClose={onClose} />)
+  it('renders all commands when value is just "/"', () => {
+    render(<SlashCommandMenu value="/" onInsert={onInsert} onClose={onClose} />)
+    expect(screen.getByRole('listbox')).toBeDefined()
     expect(screen.getByText('/help')).toBeDefined()
     expect(screen.getByText('/clear')).toBeDefined()
-    expect(screen.getByText('/summarize')).toBeDefined()
+    expect(screen.getByText('/model')).toBeDefined()
+    expect(screen.getByText('/temp')).toBeDefined()
   })
 
   it('filters commands by query', () => {
-    render(<SlashCommandMenu query="help" visible={true} onSelect={onSelect} onClose={onClose} />)
-    expect(screen.getByText('/help')).toBeDefined()
-    expect(screen.queryByText('/clear')).toBeNull()
-    expect(screen.queryByText('/summarize')).toBeNull()
+    render(<SlashCommandMenu value="/mo" onInsert={onInsert} onClose={onClose} />)
+    expect(screen.getByText('/model')).toBeDefined()
+    expect(screen.queryByText('/help')).toBeNull()
   })
 
-  it('calls onSelect when command clicked', () => {
-    render(<SlashCommandMenu query="" visible={true} onSelect={onSelect} onClose={onClose} />)
+  it('calls onInsert and onClose on click', () => {
+    render(<SlashCommandMenu value="/" onInsert={onInsert} onClose={onClose} />)
     fireEvent.click(screen.getByText('/help'))
-    expect(onSelect).toHaveBeenCalledWith(mockCommands[0])
-  })
-
-  it('calls onClose when backdrop clicked', () => {
-    render(<SlashCommandMenu query="" visible={true} onSelect={onSelect} onClose={onClose} />)
-    const backdrop = document.querySelector('.fixed.inset-0')
-    fireEvent.click(backdrop!)
+    expect(onInsert).toHaveBeenCalledWith('/help')
     expect(onClose).toHaveBeenCalled()
   })
 
-  it('selects first command by default', () => {
-    render(<SlashCommandMenu query="" visible={true} onSelect={onSelect} onClose={onClose} />)
-    const options = screen.getAllByRole('option')
-    expect(options[0].getAttribute('aria-selected')).toBe('true')
-  })
-
-  it('navigates with arrow keys and selects with Enter', () => {
-    render(<SlashCommandMenu query="" visible={true} onSelect={onSelect} onClose={onClose} />)
+  it('supports keyboard navigation with ArrowDown and Enter', () => {
+    render(<SlashCommandMenu value="/" onInsert={onInsert} onClose={onClose} />)
     fireEvent.keyDown(window, { key: 'ArrowDown' })
     fireEvent.keyDown(window, { key: 'Enter' })
-    expect(onSelect).toHaveBeenCalledWith(mockCommands[1])
-  })
-
-  it('navigates up with ArrowUp', () => {
-    render(<SlashCommandMenu query="" visible={true} onSelect={onSelect} onClose={onClose} />)
-    fireEvent.keyDown(window, { key: 'ArrowDown' })
-    fireEvent.keyDown(window, { key: 'ArrowDown' })
-    fireEvent.keyDown(window, { key: 'ArrowUp' })
-    fireEvent.keyDown(window, { key: 'Enter' })
-    expect(onSelect).toHaveBeenCalledWith(mockCommands[1])
+    expect(onInsert).toHaveBeenCalled()
   })
 
   it('closes on Escape', () => {
-    render(<SlashCommandMenu query="" visible={true} onSelect={onSelect} onClose={onClose} />)
+    render(<SlashCommandMenu value="/" onInsert={onInsert} onClose={onClose} />)
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(onClose).toHaveBeenCalled()
   })
 
-  it('selects with Tab key', () => {
-    render(<SlashCommandMenu query="" visible={true} onSelect={onSelect} onClose={onClose} />)
-    fireEvent.keyDown(window, { key: 'Tab' })
-    expect(onSelect).toHaveBeenCalledWith(mockCommands[0])
+  it('returns null when no commands match', () => {
+    const { container } = render(<SlashCommandMenu value="/zzzzz" onInsert={onInsert} onClose={onClose} />)
+    expect(container.innerHTML).toBe('')
   })
 
-  it('updates selected index on mouse enter', () => {
-    render(<SlashCommandMenu query="" visible={true} onSelect={onSelect} onClose={onClose} />)
-    const options = screen.getAllByRole('option')
-    fireEvent.mouseEnter(options[2])
-    expect(options[2].getAttribute('aria-selected')).toBe('true')
-  })
+  describe('onExecute', () => {
+    const onExecute = vi.fn()
 
-  it('resets selected index when query changes', () => {
-    const { rerender } = render(<SlashCommandMenu query="help" visible={true} onSelect={onSelect} onClose={onClose} />)
-    rerender(<SlashCommandMenu query="clear" visible={true} onSelect={onSelect} onClose={onClose} />)
-    const options = screen.getAllByRole('option')
-    expect(options[0].getAttribute('aria-selected')).toBe('true')
-  })
+    it('calls onExecute with command and args on click', () => {
+      render(<SlashCommandMenu value="/temp 0.5" onInsert={onInsert} onClose={onClose} onExecute={onExecute} />)
+      fireEvent.click(screen.getByText('/temp'))
+      expect(onExecute).toHaveBeenCalledWith(
+        expect.objectContaining({ command: '/temp' }),
+        ['0.5'],
+      )
+      expect(onClose).toHaveBeenCalled()
+    })
 
-  it('does not respond to keyboard when not visible', () => {
-    const onSelectNotCalled = vi.fn()
-    render(<SlashCommandMenu query="" visible={false} onSelect={onSelectNotCalled} onClose={onClose} />)
-    fireEvent.keyDown(window, { key: 'Enter' })
-    expect(onSelectNotCalled).not.toHaveBeenCalled()
+    it('parses multiple args from value', () => {
+      render(<SlashCommandMenu value="/model gpt2 large" onInsert={onInsert} onClose={onClose} onExecute={onExecute} />)
+      fireEvent.click(screen.getByText('/model'))
+      expect(onExecute).toHaveBeenCalledWith(
+        expect.objectContaining({ command: '/model' }),
+        ['gpt2', 'large'],
+      )
+    })
+
+    it('passes empty args when no extra text', () => {
+      render(<SlashCommandMenu value="/clear" onInsert={onInsert} onClose={onClose} onExecute={onExecute} />)
+      fireEvent.click(screen.getByText('/clear'))
+      expect(onExecute).toHaveBeenCalledWith(
+        expect.objectContaining({ command: '/clear' }),
+        [],
+      )
+    })
+
+    it('calls onExecute on Enter when onExecute is set', () => {
+      render(<SlashCommandMenu value="/help" onInsert={onInsert} onClose={onClose} onExecute={onExecute} />)
+      fireEvent.keyDown(window, { key: 'Enter' })
+      expect(onExecute).toHaveBeenCalled()
+      expect(onInsert).not.toHaveBeenCalled()
+    })
+
+    it('falls back to onInsert when onExecute is not provided', () => {
+      render(<SlashCommandMenu value="/help" onInsert={onInsert} onClose={onClose} />)
+      fireEvent.click(screen.getByText('/help'))
+      expect(onInsert).toHaveBeenCalledWith('/help')
+    })
   })
 })

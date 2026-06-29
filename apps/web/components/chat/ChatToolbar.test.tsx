@@ -97,8 +97,10 @@ const createContextValue = (overrides: Partial<ChatToolbarContextValue> = {}): C
     onCopyMarkdown: vi.fn(),
     onSaveAsDataset: vi.fn(),
     onSystemPrompt: vi.fn(),
+    onSearchConversations: vi.fn(),
     hasMessages: false,
     messageCount: 0,
+    bookmarkCount: 0,
   },
   health: {
     status: 'ok',

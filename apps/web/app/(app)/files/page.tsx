@@ -17,9 +17,11 @@ export default function FilesPage() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [ingesting, setIngesting] = useState<Set<string>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const dragCounterRef = useRef(0)
 
   const fetchFiles = useCallback(async () => {
     try {
@@ -37,9 +39,7 @@ export default function FilesPage() {
 
   useEffect(() => { fetchFiles() }, [fetchFiles])
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const doUpload = async (file: File) => {
     setUploading(true)
     try {
       const res = await filesController.upload(file)
@@ -49,8 +49,25 @@ export default function FilesPage() {
       addToast('Upload failed', 'error')
     } finally {
       setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
     }
+  }
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    await doUpload(file)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleDragEnter = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); dragCounterRef.current++; setDragOver(true) }
+  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); dragCounterRef.current--; if (dragCounterRef.current <= 0) { dragCounterRef.current = 0; setDragOver(false) } }
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation() }
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault(); e.stopPropagation()
+    setDragOver(false); dragCounterRef.current = 0
+    const file = e.dataTransfer.files?.[0]
+    if (!file) return
+    await doUpload(file)
   }
 
   const handleDelete = async (id: string) => {
@@ -99,7 +116,23 @@ export default function FilesPage() {
           <CardHeader>
             <CardTitle className="text-base">Upload & Search</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent
+            className="space-y-3 relative"
+            data-testid="drop-zone"
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+          >
+            {dragOver && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-md border-2 border-dashed border-primary bg-primary/5 backdrop-blur-[1px]">
+                <div className="text-center">
+                  <IconUpload className="h-8 w-8 mx-auto mb-2 text-primary" />
+                  <p className="text-sm font-medium text-primary">Drop file to upload</p>
+                  <p className="text-xs text-muted-foreground mt-1">PDF, DOCX, TXT, code, and more</p>
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-3">
               <div className="relative flex-1">
                 <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

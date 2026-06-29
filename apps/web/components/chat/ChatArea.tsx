@@ -10,7 +10,7 @@ import type { ToolCallEvent } from '@/lib/stream-chat-response'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import { cn } from '@/lib/cn'
 
-export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange' | 'onSend' | 'images' | 'onStop' | 'onAudioTranscript' | 'onGeneratedImage' | 'onPDFAnalysis' | 'onPDFError'> {
+export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange' | 'onSend' | 'images' | 'onStop' | 'onAudioTranscript' | 'onGeneratedImage' | 'onPDFAnalysis' | 'onPDFError' | 'onExecuteCommand'> {
   messages: ChatMessage[]
   loading: boolean
   sessionLoading?: boolean
@@ -29,6 +29,10 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   onRemoveImage?: (id: string) => void
   className?: string
   model?: string
+  isBookmarked?: (id: string) => boolean
+  onBookmark?: (messageId: string) => void
+  onDelete?: (messageId: string) => void
+  collapsibleLength?: number
 }
 
 export interface ChatAreaRef {
@@ -60,6 +64,10 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
     onGeneratedImage,
     className,
     model,
+    isBookmarked,
+    onBookmark,
+    onDelete,
+    collapsibleLength,
     ...inputProps
   }, ref) {
     const scrollRef = useRef<HTMLDivElement>(null)
@@ -168,6 +176,10 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
               searchQuery={searchQuery}
               onSuggestionClick={onSuggestionClick}
               toolEvents={toolEvents}
+              isBookmarked={isBookmarked}
+              onBookmark={onBookmark}
+              onDelete={onDelete}
+              collapsibleLength={collapsibleLength}
             />
 
             {filteredMessages.length > 0 && !isNearBottom && (

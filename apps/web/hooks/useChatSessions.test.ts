@@ -78,12 +78,12 @@ describe('useChatSessions', () => {
   it('saveSessionToStorage saves to DB and creates remote session', async () => {
     const opts = defaultOpts()
     const { result } = renderHook(() => useChatSessions(opts))
-    const msgs = [{ id: '1', role: 'user' as const, content: 'hello', timestamp: new Date() }]
+    const msgs = [{ id: '1', role: 'user' as const, content: 'What is machine learning', timestamp: new Date() }]
     await act(async () => { await result.current.saveSessionToStorage(msgs, 's1') })
     const saved = mockSaveSession.mock.calls[0][0]
     expect(saved.id).toBe('s1')
-    expect(saved.name).toContain('hello')
-    expect(mockCreate).toHaveBeenCalledWith('hello', 's1')
+    expect(saved.name).toContain('machine learning')
+    expect(mockCreate).toHaveBeenCalledWith('What is machine learning', 's1')
   })
 
   it('duplicateSession copies session with new id', async () => {

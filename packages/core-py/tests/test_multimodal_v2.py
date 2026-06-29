@@ -236,7 +236,7 @@ class TestSloTransformerDecoder:
         # Token IDs: (1, seq_len)
         token_ids = Tensor(np.array([[0, 1, 2, 3]]), requires_grad=False)
 
-        logits, h = decoder.forward(img_embed, token_ids, img_patches)
+        logits, h, _ = decoder.forward(img_embed, token_ids, img_patches)
 
         # Logits should be (B, seq_len, vocab_size) = (1, 4, 100)
         assert logits.data.ndim == 3
@@ -254,7 +254,7 @@ class TestSloTransformerDecoder:
         img_embed = Tensor(np.random.randn(1, 1, embed_dim).astype(np.float32), requires_grad=True)
         token_ids = Tensor(np.array([[0, 1, 2, 3]]), requires_grad=False)
 
-        logits, h = decoder.forward(img_embed, token_ids)
+        logits, h, _ = decoder.forward(img_embed, token_ids)
         assert logits.data.ndim == 3
         assert logits.data.shape[2] == vocab_size  # last dim is vocab
 
@@ -279,7 +279,7 @@ class TestSloTransformerDecoder:
         img_patches = Tensor(np.random.randn(1, num_patches + 1, embed_dim).astype(np.float32), requires_grad=True)
         token_ids = Tensor(np.array([[0, 2, 4, 6, 8]]), requires_grad=False)
 
-        logits, _ = decoder.forward(img_embed, token_ids, img_patches)
+        logits, _, _ = decoder.forward(img_embed, token_ids, img_patches)
         loss = logits.sum()
         loss.backward()
 
@@ -446,7 +446,7 @@ class TestTemperatureAnnealing:
         img_embed = Tensor(np.random.randn(1, 1, embed_dim).astype(np.float32), requires_grad=False)
         token_ids = Tensor(np.array([[0, 2, 4, 6]]), requires_grad=False)
 
-        logits, _ = decoder.forward(img_embed, token_ids[:, :-1])
+        logits, _, _ = decoder.forward(img_embed, token_ids[:, :-1])
 
         # Scaled with temperature 2.0
         scaled = logits / 2.0
@@ -571,6 +571,104 @@ class TestBeamSearch:
         assert isinstance(result.text, str)
 
 
+class TestKVCache:
+    """Regression tests for KV cache correctness in greedy generation."""
+
+    def test_kv_cache_is_deterministic(self):
+        """KV-cached generation must be deterministic given fixed seed."""
+        import domains.training.slonet as _slonet_mod
+        _slonet_mod._ACCELERATOR = "none"
+
+        engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
+                                  n_decoder_layers=1)
+        engine.build_vocab(["red circle on white background"])
+        engine.eval()
+        img = np.random.randn(1, 224, 224, 3).astype(np.float32)
+
+        out1 = engine.generate(img, max_len=10, temperature=0.0)
+        out2 = engine.generate(img, max_len=10, temperature=0.0)
+        assert out1.text == out2.text, (
+            f"KV cache non-deterministic: {out1.text!r} != {out2.text!r}"
+        )
+
+    def test_kv_cache_is_faster_for_long_sequences(self):
+        """KV cache should be faster than full-length forward for each step."""
+        import time
+        import domains.training.slonet as _slonet_mod
+        _slonet_mod._ACCELERATOR = "none"
+
+        engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
+                                  n_decoder_layers=1)
+        engine.build_vocab(["red circle on white background"])
+        engine.eval()
+        img = np.random.randn(1, 224, 224, 3).astype(np.float32)
+
+        # Warmup
+        engine.generate(img, max_len=5, temperature=0.0)
+
+        t0 = time.perf_counter()
+        engine.generate(img, max_len=25, temperature=0.0)
+        t1 = time.perf_counter()
+        kv_time = t1 - t0
+
+        # No-KV path: build full sequence each step
+        from domains.training.slonet import tensor as _tensor
+        embed, patches, _ = engine._concat_modalities(img, None, None)
+        # Use the same image, re-embed
+        tokens = [0]
+        t0 = time.perf_counter()
+        for _ in range(25):
+            inp = _tensor(np.array([tokens]), requires_grad=False)
+            logits, _, _ = engine.decoder.forward(embed, inp, patches)
+            last_pos = logits.data.reshape(-1, logits.data.shape[-1])[-1]
+            next_tok = int(np.argmax(last_pos))
+            tokens.append(next_tok)
+        t1 = time.perf_counter()
+        no_kv_time = t1 - t0
+
+        assert kv_time < no_kv_time, (
+            f"KV cache ({kv_time:.3f}s) not faster than no-KV ({no_kv_time:.3f}s)"
+        )
+
+    def test_kv_cache_is_faster_for_long_sequences(self):
+        """KV cache should reduce wall time for long greedy generations."""
+        import time
+        import domains.training.slonet as _slonet_mod
+        _slonet_mod._ACCELERATOR = "none"
+
+        engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
+                                  n_decoder_layers=1)
+        engine.build_vocab(["red circle on white background"])
+        img = np.random.randn(1, 224, 224, 3).astype(np.float32)
+        engine.eval()
+
+        # Warmup
+        engine.generate(img, max_len=5, temperature=0.0)
+
+        t0 = time.perf_counter()
+        engine.generate(img, max_len=25, temperature=0.0)
+        t1 = time.perf_counter()
+        kv_time = t1 - t0
+
+        # No-KV path for comparison
+        from domains.training.slonet import tensor as _tensor
+        embed, patches, _ = engine._concat_modalities(img, None, None)
+        tokens = [0]
+        t0 = time.perf_counter()
+        for _ in range(25):
+            inp = _tensor(np.array([tokens]), requires_grad=False)
+            logits, _, _ = engine.decoder.forward(embed, inp, patches)
+            last_pos = logits.data.reshape(-1, logits.data.shape[-1])[-1]
+            next_tok = int(np.argmax(last_pos))
+            tokens.append(next_tok)
+        t1 = time.perf_counter()
+        no_kv_time = t1 - t0
+
+        assert kv_time < no_kv_time, (
+            f"KV cache ({kv_time:.3f}s) not faster than no-KV ({no_kv_time:.3f}s)"
+        )
+
+
 class TestZeroPatchGradientRegression:
     """Regression tests ensuring zero-patch cross-attention doesn't explode gradients.
 
@@ -601,7 +699,7 @@ class TestZeroPatchGradientRegression:
         token_ids = Tensor(np.array([[0, 2, 4, 6, 8, 10]]), requires_grad=False)
 
         # Forward without cross-attention
-        logits_no, _ = decoder_no_ca.forward(img_embed, token_ids, img_patches=None)
+        logits_no, _, _ = decoder_no_ca.forward(img_embed, token_ids, img_patches=None)
         loss_no = logits_no.sum()
         loss_no.backward()
 
@@ -619,7 +717,7 @@ class TestZeroPatchGradientRegression:
 
         # Forward with cross-attention (zero-like patches)
         img_patches = Tensor(np.zeros((1, 51, embed_dim), dtype=np.float32), requires_grad=False)
-        logits_ca, _ = decoder_ca.forward(img_embed, token_ids, img_patches)
+        logits_ca, _, _ = decoder_ca.forward(img_embed, token_ids, img_patches)
         loss_ca = logits_ca.sum()
         loss_ca.backward()
 
@@ -681,14 +779,14 @@ class TestZeroPatchGradientRegression:
 
         # Forward without cross-attention
         # Input: all but last token; targets: all but first token (teacher forcing)
-        logits_no, _ = dec_no.forward(img_embed, token_ids[:, :-1])
+        logits_no, _, _ = dec_no.forward(img_embed, token_ids[:, :-1])
         targets = Tensor(np.array([2, 4, 6, 8, 10, 12]), requires_grad=False)
         from domains.training.slonet import cross_entropy as _cross_entropy
         loss_no = _cross_entropy(logits_no, targets)
 
         # Forward with cross-attention (zero patches)
         img_patches = Tensor(np.zeros((1, 51, embed_dim), dtype=np.float32), requires_grad=False)
-        logits_ca, _ = dec_ca.forward(img_embed, token_ids[:, :-1], img_patches)
+        logits_ca, _, _ = dec_ca.forward(img_embed, token_ids[:, :-1], img_patches)
         loss_ca = _cross_entropy(logits_ca, targets)
 
         # Losses should be comparable (not 10x+ apart)

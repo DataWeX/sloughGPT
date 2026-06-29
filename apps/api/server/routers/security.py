@@ -10,7 +10,8 @@ router = APIRouter(prefix="/security", tags=["security"])
 @router.get("/audit")
 async def get_audit_logs(limit: int = 100, event_type: Optional[str] = None):
     """Get audit logs"""
-    from main import audit_logger
+    from infrastructure.auth import get_audit_logger
+    audit_logger = get_audit_logger()
     logs = audit_logger.logs[-limit:]
     if event_type:
         logs = [l for l in logs if l.get("event_type") == event_type]
@@ -20,8 +21,9 @@ async def get_audit_logs(limit: int = 100, event_type: Optional[str] = None):
 @router.get("/keys")
 async def get_keys():
     """Get API key info (not the keys themselves)"""
-    from main import VALID_API_KEYS
+    from settings import get_security_settings
+    sec = get_security_settings()
     return {
-        "count": len(VALID_API_KEYS),
-        "configured": len(VALID_API_KEYS) > 0,
+        "count": len(sec.valid_api_keys),
+        "configured": len(sec.valid_api_keys) > 0,
     }

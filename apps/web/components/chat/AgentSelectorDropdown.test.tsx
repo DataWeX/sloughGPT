@@ -38,7 +38,7 @@ function makeCtx(overrides: { agents?: AgentDef[]; current?: AgentDef | null; on
     knowledge: { showing: false, count: 0, context: '', onToggle: vi.fn() },
     agent: { agents: overrides.agents ?? agents, current: overrides.current ?? null, onSelect },
     localEngine: { modelUrl: '', useLocal: false, loading: false, archInfo: null, onToggle: vi.fn() },
-    actions: { onVoiceMode: vi.fn(), onToggleTools: vi.fn(), onExportMarkdown: vi.fn(), onSystemPrompt: vi.fn(), hasMessages: false, messageCount: 0 },
+    actions: { onVoiceMode: vi.fn(), onToggleTools: vi.fn(), onExportMarkdown: vi.fn(), onSystemPrompt: vi.fn(), onSearchConversations: vi.fn(), hasMessages: false, messageCount: 0, bookmarkCount: 0 },
     health: { status: 'ok', summary: '', modelLoaded: false, modelType: '' },
     sidebar: { open: false, onToggle: vi.fn(), onClose: vi.fn() },
   }

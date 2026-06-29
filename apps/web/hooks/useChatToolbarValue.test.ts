@@ -116,4 +116,10 @@ describe('useChatToolbarValue', () => {
     expect(result.current.health.status).toBe('offline')
     expect(result.current.health.modelLoaded).toBe(false)
   })
+
+  it('returns bookmarkCount in actions group', () => {
+    const config = makeConfig({ bookmarkCount: 5 })
+    const { result } = renderHook(() => useChatToolbarValue(config))
+    expect(result.current.actions.bookmarkCount).toBe(5)
+  })
 })

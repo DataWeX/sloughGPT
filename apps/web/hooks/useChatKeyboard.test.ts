@@ -78,6 +78,26 @@ describe('useChatKeyboard', () => {
     expect(setToolPanelOpen).toHaveBeenCalled()
   })
 
+  it('toggles tool panel on Ctrl+Shift+B', () => {
+    renderHook(() => useChatKeyboard({
+      loading: false, currentError: null, showSettings: false,
+      setToolPanelOpen, setShowSettings, setLoading, setCurrentError,
+      loadingRef, newChatRef, handleRegenerateRef,
+    }))
+    fireKey('b', { ctrlKey: true, shiftKey: true })
+    expect(setToolPanelOpen).toHaveBeenCalled()
+  })
+
+  it('toggles tool panel on Meta+Shift+B', () => {
+    renderHook(() => useChatKeyboard({
+      loading: false, currentError: null, showSettings: false,
+      setToolPanelOpen, setShowSettings, setLoading, setCurrentError,
+      loadingRef, newChatRef, handleRegenerateRef,
+    }))
+    fireKey('b', { metaKey: true, shiftKey: true })
+    expect(setToolPanelOpen).toHaveBeenCalled()
+  })
+
   it('toggles settings on Ctrl+?', () => {
     renderHook(() => useChatKeyboard({
       loading: false, currentError: null, showSettings: false,

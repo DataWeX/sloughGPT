@@ -191,4 +191,55 @@ describe('MessageBubble', () => {
     const article = container.querySelector('[role="article"]')
     expect(article).toHaveAttribute('aria-live', 'assertive')
   })
+
+  describe('message folding', () => {
+    const longContent = 'A'.repeat(600)
+    const shortContent = 'A'.repeat(50)
+
+    it('collapses long content when collapsibleLength is set', () => {
+      const { container } = render(
+        <MessageBubble content={longContent} role="assistant" timestamp={new Date()} showTimestamp collapsibleLength={200} />
+      )
+      const markdown = container.querySelector('[data-testid="markdown"]')
+      expect(markdown?.textContent?.length).toBe(200)
+    })
+
+    it('does not collapse short content', () => {
+      const { container } = render(
+        <MessageBubble content={shortContent} role="assistant" timestamp={new Date()} showTimestamp collapsibleLength={200} />
+      )
+      const markdown = container.querySelector('[data-testid="markdown"]')
+      expect(markdown?.textContent?.length).toBe(50)
+    })
+
+    it('shows "Show more" button when collapsed', () => {
+      render(
+        <MessageBubble content={longContent} role="assistant" timestamp={new Date()} showTimestamp collapsibleLength={200} />
+      )
+      expect(screen.getByText(/Show more/)).toBeInTheDocument()
+    })
+
+    it('does not show "Show more" when collapsibleLength is 0', () => {
+      const { container } = render(
+        <MessageBubble content={longContent} role="assistant" timestamp={new Date()} showTimestamp collapsibleLength={0} />
+      )
+      expect(screen.queryByText(/Show more/)).not.toBeInTheDocument()
+      const markdown = container.querySelector('[data-testid="markdown"]')
+      expect(markdown?.textContent?.length).toBe(600)
+    })
+
+    it('shows remaining char count in collapse label', () => {
+      render(
+        <MessageBubble content={longContent} role="assistant" timestamp={new Date()} showTimestamp collapsibleLength={200} />
+      )
+      expect(screen.getByText(/400 more/)).toBeInTheDocument()
+    })
+
+    it('collapses user messages too', () => {
+      const { container } = render(
+        <MessageBubble content={longContent} role="user" timestamp={new Date()} showTimestamp collapsibleLength={200} />
+      )
+      expect(container.textContent).toContain('Show more')
+    })
+  })
 })

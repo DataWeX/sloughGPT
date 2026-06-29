@@ -21,6 +21,7 @@ import { knowledgeController } from '@/lib/knowledge-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { useHomePageData } from '@/hooks/useHomePageData'
+import type { FeedbackStats } from '@/lib/feedback-controller'
 
 function Greeting() {
   const [greeting, setGreeting] = useState('Hello')
@@ -39,7 +40,7 @@ export default function HomePage() {
   const { t } = useLocale()
   const { state: health } = useApiHealth()
   const addToast = useToastStore(s => s.addToast)
-  const { modelCount, currentSoul, modelStatus, inferenceCount, runningTraining, knowledgeCount, recentSessions, recentJobs, healthSummary, ...data } = useHomePageData(health)
+  const { modelCount, currentSoul, modelStatus, inferenceCount, runningTraining, knowledgeCount, recentSessions, recentJobs, healthSummary, feedbackStats, ...data } = useHomePageData(health)
 
   const apiStatus = health === null ? 'loading' : health === 'offline' ? 'offline' : 'online'
 
@@ -157,6 +158,32 @@ export default function HomePage() {
               </CardContent>
             </Card>
           </div>
+
+          {feedbackStats?.db_stats && feedbackStats.db_stats.feedback_total > 0 && (
+            <Card>
+              <CardContent className="py-3">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Feedback</span>
+                    <span className="text-xs font-medium tabular-nums">{feedbackStats.db_stats.feedback_total}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-success">👍 {feedbackStats.db_stats.thumbs_up}</span>
+                    <span className="text-xs text-destructive">👎 {feedbackStats.db_stats.thumbs_down}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Ratio</span>
+                    <span className={"text-xs font-medium " + (feedbackStats.db_stats.ratio >= 0.5 ? "text-success" : "text-warning")}>
+                      {Math.round(feedbackStats.db_stats.ratio * 100)}% positive
+                    </span>
+                  </div>
+                  <Link href="/training" className="ml-auto text-xs text-primary hover:text-primary/80 shrink-0">
+                    Train from feedback →
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {runningTraining && (
             <Link href="/training" className="block">

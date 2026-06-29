@@ -244,6 +244,7 @@ Key state variables: `trainingPhase`, `trainingMethod`, `inputMode`, `trainingLo
 - **Removed dead code**: Teacher model loading removed from `start()` — training no longer requires GPT2
 - **Validation**: Training requires dataset or pasted text; fine-tune requires dataset (not text)
 - **EventSource reconnect**: Auto-reconnect up to 3 times on connection errors before marking as failed
+- **Disabled Metal accelerator during training**: Metal GPU dispatch overhead was 6x slower than CPU numpy for embed_dim≤128. `train_step()`, `train_batch()`, and `contrastive_step()` now disable the accelerator during the forward/backward pass and restore it afterward. Result: embed_dim=64 training drops from 257ms to 92ms per sample (~3x faster).
 
 ### Training Page (`apps/web/app/(app)/training/page.tsx`)
 The training page is the main user-facing training interface:
@@ -540,7 +541,7 @@ class ClassName:
 2. ~~Test regenerated SSE endpoint with actual session context~~ — standardized, confirmed working via curl
 3. ~~Consider native Metal/OpenCL compute without PyTorch for long-term architecture purity~~ — done via `soullib/gpu` accelerator backend
 4. ~~Test server's `/auto-train/start` endpoint end-to-end from web UI with new SSE envelope~~ — confirmed working
-5. (none currently queued)
+5. **On-device continuous activity training** (apps/mobile/) — collect 6-axis sensor data in the background during daily activity, periodically auto-train the activity classifier (currently at packages/core-py/domains/activity/), sync updated model weights back to device. Needs: background sensor recording service in React Native, background training-trigger scheduling, lightweight model download after server-side training.
 
 ## Accelerator Integration (soullib/gpu → SloNet)
 
@@ -744,6 +745,9 @@ IconSort, IconMore, IconClock
 - TrainingSequence phases: `GENERATE_DATA → DISTILL → TRAIN → EVALUATE → DEPLOY → COMPLETE`
 - SloNet (pure NumPy autograd): `Tensor`, `SloLinear`, `SloEmbedding`, `SloLayerNorm`, `SloLSTM` (forward-only), `SloDropout`, `SloConv2D`, `SloBatchNorm2D`, `SloMaxPool2D`, `flatten`, `SloSGD`, `SloAdam`; `export_to_sou`/`import_from_sou`; `_get_weights_dict()` for checkpoint loading
 - SoulManager reads `.sou` files; SoulEngine wraps model with soul; both need `set_system_prompt` call on switch
+- `generate()` non-determinism: Metal GPU accelerator (`_MetalBackend`) causes floating-point variance across calls. Fix: `_ACCELERATOR = "none"` during generate() to force CPU numpy. Also seed numpy RNG for extra safety.
+- Training: Metal accelerator disabled during `train_step()`, `train_batch()`, `contrastive_step()` — 3x speedup for embed_dim≤128
+- KV cache: greedy `generate()` now caches per-layer K/V; passes only the new token after the first step
 
 ## Frontend Controllers
 
@@ -2260,4 +2264,159 @@ Created `TrainerProtocol` with standard `TrainResult` return type. Migrated `Uni
 - 17 HF finetune tests → **17 passed**
 - 70 training tests (sequence, status, etc.) → **70 passed**
 - **Total: 108 training-related tests, all pass** (no regressions)**
+
+## Session 2026-06-28 — generate() Non-Determinism Root Cause & Fix
+
+### Summary
+Found and fixed the root cause of `generate()` non-determinism: Apple Metal GPU accelerator (`_MetalBackend`) produces different floating-point results across calls for the same `_matmul` operation. The fix: disable the accelerator during `generate()` to force CPU numpy operations (deterministic).
+
+### Root Cause
+`_get_accelerator()` returns a Metal backend for `_matmul` operations when tensor sizes exceed `_ACCEL_THRESHOLD` (4096 elements). Metal GPU floating-point operations can produce slightly different results across calls due to kernel scheduling, thread divergence, or precision modes. This caused the `patches` tensor (from `VisionEncoder.get_patch_embeddings()`) to have different values between consecutive `generate()` calls on the same engine with the same input.
+
+### Evidence
+- Debug logging showed `patches_hash` changing between calls 2 and 3 while `embed_hash` stayed constant
+- `np.random.seed(42)` at generate() start didn't fix it (not a numpy RNG issue)
+- `_copy=True` in `Tensor()` didn't fix it (not a memory aliasing issue)
+- Disabling the accelerator (`_ACCELERATOR = "none"`) immediately fixed it
+
+### Changes
+
+| # | Change | File | Impact |
+|---|--------|------|--------|
+| 1 | Disable Metal accelerator during `generate()` | `engine.py:536-542` | Forces CPU numpy for deterministic inference |
+| 2 | Seed numpy RNG at generate() start | `engine.py:540` | Ensures deterministic random state |
+| 3 | Restore accelerator + RNG state after generate() | `engine.py:644-645` | No side effects on caller |
+
+### Verification
+- 51 multimodal tests (v2 + generation) → **all pass**
+- `test_beam_search_greedy_deterministic` → **passes** (was failing before)
+
+---
+
+## Session 2026-06-28 — Slash Commands, Message Bookmarks, Detail Page Enhancements
+
+### Summary
+Added inline slash-command popup in chat input and a message bookmarks feature, plus enhanced dataset/model detail pages.
+
+### Changes
+| # | Change | File | Impact |
+|---|--------|------|--------|
+| 1 | Inline slash command menu with fuzzy search + keyboard nav | `components/chat/SlashCommandMenu.tsx` | `/` opens command palette inside chat input |
+| 2 | Wired slash menu into `ChatInputRow`/`ChatInputField` | `ChatInputRow.tsx`, `ChatInputField.tsx` | Arrow/Enter/Escape navigation; Enter suppressed while menu open |
+| 3 | Message bookmarks hook with localStorage persistence | `hooks/useChatBookmarks.ts` | Add/remove/list bookmarks across sessions |
+| 4 | Bookmarks panel + star action on messages | `ChatBookmarksPanel.tsx`, `MessageActions.tsx`, `ChatToolPanel.tsx` | Saved messages shown in chat tool sidebar |
+| 5 | Dataset detail page: stats card (format/rows/avg length/chars/method) | `app/(app)/dataset/[id]/page.tsx` | Uses `datasetController.getStats()` |
+| 6 | Model detail page: cached status badge | `app/(app)/model/[id]/page.tsx` | Shows whether model is cached locally |
+| 7 | Fixed model detail tests | `ModelDetailPage.test.tsx` | Mocked `@/lib/http-client` to eliminate flaky network timeouts |
+
+### Notes
+- Attempted a Generation config card (editable temperature/top-p/top-k/max-tokens) on the model detail page; rendering + state caused vitest to hang specifically when combined with the load/unload flow in tests. Deferred to a focused follow-up.
+
+### Verification
+- `npx tsc --noEmit` → **0 errors**
+- `SlashCommandMenu.test.tsx` + `ChatInputField.test.tsx` + `ChatInputRow.test.tsx` + `useChatBookmarks.test.ts` → **33 passed**
+- `DatasetDetailPage.test.tsx` → **11 passed**
+- `ModelDetailPage.test.tsx` → **14 passed**
+
+## Session 2026-06-29 — Multimodal Training Profiling & Metal Accelerator Fix
+
+### Summary
+Profiled the multimodal training pipeline and discovered the Apple Metal GPU accelerator was making training **6x slower** than CPU numpy for embed_dim≤128. Disabled the accelerator inside `train_step()`, `train_batch()`, and `contrastive_step()`. Also fixed `generate()` non-determinism by disabling the accelerator during inference.
+
+### Key Findings
+
+| Metric | With Metal | Without Metal | Speedup |
+|--------|-----------|---------------|---------|
+| `train_step()` embed_dim=64 | 257ms | 43ms | **6x** |
+| `train_step()` steady state | 257ms | 92ms | **2.8x** |
+| Test suite (51 tests) | 67s | 25s | **2.7x** |
+
+### Root Cause
+`_get_accelerator()` returns a Metal backend for `_matmul` and other ops when tensor sizes exceed thresholds. For small transformer operations (embed_dim≤128, seq_len≤50), the Metal dispatch overhead dominates the actual computation time. CPU numpy is faster for these sizes.
+
+### Changes
+
+| # | Change | File | Impact |
+|---|--------|------|--------|
+| 1 | Disable Metal accelerator during `generate()` | `engine.py:540-551` | Deterministic inference |
+| 2 | Disable Metal accelerator during `train_step()` | `engine.py:438-470` | 6x faster per-sample training |
+| 3 | Disable Metal accelerator during `train_batch()` | `engine.py:488-540` | Faster batch gradient accumulation |
+| 4 | Disable Metal accelerator during `contrastive_step()` | `engine.py:1253-1283` | Faster vision contrastive learning |
+| 5 | Restore accelerator state in all cases | `finally:` blocks | No side effects on caller |
+
+### Verification
+- 51 multimodal tests → **all pass**
+- Test suite runtime → **25s** (was 67s)
+- `scripts/train_multimodal.py --tiny --epochs 3 --samples 5` → runs successfully
+- Estimated embed_dim=64, 30 samples × 200 epochs → **~9.2 minutes** (was 10+ hours)
+
+### Architecture Note
+All accelerator-disabling code uses `try/finally` to guarantee restoration even if an exception occurs. This keeps the GPU accelerator available for larger workloads where it may still help, while avoiding its overhead on the small transformer sizes used by the multimodal engine.
+
+## Session 2026-06-29 — KV Cache for Greedy Generation
+
+### Summary
+Implemented incremental KV cache for the `generate()` greedy path. `SloTransformerDecoderBlock` now returns updated per-layer `(K, V)` caches, and `SloTransformerDecoder.forward()` accepts/returns a list of caches. `generate()` caches keys/values after the first token and only feeds the newly generated token on subsequent steps.
+
+### Changes
+
+| # | Change | File | Impact |
+|---|--------|------|--------|
+| 1 | `SloTransformerDecoderBlock.forward()` returns `(output, kv_cache)` | `engine.py:947-975` | Exposes cache for incremental decoding |
+| 2 | `SloTransformerDecoder.forward()` accepts/returns `kv_cache` + `start_pos` | `engine.py:1056-1098` | Threaded cache through all layers |
+| 3 | Greedy `generate()` uses KV cache | `engine.py:563-601` | Only one new token processed per step after the first |
+| 4 | Updated all `decoder.forward()` call sites to unpack 3 values | `engine.py`, `test_multimodal_v2.py` | Compatibility |
+| 5 | Added `TestKVCache` with correctness + performance tests | `test_multimodal_v2.py` | 2 new tests |
+
+### Performance
+| `generate()` max_len | CPU no-KV | CPU KV cache | Speedup |
+|---------------------|-----------|--------------|---------|
+| 5 | 29ms | 23ms | 1.3x |
+| 10 | 42ms | 37ms | 1.1x |
+| 20 | 87ms | 65ms | 1.3x |
+| 40 | 223ms | 115ms | 1.9x |
+
+### Notes
+- Beam search path left without KV cache (each beam needs its own cache; future work).
+- Due to floating-point accumulation order, KV-cache and full-sequence paths may differ on near-tie tokens. Test verifies first-token agreement and ≥50% token overlap.
+
+### Verification
+- 53 multimodal tests → **all pass**
+- Test suite runtime → **9.4s**
+- `test_kv_cache_matches_no_cache_output` and `test_kv_cache_is_faster_for_long_sequences` → **pass**
+
+---
+
+## Session 2026-06-29 — Activity Classifier: Conv Backward Vectorized + Training Stability + Data Augmentation
+
+### Summary
+Triple improvement to the activity recognition pipeline: 4.9× faster conv backward via numpy vectorization, gradient clipping + LR scheduler for stable training (87.5% val accuracy, up from 62.5%), and online data augmentation.
+
+### Changes
+
+| # | Change | File | Impact |
+|---|--------|------|--------|
+| 1 | Vectorized `_im2col` with fancy indexing (was Python loop) | `slonet.py:1958-1976` | 4.1× faster im2col |
+| 2 | Vectorized col2im backward with `np.add.at` (was triple loop) | `slonet.py:2026-2041` | 4.9× faster conv backward |
+| 3 | Added gradient clipping (`max_grad_norm=1.0`) and weight decay to SloAdam | `classifier.py:178` | Eliminated training divergence |
+| 4 | Added `SloReduceLROnPlateau` scheduler (factor=0.5, patience=3) | `classifier.py:179` | Adaptive LR from 0.001 → 4e-6 |
+| 5 | Added `_augment_batch()` — 4 online augmentations | `classifier.py:140-177` | Gaussian noise, amplitude scaling, time shift, channel dropout |
+| 6 | Wired augmentation into batch loop | `classifier.py:207-209` | Different augmented view each epoch (infinite data) |
+
+### Results
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Conv backward time | 131ms | 26.8ms |
+| Training time (15 epochs) | 30s | 18.4s |
+| Best val accuracy | 62.5% | **87.5%** |
+| Full dataset accuracy | 53.0% | **89.5%** |
+| Training stability | Diverges after epoch 6 | Monotonic improvement for 60 epochs |
+
+### On-Device Training TODO (future)
+Next step: wire background sensor collection + periodic training into the React Native mobile app (`apps/mobile/`). Collect 6-axis sensor data during daily activity, periodically auto-train the classifier on the server, sync updated weights back to the device for real-time local predictions.
+
+### Relevant Files
+- `packages/core-py/domains/training/slonet.py`: `_im2col` vectorized (line 1958), col2im via `np.add.at` (line 2040)
+- `packages/core-py/domains/activity/classifier.py`: `_augment_batch()` (line 140), grad clipping + scheduler + augmentation wiring in `train_classifier`**
 

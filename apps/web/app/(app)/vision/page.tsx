@@ -101,6 +101,16 @@ export default function VisionPage() {
     if (file) processFile(file)
   }, [processFile])
 
+  const handleTrainDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault(); setDragOver(false)
+    const file = e.dataTransfer.files?.[0]
+    if (!file || !file.type.startsWith('image/')) return
+    setPreviewFileName(file.name)
+    const reader = new FileReader()
+    reader.onload = () => setPreviewUrl(reader.result as string)
+    reader.readAsDataURL(file)
+  }, [])
+
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) processFile(file)
@@ -293,10 +303,19 @@ export default function VisionPage() {
             <p className="text-xs text-muted-foreground">
               Train the vision model with supervised labels for better accuracy.
             </p>
-            <div onClick={() => fileInputRef.current?.click()}
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleTrainDrop}
+              onClick={() => fileInputRef.current?.click()}
               className={cn('border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors',
-                previewUrl ? 'border-primary/30 bg-primary/3' : 'border-border/50 hover:border-primary/40')}>
-              {previewUrl ? (
+                dragOver ? 'border-primary bg-primary/5' : previewUrl ? 'border-primary/30 bg-primary/3' : 'border-border/50 hover:border-primary/40')}>
+              {dragOver ? (
+                <div>
+                  <IconUpload className="h-6 w-6 mx-auto mb-1 text-primary" />
+                  <p className="text-xs font-medium text-primary">Drop image here</p>
+                </div>
+              ) : previewUrl ? (
                 <div className="relative inline-block">
                   <img src={previewUrl} alt="Training image" className="max-h-40 rounded object-contain" />
                   <button type="button" onClick={(e) => { e.stopPropagation(); clearPreview() }}
@@ -305,7 +324,7 @@ export default function VisionPage() {
                   </button>
                 </div>
               ) : (
-                <><IconUpload className="h-6 w-6 mx-auto mb-1 text-muted-foreground" /><p className="text-xs text-muted-foreground">Click to select an image for training</p></>
+                <><IconUpload className="h-6 w-6 mx-auto mb-1 text-muted-foreground" /><p className="text-xs text-muted-foreground">Drop an image here or click to select for training</p></>
               )}
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
             </div>

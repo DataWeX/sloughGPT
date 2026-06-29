@@ -32,6 +32,8 @@ from enum import Enum
 import logging
 import numpy as np
 
+from domains.infrastructure.config import get_config
+
 logger = logging.getLogger("man.embeddings")
 
 
@@ -161,7 +163,7 @@ class OpenAIEmbedder(BaseEmbedder):
         model: str = "text-embedding-3-small",
         dimensions: Optional[int] = None,
     ):
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self.api_key = api_key or get_config().embedding.openai_api_key or None
         self.model_name = model
         self.dimensions = dimensions or self.DIMENSIONS.get(model, 1536)
         
@@ -270,7 +272,7 @@ class Embedder:
         dimension: int = 384,
         **kwargs,
     ):
-        provider = provider or os.getenv("EMBEDDING_PROVIDER", "sentence_transformers")
+        provider = provider or get_config().embedding.provider
         
         if provider == "sentence_transformers" or provider == "st":
             try:

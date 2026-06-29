@@ -377,7 +377,7 @@ class MultimodalEngine:
                 requires_grad=True,
                 _children=(img_patches, aud_patches),
             )
-        logits, _ = self.decoder.forward(img_embed, token_ids, patches)
+        logits, _, _ = self.decoder.forward(img_embed, token_ids, patches)
         return logits, img_embed
 
     def precompute_audio_patches(self, audio_np: np.ndarray) -> np.ndarray:
@@ -433,26 +433,33 @@ class MultimodalEngine:
     ) -> float:
         if text_tokens is None:
             raise ValueError("text_tokens is required")
-        embed, patches, optimizers = self._concat_modalities(images_np, audio_np, audio_patches)
-        logits, _ = self.decoder.forward(embed, text_tokens[:, :-1], patches)
-        targets = _tensor(text_tokens[:, 1:].reshape(-1), requires_grad=False)
-        if temperature != 1.0:
-            logits = logits / temperature
-        loss = _cross_entropy(logits, targets)
-        loss.backward()
-        old_lrs = {}
-        if lr is not None:
-            old_lrs = {id(opt): opt.lr for opt in optimizers}
-            self._maybe_set_lr(lr, optimizers)
-        # Gradient clipping
-        for opt in optimizers:
-            self._clip_gradients(self._params_for_optimizer(opt, None, None))
-        for opt in optimizers:
-            opt.step(self._params_for_optimizer(opt, embed, patches))
-        self._maybe_restore_lr(lr, optimizers, old_lrs)
-        self._zero_grad(optimizers)
-        self._trained = True
-        return float(loss.data)
+        # Disable GPU accelerator for training — Metal dispatch overhead dominates at embed_dim≤128
+        import domains.training.slonet as _slonet_mod
+        _saved_accel = _slonet_mod._ACCELERATOR
+        _slonet_mod._ACCELERATOR = "none"
+        try:
+            embed, patches, optimizers = self._concat_modalities(images_np, audio_np, audio_patches)
+            logits, _, _ = self.decoder.forward(embed, text_tokens[:, :-1], patches)
+            targets = _tensor(text_tokens[:, 1:].reshape(-1), requires_grad=False)
+            if temperature != 1.0:
+                logits = logits / temperature
+            loss = _cross_entropy(logits, targets)
+            loss.backward()
+            old_lrs = {}
+            if lr is not None:
+                old_lrs = {id(opt): opt.lr for opt in optimizers}
+                self._maybe_set_lr(lr, optimizers)
+            # Gradient clipping
+            for opt in optimizers:
+                self._clip_gradients(self._params_for_optimizer(opt, None, None))
+            for opt in optimizers:
+                opt.step(self._params_for_optimizer(opt, embed, patches))
+            self._maybe_restore_lr(lr, optimizers, old_lrs)
+            self._zero_grad(optimizers)
+            self._trained = True
+            return float(loss.data)
+        finally:
+            _slonet_mod._ACCELERATOR = _saved_accel
 
     def train_batch(
         self,
@@ -478,46 +485,53 @@ class MultimodalEngine:
         if not samples:
             return 0.0
 
-        # Determine which optimisers are needed from the first sample
-        first_img, first_tok, first_aud_np, first_aud_pt = samples[0]
-        _, _, all_opts = self._concat_modalities(first_img, first_aud_np, first_aud_pt)
-        # Zero all relevant param gradients before accumulation
-        self._zero_grad(all_opts)
+        # Disable GPU accelerator for training — Metal dispatch overhead dominates at embed_dim≤128
+        import domains.training.slonet as _slonet_mod
+        _saved_accel = _slonet_mod._ACCELERATOR
+        _slonet_mod._ACCELERATOR = "none"
+        try:
+            # Determine which optimisers are needed from the first sample
+            first_img, first_tok, first_aud_np, first_aud_pt = samples[0]
+            _, _, all_opts = self._concat_modalities(first_img, first_aud_np, first_aud_pt)
+            # Zero all relevant param gradients before accumulation
+            self._zero_grad(all_opts)
 
-        total_loss = 0.0
-        n = 0
-        old_lrs = {} if lr is None else {id(o): o.lr for o in all_opts}
-        if lr is not None:
-            self._maybe_set_lr(lr, all_opts)
+            total_loss = 0.0
+            n = 0
+            old_lrs = {} if lr is None else {id(o): o.lr for o in all_opts}
+            if lr is not None:
+                self._maybe_set_lr(lr, all_opts)
 
-        for images_np, text_tokens, audio_np, audio_patches in samples:
-            if text_tokens is None:
-                continue
-            embed, patches, _ = self._concat_modalities(images_np, audio_np, audio_patches)
-            logits, _ = self.decoder.forward(embed, text_tokens[:, :-1], patches)
-            targets = _tensor(text_tokens[:, 1:].reshape(-1), requires_grad=False)
-            if temperature != 1.0:
-                logits = logits / temperature
-            loss = _cross_entropy(logits, targets)
-            # Scale loss by 1/N so the sum ≈ mean (even gradient contribution)
-            loss = loss * (1.0 / len(samples))
-            loss.backward()
-            total_loss += float(loss.data) * len(samples)
-            n += 1
+            for images_np, text_tokens, audio_np, audio_patches in samples:
+                if text_tokens is None:
+                    continue
+                embed, patches, _ = self._concat_modalities(images_np, audio_np, audio_patches)
+                logits, _, _ = self.decoder.forward(embed, text_tokens[:, :-1], patches)
+                targets = _tensor(text_tokens[:, 1:].reshape(-1), requires_grad=False)
+                if temperature != 1.0:
+                    logits = logits / temperature
+                loss = _cross_entropy(logits, targets)
+                # Scale loss by 1/N so the sum ≈ mean (even gradient contribution)
+                loss = loss * (1.0 / len(samples))
+                loss.backward()
+                total_loss += float(loss.data) * len(samples)
+                n += 1
 
-        if n == 0:
-            return 0.0
+            if n == 0:
+                return 0.0
 
-        # Gradient clipping
-        for opt in all_opts:
-            self._clip_gradients(self._params_for_optimizer(opt, None, None))
-        # Single step
-        for opt in all_opts:
-            opt.step(self._params_for_optimizer(opt, None, None))
-        self._maybe_restore_lr(lr, all_opts, old_lrs)
-        self._zero_grad(all_opts)
-        self._trained = True
-        return total_loss / n
+            # Gradient clipping
+            for opt in all_opts:
+                self._clip_gradients(self._params_for_optimizer(opt, None, None))
+            # Single step
+            for opt in all_opts:
+                opt.step(self._params_for_optimizer(opt, None, None))
+            self._maybe_restore_lr(lr, all_opts, old_lrs)
+            self._zero_grad(all_opts)
+            self._trained = True
+            return total_loss / n
+        finally:
+            _slonet_mod._ACCELERATOR = _saved_accel
 
     def _params_for_optimizer(self, opt, embed, patches):
         if opt is self.decoder.optimizer:
@@ -534,17 +548,34 @@ class MultimodalEngine:
                  beam_width: int = 1, top_k: int = 0) -> MultimodalOutput:
         # Switch to eval mode for deterministic generation (disable dropout)
         self.eval()
+        # Seed numpy RNG to ensure deterministic generation regardless of prior state
+        _saved_rng = np.random.get_state()
+        np.random.seed(42)
+        # Disable GPU accelerator for deterministic inference (Metal can be non-deterministic)
+        import domains.training.slonet as _slonet_mod
+        _saved_accel = _slonet_mod._ACCELERATOR
+        _slonet_mod._ACCELERATOR = "none"
         embed, patches, _ = self._concat_modalities(image_np, audio_np, audio_patches)
         bos, eos = 0, 1
         vocab_size = self.text.vocab_size
         effective_k = top_k if top_k > 0 else vocab_size
 
         if beam_width <= 1:
-            # Greedy decoding with optional top-k filtering
+            # Greedy decoding with optional top-k filtering and KV cache
             tokens = [bos]
+            kv_cache = None
             for _ in range(max_len):
-                inp = _tensor(np.array([tokens]), requires_grad=False)
-                logits, _ = self.decoder.forward(embed, inp, patches)
+                if kv_cache is None:
+                    # First step: process full prefix (typically just BOS)
+                    inp = _tensor(np.array([tokens]), requires_grad=False)
+                    start_pos = 0
+                else:
+                    # Subsequent steps: only process the newly appended token
+                    inp = _tensor(np.array([[tokens[-1]]]), requires_grad=False)
+                    start_pos = kv_cache[0][0].shape[1]
+                logits, _, kv_cache = self.decoder.forward(
+                    embed, inp, patches, kv_cache=kv_cache, start_pos=start_pos
+                )
                 logits_2d = logits.data.reshape(-1, logits.data.shape[-1])
                 last_pos = logits_2d[-1]
                 if temperature > 0 and self._trained:
@@ -587,7 +618,7 @@ class MultimodalEngine:
                 candidates = []
                 for log_prob, seq in beams:
                     inp = _tensor(np.array([seq]), requires_grad=False)
-                    logits, _ = self.decoder.forward(embed, inp, patches)
+                    logits, _, _ = self.decoder.forward(embed, inp, patches)
                     last_pos = logits.data.reshape(-1, logits.data.shape[-1])[-1]
 
                     # Penalize repetition on raw logits (same as greedy)
@@ -637,6 +668,8 @@ class MultimodalEngine:
             text = self.text.decode(best_seq)
 
         conf = float(np.mean(np.abs(embed.data)))
+        np.random.set_state(_saved_rng)
+        _slonet_mod._ACCELERATOR = _saved_accel
         return MultimodalOutput(text=text, confidence=conf)
 
 
@@ -688,7 +721,7 @@ class VisionEncoder:
         """Forward pass: patches -> embeddings -> transformer -> cls token."""
         patches = self.extract_patches(images_np)
         B = patches.shape[0]
-        x = self.patch_proj.forward(_tensor(patches, requires_grad=False))
+        x = self.patch_proj.forward(Tensor(patches, requires_grad=False, _copy=True))
         # Prepend cls token - preserve gradient by using Tensor repeat
         cls_tokens_data = self.cls_token.data.repeat(B, axis=0)
         cls_tokens = Tensor(cls_tokens_data, requires_grad=True, _children=(self.cls_token,))
@@ -708,7 +741,7 @@ class VisionEncoder:
         """Return all patch embeddings (B, num_patches+1, embed_dim) for cross-attention."""
         patches = self.extract_patches(images_np)
         B = patches.shape[0]
-        x = self.patch_proj.forward(_tensor(patches, requires_grad=False))
+        x = self.patch_proj.forward(Tensor(patches, requires_grad=False, _copy=True))
         cls_tokens_data = self.cls_token.data.repeat(B, axis=0)
         cls_tokens = Tensor(cls_tokens_data, requires_grad=True, _children=(self.cls_token,))
         x_data = np.concatenate([cls_tokens.data, x.data], axis=1)
@@ -924,7 +957,7 @@ class SloTransformerDecoderBlock(SloLayer):
     def forward(self, x: Tensor, context: Optional[Tensor] = None,
                 mask: Optional[Tensor] = None,
                 kv_cache: Optional[Tuple[np.ndarray, np.ndarray]] = None,
-                start_pos: int = 0) -> Tensor:
+                start_pos: int = 0) -> Tuple[Tensor, Tuple[np.ndarray, np.ndarray]]:
         """
         Args:
             x: (B, seq_len, d_model) input from previous layer
@@ -934,9 +967,10 @@ class SloTransformerDecoderBlock(SloLayer):
             start_pos: starting position in sequence (for incremental decoding)
         Returns:
             output: (B, seq_len, d_model)
+            kv_cache: updated (K, V) tuple for self-attention
         """
         h = self.self_attn_norm.forward(x)
-        h, _ = self.self_attn.forward(h, h, h, mask, kv_cache=kv_cache, start_pos=start_pos)
+        h, new_cache = self.self_attn.forward(h, h, h, mask, kv_cache=kv_cache, start_pos=start_pos)
         if self.drop:
             h = self.drop.forward(h)
         x = x + h
@@ -953,7 +987,7 @@ class SloTransformerDecoderBlock(SloLayer):
         if self.drop:
             h = self.drop.forward(h)
         x = x + h
-        return x
+        return x, new_cache
 
     def parameters(self) -> List[Tensor]:
         ps = self.self_attn_norm.parameters() + self.self_attn.parameters()
@@ -1031,16 +1065,21 @@ class SloTransformerDecoder(SloLayer):
         self.train(False)
 
     def forward(self, img_embed: Tensor, token_ids: Tensor,
-                img_patches: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:
+                img_patches: Optional[Tensor] = None,
+                kv_cache: Optional[List[Tuple[np.ndarray, np.ndarray]]] = None,
+                start_pos: int = 0) -> Tuple[Tensor, Tensor, List[Tuple[np.ndarray, np.ndarray]]]:
         """
         Args:
             img_embed: (B, 1, embed_dim) cls token (used for KV cache init, not directly as state)
             token_ids: (B, seq_len) token IDs (teacher forcing in training)
             img_patches: (B, num_patches+1, embed_dim) full patch embeddings for cross-attention
+            kv_cache: optional list of (K, V) cache tuples per decoder layer
+            start_pos: starting position in sequence (for incremental decoding)
 
         Returns:
             logits: (seq_len, vocab_size) output logits
             last_out: (B, hidden_dim) last hidden state
+            kv_cache: updated list of (K, V) cache tuples per layer
         """
         if token_ids.data.ndim == 1:
             token_ids_data = token_ids.data.reshape(1, -1)
@@ -1059,18 +1098,21 @@ class SloTransformerDecoder(SloLayer):
         if img_patches is not None:
             context = self.img_proj.forward(img_patches)
 
-        # Create causal mask for parallel training
-        mask = _causal_mask(seq_len)
+        # Create causal mask for parallel training (not needed for incremental decoding)
+        mask = None if kv_cache is not None else _causal_mask(seq_len)
 
         # Pass through decoder blocks
-        for block in self.blocks:
-            x = block.forward(x, context, mask)
+        new_caches = []
+        for i, block in enumerate(self.blocks):
+            cache = kv_cache[i] if kv_cache is not None else None
+            x, new_cache = block.forward(x, context, mask, kv_cache=cache, start_pos=start_pos)
+            new_caches.append(new_cache)
 
         # Output projection — keep graph by NOT calling .data
         x = self.output_norm.forward(x)
         logits = self.fc_out.forward(x)  # (B, seq_len, vocab_size)
         last_out = x[:, -1:, :]  # (B, 1, hidden_dim), keep graph
-        return logits, last_out
+        return logits, last_out, new_caches
 
 
 # =============================================================================
@@ -1215,23 +1257,30 @@ def contrastive_step(engine: MultimodalEngine, img_np: np.ndarray, buffer: Repla
     if buffer.size < 2:
         return 0.0
 
-    v1 = augment_image(img_np)
-    v2 = augment_image(img_np)
+    # Disable GPU accelerator for training — Metal dispatch overhead dominates at embed_dim≤128
+    import domains.training.slonet as _slonet_mod
+    _saved_accel = _slonet_mod._ACCELERATOR
+    _slonet_mod._ACCELERATOR = "none"
+    try:
+        v1 = augment_image(img_np)
+        v2 = augment_image(img_np)
 
-    embed1 = engine.vision.forward(v1)
-    embed2 = engine.vision.forward(v2)
+        embed1 = engine.vision.forward(v1)
+        embed2 = engine.vision.forward(v2)
 
-    neg_imgs, _ = buffer.sample(min(buffer.size, 16))
-    negatives = [engine.vision.forward(img) for img in neg_imgs]
+        neg_imgs, _ = buffer.sample(min(buffer.size, 16))
+        negatives = [engine.vision.forward(img) for img in neg_imgs]
 
-    loss = contrastive_loss(embed1, embed2, negatives, temperature=0.5)
-    loss.backward()
-    engine._clip_gradients(engine.vision.parameters(), max_norm=1.0)
-    engine.vision.optimizer.step(engine.vision.parameters())
-    for p in engine.vision.parameters():
-        p.grad = None
+        loss = contrastive_loss(embed1, embed2, negatives, temperature=0.5)
+        loss.backward()
+        engine._clip_gradients(engine.vision.parameters(), max_norm=1.0)
+        engine.vision.optimizer.step(engine.vision.parameters())
+        for p in engine.vision.parameters():
+            p.grad = None
 
-    return float(loss.data)
+        return float(loss.data)
+    finally:
+        _slonet_mod._ACCELERATOR = _saved_accel
 
 
 def replay_train_step(engine: MultimodalEngine, buffer: ReplayBuffer, batch_size: int = 4) -> float:

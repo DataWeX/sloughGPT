@@ -47,6 +47,13 @@ describe('ChatInputField', () => {
     expect(base.onSend).toHaveBeenCalled()
   })
 
+  it('does not call onSend when suppressEnter is true', () => {
+    const { container } = render(<ChatInputField {...base} value="hello" suppressEnter />)
+    const ta = container.querySelector('textarea')!
+    fireEvent.keyDown(ta, { key: 'Enter', shiftKey: false })
+    expect(base.onSend).toHaveBeenCalledTimes(0)
+  })
+
   it('does not call onSend on Shift+Enter', () => {
     const { container } = render(<ChatInputField {...base} value="hello" />)
     const ta = container.querySelector('textarea')!

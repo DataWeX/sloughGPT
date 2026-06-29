@@ -32,8 +32,8 @@ async def ping():
 @router.post("/get", response_model=MetaWeightResponse)
 async def get_meta_weights(request: GetMetaWeightsRequest, req: Request):
     """Get meta-weight adjustments based on similar past feedback."""
-    from main import get_meta_weight_manager
-    manager = get_meta_weight_manager()
+    from domains.feedback import get_meta_weight_manager as _get_manager
+    manager = _get_manager()
     if manager is None:
         raise HTTPException(status_code=503, detail="Meta-weight system not available")
     weights = manager.get_adjustment(
@@ -51,8 +51,8 @@ async def get_meta_weights(request: GetMetaWeightsRequest, req: Request):
 @router.get("/stats")
 async def get_meta_weight_stats(req: Request):
     """Get meta-weight system statistics."""
-    from main import get_meta_weight_manager
-    manager = get_meta_weight_manager()
+    from domains.feedback import get_meta_weight_manager as _get_manager
+    manager = _get_manager()
     if manager is None:
         raise HTTPException(status_code=503, detail="Meta-weight system not available")
     return manager.get_stats()

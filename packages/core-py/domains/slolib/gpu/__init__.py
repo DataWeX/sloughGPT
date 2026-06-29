@@ -645,259 +645,168 @@ class _CPUBackend(_Accelerator):
 
 
 class _MetalBackend(_Accelerator):
-    """Metal (Apple GPU) backend via PyTorch MPS.
+    """Clean Metal GPU backend via PyTorch MPS.
 
-    Auto-detects discrete vs integrated GPU and sets compute tier.
-    On multi-GPU Macs, prefers the discrete GPU (e.g. Radeon over Intel UHD).
+    Delegates compute to MPS (Metal Performance Shaders) through PyTorch.
+    All ops accept numpy arrays and return numpy arrays.
+    Ops not overridden here fall through to the base _Accelerator numpy impl.
     """
     name = "metal"
     device_type = "gpu"
 
     def __init__(self):
         self._torch = None
-        self._F = None
-        self._gpu_cache: Dict[str, Any] = {}
-        self._nd_cache: Dict[int, Any] = {}
 
     def is_available(self) -> bool:
-        if "_available" in self._gpu_cache:
-            return self._gpu_cache["_available"]
+        if self._torch is not None:
+            return True
         try:
             import torch
-            # MPS works on Apple Silicon AND Intel Macs (macOS 12.3+)
-            result = torch.backends.mps.is_available() and torch.backends.mps.is_built()
-            self._gpu_cache["_available"] = result
-            return result
+            ok = torch.backends.mps.is_available() and torch.backends.mps.is_built()
+            if ok:
+                self._torch = torch
+            return ok
         except Exception:
-            self._gpu_cache["_available"] = False
             return False
 
-    def vram_gb(self) -> float:
-        if "_vram" in self._gpu_cache:
-            return self._gpu_cache["_vram"]
-        vram = 2.0
-        try:
-            import torch
-            if hasattr(torch.cuda, 'mem_get_info'):
-                try:
-                    free, total = torch.cuda.mem_get_info()
-                    vram = total / (1024 ** 3)
-                except Exception:
-                    pass
-        except Exception:
-            pass
-        try:
-            import subprocess
-            result = subprocess.run(
-                ["system_profiler", "SPDisplaysDataType"],
-                capture_output=True, text=True, timeout=5
-            )
-            if "Radeon" in result.stdout:
-                vram = max(vram, 2.0)
-            elif "Intel" in result.stdout and "UHD" in result.stdout:
-                vram = min(vram, 0.75)
-        except Exception:
-            pass
-        self._gpu_cache["_vram"] = vram
-        return vram
+    def _t(self, a):
+        """Convert numpy → MPS tensor; pass through if already a torch tensor."""
+        if isinstance(a, np.ndarray):
+            return self._torch.tensor(a, dtype=self._torch.float32, device="mps")
+        return a
 
-    @property
-    def compute_tier(self) -> str:
-        if "_tier" in self._gpu_cache:
-            return self._gpu_cache["_tier"]
-        vram = self.vram_gb()
-        tier = "full" if vram >= 4 else "medium" if vram >= 2 else "lite"
-        self._gpu_cache["_tier"] = tier
-        return tier
-
-    def memory_hint(self) -> Dict[str, Any]:
-        vram = self.vram_gb()
-        tier = self.compute_tier
-        return {
-            "vram_gb": round(vram, 2),
-            "tier": tier,
-            "max_batch": int(32 * (vram / 4)),
-            "max_seq_len": 512 if tier == "full" else 256 if tier == "medium" else 128,
-            "recommend_quantization": tier != "full",
-            "recommend_flash_attention": tier == "full",
-        }
-
-    def _get_torch(self):
-        if self._torch is None:
-            import torch
-            import torch.nn.functional as F
-            self._torch = torch
-            self._F = F
-        return self._torch, self._F
-
-    def to_device(self, arr) -> "torch.Tensor":
-        if not isinstance(arr, np.ndarray):
-            return arr
-        key = (id(arr), arr.shape, arr.dtype.str)
-        cached = self._nd_cache.get(key)
-        if cached is not None:
-            return cached
-        torch, _ = self._get_torch()
-        t = torch.tensor(arr, dtype=torch.float32, device="mps")
-        self._nd_cache[key] = t
+    def _n(self, t):
+        """Convert MPS tensor → numpy; pass through if already numpy."""
+        if isinstance(t, self._torch.Tensor):
+            return t.cpu().numpy()
         return t
 
-    def clear_cache(self):
-        self._nd_cache.clear()
+    # --- Device transfer (used by _accel_op and callers) ---
 
-    def from_device(self, arr: "torch.Tensor") -> np.ndarray:
-        return arr.cpu().numpy()
+    def to_device(self, arr):
+        if not isinstance(arr, np.ndarray):
+            return arr
+        return self._torch.tensor(arr, dtype=self._torch.float32, device="mps")
+
+    def from_device(self, arr):
+        """Convert MPS tensor to numpy. Pass through for numpy arrays."""
+        if isinstance(arr, self._torch.Tensor):
+            return arr.cpu().numpy()
+        return np.asarray(arr)
 
     def sync(self) -> None:
-        torch, _ = self._get_torch()
-        torch.mps.synchronize()
+        if self._torch is not None:
+            self._torch.mps.synchronize()
 
-    def matmul(self, a, b) -> np.ndarray:
-        torch, _ = self._get_torch()
-        ta = self.to_device(a)
-        tb = self.to_device(b)
-        return (ta @ tb).cpu().numpy()
+    # --- Core ops ---
 
-    def scaled_dot_attention(self, q, k, v, mask=None, scale=None, causal=False) -> np.ndarray:
-        torch, F = self._get_torch()
-        tq = self.to_device(q)
-        tk = self.to_device(k)
-        tv = self.to_device(v)
-        tm = self.to_device(mask) if mask is not None else None
-        result = F.scaled_dot_product_attention(tq, tk, tv, attn_mask=tm, is_causal=causal)
-        return result.cpu().numpy()
+    def matmul(self, a, b):
+        return self._n(self._t(a) @ self._t(b))
 
-    def layer_norm(self, x, weight, bias, eps=1e-5) -> np.ndarray:
-        torch, F = self._get_torch()
-        tx = self.to_device(x)
-        tw = self.to_device(weight)
-        tb = self.to_device(bias)
-        out = F.layer_norm(tx, tx.shape[-1:], weight=tw, bias=tb, eps=eps)
-        return out.cpu().numpy()
+    def add(self, a, b):
+        return self._n(self._t(a) + self._t(b))
 
-    def gelu(self, x) -> np.ndarray:
-        torch, F = self._get_torch()
-        tx = self.to_device(x)
-        return F.gelu(tx).cpu().numpy()
+    def neg(self, a):
+        return self._n(-self._t(a))
 
-    def silu(self, x) -> np.ndarray:
-        torch, F = self._get_torch()
-        tx = self.to_device(x)
-        return F.silu(tx).cpu().numpy()
+    def mul(self, a, b):
+        return self._n(self._t(a) * self._t(b))
 
-    def softmax(self, a, axis=-1) -> np.ndarray:
-        torch, _ = self._get_torch()
-        ta = self.to_device(a)
-        return ta.softmax(dim=axis).cpu().numpy()
+    def pow(self, a, p):
+        return self._n(self._t(a) ** p)
 
-    def cross_entropy(self, logits, targets) -> float:
-        torch, F = self._get_torch()
-        tlog = self.to_device(logits)
-        ttar = self.to_device(targets)
-        return F.cross_entropy(tlog, ttar.long(), reduction="mean").item()
+    def sum(self, a, axis=None):
+        t = self._t(a)
+        if axis is not None:
+            return self._n(t.sum(dim=axis))
+        return self._n(t.sum())
 
-    def conv2d(self, x, weight, bias=None, stride=1, padding=0, groups=1) -> np.ndarray:
-        torch, _ = self._get_torch()
-        tx = self.to_device(x)
-        tw = self.to_device(weight)
-        tb = self.to_device(bias) if bias is not None else None
-        out = torch.nn.functional.conv2d(tx, tw, bias=tb, stride=stride, padding=padding, groups=groups)
-        return out.cpu().numpy()
+    def mean(self, a, axis=None):
+        t = self._t(a)
+        if axis is not None:
+            return self._n(t.mean(dim=axis))
+        return self._n(t.mean())
 
-    def max_pool2d(self, x, kernel_size, stride) -> np.ndarray:
-        torch, _ = self._get_torch()
-        tx = self.to_device(x)
-        out = torch.nn.functional.max_pool2d(tx, kernel_size, stride)
-        return out.cpu().numpy()
+    def sigmoid(self, x):
+        return self._n(self._torch.sigmoid(self._t(x)))
 
-    def embedding(self, indices, weight) -> np.ndarray:
-        torch, _ = self._get_torch()
-        ti = self.to_device(indices)
-        tw = self.to_device(weight)
-        return torch.nn.functional.embedding(ti.long(), tw).cpu().numpy()
+    def tanh(self, x):
+        return self._n(self._torch.tanh(self._t(x)))
 
-    def dropout(self, x, p=0.0, training=True) -> np.ndarray:
-        torch, _ = self._get_torch()
-        tx = self.to_device(x)
-        out = torch.nn.functional.dropout(tx, p=p, training=training)
-        return out.cpu().numpy()
+    def relu(self, x):
+        return self._n(self._torch.relu(self._t(x)))
 
-    def batch_norm_2d(self, x, gamma, beta, running_mean, running_var,
-                      eps=1e-5, momentum=0.1, training=True) -> np.ndarray:
-        torch, _ = self._get_torch()
-        tx = self.to_device(x)
-        tg = self.to_device(gamma)
-        tb = self.to_device(beta)
-        trm = self.to_device(running_mean)
-        trv = self.to_device(running_var)
-        bn = torch.nn.BatchNorm2d(x.shape[1] if isinstance(x, np.ndarray) else x.shape[1], eps=eps, momentum=1-momentum, track_running_stats=True)
-        bn.load_state_dict({"running_mean": trm, "running_var": trv, "weight": tg, "bias": tb})
-        bn.train(training)
-        out = bn(tx)
-        running_mean[:] = bn.running_mean.cpu().numpy()
-        running_var[:] = bn.running_var.cpu().numpy()
-        return out.cpu().numpy()
+    def gelu(self, x):
+        return self._n(self._torch.nn.functional.gelu(self._t(x)))
 
-    def rms_norm(self, x, weight, eps=1e-5) -> np.ndarray:
-        torch, _ = self._get_torch()
-        tx = self.to_device(x)
-        tw = self.to_device(weight)
-        rms = torch.rsqrt(torch.mean(tx ** 2, dim=-1, keepdim=True) + eps)
-        return (tx * rms * tw).cpu().numpy()
+    def silu(self, x):
+        return self._n(self._torch.nn.functional.silu(self._t(x)))
 
-    def relu(self, x) -> np.ndarray:
-        torch, _ = self._get_torch()
-        tx = self.to_device(x)
-        return torch.relu(tx).cpu().numpy()
+    def softmax(self, a, axis=-1):
+        return self._n(self._t(a).softmax(dim=axis))
 
-    def tanh(self, x) -> np.ndarray:
-        torch, _ = self._get_torch()
-        tx = self.to_device(x)
-        return torch.tanh(tx).cpu().numpy()
+    def layer_norm(self, x, weight, bias, eps=1e-5):
+        tx, tw, tb = self._t(x), self._t(weight), self._t(bias)
+        return self._n(self._torch.nn.functional.layer_norm(
+            tx, tx.shape[-1:], weight=tw, bias=tb, eps=eps
+        ))
 
-    def sigmoid(self, x) -> np.ndarray:
-        torch, _ = self._get_torch()
-        tx = self.to_device(x)
-        return torch.sigmoid(tx).cpu().numpy()
+    def rms_norm(self, x, weight, eps=1e-5):
+        tx, tw = self._t(x), self._t(weight)
+        rms = self._torch.rsqrt(self._torch.mean(tx ** 2, dim=-1, keepdim=True) + eps)
+        return self._n(tx * rms * tw)
 
-    def abs(self, x) -> np.ndarray:
-        torch, _ = self._get_torch()
-        tx = self.to_device(x)
-        return torch.abs(tx).cpu().numpy()
+    def scaled_dot_attention(self, q, k, v, mask=None, scale=None, causal=False):
+        tq, tk, tv = self._t(q), self._t(k), self._t(v)
+        tm = self._t(mask) if mask is not None else None
+        return self._n(self._torch.nn.functional.scaled_dot_product_attention(
+            tq, tk, tv, attn_mask=tm, is_causal=causal
+        ))
 
-    def exp(self, x) -> np.ndarray:
-        torch, _ = self._get_torch()
-        tx = self.to_device(x)
-        return torch.exp(tx).cpu().numpy()
+    def cross_entropy(self, logits, targets):
+        tlog, ttar = self._t(logits), self._t(targets)
+        return self._torch.nn.functional.cross_entropy(
+            tlog, ttar.long(), reduction="mean"
+        ).item()
 
-    def sqrt(self, x) -> np.ndarray:
-        torch, _ = self._get_torch()
-        tx = self.to_device(x)
-        return torch.sqrt(tx).cpu().numpy()
+    def conv2d(self, x, weight, bias=None, stride=1, padding=0, groups=1):
+        tx, tw = self._t(x), self._t(weight)
+        tb = self._t(bias) if bias is not None else None
+        return self._n(self._torch.nn.functional.conv2d(
+            tx, tw, bias=tb, stride=stride, padding=padding, groups=groups
+        ))
 
-    def sum(self, x, axis=None) -> np.ndarray:
-        torch, _ = self._get_torch()
-        tx = self.to_device(x)
-        return tx.sum(dim=axis if axis is not None else tuple(range(tx.ndim))).cpu().numpy()
+    def max_pool2d(self, x, kernel_size, stride):
+        return self._n(self._torch.nn.functional.max_pool2d(
+            self._t(x), kernel_size, stride
+        ))
 
-    def max(self, x, axis=None) -> np.ndarray:
-        torch, _ = self._get_torch()
-        tx = self.to_device(x)
-        return tx.amax(dim=axis if axis is not None else tuple(range(tx.ndim))).cpu().numpy()
+    def embedding(self, indices, weight):
+        ti, tw = self._t(indices), self._t(weight)
+        return self._n(self._torch.nn.functional.embedding(ti.long(), tw))
 
-    def mean(self, x, axis=None) -> np.ndarray:
-        torch, _ = self._get_torch()
-        tx = self.to_device(x)
-        return tx.mean(dim=axis if axis is not None else tuple(range(tx.ndim))).cpu().numpy()
+    def dropout(self, x, p=0.0, training=True):
+        return self._n(self._torch.nn.functional.dropout(
+            self._t(x), p=p, training=training
+        ))
 
-    def embedding_lookup(self, indices, weight) -> np.ndarray:
-        torch, _ = self._get_torch()
-        ti = self.to_device(indices)
-        tw = self.to_device(weight)
-        return torch.nn.functional.embedding(ti.long(), tw).cpu().numpy()
+    def abs(self, x):
+        return self._n(self._torch.abs(self._t(x)))
 
-    def embedding(self, indices, weight) -> np.ndarray:
-        return self.embedding_lookup(indices, weight)
+    def exp(self, x):
+        return self._n(self._torch.exp(self._t(x)))
+
+    def sqrt(self, x):
+        return self._n(self._torch.sqrt(self._t(x)))
+
+    def max(self, x, axis=None):
+        t = self._t(x)
+        if axis is not None:
+            return self._n(t.amax(dim=axis))
+        return self._n(t.amax())
+
+    # Use base class numpy implementations for ops not listed above
+    # (sub, div, clamp, where, gather, scatter, pad, batch_norm, etc.)
 
 
 class _CUDABackend(_Accelerator):

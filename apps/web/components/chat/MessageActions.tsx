@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { IconCopy, IconCheck, IconRefresh, IconEdit } from '@/components/ui'
+import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash } from '@/components/ui'
 import { cn } from '@/lib/cn'
 
 interface MessageActionsProps {
@@ -16,6 +16,9 @@ interface MessageActionsProps {
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string) => void
   onSuggestionClick?: (text: string) => void
+  isBookmarked?: boolean
+  onBookmark?: (messageId: string) => void
+  onDelete?: (messageId: string) => void
 }
 
 function ThumbsUpIcon({ className, animated }: { className?: string; animated?: boolean }) {
@@ -99,7 +102,7 @@ function ConfettiBurst({ active }: { active: boolean }) {
   )
 }
 
-export function MessageActions({ content, messageId, role, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, onSuggestionClick }: MessageActionsProps) {
+export function MessageActions({ content, messageId, role, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, onSuggestionClick, isBookmarked, onBookmark, onDelete }: MessageActionsProps) {
   const [copied, setCopied] = useState(false)
   const [thumbsUp, setThumbsUp] = useState(false)
   const [thumbsDown, setThumbsDown] = useState(false)
@@ -210,6 +213,18 @@ export function MessageActions({ content, messageId, role, onCopy, onRegenerate,
         </Button>
       )}
 
+      {onBookmark && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => onBookmark(messageId)}
+          className={cn('transition-all duration-200', isBookmarked && 'text-amber-500')}
+          aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark message'}
+        >
+          <IconStar className={cn('h-3.5 w-3.5', isBookmarked && 'fill-current')} />
+        </Button>
+      )}
+
       {role === 'assistant' && 'speechSynthesis' in window && (
         <Button
           variant="ghost"
@@ -238,6 +253,18 @@ export function MessageActions({ content, messageId, role, onCopy, onRegenerate,
           aria-label="Edit and resend message"
         >
           <IconEdit className="h-3.5 w-3.5" />
+        </Button>
+      )}
+
+      {onDelete && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => onDelete(messageId)}
+          aria-label="Delete message"
+          className="hover:text-destructive text-muted-foreground"
+        >
+          <IconTrash className="h-3.5 w-3.5" />
         </Button>
       )}
 

@@ -50,7 +50,7 @@ export function ImagePreview({ image, onRemove }: ImagePreviewProps) {
   )
 }
 
-function resizeImage(file: File, maxDim: number): Promise<string> {
+export function resizeImage(file: File, maxDim: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image()
     img.onload = () => {

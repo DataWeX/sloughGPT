@@ -2,13 +2,17 @@
 
 import { useEffect, useCallback, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useApiHealth } from '@/hooks/useApiHealth'
+import { soulsController } from '@/lib/controllers'
+import type { ChatCommand } from '@/lib/chat-commands'
 import { useChatUI } from '@/hooks/useChatUI'
 import { useChatVision } from '@/hooks/useChatVision'
 import { useChatAgents } from '@/hooks/useChatAgents'
 import { useChatLocalEngine } from '@/hooks/useChatLocalEngine'
 import { useChatModelSettings } from '@/hooks/useChatModelSettings'
 import { useChatKeyboard } from '@/hooks/useChatKeyboard'
+import { useChatBookmarks } from '@/hooks/useChatBookmarks'
 import { useChatMessages } from '@/hooks/useChatMessages'
 import { computeSearchMatches } from '@/lib/chat-utils'
 import type { ChatMessage } from '@/lib/chat-utils'
@@ -19,6 +23,7 @@ import { AGENTS } from '@/lib/agents'
 import { useFeedbackStore } from '@/lib/feedback-store'
 import { useToastStore } from '@/lib/toast-store'
 import { addGlobalError } from '@/lib/error-store'
+import { useSettings } from '@/lib/store'
 import { apiPost } from '@/lib/http-client'
 import { imagesController } from '@/lib/images-controller'
 import type { ImageStyle } from '@/lib/images-controller'
@@ -26,6 +31,9 @@ import { filesController } from '@/lib/files-controller'
 import {
   ChatSettings, ChatArea, ErrorBanner,
 } from '@/components/chat'
+import { ImageDropZone } from '@/components/chat/ImageDropZone'
+import { resizeImage } from '@/components/chat/ImageUpload'
+import ReadFileSection from '@/components/chat/ReadFileSection'
 import { ModeBar } from '@/components/chat/ModeBar'
 import { ChatToolbar } from '@/components/chat/ChatToolbar'
 import { ChatToolPanel } from '@/components/chat/ChatToolPanel'
@@ -42,6 +50,7 @@ import { Button } from '@/components/ui/button'
 const VoiceChatMode = dynamic(() => import('@/components/chat/VoiceChatMode').then(m => m.VoiceChatMode), { ssr: false })
 const ConversationViewer = dynamic(() => import('@/components/chat/ConversationViewer').then(m => m.ConversationViewer), { ssr: false })
 const ConversationSearch = dynamic(() => import('@/components/chat/ConversationSearch').then(m => m.ConversationSearch), { ssr: false })
+const SearchConversationsDialog = dynamic(() => import('@/components/chat/SearchConversationsDialog').then(m => m.SearchConversationsDialog), { ssr: false })
 
 export default function ChatPage() {
   const showToast = useCallback((message: string, type: string = 'success') => {
@@ -50,6 +59,8 @@ export default function ChatPage() {
     if (!exists) store.addToast(message, type as 'success' | 'error' | 'info')
   }, [])
 
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const { state: health, refresh: refreshHealth } = useApiHealth()
   const { recordFeedback, fetchStats, fetchAdapterStats } = useFeedbackStore()
 
@@ -58,6 +69,7 @@ export default function ChatPage() {
   const agents = useChatAgents()
   const engine = useChatLocalEngine(showToast)
   const model = useChatModelSettings(showToast, refreshHealth)
+  const settings = useSettings()
   const [modelDescriptions, setModelDescriptions] = useState<Record<string, string>>({})
   const [chatMode, setChatMode] = useState<'chat' | 'write' | 'decide' | 'explain' | 'translate' | 'brainstorm' | 'wellness' | 'create' | 'read' | 'talk'>('chat')
   const [writeTone, setWriteTone] = useState('Friendly')
@@ -74,6 +86,9 @@ export default function ChatPage() {
     try { return localStorage.getItem('chat:customSystemPrompt') || '' } catch { return '' }
   })
   const [systemPromptOpen, setSystemPromptOpen] = useState(false)
+  const [searchConversationsOpen, setSearchConversationsOpen] = useState(false)
+
+  const { bookmarks, addBookmark, removeBookmark, isBookmarked, clearAll } = useChatBookmarks()
 
   const chat = useChatMessages({
     model: model.model,
@@ -158,6 +173,13 @@ export default function ChatPage() {
     }).catch(() => {})
   }, [])
 
+  useEffect(() => {
+    const sessionId = searchParams.get('session')
+    if (sessionId) {
+      chat.loadSession(sessionId)
+    }
+  }, [])
+
   const [suggestions, setSuggestions] = useState<{ text: string; icon: string }[]>([])
 
   useEffect(() => {
@@ -198,6 +220,37 @@ export default function ChatPage() {
 
   const clearChat = useCallback(() => chat.newChat(), [chat])
 
+  const handleExecuteCommand = useCallback(async (cmd: ChatCommand, args: string[]) => {
+    const addSystemMessage = (content: string) => {
+      chat.setMessages(prev => [...prev, {
+        id: `cmd-${Date.now()}`, role: 'assistant' as const, content, timestamp: new Date(),
+      }])
+    }
+    const context: import('@/lib/chat-commands').CommandContext = {
+      showToast: (msg, type) => showToast(msg, type || 'info'),
+      clearChat,
+      setTemperature: model.setTemperature,
+      setModel: async (name) => { await model.setModel(name) },
+      setSoul: async (name) => { await soulsController.switch(name) },
+      exportChat: chat.handleExportMarkdown,
+      attachFile: () => {
+        const input = document.querySelector<HTMLInputElement>('input[type="file"]')
+        input?.click()
+      },
+      searchKnowledge: async (query) => {
+        addSystemMessage(`🔍 Searching knowledge base for "${query}"...`)
+      },
+      navigateTo: router.push,
+      addSystemMessage,
+      sendMessage: chat.sendMessage,
+    }
+    try {
+      await cmd.execute(args, context)
+    } catch (err: any) {
+      showToast(`Command failed: ${err?.message || 'Unknown error'}`, 'error')
+    }
+  }, [chat, clearChat, model, showToast, router])
+
   const handleSelectAgentWithToast = useCallback((agent: any) => {
     agents.setCurrentAgent(agent)
     showToast(`Switched to ${agent?.name || 'no agent'}`)
@@ -219,6 +272,8 @@ export default function ChatPage() {
     modelDescriptions,
     showToast,
     onSystemPrompt: () => setSystemPromptOpen(true),
+    onSearchConversations: () => setSearchConversationsOpen(true),
+    bookmarkCount: bookmarks.length,
   })
 
   const healthValue = useChatHealthValue({ health, refreshHealth })
@@ -230,81 +285,81 @@ export default function ChatPage() {
     try { localStorage.setItem('chat:customSystemPrompt', value) } catch {}
   }, [])
 
+  const handleCreateImage = useCallback(async (prompt: string) => {
+    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: prompt, timestamp: new Date() }
+    const pendingId = (Date.now() + 1).toString()
+    const pendingMsg: ChatMessage = { id: pendingId, role: 'assistant', content: '✨ **Creating your image...**', timestamp: new Date() }
+    chat.setMessages(prev => [...prev, userMsg, pendingMsg])
+    chat.setLoading(true)
+    try {
+      const result = await imagesController.generate(prompt, createStyle.toLowerCase() as ImageStyle)
+      chat.setMessages(prev => prev.map(m =>
+        m.id === pendingId ? { ...m, content: `Here's your ${createStyle.toLowerCase()} image:\n\n![${prompt}](${result.image})` } : m
+      ))
+    } catch (err: any) {
+      chat.setMessages(prev => prev.map(m =>
+        m.id === pendingId ? { ...m, content: `❌ Sorry, I couldn't create that image. ${err?.message || 'Please try again.'}` } : m
+      ))
+    } finally { chat.setLoading(false) }
+  }, [chat, createStyle])
+
   const handleWriteSend = useCallback(async () => {
-    if (chatMode === 'write' && chat.input.trim()) {
-      const instruction = `Write a ${writeTone.toLowerCase()} ${writeType.toLowerCase()} about: `
-      chat.sendMessage(instruction + chat.input.trim())
+    const input = chat.input.trim()
+    if (!input && chatMode !== 'read') { chat.sendMessage(); return }
+    if (chatMode === 'write') {
+      chat.sendMessage(`Write a ${writeTone.toLowerCase()} ${writeType.toLowerCase()} about: ${input}`)
       chat.setInput('')
-    } else if (chatMode === 'decide' && chat.input.trim()) {
-      const instruction = `Help me decide using ${decideStructure.toLowerCase()}: `
-      chat.sendMessage(instruction + chat.input.trim())
+    } else if (chatMode === 'decide') {
+      chat.sendMessage(`Help me decide using ${decideStructure.toLowerCase()}: ${input}`)
       chat.setInput('')
-    } else if (chatMode === 'explain' && chat.input.trim()) {
-      const instruction = `Explain this at a ${explainDifficulty.toLowerCase()} level (as if explaining to a ${explainDifficulty.toLowerCase()} learner): `
-      chat.sendMessage(instruction + chat.input.trim())
+    } else if (chatMode === 'explain') {
+      chat.sendMessage(`Explain this at a ${explainDifficulty.toLowerCase()} level (as if explaining to a ${explainDifficulty.toLowerCase()} learner): ${input}`)
       chat.setInput('')
-    } else if (chatMode === 'translate' && chat.input.trim()) {
+    } else if (chatMode === 'translate') {
       const [src, tgt] = translateLangPair.split('→')
-      const instruction = `Translate this from ${src} to ${tgt}: `
-      chat.sendMessage(instruction + chat.input.trim())
+      chat.sendMessage(`Translate this from ${src} to ${tgt}: ${input}`)
       chat.setInput('')
-    } else if (chatMode === 'brainstorm' && chat.input.trim()) {
-      const instruction = `Let's brainstorm ${brainstormTopic.toLowerCase()}. Be creative, give me ideas in a friendly list format: `
-      chat.sendMessage(instruction + chat.input.trim())
+    } else if (chatMode === 'brainstorm') {
+      chat.sendMessage(`Let's brainstorm ${brainstormTopic.toLowerCase()}. Be creative, give me ideas in a friendly list format: ${input}`)
       chat.setInput('')
-    } else if (chatMode === 'wellness' && chat.input.trim()) {
-      const prompts: Record<string, string> = {
-        'Sleep Story': 'Tell me a calming sleep story',
-        'Meditation': 'Guide me through a short meditation',
-        'Breathing': 'Guide me through a breathing exercise',
-        'Affirmation': 'Share a positive affirmation',
-      }
-      const instruction = `Respond in a gentle, soothing tone. ${prompts[wellnessType] || 'Help me feel calm'}: `
-      chat.sendMessage(instruction + chat.input.trim())
+    } else if (chatMode === 'wellness') {
+      const prompts: Record<string, string> = { 'Sleep Story': 'Tell me a calming sleep story', 'Meditation': 'Guide me through a short meditation', 'Breathing': 'Guide me through a breathing exercise', 'Affirmation': 'Share a positive affirmation' }
+      chat.sendMessage(`Respond in a gentle, soothing tone. ${prompts[wellnessType] || 'Help me feel calm'}: ${input}`)
       chat.setInput('')
-    } else if (chatMode === 'create' && chat.input.trim()) {
-      const text = chat.input.trim()
+    } else if (chatMode === 'create') {
       chat.setInput('')
-      // Add user message immediately
-      const userMsg: ChatMessage = {
-        id: Date.now().toString(), role: 'user', content: text, timestamp: new Date(),
-      }
-      const pendingId = (Date.now() + 1).toString()
-      const pendingMsg: ChatMessage = {
-        id: pendingId, role: 'assistant', content: '✨ **Creating your image...**', timestamp: new Date(),
-      }
-      chat.setMessages(prev => [...prev, userMsg, pendingMsg])
-      chat.setLoading(true)
-      // Generate image
-      try {
-        const result = await imagesController.generate(text, createStyle.toLowerCase() as ImageStyle)
-        chat.setMessages(prev => prev.map(m =>
-          m.id === pendingId
-            ? { ...m, content: `Here's your ${createStyle.toLowerCase()} image:\n\n![${text}](${result.image})` }
-            : m
-        ))
-      } catch (err: any) {
-        chat.setMessages(prev => prev.map(m =>
-          m.id === pendingId
-            ? { ...m, content: `❌ Sorry, I couldn't create that image. ${err?.message || 'Please try again.'}` }
-            : m
-        ))
-      } finally {
-        chat.setLoading(false)
-      }
-    } else if (chatMode === 'read' && chat.input.trim()) {
-      if (!readFileData) {
-        useToastStore.getState().addToast('Upload a file first, then ask your question', 'info')
-        return
-      }
-      const question = chat.input.trim()
+      await handleCreateImage(input)
+    } else if (chatMode === 'read') {
+      if (!readFileData) { useToastStore.getState().addToast('Upload a file first, then ask your question', 'info'); return }
       chat.setInput('')
-      const fullPrompt = `[I'm asking about the file "${readFileData.filename}"]\n\nHere is the file content:\n${readFileData.text.slice(0, 12000)}\n\n---\n\nMy question: ${question}`
-      chat.sendMessage(fullPrompt)
+      chat.sendMessage(`[I'm asking about the file "${readFileData.filename}"]\n\nHere is the file content:\n${readFileData.text.slice(0, 12000)}\n\n---\n\nMy question: ${input}`)
     } else {
       chat.sendMessage()
     }
-  }, [chatMode, writeTone, writeType, decideStructure, explainDifficulty, translateLangPair, brainstormTopic, wellnessType, createStyle, readFileData, chat])
+  }, [chatMode, writeTone, writeType, decideStructure, explainDifficulty, translateLangPair, brainstormTopic, wellnessType, readFileData, chat, handleCreateImage])
+
+  const handleToggleBookmark = useCallback((messageId: string) => {
+    const msg = chat.messages.find(m => m.id === messageId)
+    if (!msg) return
+    if (isBookmarked(messageId)) {
+      removeBookmark(messageId)
+    } else {
+      addBookmark({
+        id: msg.id,
+        content: typeof msg.content === 'string' ? msg.content : '',
+        role: msg.role,
+        timestamp: typeof msg.timestamp === 'number' ? msg.timestamp : msg.timestamp?.getTime() || Date.now(),
+      })
+    }
+  }, [chat.messages, isBookmarked, removeBookmark, addBookmark])
+
+  const handleDeleteMessage = useCallback((messageId: string) => {
+    chat.setMessages(prev => prev.filter(m => m.id !== messageId))
+    if (isBookmarked(messageId)) {
+      removeBookmark(messageId)
+    }
+    showToast('Message deleted', 'info')
+  }, [chat.setMessages, isBookmarked, removeBookmark, showToast])
 
   const handleReadFile = useCallback(async (file: File) => {
     setReadLoading(true)
@@ -321,6 +376,16 @@ export default function ChatPage() {
       useToastStore.getState().addToast(`Couldn't read file: ${err?.message || 'Unknown error'}`, 'error')
     } finally {
       setReadLoading(false)
+    }
+  }, [chat])
+
+  const handleImageDropped = useCallback(async (file: File) => {
+    try {
+      const dataUrl = await resizeImage(file, 512)
+      chat.handleAddImage(dataUrl)
+      showToast('Image attached — drop more or send message', 'info')
+    } catch {
+      showToast('Failed to attach image', 'error')
     }
   }, [chat])
 
@@ -406,95 +471,78 @@ export default function ChatPage() {
           />
 
           {chatMode === 'read' && (
-            <div className="px-3 py-2 border-b border-border/10 bg-muted/5">
-              {!readFileData ? (
-                <div className="flex flex-col items-center gap-2 py-6 border-2 border-dashed border-border/30 rounded-lg text-center cursor-pointer hover:border-primary/40 hover:bg-muted/10 transition-colors" onDragOver={e => e.preventDefault()} onDrop={async e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleReadFile(f) }}>
-                  <input
-                    type="file"
-                    accept=".pdf,.docx,.txt,.md,.csv,.json"
-                    className="hidden"
-                    id="read-file-input"
-                    onChange={e => { const f = e.target.files?.[0]; if (f) handleReadFile(f) }}
-                  />
-                  <label htmlFor="read-file-input" className="cursor-pointer flex flex-col items-center gap-1">
-                    <span className="text-2xl">📄</span>
-                    <span className="text-sm font-medium">{readLoading ? 'Reading your file...' : 'Drop a file here or click to upload'}</span>
-                    <span className="text-[11px] text-muted-foreground">PDF, Word, TXT, MD, CSV, JSON</span>
-                  </label>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-base">📄</span>
-                  <span className="font-medium truncate max-w-[200px]">{readFileData.filename}</span>
-                  {readFileData.pages > 1 && <span className="text-xs text-muted-foreground">({readFileData.pages} pages)</span>}
-                  <button
-                    onClick={() => { setReadFileData(null); chat.setMessages(prev => prev.filter(m => !m.id.startsWith('file-'))) }}
-                    className="ml-auto text-xs text-muted-foreground hover:text-foreground px-2 py-0.5 rounded hover:bg-muted/10"
-                  >
-                    Remove
-                  </button>
-                </div>
-              )}
-            </div>
+            <ReadFileSection
+              readLoading={readLoading}
+              readFileData={readFileData}
+              onFileSelected={handleReadFile}
+              onRemove={() => { setReadFileData(null); chat.setMessages(prev => prev.filter(m => !m.id.startsWith('file-'))) }}
+            />
           )}
 
-          <ChatArea
-            messages={chat.messages}
-            loading={chat.loading}
-            sessionLoading={chat.sessionLoading}
-            model={model.model}
-            health={health}
-            suggestions={suggestions}
-            onRefreshHealth={refreshHealth}
-            onCopy={chat.handleCopy}
-            onRegenerate={chat.handleRegenerate}
-            onThumbsUp={chat.handleThumbsUp}
-            onThumbsDown={chat.handleThumbsDown}
-            onEdit={chat.handleEditMessage}
-            searchQuery={ui.searchQuery}
-            onSuggestionClick={chat.handleSuggestionClick}
-            toolEvents={chat.toolEvents}
-            value={chat.input}
-            onChange={chat.setInput}
-            onSend={handleWriteSend}
-            onStop={() => {
-              if (chat.loadingRef.current) {
-                chat.loadingRef.current.abort()
-              }
-              chat.setLoading(false)
-            }}
-            images={chat.images}
-            onAddImage={chat.handleAddImage}
-            onRemoveImage={chat.handleRemoveImage}
-            onAudioTranscript={(text) => {
-              chat.setInput(prev => prev ? `${prev} ${text}` : text)
-            }}
-            onGeneratedImage={(dataUrl, prompt) => {
-              chat.setMessages(prev => [...prev, {
-                id: `img-${Date.now()}`, role: 'user',
-                content: `[Generate image: ${prompt}]`, timestamp: new Date(),
-                images: [{ id: `gen-${Date.now()}`, dataUrl, name: 'generated.png' }],
-              }])
-              showToast('Image generated — see message above', 'info')
-            }}
-            onPDFError={(error) => {
-              showToast(`PDF analysis failed: ${error}`, 'error')
-            }}
-            onPDFAnalysis={(analysis, filename) => {
-              chat.setMessages(prev => [...prev, {
-                id: `pdf-user-${Date.now()}`,
-                role: 'user',
-                content: `📎 Uploaded PDF: ${filename}`,
-                timestamp: new Date(),
-              }, {
-                id: `pdf-${Date.now()}`,
-                role: 'assistant',
-                content: analysis,
-                timestamp: new Date(),
-              }])
-              showToast('PDF analyzed — see response below', 'info')
-            }}
-          />
+          <ImageDropZone onImageDropped={handleImageDropped}>
+            <ChatArea
+              messages={chat.messages}
+              loading={chat.loading}
+              sessionLoading={chat.sessionLoading}
+              model={model.model}
+              health={health}
+              suggestions={suggestions}
+              onRefreshHealth={refreshHealth}
+              onCopy={chat.handleCopy}
+              onRegenerate={chat.handleRegenerate}
+              onThumbsUp={chat.handleThumbsUp}
+              onThumbsDown={chat.handleThumbsDown}
+              onEdit={chat.handleEditMessage}
+              searchQuery={ui.searchQuery}
+              onSuggestionClick={chat.handleSuggestionClick}
+              toolEvents={chat.toolEvents}
+              value={chat.input}
+              onChange={chat.setInput}
+              onSend={handleWriteSend}
+              onStop={() => {
+                if (chat.loadingRef.current) {
+                  chat.loadingRef.current.abort()
+                }
+                chat.setLoading(false)
+              }}
+              images={chat.images}
+              onAddImage={chat.handleAddImage}
+              onRemoveImage={chat.handleRemoveImage}
+              onAudioTranscript={(text) => {
+                chat.setInput(prev => prev ? `${prev} ${text}` : text)
+              }}
+              onGeneratedImage={(dataUrl, prompt) => {
+                chat.setMessages(prev => [...prev, {
+                  id: `img-${Date.now()}`, role: 'user',
+                  content: `[Generate image: ${prompt}]`, timestamp: new Date(),
+                  images: [{ id: `gen-${Date.now()}`, dataUrl, name: 'generated.png' }],
+                }])
+                showToast('Image generated — see message above', 'info')
+              }}
+              onPDFError={(error) => {
+                showToast(`PDF analysis failed: ${error}`, 'error')
+              }}
+              onPDFAnalysis={(analysis, filename) => {
+                chat.setMessages(prev => [...prev, {
+                  id: `pdf-user-${Date.now()}`,
+                  role: 'user',
+                  content: `📎 Uploaded PDF: ${filename}`,
+                  timestamp: new Date(),
+                }, {
+                  id: `pdf-${Date.now()}`,
+                  role: 'assistant',
+                  content: analysis,
+                  timestamp: new Date(),
+                }])
+                showToast('PDF analyzed — see response below', 'info')
+              }}
+              onExecuteCommand={handleExecuteCommand}
+              isBookmarked={isBookmarked}
+              onBookmark={handleToggleBookmark}
+              onDelete={handleDeleteMessage}
+              collapsibleLength={settings.collapsibleMessageLength}
+            />
+          </ImageDropZone>
 
           <ConversationViewer
             isOpen={ui.showConversationViewer}
@@ -520,6 +568,9 @@ export default function ChatPage() {
           open={true}
           onClose={() => ui.setToolPanelOpen(false)}
           sessionId={chat.sessionIdRef.current}
+          bookmarks={bookmarks}
+          onRemoveBookmark={removeBookmark}
+          onClearBookmarks={clearAll}
         />
       )}
 
@@ -544,6 +595,10 @@ export default function ChatPage() {
         />
       )}
 
+      <SearchConversationsDialog
+        open={searchConversationsOpen}
+        onOpenChange={setSearchConversationsOpen}
+      />
       <SystemPromptDialog
         open={systemPromptOpen}
         onOpenChange={setSystemPromptOpen}

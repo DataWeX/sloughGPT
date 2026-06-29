@@ -74,12 +74,12 @@ export const visualController = {
     return apiPost('/visual/train-video', data)
   },
 
-  async loadVisualModel(_modelId: string): Promise<{ status: string; message: string }> {
-    return { status: 'ok', message: 'Model loaded' }
+  async loadVisualModel(modelId: string): Promise<{ status: string; message: string }> {
+    return apiPost('/visual/load', { model_id: modelId })
   },
 
-  async visualInference(data: { image_path: string; max_len?: number; temperature?: number }): Promise<{ text: string; checkpoint: string; elapsed_ms: number }> {
-    return apiPost('/visual/video-infer', data)
+  async visualInference(data: { image_path: string; max_len?: number; temperature?: number }): Promise<{ text: string; checkpoint?: string; elapsed_ms: number }> {
+    return apiPost('/visual/video-infer', { video_path: data.image_path, max_len: data.max_len, temperature: data.temperature })
   },
 
   async listCheckpoints(): Promise<any[]> {

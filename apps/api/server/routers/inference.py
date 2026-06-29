@@ -455,66 +455,6 @@ async def root():
     }
 
 
-class LoadCheckpointRequest(BaseModel):
-    model_path: str
-
-
-@router.post("/load")
-async def load_model_endpoint(request: Optional[LoadCheckpointRequest] = None):
-    """Load the model on demand. Optionally specify model_path in request body."""
-    import state as server_state
-    model_path = request.model_path if request else None
-    if server_state.model is not None and model_path is None:
-        return {"status": "already_loaded", "model": server_state.model_type}
-    from main import load_model
-    load_model(model_path)
-    return {"status": "loaded", "model": server_state.model_type, "checkpoint": model_path}
-
-
-class LoadSoulRequest(BaseModel):
-    soul_path: str
-
-
-@router.post("/load-soul")
-async def load_soul(request: LoadSoulRequest):
-    """Load a .soul Soul Unit file into SloEngine."""
-    try:
-        from pathlib import Path
-        import sys
-        sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "packages" / "core-py"))
-        from domains.core import SloEngine
-
-        engine = SloEngine(device="cpu")
-        soul = engine.load_soul(request.soul_path)
-
-        import state as server_state
-        server_state.soul_engine = engine
-        server_state.current_soul = soul
-        server_state.model = engine.model
-        server_state.model_type = f"sou/{soul.name}" if hasattr(soul, "name") else "sou/loaded"
-
-        return {
-            "status": "loaded",
-            "soul_name": soul.name if hasattr(soul, "name") else "unknown",
-            "lineage": soul.lineage if hasattr(soul, "lineage") else "unknown",
-            "born_at": soul.born_at if hasattr(soul, "born_at") else "",
-            "generation_params": {
-                "temperature": soul.generation.temperature if soul.generation else 0.8,
-                "top_p": soul.generation.top_p if soul.generation else 0.9,
-                "max_tokens": soul.generation.max_tokens if soul.generation else 2048,
-            },
-            "personality": soul.personality.to_dict()
-            if hasattr(soul, "personality") and soul.personality
-            else {},
-            "cognition": soul.cognition.to_dict()
-            if hasattr(soul, "cognition") and soul.cognition
-            else {},
-        }
-
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-
 @router.get("/chat/tools")
 async def list_chat_tools():
     """List all available tools that can be invoked during chat."""

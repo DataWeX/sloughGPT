@@ -12,6 +12,7 @@ export interface AppSettings {
   theme: 'dark' | 'light' | 'system'
   streaming: boolean
   customContext: string
+  collapsibleMessageLength: number
 }
 
 export interface InjectedKnowledge {
@@ -38,6 +39,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   theme: 'light',
   streaming: true,
   customContext: '',
+  collapsibleMessageLength: 500,
 }
 
 export const useAppStore = create<AppStore>()(

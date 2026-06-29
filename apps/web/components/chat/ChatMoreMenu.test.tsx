@@ -34,8 +34,10 @@ function makeCtx(overrides: Partial<ChatToolbarContextValue['actions']> = {}): C
     onCopyMarkdown: undefined,
     onSaveAsDataset: undefined,
     onSystemPrompt: vi.fn(),
+    onSearchConversations: vi.fn(),
     hasMessages: true,
     messageCount: 0,
+    bookmarkCount: 0,
     ...overrides,
   }
   return {
@@ -136,5 +138,13 @@ describe('ChatMoreMenu', () => {
     fireEvent.click(screen.getByLabelText('More options'))
     fireEvent.click(screen.getByText('System Prompt'))
     expect(onSystemPrompt).toHaveBeenCalled()
+  })
+
+  it('calls onSearchConversations when Search Conversations selected', () => {
+    const onSearchConversations = vi.fn()
+    renderWithCtx({ onSearchConversations })
+    fireEvent.click(screen.getByLabelText('More options'))
+    fireEvent.click(screen.getByText('Search Conversations'))
+    expect(onSearchConversations).toHaveBeenCalled()
   })
 })

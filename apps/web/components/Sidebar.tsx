@@ -44,6 +44,7 @@ const systemItems = [
   { path: '/export', key: 'nav.export', Icon: IconExport },
   { path: '/monitoring', key: 'nav.monitoring', Icon: IconActivity },
   { path: '/tokenizer', key: 'nav.tokenizer', Icon: IconTokenizer },
+  { path: '/activity', key: 'nav.activity', Icon: IconActivity },
 ] as const
 
 /** Sidebar list — smaller than home quick-action tiles */
