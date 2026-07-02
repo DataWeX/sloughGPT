@@ -42,8 +42,32 @@ export interface TrainingStatus {
   progress_pct: number
   current_caption: string
   current_image: string
-  started_at: string | null
-  finished_at: string | null
+}
+
+interface UnifiedStatus {
+  engine: {
+    speech_to_text: boolean
+    image_caption: boolean
+    speech_model: string | null
+    vision_model: string | null
+    status: string
+  }
+  learning: {
+    images_learned: number
+    trained: boolean
+    vocab_size: number
+    replay_buffer_size: number
+    learning_method: string
+    caption_history: string[]
+    unique_captions: number
+    diversity_ratio: number
+    accuracy_history: number[]
+    mean_accuracy: number
+    last_accuracy: number
+  }
+  batch: TrainingStatus
+  dpo: { status: string; last_run: string | null; result: any; accepted_count: number; rejected_count: number }
+  video: { status: string; job_id: string | null; current_epoch: number; current_step: number; total_steps: number; current_loss: number | null; result: any; error: string | null }
 }
 
 async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
@@ -52,20 +76,65 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
 }
 
 export const multimodalController = {
+  async getStatus(): Promise<UnifiedStatus> {
+    return apiGet<UnifiedStatus>('/multimodal/status')
+  },
+
   async getCapabilities(): Promise<MultimodalCapabilities> {
-    return apiGet<MultimodalCapabilities>('/multimodal/capabilities')
+    const s = await this.getStatus() as UnifiedStatus
+    return {
+      speech_to_text: s.engine.speech_to_text,
+      image_caption: s.engine.image_caption,
+      speech_model: s.engine.speech_model,
+      vision_model: s.engine.vision_model,
+      images_learned: s.learning.images_learned,
+      trained: s.learning.trained,
+      replay_buffer_size: s.learning.replay_buffer_size,
+      learning_method: s.learning.learning_method,
+      background_job_running: s.batch.running,
+      status: s.engine.status,
+    }
   },
 
   async getLearningProgress(): Promise<LearningProgress> {
-    return apiGet<LearningProgress>('/multimodal/learning-progress')
+    const s = await this.getStatus() as UnifiedStatus
+    return {
+      images_learned: s.learning.images_learned,
+      trained: s.learning.trained,
+      vocab_size: s.learning.vocab_size,
+      replay_buffer_size: s.learning.replay_buffer_size,
+    }
   },
 
   async getTrainingReport(): Promise<TrainingReport> {
-    return apiGet<TrainingReport>('/multimodal/training-report')
+    const s = await this.getStatus() as UnifiedStatus
+    return {
+      images_learned: s.learning.images_learned,
+      vocab_size: s.learning.vocab_size,
+      replay_buffer_size: s.learning.replay_buffer_size,
+      caption_history: s.learning.caption_history,
+      unique_captions: s.learning.unique_captions,
+      diversity_ratio: s.learning.diversity_ratio,
+      trained: s.learning.trained,
+      accuracy_history: s.learning.accuracy_history,
+      mean_accuracy: s.learning.mean_accuracy,
+      last_accuracy: s.learning.last_accuracy,
+    }
   },
 
   async getTrainingStatus(): Promise<TrainingStatus> {
-    return apiGet<TrainingStatus>('/multimodal/training-status')
+    const s = await this.getStatus() as UnifiedStatus
+    return s.batch
+  },
+
+  async getDPOStatus(): Promise<{ status: string; accepted_count: number; rejected_count: number; result?: any }> {
+    const s = await this.getStatus() as UnifiedStatus
+    return s.dpo
+  },
+
+  async getVideoStatus(): Promise<{ status: string; job_id: string | null; current_epoch: number; current_step: number; total_steps: number; current_loss: number | null }> {
+    const s = await this.getStatus() as UnifiedStatus
+    return s.video
   },
 
   async trainImage(dataUrl: string, fileName?: string, label?: string): Promise<{ status: string; caption: string; confidence: number; images_learned: number; accuracy: number; supervised: boolean }> {
@@ -103,10 +172,6 @@ export const multimodalController = {
     return apiPost('/multimodal/generate-image', fd, { raw: true })
   },
 
-  async getGenerationStatus(): Promise<{ models_loaded: boolean; capabilities: Record<string, boolean | string> }> {
-    return apiGet('/multimodal/generation-status')
-  },
-
   async processVideo(file: File, numFrames: number = 16): Promise<{ status: string; caption: string; num_frames: number }> {
     const fd = new FormData()
     fd.append('file', file)
@@ -121,15 +186,9 @@ export const multimodalController = {
   },
 
   async analyzeImage(file: File, prompt?: string): Promise<{
-    caption: string
-    confidence: number
-    tags: string[]
-    accuracy: number
-    supervised: boolean
-    images_learned: number
-    trained: boolean
-    replay_buffer_size: number
-    mean_accuracy: number
+    caption: string; confidence: number; tags: string[]; accuracy: number;
+    supervised: boolean; images_learned: number; trained: boolean;
+    replay_buffer_size: number; mean_accuracy: number;
   }> {
     const fd = new FormData()
     fd.append('file', file)

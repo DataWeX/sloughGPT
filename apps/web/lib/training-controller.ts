@@ -48,6 +48,9 @@ export interface Webhook {
   id: string
   url: string
   events: string[]
+  description?: string
+  is_active?: boolean
+  created_at?: string
 }
 
 export interface AutoTrainStartRequest {

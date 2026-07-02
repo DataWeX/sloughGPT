@@ -18,6 +18,7 @@ import {ThemeProvider, useTheme} from './src/theme/ThemeContext';
 import {ErrorBoundary} from './src/components/ErrorBoundary';
 import {LoadingScreen} from './src/components/LoadingScreen';
 import {colors} from './src/theme';
+import {initInference} from './src/services/activity-inference';
 
 
 const Tab = createBottomTabNavigator();
@@ -56,7 +57,7 @@ function AppInner() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    refresh().finally(() => setReady(true));
+    Promise.all([refresh(), initInference()]).finally(() => setReady(true));
   }, []);
 
   if (!ready) {

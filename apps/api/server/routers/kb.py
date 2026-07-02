@@ -479,3 +479,133 @@ def _chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str
         chunks = overlapped
 
     return chunks
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Practical knowledge operations
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class FileSearchRequest(BaseModel):
+    query: str = Field(..., min_length=1)
+    path: str = "."
+    extensions: Optional[List[str]] = None
+    top_k: int = 10
+
+
+class DuplicateCheckRequest(BaseModel):
+    content: str = Field(..., min_length=1)
+    threshold: float = 0.85
+
+
+class CategorizeRequest(BaseModel):
+    content: str = Field(..., min_length=1)
+
+
+class BulkIngestRequest(BaseModel):
+    items: List[str]
+    topic: str = "imported"
+    source: str = "bulk"
+    dedup_threshold: float = 0.85
+
+
+@router.post("/search-files")
+async def search_files(req: FileSearchRequest):
+    """Semantic search across codebase files.
+
+    Indexes files in the given path and returns results ranked by
+    natural-language relevance.
+    """
+    from domains.learner.knowledge_ops import FileIndex
+
+    idx = FileIndex()
+    extensions = set(req.extensions) if req.extensions else None
+    stats = idx.index_directory(req.path, extensions=extensions)
+    results = idx.search(req.query, top_k=req.top_k)
+
+    return {
+        "results": results,
+        "indexed_files": stats["files_indexed"],
+        "indexed_chunks": stats["chunks_total"],
+    }
+
+
+@router.post("/check-duplicate")
+async def check_duplicate(req: DuplicateCheckRequest):
+    """Check if content is a near-duplicate of existing knowledge.
+
+    Returns whether it's a duplicate, the best match, and similarity score.
+    """
+    from domains.learner.knowledge_ops import DuplicateDetector
+
+    memory = _get_memory()
+    dup = DuplicateDetector(threshold=req.threshold)
+    dup.load_from_store(memory._vector_store)
+
+    is_dup, best_match, score = dup.check(req.content, embed_fn=memory._get_embedding)
+
+    return {
+        "is_duplicate": is_dup,
+        "best_match": best_match,
+        "score": score,
+        "threshold": req.threshold,
+    }
+
+
+@router.post("/categorize")
+async def categorize_knowledge(req: CategorizeRequest):
+    """Auto-assign a topic to content based on existing knowledge categories."""
+    from domains.learner.knowledge_ops import AutoCategorizer
+
+    memory = _get_memory()
+    cat = AutoCategorizer()
+    cat.load_from_store(memory._vector_store)
+
+    topic = cat.categorize(req.content, embed_fn=memory._get_embedding)
+    suggestions = cat.suggest_topics(req.content, top_k=3)
+
+    return {
+        "topic": topic,
+        "suggestions": [{"topic": t, "score": round(s, 4)} for t, s in suggestions],
+    }
+
+
+@router.get("/gaps")
+async def knowledge_gaps():
+    """Find under-represented topics and knowledge gaps."""
+    from domains.learner.knowledge_ops import KnowledgeGapDetector
+
+    memory = _get_memory()
+    gap = KnowledgeGapDetector()
+    gap.load_from_store(memory._vector_store)
+
+    gaps = gap.find_gaps()
+
+    return {
+        "gaps": gaps,
+        "total_facts": memory._fact_counter,
+        "topics": list(gap._topic_counts.keys()),
+    }
+
+
+@router.post("/bulk-ingest")
+async def bulk_ingest(req: BulkIngestRequest):
+    """Bulk ingest texts with automatic deduplication.
+
+    Skips near-duplicate content and reports added/skipped/errors.
+    """
+    from domains.learner.knowledge_ops import BulkProcessor
+
+    memory = _get_memory()
+    bp = BulkProcessor(memory)
+    report = bp.ingest_texts(
+        req.items,
+        topic=req.topic,
+        source=req.source,
+        dedup_threshold=req.dedup_threshold,
+    )
+
+    return {
+        "status": "completed",
+        **report,
+    }

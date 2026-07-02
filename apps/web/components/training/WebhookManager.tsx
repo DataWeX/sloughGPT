@@ -3,19 +3,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { trainingJobsController } from '@/lib/training-controller'
+import type { Webhook } from '@/lib/training-controller'
 import { devDebug } from '@/lib/dev-log'
 import { useToastStore } from '@/lib/toast-store'
 
 export function WebhookManager() {
   const addToast = useToastStore(s => s.addToast)
-  const [webhooks, setWebhooks] = useState<Array<{
-    id: string
-    url: string
-    events: string[]
-    description: string
-    is_active: boolean
-    created_at: string
-  }>>([])
+  const [webhooks, setWebhooks] = useState<Webhook[]>([])
   const [showAdd, setShowAdd] = useState(false)
   const [newWebhook, setNewWebhook] = useState({
     url: '',
@@ -28,7 +22,7 @@ export function WebhookManager() {
   const fetchWebhooks = useCallback(async () => {
     try {
       const wh = await trainingJobsController.listWebhooks()
-      setWebhooks(wh as any)
+      setWebhooks(wh)
     } catch (error) {
       devDebug('Failed to fetch webhooks:', error)
     }

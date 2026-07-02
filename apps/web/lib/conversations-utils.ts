@@ -20,13 +20,24 @@ export function truncateMessage(content: string, maxLen = 60): string {
   return firstLine.length > maxLen ? firstLine.slice(0, maxLen) + '…' : firstLine
 }
 
-export function parseConversationJSON(data: any): { name: string; messages: { role: string; content: string }[] }[] {
+interface ConversationMessage {
+  role: string
+  content: string
+}
+
+interface ConversationInput {
+  name?: string
+  id?: string
+  messages?: Array<{ role?: string; content?: unknown }>
+}
+
+export function parseConversationJSON(data: ConversationInput | ConversationInput[]): { name: string; messages: { role: string; content: string }[] }[] {
   const arr = Array.isArray(data) ? data : [data]
-  return arr.flatMap((item: any) => {
+  return arr.flatMap((item) => {
     if (!item.messages || !Array.isArray(item.messages)) return []
     return [{
       name: item.name || item.id || `Imported ${new Date().toLocaleDateString()}`,
-      messages: item.messages.map((m: any) => ({
+      messages: item.messages.map((m) => ({
         role: m.role === 'user' || m.role === 'assistant' ? m.role : 'user',
         content: typeof m.content === 'string' ? m.content : '',
       })),

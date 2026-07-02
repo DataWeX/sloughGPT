@@ -8,6 +8,11 @@ import {
   deleteAllData,
 } from '../services/activity-service';
 import {
+  predictLocal,
+  initInference,
+  isLocalModelReady,
+} from '../services/activity-inference';
+import {
   type SensorReading,
   type ActivityPrediction,
   type ActivityRecording,
@@ -239,6 +244,20 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
     })),
 
   predictActivity: async (data: number[][]) => {
+    // Try local inference first (no server round-trip)
+    const localResult = await predictLocal(data);
+    if (localResult) {
+      const prediction: ActivityPrediction = {
+        class_id: localResult.classId,
+        activity: localResult.className,
+        confidence: Math.max(...localResult.probabilities),
+        probabilities: localResult.probabilities,
+      };
+      set({lastPrediction: prediction});
+      return prediction;
+    }
+
+    // Fallback to server inference
     try {
       const result = await predict({data});
       set({lastPrediction: result});

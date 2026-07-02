@@ -141,7 +141,7 @@ export function DistillCard({ datasets: ds, onComplete }: DistillCardProps) {
 
           <div className="space-y-1.5">
             <Label className="text-xs">Temperature: {temperature.toFixed(1)}</Label>
-            <Slider value={temperature} onChange={setTemperature} min={1} max={10} step={0.5} showValue={false} />
+            <Slider value={[temperature]} onValueChange={(v) => setTemperature(v[0])} min={1} max={10} step={0.5} />
           </div>
 
           <div className="grid grid-cols-3 gap-3">

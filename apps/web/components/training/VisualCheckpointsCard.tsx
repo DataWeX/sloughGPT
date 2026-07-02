@@ -31,7 +31,7 @@ export function VisualCheckpointsCard() {
           <p className="text-sm text-muted-foreground py-2">No visual checkpoints yet</p>
         ) : (
           <div className="grid gap-2 sm:grid-cols-2">
-            {visualCheckpoints.map((ckpt: any) => {
+            {visualCheckpoints.map((ckpt) => {
               const isBusy = loadingVisualCkptName === ckpt.name
               return (
                 <div key={ckpt.name} className="flex items-center justify-between rounded-lg border border-border/50 p-3">

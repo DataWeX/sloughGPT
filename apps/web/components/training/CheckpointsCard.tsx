@@ -56,7 +56,7 @@ export function CheckpointsCard({
           )
         ) : (
           <div className="grid gap-2 sm:grid-cols-2">
-            {checkpoints.checkpoints.slice().reverse().map((cp: any) => (
+            {checkpoints.checkpoints.slice().reverse().map((cp) => (
               <div key={cp.name} className={cn("flex items-center justify-between rounded-lg border p-3 text-sm", checkpoints.activeCheckpoint === cp.name ? "border-primary/30 bg-primary/5" : "border-border/50")}>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium text-xs">{cp.name}</p>

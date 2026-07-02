@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import { trainingJobsController, modelController } from '@/lib/controllers'
 import type { Checkpoint } from '@/lib/souls-controller'
-import type { TrainingBuild } from '@/lib/training-controller'
+import type { TrainingBuild, TrainingJob } from '@/lib/training-controller'
 
 export interface UseTrainingCheckpointsReturn {
   checkpoints: Checkpoint[]
@@ -11,7 +11,7 @@ export interface UseTrainingCheckpointsReturn {
   activeCheckpoint: string | null
   builds: TrainingBuild[]
   loadingBuilds: boolean
-  jobs: any[]
+  jobs: TrainingJob[]
   loadingJobs: boolean
   setActiveCheckpoint: (c: string | null) => void
   setCheckpoints: (c: Checkpoint[]) => void
@@ -28,7 +28,7 @@ export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
   const [activeCheckpoint, setActiveCheckpoint] = useState<string | null>(null)
   const [builds, setBuilds] = useState<TrainingBuild[]>([])
   const [loadingBuilds, setLoadingBuilds] = useState(true)
-  const [jobs, setJobs] = useState<any[]>([])
+  const [jobs, setJobs] = useState<TrainingJob[]>([])
   const [loadingJobs, setLoadingJobs] = useState(true)
 
   const fetchCheckpoints = useCallback(async () => {

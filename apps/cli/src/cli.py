@@ -662,6 +662,149 @@ def train_embed(corpus, epochs, lr, batch_size, embed_dim, vocab_size, output, t
 # ═══════════════════════════════════════════════════════════════════════
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# knowledge  — search, duplicates, categorize, gaps, ingest
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Semantic knowledge operations — search, dedup, categorize, gaps")
+def knowledge():
+    pass
+
+
+@knowledge.command("search", help="Search codebase with natural language")
+@click.argument("query")
+@click.option("--path", default=".", help="Directory to search")
+@click.option("--top-k", default=10, type=int, help="Max results")
+@click.option("--extensions", default=None, help="Comma-separated file extensions")
+@click.pass_context
+def knowledge_search(ctx, query, path, top_k, extensions):
+    """Search your codebase using natural language.
+
+    \b
+    Examples:
+      sloughgpt knowledge search "how does embedding work"
+      sloughgpt knowledge search "training loop" --path packages/core-py
+      sloughgpt knowledge search "error handling" --extensions py,ts
+    """
+    import requests
+    exts = extensions.split(",") if extensions else None
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/search-files",
+                      json={"query": query, "path": path, "top_k": top_k, "extensions": exts})
+    if r.status_code != 200:
+        printer.error(f"Search failed: {r.text}")
+        return
+    data = r.json()
+    printer.header(f"Found {len(data['results'])} results (indexed {data['indexed_files']} files)")
+    for i, res in enumerate(data["results"], 1):
+        printer.info(f"[{res['score']:.3f}] {res['path']}:{res['line']}")
+        snippet = res['snippet'].replace('\n', ' ')[:100]
+        printer.info(f"  {snippet}")
+        print()
+
+
+@knowledge.command("dedup", help="Check for duplicate knowledge")
+@click.argument("content")
+@click.option("--threshold", default=0.85, type=float, help="Similarity threshold")
+@click.pass_context
+def knowledge_dedup(ctx, content, threshold):
+    """Check if content already exists in the knowledge base.
+
+    \b
+    Example:
+      sloughgpt knowledge dedup "neural networks learn from data"
+    """
+    import requests
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/check-duplicate",
+                      json={"content": content, "threshold": threshold})
+    if r.status_code != 200:
+        printer.error(f"Check failed: {r.text}")
+        return
+    data = r.json()
+    if data["is_duplicate"]:
+        printer.warning(f"DUPLICATE (score: {data['score']:.3f})")
+        printer.info(f"  Existing: {data['best_match'][:100]}")
+    else:
+        printer.success(f"Unique (best match score: {data['score']:.3f})")
+
+
+@knowledge.command("categorize", help="Auto-categorize content")
+@click.argument("content")
+@click.pass_context
+def knowledge_categorize(ctx, content):
+    """Auto-assign a topic to content based on existing categories.
+
+    \b
+    Example:
+      sloughgpt knowledge categorize "gradient descent optimizes loss"
+    """
+    import requests
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/categorize",
+                      json={"content": content})
+    if r.status_code != 200:
+        printer.error(f"Categorize failed: {r.text}")
+        return
+    data = r.json()
+    printer.success(f"Topic: {data['topic']}")
+    if data["suggestions"]:
+        printer.info("Suggestions:")
+        for s in data["suggestions"]:
+            printer.info(f"  {s['topic']} ({s['score']:.3f})")
+
+
+@knowledge.command("gaps", help="Find knowledge gaps")
+@click.pass_context
+def knowledge_gaps(ctx):
+    """Show under-represented topics in your knowledge base."""
+    import requests
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/gaps")
+    if r.status_code != 200:
+        printer.error(f"Gaps failed: {r.text}")
+        return
+    data = r.json()
+    printer.header(f"Knowledge gaps ({data['total_facts']} facts, {len(data['topics'])} topics)")
+    if data["gaps"]:
+        for g in data["gaps"]:
+            printer.info(f"  {g['topic']}: {g['suggestion']}")
+    else:
+        printer.success("No significant gaps found")
+
+
+@knowledge.command("ingest", help="Bulk ingest texts with dedup")
+@click.argument("texts", nargs=-1)
+@click.option("--topic", default="imported", help="Topic tag")
+@click.option("--file", "file_path", default=None, help="Read texts from file (one per line)")
+@click.pass_context
+def knowledge_ingest(ctx, texts, topic, file_path):
+    """Bulk ingest texts with automatic deduplication.
+
+    \b
+    Examples:
+      sloughgpt knowledge ingest "fact 1" "fact 2" "fact 3"
+      sloughgpt knowledge ingest --file facts.txt --topic ml
+    """
+    import requests
+    items = list(texts)
+    if file_path:
+        with open(file_path) as f:
+            items.extend(line.strip() for line in f if line.strip())
+    if not items:
+        printer.error("No texts to ingest")
+        return
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/bulk-ingest",
+                      json={"items": items, "topic": topic})
+    if r.status_code != 200:
+        printer.error(f"Ingest failed: {r.text}")
+        return
+    data = r.json()
+    printer.success(f"Bulk ingest: {data['added']} added, {data['skipped']} skipped, {data['errors']} errors")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# personality  — list, load, info, create, export
+# ═══════════════════════════════════════════════════════════════════════
+
+
 @cli.group(help="List, load, and manage .soul personality files")
 def personality():
     pass

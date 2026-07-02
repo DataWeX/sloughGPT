@@ -24,11 +24,14 @@ interface TabsRootProps {
   value?: string
   defaultValue?: string
   onValueChange?: (value: string) => void
+  onChange?: (value: string) => void
   className?: string
-  children: ReactNode
+  tabs?: Array<{ value: string; label: string; count?: number }>
+  children?: ReactNode
 }
 
-function Tabs({ value: controlledValue, defaultValue = '', onValueChange, className, children }: TabsRootProps) {
+function Tabs({ value: controlledValue, defaultValue = '', onValueChange, onChange, className, tabs: tabDefs, children }: TabsRootProps) {
+  const handler = onValueChange ?? onChange
   const [internalValue, setInternalValue] = useState(defaultValue)
   const isControlled = controlledValue !== undefined
   const value = isControlled ? controlledValue : internalValue
@@ -36,10 +39,27 @@ function Tabs({ value: controlledValue, defaultValue = '', onValueChange, classN
   const handleChange = useCallback(
     (v: string) => {
       if (!isControlled) setInternalValue(v)
-      onValueChange?.(v)
+      handler?.(v)
     },
-    [isControlled, onValueChange],
+    [isControlled, handler],
   )
+
+  if (tabDefs) {
+    return (
+      <TabsContext.Provider value={{ value, onValueChange: handleChange }}>
+        <div className={className}>
+          <TabsList>
+            {tabDefs.map(t => (
+              <TabsTrigger key={t.value} value={t.value}>
+                {t.label}{t.count !== undefined ? ` (${t.count})` : ''}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {children}
+        </div>
+      </TabsContext.Provider>
+    )
+  }
 
   return (
     <TabsContext.Provider value={{ value, onValueChange: handleChange }}>

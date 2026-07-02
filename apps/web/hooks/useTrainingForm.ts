@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { modelController } from '@/lib/controllers'
+import type { TrainingJob } from '@/lib/training-controller'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 import type { UseTrainingSessionReturn } from '@/hooks/useTrainingSession'
 import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
@@ -27,7 +28,7 @@ export interface TrainingFormState {
   visualStage1Epochs: number
   visualStage2Epochs: number
   loadingFinetunedModel: boolean
-  allJobs: any[]
+  allJobs: TrainingJob[]
   setMethod: (m: Method) => void
   setInputMode: (m: InputMode) => void
   setTextInput: (s: string) => void
@@ -84,7 +85,7 @@ export function useTrainingForm(
 
   const [loadingFinetunedModel, setLoadingFinetunedModel] = useState(false)
 
-  const [optimisticJobs, setOptimisticJobs] = useState<any[]>([])
+  const [optimisticJobs, setOptimisticJobs] = useState<TrainingJob[]>([])
   const allJobs = [...optimisticJobs, ...checkpoints.jobs]
 
   // Clear optimistic jobs when training ends
@@ -142,7 +143,7 @@ export function useTrainingForm(
     const now = new Date().toISOString()
     setOptimisticJobs(prev => [...prev, {
       id: tempId, name: `${method} started`, status: 'running',
-      created_at: now, status_message: 'Starting...',
+      progress: 0, created_at: now, status_message: 'Starting...',
     }])
 
     if (method === 'finetune') {

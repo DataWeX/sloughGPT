@@ -78,13 +78,6 @@ describe('multimodalController', () => {
     expect(apiClient.apiPost).toHaveBeenCalledWith('/multimodal/generate-image', expect.any(FormData), { raw: true })
   })
 
-  it('getGenerationStatus GETs /multimodal/generation-status', async () => {
-    apiClient.apiGet.mockResolvedValue({ models_loaded: true, capabilities: {} })
-    const s = await multimodalController.getGenerationStatus()
-    expect(s.models_loaded).toBe(true)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/multimodal/generation-status')
-  })
-
   it('processVideo POSTs file + num_frames as FormData', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'ok', caption: 'walking', num_frames: 16 })
     const result = await multimodalController.processVideo(new File(['vid'], 'test.mp4'), 32)

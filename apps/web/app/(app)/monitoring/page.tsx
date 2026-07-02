@@ -9,7 +9,7 @@ import { StatCard, KpiGrid } from '@/components/ui/display'
 import { systemController, type DetailedHealth, type SystemMetrics, type SystemInfo, type DiskUsage, type GPUInfo } from '@/lib/system-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { benchmarkController } from '@/lib/benchmark-controller'
-import { apiGet } from '@/lib/http-client'
+import { multimodalController } from '@/lib/controllers'
 import { useLocale } from '@/hooks/useLocale'
 import dynamic from 'next/dynamic'
 
@@ -66,8 +66,8 @@ export default function SystemHealthPage() {
         knowledgeController.getAdapterStatus().catch(() => null),
         benchmarkController.quality().catch(() => null),
         benchmarkController.stats().catch(() => null),
-        apiGet('/multimodal/dpo/status').catch(() => null),
-        apiGet('/multimodal/status').catch(() => null),
+        multimodalController.getDPOStatus().catch(() => null),
+        multimodalController.getStatus().catch(() => null),
         activityController.status().catch(() => null),
       ])
       setDetailed(d)

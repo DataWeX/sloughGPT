@@ -18,6 +18,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {getApiUrl} from './api-client';
+import {initInference} from './activity-inference';
 
 const MODEL_CACHE_KEY = '@sloughgpt/activity_model_cached';
 const MODEL_VERSION_KEY = '@sloughgpt/activity_model_version';
@@ -57,6 +58,10 @@ export async function syncModel(): Promise<boolean> {
 
     await AsyncStorage.setItem(MODEL_CACHE_KEY, base64);
     await AsyncStorage.setItem(MODEL_VERSION_KEY, String(Date.now()));
+
+    // Re-init inference engine so it picks up the new weights
+    await initInference();
+
     return true;
   } catch {
     return false;

@@ -8,7 +8,7 @@ import { IconRefresh } from '@/components/ui'
 import { multimodalController } from '@/lib/controllers'
 import type { MultimodalCapabilities, TrainingReport, TrainingStatus } from '@/lib/multimodal-controller'
 import { useToastStore } from '@/lib/toast-store'
-import { apiGet, apiPost } from '@/lib/http-client'
+import { apiPost } from '@/lib/http-client'
 import dynamic from 'next/dynamic'
 import CapabilitiesCard from '@/components/multimodal/CapabilitiesCard'
 
@@ -76,7 +76,7 @@ export default function MultimodalPage() {
 
   const pollDPOStatus = useCallback(async () => {
     try {
-      const s = await apiGet<{ status: string; accepted_count: number; rejected_count: number; result?: any }>('/multimodal/dpo/status')
+      const s = await multimodalController.getDPOStatus()
       setDpoStatus(s.status)
       setDpoAccepted(s.accepted_count)
       setDpoRejected(s.rejected_count)

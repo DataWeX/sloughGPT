@@ -438,7 +438,7 @@ export default function TokenizerPage() {
               onClick={async () => {
                 setTraining(true)
                 try {
-                  await tokenizerController.train()
+                  await tokenizerController.trainTokenizer()
                   addToast('Tokenizer trained on Shakespeare', 'success')
                   await Promise.all([fetchStats(), fetchMerges(), fetchVocab()])
                 } catch (e: any) {

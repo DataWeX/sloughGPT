@@ -5,6 +5,7 @@ import type { ChatToolbarContextValue } from '@/contexts/ChatToolbarContext'
 import type { useChatUI } from './useChatUI'
 import type { useChatVision } from './useChatVision'
 import type { useChatAgents } from './useChatAgents'
+import type { AgentDef } from '@/lib/agents'
 import type { useChatLocalEngine } from './useChatLocalEngine'
 import type { useChatModelSettings } from './useChatModelSettings'
 import type { useChatMessages } from './useChatMessages'
@@ -24,7 +25,7 @@ interface UseChatToolbarValueConfig {
   matchIds: string[]
   handlePrevMatch: () => void
   handleNextMatch: () => void
-  handleSelectAgentWithToast: (agent: any) => void
+  handleSelectAgentWithToast: (agent: AgentDef) => void
   modelDescriptions: Record<string, string>
   showToast: (message: string, type?: string) => void
   onSystemPrompt: () => void

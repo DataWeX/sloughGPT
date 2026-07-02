@@ -9,14 +9,15 @@ interface SliderProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'
   min?: number
   max?: number
   step?: number
+  label?: string
   onValueChange?: (value: number[]) => void
 }
 
 const Slider = forwardRef<HTMLInputElement, SliderProps>(
-  ({ className, value, defaultValue, min = 0, max = 100, step = 1, onValueChange, disabled, ...props }, ref) => {
+  ({ className, value, defaultValue, min = 0, max = 100, step = 1, onValueChange, disabled, label, ...props }, ref) => {
     const currentValue = value?.[0] ?? defaultValue?.[0] ?? 0
 
-    return (
+    const input = (
       <input
         ref={ref}
         type="range"
@@ -37,6 +38,17 @@ const Slider = forwardRef<HTMLInputElement, SliderProps>(
         {...props}
       />
     )
+
+    if (label) {
+      return (
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">{label}</p>
+          {input}
+        </div>
+      )
+    }
+
+    return input
   },
 )
 Slider.displayName = 'Slider'

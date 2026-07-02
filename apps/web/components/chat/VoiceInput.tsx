@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { cn } from '@/lib/cn'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { multimodalController } from '@/lib/controllers'
 import { VoiceWaveform } from './VoiceWaveform'
 
 import { Button } from '@/components/ui/button'
@@ -75,8 +75,6 @@ function WaveformIcon({ className, isActive }: { className?: string; isActive: b
   )
 }
 
-const API = PUBLIC_API_URL
-
 export function VoiceInput({ onTranscript, disabled }: VoiceInputProps) {
   const [isListening, setIsListening] = useState(false)
   const [isBrowserSupported, setIsBrowserSupported] = useState(false)
@@ -86,10 +84,9 @@ export function VoiceInput({ onTranscript, disabled }: VoiceInputProps) {
 
   useEffect(() => {
     setIsBrowserSupported(typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window))
-    fetch(`${API}/multimodal/capabilities`, { signal: AbortSignal.timeout(3000) })
-      .then(r => r.json())
-      .then(caps => { if (caps.speech_to_text) setIsServerSupported(true) })
-      .catch(() => {})
+    multimodalController.getCapabilities().then(caps => {
+      if (caps.speech_to_text) setIsServerSupported(true)
+    }).catch(() => {})
   }, [])
 
   const startBrowserListening = useCallback(() => {
@@ -137,11 +134,8 @@ export function VoiceInput({ onTranscript, disabled }: VoiceInputProps) {
         fd.append('file', blob, 'recording.webm')
         fd.append('language', 'en')
         try {
-          const res = await fetch(`${API}/multimodal/transcribe`, { method: 'POST', body: fd })
-          if (res.ok) {
-            const data = await res.json()
-            if (data.text) onTranscript(data.text)
-          }
+          const result = await multimodalController.transcribeAudio(blob as File)
+          if (result.text) onTranscript(result.text)
         } catch {}
       }
 

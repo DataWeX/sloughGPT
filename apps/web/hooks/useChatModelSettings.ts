@@ -155,7 +155,7 @@ export function useChatModelSettings(
         name: c.name || 'unknown',
         loss: c.loss,
         traits: c.traits ? Object.keys(c.traits) : undefined,
-        is_loaded: (c as any).is_loaded || false,
+        is_loaded: c.is_loaded || false,
         eval_verdict: c.verdict,
       })))
 

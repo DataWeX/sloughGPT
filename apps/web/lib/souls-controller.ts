@@ -31,6 +31,7 @@ export interface Checkpoint {
   lineage?: string
   model_type?: string
   traits?: Record<string, number>
+  is_loaded?: boolean
   verdict?: string
   perplexity_delta?: number
   bleu_delta?: number

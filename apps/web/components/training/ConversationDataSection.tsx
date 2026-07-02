@@ -46,12 +46,12 @@ export function ConversationDataSection() {
   const handleExport = useCallback(async () => {
     setExporting(true)
     try {
-      const data = await trainingJobsController.exportFeedbackPairs(0, targetCount) as Record<string, unknown>
+      const data = await trainingJobsController.exportFeedbackPairs(0, targetCount) as { pairs_count?: number; filepath?: string; error?: string }
       
       if (data.error) {
         addToast(String(data.error), 'error')
       } else {
-        addToast(`Exported ${(data as any).pairs_count || 0} pairs to ${(data as any).filepath || 'file'}`, 'success')
+        addToast(`Exported ${data.pairs_count || 0} pairs to ${data.filepath || 'file'}`, 'success')
         void fetchStats()
       }
     } catch (err) {

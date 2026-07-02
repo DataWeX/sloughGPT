@@ -21,8 +21,6 @@ export { ChatSearchBar } from './ChatSearchBar'
 export { ChatArea, type ChatAreaProps, type ChatAreaRef } from './ChatArea'
 export { ConversationViewer, type ConversationViewerProps } from './ConversationViewer'
 export { SoulSelectorDropdown } from './SoulSelectorDropdown'
-export { AgentSelectorDropdown } from './AgentSelectorDropdown'
 export { ChatMoreMenu } from './ChatMoreMenu'
-export { LocalEngineToggle } from './LocalEngineToggle'
 export { DownloadDialog } from './DownloadDialog'
 
