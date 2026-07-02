@@ -126,8 +126,7 @@ describe('activity inference', () => {
     ]);
 
     const result = forwardPass(weights, data);
-    const validActivities = ['stationary', 'walking', 'running', 'shaking', 'driving', 'cycling'];
     // With numClasses=2, valid names are 'stationary' or 'walking'
-    expect(['stationary', 'walking']).toContain(result.activity);
+    expect(['stationary', 'walking']).toContain(result.className);
   });
 });

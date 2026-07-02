@@ -5,6 +5,11 @@ jest.mock('../../services/api-client', () => ({
   getApiUrl: jest.fn(async () => 'http://localhost:8000'),
 }));
 
+// Mock activity-inference so initInference() is a no-op
+jest.mock('../../services/activity-inference', () => ({
+  initInference: jest.fn(async () => true),
+}));
+
 // Mock global fetch
 const mockFetch = jest.fn();
 global.fetch = mockFetch as any;
@@ -94,7 +99,7 @@ describe('model-sync', () => {
       expect(cached).toBeTruthy();
     });
 
-    it('falls back to flag when download fails', async () => {
+    it('returns false when download fails', async () => {
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
@@ -103,10 +108,7 @@ describe('model-sync', () => {
         .mockResolvedValueOnce({ok: false});
 
       const result = await mod.syncModel();
-      expect(result).toBe(true);
-
-      const cached = await AsyncStorage.getItem('@sloughgpt/activity_model_cached');
-      expect(cached).toBe('true');
+      expect(result).toBe(false);
     });
   });
 
