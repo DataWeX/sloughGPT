@@ -1,12 +1,19 @@
 'use client'
 import { useEffect, useRef } from 'react'
-import { useApiMonitor, type HealthSummaryData } from '@/lib/api-monitor-store'
+import { useApiMonitor } from '@/lib/api-monitor-store'
 import { apiGet } from '@/lib/http-client'
 
 const POLL_INTERVAL = 8000
 const REQUEST_TIMEOUT = 10000
 const MAX_FAILURES = 3
 const RELOAD_DELAY_MS = 1500
+
+interface HealthSummary {
+  score: number
+  status: string
+  summary: string
+  model_loaded: boolean
+}
 
 export function useBackendWatcher() {
   const setStatus = useApiMonitor((s) => s.setStatus)
@@ -23,13 +30,13 @@ export function useBackendWatcher() {
       if (cancelled) return
 
       try {
-        const data = await apiGet<HealthSummaryData>('/health/summary', undefined, {
+        const data = await apiGet<HealthSummary>('/health/summary', undefined, {
           timeout: REQUEST_TIMEOUT,
           silent: true,
         })
         if (cancelled) return
         failureCount.current = 0
-        setHealthSummary(data)
+        setHealthSummary(data as any)
 
         if (wasOffline.current) {
           wasOffline.current = false

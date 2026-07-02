@@ -5,7 +5,7 @@ import { modelController } from '@/lib/model-controller'
 import type { HealthStatus } from '@/lib/model-controller'
 import { soulsController } from '@/lib/souls-controller'
 import { sessionController } from '@/lib/session-controller'
-import { trainingController, type TrainingJob } from '@/lib/training-controller'
+import { trainingController } from '@/lib/training-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { feedbackController, type FeedbackStats } from '@/lib/feedback-controller'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
@@ -68,15 +68,15 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
           .filter(s => s.name || s.id)
           .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
           .slice(0, 5)
-        setRecentSessions(sorted)
+        setRecentSessions(sorted as any)
       }
     }).catch(() => {})
     trainingController.list().then(jobs => {
       if (!cancelled.current) {
-        const running = jobs.find((j) => j.status === 'running')
+        const running = jobs.find((j: any) => j.status === 'running')
         setRunningTraining(running ? { name: running.name || running.id, status_message: running.status_message || 'Training...' } : null)
         const recent = [...jobs]
-          .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+          .sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
           .slice(0, 3)
         setRecentJobs(recent)
       }

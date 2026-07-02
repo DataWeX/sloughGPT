@@ -145,47 +145,4 @@ export const knowledgeController = {
     if (!resp.ok) throw new Error(`Upload failed: ${resp.statusText}`)
     return resp.json()
   },
-
-  // ── Practical knowledge operations ──
-
-  async searchFiles(query: string, path = '.', extensions?: string[], topK = 10): Promise<{
-    results: Array<{ path: string; line: number; snippet: string; score: number }>
-    indexed_files: number
-    indexed_chunks: number
-  }> {
-    return apiPost('/knowledge/search-files', { query, path, extensions, top_k: topK })
-  },
-
-  async checkDuplicate(content: string, threshold = 0.85): Promise<{
-    is_duplicate: boolean
-    best_match: string | null
-    score: number
-    threshold: number
-  }> {
-    return apiPost('/knowledge/check-duplicate', { content, threshold })
-  },
-
-  async categorize(content: string): Promise<{
-    topic: string
-    suggestions: Array<{ topic: string; score: number }>
-  }> {
-    return apiPost('/knowledge/categorize', { content })
-  },
-
-  async gaps(): Promise<{
-    gaps: Array<{ topic: string; suggestion: string }>
-    total_facts: number
-    topics: string[]
-  }> {
-    return apiGet('/knowledge/gaps')
-  },
-
-  async bulkIngest(items: string[], topic = 'imported', source = 'bulk', dedupThreshold = 0.85): Promise<{
-    status: string
-    added: number
-    skipped: number
-    errors: number
-  }> {
-    return apiPost('/knowledge/bulk-ingest', { items, topic, source, dedup_threshold: dedupThreshold })
-  },
 }

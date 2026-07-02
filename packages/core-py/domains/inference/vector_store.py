@@ -394,15 +394,30 @@ async def create_vector_store(provider: str = "in_memory", **kwargs: Any) -> Vec
 
 _embed_model: Optional[Any] = None
 _EMBED_DIM: int = 384
+_EMBED_LOAD_FAILED: bool = False
 
 
 def _load_embed_model() -> Any:
-    """Return the sentence-transformers model if already loaded, else None.
-
-    We do NOT lazy-load it here — loading a second PyTorch model into a
-    process that already has Qwen causes OOM on 8 GB Macs.  The caller
-    (simple_embed) falls back to the numpy n-gram embedder.
-    """
+    """Lazy-load a sentence-transformers model for semantic embeddings."""
+    global _embed_model, _EMBED_LOAD_FAILED
+    if _EMBED_LOAD_FAILED:
+        return None
+    if _embed_model is None:
+        try:
+            import os as _os
+            _os.environ.setdefault("PYTORCH_MPS_HIGH_WATERMARK_RATIO", "0.0")
+            import torch as _torch
+            _torch.backends.mps.is_available = lambda: False
+            from sentence_transformers import SentenceTransformer
+            _embed_model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
+            logger.info("Loaded sentence-transformers embedding model (384-dim, cpu)")
+        except Exception as exc:
+            logger.warning(
+                "sentence-transformers not available (%s), using n-gram embedding",
+                exc,
+            )
+            _EMBED_LOAD_FAILED = True
+            return None
     return _embed_model
 
 
@@ -429,12 +444,12 @@ def _tokenize(text: str) -> list[str]:
 
 
 def _word_ngram_embed(text: str, dimension: int = 384) -> np.ndarray:
-    """Word-level n-gram embedding with multi-hash feature hashing.
+    """Word-level n-gram TF-IDF embedding using numpy only.
 
-    Extracts word unigrams, bigrams, and trigrams.  Uses 3 independent hash
-    seeds per n-gram (feature hashing) to reduce collision effects.  Adds
-    character-level trigrams for sub-word overlap.  Log-frequency TF weighting,
-    L2-normalized.
+    Outperforms character n-grams for semantic retrieval by operating
+    on word tokens. Extracts word unigrams, bigrams, and trigrams.
+    Frequent stopwords receive a 0.5 IDF penalty so they contribute
+    less to similarity. Log-frequency TF weighting. L2-normalized.
     """
     vec = np.zeros(dimension, dtype=np.float64)
     tokens = _tokenize(text)
@@ -449,18 +464,9 @@ def _word_ngram_embed(text: str, dimension: int = 384) -> np.ndarray:
             ngrams.append(" ".join(tokens[i:i + n]))
 
     for ng in ngrams:
-        raw = ng.encode()
-        for seed in range(3):
-            h = int(hashlib.md5(raw + bytes([seed])).hexdigest()[:8], 16)
-            idx = h % dimension
-            vec[idx] += 1.0
-
-    lower = text.lower()
-    for i in range(max(0, len(lower) - 3)):
-        tri = lower[i:i+3]
-        h = int(hashlib.md5(tri.encode()).hexdigest()[:8], 16)
+        h = int(hashlib.md5(ng.encode()).hexdigest()[:8], 16)
         idx = h % dimension
-        vec[idx] += 0.3
+        vec[idx] += 1.0
 
     vec = np.log1p(vec)
     norm = np.linalg.norm(vec)

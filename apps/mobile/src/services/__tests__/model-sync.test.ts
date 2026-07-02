@@ -109,6 +109,9 @@ describe('model-sync', () => {
 
       const result = await mod.syncModel();
       expect(result).toBe(false);
+
+      const cached = await AsyncStorage.getItem('@sloughgpt/activity_model_cached');
+      expect(cached).toBeNull();
     });
   });
 
