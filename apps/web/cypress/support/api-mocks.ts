@@ -116,12 +116,14 @@ Cypress.Commands.add('mockVisual', () => {
   }).as('visualCheckpoints')
   cy.intercept('GET', `${api}/multimodal/status`, {
     statusCode: 200,
-    body: { visual_loaded: true, model_dir: 'models/visual-finetuned', total_checkpoints: 2 },
+    body: {
+      engine: { speech_to_text: false, image_caption: false, speech_model: null, vision_model: 'slomet', status: 'ready' },
+      learning: { images_learned: 0, trained: false, vocab_size: 0, replay_buffer_size: 0, learning_method: '', caption_history: [], unique_captions: 0, diversity_ratio: 0, accuracy_history: [], mean_accuracy: 0, last_accuracy: 0 },
+      batch: { running: false, job_id: null, total: 0, completed: 0, errors: 0, progress_pct: 0, current_caption: '', current_image: '', started_at: null, finished_at: null },
+      dpo: { status: 'idle', last_run: null, result: null, accepted_count: 0, rejected_count: 0 },
+      video: { status: 'idle', job_id: null, current_epoch: 0, current_step: 0, total_steps: 0, current_loss: null, result: null, error: null },
+    },
   }).as('visualStatus')
-  cy.intercept('GET', `${api}/multimodal/dpo/status`, {
-    statusCode: 200,
-    body: { dpo_running: false, dpo_completed: true, dpo_delta_ppl: 0.15, dpo_delta_bleu: 3.2 },
-  }).as('dpoStatus')
   cy.intercept('GET', `${api}/multimodal/train/status`, {
     statusCode: 200,
     body: { training: false, completed: false, progress: 0, epoch: 0, loss: null, error: null },
@@ -141,29 +143,16 @@ Cypress.Commands.add('mockVisual', () => {
 })
 
 Cypress.Commands.add('mockMultimodal', () => {
-  cy.intercept('GET', `${api}/multimodal/capabilities`, {
+  cy.intercept('GET', `${api}/multimodal/status`, {
     statusCode: 200,
     body: {
-      vision_enabled: true, speech_enabled: false,
-      vision_model: 'slonet', learning_progress: 0.65,
-      images_learned: 42, vocab_size: 128, caption_history: [],
-      accuracy_history: [], mean_accuracy: 64.2, last_accuracy: 58.0,
-      trained: true, replay_buffer_size: 500,
+      engine: { speech_to_text: true, image_caption: true, speech_model: 'whisper', vision_model: 'soulnet', status: 'ready' },
+      learning: { images_learned: 42, trained: true, vocab_size: 128, replay_buffer_size: 500, learning_method: 'contrastive + self-training', caption_history: ['a cat sitting on a chair', 'a red car', 'a dog in the park'], unique_captions: 3, diversity_ratio: 1.0, accuracy_history: [40, 50, 60, 70, 65, 72, 68, 75, 80, 78], mean_accuracy: 64.2, last_accuracy: 78 },
+      batch: { running: false, job_id: null, total: 0, completed: 0, errors: 0, progress_pct: 0, current_caption: '', current_image: '', started_at: null, finished_at: null },
+      dpo: { status: 'idle', last_run: null, result: null, accepted_count: 0, rejected_count: 0 },
+      video: { status: 'idle', job_id: null, current_epoch: 0, current_step: 0, total_steps: 0, current_loss: null, result: null, error: null },
     },
-  }).as('multimodalCaps')
-  cy.intercept('GET', `${api}/multimodal/training-report`, {
-    statusCode: 200,
-    body: {
-      images_learned: 42, vocab_size: 128,
-      caption_history: ['a cat sitting on a chair', 'a red car', 'a dog in the park'],
-      accuracy_history: [40, 50, 60, 70, 65, 72, 68, 75, 80, 78],
-      mean_accuracy: 64.2, last_accuracy: 78,
-    },
-  }).as('multimodalReport')
-  cy.intercept('GET', `${api}/multimodal/training-status`, {
-    statusCode: 200,
-    body: { running: false, completed: 0, errors: 0 },
-  }).as('multimodalTrainStatus')
+  }).as('multimodalStatus')
   cy.intercept('POST', `${api}/multimodal/reset`, {
     statusCode: 200,
     body: { status: 'success', message: 'Model reset' },
