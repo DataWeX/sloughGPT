@@ -2,7 +2,7 @@
 Unified Training Pipeline
 
 Composite pipeline that wraps existing trainers through TrainingSequence phases.
-Supports SloughGPTTrainer, HFFineTuner, DistillationTrainer, and TurboTrainer.
+Supports SloughGPTTrainer, HFFineTuner, DistillationTrainer, and SloNet.
 
 High-level TrainingStage tracks strategy (pretraining/federated/rlhf),
 while TrainingSequence tracks low-level phases (GENERATE_DATA→DISTILL→TRAIN→...).
@@ -17,7 +17,7 @@ import threading
 import time
 import warnings
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
@@ -110,7 +110,7 @@ class TrainingProgress:
         # Include finish-specific fields from metrics when present
         # Sanitize numeric fields to prevent Infinity/NaN in JSON
         _numeric_metrics = {"final_loss", "total_steps", "elapsed", "epochs"}
-        for key in ("final_loss", "model_path", "total_steps", "elapsed", "checkpoint", "cancelled", "epochs"):
+        for key in ("final_loss", "model_path", "total_steps", "elapsed", "checkpoint", "cancelled", "epochs", "sensitivity"):
             if key in self.metrics:
                 val = self.metrics[key]
                 if key in _numeric_metrics and not isinstance(val, str):
@@ -141,7 +141,7 @@ class UnifiedTrainingConfig:
     """Configuration for the unified training pipeline.
 
     Aggregates settings for all supported trainer types.
-    Specific trainer configs (e.g. HFTrainingRequest, TrainerConfig, TurboConfig)
+    Specific trainer configs (e.g. HFTrainingRequest, TrainerConfig)
     can be passed via the ``trainer_kwargs`` dict.
     """
     # General
@@ -230,8 +230,8 @@ class UnifiedTrainingConfig:
 class UnifiedTrainingPipeline:
     """Composite pipeline orchestration.
 
-    Wraps existing trainers (SloughGPTTrainer, HFFineTuner, DistillationTrainer,
-    TurboTrainer) and drives them through ``TrainingSequence`` phases:
+    Wraps existing trainers (SloughGPTTrainer, HFFineTuner, DistillationTrainer)
+    and drives them through ``TrainingSequence`` phases:
 
         GENERATE_DATA → DISTILL → TRAIN → EVALUATE → DEPLOY → COMPLETE
 
@@ -698,33 +698,37 @@ class UnifiedTrainingPipeline:
         self,
         on_progress: Optional[Callable[[TrainingProgress], None]] = None,
     ) -> TrainResult:
-        """Train via TurboTrainer."""
-        from domains.training.turbo_trainer import TurboTrainer, TurboConfig
+        """Train via SloughGPTTrainer (decoder-only transformer)."""
+        from domains.training.train_pipeline import SloughGPTTrainer
 
-        turbo_config = TurboConfig(
-            model_spec=self.config.turbo_model_spec,
-            data_path=self.config.data_path or self.config.dataset_name,
-            output_dir=self.config.output_dir,
+        trainer = SloughGPTTrainer(
+            data_path=self.config.data_path or self.config.dataset_name or "",
             vocab_size=self.config.turbo_vocab_size,
             n_embed=self.config.turbo_n_embed,
+            n_layer=self.config.turbo_n_layer if hasattr(self.config, 'turbo_n_layer') else 2,
             n_head=self.config.turbo_n_head,
-            epochs=self.config.epochs,
+            block_size=self.config.turbo_block_size if hasattr(self.config, 'turbo_block_size') else 64,
             batch_size=self.config.batch_size,
-            learning_rate=self.config.learning_rate,
-            **self.config.trainer_kwargs,
+            epochs=self.config.epochs,
+            lr=self.config.learning_rate,
+            checkpoint_dir=self.config.output_dir,
+            soul_name=self.config.soul_name,
         )
-        trainer = TurboTrainer(turbo_config)
 
         step_counter = [0]
 
         def _turbo_progress(info: Dict[str, Any]):
             step_counter[0] += 1
+            metrics: Dict[str, Any] = {"progress_pct": info.get("progress_pct", 0)}
+            if "sensitivity" in info:
+                metrics["sensitivity"] = info["sensitivity"]
             self._update_progress(
                 "train",
                 epoch=info.get("epoch", 0),
                 step=info.get("step", step_counter[0]),
                 loss=info.get("loss"),
                 message=f"Step {step_counter[0]}",
+                metrics=metrics,
             )
             if on_progress:
                 on_progress(self.progress)
@@ -990,7 +994,7 @@ class UnifiedTrainingPipeline:
         manifest = {
             "pipeline": "unified",
             "method": self._method,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "config": {
                 "epochs": self.config.epochs,
                 "batch_size": self.config.batch_size,
@@ -1012,82 +1016,6 @@ class UnifiedTrainingPipeline:
             logger.warning("Could not write manifest: %s", e)
 
         return {"model_path": str(output_dir)}
-
-
-# =============================================================================
-# FederatedRLTrainer
-# =============================================================================
-
-
-class FederatedRLTrainer:
-    """Federated reinforcement learning trainer (stub).
-
-    Intended for privacy-preserving federated fine-tuning with RLHF alignment.
-
-    .. deprecated::
-        Use ``SloughGPTTrainer`` instead.
-    """
-
-    _is_training: bool = False
-
-    @property
-    def is_training(self) -> bool:
-        """Whether training is in progress."""
-        return self._is_training
-
-    def stop(self) -> None:
-        """Request early stopping."""
-        self._is_training = False
-
-    def __init__(
-        self,
-        num_clients: int = 5,
-        aggregation: str = "fedavg",
-        local_epochs: int = 3,
-        **kwargs,
-    ):
-        warnings.warn(
-            "FederatedRLTrainer is deprecated — use SloughGPTTrainer instead",
-            DeprecationWarning, stacklevel=2,
-        )
-        self.num_clients = num_clients
-        self.aggregation = aggregation
-        self.local_epochs = local_epochs
-        self._config = kwargs
-
-    def train(
-        self,
-        on_progress: Optional[Callable[[TrainingProgress], None]] = None,
-    ) -> TrainResult:
-        """Run federated training (stub — returns placeholder result).
-
-        Args:
-            on_progress: Optional progress callback.
-
-        Returns:
-            TrainResult with status and rounds.
-        """
-        self._is_training = True
-        logger.info(
-            "Federated training: %d clients, %s aggregation, %d local epochs",
-            self.num_clients,
-            self.aggregation,
-            self.local_epochs,
-        )
-        progress = TrainingProgress(
-            phase="federated",
-            status="complete",
-            message=f"Federated training placeholder ({self.num_clients} clients)",
-        )
-        if on_progress:
-            on_progress(progress)
-        self._is_training = False
-        return TrainResult(
-            success=True,
-            status="completed",
-            method="federated",
-            metrics={"rounds": self.num_clients, "message": "Federated RL training placeholder"},
-        )
 
 
 # =============================================================================
@@ -1126,6 +1054,5 @@ __all__ = [
     "TrainingProgress",
     "UnifiedTrainingConfig",
     "UnifiedTrainingPipeline",
-    "FederatedRLTrainer",
     "create_pipeline",
 ]

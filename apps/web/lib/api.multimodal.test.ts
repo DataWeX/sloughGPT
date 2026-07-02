@@ -14,7 +14,6 @@ import { setupApiMocks, apiClient } from './__test-helper'
 setupApiMocks()
 
 import { multimodalController } from './multimodal-controller'
-import { visualController } from './visual-controller'
 
 describe('multimodalController.getCapabilities', () => {
   beforeEach(() => { vi.clearAllMocks() })
@@ -135,71 +134,5 @@ describe('multimodalController.trainBatchFromDir', () => {
     expect(result.status).toBe('started')
     expect(result.total_images).toBe(42)
     expect(apiClient.apiPost).toHaveBeenCalledWith('/multimodal/train-batch', expect.any(FormData), { raw: true })
-  })
-})
-
-describe('visualController.createVisualDataset', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('POSTs /multimodal/visual-dataset with config', async () => {
-    apiClient.apiPost.mockResolvedValue({
-      status: 'created',
-      dataset: 'my-dataset',
-      path: '/repo/datasets/my-dataset/corpus.jsonl',
-      entries: 15,
-      auto_captioned: true,
-    })
-
-    const result = await visualController.createVisualDataset('my-dataset', '/data/images')
-    expect(result.status).toBe('created')
-    expect(result.entries).toBe(15)
-    expect(result.auto_captioned).toBe(true)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/multimodal/visual-dataset', {
-      name: 'my-dataset',
-      image_dir: '/data/images',
-      caption_prompt: 'Describe this image in detail.',
-      auto_caption: true,
-    })
-  })
-
-  it('allows custom caption prompt', async () => {
-    apiClient.apiPost.mockResolvedValue({
-      status: 'created',
-      dataset: 'custom-dataset',
-      path: '/repo/datasets/custom-dataset/corpus.jsonl',
-      entries: 5,
-      auto_captioned: false,
-    })
-
-    const result = await visualController.createVisualDataset('custom-dataset', '/path', 'What do you see?', false)
-    expect(result.entries).toBe(5)
-    expect(result.auto_captioned).toBe(false)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/multimodal/visual-dataset', {
-      name: 'custom-dataset',
-      image_dir: '/path',
-      caption_prompt: 'What do you see?',
-      auto_caption: false,
-    })
-  })
-})
-
-describe('modelController.loadVisualModel', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('POSTs /models/visual-load with query params', async () => {
-    const { modelController } = await import('./model-controller')
-    apiClient.apiPost.mockResolvedValue({
-      status: 'loaded',
-      model_id: 'visual',
-      type: 'visual',
-      vision_encoder: 'google/siglip-base-patch16-224',
-      llm: 'Qwen/Qwen2.5-0.5B-Instruct',
-    })
-
-    const result = await modelController.loadVisualModel('/path/to/visual-dir', 'my-visual')
-    expect(result.status).toBe('loaded')
-    expect(result.type).toBe('visual')
-    expect(result.vision_encoder).toContain('siglip')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/models/visual-load?model_dir=%2Fpath%2Fto%2Fvisual-dir&model_id=my-visual')
   })
 })

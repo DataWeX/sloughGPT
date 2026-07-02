@@ -18,7 +18,7 @@ CardHeader.displayName = 'CardHeader'
 
 const CardTitle = forwardRef<HTMLParagraphElement, HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
-    <h2 ref={ref} className={['text-lg font-semibold leading-none tracking-tight', className].filter(Boolean).join(' ')} {...props} />
+    <h2 ref={ref} className={['text-base font-semibold leading-none tracking-tight', className].filter(Boolean).join(' ')} {...props} />
   )
 )
 CardTitle.displayName = 'CardTitle'

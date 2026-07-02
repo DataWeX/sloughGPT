@@ -21,11 +21,27 @@ async function _fetchAndNotify() {
   _notify()
 }
 
+/** Re-fetch immediately when the tab becomes visible. */
+function _onVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    _fetchAndNotify().catch(() => {})
+  }
+}
+
 /** Start the poll interval with an immediate first fetch. */
 function _startPolling() {
   if (_pollId) return
   _fetchAndNotify().catch(() => {})
   _pollId = setInterval(_fetchAndNotify, POLL_MS)
+  document.addEventListener('visibilitychange', _onVisibilityChange)
+}
+
+function _stopPolling() {
+  if (_pollId) {
+    clearInterval(_pollId)
+    _pollId = null
+  }
+  document.removeEventListener('visibilitychange', _onVisibilityChange)
 }
 
 // ── Eager pre-fetch at module init ──────────────────────────────────────

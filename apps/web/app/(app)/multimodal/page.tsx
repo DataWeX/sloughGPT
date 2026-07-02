@@ -5,11 +5,14 @@ import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Skeleton } from '@/components/ui'
 import { Button } from '@/components/ui/button'
 import { IconRefresh } from '@/components/ui'
-import { multimodalController, visualController } from '@/lib/controllers'
+import { multimodalController } from '@/lib/controllers'
 import type { MultimodalCapabilities, TrainingReport, TrainingStatus } from '@/lib/multimodal-controller'
 import { useToastStore } from '@/lib/toast-store'
+import { apiGet, apiPost } from '@/lib/http-client'
+import dynamic from 'next/dynamic'
 import CapabilitiesCard from '@/components/multimodal/CapabilitiesCard'
-import TrainingCard from '@/components/multimodal/TrainingCard'
+
+const TrainingCard = dynamic(() => import('@/components/multimodal/TrainingCard'), { ssr: false })
 import ImageTrainingCard from '@/components/multimodal/ImageTrainingCard'
 import BatchTrainingCard from '@/components/multimodal/BatchTrainingCard'
 import VisualDatasetCard from '@/components/multimodal/VisualDatasetCard'
@@ -73,7 +76,7 @@ export default function MultimodalPage() {
 
   const pollDPOStatus = useCallback(async () => {
     try {
-      const s = await visualController.getDPOStatus()
+      const s = await apiGet<{ status: string; accepted_count: number; rejected_count: number; result?: any }>('/multimodal/dpo/status')
       setDpoStatus(s.status)
       setDpoAccepted(s.accepted_count)
       setDpoRejected(s.rejected_count)
@@ -131,7 +134,12 @@ export default function MultimodalPage() {
   const handleCreateVisualDataset = async (name: string, imageDir: string) => {
     setCreatingDataset(true)
     try {
-      const result = await visualController.createVisualDataset(name, imageDir)
+      const result = await apiPost<{ dataset: string; entries: number }>('/multimodal/visual-dataset', {
+        name,
+        image_dir: imageDir,
+        caption_prompt: 'Describe this image in detail.',
+        auto_caption: true,
+      })
       addToast(`Dataset "${result.dataset}" created: ${result.entries} entries`, 'success')
     } catch (err: unknown) { addToast(err instanceof Error ? err.message : 'Dataset creation failed', 'error')
     } finally { setCreatingDataset(false) }
@@ -141,7 +149,7 @@ export default function MultimodalPage() {
     if (dpoRunning || dpoStatus === 'running') return
     setDpoRunning(true); setDpoError(null); setDpoResult(null); setDpoStatus('running')
     try {
-      const result = await visualController.triggerDPO()
+      const result = await apiPost<{ status: string }>('/multimodal/dpo')
       addToast(`DPO training started: ${result.status || ''}`, 'success')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'DPO trigger failed'

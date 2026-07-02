@@ -98,7 +98,11 @@ prefix_output() {
 # ── Start API ──────────────────────────────────────────────────
 start_api() {
   log_api "Starting (port $MAN_API_PORT)..."
-  python3 apps/api/server/main.py 2>&1 &
+   local py="python3"
+   if [ -x ".venv/bin/python3" ]; then
+     py=".venv/bin/python3"
+   fi
+   $py apps/api/server/main.py 2>&1 &
   API_PID=$!
 
   if wait_for_health "$MAN_API_PORT" "api"; then

@@ -164,7 +164,7 @@ DEFAULT_LIMITS: dict[str, tuple[float, int]] = {
     "endpoint:health": (10.0, 20),       # 10 req/s, burst 20
     "endpoint:chat": (2.0, 5),           # 2 req/s, burst 5
     "endpoint:generate": (1.0, 3),       # 1 req/s, burst 3
-    "endpoint:training": (0.2, 1),       # 1 req/5s, burst 1
+    "endpoint:training": (2.0, 8),       # 2 req/s, burst 8 (supports page load + polling)
     "endpoint:login": (0.5, 3),          # 1 req/2s, burst 3
     "endpoint:register": (0.2, 2),       # 1 req/5s, burst 2
     "model:inference": (1.0, 2),         # 1 inference/s, burst 2
@@ -215,31 +215,34 @@ try:
                 # Check endpoint limit
                 if not self.limiter.check(f"endpoint:{endpoint_key}"):
                     wait = self.limiter.wait_seconds(f"endpoint:{endpoint_key}")
-                    return JSONResponse(
-                        status_code=429,
-                        content={
-                            "error": "rate_limit_exceeded",
-                            "message": "Too many requests. Please slow down.",
-                            "retry_after": round(wait, 1),
-                        },
-                        headers={"Retry-After": str(int(wait))},
-                    )
+                    return self._rate_limited_response(request, wait)
 
                 # Check per-user limit
                 if user_key and self.limiter.get_bucket(user_key):
                     if not self.limiter.check(user_key):
                         wait = self.limiter.wait_seconds(user_key)
-                        return JSONResponse(
-                            status_code=429,
-                            content={
-                                "error": "rate_limit_exceeded",
-                                "message": "Too many requests. Please slow down.",
-                                "retry_after": round(wait, 1),
-                            },
-                            headers={"Retry-After": str(int(wait))},
-                        )
+                        return self._rate_limited_response(request, wait)
 
             return await call_next(request)
+
+        @staticmethod
+        def _rate_limited_response(request: Request, wait: float) -> JSONResponse:
+            """Build a 429 response with CORS headers so browsers see the error."""
+            origin = request.headers.get("origin", "")
+            headers = {
+                "Retry-After": str(int(wait)),
+                "Access-Control-Allow-Origin": origin or "*",
+                "Access-Control-Allow-Credentials": "true",
+            }
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "error": "rate_limit_exceeded",
+                    "message": "Too many requests. Please slow down.",
+                    "retry_after": round(wait, 1),
+                },
+                headers=headers,
+            )
 
 
     def _path_to_endpoint_key(path: str) -> str | None:

@@ -16,18 +16,22 @@ interface SearchResult {
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
+  initialQuery?: string
 }
 
-export function SearchConversationsDialog({ open, onOpenChange }: Props) {
+export function SearchConversationsDialog({ open, onOpenChange, initialQuery }: Props) {
   const router = useRouter()
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery || '')
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 100)
-  }, [open])
+    if (open) {
+      if (initialQuery) setQuery(initialQuery)
+      setTimeout(() => inputRef.current?.focus(), 100)
+    }
+  }, [open, initialQuery])
 
   useEffect(() => {
     if (!query.trim()) { setResults([]); return }

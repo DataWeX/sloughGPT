@@ -98,7 +98,7 @@ async def get_prompt():
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
-    """Chat with companion."""
+    """Chat with companion — generates a response using the active model."""
     comp = _get_companion()
     
     # Adjust for mood
@@ -107,9 +107,28 @@ async def chat(req: ChatRequest):
     
     # Get system prompt
     system_prompt = comp.get_system_prompt() if req.include_system_prompt else ""
-    
+
+    # Build messages for the provider
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": req.message})
+
+    response_text = ""
+    try:
+        from domains.models.provider import get_provider
+        provider = get_provider("default")
+        if provider is not None:
+            response_text = await provider.chat(
+                messages,
+                max_tokens=256,
+                temperature=0.7,
+            )
+    except Exception:
+        pass  # Return empty response with system prompt on failure
+
     return ChatResponse(
-        response="",  # Model will generate this
+        response=response_text,
         system_prompt=system_prompt,
     )
 

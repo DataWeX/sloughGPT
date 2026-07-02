@@ -174,6 +174,37 @@ class QuickTrainRequest(BaseModel):
     device: Optional[str] = None
 
 
+class DistillStartRequest(BaseModel):
+    """Knowledge distillation: teach a compact student from a larger teacher model.
+
+    The teacher is loaded from the HF model registry (must be loaded in server).
+    The student is created as a SloNet LSTM with the given architecture.
+    """
+    teacher_model: str = Field(default="gpt2", description="Teacher model ID registered in the model server")
+    dataset: str = ""
+    name: str = "distill-job"
+    temperature: float = 4.0
+    alpha: float = 0.5
+    beta: float = 0.5
+    epochs: int = 10
+    embed_dim: int = 64
+    n_layers: int = 2
+    n_heads: int = 4
+    block_size: int = 64
+
+
+class ActivityTrainingRequest(BaseModel):
+    """Train or retrain the activity classifier on collected sensor data.
+
+    Sensor data is loaded from ``data/activity_records/*.npz`` on the
+    server — no need to re-send raw data for training.
+    """
+    epochs: int = 30
+    lr: float = 0.001
+    batch_size: int = 16
+    name: str = "activity-training"
+
+
 class UnifiedStartRequest(BaseModel):
     """Request body for /training/unified-start.
 

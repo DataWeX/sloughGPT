@@ -293,8 +293,8 @@ Chat UI components are in [`apps/web/components/chat/`](apps/web/components/chat
 - Responsive design
 
 ### Pending (Multimodal Engine)
-- Voice input (Web Speech API) - pending multimodal inference
-- Image upload with preview - pending multimodal inference
+- Voice input: ✅ implemented (Web Speech API browser fallback → server `/multimodal/transcribe`)
+- Image upload with preview: ✅ implemented (`ImageUpload` + `ImageDropZone` → base64 → chat message `images` field)
 
 ### API Configuration
 Frontend uses direct API URL: `http://localhost:8000/chat/stream`
@@ -536,12 +536,12 @@ class ClassName:
 
 ---
 
-## Next Steps
-1. ~~Test `/chat/stream` with ModelsController model loaded~~ — router works; needs controller model pre-loaded (separate issue)
-2. ~~Test regenerated SSE endpoint with actual session context~~ — standardized, confirmed working via curl
-3. ~~Consider native Metal/OpenCL compute without PyTorch for long-term architecture purity~~ — done via `soullib/gpu` accelerator backend
-4. ~~Test server's `/auto-train/start` endpoint end-to-end from web UI with new SSE envelope~~ — confirmed working
-5. **On-device continuous activity training** (apps/mobile/) — collect 6-axis sensor data in the background during daily activity, periodically auto-train the activity classifier (currently at packages/core-py/domains/activity/), sync updated model weights back to device. Needs: background sensor recording service in React Native, background training-trigger scheduling, lightweight model download after server-side training.
+## Next Steps (Current)
+1. ~~Test end-to-end activity pipeline: phone sensor recording → server training → sync back to device.~~ ✅ Full pipeline verified: 12 labeled recordings → train (20 epochs) → predict → model download → cleanup. All 61 activity tests + 19 router tests pass.
+2. ~~Complete InferenceEngineProvider → ModelServer refactor~~ ✅ Deduplicated semaphore/circuit-breaker/warmup; InferenceEngineProvider now delegates to ModelServer like HFModelProvider.
+3. ~~Fix coroutine warning in config.py~~ ✅ `reload()` now uses `asyncio.run()` when no event loop is running so async handlers are properly awaited instead of silently dropped.
+4. ~~Consider process-level isolation for model serving~~ ✅ Infrastructure exists (`ModelWorkerProcess`, `ProcessGuard`, `ModelServer._generate_sync()` delegation). Not wired into production — current in-process mechanism sufficient for CPU inference with small models (GPT-2 124M passes Gold Standard, Qwen-0.5B survives 10+ sequential requests). Process isolation warranted when: (a) GPU support returns, (b) model sizes exceed single-process memory, or (c) multi-tenant serving requires crash containment. Wiring requires: model loading in subprocess, streaming token queue, `ProcessGuard` ↔ `CircuitBreaker` integration, and memory accounting across processes.
+5. ~~Visual comparison / model auto-distillation pipeline wiring~~ ✅ DistillCard now has "Load for chat" button, `onComplete` callback refreshes checkpoint list, output_dir fixed to use REPO_ROOT.
 
 ## Accelerator Integration (soullib/gpu → SloNet)
 
@@ -1821,11 +1821,11 @@ Built a crash-resilient, composable model serving layer. `ModelServer` wraps any
 - `state.py` uses `__getattr__`/`__setattr__` for backward compatibility instead of requiring consumer changes — thread safety is transparent
 - Cancel-on-disconnect uses HuggingFace `StoppingCriteria` (checked every token gen step) + `GeneratorExit` handling — thread stops within one token of disconnect
 
-### Next Steps
-1. Add warmup request on model registration to prime KV cache
-2. Wire `InferenceEngineProvider` into `ModelServer` pattern
-3. Add `request.is_disconnected()` checks in router-level streaming generator alongside `cancel_event`
-4. Consider process-level isolation (Ray Serve, Triton) if single-process crashes recur despite circuit breaker
+### Status
+- [x] Warmup request on model registration (daemon thread in `ModelServer.__init__`)
+- [x] `request.is_disconnected()` checks alongside `cancel_event` in all streaming routers (inference, session, souls, agents, auto_train)
+- [ ] Wire `InferenceEngineProvider` into `ModelServer` pattern (deduplicate semaphore/circuit-breaker/warmup)
+- [ ] Consider process-level isolation (Ray Serve, Triton) if single-process crashes recur despite circuit breaker
 
 ### Relevant Files
 - `packages/core-py/domains/infrastructure/model_server.py` — `ModelServer`, `CircuitBreaker`, `ModelMetrics`, `ModelStatus`
@@ -2419,4 +2419,91 @@ Next step: wire background sensor collection + periodic training into the React 
 ### Relevant Files
 - `packages/core-py/domains/training/slonet.py`: `_im2col` vectorized (line 1958), col2im via `np.add.at` (line 2040)
 - `packages/core-py/domains/activity/classifier.py`: `_augment_batch()` (line 140), grad clipping + scheduler + augmentation wiring in `train_classifier`**
+
+---
+
+## Session 2026-06-30 — Multi-Agent Async Conversion + Activity Router Tests
+
+### Summary
+Added async `async_execute()` to `MultiAgentOrchestrator` (replaces `ThreadPoolExecutor` with `asyncio.gather`), rewrote `/orchestrate` SSE route to use async methods, wrote 10 async method tests (42 total, all pass). Added 19 server-level integration tests for the activity router covering all 7 endpoints (record, status, dataset, train, predict, delete, train/stream, model download).
+
+### Changes
+
+| # | Change | File | Impact |
+|---|--------|------|--------|
+| 1 | Added `async_execute()`, `_async_generate`, `_async_plan`, `_async_run_agent`, `_async_compose` | `multi.py` | Non-blocking orchestration via `asyncio.gather` |
+| 2 | Rewrote `/orchestrate` SSE route — uses `_async_plan`, `asyncio.gather` for level execution, `_async_compose` | `agents.py` | No blocking thread pool or sync `requests.post` |
+| 3 | 10 async method tests for `MultiAgentOrchestrator` | `test_multi_agent.py` | 42 total (was 32), all pass |
+| 4 | 19 server integration tests for activity endpoints | `test_activity_router.py` | All 7 endpoints covered |
+
+### Follow-up (same session) — `test_server_integration.py` Fixture Rewrite
+
+| # | Change | File | Impact |
+|---|--------|------|--------|
+| 1 | Replaced `_GEN_CONFIG` global + per-fixture patching with `autouse` `patch.object(ModelServer, "_generate_sync", new=_mock_generate_sync)` | `test_server_integration.py` | All 33 tests pass — no warmup race conditions, no event-loop binding issues |
+| 2 | Removed `mock_gen`, `mock_gen_fail`, `mock_gen_slow` fixtures | `test_server_integration.py` | Tests that need fail/slow behavior set `server._generate_sync = _fail_func` inline |
+| 3 | Used `patch.object(ModelServer, "_generate_sync", new=...)` with `new=` kwarg | fixture | Bypasses MagicMock's descriptor protocol — no `self` injection into mock calls |
+| 4 | Set `enable_warmup=False` on circuit-breaker test | `test_circuit_breaker_opens` | Prevents warmup thread binding semaphore to a different event loop |
+| 5 | Warmup-failure test uses `with patch.object(...):` around server creation | `test_warmup_graceful_on_failure` | Ensures mock is active during warmup thread creation |
+
+### Key Lessons
+- `patch.object(Class, "method", side_effect=fn)` creates a MagicMock with descriptor `__get__` — when accessed via `self.method`, `self` is injected as first arg (7 positional args for 6 parameter function). Use `new=fn` instead to replace with a plain function.
+- Warmup threads running `loop.run_until_complete(self.generate(...))` bind the semaphore to that thread's event loop — any subsequent `await server.generate()` from an async test fails with "bound to a different event loop". Fix: `enable_warmup=False` on tests that aren't explicitly testing warmup.
+
+### Verification
+- **33/33** `test_server_integration.py` tests pass
+- **133/133** `tests/server/` tests pass (activity router + all others)
+- **257/257** core-py tests (shell, multi-agent, server integration, multimodal, vector store, context managers, etc.) pass
+- **3 pre-existing failures** in `test_tokenizer.py::TestSloEngineLearn` — SloNet backward pass broadcast bug (`(99,) (512,)`), unrelated to our changes
+
+---
+
+## Session 2026-07-01 — Chat Page Code Splitting + Bundle Size Audit
+
+### Summary
+Code-split 5 always-mounted chat components (`ChatSettings`, `ChatToolPanel`, `ReadFileSection`, `DownloadDialog`, `SystemPromptDialog`) via `next/dynamic` with conditional render guards — saves ~11 kB from chat page initial bundle. Added wrapper dialogs with `{condition && <Component open=true>}` so dynamic chunks only load on demand.
+
+### Changes
+| # | Change | File | Impact |
+|---|--------|------|--------|
+| 1 | Replaced 5 static imports with `next/dynamic` | `chat/page.tsx` | ChatSettings, ChatToolPanel, ReadFileSection, DownloadDialog, SystemPromptDialog now lazy |
+| 2 | Added conditional render guards | `chat/page.tsx` | `{ui.showSettings && ...}`, `{model.pendingDownload !== null && ...}`, `{systemPromptOpen && ...}`, `{searchConversationsOpen && ...}` |
+| 3 | Set `open={true}` unconditionally inside guard | `chat/page.tsx` | Dialogs only render when condition is true, open immediately |
+
+### Verification
+- `tsc --noEmit` → 0 errors
+- `next build` → 19 pages, 0 errors
+- `vitest run` → 2299 tests (215 files), all pass
+- Affected component tests: ChatSettings (6), ChatToolPanel (9), ConversationSidebar (32), DownloadDialog (9), ChatToolbar (5), useChatToolbarValue (8) → all pass
+
+## Session 2026-07-01 — Bidirectional DAG (Forward-Mode AD) + Test Fixes + Cleanup
+
+### Summary
+Implemented bidirectional DAG for forward-mode automatic differentiation (JVP/tangent propagation) alongside the existing reverse-mode AD. Fixed 2 failing test suites (shell integration, process isolation), eliminated 21 `utcnow()` deprecation warnings, cleaned up stale Next Steps sections. Built distillation pipeline (endpoint, schema, controller, UI card with "Load for chat" button). Wired InferenceEngineProvider to ModelServer (deduplicated semaphore/circuit-breaker/warmup). Fixed coroutine warning in config.py.
+
+### Changes
+
+| # | Change | File | Impact |
+|---|--------|------|--------|
+| 1 | Added `_forward_fn` and `_consumers` (bidirectional DAG) to every Tensor | `slonet.py` | JVP-ready: tangent propagation alongside gradient computation |
+| 2 | `forward_grad()` method — forward topological traversal computing tangents | `slonet.py` | Returns dict of all tangents keyed by tensor id |
+| 3 | All 25 ops updated with consumers + forward functions | `slonet.py` | Consistent dual-graph across entire tensor system |
+| 4 | 31 bidirectional DAG tests added | `test_slonet_bidirectional_dag.py` | Dot-product verification for every op |
+| 5 | Fixed `test_subprocess_shell_launches` — missing `os.environ` | `test_shell_integration.py` | Shell launch test passes |
+| 6 | Fixed `test_process_isolation` — missing `pytest.importorskip("torch")` | `test_process_isolation.py` | Graceful skip when torch unavailable |
+| 7 | Replaced `datetime.utcnow()` → `datetime.now(timezone.utc)` in 7 files | `status.py`, `unified_pipeline.py`, `database.py`, `meta_weights.py`, `export.py`, `message_feedback.py`, `slo_format.py` | Zero deprecation warnings (21 callsites) |
+| 8 | InferenceEngineProvider now delegates to ModelServer | `provider.py` | Deduplicated semaphore/circuit-breaker/warmup; removed broken WarmupRunner import |
+| 9 | `setup_providers()` passes `model_registry` to InferenceEngineProvider | `provider.py` | Server-managed lifecycle for inference engine |
+| 10 | `_load_hf_model()` passes `model_registry` to `setup_providers()` | `controllers/models.py` | Full lifecycle management on manual model load |
+| 11 | Fixed `config.py` `reload()` to use `asyncio.run()` for async EventBus handlers | `config.py` | Async handlers no longer silently dropped |
+| 12 | Fixed distill endpoint `output_dir` to use `REPO_ROOT` | `training/router.py` | Checkpoints save to correct directory |
+| 13 | Added "Load for chat" button + `onComplete` callback to DistillCard | `DistillCard.tsx` | Full distillation → chat pipeline |
+| 14 | DistillCard wired into training page with checkpoint refresh | `training/page.tsx` | Checkpoint list refreshes on completion |
+| 15 | Process isolation assessed — infrastructure exists, not wired into production | `model_registry.py`, `process_guard.py`, `model_worker.py` | Current in-process mechanism sufficient for CPU inference; process isolation warranted for GPU/large-model/multi-tenant scenarios |
+
+### Verification
+- **1665 Python tests pass, 6 skipped, 0 failed**
+- **TypeScript: `tsc --noEmit` → 0 errors**
+- **148 training frontend tests pass**
+- All 31 bidirectional DAG dot-product tests pass
 

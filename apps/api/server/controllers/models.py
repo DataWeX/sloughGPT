@@ -169,10 +169,13 @@ class ModelsController:
             # hf-default registration, and default router wiring).
             try:
                 from domains.models.provider import setup_providers
+                from domains.infrastructure.model_registry import get_model_registry
+                model_registry = get_model_registry()
                 setup_providers(
                     model, tokenizer,
                     hf_model_id=model_id,
                     inference_engine=inference_engine,
+                    model_registry=model_registry,
                 )
                 logger.info("Updated providers for: %s (text=inference-engine)", model_id)
             except Exception as e:

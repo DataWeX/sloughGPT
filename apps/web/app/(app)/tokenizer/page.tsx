@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button, Input } from '@/components/ui'
 import { Spinner } from '@/components/ui'
 import { StatCard, KpiGrid } from '@/components/ui/display'
-import { Tabs } from '@/components/ui/form'
+import { Tabs } from '@/components/ui/tabs'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { useToastStore } from '@/lib/toast-store'
 import { tokenizerController, type TokenizerStats } from '@/lib/tokenizer-controller'
 import { TokenBadge, SegBar, SampleTable } from '@/components/tokenizer/TokenizerComponents'
@@ -195,14 +196,16 @@ export default function TokenizerPage() {
                     </span>
                   ))}
                 </div>
-                <details className="text-[10px] text-muted-foreground">
-                  <summary className="cursor-pointer hover:text-foreground">Segment size distribution</summary>
-                  <div className="mt-1 space-y-0.5">
-                    {preResult.segments.map((seg, i) => (
-                      <SegBar key={i} pct={seg.pct} label={seg.text} />
-                    ))}
-                  </div>
-                </details>
+                <Collapsible className="text-[10px] text-muted-foreground">
+                  <CollapsibleTrigger className="cursor-pointer hover:text-foreground">Segment size distribution</CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="mt-1 space-y-0.5">
+                      {preResult.segments.map((seg, i) => (
+                        <SegBar key={i} pct={seg.pct} label={seg.text} />
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
               </div>
             )}
 
@@ -214,10 +217,12 @@ export default function TokenizerPage() {
                     <TokenBadge key={i} token={t} isSpecial={t.startsWith('<')} />
                   ))}
                 </div>
-                <details className="text-xs text-muted-foreground">
-                  <summary className="cursor-pointer hover:text-foreground">IDs</summary>
-                  <p className="mt-1 font-mono text-[10px]">[{tokResult.ids.join(', ')}]</p>
-                </details>
+                <Collapsible className="text-xs text-muted-foreground">
+                  <CollapsibleTrigger className="cursor-pointer hover:text-foreground">IDs</CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <p className="mt-1 font-mono text-[10px]">[{tokResult.ids.join(', ')}]</p>
+                  </CollapsibleContent>
+                </Collapsible>
               </div>
             )}
           </CardContent>

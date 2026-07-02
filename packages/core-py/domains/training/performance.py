@@ -514,231 +514,6 @@ class OptimizedInferenceEngine:
         return current
 
 
-class OptimizedTrainer:
-    """Training loop with all performance optimizations.
-
-    Satisfies :class:`TrainerProtocol` structurally.
-    """
-
-    _is_training: bool = False
-
-    @property
-    def is_training(self) -> bool:
-        """Whether training is in progress."""
-        return self._is_training
-
-    def stop(self) -> None:
-        """Request early stopping."""
-        self._is_training = False
-
-    def __init__(
-        self,
-        model: nn.Module,
-        config: TrainingOptimizations,
-        train_dataset: Dataset,
-        val_dataset: Optional[Dataset] = None,
-        device: str = "auto",
-    ):
-        warnings.warn(
-            "OptimizedTrainer is deprecated — use SloughGPTTrainer instead",
-            DeprecationWarning, stacklevel=2,
-        )
-        self.model = model
-        self.config = config
-        self.device = get_optimal_device() if device == "auto" else device
-
-        self.model = self.model.to(self.device)
-
-        if self.device == "cuda" and config.use_compile and hasattr(torch, "compile"):
-            self._setup_compile()
-
-        if config.channel_last and self.device == "cuda":
-            self.model = self.model.to(memory_format=torch.channels_last)
-
-        if config.gradient_checkpointing:
-            self._setup_gradient_checkpointing()
-
-        self.train_loader = OptimizedDataLoader(
-            train_dataset,
-            batch_size=1,
-            num_workers=config.dataloader_workers,
-            prefetch_factor=config.dataloader_prefetch,
-            persistent_workers=config.dataloader_persistent,
-            pin_memory=config.dataloader_pin_memory,
-        )
-
-        self.val_loader = None
-        if val_dataset:
-            self.val_loader = OptimizedDataLoader(
-                val_dataset,
-                batch_size=1,
-                num_workers=config.dataloader_workers,
-                prefetch_factor=config.dataloader_prefetch,
-                persistent_workers=config.dataloader_persistent,
-                pin_memory=config.dataloader_pin_memory,
-            )
-
-        self.batch_cache = OptimizedBatchCache(self.device)
-        self.optimizer: Optional[torch.optim.Optimizer] = None
-        self.scaler: Optional[torch.cuda.amp.GradScaler] = None
-        self.scheduler = None
-
-        self._step_count = 0
-        self._setup_optimizer_and_scaler()
-
-    def _setup_compile(self):
-        """Setup torch.compile."""
-        try:
-            self.model = torch.compile(
-                self.model,
-                mode=self.config.compile_mode,
-                fullgraph=self.config.compile_fullgraph,
-            )
-            logger.info(f"Model compiled: {self.config.compile_mode}")
-        except Exception as e:
-            logger.warning(f"compile failed: {e}")
-
-    def _setup_gradient_checkpointing(self):
-        """Enable gradient checkpointing on transformer blocks."""
-        for module in self.model.modules():
-            if hasattr(module, "enable_gradient_checkpointing"):
-                module.enable_gradient_checkpointing()
-
-    def _setup_optimizer_and_scaler(self):
-        """Setup optimized optimizer and mixed precision scaler."""
-        decay_params = []
-        no_decay_params = []
-
-        for n, p in self.model.named_parameters():
-            if not p.requires_grad:
-                continue
-            if "bias" in n or "norm" in n or "ln_" in n:
-                no_decay_params.append(p)
-            else:
-                decay_params.append(p)
-
-        if self.config.use_fused_optimizer and self.device == "cuda":
-            try:
-                self.optimizer = torch.optim.FusedAdamW(
-                    [{"params": decay_params, "weight_decay": 0.01},
-                     {"params": no_decay_params, "weight_decay": 0.0}],
-                    lr=1e-4,
-                )
-                logger.info("Using FusedAdamW")
-            except AttributeError:
-                self.optimizer = torch.optim.AdamW(
-                    [{"params": decay_params, "weight_decay": 0.01},
-                     {"params": no_decay_params, "weight_decay": 0.0}],
-                    lr=1e-4,
-                    fused=True,
-                )
-                logger.info("Using AdamW (fused=True)")
-        else:
-            self.optimizer = torch.optim.AdamW(
-                [{"params": decay_params, "weight_decay": 0.01},
-                 {"params": no_decay_params, "weight_decay": 0.0}],
-                lr=1e-4,
-            )
-
-        if self.device == "cuda":
-            self.scaler = torch.cuda.amp.GradScaler(enabled=True, init_scale=2**15)
-
-    def train_step(
-        self,
-        batch: Tuple[torch.Tensor, torch.Tensor],
-        gradient_accumulation_steps: int = 1,
-        max_grad_norm: float = 1.0,
-    ) -> float:
-        """Execute optimized training step."""
-        x, y = batch
-        x = x.to(self.device)
-        y = y.to(self.device)
-
-        if self.device == "cuda" and self.config.channel_last:
-            x = x.to(memory_format=torch.channels_last)
-            y = y.to(memory_format=torch.channels_last)
-
-        model = self.model
-        loss_scale = 1.0 / gradient_accumulation_steps
-
-        if self.scaler:
-            with torch.cuda.amp.autocast(dtype=torch.bfloat16):
-                logits, loss = model(x, y)
-                loss = loss * loss_scale
-            self.scaler.scale(loss).backward()
-        else:
-            logits, loss = model(x, y)
-            (loss * loss_scale).backward()
-
-        if (self._step_count + 1) % gradient_accumulation_steps == 0:
-            if self.scaler:
-                self.scaler.unscale_(self.optimizer)
-
-            if max_grad_norm > 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
-
-            if self.scaler:
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-            else:
-                self.optimizer.step()
-
-            self.optimizer.zero_grad(set_to_none=True)
-
-            if self.scheduler:
-                self.scheduler.step()
-
-        self._step_count += 1
-        return loss.item() * gradient_accumulation_steps
-
-    def train(
-        self,
-        resume: bool = False,
-        resume_path: Optional[str] = None,
-        on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
-    ) -> TrainResult:
-        """Training loop implementing TrainerProtocol."""
-        import time as time_module
-
-        self._is_training = True
-        best_loss = float("inf")
-        start_time = time_module.time()
-        last_log_time = start_time
-
-        while self._step_count < self.config.max_steps and self._is_training:
-            step_start = time_module.time()
-            loss = self.train_step()
-            step_time = time_module.time() - step_start
-
-            if on_progress and self._step_count % self.config.log_interval == 0:
-                elapsed = time_module.time() - last_log_time
-                lr = self.scheduler.get_last_lr()[0] if self.scheduler else 0
-                tokens_per_sec = (self.config.batch_size * self.config.block_size) / (step_time + 1e-6)
-                try:
-                    on_progress({
-                        "global_step": int(self._step_count),
-                        "train_loss": float(loss),
-                        "learning_rate": float(lr),
-                        "tokens_per_sec": float(tokens_per_sec),
-                    })
-                except Exception:
-                    pass
-                last_log_time = time_module.time()
-
-            best_loss = min(best_loss, loss)
-
-        self._is_training = False
-        total_time = time_module.time() - start_time
-        return TrainResult(
-            success=True,
-            status="completed",
-            best_eval_loss=best_loss,
-            global_step=self._step_count,
-            total_steps=self._step_count,
-            metrics={"best_loss": best_loss, "total_time": total_time},
-        )
-
-
 class PerformanceMonitor:
     """Monitor training/inference performance metrics."""
 
@@ -810,12 +585,18 @@ def benchmark_training(
     """Benchmark training performance."""
     device = get_optimal_device() if device == "auto" else device
     model = model.to(device)
+    model.train()
 
     dummy_data = torch.randint(0, 1000, (10000,))
     dataset = PreallocatedBatchDataset(dummy_data, seq_len, batch_size)
 
-    config = TrainingOptimizations(use_compile=False)
-    trainer = OptimizedTrainer(model, config, dataset, device=device)
+    decay_params = [p for n, p in model.named_parameters() if p.requires_grad and "bias" not in n and "norm" not in n]
+    no_decay_params = [p for n, p in model.named_parameters() if p.requires_grad and ("bias" in n or "norm" in n)]
+    optimizer = torch.optim.AdamW(
+        [{"params": decay_params, "weight_decay": 0.01},
+         {"params": no_decay_params, "weight_decay": 0.0}],
+        lr=1e-4,
+    )
 
     x, y = next(iter(DataLoader(dataset, batch_size=batch_size)))
     x, y = x.to(device), y.to(device)
@@ -825,7 +606,11 @@ def benchmark_training(
 
     start = time.time()
     for _ in range(num_steps):
-        trainer.train_step((x, y))
+        logits, loss = model(x, y)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
 
     if device == "cuda":
         torch.cuda.synchronize()
@@ -890,7 +675,6 @@ __all__ = [
     "OptimizedBatchCache",
     "FastInferenceSampler",
     "OptimizedInferenceEngine",
-    "OptimizedTrainer",
     "PerformanceMonitor",
     "optimize_model_for_inference",
     "benchmark_training",

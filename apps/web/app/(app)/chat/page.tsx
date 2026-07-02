@@ -19,7 +19,7 @@ import type { ChatMessage } from '@/lib/chat-utils'
 import { modelController } from '@/lib/model-controller'
 import { chatController } from '@/lib/chat-controller'
 import { generationConfigController } from '@/lib/generation-config-controller'
-import { AGENTS } from '@/lib/agents'
+
 import { useFeedbackStore } from '@/lib/feedback-store'
 import { useToastStore } from '@/lib/toast-store'
 import { addGlobalError } from '@/lib/error-store'
@@ -28,29 +28,27 @@ import { apiPost } from '@/lib/http-client'
 import { imagesController } from '@/lib/images-controller'
 import type { ImageStyle } from '@/lib/images-controller'
 import { filesController } from '@/lib/files-controller'
-import {
-  ChatSettings, ChatArea, ErrorBanner,
-} from '@/components/chat'
+import { ChatArea, ErrorBanner } from '@/components/chat'
 import { ImageDropZone } from '@/components/chat/ImageDropZone'
 import { resizeImage } from '@/components/chat/ImageUpload'
-import ReadFileSection from '@/components/chat/ReadFileSection'
 import { ModeBar } from '@/components/chat/ModeBar'
 import { ChatToolbar } from '@/components/chat/ChatToolbar'
-import { ChatToolPanel } from '@/components/chat/ChatToolPanel'
-import { ConversationSidebar } from '@/components/chat/ConversationSidebar'
-import { DownloadDialog } from '@/components/chat/DownloadDialog'
-import { SystemPromptDialog } from '@/components/chat/SystemPromptDialog'
 import { ChatProvider } from '@/contexts/ChatContext'
 import { ChatToolbarProvider } from '@/contexts/ChatToolbarContext'
 import { useChatToolbarValue } from '@/hooks/useChatToolbarValue'
 import { useChatHealthValue, useChatModelValue, useChatUIValue } from '@/hooks/useChatContextValue'
 
-import { Button } from '@/components/ui/button'
 
 const VoiceChatMode = dynamic(() => import('@/components/chat/VoiceChatMode').then(m => m.VoiceChatMode), { ssr: false })
 const ConversationViewer = dynamic(() => import('@/components/chat/ConversationViewer').then(m => m.ConversationViewer), { ssr: false })
 const ConversationSearch = dynamic(() => import('@/components/chat/ConversationSearch').then(m => m.ConversationSearch), { ssr: false })
 const SearchConversationsDialog = dynamic(() => import('@/components/chat/SearchConversationsDialog').then(m => m.SearchConversationsDialog), { ssr: false })
+const ChatSettings = dynamic(() => import('@/components/chat/ChatSettings').then(m => m.ChatSettings), { ssr: false })
+const ConversationSidebar = dynamic(() => import('@/components/chat/ConversationSidebar').then(m => m.ConversationSidebar), { ssr: false })
+const ChatToolPanel = dynamic(() => import('@/components/chat/ChatToolPanel').then(m => m.ChatToolPanel), { ssr: false })
+const DownloadDialog = dynamic(() => import('@/components/chat/DownloadDialog').then(m => m.DownloadDialog), { ssr: false })
+const SystemPromptDialog = dynamic(() => import('@/components/chat/SystemPromptDialog').then(m => m.SystemPromptDialog), { ssr: false })
+const ReadFileSection = dynamic(() => import('@/components/chat/ReadFileSection'), { ssr: false })
 
 export default function ChatPage() {
   const showToast = useCallback((message: string, type: string = 'success') => {
@@ -87,6 +85,7 @@ export default function ChatPage() {
   })
   const [systemPromptOpen, setSystemPromptOpen] = useState(false)
   const [searchConversationsOpen, setSearchConversationsOpen] = useState(false)
+  const [searchConversationsQuery, setSearchConversationsQuery] = useState('')
 
   const { bookmarks, addBookmark, removeBookmark, isBookmarked, clearAll } = useChatBookmarks()
 
@@ -178,7 +177,7 @@ export default function ChatPage() {
     if (sessionId) {
       chat.loadSession(sessionId)
     }
-  }, [])
+  }, [chat, searchParams])
 
   const [suggestions, setSuggestions] = useState<{ text: string; icon: string }[]>([])
 
@@ -243,13 +242,28 @@ export default function ChatPage() {
       navigateTo: router.push,
       addSystemMessage,
       sendMessage: chat.sendMessage,
+      archiveConversation: () => {
+        const name = `Chat - ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+        const sid = chat.sessionIdRef.current
+        if (sid) chat.renameSession(sid, name)
+        chat.setInput('')
+        showToast(`Archived as "${name}"`, 'success')
+      },
+      renameConversation: (name: string) => {
+        const sid = chat.sessionIdRef.current
+        if (sid) chat.renameSession(sid, name)
+      },
+      searchConversations: (query: string) => {
+        setSearchConversationsQuery(query)
+        setSearchConversationsOpen(true)
+      },
     }
     try {
       await cmd.execute(args, context)
     } catch (err: any) {
       showToast(`Command failed: ${err?.message || 'Unknown error'}`, 'error')
     }
-  }, [chat, clearChat, model, showToast, router])
+  }, [chat, clearChat, model, showToast, router, ui, setSearchConversationsOpen, setSearchConversationsQuery])
 
   const handleSelectAgentWithToast = useCallback((agent: any) => {
     agents.setCurrentAgent(agent)
@@ -387,7 +401,7 @@ export default function ChatPage() {
     } catch {
       showToast('Failed to attach image', 'error')
     }
-  }, [chat])
+  }, [chat, showToast])
 
   // Open voice overlay when Talk mode is selected
   useEffect(() => {
@@ -422,8 +436,9 @@ export default function ChatPage() {
             <ChatToolbar />
           </ChatToolbarProvider>
 
+          {ui.showSettings && (
           <ChatSettings
-            isOpen={ui.showSettings}
+            isOpen={true}
             model={model.model}
             temperature={model.temperature}
             maxTokens={model.maxTokens}
@@ -440,6 +455,7 @@ export default function ChatPage() {
             onClear={clearChat}
             hasMessages={chat.messages.length > 0}
           />
+          )}
 
           {chat.currentError && (
             <ErrorBanner
@@ -574,16 +590,18 @@ export default function ChatPage() {
         />
       )}
 
-      <DownloadDialog
-        open={model.pendingDownload !== null}
-        pendingDownload={model.pendingDownload}
-        modelInfoMap={model.modelInfoMap}
-        onCancel={() => model.setPendingDownload(null)}
-        onConfirm={(modelId) => {
-          const info = model.modelInfoMap[modelId]
-          model.startDownloadFlowRef.current(modelId, info?.size_gb)
-        }}
-      />
+      {model.pendingDownload !== null && (
+        <DownloadDialog
+          open={true}
+          pendingDownload={model.pendingDownload}
+          modelInfoMap={model.modelInfoMap}
+          onCancel={() => model.setPendingDownload(null)}
+          onConfirm={(modelId) => {
+            const info = model.modelInfoMap[modelId]
+            model.startDownloadFlowRef.current(modelId, info?.size_gb)
+          }}
+        />
+      )}
 
       {ui.voiceMode && (
         <VoiceChatMode
@@ -595,16 +613,21 @@ export default function ChatPage() {
         />
       )}
 
-      <SearchConversationsDialog
-        open={searchConversationsOpen}
-        onOpenChange={setSearchConversationsOpen}
-      />
-      <SystemPromptDialog
-        open={systemPromptOpen}
-        onOpenChange={setSystemPromptOpen}
-        value={customSystemPrompt}
-        onSave={handleSaveSystemPrompt}
-      />
+      {searchConversationsOpen && (
+        <SearchConversationsDialog
+          open={true}
+          onOpenChange={setSearchConversationsOpen}
+          initialQuery={searchConversationsQuery}
+        />
+      )}
+      {systemPromptOpen && (
+        <SystemPromptDialog
+          open={true}
+          onOpenChange={setSystemPromptOpen}
+          value={customSystemPrompt}
+          onSave={handleSaveSystemPrompt}
+        />
+      )}
     </div>
     </ChatProvider>
   )

@@ -34,7 +34,7 @@ export function PDFUpload({ onAnalysis, onError, disabled }: PDFUploadProps) {
       form.append('per_page', 'false')
       form.append('max_new_tokens', '512')
 
-      const res = await fetch(`${PUBLIC_API_URL}/visual/pdf/upload`, {
+      const res = await fetch(`${PUBLIC_API_URL}/multimodal/pdf/upload`, {
         method: 'POST',
         body: form,
       })

@@ -36,7 +36,7 @@ def _mock_manager():
     mgr._accuracy_history = [0.5, 0.6, 0.7]
     engine = MagicMock()
     engine._trained = True
-    engine.text.bpe.vocab = {0: "<pad>", 1: "<bos>", 2: "hello"}
+    engine.text.vocab_size = 3
     mgr._multimodal_engine = engine
     buf = MagicMock()
     buf.size = 42

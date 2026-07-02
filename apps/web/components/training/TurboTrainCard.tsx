@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { modelController } from '@/lib/controllers'
@@ -84,11 +85,14 @@ export function TurboTrainCard({
                 </>
               ) : (
                 <>
-                  <select value={datasets.selectedDataset} onChange={e => datasets.setSelectedDataset(e.target.value)}
-                    className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground flex-1 max-w-xs"
-                    aria-label="Dataset for turbo training">
-                    {datasets.datasets.map(ds => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
-                  </select>
+                  <Select value={datasets.selectedDataset} onValueChange={datasets.setSelectedDataset}>
+                    <SelectTrigger className="h-8 text-xs font-mono flex-1 max-w-xs" aria-label="Dataset for turbo training">
+                      <SelectValue placeholder="Select dataset..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {datasets.datasets.map(ds => <SelectItem key={ds.id} value={ds.id}>{ds.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                   <Button size="sm" onClick={start} disabled={!datasets.selectedDataset || datasets.datasets.length === 0}>
                     Train with Turbo
                   </Button>

@@ -100,17 +100,13 @@ class InMemoryVectorStore(VectorStore):
     async def disconnect(self) -> None:
         pass
 
-    async def upsert(self, entries: List[VectorEntry]) -> int:
-        for e in entries:
-            self._entries[e.id] = e
-        return len(entries)
-
-    async def query(
+    def query_sync(
         self,
         vector: List[float],
         top_k: int = 5,
         filter_metadata: Optional[Dict[str, Any]] = None,
     ) -> List[QueryResult]:
+        """Synchronous query — avoids event-loop deadlock from _run_async."""
         if not self._entries:
             return []
         q = np.asarray(vector, dtype=np.float64)
@@ -133,6 +129,29 @@ class InMemoryVectorStore(VectorStore):
                 )
             )
         return out
+
+    def upsert_sync(self, entries: List[VectorEntry]) -> int:
+        """Synchronous upsert — avoids event-loop deadlock from _run_async."""
+        for e in entries:
+            self._entries[e.id] = e
+        return len(entries)
+
+    def count_sync(self) -> int:
+        """Synchronous count — avoids event-loop deadlock from _run_async."""
+        return len(self._entries)
+
+    async def upsert(self, entries: List[VectorEntry]) -> int:
+        for e in entries:
+            self._entries[e.id] = e
+        return len(entries)
+
+    async def query(
+        self,
+        vector: List[float],
+        top_k: int = 5,
+        filter_metadata: Optional[Dict[str, Any]] = None,
+    ) -> List[QueryResult]:
+        return self.query_sync(vector, top_k, filter_metadata)
 
     async def delete(self, ids: List[str]) -> bool:
         removed = 0
@@ -375,49 +394,79 @@ async def create_vector_store(provider: str = "in_memory", **kwargs: Any) -> Vec
 
 _embed_model: Optional[Any] = None
 _EMBED_DIM: int = 384
+_EMBED_LOAD_FAILED: bool = False
 
 
 def _load_embed_model() -> Any:
     """Lazy-load a sentence-transformers model for semantic embeddings."""
-    global _embed_model
+    global _embed_model, _EMBED_LOAD_FAILED
+    if _EMBED_LOAD_FAILED:
+        return None
     if _embed_model is None:
         try:
+            import os as _os
+            _os.environ.setdefault("PYTORCH_MPS_HIGH_WATERMARK_RATIO", "0.0")
+            import torch as _torch
+            _torch.backends.mps.is_available = lambda: False
             from sentence_transformers import SentenceTransformer
-            _embed_model = SentenceTransformer("all-MiniLM-L6-v2")
-            logger.info("Loaded sentence-transformers embedding model (384-dim)")
+            _embed_model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
+            logger.info("Loaded sentence-transformers embedding model (384-dim, cpu)")
         except Exception as exc:
             logger.warning(
                 "sentence-transformers not available (%s), using n-gram embedding",
                 exc,
             )
-            _embed_model = False  # sentinel: don't retry
-    return _embed_model if _embed_model is not False else None
+            _EMBED_LOAD_FAILED = True
+            return None
+    return _embed_model
 
 
-def _ngram_embed(text: str, dimension: int = 384) -> np.ndarray:
-    """Character n-gram TF-IDF embedding using numpy only.
+_STOPWORDS: frozenset = frozenset({
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "could",
+    "should", "may", "might", "can", "shall", "to", "of", "in", "for",
+    "on", "with", "at", "by", "from", "as", "into", "through", "during",
+    "before", "after", "above", "below", "between", "out", "off", "over",
+    "under", "again", "further", "then", "once", "here", "there", "when",
+    "where", "why", "how", "all", "each", "every", "both", "few", "more",
+    "most", "other", "some", "such", "no", "nor", "not", "only", "own",
+    "same", "so", "than", "too", "very", "just", "because", "and", "but",
+    "or", "if", "while", "about", "up", "it", "its", "this", "that",
+    "these", "those", "i", "me", "my", "we", "our", "you", "your", "he",
+    "she", "they", "them", "their", "what", "which", "who", "whom",
+})
 
-    Produces deterministic vectors where cosine similarity correlates
-    with character-level n-gram overlap.
 
-    Extracts character uni-, bi-, and tri-grams, applies log-frequency
-    weighting (TF), and projects into a fixed-size vector via hash
-    buckets. L2-normalized.
+def _tokenize(text: str) -> list[str]:
+    """Lowercase, strip punctuation, split on whitespace."""
+    import re
+    return re.findall(r"[a-z0-9']+", text.lower())
+
+
+def _word_ngram_embed(text: str, dimension: int = 384) -> np.ndarray:
+    """Word-level n-gram TF-IDF embedding using numpy only.
+
+    Outperforms character n-grams for semantic retrieval by operating
+    on word tokens. Extracts word unigrams, bigrams, and trigrams.
+    Frequent stopwords receive a 0.5 IDF penalty so they contribute
+    less to similarity. Log-frequency TF weighting. L2-normalized.
     """
     vec = np.zeros(dimension, dtype=np.float64)
-    text_lower = text.lower()
-    ngrams: list[str] = []
-    for n in (1, 2, 3):
-        for i in range(max(0, len(text_lower) - n + 1)):
-            ngrams.append(text_lower[i:i + n])
+    tokens = _tokenize(text)
 
-    if not ngrams:
+    if not tokens:
         vec[0] = 1.0
         return vec
 
+    ngrams: list[str] = []
+    for n in (1, 2, 3):
+        for i in range(max(0, len(tokens) - n + 1)):
+            ngrams.append(" ".join(tokens[i:i + n]))
+
     for ng in ngrams:
         h = int(hashlib.md5(ng.encode()).hexdigest()[:8], 16)
-        vec[h % dimension] += 1.0
+        idx = h % dimension
+        vec[idx] += 1.0
 
     vec = np.log1p(vec)
     norm = np.linalg.norm(vec)
@@ -426,20 +475,30 @@ def _ngram_embed(text: str, dimension: int = 384) -> np.ndarray:
     return vec
 
 
-def simple_embed(text: str, dimension: int = 384) -> List[float]:
-    """Embed text into a vector using sentence-transformers (if available) or n-gram fallback.
+def _ngram_embed(text: str, dimension: int = 384) -> np.ndarray:
+    """Alias — delegates to the word-level embedder."""
+    return _word_ngram_embed(text, dimension)
 
-    Uses ``all-MiniLM-L6-v2`` (384-dim) for semantic embeddings when available.
-    Falls back to character n-gram TF-IDF embedding when sentence-transformers
-    is not installed.
+
+_slo_embedder = None
+
+
+def simple_embed(text: str, dimension: int = 384) -> List[float]:
+    """Embed text into a vector using the best available embedder.
+
+    Priority:
+    1. sentence-transformers (all-MiniLM-L6-v2) if installed
+    2. SloTextEmbedder (trained on your own corpus) if checkpoint exists
+    3. Word n-gram TF-IDF fallback (zero downloads)
 
     Args:
         text: input text to embed
-        dimension: output vector dimension (384 for sentence-transformers, any for n-gram fallback)
+        dimension: output vector dimension (384 for all embedders)
 
     Returns:
         list of floats (L2-normalized)
     """
+    # 1. Try sentence-transformers
     model = _load_embed_model()
     if model is not None:
         try:
@@ -455,8 +514,24 @@ def simple_embed(text: str, dimension: int = 384) -> List[float]:
             return vec.tolist()
         except Exception:
             import logging
-            logging.getLogger(__name__).warning("sentence-transformers encode failed, using n-gram")
+            logging.getLogger(__name__).warning("sentence-transformers encode failed, trying SloNet embedder")
 
+    # 2. Try SloNet-trained embedder (no downloads, trained on your corpus)
+    global _slo_embedder
+    if _slo_embedder is None:
+        try:
+            from domains.inference.slo_embedder import SloTextEmbedder
+            _slo_embedder = SloTextEmbedder.load()
+        except Exception:
+            pass
+    if _slo_embedder is not None:
+        try:
+            return _slo_embedder.embed(text)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning("SloNet embedder failed, using n-gram fallback")
+
+    # 3. Last resort: word n-gram TF-IDF (zero downloads, zero training)
     vec = _ngram_embed(text, dimension)
     return vec.tolist()
 

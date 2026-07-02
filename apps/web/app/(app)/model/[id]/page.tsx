@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/tags'
 import { StatCard, KpiGrid, Skeleton } from '@/components/ui/display'
+import { Slider } from '@/components/ui/slider'
 import { IconRefresh, IconTrash, IconCheck, IconCopy } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { modelController, type ModelInfo, type HealthStatus } from '@/lib/model-controller'
@@ -373,15 +374,7 @@ function ConfigSlider({ label, value, min, max, step, onChange }: {
         <label className="text-xs text-muted-foreground">{label}</label>
         <span className="text-xs font-mono tabular-nums">{value}</span>
       </div>
-      <input
-        type="range"
-        value={value}
-        min={min}
-        max={max}
-        step={step}
-        onChange={e => onChange(parseFloat(e.target.value))}
-        className="w-full h-1.5 rounded-full appearance-none bg-muted cursor-pointer accent-primary"
-      />
+      <Slider value={[value]} onValueChange={([v]) => onChange(v)} min={min} max={max} step={step} />
     </div>
   )
 }

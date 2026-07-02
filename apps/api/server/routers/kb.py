@@ -4,7 +4,7 @@ Knowledge Router - Knowledge base management backed by KnowledgeMemory.
 All operations use the vector-store-backed KnowledgeMemory (the same store
 used by entity_extractor, soul engine prompt injection, and chat enrichment).
 """
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
 from pydantic import BaseModel, Field
 from typing import Optional, List
 import time
@@ -348,3 +348,134 @@ def get_context():
     context = memory.get_context_string(max_items=50)
     all_facts = memory.list_all()
     return {"context": context, "count": len(all_facts)}
+
+
+@router.post("/ingest-file")
+async def ingest_file(
+    file: UploadFile = File(...),
+    topic: str = Form("imported"),
+    chunk_size: int = Form(500),
+    overlap: int = Form(50),
+):
+    """Import a textbook or document file as knowledge facts.
+
+    Supports .txt, .md, and .json (array of strings) files.
+    Large files are split into overlapping chunks of ``chunk_size``
+    characters with ``overlap`` character overlap between chunks.
+    Each chunk is stored as a separate knowledge fact.
+    """
+    if chunk_size <= overlap:
+        raise HTTPException(status_code=400, detail="chunk_size must exceed overlap")
+    if chunk_size < 100 or chunk_size > 10000:
+        raise HTTPException(status_code=400, detail="chunk_size must be 100–10000")
+
+    raw = await file.read()
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        text = raw.decode("latin-1")
+
+    if file.filename and file.filename.endswith(".json"):
+        import json as _json
+        try:
+            items = _json.loads(text)
+            if isinstance(items, list):
+                chunks = [str(item) for item in items if isinstance(item, str)]
+            elif isinstance(items, dict):
+                chunks = [str(v) for v in items.values() if isinstance(v, str)]
+            else:
+                raise ValueError("JSON must be an array of strings or a dict of strings")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON file: {e}")
+    else:
+        chunks = _chunk_text(text, chunk_size, overlap)
+
+    from domains.learner.knowledge import KnowledgeFact
+    memory = _get_memory()
+
+    def _store_chunks():
+        stored = 0
+        for chunk in chunks:
+            fact = KnowledgeFact(
+                content=chunk,
+                topic=topic,
+                source=f"file:{file.filename or 'unknown'}",
+                importance=min(1.0, len(chunk) / 2000),
+            )
+            if memory.add_fact(fact):
+                stored += 1
+        return stored
+
+    import asyncio
+    stored = await asyncio.to_thread(_store_chunks)
+
+    return {
+        "status": "imported",
+        "stored": stored,
+        "total_chunks": len(chunks),
+        "topic": topic,
+        "filename": file.filename or "unknown",
+        "file_size": len(raw),
+    }
+
+
+def _lines_for_chars(lines: list[str], target_chars: int, start: int) -> int:
+    """Count how many lines from ``start`` backward cover ``target_chars``."""
+    count = 0
+    chars = 0
+    i = start
+    while i >= 0 and chars < target_chars:
+        chars += len(lines[i]) + 1
+        count += 1
+        i -= 1
+    return count
+
+
+def _chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
+    """Split text into overlapping chunks, respecting paragraph boundaries.
+
+    Splits on double newlines first (paragraph breaks), then merges
+    small paragraphs up to chunk_size. Oversized paragraphs are split
+    at sentence boundaries. Returns chunks >= 20 characters.
+    """
+    import re
+    paragraphs = re.split(r'\n\s*\n', text)
+    paragraphs = [p.strip() for p in paragraphs if p.strip()]
+
+    chunks: list[str] = []
+    buffer = ""
+
+    for para in paragraphs:
+        if len(para) <= chunk_size - len(buffer):
+            buffer = f"{buffer}\n\n{para}" if buffer else para
+        else:
+            if buffer and len(buffer) >= 20:
+                chunks.append(buffer)
+            if len(para) > chunk_size:
+                sentences = re.split(r'(?<=[.!?])\s+', para)
+                sub = ""
+                for sent in sentences:
+                    if len(sub) + len(sent) + 1 <= chunk_size:
+                        sub = f"{sub} {sent}" if sub else sent
+                    else:
+                        if sub and len(sub) >= 20:
+                            chunks.append(sub)
+                        sub = sent
+                if sub and len(sub) >= 20:
+                    buffer = sub
+                else:
+                    buffer = ""
+            else:
+                buffer = para
+
+    if buffer and len(buffer) >= 20:
+        chunks.append(buffer)
+
+    if overlap > 0 and len(chunks) > 1:
+        overlapped = [chunks[0]]
+        for i in range(1, len(chunks)):
+            tail = chunks[i - 1][-overlap:]
+            overlapped.append(f"...{tail}\n\n{chunks[i]}")
+        chunks = overlapped
+
+    return chunks

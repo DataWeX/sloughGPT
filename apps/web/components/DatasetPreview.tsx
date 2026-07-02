@@ -89,21 +89,21 @@ export function DatasetPreview({ datasetId, onUseForTraining }: DatasetPreviewPr
       <CardContent className="space-y-4">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div>
-            <div className="text-2xl font-bold">{preview.total_samples}</div>
+            <div className="text-base font-semibold">{preview.total_samples}</div>
             <div className="text-xs text-muted-foreground">Samples</div>
           </div>
           <div>
-            <div className="text-2xl font-bold">
+            <div className="text-base font-semibold">
               {(preview.total_chars / 1024).toFixed(1)}K
             </div>
             <div className="text-xs text-muted-foreground">Characters</div>
           </div>
           <div>
-            <div className="text-2xl font-bold">{languageEntries.length}</div>
+            <div className="text-base font-semibold">{languageEntries.length}</div>
             <div className="text-xs text-muted-foreground">Languages</div>
           </div>
           <div>
-            <div className="text-2xl font-bold">
+            <div className="text-base font-semibold">
               {languageEntries[0]?.[0] || '—'}
             </div>
             <div className="text-xs text-muted-foreground">Top Language</div>

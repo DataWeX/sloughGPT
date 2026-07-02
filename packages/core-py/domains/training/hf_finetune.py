@@ -15,17 +15,21 @@ from typing import Any, Callable, Dict, List, Optional
 
 from domains.training.trainer_protocol import TrainResult
 
-import torch
-from torch.utils.data import Dataset
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    Trainer,
-    TrainingArguments,
-    DataCollatorForLanguageModeling,
-    PreTrainedTokenizer,
-    PreTrainedTokenizerFast,
-)
+try:
+    import torch
+    from torch.utils.data import Dataset
+    from transformers import (
+        AutoModelForCausalLM,
+        AutoTokenizer,
+        Trainer,
+        TrainingArguments,
+        DataCollatorForLanguageModeling,
+        PreTrainedTokenizer,
+        PreTrainedTokenizerFast,
+    )
+    _HF_FINETUNE_AVAILABLE = True
+except ImportError:
+    _HF_FINETUNE_AVAILABLE = False
 
 logger = logging.getLogger("man.hf_finetune")
 
@@ -131,6 +135,11 @@ class HFFineTuner:
         logging_steps: int = 10,
         device: Optional[str] = None,
     ):
+        if not _HF_FINETUNE_AVAILABLE:
+            raise RuntimeError(
+                "HFFineTuner requires PyTorch and transformers. "
+                "Install with: pip install torch transformers peft"
+            )
         self.model_name = model_name
         self.data_path = data_path
         self.output_dir = output_dir

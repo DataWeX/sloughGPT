@@ -120,7 +120,6 @@ export default function ActivityPage() {
       } catch { /* iOS fallback */ }
     }
     setSensorPermitted(true)
-    recording
   }
 
   const startSensorRecording = () => {
@@ -147,7 +146,6 @@ export default function ActivityPage() {
     }
 
     window.addEventListener('devicemotion', handler)
-    recording
   }
 
   const startSimulatedRecording = (label: number) => {

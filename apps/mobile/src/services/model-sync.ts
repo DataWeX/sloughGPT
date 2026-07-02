@@ -40,15 +40,11 @@ export async function syncModel(): Promise<boolean> {
     const status = await statusRes.json();
     if (!status.model_loaded) return false;
 
-    // Try to download model.npz from a known path
-    // The model lives at packages/core-py/domains/activity/model.npz on the server
+    // Try to download model.npz from the server
     const modelUrl = `${baseUrl}/activity/model`;
     const modelRes = await fetch(modelUrl);
     if (!modelRes.ok) {
-      // Fall back to marking as synced without actual file
-      await AsyncStorage.setItem(MODEL_CACHE_KEY, 'true');
-      await AsyncStorage.setItem(MODEL_VERSION_KEY, String(Date.now()));
-      return true;
+      return false;
     }
 
     const blob = await modelRes.blob();

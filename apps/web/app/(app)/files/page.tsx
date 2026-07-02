@@ -184,8 +184,17 @@ export default function FilesPage() {
                 ))}
               </div>
             ) : files.length === 0 ? (
-              <div className="py-8 text-center text-sm text-muted-foreground">
-                {searchQuery ? 'No files match your search.' : 'No files uploaded yet. Upload a file to get started.'}
+              <div className="py-8 text-center text-sm text-muted-foreground space-y-3">
+                {searchQuery
+                  ? 'No files match your search.'
+                  : <>
+                      <p>No files uploaded yet.</p>
+                      <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                        <IconUpload className="h-4 w-4 mr-1" />
+                        Upload a file
+                      </Button>
+                    </>
+                }
               </div>
             ) : (
               <div className="divide-y divide-border/50">

@@ -284,6 +284,19 @@ Be concise, accurate, and helpful."""
             return ""
         
         if self._vector_store is None:
+            # Query KnowledgeMemory (vector store) for relevant facts
+            import asyncio
+            try:
+                from domains.learner.knowledge import get_knowledge_memory
+                def _query_kmem():
+                    kmem = get_knowledge_memory()
+                    return kmem.search(query, top_k=self.rag_top_k)
+                results = await asyncio.to_thread(_query_kmem)
+                if results:
+                    parts = [f"[Knowledge: {r['topic']}] {r['content'][:self.rag_max_chars]}" for r in results]
+                    return "\n".join(parts)
+            except Exception:
+                pass
             # Auto-ingest if empty, then fallback to semantic memory
             if not hasattr(self, '_auto_ingest_triggered'):
                 self._auto_ingest_triggered = True

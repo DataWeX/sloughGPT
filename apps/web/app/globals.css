@@ -579,6 +579,14 @@ html {
   opacity: 1;
 }
 
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 ::selection {
   background: color-mix(in srgb, rgb(var(--primary)) 25%, transparent);
   color: rgb(var(--foreground));
@@ -592,6 +600,16 @@ select {
 
 button {
   font-size: 14px;
+}
+
+/* Global focus ring — catch all raw form/button elements without repeated utility classes */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(var(--primary) / 0.3);
+  border-color: rgb(var(--primary) / 0.5);
 }
 
 /* Accent chips — refined variants (RGB triples for Tailwind /opacity) */

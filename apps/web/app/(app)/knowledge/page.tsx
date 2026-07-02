@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { Badge, Chip, EmptyCard, KpiGrid, StatCard } from '@/components/ui'
 import { SearchInput } from '@/components/ui/input'
 import { IconSearch, IconPlus, IconTrash, IconDownload, IconUpload } from '@/components/icons/NavIcons'
 import { IconRefresh } from '@/components/ui'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { knowledgeController, type KnowledgeItem, type KnowledgeStats, type TopicCount, type AdapterStatus } from '@/lib/knowledge-controller'
 import { useToastStore } from '@/lib/toast-store'
 
@@ -20,6 +22,7 @@ export default function KnowledgePage() {
   const [newUrl, setNewUrl] = useState('')
   const [adding, setAdding] = useState(false)
   const [urlIngesting, setUrlIngesting] = useState(false)
+  const [fileUploading, setFileUploading] = useState(false)
   const [autoTag, setAutoTag] = useState(true)
   const [adapterStatus, setAdapterStatus] = useState<AdapterStatus | null>(null)
   const [trainingAdapter, setTrainingAdapter] = useState(false)
@@ -35,6 +38,7 @@ export default function KnowledgePage() {
   const [relatedItems, setRelatedItems] = useState<Record<string, KnowledgeItem[]>>({})
   const [loadingRelated, setLoadingRelated] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const txtFileInputRef = useRef<HTMLInputElement>(null)
   const addToast = useToastStore(s => s.addToast)
 
   const fetchItems = useCallback(async () => {
@@ -188,6 +192,21 @@ export default function KnowledgePage() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setFileUploading(true)
+    try {
+      const res = await knowledgeController.ingestFile(file, 'imported')
+      addToast(`Imported ${res.stored} facts from "${res.filename}" (${res.total_chunks} chunks)`, 'success')
+      await Promise.all([fetchItems(), fetchStats()])
+    } catch (err) {
+      addToast(`File import failed: ${err instanceof Error ? err.message : 'unknown error'}`, 'error')
+    }
+    if (txtFileInputRef.current) txtFileInputRef.current.value = ''
+    setFileUploading(false)
+  }
+
   const handleTrainAdapter = async () => {
     setTrainingAdapter(true)
     try {
@@ -208,7 +227,7 @@ export default function KnowledgePage() {
     <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader
         left={<AppRouteHeaderLead title="Knowledge" />}
-        right={<Button variant="secondary" size="sm" onClick={handleRefresh}><IconRefresh className="w-3.5 h-3.5 mr-1" /> Refresh</Button>}
+        right={<Button variant="outline" size="sm" onClick={handleRefresh}><IconRefresh className="w-3.5 h-3.5 mr-1" /> Refresh</Button>}
       />
       <div className="space-y-4">
 
@@ -274,10 +293,12 @@ export default function KnowledgePage() {
 
         {/* Add new knowledge */}
         <Card>
-          <CardHeader><CardTitle className="text-base">Add Knowledge</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
+          <CardHeader>
+            <CardTitle className="text-base">Add Knowledge</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
               <textarea
-                className="w-full min-h-[80px] rounded-md border border-border bg-background px-3 py-2 text-sm resize-y"
+                className="w-full min-h-[100px] rounded-md border border-border bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all"
                 placeholder="Enter a fact to remember…"
                 value={newContent}
                 onChange={e => {
@@ -297,46 +318,62 @@ export default function KnowledgePage() {
                 aria-label="Knowledge content"
               />
               {suggestedTopic && (
-                <div className="text-xs text-muted-foreground flex items-center gap-1">
-                  Suggested topic: <span className="font-medium text-primary">{suggestedTopic}</span>
+                <div className="text-xs text-muted-foreground flex items-center gap-1.5 animate-in fade-in slide-in-from-top-1">
+                  <span className="opacity-70">Suggested topic:</span> <span className="font-medium text-primary">{suggestedTopic}</span>
                 </div>
               )}
-            <div className="flex items-center gap-3 flex-wrap">
-              <input
-                type="text"
-                className="h-8 rounded-md border border-border bg-background px-2 text-xs w-40"
-                placeholder="Topic (optional)"
-                value={newTopic}
-                onChange={e => setNewTopic(e.target.value)}
-                aria-label="Topic"
-              />
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
-                <input type="checkbox" checked={autoTag} onChange={e => setAutoTag(e.target.checked)} className="rounded" />
-                Auto-tag
-              </label>
-              <Button onClick={handleAdd} disabled={adding || !newContent.trim()} size="sm">
-                <IconPlus className="w-4 h-4 mr-1" />
-                {adding ? 'Adding…' : 'Add'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="flex items-center gap-3 flex-wrap">
+                <input
+                  type="text"
+                  className="h-8 rounded-md border border-border bg-background px-2 text-xs w-40 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                  placeholder="Topic (optional)"
+                  value={newTopic}
+                  onChange={e => setNewTopic(e.target.value)}
+                  aria-label="Topic"
+                />
+                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors">
+                  <Switch checked={autoTag} onCheckedChange={setAutoTag} />
+                  Auto-tag
+                </label>
+                <Button onClick={handleAdd} disabled={adding || !newContent.trim()} size="sm" className="ml-auto">
+                  {adding ? (
+                    <span className="flex items-center gap-2">
+                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      Adding...
+                    </span>
+                  ) : (
+                    <>
+                      <IconPlus className="w-4 h-4 mr-1" />
+                      Add
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
         {/* Ingest URL */}
         <Card>
-          <CardHeader><CardTitle className="text-base">Learn from a Web Page</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-base">Learn from a Web Page</CardTitle>
+          </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
               <input
                 type="url"
-                className="flex-1 h-8 rounded-md border border-border bg-background px-2 text-sm"
+                className="flex-1 h-8 rounded-md border border-border bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all"
                 placeholder="https://example.com/article"
                 value={newUrl}
                 onChange={e => setNewUrl(e.target.value)}
                 aria-label="URL to ingest"
               />
-              <Button onClick={handleIngestUrl} disabled={urlIngesting || !newUrl.trim()} size="sm" variant="outline">
-                {urlIngesting ? 'Learning…' : 'Learn'}
+              <Button onClick={handleIngestUrl} disabled={urlIngesting || !newUrl.trim()} size="sm" variant="outline" className="shrink-0">
+                {urlIngesting ? (
+                  <span className="flex items-center gap-2">
+                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    Learning...
+                  </span>
+                ) : 'Learn'}
               </Button>
             </div>
           </CardContent>
@@ -355,6 +392,10 @@ export default function KnowledgePage() {
                   <IconUpload className="w-4 h-4 mr-1" /> Import
                 </Button>
                 <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={importJson} aria-label="Import knowledge JSON file" />
+                <Button variant="outline" size="sm" onClick={() => txtFileInputRef.current?.click()} disabled={fileUploading}>
+                  <IconUpload className="w-4 h-4 mr-1" /> {fileUploading ? 'Uploading…' : 'Upload File'}
+                </Button>
+                <input ref={txtFileInputRef} type="file" accept=".txt,.md,.json" className="hidden" onChange={handleFileUpload} aria-label="Upload text or markdown file" />
                 <span className="text-xs text-muted-foreground">{items.length} items{activeTopic ? ` in "${activeTopic}"` : ''}</span>
               </div>
             </div>
@@ -391,18 +432,18 @@ export default function KnowledgePage() {
                   <span className="text-xs text-muted-foreground">Select all</span>
                 </div>
                 {items.map(item => (
-                  <div key={item.id} className="group flex items-start gap-3 rounded-md border border-border/50 p-3 hover:bg-muted/30 transition-colors">
+                  <div key={item.id} className="group flex items-start gap-3 rounded-lg border border-border/60 p-3 hover:bg-muted/40 transition-all duration-200">
                     <input
                       type="checkbox"
                       checked={selected.has(item.id)}
                       onChange={() => toggleSelect(item.id)}
-                      className="mt-1 rounded"
+                      className="mt-1 rounded border-border bg-background"
                       aria-label={`Select ${item.content.slice(0, 30)}`}
                     />
                     {editingId === item.id ? (
-                      <div className="flex-1 min-w-0 space-y-2">
+                      <div className="flex-1 min-w-0 space-y-3">
                         <textarea
-                          className="w-full min-h-[60px] rounded border border-border bg-background px-2 py-1 text-sm resize-y"
+                          className="w-full min-h-[60px] rounded-md border border-border bg-background px-2 py-1.5 text-sm resize-y focus:outline-none focus:ring-1 focus:ring-primary/30"
                           value={editContent}
                           onChange={e => setEditContent(e.target.value)}
                           aria-label="Edit knowledge content"
@@ -410,46 +451,52 @@ export default function KnowledgePage() {
                         <div className="flex items-center gap-2">
                           <input
                             type="text"
-                            className="h-7 rounded border border-border bg-background px-2 text-xs w-32"
+                            className="h-7 rounded-md border border-border bg-background px-2 text-xs w-32 focus:outline-none focus:ring-1 focus:ring-primary/30"
                             value={editTopic}
                             onChange={e => setEditTopic(e.target.value)}
                             placeholder="Topic"
                             aria-label="Edit topic"
                           />
-                          <Button size="sm" onClick={() => saveEdit(item.id)}>Save</Button>
-                          <Button size="sm" variant="outline" onClick={cancelEdit}>Cancel</Button>
+                          <Button size="sm" onClick={() => saveEdit(item.id)} className="h-7">Save</Button>
+                          <Button size="sm" variant="outline" onClick={cancelEdit} className="h-7">Cancel</Button>
                         </div>
                         {/* Related items */}
                         {loadingRelated === item.id ? (
-                          <div className="text-xs text-muted-foreground animate-pulse">Finding related items…</div>
+                          <div className="text-xs text-muted-foreground animate-pulse flex items-center gap-2">
+                            <span className="h-1 w-1 rounded-full bg-current" /> Finding related items…
+                          </div>
                         ) : relatedItems[item.id] && relatedItems[item.id].length > 0 ? (
-                          <details className="text-xs">
-                            <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                          <Collapsible className="text-xs group/related">
+                            <CollapsibleTrigger className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
                               Related ({relatedItems[item.id].length})
-                            </summary>
-                            <div className="mt-1 space-y-1 pl-2 border-l-2 border-border/30">
-                              {relatedItems[item.id].map(r => (
-                                <div key={r.id} className="text-muted-foreground line-clamp-1">{r.content}</div>
-                              ))}
-                            </div>
-                          </details>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent>
+                              <div className="mt-2 space-y-1.5 pl-3 border-l-2 border-border/40">
+                                {relatedItems[item.id].map(r => (
+                                  <div key={r.id} className="text-muted-foreground line-clamp-1 hover:text-foreground transition-colors cursor-default">
+                                    {r.content}
+                                  </div>
+                                ))}
+                              </div>
+                            </CollapsibleContent>
+                          </Collapsible>
                         ) : null}
                       </div>
                     ) : (
                       <>
                         <div className="flex-1 min-w-0 cursor-pointer" onClick={() => startEdit(item)}>
-                          <p className="text-sm line-clamp-2">{item.content}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Badge variant="default" className="text-[10px]" label={item.topic} />
+                          <p className="text-sm leading-relaxed line-clamp-3">{item.content}</p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <Badge variant="default" className="text-[10px] px-1.5 py-0 font-medium" label={item.topic} />
                             {item.source && (
-                              <span className="text-[10px] text-muted-foreground">{item.source}</span>
+                              <span className="text-[10px] text-muted-foreground/70 italic truncate max-w-[120px]">{item.source}</span>
                             )}
                             {item.url && (
                               <a href={item.url} target="_blank" rel="noreferrer" className="text-[10px] text-primary hover:underline truncate max-w-[160px]" onClick={e => e.stopPropagation()}>
                                 {item.url.replace(/^https?:\/\//, '').split('/')[0]}
                               </a>
                             )}
-                            <span className="text-[10px] text-muted-foreground ml-auto">
+                            <span className="text-[10px] text-muted-foreground/60 ml-auto font-mono">
                               {new Date(item.timestamp * 1000).toLocaleDateString()}
                             </span>
                           </div>
@@ -457,7 +504,7 @@ export default function KnowledgePage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="opacity-0 group-hover:opacity-100 shrink-0"
+                          className="opacity-0 group-hover:opacity-100 shrink-0 h-8 w-8 transition-opacity"
                           onClick={() => handleDelete(item.id)}
                           aria-label={`Delete ${item.content.slice(0, 30)}`}
                         >

@@ -43,7 +43,7 @@ describe('getCommand', () => {
 describe('getAllCommands', () => {
   it('returns all commands', () => {
     const cmds = getAllCommands()
-    expect(cmds.length).toBeGreaterThanOrEqual(11)
+    expect(cmds.length).toBeGreaterThanOrEqual(14)
     const names = cmds.map(c => c.command)
     expect(names).toContain('/help')
     expect(names).toContain('/clear')
@@ -67,6 +67,9 @@ describe('/help command', () => {
       navigateTo: vi.fn(),
       addSystemMessage: vi.fn(),
       sendMessage: vi.fn(),
+      archiveConversation: vi.fn(),
+      renameConversation: vi.fn(),
+      searchConversations: vi.fn(),
     }
     const result = await cmd.command.execute(cmd.args, ctx)
     expect(result.handled).toBe(true)
@@ -87,8 +90,8 @@ describe('/temp command', () => {
       showToast: vi.fn(), clearChat: vi.fn(), setTemperature: vi.fn(),
       setModel: vi.fn(), setSoul: vi.fn(), exportChat: vi.fn(),
       attachFile: vi.fn(), searchKnowledge: vi.fn(), navigateTo: vi.fn(),
-      addSystemMessage: vi.fn(),
-      sendMessage: vi.fn(),
+      addSystemMessage: vi.fn(), sendMessage: vi.fn(),
+      archiveConversation: vi.fn(), renameConversation: vi.fn(), searchConversations: vi.fn(),
     }
     await cmd.command.execute(cmd.args, ctx)
     expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('Usage'), 'error')
@@ -101,8 +104,8 @@ describe('/temp command', () => {
       showToast: vi.fn(), clearChat: vi.fn(), setTemperature: vi.fn(),
       setModel: vi.fn(), setSoul: vi.fn(), exportChat: vi.fn(),
       attachFile: vi.fn(), searchKnowledge: vi.fn(), navigateTo: vi.fn(),
-      addSystemMessage: vi.fn(),
-      sendMessage: vi.fn(),
+      addSystemMessage: vi.fn(), sendMessage: vi.fn(),
+      archiveConversation: vi.fn(), renameConversation: vi.fn(), searchConversations: vi.fn(),
     }
     await cmd.command.execute(cmd.args, ctx)
     expect(ctx.setTemperature).toHaveBeenCalledWith(0.5)
@@ -118,6 +121,7 @@ describe('/soul command', () => {
       setModel: vi.fn(), setSoul: vi.fn().mockRejectedValue(new Error('not found')),
       exportChat: vi.fn(), attachFile: vi.fn(), searchKnowledge: vi.fn(),
       navigateTo: vi.fn(), addSystemMessage: vi.fn(), sendMessage: vi.fn(),
+      archiveConversation: vi.fn(), renameConversation: vi.fn(), searchConversations: vi.fn(),
     }
     await cmd.command.execute(cmd.args, ctx)
     expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('Usage'), 'error')
@@ -131,8 +135,8 @@ describe('/knowledge command', () => {
       showToast: vi.fn(), clearChat: vi.fn(), setTemperature: vi.fn(),
       setModel: vi.fn(), setSoul: vi.fn(), exportChat: vi.fn(),
       attachFile: vi.fn(), searchKnowledge: vi.fn(), navigateTo: vi.fn(),
-      addSystemMessage: vi.fn(),
-      sendMessage: vi.fn(),
+      addSystemMessage: vi.fn(), sendMessage: vi.fn(),
+      archiveConversation: vi.fn(), renameConversation: vi.fn(), searchConversations: vi.fn(),
     }
     await cmd.command.execute(cmd.args, ctx)
     expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('Usage'), 'error')
@@ -146,8 +150,8 @@ describe('/summarize command', () => {
       showToast: vi.fn(), clearChat: vi.fn(), setTemperature: vi.fn(),
       setModel: vi.fn(), setSoul: vi.fn(), exportChat: vi.fn(),
       attachFile: vi.fn(), searchKnowledge: vi.fn(), navigateTo: vi.fn(),
-      addSystemMessage: vi.fn(),
-      sendMessage: vi.fn(),
+      addSystemMessage: vi.fn(), sendMessage: vi.fn(),
+      archiveConversation: vi.fn(), renameConversation: vi.fn(), searchConversations: vi.fn(),
     }
     const result = await cmd!.command.execute(cmd!.args, ctx)
     expect(result.handled).toBe(true)
@@ -164,8 +168,8 @@ describe('/feedback command', () => {
     showToast: vi.fn(), clearChat: vi.fn(), setTemperature: vi.fn(),
     setModel: vi.fn(), setSoul: vi.fn(), exportChat: vi.fn(),
     attachFile: vi.fn(), searchKnowledge: vi.fn(), navigateTo: vi.fn(),
-    addSystemMessage: vi.fn(),
-    sendMessage: vi.fn(),
+    addSystemMessage: vi.fn(), sendMessage: vi.fn(),
+    archiveConversation: vi.fn(), renameConversation: vi.fn(), searchConversations: vi.fn(),
   })
 
   it('shows error with no args', async () => {
@@ -211,6 +215,7 @@ describe('/translate command', () => {
       setModel: vi.fn(), setSoul: vi.fn(), exportChat: vi.fn(),
       attachFile: vi.fn(), searchKnowledge: vi.fn(), navigateTo: vi.fn(),
       addSystemMessage: vi.fn(), sendMessage: vi.fn(),
+      archiveConversation: vi.fn(), renameConversation: vi.fn(), searchConversations: vi.fn(),
     }
     await cmd!.command.execute(cmd!.args, ctx)
     expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('Usage'), 'error')
@@ -223,6 +228,7 @@ describe('/translate command', () => {
       setModel: vi.fn(), setSoul: vi.fn(), exportChat: vi.fn(),
       attachFile: vi.fn(), searchKnowledge: vi.fn(), navigateTo: vi.fn(),
       addSystemMessage: vi.fn(), sendMessage: vi.fn(),
+      archiveConversation: vi.fn(), renameConversation: vi.fn(), searchConversations: vi.fn(),
     }
     const result = await cmd!.command.execute(cmd!.args, ctx)
     expect(result.handled).toBe(true)

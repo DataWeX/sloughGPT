@@ -4,7 +4,12 @@ import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { DatasetImportModal } from '@/components/DatasetImportModal'
-import { LossChart } from '@/components/training/LossChart'
+import dynamic from 'next/dynamic'
+
+const LossChart = dynamic(() => import('@/components/training/LossChart').then(m => m.LossChart), { ssr: false })
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { modelController } from '@/lib/controllers'
 import { useToastStore } from '@/lib/toast-store'
 import { cn } from '@/lib/cn'
@@ -229,17 +234,16 @@ export function TrainingFormCard({
           <>
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <select
-                  value={datasets.selectedDataset}
-                  onChange={e => datasets.setSelectedDataset(e.target.value)}
-                  className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground flex-1 max-w-sm"
-                  aria-label="Dataset for fine-tuning"
-                >
-                  {!datasets.selectedDataset && <option value="">Select a dataset...</option>}
-                  {datasets.datasets.map(ds => (
-                    <option key={ds.id} value={ds.id}>{datasetLabel(ds)}</option>
-                  ))}
-                </select>
+                <Select value={datasets.selectedDataset} onValueChange={datasets.setSelectedDataset}>
+                  <SelectTrigger className="h-8 text-xs font-mono flex-1 max-w-sm" aria-label="Dataset for fine-tuning">
+                    <SelectValue placeholder="Select a dataset..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {datasets.datasets.map(ds => (
+                      <SelectItem key={ds.id} value={ds.id}>{datasetLabel(ds)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Button size="sm" variant="outline" onClick={() => datasets.setImportModalOpen(true)}>+ Import</Button>
                 <DatasetImportModal
                   open={datasets.importModalOpen}
@@ -289,12 +293,12 @@ export function TrainingFormCard({
             {form.showAdvanced && (
               <div className="space-y-3 mt-3">
                 <div className="flex items-center gap-4" role="radiogroup" aria-label="Training method">
-                  <div className="flex items-center gap-1 text-sm">
-                    <button role="radio" aria-checked={form.method === 'distill'} className={cn('px-3 py-1.5 rounded-md transition-colors', form.method === 'distill' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => form.setMethod('distill')}>Distill</button>
-                    <button role="radio" aria-checked={form.method === 'finetune'} className={cn('px-3 py-1.5 rounded-md transition-colors', form.method === 'finetune' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => form.setMethod('finetune')}>Continue training</button>
-                    <button role="radio" aria-checked={form.method === 'vlm'} className={cn('px-3 py-1.5 rounded-md transition-colors', form.method === 'vlm' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => form.setMethod('vlm')}>Vision model</button>
-                    <button role="radio" aria-checked={form.method === 'unified'} className={cn('px-3 py-1.5 rounded-md transition-colors', form.method === 'unified' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => form.setMethod('unified')}>Auto</button>
-                  </div>
+                  <ToggleGroup type="single" value={form.method} onValueChange={(v) => { if (v) form.setMethod(v as 'distill' | 'finetune' | 'vlm' | 'unified') }}>
+                    <ToggleGroupItem value="distill" className="px-3 py-1.5 rounded-md text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Distill</ToggleGroupItem>
+                    <ToggleGroupItem value="finetune" className="px-3 py-1.5 rounded-md text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Continue training</ToggleGroupItem>
+                    <ToggleGroupItem value="vlm" className="px-3 py-1.5 rounded-md text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Vision model</ToggleGroupItem>
+                    <ToggleGroupItem value="unified" className="px-3 py-1.5 rounded-md text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Auto</ToggleGroupItem>
+                  </ToggleGroup>
                   {form.method === 'distill' && <span className="text-xs text-muted-foreground/70">A large model teaches a smaller one to copy its style</span>}
                   {form.method === 'finetune' && <span className="text-xs text-muted-foreground/70">Continue training an existing model on new data</span>}
                   {form.method === 'vlm' && <span className="text-xs text-muted-foreground/70">Teach the AI to understand images and text</span>}
@@ -303,8 +307,10 @@ export function TrainingFormCard({
 
                 {form.method !== 'vlm' && form.method !== 'unified' && (
                   <div className="flex items-center gap-1 text-sm" role="radiogroup" aria-label="Data source">
-                    <button role="radio" aria-checked={form.inputMode === 'dataset'} className={cn('px-3 py-1.5 rounded-md transition-colors', form.inputMode === 'dataset' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => form.setInputMode('dataset')}>Use a dataset</button>
-                    <button role="radio" aria-checked={form.inputMode === 'text'} className={cn('px-3 py-1.5 rounded-md transition-colors', form.inputMode === 'text' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground')} onClick={() => form.setInputMode('text')}>Paste text</button>
+                    <ToggleGroup type="single" value={form.inputMode} onValueChange={(v) => { if (v) form.setInputMode(v as 'dataset' | 'text') }}>
+                      <ToggleGroupItem value="dataset" className="px-3 py-1.5 rounded-md text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Use a dataset</ToggleGroupItem>
+                      <ToggleGroupItem value="text" className="px-3 py-1.5 rounded-md text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Paste text</ToggleGroupItem>
+                    </ToggleGroup>
                   </div>
                 )}
 
@@ -327,9 +333,14 @@ export function TrainingFormCard({
                 {(form.method === 'finetune' || form.method === 'unified') && form.availableModels.length > 0 && (
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Base model</label>
-                    <select value={form.selectedModel} onChange={e => form.setSelectedModel(e.target.value)} className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground max-w-sm" aria-label="Base model for fine-tuning">
-                      {form.availableModels.map(id => <option key={id} value={id}>{id}</option>)}
-                    </select>
+                    <Select value={form.selectedModel} onValueChange={form.setSelectedModel}>
+                      <SelectTrigger className="h-8 text-xs font-mono max-w-sm" aria-label="Base model for fine-tuning">
+                        <SelectValue placeholder="Select model..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {form.availableModels.map(id => <SelectItem key={id} value={id}>{id}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
 
@@ -337,11 +348,16 @@ export function TrainingFormCard({
                   <div className="grid grid-cols-2 gap-3 p-3 rounded-lg border border-border/40 bg-muted/20">
                     <div className="flex flex-col gap-1">
                       <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Vision Encoder</label>
-                      <select value={form.visualVisionEncoder} onChange={e => form.setVlmVisionEncoder(e.target.value)} className="h-7 rounded-md border border-border/60 bg-background px-2 text-[11px] font-mono" aria-label="Vision encoder model">
-                        <option value="google/siglip-base-patch16-224">SigLIP Base (patch16)</option>
-                        <option value="google/siglip-large-patch16-384">SigLIP Large (patch16)</option>
-                        <option value="openai/clip-vit-base-patch32">CLIP ViT-B/32</option>
-                      </select>
+                      <Select value={form.visualVisionEncoder} onValueChange={form.setVlmVisionEncoder}>
+                        <SelectTrigger className="h-7 text-[11px] font-mono" aria-label="Vision encoder model">
+                          <SelectValue placeholder="Select encoder..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="google/siglip-base-patch16-224">SigLIP Base (patch16)</SelectItem>
+                          <SelectItem value="google/siglip-large-patch16-384">SigLIP Large (patch16)</SelectItem>
+                          <SelectItem value="openai/clip-vit-base-patch32">CLIP ViT-B/32</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="flex flex-col gap-1">
                       <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Language Model</label>
@@ -362,9 +378,14 @@ export function TrainingFormCard({
                   {(form.method === 'distill' || form.method === 'unified') && form.availableModels.length > 0 && (
                     <div className="flex flex-col gap-1">
                       <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Base model</label>
-                      <select value={form.selectedModel} onChange={e => form.setSelectedModel(e.target.value)} className="h-7 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground" aria-label="Base model for distillation">
-                        {form.availableModels.map(id => <option key={id} value={id}>{id}</option>)}
-                      </select>
+                      <Select value={form.selectedModel} onValueChange={form.setSelectedModel}>
+                        <SelectTrigger className="h-7 text-xs font-mono" aria-label="Base model for distillation">
+                          <SelectValue placeholder="Select model..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {form.availableModels.map(id => <SelectItem key={id} value={id}>{id}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
                     </div>
                   )}
                   <div className="flex flex-col gap-1">
@@ -381,13 +402,13 @@ export function TrainingFormCard({
                   </div>
                   {(form.method === 'finetune' || form.method === 'unified') && (
                     <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground h-7">
-                      <input type="checkbox" checked={form.useLoRA} onChange={e => form.setUseLoRA(e.target.checked)} className="rounded border-border/60" />
+                      <Switch checked={form.useLoRA} onCheckedChange={form.setUseLoRA} />
                       Advanced
                     </label>
                   )}
                   {form.method === 'unified' && (
                     <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground h-7">
-                      <input type="checkbox" checked={form.unifiedDistill} onChange={e => form.setUnifiedDistill(e.target.checked)} className="rounded border-border/60" />
+                      <Switch checked={form.unifiedDistill} onCheckedChange={form.setUnifiedDistill} />
                       Distillation
                     </label>
                   )}
@@ -395,8 +416,10 @@ export function TrainingFormCard({
                     <div className="flex flex-col gap-1">
                       <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Tokenizer</label>
                       <div className="flex items-center gap-1 text-[11px]" role="radiogroup" aria-label="Tokenizer algorithm">
-                        <button role="radio" aria-checked={form.algo === 'bpe'} className={`px-1.5 py-0.5 rounded-sm ${form.algo === 'bpe' ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'}`} onClick={() => form.setAlgo('bpe')}>BPE</button>
-                        <button role="radio" aria-checked={form.algo === 'unigram'} className={`px-1.5 py-0.5 rounded-sm ${form.algo === 'unigram' ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'}`} onClick={() => form.setAlgo('unigram')}>Unigram</button>
+                        <ToggleGroup type="single" value={form.algo} onValueChange={(v) => { if (v) form.setAlgo(v as 'bpe' | 'unigram') }}>
+                          <ToggleGroupItem value="bpe" className="px-1.5 py-0.5 rounded-sm text-[11px] data-[state=on]:bg-muted data-[state=on]:font-medium data-[state=on]:text-foreground">BPE</ToggleGroupItem>
+                          <ToggleGroupItem value="unigram" className="px-1.5 py-0.5 rounded-sm text-[11px] data-[state=on]:bg-muted data-[state=on]:font-medium data-[state=on]:text-foreground">Unigram</ToggleGroupItem>
+                        </ToggleGroup>
                       </div>
                     </div>
                   )}

@@ -630,6 +630,33 @@ def train_cloud(api_key, index, dimension, environment):
     cmd_cloud_setup(args)
 
 
+@train.command("embed", help="Train a text embedder on your corpus (no downloads)")
+@click.option("--corpus", default=None, help="Text file or directory to train on (default: knowledge + chat history)")
+@click.option("--epochs", default=20, type=int, help="Training epochs")
+@click.option("--lr", default=3e-4, type=float, help="Learning rate")
+@click.option("--batch-size", default=32, type=int, help="Batch size")
+@click.option("--embed-dim", default=384, type=int, help="Embedding dimension")
+@click.option("--vocab-size", default=4096, type=int, help="Max vocabulary size")
+@click.option("--output", default=None, help="Output checkpoint path")
+@click.option("--test", default=None, help="Test: embed a query string and print top matches")
+def train_embed(corpus, epochs, lr, batch_size, embed_dim, vocab_size, output, test):
+    """Train a text embedder on your own data using contrastive learning.
+
+    \b
+    Examples:
+      sloughgpt train embed                          # train on knowledge + chat history
+      sloughgpt train embed --corpus datasets/       # train on a directory of text files
+      sloughgpt train embed --corpus my_corpus.txt   # train on a single file
+      sloughgpt train embed --test "neural networks" # embed a test query
+    """
+    from commands.train import cmd_train_embed
+    args = _ns(
+        corpus=corpus, epochs=epochs, lr=lr, batch_size=batch_size,
+        embed_dim=embed_dim, vocab_size=vocab_size, output=output, test=test,
+    )
+    cmd_train_embed(args)
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # personality  — list, load, info, create, export
 # ═══════════════════════════════════════════════════════════════════════

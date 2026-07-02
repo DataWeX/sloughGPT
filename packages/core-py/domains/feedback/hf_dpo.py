@@ -21,14 +21,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-import torch
-from torch import nn
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    PreTrainedTokenizer,
-    PreTrainedTokenizerFast,
-)
+try:
+    import torch
+    from torch import nn
+    from transformers import (
+        AutoModelForCausalLM,
+        AutoTokenizer,
+        PreTrainedTokenizer,
+        PreTrainedTokenizerFast,
+    )
+    _HF_DPO_AVAILABLE = True
+except ImportError:
+    _HF_DPO_AVAILABLE = False
 from typing import Union
 
 logger = logging.getLogger("man.hf_dpo")

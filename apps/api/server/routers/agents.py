@@ -139,7 +139,7 @@ async def orchestrate_agents(req: OrchestrateRequest, request: Request):
     """Orchestrate multiple agents on a goal with SSE streaming.
 
     Streams plan → per-level task execution → composition → complete.
-    Tasks without dependencies run in parallel within each level.
+    Uses async HTTP for non-blocking inference calls.
     """
     from domains.agents.multi import MultiAgentOrchestrator
 
@@ -158,7 +158,7 @@ async def orchestrate_agents(req: OrchestrateRequest, request: Request):
                 return
 
             # Plan
-            tasks = orch._plan(req.goal, req.context or "")
+            tasks = await orch._async_plan(req.goal, req.context or "")
             if not tasks:
                 yield sse_event(
                     stream="agent-orchestrate",
@@ -181,7 +181,7 @@ async def orchestrate_agents(req: OrchestrateRequest, request: Request):
             if await request.is_disconnected():
                 return
 
-            # Execute level by level
+            # Execute level by level via async orchestrator
             task_map = {t.id: t for t in tasks}
             levels = orch._compute_levels(tasks)
             results_ctx: dict = {}
@@ -193,8 +193,6 @@ async def orchestrate_agents(req: OrchestrateRequest, request: Request):
                 data={"levels": len(levels)},
                 message="Starting execution",
             )
-
-            from concurrent.futures import ThreadPoolExecutor, as_completed
 
             for level_idx, task_ids in enumerate(levels):
                 if await request.is_disconnected():
@@ -208,51 +206,51 @@ async def orchestrate_agents(req: OrchestrateRequest, request: Request):
                     message=f"Executing level {level_idx + 1}/{len(levels)} ({len(task_ids)} tasks)",
                 )
 
-                with ThreadPoolExecutor(max_workers=len(task_ids)) as pool:
-                    future_map = {}
-                    for tid in task_ids:
-                        task = task_map[tid]
-                        task.status = "in_progress"
-                        dep_context = orch._build_dep_context(task, task_map, results_ctx)
-                        future = pool.submit(orch._run_agent, task, req.goal, dep_context)
-                        future_map[future] = task
+                async def run_and_yield(tid: str):
+                    task = task_map[tid]
+                    task.status = "in_progress"
+                    dep_context = orch._build_dep_context(task, task_map, results_ctx)
+                    try:
+                        result = await orch._async_run_agent(task, req.goal, dep_context)
+                        task.result = result
+                        task.status = "completed"
+                        results_ctx[task.id] = result
+                        return sse_event(
+                            stream="agent-orchestrate",
+                            phase="EXECUTE",
+                            status="success",
+                            data={
+                                "task_id": task.id,
+                                "agent": task.assigned_agent,
+                                "description": task.description,
+                                "result_preview": result[:200],
+                            },
+                            message=f"Completed: {task.description}",
+                        )
+                    except Exception as e:
+                        error = str(e)
+                        task.error = error
+                        task.status = "failed"
+                        results_ctx[task.id] = f"[error: {error}]"
+                        return sse_event(
+                            stream="agent-orchestrate",
+                            phase="EXECUTE",
+                            status="error",
+                            data={
+                                "task_id": task.id,
+                                "agent": task.assigned_agent,
+                                "description": task.description,
+                                "error": error,
+                            },
+                            message=f"Failed: {task.description}",
+                        )
 
-                    for future in as_completed(future_map):
-                        task = future_map[future]
-                        try:
-                            result = future.result()
-                            task.result = result
-                            task.status = "completed"
-                            results_ctx[task.id] = result
-                            yield sse_event(
-                                stream="agent-orchestrate",
-                                phase="EXECUTE",
-                                status="success",
-                                data={
-                                    "task_id": task.id,
-                                    "agent": task.assigned_agent,
-                                    "description": task.description,
-                                    "result_preview": result[:200],
-                                },
-                                message=f"Completed: {task.description}",
-                            )
-                        except Exception as e:
-                            error = str(e)
-                            task.error = error
-                            task.status = "failed"
-                            results_ctx[task.id] = f"[error: {error}]"
-                            yield sse_event(
-                                stream="agent-orchestrate",
-                                phase="EXECUTE",
-                                status="error",
-                                data={
-                                    "task_id": task.id,
-                                    "agent": task.assigned_agent,
-                                    "description": task.description,
-                                    "error": error,
-                                },
-                                message=f"Failed: {task.description}",
-                            )
+                events = await asyncio.gather(*[run_and_yield(tid) for tid in task_ids], return_exceptions=True)
+                for ev in events:
+                    if isinstance(ev, str):
+                        yield ev
+                    elif isinstance(ev, Exception):
+                        logger.warning("Task exception: %s", ev)
 
                 if await request.is_disconnected():
                     return
@@ -265,7 +263,7 @@ async def orchestrate_agents(req: OrchestrateRequest, request: Request):
                 message="Composing final response...",
             )
 
-            final = orch._compose(req.goal, tasks)
+            final = await orch._async_compose(req.goal, tasks)
 
             yield sse_complete(
                 stream="agent-orchestrate",

@@ -33,11 +33,12 @@ from dataclasses import dataclass, field, asdict
 import numpy as np
 
 logger = logging.getLogger("man.learner.knowledge")
-
 KNOWLEDGE_DIR = Path("data/knowledge")
 KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)
+
 FEED_STATE_PATH = KNOWLEDGE_DIR / "feeds.json"
 VISITED_PATH = KNOWLEDGE_DIR / "visited.json"
+ENTRIES_PATH = KNOWLEDGE_DIR / "entries.json"
 
 DEFAULT_FEED_POLL_INTERVAL = 3600  # 1 hour
 MAX_ARTICLE_TOKENS = 2048
@@ -49,10 +50,10 @@ MAX_ARTICLE_TOKENS = 2048
 
 @dataclass
 class KnowledgeFact:
-    """A single fact extracted from a source."""
+    """A single knowledge fact."""
     content: str
-    topic: str
-    source: str  # "rss", "search", "article"
+    topic: str = "general"
+    source: str = "manual"
     url: str = ""
     timestamp: float = 0.0
     importance: float = 0.5  # 0-1, auto-estimated
@@ -207,6 +208,7 @@ class KnowledgeMemory:
                 pass
         self._embed_fn = None
         self._fact_counter = 0
+        self._load_entries()
         self._migrate_from_json_topics()
 
     def _get_embedding(self, text: str) -> list[float]:
@@ -227,6 +229,48 @@ class KnowledgeMemory:
 
     def _save_visited(self):
         VISITED_PATH.write_text(json.dumps(list(self._visited), indent=2))
+
+    def _save_entries(self):
+        """Persist all vector entries to JSON for restart survival."""
+        try:
+            from domains.inference.vector_store import VectorEntry
+            entries = getattr(self._vector_store, '_entries', None)
+            if not entries:
+                return
+            data = []
+            for eid, entry in entries.items():
+                data.append({
+                    "id": entry.id,
+                    "vector": entry.vector,
+                    "text": entry.text,
+                    "metadata": dict(entry.metadata) if entry.metadata else {},
+                })
+            ENTRIES_PATH.write_text(json.dumps(data))
+        except Exception as e:
+            logger.warning(f"Failed to save entries: {e}")
+
+    def _load_entries(self):
+        """Load persisted entries into vector store on init."""
+        if not ENTRIES_PATH.exists():
+            return
+        try:
+            from domains.inference.vector_store import VectorEntry
+            data = json.loads(ENTRIES_PATH.read_text())
+            if not data:
+                return
+            entries = []
+            for d in data:
+                entry = VectorEntry(
+                    id=d["id"],
+                    vector=d["vector"],
+                    text=d["text"],
+                    metadata=d.get("metadata", {}),
+                )
+                entries.append(entry)
+            self._run_async(self._vector_store.upsert(entries))
+            logger.info(f"Loaded {len(entries)} persisted entries from {ENTRIES_PATH}")
+        except Exception as e:
+            logger.warning(f"Failed to load entries: {e}")
 
     def _migrate_from_json_topics(self):
         """One-time migration: import old JSON topic files into vector store."""
@@ -283,7 +327,11 @@ class KnowledgeMemory:
                     "content_hash": content_hash,
                 },
             )
-            self._run_async(self._vector_store.upsert([entry]))
+            if hasattr(self._vector_store, 'upsert_sync'):
+                self._vector_store.upsert_sync([entry])
+            else:
+                self._run_async(self._vector_store.upsert([entry]))
+            self._save_entries()
         except Exception as e:
             logger.warning(f"Vector store upsert failed: {e}")
         self._save_visited()
@@ -330,13 +378,22 @@ class KnowledgeMemory:
     def query(self, topic: str, top_k: int = 10) -> list[dict]:
         """Retrieve facts for a topic, sorted by importance."""
         try:
-            results = self._run_async(
-                self._vector_store.query(
+            if hasattr(self._vector_store, 'count_sync'):
+                total = self._vector_store.count_sync()
+                results = self._vector_store.query_sync(
                     vector=[0.0] * 384,
-                    top_k=top_k,
+                    top_k=total or 1000,
                     filter_metadata={"topic": topic},
                 )
-            )
+            else:
+                total = self._run_async(self._vector_store.count())
+                results = self._run_async(
+                    self._vector_store.query(
+                        vector=[0.0] * 384,
+                        top_k=total or 1000,
+                        filter_metadata={"topic": topic},
+                    )
+                )
             facts = []
             for r in results:
                 fact = {
@@ -359,9 +416,12 @@ class KnowledgeMemory:
         """Semantic search across all facts via vector embedding."""
         try:
             query_vec = self._get_embedding(text)
-            results = self._run_async(
-                self._vector_store.query(vector=query_vec, top_k=top_k)
-            )
+            if hasattr(self._vector_store, 'query_sync'):
+                results = self._vector_store.query_sync(vector=query_vec, top_k=top_k)
+            else:
+                results = self._run_async(
+                    self._vector_store.query(vector=query_vec, top_k=top_k)
+                )
             facts = []
             for r in results:
                 fact = {
@@ -383,7 +443,10 @@ class KnowledgeMemory:
     def stats(self) -> dict:
         """Return summary statistics."""
         try:
-            total_facts = self._run_async(self._vector_store.count())
+            if hasattr(self._vector_store, 'count_sync'):
+                total_facts = self._vector_store.count_sync()
+            else:
+                total_facts = self._run_async(self._vector_store.count())
         except Exception:
             total_facts = 0
         with self._lock:
@@ -402,9 +465,12 @@ class KnowledgeMemory:
     def list_all(self, top_k: int = 5000) -> list[dict]:
         """Return all stored facts by querying with a zero vector."""
         try:
-            results = self._run_async(
-                self._vector_store.query(vector=[0.0] * 384, top_k=top_k)
-            )
+            if hasattr(self._vector_store, 'query_sync'):
+                results = self._vector_store.query_sync(vector=[0.0] * 384, top_k=top_k)
+            else:
+                results = self._run_async(
+                    self._vector_store.query(vector=[0.0] * 384, top_k=top_k)
+                )
             facts = []
             for r in results:
                 facts.append({
@@ -438,6 +504,7 @@ class KnowledgeMemory:
                 with self._lock:
                     self._visited.discard(removed_hash)
                 self._save_visited()
+                self._save_entries()
             return deleted
         except Exception as e:
             logger.warning(f"delete_by_id failed: {e}")
@@ -455,6 +522,7 @@ class KnowledgeMemory:
             with self._lock:
                 self._visited.clear()
             self._save_visited()
+            self._save_entries()
             return len(ids)
         except Exception as e:
             logger.warning(f"clear_all failed: {e}")

@@ -1,20 +1,74 @@
-"""Multimodal Router - vision, speech, and background batch training."""
+"""Multimodal Router - vision, speech, DPO, video training, and background batch training."""
 
 import asyncio
 import datetime
 import json
 import logging
+import os
+import time
 from typing import List, Optional
 from pathlib import Path
+from threading import Lock
 import numpy as np
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Form
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from domains.multimodal import get_multimodal_manager, ImageCaption
 
 logger = logging.getLogger("man.routers.multimodal")
 
 router = APIRouter(prefix="/multimodal", tags=["multimodal"])
+
+# ── DPO + Video training state (from visual router) ─────────────────────────
+
+_dpo_state = {
+    "last_run": None,
+    "status": "idle",
+    "result": None,
+    "accepted_count": 0,
+    "rejected_count": 0,
+}
+_dpo_lock = Lock()
+
+
+class DPOTriggerRequest(BaseModel):
+    max_pairs: int = Field(6, ge=1, le=50)
+    learning_rate: float = Field(5e-6, ge=1e-8, le=1e-3)
+
+
+class DPOStatusResponse(BaseModel):
+    status: str
+    last_run: Optional[str] = None
+    result: Optional[dict] = None
+    accepted_count: int = 0
+    rejected_count: int = 0
+
+
+class VideoTrainRequest(BaseModel):
+    data_path: str = Field(..., description="Path to JSONL with {video_path, caption} entries")
+    epochs: int = Field(5, ge=1, le=100)
+    batch_size: int = Field(2, ge=1, le=16)
+    learning_rate: float = Field(3e-4, ge=1e-6, le=1.0)
+    output_dir: str = Field("models/video-training", description="Output directory for checkpoints")
+
+
+class VideoInferRequest(BaseModel):
+    video_path: str = Field(..., description="Server path to video file")
+    max_len: int = Field(50, ge=10, le=200)
+    temperature: float = Field(0.8, ge=0.0, le=2.0)
+
+
+_VIDEO_TRAINING_STATE = {
+    "status": "idle",
+    "job_id": None,
+    "current_epoch": 0,
+    "current_step": 0,
+    "total_steps": 0,
+    "current_loss": None,
+    "result": None,
+    "error": None,
+}
+_video_training_lock = Lock()
 
 # ── Background training state ──────────────────────────────────────────────
 
@@ -78,7 +132,7 @@ async def get_learning_progress():
     learning = getattr(mgr, "_learning_count", 0)
     engine = getattr(mgr, "_multimodal_engine", None)
     trained = getattr(engine, "_trained", False) if engine else False
-    vocab_size = len(engine.text.bpe.vocab) if engine and hasattr(engine, "text") else 0
+    vocab_size = getattr(getattr(engine, "text", None), "vocab_size", 0) if engine else 0
     buf = getattr(mgr, "_replay_buffer", None)
     return {
         "images_learned": learning,
@@ -95,7 +149,7 @@ async def get_training_report():
     history = getattr(mgr, "_caption_history", [])
     learning = getattr(mgr, "_learning_count", 0)
     engine = getattr(mgr, "_multimodal_engine", None)
-    vocab_size = len(engine.text.bpe.vocab) if engine and hasattr(engine, "text") else 0
+    vocab_size = getattr(getattr(engine, "text", None), "vocab_size", 0) if engine else 0
     buf = getattr(mgr, "_replay_buffer", None)
     unique = len(set(history)) if history else 0
     accuracy_history = getattr(mgr, "_accuracy_history", [])
@@ -582,4 +636,322 @@ async def create_visual_dataset(req: VisualDatasetRequest):
         "entries": entries,
         "auto_captioned": auto_captioned,
     }
+
+
+# ── Helpers ────────────────────────────────────────────────────────
+
+def _get_active_model_and_tokenizer():
+    """Get the currently loaded HF model and tokenizer from server state."""
+    try:
+        import state as server_state
+        return server_state.model, server_state.tokenizer
+    except Exception:
+        return None, None
+
+
+# ── DPO Endpoints ──────────────────────────────────────────────────
+
+@router.post("/dpo")
+async def trigger_dpo(req: DPOTriggerRequest):
+    """Trigger DPO training on the active HF model using feedback pairs."""
+    global _dpo_state
+
+    model, tokenizer = _get_active_model_and_tokenizer()
+    if model is None or tokenizer is None:
+        raise HTTPException(status_code=400, detail="No model loaded. Load a model first.")
+
+    with _dpo_lock:
+        if _dpo_state["status"] == "running":
+            raise HTTPException(status_code=409, detail="DPO training already in progress")
+        _dpo_state["status"] = "running"
+        _dpo_state["result"] = None
+
+    try:
+        from domains.feedback.hf_dpo import HFDPOTrainer
+
+        trainer = HFDPOTrainer(
+            model=model,
+            tokenizer=tokenizer,
+            learning_rate=req.learning_rate,
+        )
+
+        t0 = time.time()
+        result = trainer.train(max_pairs=req.max_pairs)
+        elapsed = time.time() - t0
+
+        result["elapsed_seconds"] = round(elapsed, 1)
+
+        with _dpo_lock:
+            _dpo_state["last_run"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+            _dpo_state["result"] = result
+            _dpo_state["status"] = result["status"]
+            if result["status"] == "accepted":
+                _dpo_state["accepted_count"] += 1
+            elif result["status"] == "rejected":
+                _dpo_state["rejected_count"] += 1
+
+        logger.info("DPO completed: %s (%ds)", result["status"], round(elapsed))
+
+        return {
+            "status": result["status"],
+            "steps": result.get("steps", 0),
+            "avg_loss": result.get("avg_loss"),
+            "ppl_before": result.get("ppl_before"),
+            "ppl_after": result.get("ppl_after"),
+            "ppl_delta_pct": result.get("ppl_delta_pct"),
+            "pairs_trained": result.get("pairs_trained", 0),
+            "elapsed_seconds": round(elapsed, 1),
+        }
+
+    except Exception as e:
+        with _dpo_lock:
+            _dpo_state["status"] = "error"
+            _dpo_state["result"] = {"error": str(e)}
+        logger.error("DPO failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/dpo/status")
+async def dpo_status():
+    """Get DPO training status and history."""
+    with _dpo_lock:
+        return DPOStatusResponse(
+            status=_dpo_state["status"],
+            last_run=_dpo_state["last_run"],
+            result=_dpo_state["result"],
+            accepted_count=_dpo_state["accepted_count"],
+            rejected_count=_dpo_state["rejected_count"],
+        )
+
+
+# ── Video Training Endpoints ───────────────────────────────────────
+
+@router.post("/train-video")
+async def train_video(req: VideoTrainRequest):
+    """Start video captioning training in background."""
+    with _video_training_lock:
+        if _VIDEO_TRAINING_STATE["status"] == "running":
+            raise HTTPException(status_code=409, detail="Video training already in progress")
+        _VIDEO_TRAINING_STATE["status"] = "running"
+        _VIDEO_TRAINING_STATE["error"] = None
+        _VIDEO_TRAINING_STATE["result"] = None
+
+    job_id = f"video_{int(time.time())}"
+    _VIDEO_TRAINING_STATE["job_id"] = job_id
+
+    def _progress(epoch, step, loss, total):
+        with _video_training_lock:
+            _VIDEO_TRAINING_STATE["current_epoch"] = epoch
+            _VIDEO_TRAINING_STATE["current_step"] = step
+            _VIDEO_TRAINING_STATE["total_steps"] = total
+            _VIDEO_TRAINING_STATE["current_loss"] = float(loss)
+
+    def _run():
+        try:
+            from domains.training.video_trainer import VideoCaptionTrainer
+
+            trainer = VideoCaptionTrainer(max_frames=8, lr=req.learning_rate)
+            result = trainer.train(
+                data_path=req.data_path,
+                epochs=req.epochs,
+                batch_size=req.batch_size,
+                lr=req.learning_rate,
+                output_dir=req.output_dir,
+                progress_callback=_progress,
+            )
+            with _video_training_lock:
+                _VIDEO_TRAINING_STATE["status"] = "completed" if result.get("status") == "completed" else "error"
+                _VIDEO_TRAINING_STATE["result"] = result
+            logger.info("Video training %s: %s", result.get("status"), req.data_path)
+        except Exception as e:
+            with _video_training_lock:
+                _VIDEO_TRAINING_STATE["status"] = "error"
+                _VIDEO_TRAINING_STATE["error"] = str(e)
+            logger.error("Video training failed: %s", e)
+
+    import threading
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+
+    return {
+        "status": "started",
+        "job_id": job_id,
+        "data_path": req.data_path,
+        "output_dir": req.output_dir,
+    }
+
+
+@router.get("/train-video/status")
+async def train_video_status():
+    """Get video training status."""
+    with _video_training_lock:
+        return {
+            "status": _VIDEO_TRAINING_STATE["status"],
+            "job_id": _VIDEO_TRAINING_STATE["job_id"],
+            "current_epoch": _VIDEO_TRAINING_STATE["current_epoch"],
+            "current_step": _VIDEO_TRAINING_STATE["current_step"],
+            "total_steps": _VIDEO_TRAINING_STATE["total_steps"],
+            "current_loss": _VIDEO_TRAINING_STATE["current_loss"],
+            "result": _VIDEO_TRAINING_STATE["result"],
+            "error": _VIDEO_TRAINING_STATE["error"],
+        }
+
+
+@router.post("/video-infer")
+async def video_infer(req: VideoInferRequest):
+    """Generate a caption for a video file on the server."""
+    try:
+        from domains.training.video_trainer import VideoCaptionTrainer, list_video_checkpoints
+
+        checkpoints = list_video_checkpoints()
+        if not checkpoints:
+            checkpoints = list_video_checkpoints(str(Path("models/video-training")))
+        if not checkpoints:
+            raise HTTPException(status_code=400, detail="No trained video model found. Train via /multimodal/train-video first.")
+
+        latest = checkpoints[0]
+        trainer = VideoCaptionTrainer()
+        trainer.load_checkpoint(latest["path"])
+
+        t0 = time.time()
+        text = trainer.generate(video_path=req.video_path, max_len=req.max_len, temperature=req.temperature)
+        elapsed = (time.time() - t0) * 1000
+
+        return {"text": text, "checkpoint": latest["name"], "elapsed_ms": round(elapsed, 1)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Visual Checkpoints ─────────────────────────────────────────────
+
+@router.get("/checkpoints")
+async def list_visual_checkpoints():
+    """List all video training checkpoints."""
+    try:
+        from domains.training.video_trainer import list_video_checkpoints
+        ckpts = list_video_checkpoints()
+        if not ckpts:
+            ckpts = list_video_checkpoints(str(Path("models/video-training")))
+        return ckpts
+    except Exception as e:
+        logger.error("Failed to list visual checkpoints: %s", e)
+        return []
+
+
+@router.post("/checkpoints/{name}/load")
+async def load_visual_checkpoint(name: str):
+    """Load a video training checkpoint by name."""
+    try:
+        from domains.training.video_trainer import VideoCaptionTrainer, list_video_checkpoints
+        ckpts = list_video_checkpoints()
+        if not ckpts:
+            ckpts = list_video_checkpoints(str(Path("models/video-training")))
+        match = [c for c in ckpts if c["name"] == name]
+        if not match:
+            raise HTTPException(status_code=404, detail=f"Checkpoint '{name}' not found")
+        trainer = VideoCaptionTrainer()
+        trainer.load_checkpoint(match[0]["path"])
+        return {"status": "loaded", "checkpoint": name}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/checkpoints/{name}")
+async def delete_visual_checkpoint(name: str):
+    """Delete a video training checkpoint by name."""
+    try:
+        from domains.training.video_trainer import list_video_checkpoints
+        ckpts = list_video_checkpoints()
+        if not ckpts:
+            ckpts = list_video_checkpoints(str(Path("models/video-training")))
+        match = [c for c in ckpts if c["name"] == name]
+        if not match:
+            raise HTTPException(status_code=404, detail=f"Checkpoint '{name}' not found")
+        path = Path(match[0]["path"])
+        if path.exists():
+            os.remove(path)
+        npz_path = path.with_suffix(".npz")
+        if npz_path.exists():
+            os.remove(npz_path)
+        meta_path = path.parent / f"{path.stem}_meta.json"
+        if meta_path.exists():
+            os.remove(meta_path)
+        return {"status": "deleted", "checkpoint": name}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── PDF Analysis ────────────────────────────────────────────────────
+
+@router.post("/pdf/upload")
+async def analyze_pdf_upload(
+    file: UploadFile = File(...),
+    question: str = Form("Analyze this document and summarize its contents."),
+    per_page: bool = Form(False),
+    max_new_tokens: int = Form(512),
+):
+    """Analyze an uploaded PDF document."""
+    import tempfile
+    from domains.inference.pdf_vlm import PDFVLMProcessor
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        processor = PDFVLMProcessor(max_pages=10)
+
+        if per_page:
+            results = processor.analyze_pages(tmp_path, question=question, max_new_tokens=max_new_tokens)
+            text = "\n\n".join(f"--- Page {r['page']} ---\n{r['text']}" for r in results)
+        else:
+            text = processor.analyze(tmp_path, question=question, max_new_tokens=max_new_tokens)
+
+        return {
+            "analysis": text,
+            "filename": file.filename,
+            "pages_analyzed": 10,
+            "method": "vlm" if processor._get_vlm() is not None else "text_extract",
+        }
+    except Exception as e:
+        logger.warning("PDF analysis failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"PDF analysis failed: {e}")
+    finally:
+        os.unlink(tmp_path)
+
+
+# ── Combined Status ────────────────────────────────────────────────
+
+@router.get("/status")
+async def multimodal_status():
+    """Get combined status of all multimodal subsystems."""
+    with _video_training_lock:
+        video_train_state = {
+            "status": _VIDEO_TRAINING_STATE["status"],
+            "job_id": _VIDEO_TRAINING_STATE["job_id"],
+            "current_epoch": _VIDEO_TRAINING_STATE["current_epoch"],
+            "current_step": _VIDEO_TRAINING_STATE["current_step"],
+            "total_steps": _VIDEO_TRAINING_STATE["total_steps"],
+            "current_loss": _VIDEO_TRAINING_STATE["current_loss"],
+            "result": _VIDEO_TRAINING_STATE["result"],
+            "error": _VIDEO_TRAINING_STATE["error"],
+        }
+    return {
+        "video_training": video_train_state,
+        "dpo": DPOStatusResponse(
+            status=_dpo_state["status"],
+            last_run=_dpo_state["last_run"],
+            result=_dpo_state["result"],
+            accepted_count=_dpo_state["accepted_count"],
+            rejected_count=_dpo_state["rejected_count"],
+        ).model_dump(),
+    }
+
 

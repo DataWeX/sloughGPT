@@ -16,7 +16,8 @@ import {SensorGraph} from '../components/SensorGraph';
 import {StatusBadge} from '../components/StatusBadge';
 import {colors, spacing, radii, typography} from '../theme';
 import {ACTIVITY_NAMES} from '../types';
-import type {ActivityPrediction, LossPoint} from '../stores/activity-store';
+import type {ActivityPrediction} from '../types';
+import type {LossPoint} from '../stores/activity-store';
 
 const WINDOW_SIZE = 128;
 
@@ -26,23 +27,31 @@ export function ActivityScreen() {
     isRecording,
     recordingLabel,
     phase,
+    trainingEpochs,
+    trainingEpoch,
     trainingLoss,
     trainingAccuracy,
+    lossHistory,
     numSamples,
     error,
     modelLoaded,
     dataset,
     totalRecordings,
+    bgBufferSize,
+    bgLastSync,
     lastPrediction,
     clearHistory,
     startRecording,
     stopRecording,
     setRecordingLabel,
     startTraining,
+    startTrainingStream,
     predictActivity,
     refreshStatus,
     clearError,
     deleteAll,
+    setBackgroundState,
+    setModelSync,
   } = useActivityStore();
 
   const [refreshing, setRefreshing] = useState(false);

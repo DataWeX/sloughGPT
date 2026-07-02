@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { DatasetImportModal } from '@/components/DatasetImportModal'
@@ -129,18 +130,16 @@ export function QuickTrainCard({
             </>
           ) : (
             <>
-              <select
-                value={quickDataset}
-                onChange={e => setQuickDataset(e.target.value)}
-                className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground flex-1 max-w-sm"
-                disabled={quickTraining}
-                aria-label="Dataset for quick training"
-              >
-                <option value="">Select a dataset...</option>
-                {datasets.datasets.map(ds => (
-                  <option key={ds.id} value={ds.id}>{datasetLabel(ds)}</option>
-                ))}
-              </select>
+              <Select value={quickDataset} onValueChange={setQuickDataset} disabled={quickTraining}>
+                <SelectTrigger className="h-8 text-xs font-mono flex-1 max-w-sm" aria-label="Dataset for quick training">
+                  <SelectValue placeholder="Select a dataset..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {datasets.datasets.map(ds => (
+                    <SelectItem key={ds.id} value={ds.id}>{datasetLabel(ds)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button size="sm" disabled={!quickDataset || quickTraining} onClick={startQuickTrain}>
                 {quickTraining ? 'Training...' : 'Start training'}
               </Button>

@@ -2,14 +2,12 @@
  * @vitest-environment jsdom
  */
 import { describe, expect, it, vi, afterEach } from 'vitest'
-import { renderHook, act, cleanup } from '@testing-library/react'
+import { renderHook, act, cleanup, waitFor } from '@testing-library/react'
 
 const mockGetHealth = vi.fn()
 
 vi.mock('@/lib/model-controller', () => ({
-  modelController: {
-    getHealth: (...args: unknown[]) => mockGetHealth(...args),
-  },
+  modelController: { getHealth: (...args: unknown[]) => mockGetHealth(...args) },
 }))
 
 import { inferenceHealthLabel, useApiHealth } from './useApiHealth'
@@ -42,7 +40,31 @@ describe('inferenceHealthLabel', () => {
 })
 
 describe('useApiHealth', () => {
-  it('returns state and refresh', () => {
+  it('re-fetches on visibilitychange to visible', async () => {
+    mockGetHealth.mockResolvedValue({ status: 'ok', model_loaded: true, model_type: 'gpt2', summary: 'ready' })
+    const { result } = renderHook(() => useApiHealth())
+    await act(async () => { await result.current.refresh() })
+
+    const callCount = mockGetHealth.mock.calls.length
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+
+    await waitFor(() => expect(mockGetHealth.mock.calls.length).toBe(callCount + 1))
+  })
+
+  it('does not re-fetch on visibilitychange to hidden', async () => {
+    mockGetHealth.mockResolvedValue({ status: 'ok', model_loaded: true, model_type: 'gpt2', summary: 'ready' })
+    const { result } = renderHook(() => useApiHealth())
+    await act(async () => { await result.current.refresh() })
+
+    const callCount = mockGetHealth.mock.calls.length
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+
+    expect(mockGetHealth.mock.calls.length).toBe(callCount)
+  })
+
+  it('returns state and refresh', async () => {
     mockGetHealth.mockResolvedValue({ status: 'ok', model_loaded: true, model_type: 'gpt2', summary: 'ready' })
     const { result } = renderHook(() => useApiHealth())
     expect(result.current).toHaveProperty('state')

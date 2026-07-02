@@ -142,7 +142,13 @@ export default function ExportPage() {
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No model loaded. Load one from the Models page first.</p>
+              <p className="text-sm text-muted-foreground">
+                No model loaded.{' '}
+                <a href="/models" className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors">
+                  Load one from the Models page
+                </a>
+                .
+              </p>
             )}
           </CardContent>
         </Card>

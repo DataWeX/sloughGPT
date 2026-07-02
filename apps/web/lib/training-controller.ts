@@ -27,6 +27,7 @@ export interface TrainingJob {
   loss_history?: Array<{ step: number; value: number; type: 'train' | 'eval' }>
   reward_history?: Array<{ step: number; value: number }>
   result?: Record<string, unknown>
+  error?: string
   explanation?: string
   status_message?: string
 }
@@ -94,7 +95,7 @@ export interface TrainingBuild {
 }
 
 export interface TurboTrainStartRequest {
-  method?: 'transformer'
+  method?: 'slonet' | 'transformer'
   dataset_id?: string
   data_path?: string
   epochs?: number
@@ -103,10 +104,13 @@ export interface TurboTrainStartRequest {
   vocab_size?: number
   n_embed?: number
   n_head?: number
+  n_layer?: number
+  block_size?: number
+  dropout?: number
+  // Legacy fields (ignored)
   n_encoder_layers?: number
   n_decoder_layers?: number
   dim_feedforward?: number
-  dropout?: number
   max_src_len?: number
   max_tgt_len?: number
 }
@@ -233,6 +237,22 @@ export const trainingJobsController = {
     name?: string
   }): Promise<{ job_id: string; status: string; message: string }> {
     return apiPost('/training/visual-start', params)
+  },
+
+  async startDistill(params: {
+    teacher_model: string
+    dataset: string
+    name?: string
+    temperature?: number
+    alpha?: number
+    beta?: number
+    epochs?: number
+    embed_dim?: number
+    n_layers?: number
+    n_heads?: number
+    block_size?: number
+  }): Promise<{ job_id: string; status: string; message: string }> {
+    return apiPost('/training/distill', params)
   },
 
   async stop(id: string): Promise<void> {

@@ -301,8 +301,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       learning_rate: config.lr,
       n_embed: config.embed,
       n_head: config.heads,
-      n_encoder_layers: config.layers,
-      n_decoder_layers: config.layers,
+      n_layer: config.layers,
     }).then(result => {
       if (result.status === 'error') {
         setTurboError(result.message || 'Training failed'); setTurboPhase('error')

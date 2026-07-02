@@ -105,7 +105,7 @@ Cypress.Commands.add('mockAll', () => {
 })
 
 Cypress.Commands.add('mockVisual', () => {
-  cy.intercept('GET', `${api}/visual/checkpoints`, {
+  cy.intercept('GET', `${api}/multimodal/checkpoints`, {
     statusCode: 200,
     body: {
       checkpoints: [
@@ -114,27 +114,27 @@ Cypress.Commands.add('mockVisual', () => {
       ],
     },
   }).as('visualCheckpoints')
-  cy.intercept('GET', `${api}/visual/status`, {
+  cy.intercept('GET', `${api}/multimodal/status`, {
     statusCode: 200,
     body: { visual_loaded: true, model_dir: 'models/visual-finetuned', total_checkpoints: 2 },
   }).as('visualStatus')
-  cy.intercept('GET', `${api}/visual/dpo/status`, {
+  cy.intercept('GET', `${api}/multimodal/dpo/status`, {
     statusCode: 200,
     body: { dpo_running: false, dpo_completed: true, dpo_delta_ppl: 0.15, dpo_delta_bleu: 3.2 },
   }).as('dpoStatus')
-  cy.intercept('GET', `${api}/visual/train/status`, {
+  cy.intercept('GET', `${api}/multimodal/train/status`, {
     statusCode: 200,
     body: { training: false, completed: false, progress: 0, epoch: 0, loss: null, error: null },
   }).as('visualTrainStatus')
-  cy.intercept('POST', `${api}/visual/checkpoints/*/load`, {
+  cy.intercept('POST', `${api}/multimodal/checkpoints/*/load`, {
     statusCode: 200,
     body: { status: 'staged', name: 'visual-v2', path: 'models/visual-finetuned' },
   }).as('visualLoad')
-  cy.intercept('DELETE', `${api}/visual/checkpoints/*`, {
+  cy.intercept('DELETE', `${api}/multimodal/checkpoints/*`, {
     statusCode: 200,
     body: { status: 'deleted', name: 'visual-v1' },
   }).as('visualDelete')
-  cy.intercept('POST', `${api}/visual/load`, {
+  cy.intercept('POST', `${api}/multimodal/load`, {
     statusCode: 200,
     body: { status: 'loaded', model_dir: 'models/visual-finetuned' },
   }).as('visualProviderLoad')

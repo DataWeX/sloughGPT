@@ -1000,3 +1000,144 @@ def register(subparsers):
     monitor_parser.add_argument("--watch", action="store_true", help="Continuous watch")
     monitor_parser.add_argument("--interval", type=int, default=5, help="Refresh interval (s)")
     monitor_parser.set_defaults(func=lambda a: _cmd_monitor(a))
+
+
+def cmd_train_embed(args):
+    """Train a text embedder on your own corpus using contrastive learning.
+
+    Collects texts from knowledge files and chat history, then trains a
+    SloNet transformer encoder to produce 384-dim embeddings.  The trained
+    model is saved to data/models/text-embedder.sou and automatically
+    used by simple_embed() instead of downloading sentence-transformers.
+    """
+    import os
+    import json
+    import glob as glob_mod
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parent.parent.parent.parent
+
+    # ── Collect training texts ────────────────────────────────────────
+    texts = []
+
+    corpus = getattr(args, "corpus", None)
+    if corpus:
+        p = Path(corpus)
+        if p.is_file():
+            texts.append(p.read_text(errors="ignore"))
+        elif p.is_dir():
+            for ext in ("*.txt", "*.md", "*.json"):
+                for fp in p.rglob(ext):
+                    try:
+                        texts.append(fp.read_text(errors="ignore"))
+                    except Exception:
+                        pass
+        else:
+            printer.error(f"Corpus not found: {corpus}")
+            return
+    else:
+        # Auto-discover: knowledge files + chat history
+        knowledge_dir = repo_root / "data" / "knowledge"
+        if knowledge_dir.exists():
+            for fp in knowledge_dir.rglob("*.txt"):
+                try:
+                    texts.append(fp.read_text(errors="ignore"))
+                except Exception:
+                    pass
+            for fp in knowledge_dir.rglob("*.json"):
+                try:
+                    data = json.loads(fp.read_text(errors="ignore"))
+                    if isinstance(data, list):
+                        texts.extend(str(x) for x in data if isinstance(x, str))
+                    elif isinstance(data, dict):
+                        texts.extend(str(v) for v in data.values() if isinstance(v, str))
+                except Exception:
+                    pass
+
+        sessions_dir = repo_root / "data" / "sessions"
+        if sessions_dir.exists():
+            for fp in sessions_dir.glob("*.json"):
+                try:
+                    data = json.loads(fp.read_text(errors="ignore"))
+                    if isinstance(data, list):
+                        for msg in data:
+                            if isinstance(msg, dict) and "content" in msg:
+                                texts.append(msg["content"])
+                    elif isinstance(data, dict) and "messages" in data:
+                        for msg in data["messages"]:
+                            if isinstance(msg, dict) and "content" in msg:
+                                texts.append(msg["content"])
+                except Exception:
+                    pass
+
+        # Datasets directory
+        datasets_dir = repo_root / "datasets"
+        if datasets_dir.exists():
+            for fp in datasets_dir.rglob("*.txt"):
+                try:
+                    texts.append(fp.read_text(errors="ignore"))
+                except Exception:
+                    pass
+            for fp in datasets_dir.rglob("*.jsonl"):
+                try:
+                    for line in fp.read_text(errors="ignore").splitlines():
+                        texts.append(line)
+                except Exception:
+                    pass
+
+    # Filter empty / tiny texts
+    texts = [t.strip() for t in texts if len(t.strip()) > 20]
+
+    if len(texts) < 2:
+        printer.error("Not enough training data. Provide --corpus or add knowledge files.")
+        return
+
+    printer.header("Training Text Embedder")
+    printer.key_value("Texts", str(len(texts)))
+    printer.key_value("Epochs", str(getattr(args, "epochs", 20)))
+    printer.key_value("Embed dim", str(getattr(args, "embed_dim", 384)))
+    printer.blank()
+
+    # ── Test mode: just embed a query ─────────────────────────────────
+    test_query = getattr(args, "test", None)
+    if test_query:
+        from domains.inference.slo_embedder import SloTextEmbedder
+        embedder = SloTextEmbedder.load()
+        if embedder is None:
+            printer.error("No trained embedder found. Run training first: sloughgpt train embed")
+            return
+        vec = embedder.embed(test_query)
+        printer.success(f"Embedding for '{test_query}': dim={len(vec)}, norm={sum(x*x for x in vec)**0.5:.4f}")
+        printer.info(f"First 8 values: {vec[:8]}")
+        return
+
+    # ── Train ─────────────────────────────────────────────────────────
+    from domains.inference.slo_embedder import train_embedder
+
+    def progress(epoch, loss, total):
+        bar = "=" * int(epoch / total * 30)
+        bar += "." * (30 - len(bar))
+        print(f"\r  [{bar}] Epoch {epoch}/{total} — loss: {loss:.4f}", end="", flush=True)
+        if epoch == total:
+            print()
+
+    result = train_embedder(
+        texts=texts,
+        vocab_size=getattr(args, "vocab_size", 4096),
+        embed_dim=getattr(args, "embed_dim", 384),
+        epochs=getattr(args, "epochs", 20),
+        lr=getattr(args, "lr", 3e-4),
+        batch_size=getattr(args, "batch_size", 32),
+        save_path=getattr(args, "output", None),
+        progress_callback=progress,
+    )
+
+    printer.blank()
+    printer.success("Embedder trained")
+    printer.key_value("Final loss", f"{result['final_loss']:.4f}")
+    printer.key_value("Vocab size", str(result["vocab_size"]))
+    printer.key_value("Parameters", f"{result['n_params']:,}")
+    printer.key_value("Saved to", result["save_path"])
+    printer.blank()
+    printer.info("The embedder is now used automatically by KnowledgeMemory and vector search.")
+    printer.info("No sentence-transformers download needed.")

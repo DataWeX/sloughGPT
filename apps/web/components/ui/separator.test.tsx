@@ -16,7 +16,7 @@ describe('Separator', () => {
   it('renders as horizontal by default', () => {
     const { container } = render(<Separator />)
     const el = container.firstChild as HTMLElement
-    expect(el).toHaveAttribute('data-orientation', 'horizontal')
+    expect(el).toHaveAttribute('aria-orientation', 'horizontal')
     expect(el.className).toContain('h-px')
     expect(el.className).toContain('w-full')
   })
@@ -24,14 +24,14 @@ describe('Separator', () => {
   it('renders as vertical when orientation vertical', () => {
     const { container } = render(<Separator orientation="vertical" />)
     const el = container.firstChild as HTMLElement
-    expect(el).toHaveAttribute('data-orientation', 'vertical')
+    expect(el).toHaveAttribute('aria-orientation', 'vertical')
     expect(el.className).toContain('w-px')
     expect(el.className).toContain('h-full')
   })
 
   it('is decorative by default', () => {
     const { container } = render(<Separator />)
-    expect(container.firstChild).toHaveAttribute('data-orientation')
+    expect(container.firstChild).toHaveAttribute('aria-orientation')
   })
 
   it('applies custom className', () => {

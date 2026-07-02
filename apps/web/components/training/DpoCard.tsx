@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useToastStore } from '@/lib/toast-store'
-import { visualController } from '@/lib/visual-controller'
+import { apiGet, apiPost } from '@/lib/http-client'
 
 export function DpoCard() {
   const addToast = useToastStore(s => s.addToast)
@@ -23,10 +23,10 @@ export function DpoCard() {
     setDpoRunning(true)
     setDpoResult(null)
     try {
-      const res = await visualController.triggerDPO({ max_pairs: 100 })
+      const res = await apiPost<{ status: string }>('/multimodal/dpo', { max_pairs: 100 })
       const poll = async () => {
         try {
-          const status = await visualController.getDPOStatus()
+          const status = await apiGet<{ status: string; result?: any }>('/multimodal/dpo/status')
           if (status.status === 'completed' && status.result) {
             setDpoResult(status.result as typeof dpoResult)
             setDpoRunning(false)

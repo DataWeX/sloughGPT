@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { EvalResults, type EvalData } from './EvalResults'
 
 const baseData: EvalData = {
@@ -64,6 +64,7 @@ describe('EvalResults', () => {
     }
     const { container } = render(<EvalResults data={withReport} />)
     expect(container.textContent).toContain('View Report')
+    fireEvent.click(screen.getByText('View Report'))
     expect(container.textContent).toContain('Detailed evaluation report')
   })
 

@@ -17,9 +17,19 @@ function firstByText(text: string | RegExp): HTMLElement {
   return screen.getAllByText(text)[0]
 }
 
-/** Find a slider by its aria-label (StrictMode-safe) */
+/** Find a slider whose aria-label starts with the given label (StrictMode-safe, value-independent). */
 function sliderByLabel(label: string): HTMLElement {
-  return screen.getAllByRole('slider').find(s => s.getAttribute('aria-label') === label)!
+  return screen.getAllByRole('slider').find(s => (s.getAttribute('aria-label') || '').startsWith(label))!
+}
+
+/** Set a native <input type="range"> slider to a target value. Uses the native
+ *  HTMLInputElement.value setter (bypasses JSDOM limitations) + fireEvent.change
+ *  to trigger React's onChange handler. */
+function setSlider(label: string, value: number) {
+  const slider = sliderByLabel(label) as HTMLInputElement
+  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+  nativeInputValueSetter.call(slider, String(value))
+  fireEvent.change(slider)
 }
 
 describe('TraitEditor', () => {
@@ -58,24 +68,23 @@ describe('TraitEditor', () => {
 
   it('Save button enables after slider change', () => {
     render(<TraitEditor traitWeights={defaultWeights} onSave={vi.fn()} onReset={vi.fn()} />)
-    const slider = sliderByLabel('Warmth: 70')
-    fireEvent.change(slider, { target: { value: 90 } })
+    setSlider('Warmth: 70', 90)
     expect(screen.getAllByText('Save')[0].closest('button')).not.toBeDisabled()
   })
 
   it('archetype updates after slider change', () => {
     render(<TraitEditor traitWeights={defaultWeights} onSave={vi.fn()} onReset={vi.fn()} />)
     expect(firstByText('The Optimist')).toBeDefined()
-    fireEvent.change(sliderByLabel('Warmth: 70'), { target: { value: 5 } })
-    fireEvent.change(sliderByLabel('Empathy: 60'), { target: { value: 5 } })
-    fireEvent.change(sliderByLabel('Optimism: 60'), { target: { value: 5 } })
+    setSlider('Warmth: 70', 5)
+    setSlider('Empathy: 60', 5)
+    setSlider('Optimism: 60', 5)
     expect(firstByText('The Balanced')).toBeDefined()
   })
 
   it('calls onSave with updated weights', () => {
     const onSave = vi.fn()
     render(<TraitEditor traitWeights={defaultWeights} onSave={onSave} onReset={vi.fn()} />)
-    fireEvent.change(sliderByLabel('Warmth: 70'), { target: { value: 90 } })
+    setSlider('Warmth: 70', 90)
     fireEvent.click(screen.getAllByText('Save')[0])
     expect(onSave).toHaveBeenCalledTimes(1)
     const saved = onSave.mock.calls[0][0] as Record<string, Record<string, number>>
@@ -85,14 +94,14 @@ describe('TraitEditor', () => {
   it('calls onReset on Reset click', () => {
     const onReset = vi.fn()
     render(<TraitEditor traitWeights={defaultWeights} onSave={vi.fn()} onReset={onReset} />)
-    fireEvent.change(sliderByLabel('Warmth: 70'), { target: { value: 90 } })
+    setSlider('Warmth: 70', 90)
     fireEvent.click(screen.getAllByText('Reset')[0])
     expect(onReset).toHaveBeenCalledTimes(1)
   })
 
   it('displays archetype description', () => {
     render(<TraitEditor traitWeights={defaultWeights} onSave={vi.fn()} onReset={vi.fn()} />)
-    expect(firstByText(/Warm|empath|connect/)).toBeDefined()
+    expect(firstByText(/Upbeat|encouraging|bright/)).toBeDefined()
   })
 
   it('all trait sliders have aria-labels', () => {
@@ -106,14 +115,14 @@ describe('TraitEditor', () => {
 
   it('dirty state resets after saving', () => {
     render(<TraitEditor traitWeights={defaultWeights} onSave={vi.fn()} onReset={vi.fn()} />)
-    fireEvent.change(sliderByLabel('Warmth: 70'), { target: { value: 90 } })
+    setSlider('Warmth: 70', 90)
     fireEvent.click(screen.getAllByText('Save')[0])
     expect(screen.getAllByText('Save')[0].closest('button')).toBeDisabled()
   })
 
   it('Reset restores original values from props', () => {
     render(<TraitEditor traitWeights={defaultWeights} onSave={vi.fn()} onReset={vi.fn()} />)
-    fireEvent.change(sliderByLabel('Warmth: 70'), { target: { value: 90 } })
+    setSlider('Warmth: 70', 90)
     fireEvent.click(screen.getAllByText('Reset')[0])
     expect(screen.getAllByText('70').length).toBeGreaterThanOrEqual(1)
   })

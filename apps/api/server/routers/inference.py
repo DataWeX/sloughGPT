@@ -498,16 +498,19 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
         # vector search finds it. Then query vector store for relevant facts.
         if req.knowledge:
             try:
-                from domains.learner.knowledge import get_knowledge_memory, KnowledgeFact
-                import time
-                mem = get_knowledge_memory()
-                stored = 0
-                for k in req.knowledge:
-                    if k and len(k) > 10:
-                        fact = KnowledgeFact(content=k, topic="injected", source="injected",
-                                             timestamp=time.time(), importance=0.7)
-                        if mem.add_fact(fact):
-                            stored += 1
+                def _store_knowledge(k_list):
+                    from domains.learner.knowledge import get_knowledge_memory, KnowledgeFact
+                    import time
+                    mem = get_knowledge_memory()
+                    stored = 0
+                    for k in k_list:
+                        if k and len(k) > 10:
+                            fact = KnowledgeFact(content=k, topic="injected", source="injected",
+                                                 timestamp=time.time(), importance=0.7)
+                            if mem.add_fact(fact):
+                                stored += 1
+                    return stored
+                stored = await asyncio.to_thread(_store_knowledge, req.knowledge)
                 if stored:
                     logger.info("Stored %d injected knowledge items in vector store", stored, extra={"context": {"count": stored}})
             except Exception as e:
@@ -627,6 +630,22 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                             "role": "system",
                             "content": f"[TOOL RESULT: {tool_name}]\nError: {result.error}\n[/TOOL RESULT]"
                         })
+                if result.success:
+                    yield _sse_event("chat", "TOOL", "complete",
+                        data=tool_result_data,
+                        message=f"Tool {tool_name} completed in {result.duration_ms:.0f}ms")
+                    provider_messages.append({
+                        "role": "system",
+                        "content": f"[TOOL RESULT: {tool_name}]\n{result.output}\n[/TOOL RESULT]"
+                    })
+                else:
+                    yield _sse_event("chat", "TOOL", "error",
+                        data=tool_result_data,
+                        message=f"Tool {tool_name} failed: {result.error}")
+                    provider_messages.append({
+                        "role": "system",
+                        "content": f"[TOOL RESULT: {tool_name}]\nError: {result.error}\n[/TOOL RESULT]"
+                    })
         except Exception:
             logger.warning("Tool execution failed", exc_info=True)
 
@@ -636,6 +655,20 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                 data={"context": context_info},
                 message=f"{len(context_info.get('layers', []))} context layers")
         
+        # ── Knowledge enrichment from KnowledgeMemory (offload to thread to avoid event loop deadlock) ──
+        knowledge_retrieved = []
+        try:
+            enrichment = await asyncio.to_thread(_enrich_knowledge, user_msg, False, 5)
+            if enrichment.get("facts"):
+                knowledge_retrieved = enrichment["facts"]
+                k_text = "\n".join(f"- {f}" for f in enrichment["facts"])
+                provider_messages.insert(0, {
+                    "role": "system",
+                    "content": f"[KNOWLEDGE RETRIEVED]\n{k_text}\n[/KNOWLEDGE RETRIEVED]"
+                })
+        except Exception:
+            pass
+
         try:
             from domains.models.provider import get_provider
             provider = get_provider("default")
@@ -688,6 +721,9 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                 if req.knowledge:
                     knowledge_str = "\n".join(f"- {k}" for k in req.knowledge)
                     system_prompt = f"{system_prompt}\n\n[KNOWLEDGE]\n{knowledge_str}\n[/KNOWLEDGE]"
+                if knowledge_retrieved:
+                    k_text = "\n".join(f"- {f}" for f in knowledge_retrieved)
+                    system_prompt = f"{system_prompt}\n\n[KNOWLEDGE RETRIEVED]\n{k_text}\n[/KNOWLEDGE RETRIEVED]"
                 full_prompt = f"{system_prompt}\n{user_msg}" if system_prompt else user_msg
 
                 inputs = ctrl._tokenizer(full_prompt, return_tensors="pt")
@@ -796,7 +832,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
             # Auto-extract entities and relationships into knowledge base
             try:
                 from domains.learner.entity_extractor import extract_and_store
-                extract_and_store(user_msg or "", full_response)
+                asyncio.create_task(extract_and_store(user_msg or "", full_response))
             except Exception as e:
                 logger.debug("Entity extraction failed: %s", e)
 
@@ -893,6 +929,15 @@ async def chat(req: ChatRequest) -> ChatResponse:
     if req.knowledge:
         knowledge_str = "\n".join(f"- {k}" for k in req.knowledge)
         system_prompt = f"{system_prompt}\n\n[KNOWLEDGE]\n{knowledge_str}\n[/KNOWLEDGE]" if system_prompt else f"[KNOWLEDGE]\n{knowledge_str}\n[/KNOWLEDGE]"
+    
+    # Knowledge enrichment from KnowledgeMemory
+    try:
+        enrichment = await asyncio.to_thread(_enrich_knowledge, user_msg, False, 5)
+        if enrichment.get("facts"):
+            k_text = "\n".join(f"- {f}" for f in enrichment["facts"])
+            system_prompt = f"{system_prompt}\n\n[KNOWLEDGE RETRIEVED]\n{k_text}\n[/KNOWLEDGE RETRIEVED]" if system_prompt else f"[KNOWLEDGE RETRIEVED]\n{k_text}\n[/KNOWLEDGE RETRIEVED]"
+    except Exception:
+        pass
     
     result = await chat_domain.respond(
         messages=messages,

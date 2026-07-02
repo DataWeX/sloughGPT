@@ -33,7 +33,6 @@ def _write_mock_soul(path, name="test_soul", description="A test soul", personal
         f.write(struct.pack("<I", len(config_bytes)))
         f.write(config_bytes)
 
-
 @pytest.fixture
 def manager(tmp_souls_dir):
     """SloManager backed by a temp dir (no saved preference)."""
@@ -41,6 +40,7 @@ def manager(tmp_souls_dir):
 
 
 # ── SloInfo ────────────────────────────────────────────────────────────────
+
 
 class TestSloInfo:
 
@@ -63,9 +63,24 @@ class TestSloInfo:
         assert len(info.traits) == 2
 
 
-# ── SloManager ─────────────────────────────────────────────────────────────
-
 class TestSloManager:
+    """SloManager tests that avoid scanning the real models/souls/ directory."""
+
+    @pytest.fixture(autouse=True)
+    def _patch_souls_walk(self, monkeypatch):
+        """Prevent _scan_souls from finding real models/souls/ dir via parent walk."""
+        original = SloManager._scan_souls
+        def patched_scan(self):
+            self._souls_cache.clear()
+            if not self.slos_dir.exists():
+                return
+            for ext in ("*.slo", "*.soul"):
+                import glob
+                for sou_path in glob.glob(str(self.slos_dir / ext)):
+                    info = self._parse_soul_info(sou_path)
+                    if info:
+                        self._souls_cache[info.name] = info
+        monkeypatch.setattr(SloManager, "_scan_souls", patched_scan)
 
     def test_init_empty_dir(self, tmp_path):
         empty_dir = tmp_path / "empty"

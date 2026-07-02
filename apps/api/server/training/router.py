@@ -34,7 +34,7 @@ except ImportError:
 
 from training.jobs import training_jobs
 from training.resolution import resolve_training_inputs
-from training.schemas import TrainingRequest, TrainRequest, TrainResolveRequest, HFTrainingRequest, UnifiedStartRequest, QuickTrainRequest
+from training.schemas import TrainingRequest, TrainRequest, TrainResolveRequest, HFTrainingRequest, UnifiedStartRequest, QuickTrainRequest, ActivityTrainingRequest, DistillStartRequest
 from training.controller import get_training_controller, TrainingState
 from training.webhooks import (
     get_webhook_store,
@@ -815,7 +815,81 @@ async def start_hf_training(request: HFTrainingRequest):
     }
 
 
+# ── Activity Training ──────────────────────────────────────────────
 
+
+@router.post("/training/activity-start")
+async def start_activity_training(request: ActivityTrainingRequest):
+    """Train the activity classifier on collected sensor data.
+
+    Loads recorded .npz files from ``data/activity_records/``, trains the
+    SloNet-based ActivityClassifier, and tracks progress as a training job.
+
+    Returns:
+        Job ID and status for tracking via ``GET /training/jobs/{job_id}``.
+    """
+    job_id = f"activity_{int(time.time())}"
+
+    job: dict[str, Any] = {
+        "id": job_id,
+        "name": request.name,
+        "type": "activity",
+        "status": "queued",
+        "progress": 0,
+        "epochs": request.epochs,
+        "current_epoch": 0,
+        "loss": None,
+        "loss_history": [],
+        "explanation": "Activity classifier training",
+    }
+    training_jobs[job_id] = job
+
+    def _run_activity_training():
+        jid = job_id
+        try:
+            from domains.activity.trainer import ActivityTrainer
+
+            training_jobs[jid]["status"] = "running"
+
+            trainer = ActivityTrainer()
+
+            result = trainer.train(
+                epochs=request.epochs,
+                lr=request.lr,
+                batch_size=request.batch_size,
+            )
+
+            if result.success:
+                training_jobs[jid]["status"] = "completed"
+                training_jobs[jid]["progress"] = 100
+                training_jobs[jid]["result"] = result.to_dict()
+                val_acc = result.metrics.get("val_accuracy", 0)
+                num_labeled = result.metrics.get("num_labeled", 0)
+                training_jobs[jid]["explanation"] = (
+                    f"Activity training complete! "
+                    f"Accuracy: {val_acc:.1%} on {num_labeled} labeled samples, "
+                    f"loss: {result.final_loss:.4f}."
+                )
+            else:
+                training_jobs[jid]["status"] = "failed"
+                training_jobs[jid]["error"] = result.error
+                training_jobs[jid]["explanation"] = f"Training failed: {result.error}"
+
+        except Exception as exc:
+            logger.exception("Activity training job %s failed", job_id)
+            if jid in training_jobs:
+                training_jobs[jid]["status"] = "failed"
+                training_jobs[jid]["error"] = str(exc)
+                training_jobs[jid]["explanation"] = f"Error: {exc}"
+
+    thread = threading.Thread(target=_run_activity_training, daemon=True)
+    thread.start()
+
+    return {
+        "job_id": job_id,
+        "status": "queued",
+        "message": f"Activity training started: {request.epochs} epochs, lr={request.lr}",
+    }
 
 
 # ── Visual Training ────────────────────────────────────────────────
@@ -835,7 +909,7 @@ class VisualTrainRequest(BaseModel):
     use_lora: bool = False
     lora_rank: int = 8
     freeze_vision: bool = True
-    name: str | None = None
+    name: Optional[str] = None
 
 
 @router.post("/training/visual-start")
@@ -929,6 +1003,225 @@ async def start_visual_training(request: VisualTrainRequest):
         "job_id": job_id,
         "status": "queued",
         "message": f"Visual training started on {request.dataset}",
+    }
+
+
+# ── Distillation ────────────────────────────────────────────────────
+
+
+@router.post("/training/distill")
+async def start_distillation(request: DistillStartRequest):
+    """Knowledge distillation: teach a compact SloNet LSTM student from a teacher HF model.
+
+    Loads the teacher from the HF model registry, creates a SloNet LSTM student,
+    runs DistillationTrainer.step() in a loop, saves the student as a checkpoint.
+    """
+    import uuid
+    job_id = str(uuid.uuid4())[:8]
+
+    datasets_dir = Path(__file__).resolve().parents[4] / "datasets"
+    data_path = datasets_dir / request.dataset
+    if not data_path.exists():
+        data_path = datasets_dir / f"{request.dataset}.jsonl"
+    if not data_path.exists():
+        raise HTTPException(status_code=400, detail=f"Dataset not found: {request.dataset}")
+
+    input_file = data_path / "input.txt" if data_path.is_dir() else data_path
+    if data_path.is_dir():
+        candidates = [data_path / "input.txt", data_path / "corpus.jsonl", data_path / "train.txt"]
+        input_file = next((c for c in candidates if c.exists()), None)
+    if not input_file or not Path(input_file).exists():
+        raise HTTPException(status_code=400, detail="No training data file (input.txt/corpus.jsonl) in dataset")
+
+    data_str = Path(input_file).read_text(encoding="utf-8")
+    if not data_str.strip():
+        raise HTTPException(status_code=400, detail="Training data is empty")
+
+    out_stem = request.name or f"distill_{job_id}"
+    _REPO_ROOT = Path(__file__).resolve().parents[4]
+    output_dir = _REPO_ROOT / "models" / "auto-training"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    job: dict[str, Any] = {
+        "id": job_id,
+        "name": request.name or f"Distill-{job_id}",
+        "type": "distill",
+        "status": "queued",
+        "progress": 0,
+        "epochs": request.epochs,
+        "dataset": request.dataset,
+        "teacher_model": request.teacher_model,
+        "config": request.model_dump(),
+    }
+    training_jobs[job_id] = job
+
+    def _run_distill():
+        """Background thread that runs distillation."""
+        try:
+            # Load teacher from model registry
+            from domains.infrastructure.model_registry import get_model_registry
+            registry = get_model_registry()
+            server = registry.get(request.teacher_model) if registry else None
+            if server is None:
+                # Try loading via HF controllers
+                from controllers.models import get_models_controller
+                ctrl = get_models_controller()
+                teacher_model = ctrl._hf_model
+                teacher_tokenizer = ctrl._tokenizer
+            else:
+                teacher_model = server._model_ref
+                teacher_tokenizer = getattr(server, "_tokenizer", None)
+
+            if teacher_model is None:
+                training_jobs[job_id]["status"] = "failed"
+                training_jobs[job_id]["error"] = f"Teacher model '{request.teacher_model}' not loaded"
+                return
+
+            # Tokenize training data
+            if teacher_tokenizer is not None:
+                tokens = teacher_tokenizer.encode(data_str[:100000])
+            else:
+                tokens = [ord(c) for c in data_str[:100000]]
+
+            # Build vocab from teacher or data
+            import numpy as np
+            import random as _random
+            _random.seed(42)
+            np.random.seed(42)
+
+            vocab = sorted(set(tokens))
+            stoi = {c: i for i, c in enumerate(vocab)}
+            itos = {i: c for c, i in stoi.items()}
+            vocab_size = len(stoi)
+
+            # Create student SloNet LSTM
+            from domains.training.slonet import SloNet, SloAdam
+            from domains.training.train_pipeline import TextDataset as _TextDataset
+
+            student = SloNet(
+                vocab_size=vocab_size,
+                embed_dim=request.embed_dim,
+                hidden_dim=request.embed_dim * 2,
+                n_layers=request.n_layers,
+                n_heads=request.n_heads or 4,
+                block_size=request.block_size,
+                padding_idx=0,
+            )
+
+            # Prepare data for training
+            block_size = request.block_size
+            token_ids = [stoi.get(t, 0) for t in tokens]
+            inputs_list = []
+            targets_list = []
+            for i in range(0, len(token_ids) - block_size, block_size // 2):
+                x = token_ids[i:i + block_size]
+                y = token_ids[i + 1:i + block_size + 1]
+                if len(x) == block_size and len(y) == block_size:
+                    inputs_list.append(x)
+                    targets_list.append(y)
+
+            if not inputs_list:
+                training_jobs[job_id]["status"] = "failed"
+                training_jobs[job_id]["error"] = "Not enough data for training"
+                return
+
+            inputs_np = np.array(inputs_list, dtype=np.int64)
+            targets_np = np.array(targets_list, dtype=np.int64)
+            n_samples = len(inputs_np)
+            batch_size = min(16, n_samples)
+
+            # Create teacher inputs wrapper
+            class _TeacherWrapper:
+                def __init__(self, model, tokenizer):
+                    self._model = model
+                    self._tokenizer = tokenizer
+                def __call__(self, x):
+                    import torch
+                    import numpy as np
+                    if isinstance(x, np.ndarray):
+                        seq = "".join(chr(max(32, min(126, t))) for t in x[0] if t < 256)
+                        inp = self._tokenizer(seq, return_tensors="pt", truncation=True, max_length=block_size)
+                        with torch.no_grad():
+                            out = self._model(**inp).logits
+                        out_np = out[:, :vocab_size, :].float().numpy()
+                        return np.squeeze(out_np, 0) if out_np.shape[0] == 1 else out_np[:, :vocab_size, :]
+                    return np.zeros((x.shape[0], vocab_size), dtype=np.float32)
+
+            teacher_wrapper = _TeacherWrapper(teacher_model, teacher_tokenizer)
+
+            from domains.training.distillation import DistillationTrainer, DistillationConfig
+            distill_cfg = DistillationConfig(
+                temperature=request.temperature,
+                alpha=request.alpha,
+                beta=request.beta,
+            )
+            trainer = DistillationTrainer(teacher_wrapper, student, distill_cfg)
+
+            # Training loop
+            epoch_losses = []
+            for epoch in range(request.epochs):
+                indices = list(range(n_samples))
+                _random.shuffle(indices)
+                epoch_loss = 0.0
+                n_batches = 0
+                for start in range(0, n_samples, batch_size):
+                    batch_idx = indices[start:start + batch_size]
+                    bx = inputs_np[batch_idx]
+                    by = targets_np[batch_idx]
+
+                    losses = trainer.step(bx, by)
+                    batch_loss = losses.get("total_loss", 0.0)
+                    epoch_loss += batch_loss
+                    n_batches += 1
+
+                avg_loss = epoch_loss / max(n_batches, 1)
+                epoch_losses.append(avg_loss)
+
+                training_jobs[job_id]["progress"] = int((epoch + 1) / request.epochs * 100)
+                training_jobs[job_id]["current_epoch"] = epoch + 1
+                training_jobs[job_id]["train_loss"] = avg_loss
+
+            # Save student checkpoint
+            safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
+            ckpt_path = output_dir / f"{safe_stem}_distilled.soul"
+
+            student.export_to_sou(str(ckpt_path), metadata={
+                "model_type": "slonet_lstm",
+                "teacher": request.teacher_model,
+                "distill_temperature": request.temperature,
+                "epochs": request.epochs,
+                "final_loss": float(epoch_losses[-1]) if epoch_losses else 0.0,
+                "embed_dim": request.embed_dim,
+                "n_layers": request.n_layers,
+                "vocab_size": vocab_size,
+                "stoi": stoi,
+                "itos": itos,
+            })
+
+            training_jobs[job_id].update({
+                "status": "completed",
+                "progress": 100,
+                "loss": float(epoch_losses[-1]) if epoch_losses else None,
+                "checkpoint": str(ckpt_path),
+                "loss_history": [
+                    {"step": i, "value": v, "type": "train"}
+                    for i, v in enumerate(epoch_losses)
+                ],
+            })
+            logger.info("Distillation complete: %s loss=%.4f", ckpt_path, epoch_losses[-1] if epoch_losses else 0)
+
+        except Exception as e:
+            logger.exception("Distillation job %s failed", job_id)
+            training_jobs[job_id]["status"] = "failed"
+            training_jobs[job_id]["error"] = str(e)
+
+    thread = threading.Thread(target=_run_distill, daemon=True)
+    thread.start()
+
+    return {
+        "job_id": job_id,
+        "status": "queued",
+        "message": f"Distillation started: teacher={request.teacher_model} epochs={request.epochs}",
     }
 
 
@@ -1507,6 +1800,13 @@ async def register_webhook(
     }
 
 
+@router.get("/training/webhooks/stats")
+async def get_webhook_stats():
+    """Get webhook statistics."""
+    store = get_webhook_store()
+    return store.get_stats()
+
+
 @router.delete("/training/webhooks/{webhook_id}")
 async def unregister_webhook(webhook_id: str):
     """Unregister a webhook."""
@@ -1562,13 +1862,6 @@ async def get_webhook_deliveries(webhook_id: str, limit: int = 50):
             for d in deliveries
         ]
     }
-
-
-@router.get("/training/webhooks/stats")
-async def get_webhook_stats():
-    """Get webhook statistics."""
-    store = get_webhook_store()
-    return store.get_stats()
 
 
 class TestWebhookRequest(BaseModel):

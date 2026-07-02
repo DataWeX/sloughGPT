@@ -71,9 +71,20 @@ function SidebarContent({
   onClose?: () => void
   isDrawer?: boolean
 }) {
+  const SORT_KEY = 'sloughgpt:sidebar-sort'
+
   const [search, setSearch] = useState('')
-  const [sortMode, setSortMode] = useState<'updated' | 'name' | 'messages'>('updated')
+  const [sortMode, setSortMode] = useState<'updated' | 'name' | 'messages'>(() => {
+    if (typeof window === 'undefined') return 'updated'
+    const saved = localStorage.getItem(SORT_KEY)
+    if (saved === 'name' || saved === 'messages') return saved
+    return 'updated'
+  })
   const [sortOpen, setSortOpen] = useState(false)
+
+  useEffect(() => {
+    localStorage.setItem(SORT_KEY, sortMode)
+  }, [sortMode])
 
   const sorted = useMemo(() => {
     return [...conversations].sort((a, b) => {

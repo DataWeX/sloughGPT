@@ -120,31 +120,45 @@ class SloNetChatProvider:
         logger.info("SloNetChatProvider ready: %s (NumPy weights loaded)", hf_model_id)
 
     def _load_weights(self, snapshot: Path, n_layer: int):
-        """Load PyTorch weights from HF snapshot and feed into SloTransformer."""
-        import torch
+        """Load HF weights from safetensors (numpy) into SloTransformer.
+
+        Prefers safetensors with numpy backend — no PyTorch required.
+        Falls back to PyTorch ``torch.load`` only for legacy ``.bin`` files.
+        """
         weight_files = sorted(snapshot.glob("*.safetensors"))
         if not weight_files:
-            weight_files = sorted(snapshot.glob("pytorch_model*.bin"))
-        if not weight_files:
             weight_files = sorted(snapshot.glob("model*.safetensors"))
+        if not weight_files:
+            weight_files = sorted(snapshot.glob("pytorch_model*.bin"))
 
         logger.info("Loading weights from %d file(s) in %s", len(weight_files), snapshot)
 
         hf_dict = {}
         for f in weight_files:
-            try:
-                w = torch.load(f, map_location="cpu", weights_only=True, mmap=True)
-                for k, v in w.items():
-                    hf_dict[k] = v.to(dtype=torch.float32)
-            except Exception:
+            if f.suffix == ".safetensors":
                 try:
                     from safetensors import safe_open
-                    with safe_open(str(f), framework="pt", device="cpu") as sf:
+                    with safe_open(str(f), framework="np") as sf:
                         for k in sf.keys():
-                            t = sf.get_tensor(k)
-                            hf_dict[k] = t.to(dtype=torch.float32)
-                except Exception as e2:
-                    raise RuntimeError(f"Failed to load {f}: {e2}")
+                            hf_dict[k] = sf.get_tensor(k).astype(np.float32)
+                except Exception as e:
+                    # If numpy framework not supported, fall back to pt
+                    try:
+                        from safetensors import safe_open
+                        with safe_open(str(f), framework="pt", device="cpu") as sf:
+                            for k in sf.keys():
+                                t = sf.get_tensor(k)
+                                hf_dict[k] = t.to(dtype=torch.float32)
+                    except Exception as e2:
+                        raise RuntimeError(f"Failed to load safetensors {f}: {e2}")
+            else:
+                try:
+                    from domains.training.slonet_compat import torch
+                    w = torch.load(f, map_location="cpu", weights_only=True, mmap=True)
+                    for k, v in w.items():
+                        hf_dict[k] = v.to(dtype=torch.float32)
+                except Exception as e:
+                    raise RuntimeError(f"Failed to load bin file {f}: {e}")
 
         mapped = convert_hf_to_slonet(hf_dict, n_layer)
         logger.info("Mapped %d / %d HF weights to SloTransformer keys", len(mapped), len(hf_dict))

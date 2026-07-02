@@ -28,7 +28,8 @@ try:
     from torch.nn.parallel import DistributedDataParallel as DDP
     _TRAINING_TORCH_AVAILABLE = True
 except ImportError:
-    torch = None
+    from domains.training.slonet_compat import torch as _torch_compat
+    torch = _torch_compat
     Dataset = object
     DataLoader = None
     DDP = None

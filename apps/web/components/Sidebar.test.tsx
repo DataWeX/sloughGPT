@@ -30,14 +30,13 @@ describe('Sidebar', () => {
   it('renders workspace nav items', () => {
     render(<Sidebar />)
     expect(screen.getByText('nav.chat')).toBeDefined()
-    expect(screen.getByText('nav.models')).toBeDefined()
-    expect(screen.getByText('nav.settings')).toBeDefined()
+    expect(screen.getByText('nav.training')).toBeDefined()
   })
 
   it('renders system nav items', () => {
     render(<Sidebar />)
-    expect(screen.getByText('nav.monitoring')).toBeDefined()
-    expect(screen.getByText('nav.tokenizer')).toBeDefined()
+    expect(screen.getByText('nav.models')).toBeDefined()
+    expect(screen.getByText('nav.settings')).toBeDefined()
   })
 
   it('highlights active route', () => {

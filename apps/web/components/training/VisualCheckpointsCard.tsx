@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useToastStore } from '@/lib/toast-store'
-import { visualController } from '@/lib/visual-controller'
+import { apiGet, apiPost, apiDelete } from '@/lib/http-client'
 
 export function VisualCheckpointsCard() {
   const addToast = useToastStore(s => s.addToast)
@@ -14,7 +14,7 @@ export function VisualCheckpointsCard() {
 
   const fetchVisualCheckpoints = useCallback(async () => {
     setLoadingVisualCkpts(true)
-    try { setVisualCheckpoints(await visualController.listCheckpoints()) } catch {}
+    try { setVisualCheckpoints(await apiGet<any[]>('/multimodal/checkpoints')) } catch {}
     finally { setLoadingVisualCkpts(false) }
   }, [])
 
@@ -47,7 +47,7 @@ export function VisualCheckpointsCard() {
                     <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={isBusy} onClick={async () => {
                       setLoadingVisualCkptName(ckpt.name)
                       try {
-                        await visualController.loadCheckpoint(ckpt.name)
+                        await apiPost(`/multimodal/checkpoints/${encodeURIComponent(ckpt.name)}/load`)
                         addToast(`Loaded visual checkpoint: ${ckpt.name}`, 'success')
                       } catch { addToast('Failed to load visual checkpoint', 'error') }
                       finally { setLoadingVisualCkptName(null); void fetchVisualCheckpoints() }
@@ -58,7 +58,7 @@ export function VisualCheckpointsCard() {
                       if (!confirm(`Delete visual checkpoint "${ckpt.name}"?`)) return
                       setLoadingVisualCkptName(ckpt.name)
                       try {
-                        await visualController.deleteCheckpoint(ckpt.name)
+                        await apiDelete(`/multimodal/checkpoints/${encodeURIComponent(ckpt.name)}`)
                         addToast(`Deleted: ${ckpt.name}`, 'info')
                       } catch { addToast('Failed to delete visual checkpoint', 'error') }
                       finally { setLoadingVisualCkptName(null); void fetchVisualCheckpoints() }

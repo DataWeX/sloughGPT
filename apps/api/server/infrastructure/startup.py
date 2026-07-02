@@ -230,7 +230,7 @@ class StartupOrchestrator:
         except Exception as e:
             logger.warning("Phase 4/6: multimodal init failed: %s", e)
 
-    def _phase5_model_registry(self):
+    async def _phase5_model_registry(self):
         """Initialize model registry."""
         STARTUP_PHASE.update(phase="model_registry", step=5, message="Initializing model registry...")
         try:
@@ -240,7 +240,7 @@ class StartupOrchestrator:
         except Exception as e:
             logger.warning("Phase 5/6: model registry failed: %s", e)
 
-    def _phase6_routers(self):
+    async def _phase6_routers(self):
         """Register all feature routers."""
         STARTUP_PHASE.update(phase="registering_routers", step=6, message="Registering routes...")
         try:

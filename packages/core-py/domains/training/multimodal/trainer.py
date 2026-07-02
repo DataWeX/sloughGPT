@@ -7,16 +7,20 @@ import os
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-import torch
-import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
-from transformers import (
-    AutoModel,
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    get_linear_schedule_with_warmup,
-)
-from peft import LoraConfig, get_peft_model, TaskType
+try:
+    import torch
+    import torch.nn as nn
+    from torch.utils.data import Dataset, DataLoader
+    from transformers import (
+        AutoModel,
+        AutoModelForCausalLM,
+        AutoTokenizer,
+        get_linear_schedule_with_warmup,
+    )
+    from peft import LoraConfig, get_peft_model, TaskType
+    _VLM_TRAINER_AVAILABLE = True
+except ImportError:
+    _VLM_TRAINER_AVAILABLE = False
 
 from .config import VLMConfig
 

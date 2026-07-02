@@ -11,7 +11,7 @@ Tracks training completion status and enables:
 import json
 import os
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -125,7 +125,7 @@ class TrainingStatusTracker:
         self.model_name = model_name
         self.report = TrainingCompletionReport(
             model_name=model_name,
-            created_at=datetime.utcnow().isoformat() + "Z",
+            created_at=datetime.now(timezone.utc).isoformat() + "Z",
         )
         self.checkpoints: List[Dict[str, Any]] = []
         
@@ -173,7 +173,7 @@ class TrainingStatusTracker:
         
         stage_status = stage_name_map.get(stage)
         if stage_status:
-            stage_status.started_at = datetime.utcnow().isoformat() + "Z"
+            stage_status.started_at = datetime.now(timezone.utc).isoformat() + "Z"
             stage_status.status = CompletionStatus.IN_PROGRESS
     
     def update_stage(
@@ -210,7 +210,7 @@ class TrainingStatusTracker:
         
         stage_status = stage_name_map.get(stage)
         if stage_status:
-            stage_status.completed_at = datetime.utcnow().isoformat() + "Z"
+            stage_status.completed_at = datetime.now(timezone.utc).isoformat() + "Z"
             stage_status.status = CompletionStatus.COMPLETED
             
             if stage_status.best_loss > 0:
@@ -249,7 +249,7 @@ class TrainingStatusTracker:
             "path": checkpoint_path,
             "step": step,
             "loss": loss,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
         })
         self.report.checkpoint_count = len(self.checkpoints)
     
@@ -276,13 +276,13 @@ class TrainingStatusTracker:
             
             if all_complete:
                 self.report.completion_status = CompletionStatus.COMPLETED
-                self.report.trained_at = datetime.utcnow().isoformat() + "Z"
+                self.report.trained_at = datetime.now(timezone.utc).isoformat() + "Z"
     
     def mark_complete(self):
         """Mark training as complete."""
         self.report.completion_status = CompletionStatus.COMPLETED
         self.report.completion_percentage = 100.0
-        self.report.trained_at = datetime.utcnow().isoformat() + "Z"
+        self.report.trained_at = datetime.now(timezone.utc).isoformat() + "Z"
     
     def get_report(self) -> TrainingCompletionReport:
         """Get the completion report."""
@@ -374,7 +374,7 @@ class CheckpointManager:
             "stage": stage.value,
             
             # Metadata
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "metadata": metadata or {},
             
             # Training status

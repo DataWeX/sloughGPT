@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import React from 'react'
 
 const { mockTrainingJobs, mockAddToast } = vi.hoisted(() => ({
@@ -55,8 +56,11 @@ describe('ConversationDataSection', () => {
   it('renders 3 strategy options', async () => {
     render(<ConversationDataSection />)
     await screen.findByText('20')
+    const trigger = screen.getByRole('combobox')
+    expect(trigger).toBeDefined()
+    fireEvent.click(trigger)
     const options = screen.getAllByRole('option')
-    expect(options.length).toBe(3)
+    expect(options).toHaveLength(3)
     expect(options[0].textContent).toContain('Balanced')
     expect(options[1].textContent).toContain('Weighted')
     expect(options[2].textContent).toContain('Simple')

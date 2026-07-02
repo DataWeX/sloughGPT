@@ -8,7 +8,10 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/display'
 import { Badge } from '@/components/ui/badge'
 import { StatCard, KpiGrid } from '@/components/strui'
-import { LossChart, type LossPoint, type RewardPoint } from '@/components/training/LossChart'
+import dynamic from 'next/dynamic'
+import type { LossPoint, RewardPoint } from '@/components/training/LossChart'
+
+const LossChart = dynamic(() => import('@/components/training/LossChart').then(m => m.LossChart), { ssr: false })
 import { IconTrash, IconRefresh, IconDownload } from '@/components/ui'
 import { trainingJobsController, type TrainingJob } from '@/lib/training-controller'
 import { modelController } from '@/lib/model-controller'

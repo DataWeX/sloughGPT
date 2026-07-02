@@ -107,51 +107,51 @@ export default function HomePage() {
 
       {apiStatus === 'offline' ? null : (
         <>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Card>
-              <CardHeader className="pb-1">
-                <CardDescription className="text-xs font-medium">{t('home.stats.status')}</CardDescription>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Card className="flex flex-col justify-between">
+              <CardHeader className="pb-1 px-4 pt-4">
+                <CardDescription className="text-xs font-medium text-muted-foreground">{t('home.stats.status')}</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pb-4 px-4">
                 {apiStatus === 'loading' ? (
-                  <div className="h-8 w-24 animate-pulse rounded bg-muted" />
+                  <div className="h-6 w-20 animate-pulse rounded bg-muted" />
                 ) : (
                   <div className="flex items-center gap-2">
-                    <span className="relative flex h-3 w-3">
+                    <span className="relative flex h-2 w-2">
                       <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/40" />
-                      <span className="relative inline-flex h-3 w-3 rounded-full bg-success" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
                     </span>
-                    <p className="text-base font-semibold">Online</p>
+                    <p className="text-sm font-semibold">Online</p>
                   </div>
                 )}
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader className="pb-1">
-                <CardDescription className="text-xs font-medium">{t('home.stats.models')}</CardDescription>
+            <Card className="flex flex-col justify-between">
+              <CardHeader className="pb-1 px-4 pt-4">
+                <CardDescription className="text-xs font-medium text-muted-foreground">{t('home.stats.models')}</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pb-4 px-4">
                 {apiStatus === 'loading' ? (
-                  <div className="h-8 w-16 animate-pulse rounded bg-muted" />
+                  <div className="h-6 w-12 animate-pulse rounded bg-muted" />
                 ) : (
-                  <p className="text-base font-semibold tabular-nums">{modelCount !== null ? modelCount : '\u2014'}</p>
+                  <p className="text-sm font-semibold tabular-nums">{modelCount !== null ? modelCount : '\u2014'}</p>
                 )}
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader className="pb-1">
-                <CardDescription className="text-xs font-medium">{t('home.stats.personality')}</CardDescription>
+            <Card className="flex flex-col justify-between">
+              <CardHeader className="pb-1 px-4 pt-4">
+                <CardDescription className="text-xs font-medium text-muted-foreground">{t('home.stats.personality')}</CardDescription>
               </CardHeader>
-              <CardContent>
-                <p className="text-base font-semibold truncate">{currentSoul?.name || '\u2014'}</p>
+              <CardContent className="pb-4 px-4">
+                <p className="text-sm font-semibold truncate">{currentSoul?.name || '\u2014'}</p>
               </CardContent>
             </Card>
-            <Card className="bg-gradient-to-br from-accent/5 to-transparent border-accent/20">
-              <CardHeader className="pb-1">
-                <CardDescription className="text-xs font-medium">Active</CardDescription>
+            <Card className="bg-gradient-to-br from-accent/5 to-transparent border-accent/20 flex flex-col justify-between">
+              <CardHeader className="pb-1 px-4 pt-4">
+                <CardDescription className="text-xs font-medium text-muted-foreground">Active</CardDescription>
               </CardHeader>
-              <CardContent>
-                <p className="text-base font-semibold truncate">{modelStatus.loaded ? `${modelStatus.model} + ${currentSoul?.name || 'default'}` : 'Not loaded'}</p>
+              <CardContent className="pb-4 px-4">
+                <p className="text-sm font-semibold truncate">{modelStatus.loaded ? `${modelStatus.model} + ${currentSoul?.name || 'default'}` : 'Not loaded'}</p>
                 {inferenceCount !== null && inferenceCount !== undefined && (
                   <p className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">{inferenceCount} conversations</p>
                 )}
@@ -162,16 +162,16 @@ export default function HomePage() {
           {feedbackStats?.db_stats && feedbackStats.db_stats.feedback_total > 0 && (
             <Card>
               <CardContent className="py-3">
-                <div className="flex items-center gap-4 flex-wrap">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-1.5">
                     <span className="text-xs text-muted-foreground">Feedback</span>
                     <span className="text-xs font-medium tabular-nums">{feedbackStats.db_stats.feedback_total}</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <span className="text-xs text-success">👍 {feedbackStats.db_stats.thumbs_up}</span>
                     <span className="text-xs text-destructive">👎 {feedbackStats.db_stats.thumbs_down}</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <span className="text-xs text-muted-foreground">Ratio</span>
                     <span className={"text-xs font-medium " + (feedbackStats.db_stats.ratio >= 0.5 ? "text-success" : "text-warning")}>
                       {Math.round(feedbackStats.db_stats.ratio * 100)}% positive
@@ -208,36 +208,47 @@ export default function HomePage() {
       )}
 
       {apiStatus === 'online' && (
-        <Card>
-          <CardContent className="py-3">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-              <div>
-                <div className="flex justify-center mb-1">
+        <Card className="overflow-hidden border-border/60">
+          <CardContent className="p-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 text-center">
+              <div className="flex flex-col items-center gap-1">
+                <div className="flex justify-center">
                   <span className={`w-2 h-2 rounded-full ${health && health !== 'offline' && health.status === 'healthy' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
                 </div>
-                <p className="text-[10px] text-muted-foreground">API</p>
-                <p className="text-xs font-medium">{health && health !== 'offline' && health.status === 'healthy' ? 'Healthy' : 'Degraded'}</p>
+                <div className="space-y-0">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">API</p>
+                  <p className="text-xs font-semibold">{health && health !== 'offline' && health.status === 'healthy' ? 'Healthy' : 'Degraded'}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground">Model</p>
-                <p className="text-xs font-medium truncate">
-                  {modelStatus.loaded ? (modelStatus.model?.split('/').pop() || modelStatus.model) : 'None loaded'}
-                </p>
-                {inferenceCount !== null && inferenceCount !== undefined && (
-                  <p className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">{inferenceCount} inference{inferenceCount === 1 ? '' : 's'}</p>
-                )}
+              <div className="flex flex-col items-center gap-1">
+                <div className="h-2 w-2 rounded-full bg-muted-foreground/20" />
+                <div className="space-y-0">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Model</p>
+                  <p className="text-xs font-semibold truncate max-w-[80px]">
+                    {modelStatus.loaded ? (modelStatus.model?.split('/').pop() || modelStatus.model) : 'None loaded'}
+                  </p>
+                  {inferenceCount !== null && inferenceCount !== undefined && (
+                    <p className="text-[10px] text-muted-foreground tabular-nums">{inferenceCount} convs</p>
+                  )}
+                </div>
               </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground">Personality</p>
-                <p className="text-xs font-medium truncate">{currentSoul?.name || 'Default'}</p>
-                {currentSoul?.traits && currentSoul.traits.length > 0 && (
-                  <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{currentSoul.traits.slice(0, 3).join(', ')}</p>
-                )}
+              <div className="flex flex-col items-center gap-1">
+                <div className="h-2 w-2 rounded-full bg-muted-foreground/20" />
+                <div className="space-y-0">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Personality</p>
+                  <p className="text-xs font-semibold truncate max-w-[80px]">{currentSoul?.name || 'Default'}</p>
+                  {currentSoul?.traits && currentSoul.traits.length > 0 && (
+                    <p className="text-[10px] text-muted-foreground truncate">{currentSoul.traits.slice(0, 2).join(', ')}</p>
+                  )}
+                </div>
               </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground">Knowledge</p>
-                <p className="text-xs font-medium">{knowledgeCount} fact{knowledgeCount === 1 ? '' : 's'}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">{modelCount !== null ? `${modelCount} model${modelCount === 1 ? '' : 's'} available` : ''}</p>
+              <div className="flex flex-col items-center gap-1">
+                <div className="h-2 w-2 rounded-full bg-muted-foreground/20" />
+                <div className="space-y-0">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Knowledge</p>
+                  <p className="text-xs font-semibold">{knowledgeCount} facts</p>
+                  <p className="text-[10px] text-muted-foreground">{modelCount !== null ? `${modelCount} models` : ''}</p>
+                </div>
               </div>
             </div>
           </CardContent>

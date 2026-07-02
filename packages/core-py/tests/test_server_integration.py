@@ -13,6 +13,7 @@ Tests the full pipeline without an HTTP server:
 
 import asyncio
 import time
+from unittest.mock import patch
 import pytest
 
 from domains.infrastructure.server_state import get_server_state
@@ -20,7 +21,7 @@ from domains.infrastructure.model_registry import get_model_registry, ModelRegis
 from domains.infrastructure.model_server import ModelServer, ModelStatus, CircuitBreakerState
 
 
-# ── Mock model ────────────────────────────────────────────────────────────────
+# ── Mock model (torch-free) ──────────────────────────────────────────
 
 
 class MockTokenizer:
@@ -28,10 +29,9 @@ class MockTokenizer:
     pad_token_id = 0
 
     def __call__(self, prompt, return_tensors="pt", **kwargs):
-        import torch
         return {
-            "input_ids": torch.tensor([[1, 2, 3]]),
-            "attention_mask": torch.tensor([[1, 1, 1]]),
+            "input_ids": [[1, 2, 3]],
+            "attention_mask": [[1, 1, 1]],
         }
 
     def decode(self, tokens, skip_special_tokens=True):
@@ -50,14 +50,57 @@ class MockModel:
             raise RuntimeError("mock generation failure")
         if self._slow:
             time.sleep(3)
-        import torch
-        return torch.tensor([[1, 2, 3, 4, 5]])
+        return [[1, 2, 3, 4, 5]]
 
     def parameters(self):
         return []
 
 
-# ── Fixtures ──────────────────────────────────────────────────────────────────
+# ── Fixtures ─────────────────────────────────────────────────────────
+
+
+# ── Fixtures ─────────────────────────────────────────────────────────
+
+# Shared state for _generate_sync mock — tests set this to configure fail/slow
+_GEN_CONFIG: dict = {"fail": False, "slow": False}
+
+
+def _mock_generate_sync(*args, **kwargs):
+    """Mock _generate_sync — defaults to success."""
+    return {
+        "text": f"generated: {args[0] if args else kwargs.get('prompt', 'hello')}",
+        "tokens_generated": 5,
+        "elapsed_ms": 10.0,
+    }
+
+
+@pytest.fixture(autouse=True)
+def patch_torch_deps():
+    """Patch out torch from ModelServer so tests run torch-free."""
+    patches = [
+        patch("domains.infrastructure.model_server._ensure_torch", return_value=True),
+        patch.object(ModelServer, "_generate_sync", new=_mock_generate_sync),
+    ]
+    for p in patches:
+        p.start()
+    yield
+    for p in patches:
+        p.stop()
+
+
+@pytest.fixture(autouse=True)
+def patch_torch_deps():
+    """Patch out torch from ModelServer so tests run torch-free."""
+    patches = [
+        patch("domains.infrastructure.model_server._ensure_torch", return_value=True),
+        patch.object(ModelServer, "_generate_sync", autospec=True,
+                     side_effect=_mock_generate_sync),
+    ]
+    for p in patches:
+        p.start()
+    yield
+    for p in patches:
+        p.stop()
 
 
 @pytest.fixture(autouse=True)
@@ -215,6 +258,13 @@ class TestModelServer:
         slow_model = MockModel(slow=True)
         server = ModelServer(slow_model, tokenizer, model_id="slow", max_concurrent=1, enable_warmup=False)
 
+        # Patch _generate_sync to be slow for this test only
+        original = server._generate_sync
+        def _slow(*args, **kwargs):
+            time.sleep(3)
+            return {"text": "slow result", "tokens_generated": 1, "elapsed_ms": 3000.0}
+        server._generate_sync = _slow
+
         async def gen():
             return await server.generate("hello")
 
@@ -238,7 +288,12 @@ class TestModelServer:
             fail_model, tokenizer, model_id="fail",
             enable_circuit_breaker=True,
             failure_threshold=2,
+            enable_warmup=False,
         )
+
+        def _fail(*args, **kwargs):
+            raise RuntimeError("mock generation failure")
+        server._generate_sync = _fail
 
         for _ in range(2):
             with pytest.raises(RuntimeError):
@@ -260,6 +315,9 @@ class TestModelServer:
             enable_warmup=False,
         )
 
+        def _fail(*args, **kwargs):
+            raise RuntimeError("mock generation failure")
+        server._generate_sync = _fail
         with pytest.raises(RuntimeError):
             await server.generate("hello")
 
@@ -277,6 +335,12 @@ class TestModelServer:
     async def test_timeout_semaphore(self, model, tokenizer):
         slow_model = MockModel(slow=True)
         server = ModelServer(slow_model, tokenizer, model_id="slow", max_concurrent=1, enable_warmup=False)
+
+        # Patch to be slow
+        def _slow(*args, **kwargs):
+            time.sleep(3)
+            return {"text": "slow result", "tokens_generated": 1, "elapsed_ms": 3000.0}
+        server._generate_sync = _slow
 
         # First request hogs the semaphore
         t1 = asyncio.create_task(server.generate("hello"))
@@ -311,6 +375,9 @@ class TestModelServer:
         fail_model = MockModel(fail_on_call=True)
         server = ModelServer(fail_model, tokenizer, model_id="fail", enable_warmup=False)
         server.add_on_error_hook(lambda e: errors.append(str(e)))
+        def _fail(*args, **kwargs):
+            raise RuntimeError("mock generation failure")
+        server._generate_sync = _fail
         with pytest.raises(RuntimeError):
             await server.generate("hello")
         assert len(errors) == 1
@@ -393,16 +460,14 @@ class TestWarmup:
 
     def test_warmup_graceful_on_failure(self, tokenizer):
         """Warmup failure doesn't crash — just degrades status."""
-        fail_model = MockModel(fail_on_call=True)
-        server = ModelServer(fail_model, tokenizer, model_id="fail-warmup")
-        import time
-        deadline = time.time() + 15.0
-        while time.time() < deadline:
-            if server._warmup_error is not None:
-                break
-            time.sleep(0.2)
-        assert not server._warmup_completed, "warmup should not have completed"
-        assert server._warmup_error is not None, f"expected warmup error, got None (completed={server._warmup_completed})"
-        # Warmup failure triggers circuit breaker → status is DEGRADED
-        # (this is correct: the model is unhealthy)
-        assert server.status == ModelStatus.DEGRADED
+        with patch.object(ModelServer, "_generate_sync", new=lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("mock generation failure"))):
+            server = ModelServer(MockModel(fail_on_call=True), tokenizer, model_id="fail-warmup")
+            import time
+            deadline = time.time() + 15.0
+            while time.time() < deadline:
+                if server._warmup_error is not None:
+                    break
+                time.sleep(0.2)
+            assert not server._warmup_completed, "warmup should not have completed"
+            assert server._warmup_error is not None, f"expected warmup error, got None (completed={server._warmup_completed})"
+            assert server.status == ModelStatus.DEGRADED

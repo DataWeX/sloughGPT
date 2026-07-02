@@ -129,8 +129,11 @@ export function DatasetImportModal({
           break
 
         case 'isbn':
+          if (bookResults.length > 0) {
+            throw new Error('Select a book from the search results')
+          }
           if (!url.trim()) {
-            throw new Error('Select a book from the search results first')
+            throw new Error('Enter a search term or ISBN')
           }
           if (!name.trim()) {
             throw new Error('Dataset name is required')

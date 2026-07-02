@@ -67,7 +67,9 @@ async function request<T>(
         const isRetryable = RETRYABLE_STATUSES.has(status)
         if (isRetryable && retries < MAX_RETRIES) {
           retries++
-          await new Promise(r => setTimeout(r, BASE_DELAY * Math.pow(2, retries - 1)))
+          const retryAfter = Number(res.headers.get('Retry-After')) || 0
+          const delay = retryAfter > 0 ? retryAfter * 1000 : BASE_DELAY * Math.pow(2, retries - 1)
+          await new Promise(r => setTimeout(r, delay))
           continue
         }
 

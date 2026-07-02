@@ -20,6 +20,7 @@ from domains.training.slonet import (
     flatten as _flatten, tensor as _tensor,
     cross_entropy as _cross_entropy, sigmoid as _sigmoid,
     zeros, ones,
+    compute_sensitivity,
 )
 
 from .char_tokenizer import CharTokenizer
@@ -422,6 +423,19 @@ class MultimodalEngine:
                 g_data = p.grad.data if hasattr(p.grad, 'data') else p.grad
                 g_data *= scale
 
+    def param_groups(self) -> dict:
+        """Return param groups keyed by sub-module name for sensitivity analysis.
+
+        Returns:
+            Dict mapping group names to lists of Tensor parameters.
+            Groups: ``decoder`` (text generation), ``vision`` (image encoder),
+            ``audio`` (audio encoder).
+        """
+        groups = {"decoder": self.decoder.parameters()}
+        groups["vision"] = self.vision.parameters()
+        groups["audio"] = self.audio.parameters()
+        return groups
+
     def train_step(
         self,
         images_np: Optional[np.ndarray] = None,
@@ -430,7 +444,18 @@ class MultimodalEngine:
         audio_np: Optional[np.ndarray] = None,
         audio_patches: Optional[np.ndarray] = None,
         temperature: float = 1.0,
-    ) -> float:
+        compute_sens: bool = False,
+    ):
+        """Single-sample training step with optional JVP sensitivity.
+
+        Args:
+            compute_sens: If True, returns ``(loss, sensitivities)`` where
+                sensitivities is a dict of per-group sensitivity scores.
+
+        Returns:
+            float loss by default, or ``(loss, sensitivities)`` if
+            ``compute_sens=True``.
+        """
         if text_tokens is None:
             raise ValueError("text_tokens is required")
         # Disable GPU accelerator for training — Metal dispatch overhead dominates at embed_dim≤128
@@ -444,12 +469,18 @@ class MultimodalEngine:
             if temperature != 1.0:
                 logits = logits / temperature
             loss = _cross_entropy(logits, targets)
+            sensitivities = {}
+            if compute_sens:
+                sensitivities = compute_sensitivity(
+                    loss,
+                    {"decoder": self.decoder.parameters(), "vision": self.vision.parameters()},
+                    seed=0,
+                )
             loss.backward()
             old_lrs = {}
             if lr is not None:
                 old_lrs = {id(opt): opt.lr for opt in optimizers}
                 self._maybe_set_lr(lr, optimizers)
-            # Gradient clipping
             for opt in optimizers:
                 self._clip_gradients(self._params_for_optimizer(opt, None, None))
             for opt in optimizers:
@@ -457,7 +488,8 @@ class MultimodalEngine:
             self._maybe_restore_lr(lr, optimizers, old_lrs)
             self._zero_grad(optimizers)
             self._trained = True
-            return float(loss.data)
+            loss_val = float(loss.data)
+            return (loss_val, sensitivities) if compute_sens else loss_val
         finally:
             _slonet_mod._ACCELERATOR = _saved_accel
 
@@ -466,7 +498,8 @@ class MultimodalEngine:
         samples: list,
         lr: Optional[float] = None,
         temperature: float = 1.0,
-    ) -> float:
+        compute_sens: bool = False,
+    ):
         """Accumulate gradients over multiple samples then step once.
 
         Each sample is ``(images_np, text_tokens, audio_np, audio_patches)``
@@ -478,26 +511,26 @@ class MultimodalEngine:
             lr: optional learning rate override
             temperature: softmax temperature for logit scaling (1.0 = standard CE).
                          Values >1 create softer targets for better exploration.
+            compute_sens: If True, returns ``(loss, sensitivities)``.
 
         Returns:
-            mean loss across samples
+            mean loss across samples, or ``(loss, sensitivities)`` if
+            ``compute_sens=True``.
         """
         if not samples:
             return 0.0
 
-        # Disable GPU accelerator for training — Metal dispatch overhead dominates at embed_dim≤128
         import domains.training.slonet as _slonet_mod
         _saved_accel = _slonet_mod._ACCELERATOR
         _slonet_mod._ACCELERATOR = "none"
         try:
-            # Determine which optimisers are needed from the first sample
             first_img, first_tok, first_aud_np, first_aud_pt = samples[0]
             _, _, all_opts = self._concat_modalities(first_img, first_aud_np, first_aud_pt)
-            # Zero all relevant param gradients before accumulation
             self._zero_grad(all_opts)
 
             total_loss = 0.0
             n = 0
+            sensitivities = {}
             old_lrs = {} if lr is None else {id(o): o.lr for o in all_opts}
             if lr is not None:
                 self._maybe_set_lr(lr, all_opts)
@@ -511,7 +544,12 @@ class MultimodalEngine:
                 if temperature != 1.0:
                     logits = logits / temperature
                 loss = _cross_entropy(logits, targets)
-                # Scale loss by 1/N so the sum ≈ mean (even gradient contribution)
+                if compute_sens and not sensitivities:
+                    sensitivities = compute_sensitivity(
+                        loss,
+                        {"decoder": self.decoder.parameters(), "vision": self.vision.parameters()},
+                        seed=0,
+                    )
                 loss = loss * (1.0 / len(samples))
                 loss.backward()
                 total_loss += float(loss.data) * len(samples)
@@ -520,16 +558,15 @@ class MultimodalEngine:
             if n == 0:
                 return 0.0
 
-            # Gradient clipping
             for opt in all_opts:
                 self._clip_gradients(self._params_for_optimizer(opt, None, None))
-            # Single step
             for opt in all_opts:
                 opt.step(self._params_for_optimizer(opt, None, None))
             self._maybe_restore_lr(lr, all_opts, old_lrs)
             self._zero_grad(all_opts)
             self._trained = True
-            return total_loss / n
+            loss_val = total_loss / n
+            return (loss_val, sensitivities) if compute_sens else loss_val
         finally:
             _slonet_mod._ACCELERATOR = _saved_accel
 

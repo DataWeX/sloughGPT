@@ -307,7 +307,7 @@ class ModelMetadata:
                     setattr(metadata, field, val)
 
         # Set timestamps
-        metadata.created_at = datetime.datetime.utcnow().isoformat() + "Z"
+        metadata.created_at = datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
 
         # Get PyTorch version
         try:
@@ -344,7 +344,7 @@ class ModelMetadata:
         self.final_val_loss = val_loss
         self.steps_trained = steps
         self.last_step = steps
-        self.trained_at = datetime.datetime.utcnow().isoformat() + "Z"
+        self.trained_at = datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
 
         if val_loss > 0 and (self.best_val_loss == 0 or val_loss < self.best_val_loss):
             self.best_val_loss = val_loss
@@ -444,7 +444,7 @@ def create_model_metadata(
     if soul_info:
         metadata.add_soul_info(**soul_info)
 
-    metadata.exported_at = datetime.datetime.utcnow().isoformat() + "Z"
+    metadata.exported_at = datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
 
     return metadata
 
@@ -831,14 +831,14 @@ def export_to_safetensors(
         model_meta = metadata
         model_meta.precision = precision
         model_meta.export_format = "safetensors"
-        model_meta.exported_at = datetime.datetime.utcnow().isoformat() + "Z"
+        model_meta.exported_at = datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
         meta = model_meta.to_dict()
     else:
         meta = metadata.copy() if metadata else {}
         meta["format"] = "safetensors"
         meta["format_version"] = "1.0"
         meta["precision"] = precision
-        meta["exported_at"] = datetime.datetime.utcnow().isoformat() + "Z"
+        meta["exported_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
 
         # Extract architecture from model if not present
         for field in ["vocab_size", "n_embed", "n_layer", "n_head", "n_kv_head", "block_size"]:

@@ -171,7 +171,7 @@ class SloProfile:
 
     def __post_init__(self):
         if not self.born_at:
-            self.born_at = datetime.datetime.utcnow().isoformat() + "Z"
+            self.born_at = datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
 
     def to_dict(self) -> Dict[str, Any]:
         d = {

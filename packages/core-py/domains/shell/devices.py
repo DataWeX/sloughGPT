@@ -194,7 +194,7 @@ class VisionDevice(AIDevice):
             return f"  File not found: {path}"
         # Delegate to VisionCNN if available
         try:
-            from domains.inference.vision import VisionCNN
+            from domains.multimodal.vision import VisionCNN
             cnn = VisionCNN()
             from PIL import Image
             img = Image.open(path).convert("RGB")

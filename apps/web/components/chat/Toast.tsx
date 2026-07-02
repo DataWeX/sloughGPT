@@ -183,3 +183,47 @@ export function ToastContainer({ toasts, onDismiss, onClearAll }: ToastContainer
     </div>
   )
 }
+
+// ── Radix Toast Bridge ──────────────────────────────────────────
+
+import {
+  ToastProvider, ToastViewport, Toast as RadixToast,
+  ToastTitle, ToastDescription, ToastClose,
+} from '@/components/ui/toast'
+
+const TYPE_BORDER: Record<ToastType, string> = {
+  success: 'border-l-success',
+  error: 'border-l-destructive',
+  info: 'border-l-primary',
+}
+
+export function RadixToastContainer({ toasts, onDismiss, onClearAll }: ToastContainerProps) {
+  return (
+    <ToastProvider duration={Infinity}>
+      {toasts.length > 2 && onClearAll && (
+        <button
+          onClick={onClearAll}
+          className="fixed bottom-20 right-4 z-[101] text-[9px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
+          aria-label="Dismiss all notifications"
+        >
+          Clear all
+        </button>
+      )}
+      {toasts.map((t) => (
+        <RadixToast key={t.id} open onOpenChange={(open) => { if (!open) onDismiss(t.id) }} className={['border-l-4', TYPE_BORDER[t.type]].join(' ')}>
+          <div className="flex items-start gap-3 w-full">
+            <span className="mt-0.5 text-sm shrink-0">
+              {t.type === 'success' ? '✨' : t.type === 'error' ? '😕' : '💡'}
+            </span>
+            <div className="flex-1 min-w-0">
+              <ToastTitle className="text-sm">{t.message}</ToastTitle>
+              {t.verbose && <ToastDescription className="mt-1">{t.verbose}</ToastDescription>}
+            </div>
+            <ToastClose />
+          </div>
+        </RadixToast>
+      ))}
+      <ToastViewport />
+    </ToastProvider>
+  )
+}

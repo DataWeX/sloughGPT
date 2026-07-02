@@ -427,7 +427,6 @@ __all__ = [
     "UnifiedTrainingPipeline",
     "TrainingProgress",
     "TrainingStage",
-    "FederatedRLTrainer",
 ]
 
 
@@ -496,8 +495,6 @@ def __getattr__(name):
         "URLImporter": ".data_import",
         "ImportResult": ".data_import",
         "import_data": ".data_import",
-        "TurboTrainer": ".turbo_trainer",
-        "TurboConfig": ".turbo_trainer",
         "TrainerProtocol": ".trainer_protocol",
         "TrainResult": ".trainer_protocol",
         # Export modules
@@ -519,7 +516,6 @@ def __getattr__(name):
         "UnifiedTrainingPipeline": ".unified_pipeline",
         "TrainingProgress": ".unified_pipeline",
         "TrainingStage": ".unified_pipeline",
-        "FederatedRLTrainer": ".unified_pipeline",
     }
 
     if name in lazy_imports:

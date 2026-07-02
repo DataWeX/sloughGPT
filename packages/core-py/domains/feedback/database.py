@@ -10,7 +10,7 @@ import pickle
 import json
 import uuid
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass
@@ -160,7 +160,7 @@ class FeedbackDB:
     def create_conversation(self, user_id: str = "default", title: str = "New Chat") -> str:
         """Create a new conversation."""
         conv_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         with self._lock:
             conn = sqlite3.connect(self.db_path)
@@ -217,7 +217,7 @@ class FeedbackDB:
     ) -> str:
         """Add a message to a conversation."""
         msg_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         embedding_blob = self._embeddings_to_blob(embedding) if embedding is not None else None
 
@@ -280,7 +280,7 @@ class FeedbackDB:
     ) -> str:
         """Add feedback for a message."""
         fb_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         with self._lock:
             conn = sqlite3.connect(self.db_path)
@@ -570,7 +570,7 @@ class FeedbackDB:
         repetition_delta: float = 0.01,
     ) -> Dict:
         """Update meta weights for a user based on feedback."""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         with self._lock:
             conn = sqlite3.connect(self.db_path)

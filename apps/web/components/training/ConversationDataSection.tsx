@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { trainingJobsController } from '@/lib/training-controller'
 import { devDebug } from '@/lib/dev-log'
 import { useToastStore } from '@/lib/toast-store'
@@ -69,19 +70,19 @@ export function ConversationDataSection() {
         <>
           <div className="grid grid-cols-2 gap-2">
             <div className="p-3 rounded-lg bg-success/10 border border-success/30">
-              <div className="text-2xl font-bold text-success">{stats.positive_pairs}</div>
+              <div className="text-base font-semibold text-success">{stats.positive_pairs}</div>
               <div className="text-xs text-muted-foreground">Positive (👍)</div>
             </div>
             <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30">
-              <div className="text-2xl font-bold text-destructive">{stats.negative_pairs}</div>
+              <div className="text-base font-semibold text-destructive">{stats.negative_pairs}</div>
               <div className="text-xs text-muted-foreground">Negative (👎)</div>
             </div>
             <div className="p-3 rounded-lg bg-muted">
-              <div className="text-2xl font-bold">{stats.neutral_pairs}</div>
+              <div className="text-base font-semibold">{stats.neutral_pairs}</div>
               <div className="text-xs text-muted-foreground">Neutral</div>
             </div>
             <div className="p-3 rounded-lg bg-muted">
-              <div className="text-2xl font-bold">{stats.total_pairs}</div>
+              <div className="text-base font-semibold">{stats.total_pairs}</div>
               <div className="text-xs text-muted-foreground">Total Pairs</div>
             </div>
           </div>
@@ -89,15 +90,16 @@ export function ConversationDataSection() {
           <div className="space-y-3">
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Sampling Strategy</label>
-              <select
-                value={strategy}
-                onChange={(e) => setStrategy(e.target.value as any)}
-                className="sl-input py-1.5 text-sm"
-              >
-                <option value="balanced">Balanced (equal +/ /neutral)</option>
-                <option value="weighted">Weighted (edge cases)</option>
-                <option value="simple">Simple (filter by quality)</option>
-              </select>
+              <Select value={strategy} onValueChange={(v: string) => setStrategy(v as 'balanced' | 'weighted' | 'simple')}>
+                <SelectTrigger className="text-sm">
+                  <SelectValue placeholder="Select strategy..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="balanced">Balanced (equal +/ /neutral)</SelectItem>
+                  <SelectItem value="weighted">Weighted (edge cases)</SelectItem>
+                  <SelectItem value="simple">Simple (filter by quality)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div>

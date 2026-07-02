@@ -57,10 +57,13 @@ class WebhookStore:
     Persists across server restarts.
     """
 
+    _max_log_size: int = 1000
+
     def __init__(self, db_path: str = "data/webhooks.db"):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        self.delivery_log: list = []
         self._init_db()
 
     def _init_db(self) -> None:

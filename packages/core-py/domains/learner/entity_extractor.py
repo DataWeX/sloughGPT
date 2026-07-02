@@ -148,7 +148,44 @@ def extract_facts_from_conversation(user_msg: str, assistant_msg: str) -> List[s
     return facts
 
 
-def extract_and_store(user_msg: str, assistant_msg: str, knowledge_memory=None):
+async def extract_facts_neural(user_msg: str, assistant_msg: str) -> List[str]:
+    """Use the current LLM to extract nuanced facts from a conversation.
+    
+    Returns a list of natural-language facts.
+    """
+    try:
+        from domains.infrastructure.model_server import get_model_registry
+        registry = get_model_registry()
+        if not registry or not registry.list_models():
+            return []
+        
+        model = registry.get_default_model()
+        if not model:
+            return []
+
+        combined = f"User: {user_msg}\nAI: {assistant_msg}"
+        prompt = (
+            "Extract a few concise, factual statements about the user or mentioned entities "
+            "from this conversation. Focus on new knowledge. Return only a bulleted list of facts, "
+            "one per line, without labels or introductory text.\n\n"
+            f"Conversation:\n{combined}\n\n"
+            "Facts:"
+        )
+        
+        # Use non-streaming generate for extraction
+        result = await model.generate(prompt, max_new_tokens=128, temperature=0.1)
+        text = result.text.strip()
+        if not text:
+            return []
+            
+        facts = [line.strip("- ").strip() for line in text.splitlines() if line.strip()]
+        return [f for f in facts if len(f) > 5]
+    except Exception as e:
+        logger.debug(f"Neural extraction failed: {e}")
+        return []
+
+
+async def extract_and_store(user_msg: str, assistant_msg: str, knowledge_memory=None):
     """Extract facts from conversation and store in KnowledgeMemory.
 
     Args:
@@ -160,7 +197,15 @@ def extract_and_store(user_msg: str, assistant_msg: str, knowledge_memory=None):
         Number of new facts stored
     """
     try:
+        # 1. Rule-based extraction (Fast, always runs)
         facts = extract_facts_from_conversation(user_msg, assistant_msg)
+        
+        # 2. Neural extraction (Slower, runs for significant exchanges)
+        # Significant exchange: total length > 100 chars or contains named entities
+        if len(user_msg) + len(assistant_msg) > 100:
+            neural_facts = await extract_facts_neural(user_msg, assistant_msg)
+            facts.extend(neural_facts)
+            
         if not facts:
             return 0
 

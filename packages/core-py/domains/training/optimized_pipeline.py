@@ -726,7 +726,6 @@ __all__ = [
     "MemoryOptimizer",
     "LoRAWrapper",
     "LoRAModelWrapper",
-    "OptimizedTrainer",
     "OptimizedFederatedTrainer",
     "OptimizedPipeline",
 ]

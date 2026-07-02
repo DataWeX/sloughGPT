@@ -17,6 +17,9 @@ export interface CommandContext {
   navigateTo: (path: string) => void
   addSystemMessage: (content: string) => void
   sendMessage: (text?: string) => Promise<void>
+  archiveConversation: () => void
+  renameConversation: (name: string) => void
+  searchConversations: (query: string) => void
 }
 
 export interface CommandResult {
@@ -187,6 +190,45 @@ const commands: ChatCommand[] = [
       const lang = args.join(' ')
       ctx.addSystemMessage(`Please rephrase your last response in **${lang}**. Only output the translation, no preamble.`)
       await ctx.sendMessage()
+      return { handled: true }
+    },
+  },
+  {
+    command: '/search',
+    description: 'Search past conversations for a topic',
+    usage: '/search <query>',
+    async execute(args, ctx) {
+      if (!args.length) {
+        ctx.showToast('Usage: /search <query>', 'error')
+        return { handled: true }
+      }
+      const query = args.join(' ')
+      ctx.searchConversations(query)
+      return { handled: true }
+    },
+  },
+  {
+    command: '/archive',
+    description: 'Archive current conversation and start fresh',
+    usage: '/archive',
+    async execute(_args, ctx) {
+      ctx.archiveConversation()
+      ctx.showToast('Conversation archived', 'success')
+      return { handled: true }
+    },
+  },
+  {
+    command: '/rename',
+    description: 'Rename the current conversation',
+    usage: '/rename <name>',
+    async execute(args, ctx) {
+      if (!args.length) {
+        ctx.showToast('Usage: /rename <name>', 'error')
+        return { handled: true }
+      }
+      const name = args.join(' ')
+      ctx.renameConversation(name)
+      ctx.showToast(`Renamed to "${name}"`, 'success')
       return { handled: true }
     },
   },

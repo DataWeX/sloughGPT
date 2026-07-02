@@ -11,7 +11,9 @@ import ModelsCard from '@/components/compare/ModelsCard'
 import ComparisonTableCard from '@/components/compare/ComparisonTableCard'
 import SummaryCard from '@/components/compare/SummaryCard'
 import OutputComparisonCard from '@/components/compare/OutputComparisonCard'
-import VisualComparisonCard from '@/components/compare/VisualComparisonCard'
+import dynamic from 'next/dynamic'
+
+const VisualComparisonCard = dynamic(() => import('@/components/compare/VisualComparisonCard'), { ssr: false })
 
 interface ModelEntry {
   id: string

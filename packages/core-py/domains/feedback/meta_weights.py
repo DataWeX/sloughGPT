@@ -8,7 +8,7 @@ adjust generation parameters accordingly.
 import numpy as np
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 import logging
 
@@ -204,7 +204,7 @@ class MetaWeightManager:
             # Store in history
             self._weight_history.append(
                 {
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                     "temperature": weights.temperature,
                     "repetition_penalty": weights.repetition_penalty,
                     "pattern_count": len(patterns),

@@ -17,11 +17,35 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
-import { Slider, ToggleGroup } from '@/components/ui/form'
+import { Slider } from '@/components/ui/slider'
+import { ToggleGroup as ToggleGroupRadix, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useToastStore } from '@/lib/toast-store'
 import { useSettings, useUpdateSettings } from '@/lib/store'
 import { useApiHealth } from '@/hooks/useApiHealth'
 import Link from 'next/link'
+
+function SettingsSlider({
+  label, value, onChange, min, max, step, formatValue,
+}: {
+  label: string
+  value: number
+  onChange: (v: number) => void
+  min?: number
+  max?: number
+  step?: number
+  formatValue?: (v: number) => string
+}) {
+  const display = formatValue ? formatValue(value) : value.toString()
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-medium">{label}</label>
+        <span className="text-sm text-muted-foreground">{display}</span>
+      </div>
+      <Slider value={[value]} onValueChange={([v]) => onChange(v)} min={min} max={max} step={step} />
+    </div>
+  )
+}
 
 export default function SettingsPage() {
   const settings = useSettings()
@@ -53,15 +77,11 @@ export default function SettingsPage() {
             <CardDescription>Theme preference</CardDescription>
           </CardHeader>
           <CardContent>
-            <ToggleGroup
-              value={settings.theme}
-              onChange={(v) => updateSettings({ theme: v as 'light' | 'dark' | 'system' })}
-              options={[
-                { value: 'light', label: 'Light' },
-                { value: 'dark', label: 'Dark' },
-                { value: 'system', label: 'System' },
-              ]}
-            />
+            <ToggleGroupRadix type="single" value={settings.theme} onValueChange={(v) => v && updateSettings({ theme: v as 'light' | 'dark' | 'system' })}>
+              <ToggleGroupItem value="light">Light</ToggleGroupItem>
+              <ToggleGroupItem value="dark">Dark</ToggleGroupItem>
+              <ToggleGroupItem value="system">System</ToggleGroupItem>
+            </ToggleGroupRadix>
           </CardContent>
         </Card>
 
@@ -73,7 +93,7 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <Slider
+              <SettingsSlider
                 label="Temperature"
                 value={settings.defaultTemp}
                 onChange={(v) => updateSettings({ defaultTemp: v })}
@@ -81,7 +101,7 @@ export default function SettingsPage() {
                 max={2}
                 step={0.1}
               />
-              <Slider
+              <SettingsSlider
                 label="Max tokens"
                 value={settings.defaultMaxTokens}
                 onChange={(v) => updateSettings({ defaultMaxTokens: v })}
@@ -91,7 +111,7 @@ export default function SettingsPage() {
               />
             </div>
             <div className="pt-2">
-              <Slider
+              <SettingsSlider
                 label="Auto-collapse messages longer than"
                 value={settings.collapsibleMessageLength}
                 onChange={(v) => updateSettings({ collapsibleMessageLength: v })}
@@ -101,14 +121,6 @@ export default function SettingsPage() {
                 formatValue={(v) => v === 0 ? 'Disabled' : `${v} chars`}
               />
             </div>
-            <Slider
-              label="Message fold threshold"
-              value={settings.collapsibleMessageLength}
-              onChange={(v) => updateSettings({ collapsibleMessageLength: v })}
-              min={0}
-              max={2000}
-              step={50}
-            />
           </CardContent>
         </Card>
 
@@ -170,6 +182,9 @@ export default function SettingsPage() {
                 ['/summarize', 'Summarise chat'],
                 ['/feedback +/- [r]', 'Rate response'],
                 ['/translate <lang>', 'Translate reply'],
+                ['/search <q>', 'Search conversations'],
+                ['/archive', 'Archive & start fresh'],
+                ['/rename <n>', 'Rename conversation'],
               ].map(([cmd, desc]) => (
                 <div key={cmd} className="flex items-center gap-2">
                   <code className="text-xs text-primary font-mono shrink-0">{cmd}</code>

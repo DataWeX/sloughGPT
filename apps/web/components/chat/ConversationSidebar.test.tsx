@@ -63,7 +63,7 @@ describe('ConversationSidebar', () => {
     onClose,
   }
 
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => { vi.clearAllMocks(); localStorage.clear() })
   afterEach(cleanup)
 
   it('renders desktop sidebar', () => {
@@ -343,5 +343,28 @@ describe('ConversationSidebar', () => {
     fireEvent.click(screen.getByText('Name'))
     const updatedBtn = screen.getByLabelText('Sort conversations')
     expect(updatedBtn.className).toContain('text-primary')
+  })
+
+  it('persists sort preference across remounts', () => {
+    localStorage.clear()
+    const conversations = [
+      createConv('1', { name: 'Zebra', updated_at: '2026-01-01' }),
+      createConv('2', { name: 'Apple', updated_at: '2026-01-02' }),
+    ]
+    // First render: change sort to name
+    render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    fireEvent.click(screen.getByLabelText('Sort conversations'))
+    fireEvent.click(screen.getByText('Name'))
+    expect(localStorage.getItem('sloughgpt:sidebar-sort')).toBe('name')
+    cleanup()
+
+    // Second render: sort should persist from localStorage as 'name' (non-default)
+    render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    const sortBtn = screen.getByLabelText('Sort conversations')
+    expect(sortBtn.className).toContain('text-primary')
+    // Items should appear in name order
+    const items = screen.getAllByText(/^(Apple|Zebra)$/)
+    expect(items[0]).toHaveProperty('textContent', 'Apple')
+    expect(items[1]).toHaveProperty('textContent', 'Zebra')
   })
 })

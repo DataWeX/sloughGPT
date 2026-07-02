@@ -28,23 +28,12 @@ import { useLocale, LOCALES } from '@/hooks/useLocale'
 
 const workspaceItems = [
   { path: '/chat', key: 'nav.chat', Icon: IconChat },
-  { path: '/conversations', key: 'nav.conversations', Icon: IconMenu },
   { path: '/training', key: 'nav.training', Icon: IconTraining },
-  { path: '/models', key: 'nav.models', Icon: IconModels },
-  { path: '/datasets', key: 'nav.datasets', Icon: IconActivity },
-  { path: '/knowledge', key: 'nav.knowledge', Icon: IconSearch },
-  { path: '/agents', key: 'nav.agents', Icon: IconAgents },
-  { path: '/compare', key: 'nav.compare', Icon: IconCompare },
-  { path: '/settings', key: 'nav.settings', Icon: IconSettings },
 ] as const
 
 const systemItems = [
-  { path: '/files', key: 'nav.files', Icon: IconFile },
-  { path: '/multimodal', key: 'nav.multimodal', Icon: IconVision },
-  { path: '/export', key: 'nav.export', Icon: IconExport },
-  { path: '/monitoring', key: 'nav.monitoring', Icon: IconActivity },
-  { path: '/tokenizer', key: 'nav.tokenizer', Icon: IconTokenizer },
-  { path: '/activity', key: 'nav.activity', Icon: IconActivity },
+  { path: '/models', key: 'nav.models', Icon: IconModels },
+  { path: '/settings', key: 'nav.settings', Icon: IconSettings },
 ] as const
 
 /** Sidebar list — smaller than home quick-action tiles */
@@ -120,7 +109,7 @@ export function Sidebar({ variant = 'desktop', onNavigate, onClose }: SidebarPro
         className="flex min-h-0 flex-1 flex-col p-3"
         aria-label="Primary"
       >
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div className={cn("min-h-0 flex-1 overscroll-contain", isDrawer ? "overflow-y-auto scrollbar-hide" : "overflow-y-auto")}>
           <p
             className="mb-2 px-3 text-xs font-medium text-muted-foreground"
             id="sidebar-workspace-heading"

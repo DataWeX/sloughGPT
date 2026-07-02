@@ -124,4 +124,25 @@ export const knowledgeController = {
   async ingestUrl(url: string): Promise<IngestResult> {
     return apiPost('/knowledge/ingest-url', { url })
   },
+
+  async ingestFile(file: File, topic = 'imported', chunkSize = 500, overlap = 50): Promise<{
+    status: string
+    stored: number
+    total_chunks: number
+    topic: string
+    filename: string
+    file_size: number
+  }> {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('topic', topic)
+    formData.append('chunk_size', String(chunkSize))
+    formData.append('overlap', String(overlap))
+    const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/knowledge/ingest-file`, {
+      method: 'POST',
+      body: formData,
+    })
+    if (!resp.ok) throw new Error(`Upload failed: ${resp.statusText}`)
+    return resp.json()
+  },
 }

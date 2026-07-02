@@ -215,6 +215,7 @@ class TestProcessGuard:
 class TestModelServerWithGuard:
     @pytest.fixture
     async def model_server_with_guard(self):
+        pytest.importorskip("torch")
         from domains.infrastructure.model_server import ModelServer
         from domains.infrastructure.process_guard import ProcessGuard
 

@@ -242,16 +242,16 @@ class ConfigManager:
             from domains.infrastructure.event_bus import get_event_bus
             bus = get_event_bus()
             import asyncio
+            payload = {
+                "old": old_config.model_dump() if hasattr(old_config, "model_dump") else {},
+                "new": new_config.model_dump(),
+            }
             try:
-                asyncio.ensure_future(bus.emit("config.changed", {
-                    "old": old_config.model_dump() if hasattr(old_config, "model_dump") else {},
-                    "new": new_config.model_dump(),
-                }, source="config_manager"))
-            except Exception:
-                bus.emit_sync("config.changed", {
-                    "old": old_config.model_dump() if hasattr(old_config, "model_dump") else {},
-                    "new": new_config.model_dump(),
-                }, source="config_manager")
+                loop = asyncio.get_running_loop()
+                loop.create_task(bus.emit("config.changed", payload, source="config_manager"))
+            except RuntimeError:
+                # No running event loop — use asyncio.run() so async handlers are awaited
+                asyncio.run(bus.emit("config.changed", payload, source="config_manager"))
         except Exception:
             logger.warning("Could not emit config.changed event")
 

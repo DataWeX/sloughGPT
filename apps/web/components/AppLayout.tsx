@@ -1,9 +1,9 @@
 'use client'
 
-import * as DialogPrimitive from '@radix-ui/react-dialog'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import { Button } from '@/components/ui/button'
 import { IconMenu } from '@/components/icons/NavIcons'
@@ -12,7 +12,7 @@ import { ErrorPanel } from '@/components/ui/error-panel'
 import { GlobalErrorHandler } from '@/components/GlobalErrorHandler'
 import { StatusBar } from '@/components/StatusBar'
 import { useApiMonitor } from '@/lib/api-monitor-store'
-import { ToastContainer } from '@/components/chat/Toast'
+import { ToastContainer, RadixToastContainer } from '@/components/chat/Toast'
 import { CommandPalette } from '@/components/CommandPalette'
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
 import { useBackendWatcher } from '@/hooks/useBackendWatcher'
@@ -64,8 +64,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const closeMobileNav = () => setMobileNavOpen(false)
 
   return (
-    <DialogPrimitive.Root open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-      <div className="flex h-dvh max-h-dvh flex-col bg-background pt-[env(safe-area-inset-top)]">
+    <div className="flex h-dvh max-h-dvh flex-col bg-background pt-[env(safe-area-inset-top)]">
         {apiStatus === 'reloading' && (
           <div className="shrink-0 flex items-center justify-center gap-2 h-7 bg-warning/15 border-b border-warning/30 text-[11px] text-warning font-medium">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />
@@ -114,40 +113,43 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
         </div>
 
-        <DialogPrimitive.Portal>
-          <DialogPrimitive.Overlay
-            className={cn(
-              'fixed inset-0 z-[100] bg-black/45 backdrop-blur-sm lg:hidden',
-              'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-200',
-              !mobileNavOpen && 'pointer-events-none',
-            )}
-          />
-          <DialogPrimitive.Content
-            id="mobile-navigation-drawer"
-            className={cn(
-              'fixed inset-y-0 left-0 z-[110] flex w-[min(var(--sidebar-width),min(18rem,92vw))] max-w-full outline-none lg:hidden',
-              'shadow-[0.25rem_0_1.5rem_-0.25rem_rgba(0,0,0,0.28)]',
-              'data-[state=open]:animate-in data-[state=closed]:animate-out duration-200',
-              'data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left',
-              !mobileNavOpen && 'pointer-events-none',
-            )}
-          >
-            <DialogPrimitive.Title className="sr-only">Main navigation</DialogPrimitive.Title>
-            <DialogPrimitive.Description className="sr-only">
-              Primary navigation for the sloughGPT console. Choose a section or close this panel.
-            </DialogPrimitive.Description>
-            <Sidebar variant="drawer" onClose={closeMobileNav} onNavigate={closeMobileNav} />
-          </DialogPrimitive.Content>
-        </DialogPrimitive.Portal>
+        {typeof document !== 'undefined' && createPortal(
+          <>
+            <div
+              aria-hidden="true"
+              className={cn(
+                'fixed inset-0 z-[100] bg-black/45 backdrop-blur-sm lg:hidden transition-opacity duration-200',
+                mobileNavOpen ? 'opacity-100' : 'opacity-0 pointer-events-none',
+              )}
+            />
+            <div
+              id="mobile-navigation-drawer"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Main navigation"
+              className={cn(
+                'fixed inset-y-0 left-0 z-[110] flex w-[min(var(--sidebar-width),min(18rem,92vw))] max-w-full outline-none lg:hidden',
+                'shadow-[0.25rem_0_1.5rem_-0.25rem_rgba(0,0,0,0.28)]',
+                'transition-all duration-200',
+                mobileNavOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none',
+                'scrollbar-hide',
+              )}
+            >
+              <span className="sr-only">Main navigation</span>
+              <span className="sr-only">Primary navigation for the sloughGPT console. Choose a section or close this panel.</span>
+              <Sidebar variant="drawer" onClose={closeMobileNav} onNavigate={closeMobileNav} />
+            </div>
+          </>,
+          document.body,
+        )}
 
         <GlobalErrorHandler />
         <ErrorPanel />
-        <ToastContainer toasts={toasts} onDismiss={dismissToast} onClearAll={clearToasts} />
+        <RadixToastContainer toasts={toasts} onDismiss={dismissToast} onClearAll={clearToasts} />
         <KeyboardShortcutsModal open={showShortcuts} onOpenChange={setShowShortcuts} />
         <DebugOverlay open={showDebug} onOpenChange={setShowDebug} />
         <CommandPalette />
         <WhatsNewDialog open={showWhatsNew} onOpenChange={setShowWhatsNew} />
       </div>
-    </DialogPrimitive.Root>
   )
 }

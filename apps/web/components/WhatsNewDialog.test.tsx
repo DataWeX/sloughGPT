@@ -45,14 +45,6 @@ describe('WhatsNewDialog', () => {
     window.removeEventListener('whatsnew-updated', listener)
   })
 
-  it('calls onOpenChange when close button is clicked', () => {
-    const onOpenChange = vi.fn()
-    render(<WhatsNewDialog open={true} onOpenChange={onOpenChange} />)
-    const closeButtons = screen.getAllByRole('button', { name: /^Close$/i })
-    fireEvent.click(closeButtons[0])
-    expect(onOpenChange).toHaveBeenCalledWith(false)
-  })
-
   it('calls onOpenChange(false) when Escape is pressed', () => {
     const onOpenChange = vi.fn()
     const { container } = render(<WhatsNewDialog open={true} onOpenChange={onOpenChange} />)

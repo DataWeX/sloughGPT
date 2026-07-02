@@ -18,7 +18,7 @@ import {ThemeProvider, useTheme} from './src/theme/ThemeContext';
 import {ErrorBoundary} from './src/components/ErrorBoundary';
 import {LoadingScreen} from './src/components/LoadingScreen';
 import {colors} from './src/theme';
-import type {ColorScheme} from 'react-native';
+
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();

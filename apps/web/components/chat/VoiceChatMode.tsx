@@ -3,6 +3,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { useVoiceChat, VoiceExchange, VoiceSettings } from '@/hooks/useVoiceChat'
 import { VoiceWaveform, VoiceOrb, ListeningIndicator, ListeningBars } from '@/components/chat/VoiceWaveform'
+import { Slider } from '@/components/ui/slider'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { IconX, IconRefresh, IconSettings } from '@/components/ui'
 
 interface VoiceChatModeProps {
@@ -95,14 +97,12 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
               <label className="text-xs font-medium text-muted-foreground">Speech Rate</label>
               <span className="text-xs text-muted-foreground/60">{settings.rate.toFixed(1)}x</span>
             </div>
-            <input
-              type="range"
-              min="0.5"
-              max="2.0"
-              step="0.1"
-              value={settings.rate}
-              onChange={(e) => updateSettings({ rate: parseFloat(e.target.value) })}
-              className="w-full h-1 accent-primary"
+            <Slider
+              value={[settings.rate]}
+              onValueChange={([v]) => updateSettings({ rate: v })}
+              min={0.5}
+              max={2.0}
+              step={0.1}
             />
 
             <div className="flex items-center justify-between">
@@ -111,14 +111,12 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
                 {settings.interruptThreshold < 0.1 ? 'High' : settings.interruptThreshold < 0.2 ? 'Medium' : 'Low'}
               </span>
             </div>
-            <input
-              type="range"
-              min="0.05"
-              max="0.5"
-              step="0.05"
-              value={settings.interruptThreshold}
-              onChange={(e) => updateSettings({ interruptThreshold: parseFloat(e.target.value) })}
-              className="w-full h-1 accent-primary"
+            <Slider
+              value={[settings.interruptThreshold]}
+              onValueChange={([v]) => updateSettings({ interruptThreshold: v })}
+              min={0.05}
+              max={0.5}
+              step={0.05}
             />
 
             <div className="flex items-center justify-between">
@@ -168,16 +166,20 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-medium text-muted-foreground">Voice</label>
                 </div>
-                <select
+                <Select
                   value={settings.voiceName || ''}
-                  onChange={(e) => updateSettings({ voiceName: e.target.value || null })}
-                  className="w-full text-xs bg-background border border-border rounded-md px-2 py-1.5"
+                  onValueChange={(v) => updateSettings({ voiceName: v || null })}
                 >
-                  <option value="">Default</option>
-                  {availableVoices.filter(v => v.lang.startsWith('en')).map(v => (
-                    <option key={v.name} value={v.name}>{v.name} ({v.lang})</option>
-                  ))}
-                </select>
+                  <SelectTrigger className="w-full text-xs">
+                    <SelectValue placeholder="Default" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Default</SelectItem>
+                    {availableVoices.filter(v => v.lang.startsWith('en')).map(v => (
+                      <SelectItem key={v.name} value={v.name}>{v.name} ({v.lang})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </>
             )}
           </div>

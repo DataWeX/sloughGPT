@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 
@@ -40,7 +40,7 @@ class MessageFeedback:
     ) -> Dict[str, Any]:
         """Record feedback for a message."""
         with self._lock:
-            timestamp = datetime.utcnow().isoformat()
+            timestamp = datetime.now(timezone.utc).isoformat()
             feedback_entry: Dict[str, Any] = {
                 "message_id": message_id,
                 "rating": rating,
@@ -86,7 +86,7 @@ class MessageFeedback:
             regen_entry: Dict[str, Any] = {
                 "original_message_id": original_message_id,
                 "new_message_id": new_message_id,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "session_id": session_id,
             }
             self._regenerations[original_message_id] = regen_entry

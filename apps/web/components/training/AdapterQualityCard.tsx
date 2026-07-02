@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { useToastStore } from '@/lib/toast-store'
 import { userAdaptersController } from '@/lib/user-adapters-controller'
 import type { UserAdapterStats } from '@/lib/user-adapters-controller'
@@ -45,19 +46,19 @@ export function AdapterQualityCard() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="rounded-lg border border-border/50 p-3">
               <p className="text-xs text-muted-foreground">Total users</p>
-              <p className="text-lg font-semibold">{adapterStats.total_users}</p>
+              <p className="text-base font-semibold">{adapterStats.total_users}</p>
             </div>
             <div className="rounded-lg border border-border/50 p-3">
               <p className="text-xs text-muted-foreground">Total size</p>
-              <p className="text-lg font-semibold">{adapterStats.total_size_mb.toFixed(1)} MB</p>
+              <p className="text-base font-semibold">{adapterStats.total_size_mb.toFixed(1)} MB</p>
             </div>
             <div className="rounded-lg border border-border/50 p-3">
               <p className="text-xs text-muted-foreground">Avg per user</p>
-              <p className="text-lg font-semibold">{adapterStats.avg_size_per_user_kb.toFixed(0)} KB</p>
+              <p className="text-base font-semibold">{adapterStats.avg_size_per_user_kb.toFixed(0)} KB</p>
             </div>
             <div className="rounded-lg border border-border/50 p-3">
               <p className="text-xs text-muted-foreground">Quality adapters</p>
-              <p className="text-lg font-semibold">{adapterStats.auto_management?.quality_adapters_count ?? 0}</p>
+              <p className="text-base font-semibold">{adapterStats.auto_management?.quality_adapters_count ?? 0}</p>
             </div>
           </div>
         ) : (
@@ -86,10 +87,12 @@ export function AdapterQualityCard() {
               </p>
             )}
             {aggResult.eval.report && (
-              <details className="text-xs">
-                <summary className="cursor-pointer text-muted-foreground hover:text-foreground">View full report</summary>
-                <pre className="mt-1 whitespace-pre-wrap font-mono text-[11px] text-muted-foreground max-h-40 overflow-y-auto rounded bg-muted/50 p-2">{aggResult.eval.report}</pre>
-              </details>
+              <Collapsible className="text-xs">
+                <CollapsibleTrigger className="cursor-pointer text-muted-foreground hover:text-foreground">View full report</CollapsibleTrigger>
+                <CollapsibleContent>
+                  <pre className="mt-1 whitespace-pre-wrap font-mono text-[11px] text-muted-foreground max-h-40 overflow-y-auto rounded bg-muted/50 p-2">{aggResult.eval.report}</pre>
+                </CollapsibleContent>
+              </Collapsible>
             )}
           </div>
         )}

@@ -9,15 +9,21 @@ import { StatCard, KpiGrid } from '@/components/ui/display'
 import { systemController, type DetailedHealth, type SystemMetrics, type SystemInfo, type DiskUsage, type GPUInfo } from '@/lib/system-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { benchmarkController } from '@/lib/benchmark-controller'
-import { visualController } from '@/lib/controllers'
+import { apiGet } from '@/lib/http-client'
 import { useLocale } from '@/hooks/useLocale'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import dynamic from 'next/dynamic'
+
+const SystemChart = dynamic(() => import('@/components/monitoring/SystemChart').then(m => m.SystemChart), {
+  ssr: false,
+  loading: () => <div className="h-40 w-full animate-pulse bg-muted rounded-lg" />,
+})
 import { formatUptime } from '@/lib/chat-utils'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { GpuCard, DiskCard, ServerInfoCard } from '@/components/monitoring/SystemInfoCards'
 import { Skeleton } from '@/components/ui'
 import { apiPost } from '@/lib/http-client'
 import { useErrorStore } from '@/lib/error-store'
+import { activityController, type ActivityStatus } from '@/lib/activity-controller'
 
 export default function SystemHealthPage() {
   const { t } = useLocale()
@@ -39,6 +45,9 @@ export default function SystemHealthPage() {
   const [dpoStatus, setDpoStatus] = useState<{ status: string; last_run: string | null; accepted_count: number; rejected_count: number; result: any } | null>(null)
   const [dpoRunning, setDpoRunning] = useState(false)
   const [visualStatus, setVisualStatus] = useState<{ visual_loaded: boolean; training: { status: string } } | null>(null)
+  const [activityStatus, setActivityStatus] = useState<ActivityStatus | null>(null)
+  const [activityTraining, setActivityTraining] = useState(false)
+  const [activityTrainProgress, setActivityTrainProgress] = useState<string | null>(null)
   const MAX_HISTORY = 30
   const recentErrors = useErrorStore(s => s.errors)
   const dismissError = useErrorStore(s => s.dismissError)
@@ -57,8 +66,9 @@ export default function SystemHealthPage() {
         knowledgeController.getAdapterStatus().catch(() => null),
         benchmarkController.quality().catch(() => null),
         benchmarkController.stats().catch(() => null),
-        visualController.getDPOStatus().catch(() => null),
-        visualController.getVisualStatus().catch(() => null),
+        apiGet('/multimodal/dpo/status').catch(() => null),
+        apiGet('/multimodal/status').catch(() => null),
+        activityController.status().catch(() => null),
       ])
       setDetailed(d)
       setMetrics(m)
@@ -72,7 +82,7 @@ export default function SystemHealthPage() {
         setBenchQuality(null)
       }
       setBenchStats(bs as any)
-      setDpoStatus(dsRes)
+      setDpoStatus(dsRes as typeof dpoStatus)
       setVisualStatus(null)
       setLastUpdated(new Date().toLocaleTimeString())
       if (m) {
@@ -303,7 +313,7 @@ export default function SystemHealthPage() {
                   onClick={async () => {
                     setDpoRunning(true)
                     try {
-                      await apiPost('/visual/dpo', {})
+                      await apiPost('/multimodal/dpo', {})
                       await fetchAll()
                     } catch {}
                     setDpoRunning(false)
@@ -323,16 +333,7 @@ export default function SystemHealthPage() {
             <CardHeader><CardTitle className="text-base">Real‑time Metrics (last {MAX_HISTORY}s)</CardTitle></CardHeader>
             <CardContent>
               <div className="h-48" role="img" aria-label="CPU and memory usage chart over time">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartHistory}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis dataKey="time" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                    <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} width={30} />
-                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 6 }} />
-                    <Line type="monotone" dataKey="cpu" stroke="var(--color-primary)" strokeWidth={1.5} dot={false} name="CPU %" />
-                    <Line type="monotone" dataKey="mem" stroke="var(--color-warning)" strokeWidth={1.5} dot={false} name="Memory %" />
-                  </LineChart>
-                </ResponsiveContainer>
+                <SystemChart data={chartHistory} />
               </div>
             </CardContent>
           </Card>

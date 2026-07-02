@@ -201,7 +201,7 @@ class StartRequest(BaseModel):
 
 
 class TurboStartRequest(BaseModel):
-    method: str = Field(default="transformer", description="Training method: 'transformer', 'nanogpt', 'hf', 'slonet'")
+    method: str = Field(default="slonet", description="Training method: 'slonet', 'transformer', 'nanogpt', 'hf'")
     data_path: str = Field(default="", description="Path to training data file")
     dataset_id: Optional[str] = Field(default=None, description="Dataset ID to train on")
     epochs: int = Field(default=3, ge=1, le=1000)
@@ -210,12 +210,15 @@ class TurboStartRequest(BaseModel):
     vocab_size: int = Field(default=500, ge=50, le=50000)
     n_embed: int = Field(default=128, ge=16, le=1024)
     n_head: int = Field(default=4, ge=1, le=64)
-    n_encoder_layers: int = Field(default=3, ge=1, le=24)
-    n_decoder_layers: int = Field(default=3, ge=1, le=24)
-    dim_feedforward: int = Field(default=256, ge=32, le=8192)
+    n_layer: int = Field(default=3, ge=1, le=24)
+    block_size: int = Field(default=128, ge=8, le=2048)
     dropout: float = Field(default=0.1, ge=0.0, le=0.9)
-    max_src_len: int = Field(default=128, ge=8, le=2048)
-    max_tgt_len: int = Field(default=128, ge=8, le=2048)
+    # Legacy fields (ignored, kept for backward compat)
+    n_encoder_layers: Optional[int] = Field(default=None, description="Deprecated: use n_layer")
+    n_decoder_layers: Optional[int] = Field(default=None, description="Deprecated: use n_layer")
+    dim_feedforward: Optional[int] = Field(default=None, description="Deprecated: ignored")
+    max_src_len: Optional[int] = Field(default=None, description="Deprecated: ignored")
+    max_tgt_len: Optional[int] = Field(default=None, description="Deprecated: use block_size")
 
 
 def _build_soul_prompt(soul_name: str) -> str:
@@ -554,7 +557,7 @@ async def start(req: StartRequest):
 @router.post("/start-turbo")
 async def start_turbo(req: TurboStartRequest):
     """
-    Start training using TurboTrainer (encoder-decoder Transformer via torch shim).
+    Start training using SloughGPTTrainer (decoder-only transformer).
 
     Args:
         req: TurboStartRequest with model architecture and training params
@@ -563,7 +566,7 @@ async def start_turbo(req: TurboStartRequest):
         dict with training result (status, model_path, final_loss, total_steps, epochs)
     """
     try:
-        from domains.training.turbo_trainer import TurboTrainer, TurboConfig
+        from domains.training.train_pipeline import SloughGPTTrainer
 
         data_path = req.data_path
         if not data_path and req.dataset_id:
@@ -580,34 +583,34 @@ async def start_turbo(req: TurboStartRequest):
         if not data_path:
             return {"status": "error", "message": "No data_path or dataset_id provided"}
 
-        config = TurboConfig(
+        # Map legacy fields: n_decoder_layers → n_layer, max_tgt_len → block_size
+        n_layer = req.n_layer or req.n_decoder_layers or 3
+        block_size = req.block_size or req.max_tgt_len or 128
+
+        output_dir = Path(REPO_ROOT / "models" / "turbo-trained")
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        trainer = SloughGPTTrainer(
             data_path=data_path,
             vocab_size=req.vocab_size,
             n_embed=req.n_embed,
+            n_layer=n_layer,
             n_head=req.n_head,
-            n_encoder_layers=req.n_encoder_layers,
-            n_decoder_layers=req.n_decoder_layers,
-            dim_feedforward=req.dim_feedforward,
+            block_size=block_size,
             dropout=req.dropout,
             batch_size=req.batch_size,
             epochs=req.epochs,
-            learning_rate=req.learning_rate,
-            max_src_len=req.max_src_len,
-            max_tgt_len=req.max_tgt_len,
+            lr=req.learning_rate,
+            checkpoint_dir=str(output_dir),
         )
 
-        trainer = TurboTrainer(config)
-        output_dir = Path(REPO_ROOT / "models" / "turbo-trained")
-        config.output_dir = str(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        autotrain_logger.info("Starting TurboTrainer with method=%s data=%s", req.method, data_path)
+        autotrain_logger.info("Starting SloughGPTTrainer with method=%s data=%s", req.method, data_path)
         result = trainer.train()
-        autotrain_logger.info("TurboTrainer result: %s", result)
+        autotrain_logger.info("SloughGPTTrainer result: %s", result)
 
         return result
     except Exception as e:
-        autotrain_logger.error("TurboTrainer failed: %s", e)
+        autotrain_logger.error("SloughGPTTrainer failed: %s", e)
         return {"status": "error", "message": str(e)}
 
 

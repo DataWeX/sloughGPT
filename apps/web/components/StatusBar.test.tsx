@@ -28,10 +28,17 @@ vi.mock('@/components/WhatsNewDialog', () => ({
 }))
 
 const mockHealthSummary = { score: 85, summary: 'Healthy', tokens_per_sec: 15, model_loaded: true, model_type: 'gpt2', soul: 'friendly', uptime_seconds: 100, request_count: 50, error_count: 0, cpu_percent: 30, memory_percent: 40 }
-let storeSummary: typeof mockHealthSummary | null = mockHealthSummary
+
+const { useApiMonitor: _useApiMonitor, setHealthSummaryData } = vi.hoisted(() => {
+  let hc: typeof mockHealthSummary | null = null
+  return {
+    useApiMonitor: (selector: (s: any) => any) => selector({ healthSummary: hc }),
+    setHealthSummaryData: (v: typeof mockHealthSummary | null) => { hc = v },
+  }
+})
 
 vi.mock('@/lib/api-monitor-store', () => ({
-  useApiMonitor: (selector: (s: any) => any) => selector({ healthSummary: storeSummary }),
+  useApiMonitor: _useApiMonitor,
 }))
 
 import { StatusBar } from './StatusBar'
@@ -39,7 +46,7 @@ import { StatusBar } from './StatusBar'
 describe('StatusBar', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    storeSummary = mockHealthSummary
+    setHealthSummaryData(null)
     mockGetUnseenCount.mockReturnValue(0)
     mockHealthState.mockReturnValue({ model_loaded: true, model_type: 'gpt2', inference_count: 42 })
     mockGetCurrent.mockResolvedValue({ name: 'friendly', description: 'Friendly soul' })
@@ -60,13 +67,14 @@ describe('StatusBar', () => {
   })
 
   it('renders tokens per second from summary', async () => {
+    setHealthSummaryData(mockHealthSummary)
     render(<StatusBar />)
     const tps = await screen.findAllByText('15 t/s')
     expect(tps.length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders inference count when summary has no tps', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ score: 85, tokens_per_sec: 0 }) })
+    setHealthSummaryData({ ...mockHealthSummary, tokens_per_sec: 0 })
     render(<StatusBar />)
     const count = await screen.findAllByText('42 responses')
     expect(count.length).toBeGreaterThanOrEqual(1)

@@ -288,6 +288,133 @@ class TestParallelExecution:
         assert ctx == ""
 
 
+# ── Async method tests ────────────────────────────────────────────────
+
+
+class TestAsyncMethods:
+    """Tests for async versions of orchestrator methods."""
+
+    @pytest.mark.asyncio
+    async def test_async_generate_returns_text(self):
+        orch = MultiAgentOrchestrator()
+
+        async def mock_gen(prompt, max_tokens=200):
+            return {"text": "async result"}
+        orch._cmds.generate_async = mock_gen
+        result = await orch._async_generate("test prompt")
+        assert result == "async result"
+
+    @pytest.mark.asyncio
+    async def test_async_generate_handles_error(self):
+        orch = MultiAgentOrchestrator()
+
+        async def mock_gen(prompt, max_tokens=200):
+            return {"error": "timeout"}
+        orch._cmds.generate_async = mock_gen
+        result = await orch._async_generate("test")
+        assert "LLM error" in result
+
+    @pytest.mark.asyncio
+    async def test_async_plan_fallback_when_junk(self):
+        orch = MultiAgentOrchestrator()
+
+        async def mock_gen(prompt, max_tokens=200):
+            return "garbage"
+        orch._async_generate = mock_gen
+        tasks = await orch._async_plan("some goal", "")
+        assert len(tasks) == 2  # falls back to simple plan
+
+    @pytest.mark.asyncio
+    async def test_async_plan_from_json(self):
+        orch = MultiAgentOrchestrator()
+
+        async def mock_gen(prompt, max_tokens=200):
+            return '[{"id": "1", "description": "research", "agent": "researcher"},' \
+                   '{"id": "2", "description": "write", "agent": "writer"}]'
+        orch._async_generate = mock_gen
+        tasks = await orch._async_plan("test goal", "")
+        assert len(tasks) == 2
+        assert tasks[0].assigned_agent == "researcher"
+
+    @pytest.mark.asyncio
+    async def test_async_run_agent_returns_text(self):
+        orch = MultiAgentOrchestrator()
+
+        async def mock_gen(prompt, max_tokens=300):
+            return "async research done"
+        orch._async_generate = mock_gen
+        task = AgentTask(id="1", description="research", assigned_agent="researcher")
+        result = await orch._async_run_agent(task, "goal", "")
+        assert result == "async research done"
+
+    @pytest.mark.asyncio
+    async def test_async_run_agent_unknown_agent(self):
+        orch = MultiAgentOrchestrator()
+        task = AgentTask(id="1", description="x", assigned_agent="ghost")
+        result = await orch._async_run_agent(task, "goal", "")
+        assert "No agent" in result
+
+    @pytest.mark.asyncio
+    async def test_async_compose_no_completed(self):
+        orch = MultiAgentOrchestrator()
+        tasks = [AgentTask(id="1", description="fail", assigned_agent="researcher")]
+        result = await orch._async_compose("goal", tasks)
+        assert "All agents failed" in result
+
+    @pytest.mark.asyncio
+    async def test_async_compose_with_completed(self):
+        orch = MultiAgentOrchestrator()
+
+        async def mock_gen(prompt, max_tokens=400):
+            return "synthesized result"
+        orch._async_generate = mock_gen
+        task = AgentTask(id="1", description="research", assigned_agent="researcher")
+        task.status = TaskStatus.COMPLETED
+        task.result = "data"
+        result = await orch._async_compose("goal", [task])
+        assert result == "synthesized result"
+
+    @pytest.mark.asyncio
+    async def test_async_execute_returns_tasks(self):
+        orch = MultiAgentOrchestrator()
+
+        async def mock_gen(prompt, max_tokens=200):
+            return '[{"id": "1", "description": "research", "agent": "researcher"}]'
+        orch._async_generate = mock_gen
+
+        async def mock_run(task, goal, ctx):
+            return "async results"
+        orch._async_run_agent = mock_run
+
+        async def mock_comp(goal, tasks):
+            return "final async response"
+        orch._async_compose = mock_comp
+
+        result = await orch.async_execute("test")
+        assert "response" in result
+        assert "tasks" in result
+        assert result["response"] == "final async response"
+
+    @pytest.mark.asyncio
+    async def test_async_execute_failed_task(self):
+        orch = MultiAgentOrchestrator()
+
+        async def mock_gen(prompt, max_tokens=200):
+            return '[{"id": "1", "description": "research", "agent": "researcher"}]'
+        orch._async_generate = mock_gen
+
+        async def failing_run(task, goal, ctx):
+            raise RuntimeError("API down")
+        orch._async_run_agent = failing_run
+
+        async def mock_comp(goal, tasks):
+            return "fallback"
+        orch._async_compose = mock_comp
+
+        result = await orch.async_execute("test")
+        assert result["tasks"][0]["status"] == "failed"
+
+
 # ── Singleton tests ───────────────────────────────────────────────────
 
 

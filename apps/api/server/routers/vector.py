@@ -1,6 +1,7 @@
 """
 Vector Store Router - Embedding/vector operations
 """
+import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
@@ -59,6 +60,15 @@ async def init_vector_store(config: VectorStoreConfig):
         except Exception:
             pass
         return {"status": "connected", "provider": _vector_store_type}
+    except ImportError:
+        _vector_store_type = "in_memory"
+        _vector_store = await create_vector_store(provider="in_memory", dimension=384)
+        try:
+            from routers.inference import set_vector_store_ref
+            set_vector_store_ref(_vector_store)
+        except Exception:
+            pass
+        return {"status": "connected", "provider": "in_memory", "note": "chromadb not installed, using in-memory store"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -83,7 +93,7 @@ async def upsert_vectors(request: UpsertRequest):
         entry = VectorEntry(
             id=request.ids[i] if request.ids else None,
             text=text,
-            embedding=embedding,
+            vector=embedding,
             metadata=request.metadata[i] if request.metadata else {}
         )
         entries.append(entry)

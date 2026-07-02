@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Tabs } from '@/components/ui/form'
+import { Tabs } from '@/components/ui/tabs'
 import { IconUpload, IconTrash, IconSend, IconDownload, IconX, IconRefresh } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { Skeleton } from '@/components/ui/display'

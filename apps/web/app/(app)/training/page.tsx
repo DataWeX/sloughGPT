@@ -6,6 +6,7 @@ import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatCard, KpiGrid } from '@/components/strui'
+import { Tabs } from '@/components/ui/tabs'
 import { useToastStore } from '@/lib/toast-store'
 import { datasetController } from '@/lib/controllers'
 import { useTrainingForm } from '@/hooks/useTrainingForm'
@@ -24,6 +25,7 @@ import { TrainingFormCard } from '@/components/training/TrainingFormCard'
 import { TurboTrainCard } from '@/components/training/TurboTrainCard'
 import { FeedbackTrainCard } from '@/components/training/FeedbackTrainCard'
 import { DpoCard } from '@/components/training/DpoCard'
+import { DistillCard } from '@/components/training/DistillCard'
 
 export default function TrainingPage() {
   const searchParams = useSearchParams()
@@ -35,6 +37,8 @@ export default function TrainingPage() {
   const test = useTestDialog()
 
   const form = useTrainingForm(datasets, session, checkpoints, addToast)
+
+  const [activeTab, setActiveTab] = useState('train')
 
   // ===== Visibility-based polling pause =====
   const visibilityRef = useRef<boolean>(true)
@@ -101,6 +105,12 @@ export default function TrainingPage() {
   const runningJob = form.allJobs.find(j => j.status === 'running')
   const completedCount = form.allJobs.filter(j => j.status === 'completed').length
 
+  const TABS = [
+    { value: 'train', label: 'Train' },
+    { value: 'methods', label: 'Methods' },
+    { value: 'results', label: 'Results', count: checkpoints.checkpoints.length || undefined },
+  ]
+
   return (
     <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader
@@ -122,50 +132,67 @@ export default function TrainingPage() {
           <StatCard label="Saved versions" value={checkpoints.checkpoints.length} />
         </KpiGrid>
 
-        <QuickTrainCard datasets={datasets} checkpoints={checkpoints} />
+        {/* Tabs */}
+        <Tabs value={activeTab} onChange={setActiveTab} tabs={TABS} />
 
-        <TrainingFormCard
-          form={form}
-          datasets={datasets}
-          session={session}
-          checkpoints={checkpoints}
-          onTest={() => test.setTestDialogOpen(true)}
-        />
+        {/* Tab: Train */}
+        {activeTab === 'train' && (
+          <div className="space-y-4">
+            <QuickTrainCard datasets={datasets} checkpoints={checkpoints} />
 
-        <TurboTrainCard datasets={datasets} session={session} />
-        <VisualCheckpointsCard />
+            <TrainingFormCard
+              form={form}
+              datasets={datasets}
+              session={session}
+              checkpoints={checkpoints}
+              onTest={() => test.setTestDialogOpen(true)}
+            />
 
-        <FeedbackTrainCard onComplete={() => { checkpoints.fetchCheckpoints(); checkpoints.fetchJobs() }} />
-        <DpoCard />
+            {!session.trainingRunning && !checkpoints.loadingCheckpoints && checkpoints.checkpoints.length === 0 && form.allJobs.length === 0 && (
+              <Card className="border-dashed py-8">
+                <CardContent className="text-center space-y-3">
+                  <p className="text-sm text-muted-foreground">No training activity yet.</p>
+                  <div className="text-xs text-muted-foreground/70 space-y-1.5 max-w-sm mx-auto text-left">
+                    <p>Pick a dataset above and click <span className="font-medium text-foreground">Start training</span></p>
+                    <p>Use <span className="font-medium text-foreground">Paste text</span> to train on your own content</p>
+                    <p>Conversation-format data (JSONL) trains better than plain text</p>
+                    <p>Small datasets (5-10 samples) work for personality fine-tuning</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
 
-        {/* Webhooks */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Webhooks</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <WebhookManager />
-          </CardContent>
-        </Card>
+        {/* Tab: Methods */}
+        {activeTab === 'methods' && (
+          <div className="space-y-4">
+            <DistillCard datasets={datasets} onComplete={() => { checkpoints.fetchCheckpoints(); checkpoints.fetchBuilds() }} />
+            <TurboTrainCard datasets={datasets} session={session} />
+            <FeedbackTrainCard onComplete={() => { checkpoints.fetchCheckpoints(); checkpoints.fetchJobs() }} />
+            <DpoCard />
+            <VisualCheckpointsCard />
+          </div>
+        )}
 
-        <CheckpointsCard checkpoints={checkpoints} loadingTimedOut={loadingTimedOut} onRetry={() => { setLoadingTimedOut(false); void checkpoints.fetchCheckpoints() }} onContinue={form.startTraining} onTest={() => test.setTestDialogOpen(true)} />
+        {/* Tab: Results */}
+        {activeTab === 'results' && (
+          <div className="space-y-4">
+            <CheckpointsCard checkpoints={checkpoints} loadingTimedOut={loadingTimedOut} onRetry={() => { setLoadingTimedOut(false); void checkpoints.fetchCheckpoints() }} onContinue={form.startTraining} onTest={() => test.setTestDialogOpen(true)} />
 
-        <BuildsCard checkpoints={checkpoints} loadingTimedOut={loadingTimedOut} onRetry={() => { setLoadingTimedOut(false); void checkpoints.fetchBuilds() }} />
+            <BuildsCard checkpoints={checkpoints} loadingTimedOut={loadingTimedOut} onRetry={() => { setLoadingTimedOut(false); void checkpoints.fetchBuilds() }} />
 
-        <JobHistoryCard allJobs={form.allJobs} checkpoints={checkpoints} loadingTimedOut={loadingTimedOut} onRetry={() => { setLoadingTimedOut(false); void checkpoints.fetchJobs() }} />
+            <JobHistoryCard allJobs={form.allJobs} checkpoints={checkpoints} loadingTimedOut={loadingTimedOut} onRetry={() => { setLoadingTimedOut(false); void checkpoints.fetchJobs() }} />
 
-        {!session.trainingRunning && !checkpoints.loadingCheckpoints && checkpoints.checkpoints.length === 0 && form.allJobs.length === 0 && (
-          <Card className="border-dashed py-8">
-            <CardContent className="text-center space-y-3">
-              <p className="text-sm text-muted-foreground">No training activity yet.</p>
-              <div className="text-xs text-muted-foreground/70 space-y-1.5 max-w-sm mx-auto text-left">
-                <p>• Pick a dataset above and click <span className="font-medium text-foreground">Start training</span></p>
-                <p>• Use <span className="font-medium text-foreground">Paste text</span> to train on your own content</p>
-                <p>• Conversation-format data (JSONL) trains better than plain text</p>
-                <p>• Small datasets (5-10 samples) work for personality fine-tuning</p>
-              </div>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Webhooks</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <WebhookManager />
+              </CardContent>
+            </Card>
+          </div>
         )}
       </div>
 

@@ -295,6 +295,8 @@ async def train_stream(body: TrainRequest = TrainRequest()):
         yield f"data: {json.dumps({'status': 'complete', 'epochs': body.epochs, 'val_accuracy': final_acc, 'num_samples': len(X_lab)})}\n\n"
 
     return StreamingResponse(_generate(), media_type="text/event-stream")
+
+@router.post("/predict")
 async def predict(body: PredictRequest):
     """Classify a sensor window.
 

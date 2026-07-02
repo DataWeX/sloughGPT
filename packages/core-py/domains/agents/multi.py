@@ -17,6 +17,7 @@ Usage:
     print(result["response"])
 """
 
+import asyncio
 import json
 import re
 import time
@@ -197,6 +198,46 @@ class MultiAgentOrchestrator:
         final = self._compose(goal, tasks)
         return {"response": final, "tasks": [t.to_dict() for t in tasks]}
 
+    async def async_execute(self, goal: str, context: str = "") -> Dict[str, Any]:
+        """Async version of execute — uses asyncio.gather instead of ThreadPoolExecutor.
+
+        Non-blocking during inference calls via httpx.AsyncClient.
+        Tasks within a dependency level run concurrently via asyncio.gather.
+        """
+        tasks = await self._async_plan(goal, context)
+        if not tasks:
+            return {"response": "Could not plan this goal.", "tasks": []}
+
+        task_map = {t.id: t for t in tasks}
+        levels = self._compute_levels(tasks)
+        results_ctx: Dict[str, str] = {}
+
+        for level_idx, task_ids in enumerate(levels):
+            logger.info(
+                "Executing level %d (%d tasks in parallel via asyncio)",
+                level_idx, len(task_ids),
+            )
+
+            async def run_task(tid: str) -> None:
+                task = task_map[tid]
+                task.status = TaskStatus.IN_PROGRESS
+                dep_context = self._build_dep_context(task, task_map, results_ctx)
+                try:
+                    result = await self._async_run_agent(task, goal, dep_context)
+                    task.result = result
+                    task.status = TaskStatus.COMPLETED
+                    results_ctx[tid] = result
+                except Exception as e:
+                    error = str(e)
+                    task.error = error
+                    task.status = TaskStatus.FAILED
+                    results_ctx[tid] = f"[error: {error}]"
+
+            await asyncio.gather(*[run_task(tid) for tid in task_ids], return_exceptions=True)
+
+        final = await self._async_compose(goal, tasks)
+        return {"response": final, "tasks": [t.to_dict() for t in tasks]}
+
     def _plan(self, goal: str, context: str) -> List[AgentTask]:
         """Use LLM to plan subtasks with dependency info."""
         agent_names = ", ".join(self.agents.keys())
@@ -333,13 +374,109 @@ class MultiAgentOrchestrator:
         return summary.strip()
 
     def _generate(self, prompt: str, max_tokens: int = 200) -> str:
-        """Generate text via inference API."""
+        """Generate text via inference API (sync)."""
         result = self._cmds.generate(prompt, max_tokens=max_tokens)
         if isinstance(result, dict) and "text" in result:
             return result["text"]
         if isinstance(result, dict) and "error" in result:
             return f"[LLM error: {result['error']}]"
         return str(result)
+
+    async def _async_generate(self, prompt: str, max_tokens: int = 200) -> str:
+        """Generate text via inference API (async — non-blocking)."""
+        result = await self._cmds.generate_async(prompt, max_tokens=max_tokens)
+        if isinstance(result, dict) and "text" in result:
+            return result["text"]
+        if isinstance(result, dict) and "error" in result:
+            return f"[LLM error: {result['error']}]"
+        return str(result)
+
+    async def _async_plan(self, goal: str, context: str) -> List[AgentTask]:
+        """Async plan subtasks — same as _plan but non-blocking."""
+        agent_names = ", ".join(self.agents.keys())
+        prompt = (
+            f"Goal: {goal}\n"
+            f"Available agents: {agent_names}\n"
+            f"Break this goal into 1-4 subtasks. "
+            f"Tasks that can run in parallel go in the same level "
+            f"(depends_on is empty for independent tasks). "
+            f"Tasks that depend on earlier results set depends_on.\n"
+            f"Format: JSON array of "
+            f"{{'id': str, 'description': str, 'agent': str, "
+            f"'depends_on': list[str]}}\n"
+            f"Return ONLY the JSON, no other text."
+        )
+        resp = await self._async_generate(prompt)
+
+        try:
+            plan = json.loads(resp)
+            if not isinstance(plan, list):
+                plan = [plan]
+        except (json.JSONDecodeError, TypeError):
+            match = re.search(r"\[.*?\]", resp, re.DOTALL)
+            if match:
+                try:
+                    plan = json.loads(match.group())
+                except json.JSONDecodeError:
+                    return self._simple_plan(goal)
+            else:
+                return self._simple_plan(goal)
+
+        tasks = []
+        for i, item in enumerate(plan):
+            agent_name = item.get("agent", "researcher")
+            if agent_name not in self.agents:
+                agent_name = "researcher"
+            deps = item.get("depends_on") or []
+            if isinstance(deps, str):
+                deps = [deps]
+            tasks.append(AgentTask(
+                id=item.get("id", str(i + 1)),
+                description=item.get("description", item.get("task", f"Step {i + 1}")),
+                assigned_agent=agent_name,
+                depends_on=[d for d in deps if d],
+            ))
+        return tasks or self._simple_plan(goal)
+
+    async def _async_run_agent(self, task: AgentTask, goal: str, dep_context: str) -> str:
+        """Async run a single agent — same as _run_agent but non-blocking."""
+        agent = self.agents.get(task.assigned_agent)
+        if not agent:
+            return f"[No agent '{task.assigned_agent}' available]"
+
+        prev = f"Dependency context:\n{dep_context}" if dep_context else ""
+        prompt = (
+            f"{agent.system_prompt}\n\n"
+            f"Goal: {goal}\n"
+            f"Your task: {task.description}\n"
+            f"{prev}\n"
+            f"Output your work below:"
+        )
+        result = await self._async_generate(prompt, max_tokens=300)
+        return result.strip()
+
+    async def _async_compose(self, goal: str, tasks: List[AgentTask]) -> str:
+        """Async compose final output — same as _compose but non-blocking."""
+        completed = [t for t in tasks if t.status == TaskStatus.COMPLETED]
+        if not completed:
+            return "All agents failed."
+
+        lines = [f"# Result: {goal}", ""]
+        for t in completed:
+            agent = self.agents.get(t.assigned_agent)
+            name = agent.name if agent else t.assigned_agent
+            lines.append(f"## {name}: {t.description}")
+            lines.append(t.result)
+            lines.append("")
+
+        summary_prompt = (
+            f"Synthesize the following agent outputs into a cohesive response "
+            f"for the user's goal: {goal}\n\n"
+            + "\n".join(lines)
+            + "\n\nFinal response:"
+        )
+        summary = await self._async_generate(summary_prompt, max_tokens=400)
+        return summary.strip()
 
 
 # ── Singleton ─────────────────────────────────────────────────────────

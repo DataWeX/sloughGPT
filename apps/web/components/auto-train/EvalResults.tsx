@@ -1,5 +1,7 @@
 'use client'
 
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
+
 interface EvalData {
   baseline: Record<string, number | string>
   with_adapter: Record<string, number | string>
@@ -95,10 +97,12 @@ function EvalResults({ data }: EvalResultsProps) {
         />
       </div>
       {data.report && (
-        <details className="text-xs text-muted-foreground border border-border rounded p-2">
-          <summary className="cursor-pointer font-medium">View Report</summary>
-          <pre className="mt-2 whitespace-pre-wrap font-mono text-xs">{data.report}</pre>
-        </details>
+        <Collapsible className="text-xs text-muted-foreground border border-border rounded p-2">
+          <CollapsibleTrigger className="cursor-pointer font-medium">View Report</CollapsibleTrigger>
+          <CollapsibleContent>
+            <pre className="mt-2 whitespace-pre-wrap font-mono text-xs">{data.report}</pre>
+          </CollapsibleContent>
+        </Collapsible>
       )}
     </div>
   )

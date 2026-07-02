@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { trainingJobsController } from '@/lib/training-controller'
 import { useToastStore } from '@/lib/toast-store'
 
@@ -44,17 +45,16 @@ export function ExportDropdown({ jobId, checkpoint }: ExportDropdownProps) {
 
   return (
     <div className="flex gap-2 items-center">
-      <select
-        value={format}
-        onChange={(e) => setFormat(e.target.value)}
-        className="sl-input py-1 px-2 text-xs h-8"
-      >
-        {formats.map((f) => (
-          <option key={f.id} value={f.id}>
-            {f.name}
-          </option>
-        ))}
-      </select>
+      <Select value={format} onValueChange={setFormat}>
+        <SelectTrigger className="text-xs h-8">
+          <SelectValue placeholder="Select format..." />
+        </SelectTrigger>
+        <SelectContent>
+          {formats.map((f) => (
+            <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       <Button
         size="sm"
         variant="outline"

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useCallback } from 'react'
+import { Slider } from '@/components/ui/slider'
 import { deriveArchetype } from './PersonalitySummary'
 
 interface TraitEditorProps {
@@ -70,13 +71,13 @@ export default function TraitEditor({ traitWeights, onSave, onReset }: TraitEdit
                       <span className="text-[10px] text-muted-foreground w-20 truncate shrink-0">
                         {formatTraitName(name)}
                       </span>
-                      <input
-                        type="range"
+                      <Slider
+                        value={[pct]}
+                        onValueChange={([v]) => handleChange(group.key, name, v)}
                         min={0}
                         max={100}
-                        value={pct}
-                        onChange={e => handleChange(group.key, name, Number(e.target.value))}
-                        className="flex-1 h-1.5 rounded-full appearance-none bg-muted-foreground/10 accent-current cursor-pointer"
+                        step={1}
+                        className="flex-1"
                         aria-label={`${formatTraitName(name)}: ${pct}`}
                       />
                       <span className="text-[10px] font-mono tabular-nums w-6 text-right" style={{ color: group.color }}>

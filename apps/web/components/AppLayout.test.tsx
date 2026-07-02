@@ -22,7 +22,7 @@ vi.mock('@/components/Sidebar', () => ({
 vi.mock('@/components/StatusBar', () => ({ StatusBar: () => <div data-testid="status-bar" /> }))
 vi.mock('@/components/GlobalErrorHandler', () => ({ GlobalErrorHandler: () => <div data-testid="error-handler" /> }))
 vi.mock('@/components/ui/error-panel', () => ({ ErrorPanel: () => <div data-testid="error-panel" /> }))
-vi.mock('@/components/chat/Toast', () => ({ ToastContainer: () => <div data-testid="toast-container" /> }))
+vi.mock('@/components/chat/Toast', () => ({ ToastContainer: () => <div data-testid="toast-container" />, RadixToastContainer: () => <div data-testid="toast-container" /> }))
 vi.mock('@/components/CommandPalette', () => ({ CommandPalette: () => <div data-testid="command-palette" /> }))
 vi.mock('@/components/KeyboardShortcutsModal', () => ({ KeyboardShortcutsModal: ({ open }: any) => open ? <div data-testid="shortcuts-modal" /> : null }))
 vi.mock('@/components/DebugOverlay', () => ({ DebugOverlay: ({ open }: any) => open ? <div data-testid="debug-overlay" /> : null }))
@@ -64,9 +64,9 @@ describe('AppLayout', () => {
 
   it('renders desktop sidebar', () => {
     render(<AppLayout><div /></AppLayout>)
-    const sidebar = screen.getByTestId('sidebar')
-    expect(sidebar).toBeDefined()
-    expect(sidebar.getAttribute('data-variant')).toBe('desktop')
+    const sidebars = screen.getAllByTestId('sidebar')
+    const desktop = sidebars.find(s => s.getAttribute('data-variant') === 'desktop')
+    expect(desktop).toBeDefined()
   })
 
   it('renders status bar', () => {

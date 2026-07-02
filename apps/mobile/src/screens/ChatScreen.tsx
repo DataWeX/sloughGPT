@@ -642,4 +642,32 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     padding: spacing.xxxl,
   },
+  activeSoul: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.primary + '08',
+  },
+  activeSoulLabel: {
+    ...typography.small,
+    color: colors.primary,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  activeSoulName: {
+    ...typography.h3,
+    color: colors.text,
+  },
+  activeSoulDesc: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  traitRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 4,
+  },
 });
