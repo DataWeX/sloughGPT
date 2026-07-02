@@ -16,7 +16,7 @@ vi.mock('@/components/ui/button', () => ({
   ),
 }))
 
-vi.mock('@/components/ui/form', () => ({
+vi.mock('@/components/ui/tabs', () => ({
   Tabs: ({ value, onChange, tabs: tabDefs, children }: any) => (
     <div data-testid="tabs" data-current={value}>
       {tabDefs.map((t: any) => (
@@ -51,6 +51,8 @@ vi.mock('@/lib/multimodal-controller', () => ({
     trainImage: vi.fn(),
     generateImage: vi.fn(),
     transcribeAudio: vi.fn(),
+    getCapabilities: vi.fn().mockResolvedValue({ speech_to_text: true, image_captioning: true }),
+    resetModel: vi.fn(),
   },
 }))
 

@@ -3,7 +3,11 @@ import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('@/lib/multimodal-controller', () => ({
-  multimodalController: { transcribeAudio: vi.fn() },
+  multimodalController: {
+    transcribeAudio: vi.fn(),
+    getCapabilities: vi.fn().mockResolvedValue({ speech_to_text: true }),
+    resetModel: vi.fn(),
+  },
 }))
 
 import { ChatInputAccessories } from './ChatInputAccessories'
