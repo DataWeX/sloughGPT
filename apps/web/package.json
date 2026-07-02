@@ -46,7 +46,7 @@
     "recharts": "^2.5.0",
     "tailwind-merge": "^3.5.0",
     "tailwindcss-animate": "^1.0.7",
-    "zustand": "^4.3.0"
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@next/bundle-analyzer": "^16.2.9",
