@@ -136,3 +136,132 @@ def test_get_context():
     body = resp.json()
     assert body["count"] >= 1
     assert "[KNOWN_FACTS]" in body["context"]
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Tests for practical knowledge operations endpoints
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def test_search_files():
+    client = get_test_client()
+    resp = client.post("/knowledge/search-files", json={
+        "query": "def function",
+        "path": "routers",
+        "top_k": 3,
+        "extensions": ["py"],
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "results" in body
+    assert "indexed_files" in body
+    assert isinstance(body["results"], list)
+
+
+def test_check_duplicate_unique():
+    client = get_test_client()
+    _cleanup(client)
+    resp = client.post("/knowledge/check-duplicate", json={
+        "content": "Completely unique content that does not exist anywhere",
+        "threshold": 0.85,
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["is_duplicate"] is False
+    assert body["score"] < 0.85
+
+
+def test_check_duplicate_after_add():
+    client = get_test_client()
+    _cleanup(client)
+
+    client.post("/knowledge", json={"content": "Python is a programming language", "topic": "code"})
+
+    resp = client.post("/knowledge/check-duplicate", json={
+        "content": "Python is a programming language",
+        "threshold": 0.85,
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["is_duplicate"] is True
+    assert body["score"] >= 0.85
+
+
+def test_categorize():
+    client = get_test_client()
+    _cleanup(client)
+    resp = client.post("/knowledge/categorize", json={
+        "content": "The neural network was trained on MNIST using gradient descent",
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "topic" in body
+    assert "suggestions" in body
+    assert isinstance(body["suggestions"], list)
+
+
+def test_knowledge_gaps_empty():
+    client = get_test_client()
+    _cleanup(client)
+    resp = client.get("/knowledge/gaps")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "gaps" in body
+    assert body["total_facts"] == 0
+
+
+def test_bulk_ingest():
+    client = get_test_client()
+    _cleanup(client)
+    resp = client.post("/knowledge/bulk-ingest", json={
+        "items": ["Fact alpha", "Fact beta", "Fact gamma"],
+        "topic": "test_bulk",
+        "source": "test",
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["added"] == 3
+    assert body["skipped"] == 0
+    assert body["errors"] == 0
+
+
+def test_bulk_ingest_dedup():
+    client = get_test_client()
+    _cleanup(client)
+
+    # Add first batch
+    client.post("/knowledge/bulk-ingest", json={
+        "items": ["Unique fact one", "Unique fact two"],
+        "topic": "test",
+    })
+
+    # Second batch with duplicates
+    resp = client.post("/knowledge/bulk-ingest", json={
+        "items": ["Unique fact one", "Brand new fact"],
+        "topic": "test",
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["added"] == 1  # Only "Brand new fact"
+    assert body["skipped"] == 1  # "Unique fact one" is a dup
+
+
+def test_add_returns_duplicate_status():
+    client = get_test_client()
+    _cleanup(client)
+
+    # Add a fact
+    resp1 = client.post("/knowledge", json={
+        "content": "Machine learning is a subset of AI",
+        "topic": "ml",
+    })
+    assert resp1.json()["status"] == "stored"
+
+    # Add the same fact again
+    resp2 = client.post("/knowledge", json={
+        "content": "Machine learning is a subset of AI",
+        "topic": "ml",
+    })
+    body = resp2.json()
+    assert body["status"] == "duplicate"
+    assert body["duplicate_score"] >= 0.85
