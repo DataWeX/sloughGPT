@@ -1,0 +1,40 @@
+/**
+ * Storybook canvas chrome — complements strui tokens in globals.css.
+ * Pastel lattice: soft mesh + crisp borders (no border-radius).
+ */
+
+.sb-strui-root {
+  min-height: 100vh;
+  width: 100%;
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  color: var(--foreground);
+  background-color: var(--background);
+  background-image:
+    radial-gradient(ellipse 120% 80% at 100% -20%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 52%),
+    radial-gradient(ellipse 90% 60% at 0% 100%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 48%),
+    linear-gradient(180deg, var(--background) 0%, color-mix(in srgb, var(--muted) 35%, var(--background)) 100%);
+  background-attachment: fixed;
+}
+
+html.dark .sb-strui-root {
+  background-image:
+    radial-gradient(ellipse 120% 80% at 100% -20%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 55%),
+    radial-gradient(ellipse 90% 60% at 0% 100%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 50%),
+    linear-gradient(180deg, var(--background) 0%, color-mix(in srgb, var(--card) 40%, var(--background)) 100%);
+}
+
+/* Fullscreen gallery stories: edge-to-edge lattice */
+.sb-strui-root--fullscreen {
+  padding: 0;
+}
+
+.sb-strui-root:not(.sb-strui-root--fullscreen) {
+  box-sizing: border-box;
+  padding: 1.5rem 1.25rem 2.5rem;
+}
+
+@media (min-width: 640px) {
+  .sb-strui-root:not(.sb-strui-root--fullscreen) {
+    padding: 2rem 2rem 3rem;
+  }
+}

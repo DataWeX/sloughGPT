@@ -3,12 +3,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { StatCard, KpiGrid } from '@/components/ui/display'
 import { systemController, type DetailedHealth, type SystemMetrics, type SystemInfo, type DiskUsage, type GPUInfo } from '@/lib/system-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { benchmarkController } from '@/lib/benchmark-controller'
 import { multimodalController } from '@/lib/controllers'
-import { useLocale } from '@/hooks/useLocale'
 import dynamic from 'next/dynamic'
 
 const SystemChart = dynamic(() => import('@/components/monitoring/SystemChart').then(m => m.SystemChart), {
@@ -24,7 +24,6 @@ import { useErrorStore } from '@/lib/error-store'
 import { activityController, type ActivityStatus } from '@/lib/activity-controller'
 
 export default function SystemHealthPage() {
-  const { t } = useLocale()
   const [detailed, setDetailed] = useState<DetailedHealth | null>(null)
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null)
   const [info, setInfo] = useState<SystemInfo | null>(null)

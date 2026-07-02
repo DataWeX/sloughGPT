@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/display'
 import { Badge } from '@/components/ui/badge'
-import { StatCard, KpiGrid } from '@/components/strui'
+import { StatCard, KpiGrid } from '@/components/ui'
 import dynamic from 'next/dynamic'
 import type { LossPoint, RewardPoint } from '@/components/training/LossChart'
 

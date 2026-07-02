@@ -15,103 +15,67 @@ setupApiMocks()
 
 import { multimodalController } from './multimodal-controller'
 
+const unifiedResponse = {
+  engine: { speech_to_text: true, image_caption: true, speech_model: 'whisper', vision_model: 'soulnet', status: 'trained' },
+  learning: { images_learned: 12, trained: true, vocab_size: 256, replay_buffer_size: 200, learning_method: 'contrastive + self-training', caption_history: ['a cat', 'a dog'], unique_captions: 2, diversity_ratio: 1.0, accuracy_history: [0.5, 0.9], mean_accuracy: 0.7, last_accuracy: 0.9 },
+  batch: { running: true, job_id: 'batch_20260101_120000', total: 20, completed: 10, errors: 1, progress_pct: 50, current_caption: 'a landscape', current_image: 'img_001.jpg', started_at: '2026-01-01T12:00:00', finished_at: null },
+  dpo: { status: 'idle', last_run: null, result: null, accepted_count: 0, rejected_count: 0 },
+  video: { status: 'idle', job_id: null, current_epoch: 0, current_step: 0, total_steps: 0, current_loss: null, result: null, error: null },
+}
+
 describe('multimodalController.getCapabilities', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('GETs /multimodal/capabilities', async () => {
-    apiClient.apiGet.mockResolvedValue({
-      speech_to_text: true,
-      image_caption: true,
-      speech_model: 'whisper',
-      vision_model: 'soulnet',
-      images_learned: 12,
-      trained: true,
-      replay_buffer_size: 100,
-      learning_method: 'contrastive + self-training',
-      background_job_running: false,
-      status: 'trained',
-    })
-
+  it('GETs /multimodal/status and maps fields', async () => {
+    apiClient.apiGet.mockResolvedValue(unifiedResponse)
     const caps = await multimodalController.getCapabilities()
     expect(caps.speech_to_text).toBe(true)
     expect(caps.images_learned).toBe(12)
     expect(caps.learning_method).toBe('contrastive + self-training')
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/multimodal/capabilities')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/multimodal/status')
   })
 })
 
 describe('multimodalController.getLearningProgress', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('GETs /multimodal/learning-progress', async () => {
-    apiClient.apiGet.mockResolvedValue({
-      images_learned: 5,
-      trained: false,
-      vocab_size: 128,
-      replay_buffer_size: 50,
-    })
-
+  it('GETs /multimodal/status and maps learning fields', async () => {
+    apiClient.apiGet.mockResolvedValue(unifiedResponse)
     const prog = await multimodalController.getLearningProgress()
-    expect(prog.images_learned).toBe(5)
-    expect(prog.vocab_size).toBe(128)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/multimodal/learning-progress')
+    expect(prog.images_learned).toBe(12)
+    expect(prog.vocab_size).toBe(256)
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/multimodal/status')
   })
 })
 
 describe('multimodalController.getTrainingReport', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('GETs /multimodal/training-report with caption history', async () => {
-    apiClient.apiGet.mockResolvedValue({
-      images_learned: 10,
-      vocab_size: 256,
-      replay_buffer_size: 200,
-      caption_history: ['a cat', 'a dog', 'a bird'],
-      unique_captions: 3,
-      diversity_ratio: 1.0,
-      trained: true,
-    })
-
+  it('GETs /multimodal/status and maps report fields', async () => {
+    apiClient.apiGet.mockResolvedValue(unifiedResponse)
     const report = await multimodalController.getTrainingReport()
-    expect(report.caption_history).toHaveLength(3)
-    expect(report.unique_captions).toBe(3)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/multimodal/training-report')
+    expect(report.caption_history).toHaveLength(2)
+    expect(report.unique_captions).toBe(2)
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/multimodal/status')
   })
 })
 
 describe('multimodalController.getTrainingStatus', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('GETs /multimodal/training-status', async () => {
-    apiClient.apiGet.mockResolvedValue({
-      running: true,
-      job_id: 'batch_20260101_120000',
-      total: 20,
-      completed: 10,
-      errors: 1,
-      progress_pct: 50,
-      current_caption: 'a landscape',
-      current_image: 'img_001.jpg',
-      started_at: '2026-01-01T12:00:00',
-      finished_at: null,
-    })
-
+  it('GETs /multimodal/status and returns batch', async () => {
+    apiClient.apiGet.mockResolvedValue(unifiedResponse)
     const s = await multimodalController.getTrainingStatus()
     expect(s.running).toBe(true)
     expect(s.progress_pct).toBe(50)
     expect(s.current_image).toBe('img_001.jpg')
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/multimodal/training-status')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/multimodal/status')
   })
 
   it('returns idle state when not running', async () => {
     apiClient.apiGet.mockResolvedValue({
-      running: false,
-      total: 0,
-      completed: 0,
-      errors: 0,
-      progress_pct: 0,
-      current_caption: '',
-      current_image: '',
+      ...unifiedResponse,
+      batch: { running: false, total: 0, completed: 0, errors: 0, progress_pct: 0, current_caption: '', current_image: '' },
     })
 
     const s = await multimodalController.getTrainingStatus()

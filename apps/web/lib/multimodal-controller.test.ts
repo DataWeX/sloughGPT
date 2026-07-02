@@ -9,36 +9,55 @@ setupApiMocks()
 
 import { multimodalController } from './multimodal-controller'
 
+const unifiedResponse = {
+  engine: { speech_to_text: true, image_caption: true, speech_model: 'whisper', vision_model: 'soulnet', status: 'trained' },
+  learning: { images_learned: 10, trained: true, vocab_size: 256, replay_buffer_size: 200, learning_method: 'contrastive + self-training', caption_history: ['a cat', 'a dog'], unique_captions: 2, diversity_ratio: 1.0, accuracy_history: [0.5, 0.9], mean_accuracy: 0.7, last_accuracy: 0.9 },
+  batch: { running: false, job_id: null, total: 0, completed: 0, errors: 0, progress_pct: 0, current_caption: '', current_image: '', started_at: null, finished_at: null },
+  dpo: { status: 'idle', last_run: null, result: null, accepted_count: 0, rejected_count: 0 },
+  video: { status: 'idle', job_id: null, current_epoch: 0, current_step: 0, total_steps: 0, current_loss: null, result: null, error: null },
+}
+
 beforeEach(() => { vi.clearAllMocks() })
 afterEach(() => { vi.unstubAllGlobals() })
 
 describe('multimodalController', () => {
-  it('getCapabilities GETs /multimodal/capabilities', async () => {
-    apiClient.apiGet.mockResolvedValue({ speech_to_text: true, image_caption: false, status: 'ready' })
+  it('getCapabilities calls GET /multimodal/status', async () => {
+    apiClient.apiGet.mockResolvedValue(unifiedResponse)
     const cap = await multimodalController.getCapabilities()
-    expect(cap.status).toBe('ready')
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/multimodal/capabilities')
+    expect(cap.status).toBe('trained')
+    expect(cap.images_learned).toBe(10)
+    expect(cap.learning_method).toBe('contrastive + self-training')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/multimodal/status')
   })
 
-  it('getLearningProgress GETs /multimodal/learning-progress', async () => {
-    apiClient.apiGet.mockResolvedValue({ images_learned: 5, trained: true, vocab_size: 100, replay_buffer_size: 50 })
+  it('getLearningProgress calls GET /multimodal/status', async () => {
+    apiClient.apiGet.mockResolvedValue(unifiedResponse)
     const p = await multimodalController.getLearningProgress()
-    expect(p.images_learned).toBe(5)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/multimodal/learning-progress')
+    expect(p.images_learned).toBe(10)
+    expect(p.vocab_size).toBe(256)
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/multimodal/status')
   })
 
-  it('getTrainingReport GETs /multimodal/training-report', async () => {
-    apiClient.apiGet.mockResolvedValue({ images_learned: 10, vocab_size: 200, trained: true, caption_history: ['a'], unique_captions: 1, diversity_ratio: 1, accuracy_history: [0.5], mean_accuracy: 0.5, last_accuracy: 0.5, replay_buffer_size: 100 })
+  it('getTrainingReport calls GET /multimodal/status', async () => {
+    apiClient.apiGet.mockResolvedValue(unifiedResponse)
     const r = await multimodalController.getTrainingReport()
-    expect(r.images_learned).toBe(10)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/multimodal/training-report')
+    expect(r.caption_history).toHaveLength(2)
+    expect(r.unique_captions).toBe(2)
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/multimodal/status')
   })
 
-  it('getTrainingStatus GETs /multimodal/training-status', async () => {
-    apiClient.apiGet.mockResolvedValue({ running: false, job_id: null, total: 0, completed: 0, errors: 0, progress_pct: 0, current_caption: '', current_image: '', started_at: null, finished_at: null })
+  it('getTrainingStatus calls GET /multimodal/status', async () => {
+    apiClient.apiGet.mockResolvedValue(unifiedResponse)
     const s = await multimodalController.getTrainingStatus()
     expect(s.running).toBe(false)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/multimodal/training-status')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/multimodal/status')
+  })
+
+  it('getTrainingStatus returns idle state', async () => {
+    apiClient.apiGet.mockResolvedValue(unifiedResponse)
+    const s = await multimodalController.getTrainingStatus()
+    expect(s.running).toBe(false)
+    expect(s.progress_pct).toBe(0)
   })
 
   it('trainImage POSTs dataUrl via fetch then FormData', async () => {

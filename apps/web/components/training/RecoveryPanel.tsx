@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { FoldSection } from '@/components/strui'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { trainingJobsController, type TrainingJob } from '@/lib/training-controller'
 import { devDebug } from '@/lib/dev-log'
 import { useToastStore } from '@/lib/toast-store'
@@ -85,70 +85,75 @@ export function RecoveryPanel({ jobs, fetchJobs }: RecoveryPanelProps) {
   if (crashedCount === 0) return null
 
   return (
-    <FoldSection heading="Job Recovery">
-      <div className="flex items-center justify-between p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-        <div>
-          <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
-            {crashedCount > 0 ? `${crashedCount} job(s) may have crashed` : 'Interrupted jobs detected'}
-          </p>
-          <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-            Server may have stopped unexpectedly.
-          </p>
-        </div>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setExpanded(!expanded)}
-        >
-          {expanded ? 'Hide' : 'Show'}
-        </Button>
-      </div>
-
-      {expanded && (
-        <div className="mt-3 space-y-2">
-          {recoverableJobs.length > 0 ? (
-            recoverableJobs.map(job => (
-              <div key={job.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-md">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-amber-500" />
-                    <span className="font-medium text-sm truncate">{job.name || job.id}</span>
-                  </div>
-                  <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                    <span>Progress: {job.progress}%</span>
-                    {job.checkpoint_path && (
-                      <span className="truncate">Checkpoint: {job.checkpoint_path.split('/').pop()}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex gap-2 ml-2">
-                  <Button
-                    size="sm"
-                    variant="default"
-                    onClick={() => void handleRecover(job.id)}
-                    disabled={loading}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    Recover
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => void handleAbandon(job.id)}
-                    className="text-destructive/60 hover:text-destructive"
-                  >
-                    Abandon
-                  </Button>
-                </div>
-              </div>
-            ))
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              No recoverable jobs found.
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Job Recovery</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center justify-between p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+          <div>
+            <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+              {crashedCount > 0 ? `${crashedCount} job(s) may have crashed` : 'Interrupted jobs detected'}
             </p>
-          )}
+            <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+              Server may have stopped unexpectedly.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setExpanded(!expanded)}
+          >
+            {expanded ? 'Hide' : 'Show'}
+          </Button>
         </div>
-      )}
-    </FoldSection>
+
+        {expanded && (
+          <div className="mt-3 space-y-2">
+            {recoverableJobs.length > 0 ? (
+              recoverableJobs.map(job => (
+                <div key={job.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-md">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-amber-500" />
+                      <span className="font-medium text-sm truncate">{job.name || job.id}</span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                      <span>Progress: {job.progress}%</span>
+                      {job.checkpoint_path && (
+                        <span className="truncate">Checkpoint: {job.checkpoint_path.split('/').pop()}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 ml-2">
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={() => void handleRecover(job.id)}
+                      disabled={loading}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      Recover
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => void handleAbandon(job.id)}
+                      className="text-destructive/60 hover:text-destructive"
+                    >
+                      Abandon
+                    </Button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No recoverable jobs found.
+              </p>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

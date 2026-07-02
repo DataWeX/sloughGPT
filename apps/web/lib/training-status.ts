@@ -1,8 +1,9 @@
-import type { JobStatusState } from '@sloughgpt/strui'
-
 import type { TrainingJob } from '@/lib/training-controller'
 
-/** Map API training job status to strui `JobStatus` states. */
+/** Job status states. */
+export type JobStatusState = 'idle' | 'queued' | 'running' | 'success' | 'error' | 'cancelled'
+
+/** Map API training job status to JobStatusState. */
 export function trainingJobStatusToStrui(status: TrainingJob['status']): JobStatusState {
   switch (status) {
     case 'pending':
