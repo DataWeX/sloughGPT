@@ -44,14 +44,14 @@ logger = logging.getLogger(__name__)
 # Defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_VOCAB_SIZE = 4096
-DEFAULT_EMBED_DIM = 384
-DEFAULT_MAX_SEQ_LEN = 128
-DEFAULT_N_HEADS = 6
-DEFAULT_N_LAYERS = 4
+DEFAULT_VOCAB_SIZE = 2048
+DEFAULT_EMBED_DIM = 128
+DEFAULT_MAX_SEQ_LEN = 64
+DEFAULT_N_HEADS = 4
+DEFAULT_N_LAYERS = 2
 DEFAULT_BATCH_SIZE = 32
-DEFAULT_LR = 3e-4
-DEFAULT_EPOCHS = 20
+DEFAULT_LR = 1e-4
+DEFAULT_EPOCHS = 15
 CONTRASTIVE_TEMPERATURE = 0.07
 
 # Where the trained embedder lives
@@ -61,7 +61,7 @@ _TOKENIZER_PATH = _EMBEDDER_DIR / "text-embedder-tokenizer.json"
 
 
 # ---------------------------------------------------------------------------
-# Simple whitespace tokenizer (fast, no BPE dependency for training pairs)
+# Tokenizer — BPE with whitespace fallback
 # ---------------------------------------------------------------------------
 
 _STOPWORDS: frozenset = frozenset({
@@ -86,14 +86,31 @@ def _tokenize_simple(text: str) -> List[str]:
     return [t for t in re.findall(r"[a-z0-9']+", text.lower()) if t not in _STOPWORDS]
 
 
+def _build_bpe_tokenizer(texts: List[str], vocab_size: int = 2048):
+    """Train a BPE tokenizer on the corpus and return (bpe, encode_fn)."""
+    try:
+        from domains.multimodal.bpe_tokenizer import BPETokenizer
+        bpe = BPETokenizer(vocab_size=vocab_size)
+        bpe.train(texts)
+        def encode_fn(text: str, max_len: int) -> np.ndarray:
+            ids = bpe.encode(text)
+            ids = ids[:max_len]
+            padded = np.zeros(max_len, dtype=np.int64)
+            padded[:len(ids)] = ids
+            return padded
+        return bpe, encode_fn
+    except Exception as e:
+        logger.warning("BPE tokenizer failed (%s), falling back to whitespace", e)
+        return None, None
+
+
 def _build_vocab(texts: List[str], vocab_size: int = DEFAULT_VOCAB_SIZE) -> Tuple[dict, dict]:
-    """Build character-level vocab from texts."""
+    """Build vocabulary from texts (used by whitespace fallback)."""
     from collections import Counter
     counts = Counter()
     for t in texts:
         counts.update(_tokenize_simple(t))
 
-    # Reserve 0=PAD, 1=BOS, 2=EOS, 3=UNK
     vocab = {"<PAD>": 0, "<BOS>": 1, "<EOS>": 2, "<UNK>": 3}
     for word, _ in counts.most_common(vocab_size - len(vocab)):
         if word not in vocab:
@@ -106,11 +123,10 @@ def _build_vocab(texts: List[str], vocab_size: int = DEFAULT_VOCAB_SIZE) -> Tupl
 
 
 def _encode_tokens(text: str, vocab: dict, max_len: int) -> np.ndarray:
-    """Encode text to padded token ID array."""
+    """Encode text to padded token ID array (whitespace fallback)."""
     tokens = _tokenize_simple(text)
     ids = [vocab.get(t, 3) for t in tokens]  # 3 = UNK
     ids = ids[:max_len]
-    # Pad
     padded = np.zeros(max_len, dtype=np.int64)
     padded[: len(ids)] = ids
     return padded
@@ -289,11 +305,19 @@ def train_embedder(
 
     rng = np.random.RandomState(42)
 
-    # 1. Build vocab
-    logger.info("Building vocab from %d texts", len(texts))
-    vocab, itos = _build_vocab(texts, vocab_size)
-    actual_vocab = len(vocab)
-    logger.info("Vocab size: %d", actual_vocab)
+    # 1. Build tokenizer — prefer BPE, fall back to whitespace
+    logger.info("Building tokenizer from %d texts", len(texts))
+    bpe, encode_fn = _build_bpe_tokenizer(texts, vocab_size)
+    if bpe is not None:
+        logger.info("Using BPE tokenizer (vocab=%d)", len(bpe.vocab))
+        actual_vocab = len(bpe.vocab)
+        vocab = bpe.vocab
+        itos = bpe.itos
+    else:
+        vocab, itos = _build_vocab(texts, vocab_size)
+        actual_vocab = len(vocab)
+        encode_fn = None
+        logger.info("Using whitespace tokenizer (vocab=%d)", actual_vocab)
 
     # 2. Build encoder
     encoder = _build_encoder(actual_vocab, embed_dim, max_seq_len, n_heads, n_layers)
@@ -326,9 +350,13 @@ def train_embedder(
             orig_texts = [texts[i] for i in batch_idx]
             aug_texts = [_augment_text(t, rng_train) for t in orig_texts]
 
-            # Encode both views
-            orig_ids = np.stack([_encode_tokens(t, vocab, max_seq_len) for t in orig_texts])
-            aug_ids = np.stack([_encode_tokens(t, vocab, max_seq_len) for t in aug_texts])
+            # Encode both views — use BPE if available, else whitespace
+            if encode_fn is not None:
+                orig_ids = np.stack([encode_fn(t, max_seq_len) for t in orig_texts])
+                aug_ids = np.stack([encode_fn(t, max_seq_len) for t in aug_texts])
+            else:
+                orig_ids = np.stack([_encode_tokens(t, vocab, max_seq_len) for t in orig_texts])
+                aug_ids = np.stack([_encode_tokens(t, vocab, max_seq_len) for t in aug_texts])
 
             orig_emb = encoder.forward(orig_ids)
             aug_emb = encoder.forward(aug_ids)
@@ -387,7 +415,7 @@ def train_embedder(
 
     # 4. Save checkpoint
     out_path = save_path or str(_EMBEDDER_PATH)
-    _save_checkpoint(out_path, encoder, vocab, itos, embed_dim, max_seq_len, n_heads, n_layers)
+    _save_checkpoint(out_path, encoder, vocab, itos, embed_dim, max_seq_len, n_heads, n_layers, bpe=bpe)
     logger.info("Saved embedder to %s", out_path)
 
     return {
@@ -413,6 +441,7 @@ def _save_checkpoint(
     max_seq_len: int,
     n_heads: int,
     n_layers: int,
+    bpe=None,
 ):
     """Save embedder as .sou checkpoint with vocab sidecar."""
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
@@ -477,6 +506,15 @@ def _save_checkpoint(
             pass
         raise
 
+    # Save BPE tokenizer alongside the checkpoint
+    if bpe is not None:
+        bpe_save_path = str(path).replace(".sou", "-bpe.json")
+        try:
+            bpe.save(bpe_save_path)
+            logger.info("Saved BPE tokenizer to %s", bpe_save_path)
+        except Exception as e:
+            logger.warning("Failed to save BPE tokenizer: %s", e)
+
 
 class SloTextEmbedder:
     """Trained SloNet text embedder for vector store integration.
@@ -494,11 +532,13 @@ class SloTextEmbedder:
         vocab: dict,
         embed_dim: int = DEFAULT_EMBED_DIM,
         max_seq_len: int = DEFAULT_MAX_SEQ_LEN,
+        encode_fn=None,
     ):
         self.encoder = encoder
         self.vocab = vocab
         self.embed_dim = embed_dim
         self.max_seq_len = max_seq_len
+        self.encode_fn = encode_fn  # BPE encode function if available
 
     @classmethod
     def load(cls, path: Optional[str] = None) -> Optional["SloTextEmbedder"]:
@@ -546,6 +586,17 @@ class SloTextEmbedder:
 
             actual_vocab = max(vocab.values()) + 1 if vocab else DEFAULT_VOCAB_SIZE
 
+            # Try loading BPE tokenizer
+            bpe_tokenizer = None
+            try:
+                from domains.multimodal.bpe_tokenizer import BPETokenizer
+                bpe_path = path.replace(".sou", "-bpe.json")
+                if os.path.exists(bpe_path):
+                    bpe_tokenizer = BPETokenizer.load(bpe_path)
+                    logger.info("Loaded BPE tokenizer from %s", bpe_path)
+            except Exception:
+                pass
+
             # Build encoder
             encoder = _build_encoder(actual_vocab, embed_dim, max_seq_len, n_heads, n_layers)
 
@@ -579,14 +630,22 @@ class SloTextEmbedder:
                     param_idx += 1
 
             logger.info("Loaded SloTextEmbedder from %s (embed_dim=%d)", path, embed_dim)
-            return cls(encoder, vocab, embed_dim, max_seq_len)
+            encode_fn = None
+            if bpe_tokenizer is not None:
+                def encode_fn(text: str, max_len: int) -> np.ndarray:
+                    ids = bpe_tokenizer.encode(text)
+                    ids = ids[:max_len]
+                    padded = np.zeros(max_len, dtype=np.int64)
+                    padded[:len(ids)] = ids
+                    return padded
+            return cls(encoder, vocab, embed_dim, max_seq_len, encode_fn=encode_fn)
 
         except Exception as e:
             logger.warning("Failed to load SloTextEmbedder: %s", e)
             return None
 
     def embed(self, text: str) -> List[float]:
-        """Encode text to a 384-dim L2-normalized vector.
+        """Encode text to an L2-normalized vector.
 
         Args:
             text: input text string
@@ -598,7 +657,10 @@ class SloTextEmbedder:
         _prev_accel = getattr(_slonet, "_ACCELERATOR", None)
         try:
             _slonet._ACCELERATOR = "none"
-            ids = _encode_tokens(text, self.vocab, self.max_seq_len)
+            if self.encode_fn is not None:
+                ids = self.encode_fn(text, self.max_seq_len)
+            else:
+                ids = _encode_tokens(text, self.vocab, self.max_seq_len)
             ids = ids[np.newaxis, :]  # (1, max_seq_len)
 
             emb = self.encoder.forward(ids)  # (1, embed_dim)
@@ -611,11 +673,11 @@ class SloTextEmbedder:
         if norm > 0:
             vec = vec / norm
 
-        # Pad/truncate to 384 for InMemoryVectorStore compatibility
-        if len(vec) < DEFAULT_EMBED_DIM:
-            vec = np.pad(vec, (0, DEFAULT_EMBED_DIM - len(vec)))
-        elif len(vec) > DEFAULT_EMBED_DIM:
-            vec = vec[:DEFAULT_EMBED_DIM]
+        # Pad/truncate to self.embed_dim
+        if len(vec) < self.embed_dim:
+            vec = np.pad(vec, (0, self.embed_dim - len(vec)))
+        elif len(vec) > self.embed_dim:
+            vec = vec[:self.embed_dim]
             n = np.linalg.norm(vec)
             if n > 0:
                 vec = vec / n

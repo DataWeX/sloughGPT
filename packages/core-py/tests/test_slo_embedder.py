@@ -183,7 +183,7 @@ def test_embedder_embed_dim():
         embedder = SloTextEmbedder.load(path)
         assert embedder is not None
         vec = embedder.embed("hello world")
-        assert len(vec) == 384  # padded to 384 for InMemoryVectorStore compat
+        assert len(vec) == 64  # padded to embed_dim for InMemoryVectorStore compat
         norm = sum(x * x for x in vec) ** 0.5
         assert 0.99 < norm < 1.01  # L2-normalized
 
@@ -236,7 +236,7 @@ def test_simple_embed_fallback():
     # This should not crash regardless of which backend is active
     vec = simple_embed("hello world test")
     assert isinstance(vec, list)
-    assert len(vec) == 384
+    assert len(vec) == 384  # simple_embed defaults to 384
     # Should be L2-normalized
     norm = sum(x * x for x in vec) ** 0.5
     assert 0.99 < norm < 1.01

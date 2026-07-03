@@ -29,6 +29,8 @@ def cmd_train(args):
         return _cmd_feedback_train(args)
     if getattr(args, "export_feedback", False):
         return _cmd_feedback_export(args)
+    if getattr(args, "embed_train", False):
+        return cmd_train_embed(args)
 
     # Original train logic
     from ..cli import _chat_repository_root
@@ -940,6 +942,13 @@ def register(subparsers):
 
     # Checkpoint info
     train_parser.add_argument("--checkpoint-info", dest="checkpoint_info_path", help="Inspect a checkpoint file (.pt)")
+
+    # Embedder training
+    train_parser.add_argument("--embed", dest="embed_train", action="store_true", help="Train text embedder on corpus")
+    train_parser.add_argument("--corpus", help="Corpus path for embedder training (auto-discovers knowledge/datasets if omitted)")
+    train_parser.add_argument("--embed-dim", type=int, default=384, help="Embedding dimension")
+    train_parser.add_argument("--vocab-size", type=int, default=4096, help="Vocab size for embedder")
+    train_parser.add_argument("--output", dest="embed_output", default=None, help="Embedder save path")
 
     train_parser.set_defaults(func=cmd_train)
 

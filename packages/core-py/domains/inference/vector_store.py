@@ -526,7 +526,16 @@ def simple_embed(text: str, dimension: int = 384) -> List[float]:
             pass
     if _slo_embedder is not None:
         try:
-            return _slo_embedder.embed(text)
+            vec = _slo_embedder.embed(text)
+            if len(vec) != dimension:
+                if len(vec) < dimension:
+                    vec = np.pad(vec, (0, dimension - len(vec)))
+                else:
+                    vec = vec[:dimension]
+                norm = np.linalg.norm(vec)
+                if norm > 0:
+                    vec = vec / norm
+            return vec.tolist() if isinstance(vec, np.ndarray) else vec
         except Exception:
             import logging
             logging.getLogger(__name__).warning("SloNet embedder failed, using n-gram fallback")
