@@ -27,6 +27,8 @@ export interface TrainingJob {
   loss_history?: Array<{ step: number; value: number; type: 'train' | 'eval' }>
   reward_history?: Array<{ step: number; value: number }>
   result?: Record<string, unknown>
+  metrics?: Record<string, unknown>
+  epochs_completed?: number
   error?: string
   explanation?: string
   status_message?: string
@@ -323,6 +325,12 @@ export const trainingJobsController = {
 
   async loadCheckpoint(name: string): Promise<{ success: boolean }> {
     return apiPost(`/auto-train/checkpoints/${encodeURIComponent(name)}/load`)
+  },
+
+  async startActivityTraining(params: {
+    name?: string; epochs?: number; batch_size?: number; learning_rate?: number
+  }): Promise<{ job_id: string; status: string }> {
+    return apiPost('/training/activity-start', params ?? {})
   },
 
   async deleteCheckpoint(name: string): Promise<{ success: boolean }> {

@@ -7,6 +7,7 @@ import { Button, Input, ProgressBar, Spinner, Chip } from '@/components/ui'
 import { StatCard, KpiGrid } from '@/components/ui/display'
 import { useToastStore } from '@/lib/toast-store'
 import { activityController, type ActivityStatus, type DatasetRecord, type PredictResponse } from '@/lib/activity-controller'
+import { trainingJobsController } from '@/lib/controllers'
 
 const ACTIVITIES = ['stationary', 'walking', 'running', 'shaking', 'driving', 'cycling']
 const WINDOW_SIZE = 128
@@ -169,18 +170,40 @@ export default function ActivityPage() {
     setTraining(true)
     setTrainResult(null)
     try {
-      const res = await activityController.train({ epochs: trainEpochs, lr: 0.001, batch_size: 16 })
-      setTrainResult({
-        acc: res.val_accuracy ?? 0,
-        samples: res.num_samples,
-        message: res.message,
+      const { job_id } = await trainingJobsController.startActivityTraining({
+        epochs: trainEpochs,
+        batch_size: 16,
+        learning_rate: 0.001,
       })
-      addToast(`Training done — ${(res.val_accuracy! * 100).toFixed(0)}% accuracy`, 'success')
-      await fetchStatus()
+      addToast('Training started — tracking progress', 'info')
+
+      const poll = async (): Promise<void> => {
+        const jobs = await trainingJobsController.list()
+        const job = jobs.find((j: any) => j.id === job_id)
+        if (!job || job.status === 'failed') {
+          addToast(`Training failed: ${job?.error ?? 'unknown'}`, 'error')
+          setTraining(false)
+          return
+        }
+        if (job.status === 'completed' || job.status === 'success') {
+          const m = (job.metrics ?? {}) as Record<string, number>
+          setTrainResult({
+            acc: m.val_accuracy ?? 0,
+            samples: m.num_samples ?? 0,
+            message: `Training complete — ${job.epochs_completed ?? trainEpochs} epochs`,
+          })
+          addToast(`Training done — ${((m.val_accuracy ?? 0) * 100).toFixed(0)}% accuracy`, 'success')
+          await fetchStatus()
+          setTraining(false)
+          return
+        }
+        setTimeout(poll, 2000)
+      }
+      void poll()
     } catch (e: any) {
       addToast(`Training failed: ${e.message}`, 'error')
+      setTraining(false)
     }
-    setTraining(false)
   }
 
   const handlePredict = async () => {
