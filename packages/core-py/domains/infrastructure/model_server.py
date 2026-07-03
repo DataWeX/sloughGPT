@@ -485,17 +485,26 @@ class ModelServer:
                     logger.warning("Post-gen hook failed: %s", e)
 
     def _tokenize_cached(self, tokenizer, prompt: str) -> tuple:
-        """Tokenize with LRU cache to avoid redundant tokenization."""
-        cache_key = (prompt, id(tokenizer))
-        if cache_key in self._tokenize_cache:
-            ids, attn = self._tokenize_cache[cache_key]
+        """Tokenize with LRU cache to avoid redundant tokenization.
+
+        Keyed on prompt text only — each ModelServer has exactly one
+        tokenizer, so the prompt is sufficient for cache identity.
+        """
+        if prompt in self._tokenize_cache:
+            ids, attn = self._tokenize_cache[prompt]
             import torch
-            return {"input_ids": torch.tensor([ids]), "attention_mask": torch.tensor([attn])}
+            result = {"input_ids": torch.tensor([ids])}
+            if attn is not None:
+                result["attention_mask"] = torch.tensor([attn])
+            return result
         import torch
         inputs = tokenizer(prompt, return_tensors="pt")
-        self._tokenize_cache[cache_key] = (
+        attn_list = None
+        if inputs.get("attention_mask") is not None:
+            attn_list = inputs["attention_mask"][0].tolist()
+        self._tokenize_cache[prompt] = (
             inputs["input_ids"][0].tolist(),
-            inputs.get("attention_mask", inputs["input_ids"][0]).tolist() if inputs.get("attention_mask") is not None else None,
+            attn_list,
         )
         if len(self._tokenize_cache) > 64:
             # Evict oldest
