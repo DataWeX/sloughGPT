@@ -1,0 +1,127 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/cn'
+import { catalogIdMatchesRuntime } from '@/lib/inference-display'
+import { generateController } from '@/lib/generate-controller'
+import { useLoadModel } from '@/lib/query/api-hooks'
+import { useToastStore } from '@/lib/toast-store'
+
+interface Model {
+  id: string; name?: string; source?: string; description?: string; tags?: string[]
+  size_mb?: number; size_gb?: number; params?: string; cached?: boolean; thumbnail?: string
+}
+
+interface ModelCatalogCardProps {
+  models: Model[]
+  modelsLoading: boolean
+  activeRuntimeId: string | null
+  onModelLoaded: () => Promise<void>
+}
+
+export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeId, onModelLoaded }: ModelCatalogCardProps) {
+  const router = useRouter()
+  const addToast = useToastStore(s => s.addToast)
+  const { mutateAsync: loadModel } = useLoadModel()
+  const [loadingModel, setLoadingModel] = useState<string | null>(null)
+  const [warmingModel, setWarmingModel] = useState<string | null>(null)
+  const [modelSearch, setModelSearch] = useState('')
+
+  const handleLoadModel = async (modelId: string) => {
+    setLoadingModel(modelId)
+    try {
+      const data = await loadModel(modelId)
+      if (data.error) { addToast(data.error, 'error'); return }
+      addToast(`${data.model_id ?? modelId} ready`, 'success')
+      setLoadingModel(null)
+      setWarmingModel(modelId)
+      try { await generateController.generate({ prompt: 'Hello', max_new_tokens: 2 }) } catch {}
+      setWarmingModel(null)
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : String(err), 'error')
+    } finally {
+      setLoadingModel(null)
+      setWarmingModel(null)
+      await onModelLoaded()
+    }
+  }
+
+  const filtered = modelSearch
+    ? models.filter(m => (m.name || m.id).toLowerCase().includes(modelSearch.toLowerCase()) || m.id.toLowerCase().includes(modelSearch.toLowerCase()))
+    : models
+
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">Model Catalog</CardTitle></CardHeader>
+      <CardContent>
+        {modelsLoading ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {[1,2,3,4,5,6].map(i => (
+              <div key={i} className="animate-pulse rounded-lg bg-muted/50 border border-border/50 p-4 h-20" />
+            ))}
+          </div>
+        ) : models.length === 0 ? (
+          <div className="text-center py-8 text-sm text-muted-foreground">No models available</div>
+        ) : (
+          <>
+            {models.length > 6 && (
+              <div className="mb-3">
+                <input
+                  type="text"
+                  value={modelSearch}
+                  onChange={e => setModelSearch(e.target.value)}
+                  placeholder="Search models..."
+                  className="h-8 w-full max-w-xs rounded-md border border-border/60 bg-background px-2 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                />
+              </div>
+            )}
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {filtered.map((model) => {
+                const isLoading = loadingModel === model.id
+                const isLoaded = activeRuntimeId ? catalogIdMatchesRuntime(model.id, activeRuntimeId) : false
+                return (
+                  <div
+                    key={model.id}
+                    className={cn("flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm",
+                      isLoaded ? "border-primary/40 bg-primary/5" : "border-border/60")}
+                    onClick={() => router.push(`/model/${encodeURIComponent(model.id)}`)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/model/${encodeURIComponent(model.id)}`) }}
+                    tabIndex={0}
+                    role="button"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium truncate">{model.name || model.id}</div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {model.params && <span className="text-[10px] text-muted-foreground font-mono">{model.params}</span>}
+                        {model.size_gb && <span className="text-[10px] text-muted-foreground">{(model.size_gb).toFixed(1)} GB</span>}
+                        {isLoaded && <span className="text-[10px] text-primary font-medium">Loaded</span>}
+                        {!isLoaded && model.cached && <span className="text-[10px] text-success/70">Cached</span>}
+                      </div>
+                    </div>
+                    <div className="flex gap-1 shrink-0 ml-2">
+                      {model.source === 'local' ? (
+                        <span className="text-[10px] text-muted-foreground">Local</span>
+                      ) : (
+                        <Button size="sm" variant={isLoaded ? 'outline' : 'default'} className="h-7 text-xs px-3"
+                          disabled={isLoading || warmingModel === model.id}
+                          onClick={(e) => { e.stopPropagation(); handleLoadModel(model.id) }}>
+                          {isLoading ? '…' : warmingModel === model.id ? 'Warming…' : isLoaded ? 'Loaded' : 'Load'}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {filtered.length === 0 && modelSearch && (
+              <div className="text-center py-4 text-xs text-muted-foreground">No models matching &quot;{modelSearch}&quot;</div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}

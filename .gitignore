@@ -182,8 +182,8 @@ models/auto-training/
 # User data and backups
 .git-corrupted-backup/
 data/
-models/
-datasets/
+/models/
+/datasets/
 
 # Build cache
 .webpack/
