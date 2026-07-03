@@ -740,11 +740,18 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                 full_response = ""
                 try:
                     try:
-                        for text in streamer:
+                        while thread.is_alive() or not streamer.text_queue.empty():
                             if await request.is_disconnected():
                                 cancel_event.set()
                                 logger.info("Client disconnected from chat stream (fallback, request)", extra={"context": {"session_id": session_id}})
                                 return
+                            try:
+                                text = streamer.text_queue.get(timeout=0.01)
+                            except Exception:
+                                await asyncio.sleep(0)
+                                continue
+                            if text == streamer.stop_signal:
+                                break
                             if text:
                                 full_response += text
                                 yield sse_token("chat", text)

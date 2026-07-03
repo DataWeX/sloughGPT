@@ -398,27 +398,15 @@ _EMBED_LOAD_FAILED: bool = False
 
 
 def _load_embed_model() -> Any:
-    """Lazy-load a sentence-transformers model for semantic embeddings."""
+    """Lazy-load a sentence-transformers model for semantic embeddings.
+
+    Currently disabled to avoid OOM on 8GB Mac (two PyTorch models in same process).
+    Falls back to fast n-gram TF-IDF embedder.
+    """
     global _embed_model, _EMBED_LOAD_FAILED
     if _EMBED_LOAD_FAILED:
         return None
-    if _embed_model is None:
-        try:
-            import os as _os
-            _os.environ.setdefault("PYTORCH_MPS_HIGH_WATERMARK_RATIO", "0.0")
-            import torch as _torch
-            _torch.backends.mps.is_available = lambda: False
-            from sentence_transformers import SentenceTransformer
-            _embed_model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
-            logger.info("Loaded sentence-transformers embedding model (384-dim, cpu)")
-        except Exception as exc:
-            logger.warning(
-                "sentence-transformers not available (%s), using n-gram embedding",
-                exc,
-            )
-            _EMBED_LOAD_FAILED = True
-            return None
-    return _embed_model
+    return None
 
 
 _STOPWORDS: frozenset = frozenset({
