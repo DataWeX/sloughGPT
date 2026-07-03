@@ -291,6 +291,9 @@ export default function KnowledgePage() {
           </div>
         )}
 
+        {/* Embedder Training */}
+        <EmbedderTrainingCard />
+
         {/* Add new knowledge */}
         <Card>
           <CardHeader>
@@ -520,5 +523,202 @@ export default function KnowledgePage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+function EmbedderTrainingCard() {
+  const [training, setTraining] = useState(false)
+  const [embedderStatus, setEmbedderStatus] = useState<{ trained: boolean; info: { embed_dim: number; vocab_size: number } | null } | null>(null)
+  const [result, setResult] = useState<{ texts_used: number; epochs: number; final_loss: number } | null>(null)
+  const addToast = useToastStore(s => s.addToast)
+
+  useEffect(() => {
+    knowledgeController.getEmbedderStatus().then(setEmbedderStatus).catch(() => {})
+  }, [])
+
+  const handleTrain = async () => {
+    setTraining(true)
+    try {
+      const res = await knowledgeController.trainEmbedder()
+      setResult(res)
+      setEmbedderStatus({ trained: true, info: { embed_dim: 64, vocab_size: 1024 } })
+      addToast(`Embedder trained on ${res.texts_used} texts in ${res.epochs} epochs`, 'success')
+    } catch { addToast('Training failed', 'error') }
+    setTraining(false)
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-base">Text Embedder</CardTitle>
+        <Button size="sm" onClick={handleTrain} disabled={training}>
+          {training ? 'Training…' : embedderStatus?.trained ? 'Retrain' : 'Train Embedder'}
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {embedderStatus === null ? (
+          <div className="h-8 animate-pulse bg-muted rounded" />
+        ) : embedderStatus.trained ? (
+          <div className="flex items-center gap-4 text-sm flex-wrap">
+            <Badge variant="default" label="Trained" />
+            <span className="text-muted-foreground">
+              {embedderStatus.info?.embed_dim}d, {embedderStatus.info?.vocab_size} vocab
+            </span>
+            {result && (
+              <span className="text-muted-foreground">
+                loss {result.final_loss.toFixed(4)} on {result.texts_used} texts
+              </span>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Train a SloNet text embedder on your knowledge + datasets for better semantic search. No downloads required.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function KnowledgeOperationsCard() {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchPath, setSearchPath] = useState('.')
+  const [searchResults, setSearchResults] = useState<Array<{ path: string; line: number; snippet: string; score: number }>>([])
+  const [searching, setSearching] = useState(false)
+
+  const [dedupContent, setDedupContent] = useState('')
+  const [dedupResult, setDedupResult] = useState<{ is_duplicate: boolean; best_match: string | null; score: number } | null>(null)
+  const [checkingDup, setCheckingDup] = useState(false)
+
+  const [gapData, setGapData] = useState<{ gaps: Array<{ topic: string; suggestion: string }>; total_facts: number } | null>(null)
+  const [loadingGaps, setLoadingGaps] = useState(false)
+
+  const addToast = useToastStore(s => s.addToast)
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return
+    setSearching(true)
+    try {
+      const res = await knowledgeController.searchFiles(searchQuery, searchPath)
+      setSearchResults(res.results)
+    } catch { addToast('Search failed', 'error') }
+    setSearching(false)
+  }
+
+  const handleCheckDup = async () => {
+    if (!dedupContent.trim()) return
+    setCheckingDup(true)
+    try {
+      const res = await knowledgeController.checkDuplicate(dedupContent)
+      setDedupResult(res)
+    } catch { addToast('Duplicate check failed', 'error') }
+    setCheckingDup(false)
+  }
+
+  const handleFindGaps = async () => {
+    setLoadingGaps(true)
+    try {
+      const res = await knowledgeController.gaps()
+      setGapData(res)
+    } catch { addToast('Gap analysis failed', 'error') }
+    setLoadingGaps(false)
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Semantic Tools</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* File search */}
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground">Search codebase</label>
+          <div className="flex items-center gap-2">
+            <input
+              className="flex-1 h-8 rounded-md border border-border bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
+              placeholder="e.g. how does embedding work"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSearch()}
+              aria-label="File search query"
+            />
+            <input
+              className="h-8 rounded-md border border-border bg-background px-2 text-xs w-28 focus:outline-none focus:ring-1 focus:ring-primary/30"
+              placeholder="path (.)"
+              value={searchPath}
+              onChange={e => setSearchPath(e.target.value)}
+              aria-label="Search path"
+            />
+            <Button size="sm" onClick={handleSearch} disabled={searching || !searchQuery.trim()}>
+              {searching ? 'Searching…' : 'Search'}
+            </Button>
+          </div>
+          {searchResults.length > 0 && (
+            <div className="space-y-1.5 mt-2 max-h-48 overflow-y-auto">
+              {searchResults.map((r, i) => (
+                <div key={i} className="text-xs rounded bg-muted/40 px-2 py-1.5 flex items-center gap-2">
+                  <span className="font-mono text-muted-foreground shrink-0">{r.score.toFixed(3)}</span>
+                  <span className="font-mono text-muted-foreground shrink-0">{r.path}:{r.line}</span>
+                  <span className="truncate">{r.snippet.replace(/\n/g, ' ')}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="h-px bg-border/30" />
+
+        {/* Duplicate check */}
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground">Check for duplicates</label>
+          <div className="flex items-center gap-2">
+            <input
+              className="flex-1 h-8 rounded-md border border-border bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
+              placeholder="Paste content to check…"
+              value={dedupContent}
+              onChange={e => setDedupContent(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleCheckDup()}
+              aria-label="Duplicate check content"
+            />
+            <Button size="sm" variant="outline" onClick={handleCheckDup} disabled={checkingDup || !dedupContent.trim()}>
+              {checkingDup ? 'Checking…' : 'Check'}
+            </Button>
+          </div>
+          {dedupResult && (
+            <div className={`text-xs rounded px-2 py-1.5 ${dedupResult.is_duplicate ? 'bg-destructive/10 text-destructive' : 'bg-green-500/10 text-green-600'}`}>
+              {dedupResult.is_duplicate
+                ? `Duplicate (score: ${dedupResult.score.toFixed(3)}) — existing: "${dedupResult.best_match?.slice(0, 80)}…"`
+                : `Unique (best match: ${dedupResult.score.toFixed(3)})`
+              }
+            </div>
+          )}
+        </div>
+
+        <div className="h-px bg-border/30" />
+
+        {/* Knowledge gaps */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-muted-foreground">Knowledge gaps</label>
+            <Button size="sm" variant="ghost" onClick={handleFindGaps} disabled={loadingGaps}>
+              {loadingGaps ? 'Analyzing…' : 'Analyze'}
+            </Button>
+          </div>
+          {gapData && (
+            <div className="space-y-1">
+              {gapData.gaps.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No significant gaps — {gapData.total_facts} facts across all topics</p>
+              ) : (
+                gapData.gaps.map((g, i) => (
+                  <div key={i} className="text-xs rounded bg-muted/40 px-2 py-1.5">
+                    <span className="font-medium">{g.topic}:</span> <span className="text-muted-foreground">{g.suggestion}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   )
 }

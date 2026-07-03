@@ -609,3 +609,97 @@ async def bulk_ingest(req: BulkIngestRequest):
         "status": "completed",
         **report,
     }
+
+
+@router.post("/train-embedder")
+async def train_embedder_endpoint():
+    """Train the SloNet text embedder on all knowledge + dataset texts.
+
+    Collects texts from the knowledge base, ingested files, and datasets,
+    then trains a contrastive embedder. Returns training stats.
+    """
+    import asyncio
+
+    def _train():
+        from pathlib import Path
+        from domains.inference.slo_embedder import train_embedder
+
+        REPO = Path(__file__).resolve().parents[4]
+        texts = []
+
+        # 1. Knowledge entries
+        kb_path = REPO / "data" / "knowledge" / "entries.json"
+        if kb_path.exists():
+            with open(kb_path) as f:
+                entries = json.load(f)
+            for e in entries:
+                t = e.get("text", "")
+                if len(t) > 20:
+                    texts.append(t)
+
+        # 2. Ingested files
+        ingested_dir = REPO / "data" / "ingested"
+        if ingested_dir.exists():
+            for fp in ingested_dir.glob("*.txt"):
+                try:
+                    raw = fp.read_text(errors="ignore")
+                    chunks = [p.strip() for p in raw.split("\n\n") if len(p.strip()) > 40]
+                    texts.extend(chunks[:500])
+                except Exception:
+                    pass
+
+        # 3. Dataset files
+        datasets_dir = REPO / "datasets"
+        if datasets_dir.exists():
+            for fp in datasets_dir.glob("*.txt"):
+                try:
+                    raw = fp.read_text(errors="ignore")
+                    chunks = [p.strip() for p in raw.split("\n\n") if len(p.strip()) > 40]
+                    texts.extend(chunks[:500])
+                except Exception:
+                    pass
+
+        # Deduplicate
+        seen = set()
+        unique = [t for t in texts if hash(t[:200]) not in seen and not seen.add(hash(t[:200]))]
+        texts = unique[:500]
+
+        if len(texts) < 10:
+            return {"status": "error", "message": f"Only {len(texts)} texts found. Need at least 10."}
+
+        result = train_embedder(
+            texts, epochs=15, lr=5e-4, batch_size=32,
+            embed_dim=64, vocab_size=1024, max_seq_len=32,
+            n_heads=2, n_layers=1,
+        )
+        return {
+            "status": "trained",
+            "texts_used": len(texts),
+            "epochs": result["epochs"],
+            "final_loss": result["final_loss"],
+            "save_path": result["save_path"],
+        }
+
+    return await asyncio.to_thread(_train)
+
+
+@router.get("/embedder-status")
+async def embedder_status():
+    """Check if a trained embedder checkpoint exists."""
+    from domains.inference.slo_embedder import _EMBEDDER_PATH, SloTextEmbedder
+
+    exists = _EMBEDDER_PATH.exists()
+    info = None
+    if exists:
+        emb = SloTextEmbedder.load()
+        if emb:
+            info = {
+                "embed_dim": emb.embed_dim,
+                "vocab_size": len(emb.vocab),
+                "path": str(_EMBEDDER_PATH),
+            }
+
+    return {
+        "trained": exists,
+        "info": info,
+    }
