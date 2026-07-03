@@ -27,7 +27,7 @@ class MockFileReader {
 (global as any).FileReader = MockFileReader;
 
 beforeEach(async () => {
-  jest.clearAllMocks();
+  jest.restoreAllMocks();
   (AsyncStorage as any)._store = {};
 });
 
@@ -100,6 +100,10 @@ describe('model-sync', () => {
     });
 
     it('returns false when download fails', async () => {
+      // Ensure clean state — previous test's FileReader async callback
+      // may have stored data after beforeEach cleared AsyncStorage.
+      (AsyncStorage as any)._store = {};
+
       mockFetch
         .mockResolvedValueOnce({
           ok: true,

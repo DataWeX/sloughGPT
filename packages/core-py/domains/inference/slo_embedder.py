@@ -244,10 +244,18 @@ def _contrastive_loss(
     z_i: np.ndarray,
     z_j: np.ndarray,
     temperature: float = CONTRASTIVE_TEMPERATURE,
-) -> float:
-    """InfoNCE loss for a batch of positive pairs.
+    anchor_labels: Optional[List[str]] = None,
+    anchor_store=None,
+    constraint_weight: float = 0.5,
+) -> Tuple[float, float]:
+    """InfoNCE loss with hard anchor constraints.
 
     z_i, z_j: (B, D) — L2-normalized embeddings
+    anchor_labels: optional list of anchor names per text (e.g., ["truth", "question"])
+    anchor_store: AnchorStore instance with fixed reference vectors
+    constraint_weight: how much to weight the anchor constraint (0.0 = ignore anchors)
+
+    Returns (total_loss, constraint_loss) — constraint_loss is 0 if no anchors provided.
     """
     B = z_i.shape[0]
     # Cosine similarity matrix (already L2-normalized → dot product)
@@ -263,8 +271,46 @@ def _contrastive_loss(
     exp_logits = np.exp(logits)
     log_sum_exp = np.log(exp_logits.sum(axis=1) + 1e-10)
     log_probs = logits - log_sum_exp[:, None]
-    loss = -log_probs[labels, labels].mean()
-    return float(loss)
+    info_nce_loss = -log_probs[labels, labels].mean()
+
+    # Hard constraint: penalize distance from known anchor
+    constraint_loss = 0.0
+    if anchor_labels and anchor_store is not None:
+        penalties = []
+        for i, label in enumerate(anchor_labels):
+            if label and anchor_store.get(label) is not None:
+                anchor_vec = anchor_store.get(label)
+                # Cosine similarity to anchor — should be high
+                sim_to_anchor = float(np.dot(z_i[i], anchor_vec))
+                # Penalty: 1 - sim (zero when perfectly aligned)
+                penalties.append(1.0 - sim_to_anchor)
+        if penalties:
+            constraint_loss = float(np.mean(penalties))
+
+    total = info_nce_loss + constraint_weight * constraint_loss
+    return float(total), constraint_loss
+
+
+def _assign_anchor_label(text: str) -> Optional[str]:
+    """Assign an anchor label to text based on simple heuristics.
+
+    This is the "first glance" truth detector — encodes what we already know
+    about text structure without any training.
+    """
+    text = text.strip()
+    if not text:
+        return None
+    # Questions
+    if text.endswith("?") or text.lower().startswith(("what", "how", "why", "when", "where", "who", "which", "is", "are", "do", "does", "can", "could", "should", "would")):
+        return "question"
+    # Instructions / commands
+    if text.lower().startswith(("you should", "you must", "you need to", "please", "do this", "run", "create", "make", "build", "write", "delete", "move", "copy", "install", "update")):
+        return "instruction"
+    # Observations / descriptions
+    if text.lower().startswith(("the ", "a ", "an ", "this ", "that ", "it ", "there ", "here ", "in ", "on ", "at ")) and not text.endswith(("!", "?")):
+        return "observation"
+    # Default: factual assertion
+    return "truth"
 
 
 def train_embedder(
@@ -325,6 +371,11 @@ def train_embedder(
     params = encoder.parameters()
     logger.info("Encoder params: %d tensors", len(params))
 
+    # 2b. Load anchor store (the stars — fixed reference points)
+    from domains.infrastructure.anchor_store import AnchorStore, get_default_anchors, _seed_anchor_from_text
+    anchor_store = get_default_anchors(dimension=embed_dim)
+    logger.info("Loaded %d anchor points: %s", len(anchor_store.names()), anchor_store.names())
+
     # 3. Training loop
     logger.info("Training embedder: %d texts, %d epochs, batch_size=%d", len(texts), epochs, batch_size)
     rng_train = np.random.RandomState(123)
@@ -332,6 +383,7 @@ def train_embedder(
 
     for epoch in range(epochs):
         epoch_loss = 0.0
+        epoch_constraint = 0.0
         n_batches = 0
 
         # Shuffle indices
@@ -365,8 +417,16 @@ def train_embedder(
             orig_norm = orig_emb.data / (np.linalg.norm(orig_emb.data, axis=1, keepdims=True) + 1e-10)
             aug_norm = aug_emb.data / (np.linalg.norm(aug_emb.data, axis=1, keepdims=True) + 1e-10)
 
-            # Compute contrastive loss
-            loss_val = _contrastive_loss(orig_norm, aug_norm)
+            # Assign anchor labels (the "first glance" truth detector)
+            batch_labels = [_assign_anchor_label(t) for t in orig_texts]
+
+            # Compute contrastive loss with anchor constraints
+            loss_val, constraint_loss = _contrastive_loss(
+                orig_norm, aug_norm,
+                anchor_labels=batch_labels,
+                anchor_store=anchor_store,
+                constraint_weight=0.5,
+            )
 
             # Vectorized InfoNCE gradient w.r.t. orig_norm
             B = len(batch_idx)
@@ -391,6 +451,7 @@ def train_embedder(
             orig_emb.backward()
 
             epoch_loss += loss_val
+            epoch_constraint += constraint_loss
             n_batches += 1
 
             # Clip gradients to prevent explosion
@@ -405,13 +466,14 @@ def train_embedder(
             optimizer.step(params)
 
         avg_loss = epoch_loss / max(n_batches, 1)
+        avg_constraint = epoch_constraint / max(n_batches, 1)
         losses.append(avg_loss)
 
         if progress_callback:
             progress_callback(epoch + 1, avg_loss, epochs)
 
         if (epoch + 1) % 5 == 0 or epoch == 0:
-            logger.info("Epoch %d/%d — loss: %.4f", epoch + 1, epochs, avg_loss)
+            logger.info("Epoch %d/%d — loss: %.4f (constraint: %.4f)", epoch + 1, epochs, avg_loss, avg_constraint)
 
     # 4. Save checkpoint
     out_path = save_path or str(_EMBEDDER_PATH)
@@ -540,6 +602,12 @@ class SloTextEmbedder:
         self.max_seq_len = max_seq_len
         self.encode_fn = encode_fn  # BPE encode function if available
 
+    def eval(self):
+        """Set encoder to eval mode (disables dropout for deterministic output)."""
+        for block in self.encoder.blocks:
+            if hasattr(block, "train"):
+                block.train(False)
+
     @classmethod
     def load(cls, path: Optional[str] = None) -> Optional["SloTextEmbedder"]:
         """Load a trained embedder from disk. Returns None if not found."""
@@ -638,7 +706,9 @@ class SloTextEmbedder:
                     padded = np.zeros(max_len, dtype=np.int64)
                     padded[:len(ids)] = ids
                     return padded
-            return cls(encoder, vocab, embed_dim, max_seq_len, encode_fn=encode_fn)
+            embedder = cls(encoder, vocab, embed_dim, max_seq_len, encode_fn=encode_fn)
+            embedder.eval()
+            return embedder
 
         except Exception as e:
             logger.warning("Failed to load SloTextEmbedder: %s", e)

@@ -12,6 +12,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+torch = pytest.importorskip("torch")
+
 
 def _make_tiny_dataset(tmp_path: Path) -> Path:
     """Create a small ASCII text file for tokenization."""

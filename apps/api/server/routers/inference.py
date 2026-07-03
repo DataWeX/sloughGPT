@@ -630,22 +630,6 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                             "role": "system",
                             "content": f"[TOOL RESULT: {tool_name}]\nError: {result.error}\n[/TOOL RESULT]"
                         })
-                if result.success:
-                    yield _sse_event("chat", "TOOL", "complete",
-                        data=tool_result_data,
-                        message=f"Tool {tool_name} completed in {result.duration_ms:.0f}ms")
-                    provider_messages.append({
-                        "role": "system",
-                        "content": f"[TOOL RESULT: {tool_name}]\n{result.output}\n[/TOOL RESULT]"
-                    })
-                else:
-                    yield _sse_event("chat", "TOOL", "error",
-                        data=tool_result_data,
-                        message=f"Tool {tool_name} failed: {result.error}")
-                    provider_messages.append({
-                        "role": "system",
-                        "content": f"[TOOL RESULT: {tool_name}]\nError: {result.error}\n[/TOOL RESULT]"
-                    })
         except Exception:
             logger.warning("Tool execution failed", exc_info=True)
 

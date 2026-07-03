@@ -79,20 +79,6 @@ def patch_torch_deps():
     """Patch out torch from ModelServer so tests run torch-free."""
     patches = [
         patch("domains.infrastructure.model_server._ensure_torch", return_value=True),
-        patch.object(ModelServer, "_generate_sync", new=_mock_generate_sync),
-    ]
-    for p in patches:
-        p.start()
-    yield
-    for p in patches:
-        p.stop()
-
-
-@pytest.fixture(autouse=True)
-def patch_torch_deps():
-    """Patch out torch from ModelServer so tests run torch-free."""
-    patches = [
-        patch("domains.infrastructure.model_server._ensure_torch", return_value=True),
         patch.object(ModelServer, "_generate_sync", autospec=True,
                      side_effect=_mock_generate_sync),
     ]
