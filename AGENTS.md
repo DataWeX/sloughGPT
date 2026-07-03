@@ -292,7 +292,7 @@ Chat UI components are in [`apps/web/components/chat/`](apps/web/components/chat
 - Keyboard shortcuts (Enter to send, Esc to close)
 - Responsive design
 
-### Pending (Multimodal Engine)
+### Done
 - Voice input: ✅ implemented (Web Speech API browser fallback → server `/multimodal/transcribe`)
 - Image upload with preview: ✅ implemented (`ImageUpload` + `ImageDropZone` → base64 → chat message `images` field)
 
@@ -449,8 +449,8 @@ class ClassName:
 - ✅ Side effects documented
 - ✅ Parameter descriptions for non-obvious args
 
-### Pending
-- Voice & image input: UI captures audio/image, backend wired but limited
+### Done
+- Voice & image input: ✅ implemented (Web Speech API + `/multimodal/transcribe`, `ImageUpload` → base64 → chat)
 
 ### Done
 - [x] MNIST/benchmark test suite for SloNet - autograd tests pass
