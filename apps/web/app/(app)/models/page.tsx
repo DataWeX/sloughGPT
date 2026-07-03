@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { IconRefresh } from '@/components/ui'
 import { useApiHealth } from '@/hooks/useApiHealth'
 import { useToastStore } from '@/lib/toast-store'
+import { modelDisplayName } from '@/lib/inference-display'
 import { modelController } from '@/lib/model-controller'
 import { soulsController } from '@/lib/souls-controller'
 import ModelStatusCard from '@/components/models/ModelStatusCard'
@@ -93,7 +94,7 @@ export default function ModelsPage() {
   const isOnline = health !== null && health !== 'offline'
   const subtitle = health === null ? 'Connecting...'
     : !isOnline ? 'API offline'
-    : health.model_loaded ? `${health.model_type} · running`
+    : health.model_loaded ? `${modelDisplayName(health.model_type)} · running`
     : 'No model loaded'
 
   return (

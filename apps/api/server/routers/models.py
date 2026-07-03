@@ -97,6 +97,42 @@ def _describe_model(model_id: str, parameters: int, loaded: bool) -> str:
     return " — ".join(parts[:2]) + (f". {parts[2]}" if len(parts) > 2 else "") + "."
 
 
+def _model_display_name(model_id: str) -> str:
+    """Generate a human-friendly display name from a HuggingFace model ID.
+
+    Examples:
+        "Qwen/Qwen2.5-0.5B-Instruct" → "Qwen 2.5 0.5B Instruct"
+        "gpt2" → "GPT-2"
+        "microsoft/Phi-3.5-mini-instruct" → "Phi 3.5 Mini Instruct"
+        "meta-llama/Llama-3-8B" → "Llama 3 8B"
+    """
+    name = model_id.split("/")[-1] if "/" in model_id else model_id
+
+    # Known special cases
+    _DISPLAY_NAMES = {
+        "gpt2": "GPT-2",
+        "gpt2-medium": "GPT-2 Medium",
+        "gpt2-large": "GPT-2 Large",
+        "gpt2-xl": "GPT-2 XL",
+    }
+    if model_id in _DISPLAY_NAMES:
+        return _DISPLAY_NAMES[model_id]
+
+    # Strip common prefixes
+    for prefix in ["models--", "models--"]:
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+
+    # Replace hyphens/underscores with spaces, clean up version dots
+    display = name.replace("-", " ").replace("_", " ")
+
+    # Collapse multiple spaces
+    while "  " in display:
+        display = display.replace("  ", " ")
+
+    return display.strip()
+
+
 @router.post("/load", response_model=LoadModelResponse)
 async def load_model(req: LoadModelRequest):
     """Load a model"""
@@ -172,7 +208,7 @@ async def list_hf_models(q: Optional[str] = None):
         size_gb = compute_model_size_gb(mid)
         models_out.append({
             "id": mid,
-            "name": mid,
+            "name": _model_display_name(mid),
             "hf_model_id": mid,
             "source": "huggingface",
             "size_mb": size_gb * 1024 if size_gb is not None else None,
@@ -192,7 +228,7 @@ async def list_hf_models(q: Optional[str] = None):
                     size_gb = compute_model_size_gb(cached_id)
                     models_out.append({
                         "id": cached_id,
-                        "name": cached_id,
+                        "name": _model_display_name(cached_id),
                         "hf_model_id": cached_id,
                         "source": "huggingface",
                         "size_mb": size_gb * 1024 if size_gb is not None else None,
