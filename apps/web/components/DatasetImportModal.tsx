@@ -38,7 +38,7 @@ const SOURCE_OPTIONS: SourceOption[] = [
   { value: 'local', label: 'Server Path', description: 'Folder on this machine' },
 ]
 
-const DEFAULT_EXTENSIONS = ['.py', '.js', '.ts', '.md', '.txt', '.json']
+const DEFAULT_EXTENSIONS = ['.py', '.js', '.ts', '.md', '.txt', '.json', '.pdf']
 
 export function DatasetImportModal({
   open,
@@ -434,7 +434,7 @@ export function DatasetImportModal({
             <fieldset>
               <legend className="text-sm font-medium text-foreground mb-2">File Types (for code repos)</legend>
               <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Select file extensions">
-                {['.py', '.js', '.ts', '.md', '.txt', '.json', '.yaml', '.csv'].map((ext) => (
+                {['.py', '.js', '.ts', '.md', '.txt', '.json', '.yaml', '.csv', '.pdf'].map((ext) => (
                   <Button
                     key={ext}
                     variant={extensions.includes(ext) ? 'default' : 'outline'}

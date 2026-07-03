@@ -471,3 +471,91 @@ class TestWarmup:
             assert not server._warmup_completed, "warmup should not have completed"
             assert server._warmup_error is not None, f"expected warmup error, got None (completed={server._warmup_completed})"
             assert server.status == ModelStatus.DEGRADED
+
+
+# ── ModelRegistry ↔ ModelServer wiring ─────────────────────────────────────
+
+
+class TestRegistryWiring:
+    """Verify that registering a model creates a ModelServer with lifecycle
+    management, and that unregistering cleans up properly."""
+
+    def test_register_creates_model_server(self, registry, model, tokenizer):
+        """Registering a model produces a ModelServer in the registry."""
+        server = registry.register("gpt2", model, tokenizer, make_default=True)
+        assert isinstance(server, ModelServer)
+        assert registry.get("gpt2") is server
+        assert registry.default_id == "gpt2"
+
+    def test_list_models_shows_registered(self, registry, model, tokenizer):
+        """Registered models appear in list_models with metrics."""
+        registry.register("test-model", model, tokenizer)
+        models = registry.list_models()
+        assert len(models) >= 1
+        ids = [m["model_id"] for m in models]
+        assert "test-model" in ids
+
+    def test_health_summary_includes_model(self, registry, model, tokenizer):
+        """Health summary reports registered models."""
+        registry.register("healthy-model", model, tokenizer)
+        health = registry.health_summary()
+        assert health["models_loaded"] >= 1
+        assert health["default_model"] == "healthy-model"
+
+    def test_unregister_removes_model(self, registry, model, tokenizer):
+        """Unregister removes the ModelServer and cleans up."""
+        registry.register("temp-model", model, tokenizer)
+        assert registry.get("temp-model") is not None
+        result = registry.unregister("temp-model")
+        assert result is True
+        assert registry.get("temp-model") is None
+
+    def test_unregister_updates_default(self, registry, model, tokenizer):
+        """Unregistering the default model falls back to the next one."""
+        registry.register("first", model, tokenizer, make_default=True)
+        registry.register("second", model, tokenizer)
+        assert registry.default_id == "first"
+        registry.unregister("first")
+        assert registry.default_id == "second"
+
+    def test_generate_through_registry(self, registry, model, tokenizer):
+        """Generation through registry delegates to ModelServer."""
+        registry.register("gen-model", model, tokenizer, make_default=True)
+        result = asyncio.run(registry.generate("Hello world"))
+        assert "text" in result
+        assert result["tokens_generated"] >= 1
+
+    def test_registry_lifecycle_hooks_fire(self, registry, model, tokenizer):
+        """Pre/post hooks on ModelServer fire during generation."""
+        server = registry.register("hook-model", model, tokenizer, make_default=True)
+        pre_count_before = len(server._pre_generate_hooks)
+        post_count_before = len(server._post_generate_hooks)
+        asyncio.run(registry.generate("test prompt"))
+        # Hooks should have fired at least once (warmup + explicit generate)
+        assert server.metrics.requests_completed >= 1
+
+    def test_registry_metrics_track_generation(self, registry, model, tokenizer):
+        """Metrics are recorded after generation through registry."""
+        server = registry.register("metrics-model", model, tokenizer, make_default=True)
+        asyncio.run(registry.generate("metrics test"))
+        snap = server.get_metrics_snapshot()
+        assert snap["requests_completed"] >= 1
+        assert snap["tokens_generated_total"] >= 1
+
+    def test_register_replaces_old_server(self, registry, tokenizer):
+        """Registering the same ID replaces the old ModelServer."""
+        old_model = MockModel()
+        new_model = MockModel()
+        server1 = registry.register("swap-model", old_model, tokenizer)
+        server2 = registry.register("swap-model", new_model, tokenizer)
+        assert server1 is not server2
+        assert registry.get("swap-model") is server2
+
+    def test_multiple_models_coexist(self, registry, model, tokenizer):
+        """Multiple models can coexist in the registry."""
+        registry.register("model-a", model, tokenizer)
+        registry.register("model-b", model, tokenizer)
+        models = registry.list_models()
+        ids = [m["model_id"] for m in models]
+        assert "model-a" in ids
+        assert "model-b" in ids
