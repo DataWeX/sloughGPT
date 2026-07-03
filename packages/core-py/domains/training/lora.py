@@ -176,11 +176,12 @@ class LoRALinear(SloLayer):
 
     def named_parameters(self, prefix=""):
         params = self.get_trainable_parameters()
-        names = {
-            id(self.lora_s): f"{prefix}lora_s" if self.lora_type == LoRAType.IA3 else None,
-            id(self.lora_A): f"{prefix}lora_A",
-            id(self.lora_B): f"{prefix}lora_B",
-        }
+        names = {}
+        if self.lora_type == LoRAType.IA3:
+            names[id(self.lora_s)] = f"{prefix}lora_s"
+        else:
+            names[id(self.lora_A)] = f"{prefix}lora_A"
+            names[id(self.lora_B)] = f"{prefix}lora_B"
         return [(names.get(id(p), f"{prefix}p{i}"), p) for i, p in enumerate(params) if names.get(id(p))]
 
 

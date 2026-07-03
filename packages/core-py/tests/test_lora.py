@@ -176,13 +176,20 @@ class TestLoRALinear:
         params = layer.parameters()
         assert len(params) == 2
 
-    @pytest.mark.skip(reason="named_parameters accesses lora_s unconditionally — source bug")
     def test_named_parameters_lora(self):
-        pass
+        layer = LoRALinear(64, 32, lora_type=LoRAType.LORA)
+        named = layer.named_parameters()
+        assert len(named) == 2
+        names = [n for n, _ in named]
+        assert "lora_A" in names
+        assert "lora_B" in names
 
-    @pytest.mark.skip(reason="named_parameters accesses lora_s unconditionally — source bug")
     def test_named_parameters_ia3(self):
-        pass
+        layer = LoRALinear(64, 32, lora_type=LoRAType.IA3)
+        named = layer.named_parameters()
+        assert len(named) == 1
+        names = [n for n, _ in named]
+        assert "lora_s" in names
 
 
 # ── LoRAEmbedding ──────────────────────────────────────────────────────────
