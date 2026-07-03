@@ -152,6 +152,18 @@ class ModelsController:
             server_state.model = model
             server_state.tokenizer = tokenizer
 
+            # Register model with ModelRegistry BEFORE setup_providers()
+            # so that setup_providers() can find the ModelServer and wire
+            # it into providers (enables semaphore, timeout, circuit breaker, warmup).
+            from domains.infrastructure.model_registry import get_model_registry
+            model_registry = get_model_registry()
+            model_registry.register(
+                model_id, model, tokenizer,
+                make_default=True,
+                generate_timeout=120.0,
+            )
+            logger.info("Registered model in ModelRegistry: %s", model_id)
+
             # Create InferenceEngine for the new model so the inference-engine
             # provider (which is preferred over hf-default) works with current weights.
             inference_engine = None
@@ -169,8 +181,6 @@ class ModelsController:
             # hf-default registration, and default router wiring).
             try:
                 from domains.models.provider import setup_providers
-                from domains.infrastructure.model_registry import get_model_registry
-                model_registry = get_model_registry()
                 setup_providers(
                     model, tokenizer,
                     hf_model_id=model_id,
@@ -335,19 +345,28 @@ class ModelsController:
             }
     
     def unload_model(self) -> Dict[str, Any]:
-        """Unload current model"""
+        """Unload current model and clean up ModelRegistry entry."""
         if self._model_instance is not None:
             del self._model_instance
             self._model_instance = None
-        
+
+        # Unregister from ModelRegistry (tears down ModelServer, releases semaphore, etc.)
+        if self._current_model:
+            try:
+                from domains.infrastructure.model_registry import get_model_registry
+                registry = get_model_registry()
+                registry.unregister(self._current_model)
+            except Exception:
+                pass
+
         if self._hf_model is not None:
             del self._hf_model
             self._hf_model = None
-        
+
         if self._tokenizer is not None:
             del self._tokenizer
             self._tokenizer = None
-        
+
         try:
             from domains.training.slonet import _get_accelerator
             acc = _get_accelerator()
@@ -355,7 +374,10 @@ class ModelsController:
                 acc.empty_cache()
         except Exception:
             pass
-        
+
+        import gc
+        gc.collect()
+
         result = {
             "model_id": self._current_model,
             "status": "unloaded",
@@ -458,7 +480,6 @@ class ModelsController:
             return [{"model_id": m, "parameters": p, "vocab_size": v} for m, p, v in curated if q.lower() in m.lower()]
         return [{"model_id": m, "parameters": p, "vocab_size": v} for m, p, v in curated]
 
-    @staticmethod
     @staticmethod
     def _estimate_params(model_id: str) -> int:
         """Estimate parameter count from model ID string."""
