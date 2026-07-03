@@ -318,6 +318,10 @@ def train_embedder(
             if len(batch_idx) < 2:
                 continue
 
+            # Zero gradients
+            for p in params:
+                p.grad = None
+
             # Build positive pairs: original + augmented
             orig_texts = [texts[i] for i in batch_idx]
             aug_texts = [_augment_text(t, rng_train) for t in orig_texts]
@@ -336,47 +340,40 @@ def train_embedder(
             # Compute contrastive loss
             loss_val = _contrastive_loss(orig_norm, aug_norm)
 
-            # Backward pass (manual gradient computation for contrastive loss)
+            # Vectorized InfoNCE gradient w.r.t. orig_norm
             B = len(batch_idx)
-            D = embed_dim
             temperature = CONTRASTIVE_TEMPERATURE
-
-            # Gradient of InfoNCE w.r.t. orig_norm
             sim = orig_norm @ aug_norm.T / temperature
             sim_max = sim.max(axis=1, keepdims=True)
-            sim_shifted = sim - sim_max
-            exp_sim = np.exp(sim_shifted)
+            exp_sim = np.exp(sim - sim_max)
             sum_exp = exp_sim.sum(axis=1, keepdims=True)
             probs = exp_sim / sum_exp  # (B, B)
 
-            # d(loss)/d(orig_norm) = (1/B) * sum_j [ (probs[j,j] - 1_{i=j}) * aug_norm[j] / temp ]
-            labels = np.arange(B)
-            grad_orig = np.zeros_like(orig_norm)
-            for i in range(B):
-                for j in range(B):
-                    coeff = probs[i, j] - (1.0 if i == j else 0.0)
-                    grad_orig[i] += coeff * aug_norm[j]
-                grad_orig[i] /= (B * temperature)
+            # d(loss)/d(orig_norm) — fully vectorized, no Python loops
+            eye = np.eye(B)
+            coeff = (probs - eye) / (B * temperature)  # (B, B)
+            grad_orig_norm = coeff @ aug_norm  # (B, D)
 
-            # Backprop through encoder (simplified: update last projection + norm)
-            # For full backprop we'd need the full autograd graph; here we
-            # approximate by updating the projection head directly
-            proj = encoder.proj
-            if hasattr(proj, "weight") and hasattr(proj.weight, "grad"):
-                # Approximate gradient for projection layer
-                grad_proj = grad_orig.T @ orig_emb.data  # (D, D)
-                if proj.weight.grad is None:
-                    proj.weight.grad = Tensor(grad_proj)
-                else:
-                    proj.weight.grad.data += grad_proj
+            # Backprop through L2 norm: d(L2)/d(orig_emb)
+            norms = np.linalg.norm(orig_emb.data, axis=1, keepdims=True) + 1e-10
+            grad_orig_emb = (grad_orig_norm / norms) - (orig_emb.data * (grad_orig_norm * orig_emb.data).sum(axis=1, keepdims=True) / (norms ** 3))
+
+            # Set gradient on encoder output and backward through SloNet autograd
+            orig_emb.grad = Tensor(grad_orig_emb)
+            orig_emb.backward()
 
             epoch_loss += loss_val
             n_batches += 1
 
-            # Step optimizer (SloAdam.step sets p.grad=None internally)
+            # Clip gradients to prevent explosion
             for p in params:
                 if p.grad is not None:
-                    p.grad.data *= 0.01  # scale down to prevent explosion
+                    g = p.grad.data
+                    norm = np.linalg.norm(g)
+                    if norm > 1.0:
+                        p.grad.data = g / norm
+
+            # Step optimizer (SloAdam.step sets p.grad=None internally)
             optimizer.step(params)
 
         avg_loss = epoch_loss / max(n_batches, 1)
@@ -597,11 +594,17 @@ class SloTextEmbedder:
         Returns:
             list of floats (L2-normalized)
         """
-        ids = _encode_tokens(text, self.vocab, self.max_seq_len)
-        ids = ids[np.newaxis, :]  # (1, max_seq_len)
+        import domains.training.slonet as _slonet
+        _prev_accel = getattr(_slonet, "_ACCELERATOR", None)
+        try:
+            _slonet._ACCELERATOR = "none"
+            ids = _encode_tokens(text, self.vocab, self.max_seq_len)
+            ids = ids[np.newaxis, :]  # (1, max_seq_len)
 
-        emb = self.encoder.forward(ids)  # (1, embed_dim)
-        vec = emb.data.squeeze(0)
+            emb = self.encoder.forward(ids)  # (1, embed_dim)
+            vec = emb.data.squeeze(0)
+        finally:
+            _slonet._ACCELERATOR = _prev_accel
 
         # L2-normalize
         norm = np.linalg.norm(vec)

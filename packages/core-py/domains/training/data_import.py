@@ -1017,18 +1017,49 @@ class DataImporter:
         """Import from URL."""
         return self.url_importer.import_from_url(url, name, self.output_dir)
 
+    @staticmethod
+    def _extract_pdf_text(file_path: Path) -> str:
+        """Extract text from a PDF file using PyMuPDF (fitz) or PyPDF2.
+
+        Args:
+            file_path: Path to the PDF file.
+
+        Returns:
+            Extracted text content, or empty string if extraction fails.
+        """
+        try:
+            import fitz
+            doc = fitz.open(str(file_path))
+            pages = [page.get_text() for page in doc]
+            doc.close()
+            return "\n".join(pages)
+        except ImportError:
+            pass
+        try:
+            import PyPDF2
+            with open(file_path, "rb") as f:
+                reader = PyPDF2.PdfReader(f)
+                return "\n".join(page.extract_text() or "" for page in reader.pages)
+        except ImportError:
+            pass
+        return ""
+
     def import_from_local(
         self,
         path: str,
         name: str,
         extensions: Optional[List[str]] = None,
     ) -> ImportResult:
-        """Import from local file or directory."""
+        """Import from local file or directory.
+
+        Supports text files (.py, .js, .ts, .md, .txt, .json, .yaml, .csv)
+        and PDF files (.pdf) with automatic text extraction via PyMuPDF/PyPDF2.
+        """
         source = Path(path)
         output_path = Path(self.output_dir) / name
         output_path.mkdir(parents=True, exist_ok=True)
 
-        extensions = extensions or [".py", ".js", ".ts", ".md", ".txt", ".json"]
+        extensions = extensions or [".py", ".js", ".ts", ".md", ".txt", ".json", ".pdf"]
 
         try:
             corpus_file = output_path / "corpus.jsonl"
@@ -1037,7 +1068,10 @@ class DataImporter:
 
             with open(corpus_file, "w", encoding="utf-8") as f:
                 if source.is_file():
-                    content = source.read_text(encoding="utf-8")
+                    if source.suffix.lower() == ".pdf":
+                        content = self._extract_pdf_text(source)
+                    else:
+                        content = source.read_text(encoding="utf-8")
                     record = {"content": content, "path": str(source)}
                     f.write(json.dumps(record, ensure_ascii=False) + "\n")
                     total_chars = len(content)
@@ -1046,7 +1080,10 @@ class DataImporter:
                     for ext in extensions:
                         for file_path in source.rglob(f"*{ext}"):
                             try:
-                                content = file_path.read_text(encoding="utf-8")
+                                if file_path.suffix.lower() == ".pdf":
+                                    content = self._extract_pdf_text(file_path)
+                                else:
+                                    content = file_path.read_text(encoding="utf-8")
                                 record = {
                                     "content": content,
                                     "path": str(file_path.relative_to(source)),
