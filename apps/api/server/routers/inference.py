@@ -648,7 +648,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                 k_text = "\n".join(f"- {f}" for f in enrichment["facts"])
                 provider_messages.insert(0, {
                     "role": "system",
-                    "content": f"[KNOWLEDGE RETRIEVED]\n{k_text}\n[/KNOWLEDGE RETRIEVED]"
+                    "content": f"Use the following context to answer the question:\n{k_text}"
                 })
         except Exception:
             pass
@@ -662,7 +662,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                     knowledge_str = "\n".join(f"- {k}" for k in req.knowledge)
                     provider_messages.insert(0, {
                         "role": "system",
-                        "content": f"[KNOWLEDGE]\n{knowledge_str}\n[/KNOWLEDGE]"
+                        "content": f"Use the following context to answer:\n{knowledge_str}"
                     })
 
                 full_response = ""
@@ -704,10 +704,10 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                 system_prompt = frame.system_prompt if frame and frame.system_prompt else (req.system_prompt or "")
                 if req.knowledge:
                     knowledge_str = "\n".join(f"- {k}" for k in req.knowledge)
-                    system_prompt = f"{system_prompt}\n\n[KNOWLEDGE]\n{knowledge_str}\n[/KNOWLEDGE]"
+                    system_prompt = f"{system_prompt}\n\nUse the following context to answer:\n{knowledge_str}"
                 if knowledge_retrieved:
                     k_text = "\n".join(f"- {f}" for f in knowledge_retrieved)
-                    system_prompt = f"{system_prompt}\n\n[KNOWLEDGE RETRIEVED]\n{k_text}\n[/KNOWLEDGE RETRIEVED]"
+                    system_prompt = f"{system_prompt}\n\nUse the following context to answer:\n{k_text}"
                 full_prompt = f"{system_prompt}\n{user_msg}" if system_prompt else user_msg
 
                 inputs = ctrl._tokenizer(full_prompt, return_tensors="pt")
@@ -919,14 +919,14 @@ async def chat(req: ChatRequest) -> ChatResponse:
     # Inject knowledge into system prompt if provided
     if req.knowledge:
         knowledge_str = "\n".join(f"- {k}" for k in req.knowledge)
-        system_prompt = f"{system_prompt}\n\n[KNOWLEDGE]\n{knowledge_str}\n[/KNOWLEDGE]" if system_prompt else f"[KNOWLEDGE]\n{knowledge_str}\n[/KNOWLEDGE]"
+        system_prompt = f"{system_prompt}\n\nUse the following context to answer:\n{knowledge_str}" if system_prompt else f"Use the following context to answer:\n{knowledge_str}"
     
     # Knowledge enrichment from KnowledgeMemory
     try:
         enrichment = await asyncio.to_thread(_enrich_knowledge, user_msg, False, 5)
         if enrichment.get("facts"):
             k_text = "\n".join(f"- {f}" for f in enrichment["facts"])
-            system_prompt = f"{system_prompt}\n\n[KNOWLEDGE RETRIEVED]\n{k_text}\n[/KNOWLEDGE RETRIEVED]" if system_prompt else f"[KNOWLEDGE RETRIEVED]\n{k_text}\n[/KNOWLEDGE RETRIEVED]"
+            system_prompt = f"{system_prompt}\n\nUse the following context to answer:\n{k_text}" if system_prompt else f"Use the following context to answer:\n{k_text}"
     except Exception:
         pass
     

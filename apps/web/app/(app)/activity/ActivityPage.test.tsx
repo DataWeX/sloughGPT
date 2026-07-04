@@ -4,7 +4,7 @@ import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/re
 import React from 'react'
 import { act } from 'react'
 
-const { mockStatus, mockDataset, mockTrain, mockPredict, mockRecordData, mockDeleteAll, mockAddToast } = vi.hoisted(() => ({
+const { mockStatus, mockDataset, mockTrain, mockPredict, mockRecordData, mockDeleteAll, mockAddToast, mockStartActivityTraining, mockListJobs } = vi.hoisted(() => ({
   mockStatus: vi.fn(),
   mockDataset: vi.fn(),
   mockTrain: vi.fn(),
@@ -12,6 +12,8 @@ const { mockStatus, mockDataset, mockTrain, mockPredict, mockRecordData, mockDel
   mockRecordData: vi.fn(),
   mockDeleteAll: vi.fn(),
   mockAddToast: vi.fn(),
+  mockStartActivityTraining: vi.fn(),
+  mockListJobs: vi.fn(),
 }))
 
 vi.mock('@/lib/activity-controller', () => ({
@@ -26,6 +28,12 @@ vi.mock('@/lib/activity-controller', () => ({
 }))
 vi.mock('@/lib/toast-store', () => ({
   useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+}))
+vi.mock('@/lib/controllers', () => ({
+  trainingJobsController: {
+    startActivityTraining: mockStartActivityTraining,
+    list: mockListJobs,
+  },
 }))
 
 import ActivityPage from './page'
@@ -128,14 +136,13 @@ describe('ActivityPage', () => {
   })
 
   it('trains classifier', async () => {
-    mockTrain.mockResolvedValue({
-      status: 'complete',
-      epochs: 30,
-      final_loss: 0.5,
-      val_accuracy: 0.85,
-      num_samples: 10,
-      message: 'Training complete',
-    })
+    mockStartActivityTraining.mockResolvedValue({ job_id: 'activity_1', status: 'queued' })
+    mockListJobs.mockResolvedValue([{
+      id: 'activity_1',
+      status: 'completed',
+      metrics: { val_accuracy: 0.85, num_samples: 10 },
+      epochs_completed: 30,
+    }])
     render(<ActivityPage />)
     await waitFor(() => {
       expect(screen.getByText('Train')).toBeTruthy()
@@ -143,7 +150,7 @@ describe('ActivityPage', () => {
     await act(async () => { fireEvent.click(screen.getByText('Train')) })
     await waitFor(() => {
       expect(screen.getByText(/85.0%/)).toBeTruthy()
-      expect(mockTrain).toHaveBeenCalled()
+      expect(mockStartActivityTraining).toHaveBeenCalled()
     })
   })
 
@@ -171,7 +178,7 @@ describe('ActivityPage', () => {
   })
 
   it('shows error toast on train failure', async () => {
-    mockTrain.mockRejectedValueOnce(new Error('train failed'))
+    mockStartActivityTraining.mockRejectedValueOnce(new Error('train failed'))
     render(<ActivityPage />)
     await waitFor(() => { expect(screen.getByText('Train')).toBeTruthy() })
     await act(async () => { fireEvent.click(screen.getByText('Train')) })
