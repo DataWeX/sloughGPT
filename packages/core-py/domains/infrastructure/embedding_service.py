@@ -1,7 +1,7 @@
 """
-Embedding service — foundational plumbing for vector operations.
+Embedding service — foundational base layer for vector operations.
 
-This is infrastructure, not opinion. It provides:
+This is the foundational base layer, not opinion. It provides:
 - Embedding computation (delegates to best available backend)
 - Anchor store integration (fixed reference points)
 - Dimension management (padding/truncation)
@@ -19,9 +19,9 @@ from .anchor_store import AnchorStore, get_default_anchors
 
 
 class EmbeddingService:
-    """Foundational embedding infrastructure.
+    """Foundational base layer for embedding operations.
 
-    This is plumbing — it doesn't have opinions about what embeddings
+    This is the foundational base layer — it doesn't have opinions about what embeddings
     mean, only how to compute and compare them.
     """
 
