@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 try:
-    import torch
+    from domains.training.slonet_compat import torch
     import torch.nn as nn
     from torch.utils.data import Dataset, DataLoader
     from transformers import (

@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  output: 'standalone',
   transpilePackages: ['@sloughgpt/strui'],
   // Disable Next.js default error overlay in development
   // We use our own CustomErrorHandler component instead

@@ -158,7 +158,7 @@ class ModelLoader:
     def _load_torch(cls, path: str, device: str, **kwargs) -> ModelInterface:
         """Load a PyTorch .pt file, converting weights to numpy arrays."""
         try:
-            import torch
+            from domains.training.slonet_compat import torch
         except ImportError:
             raise ImportError(
                 "PyTorch required to load .pt files. Install: pip install torch"
@@ -243,7 +243,7 @@ class HuggingFaceWrapper(ModelInterface):
     def load(self, path: str, device: str = "cpu", **kwargs) -> "HuggingFaceWrapper":
         from transformers import AutoModelForCausalLM
         self._model = AutoModelForCausalLM.from_pretrained(path)
-        import torch
+        from domains.training.slonet_compat import torch
         self._model = self._model.to(torch.device(device))
         return self
 
@@ -256,7 +256,7 @@ class HuggingFaceWrapper(ModelInterface):
         top_p: Optional[float] = None,
         **kwargs,
     ) -> np.ndarray:
-        import torch
+        from domains.training.slonet_compat import torch
         inp = torch.from_numpy(input_ids.astype(np.int64))
         with torch.no_grad():
             output = self._model.generate(
@@ -269,7 +269,7 @@ class HuggingFaceWrapper(ModelInterface):
     def forward(
         self, input_ids: np.ndarray, targets: Optional[np.ndarray] = None, **kwargs
     ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
-        import torch
+        from domains.training.slonet_compat import torch
         inp = torch.from_numpy(input_ids.astype(np.int64))
         tgt = torch.from_numpy(targets.astype(np.int64)) if targets is not None else None
         outputs = self._model(inp, labels=tgt)
@@ -282,7 +282,7 @@ class HuggingFaceWrapper(ModelInterface):
         return {k: v.cpu().numpy() for k, v in sd.items()}
 
     def load_state_dict(self, state_dict: Dict[str, np.ndarray], **kwargs) -> None:
-        import torch
+        from domains.training.slonet_compat import torch
         torch_sd = {k: torch.from_numpy(v) for k, v in state_dict.items()}
         self._model.load_state_dict(torch_sd, **kwargs)
 
@@ -293,7 +293,7 @@ class HuggingFaceWrapper(ModelInterface):
         return self._config
 
     def to(self, device: str) -> "HuggingFaceWrapper":
-        import torch
+        from domains.training.slonet_compat import torch
         self._model = self._model.to(torch.device(device))
         return self
 
