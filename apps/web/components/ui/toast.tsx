@@ -48,6 +48,7 @@ function ToastProvider({ children, duration }: { children: ReactNode; duration?:
 /* ── Toast Viewport ─────────────────────────────────────────────── */
 
 function ToastViewport({ className }: { className?: string }) {
+  if (typeof document === 'undefined') return null
   return createPortal(
     <div
       aria-live="polite"

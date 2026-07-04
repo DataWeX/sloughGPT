@@ -21,22 +21,17 @@ import gc
 import os
 import functools
 from threading import Lock, Thread, Event
+
+def _ensure_torch() -> bool:
+    """Check if real PyTorch is available (needed for HF model inference)."""
+    try:
+        import torch as _real_torch  # noqa: F401
+        return True
+    except ImportError:
+        return False
 from typing import Any, Optional, Callable
 from dataclasses import dataclass, field
 from enum import Enum
-
-# torch imported lazily in generate() / generate_stream() to avoid 9s module-level block
-_TORCH_AVAILABLE = None
-
-def _ensure_torch():
-    global _TORCH_AVAILABLE
-    if _TORCH_AVAILABLE is None:
-        try:
-            import torch  # noqa: F401
-            _TORCH_AVAILABLE = True
-        except ImportError:
-            _TORCH_AVAILABLE = False
-    return _TORCH_AVAILABLE
 
 logger = logging.getLogger("man.infrastructure.model_server")
 
@@ -176,7 +171,7 @@ def _mps_oom_recovery() -> None:
 def _cpu_fallback() -> str:
     """Force model to CPU; returns device string."""
     try:
-        import torch
+        from domains.training.slonet_compat import torch
         for obj in gc.get_objects():
             if hasattr(obj, "device") and hasattr(obj, "to"):
                 try:
