@@ -153,6 +153,7 @@ def load_hf_model(model_id: str, device: Optional[str] = None):
             model_id,
             dtype=torch.float32,
             local_files_only=True,
+            device_map="cpu" if resolved == "cpu" else None,
         )
         logger.info("%s loaded from local cache", model_id)
     except OSError:
@@ -162,6 +163,7 @@ def load_hf_model(model_id: str, device: Optional[str] = None):
             model_id,
             dtype=torch.float32,
             local_files_only=False,
+            device_map="cpu" if resolved == "cpu" else None,
         )
         logger.info("%s downloaded successfully", model_id)
 
