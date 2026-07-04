@@ -7,6 +7,7 @@ import {
   TextInput,
   StyleSheet,
   Alert,
+  Switch,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useNavigation} from '@react-navigation/native';
@@ -14,6 +15,12 @@ import {useSettingsStore} from '../stores/settings-store';
 import {useModelStore} from '../stores/model-store';
 import {StatusBadge} from '../components/StatusBadge';
 import {api, getApiUrl, setApiUrl} from '../services/api-client';
+import {
+  registerForPushNotifications,
+  unregisterPushNotifications,
+  isNotificationsEnabled,
+  onNotification,
+} from '../services/push-notifications';
 import {colors, spacing, radii, typography} from '../theme';
 import type {HealthStatus} from '../types';
 import type {ThemeMode} from '../types';
@@ -24,11 +31,35 @@ export function SettingsScreen() {
   const navigation = useNavigation<any>();
   const [serverUrl, setServerUrl] = useState('');
   const [healthData, setHealthData] = useState<HealthStatus | null>(null);
+  const [notificationsOn, setNotificationsOn] = useState(false);
+  const [lastNotification, setLastNotification] = useState<string | null>(null);
 
   useEffect(() => {
     getApiUrl().then(setServerUrl);
     api.get<HealthStatus>('/health').then(setHealthData).catch(() => {});
+    isNotificationsEnabled().then(setNotificationsOn);
   }, []);
+
+  useEffect(() => {
+    return onNotification((title, body) => {
+      setLastNotification(`${title}: ${body}`);
+    });
+  }, []);
+
+  const handleToggleNotifications = async (val: boolean) => {
+    if (val) {
+      const token = await registerForPushNotifications();
+      setNotificationsOn(!!token);
+      if (token) {
+        Alert.alert('Notifications enabled', 'You\'ll receive training and chat updates.');
+      } else {
+        Alert.alert('Permission denied', 'Enable notifications in system settings.');
+      }
+    } else {
+      await unregisterPushNotifications();
+      setNotificationsOn(false);
+    }
+  };
 
   const handleSaveUrl = async () => {
     const trimmed = serverUrl.trim();
@@ -111,6 +142,26 @@ export function SettingsScreen() {
               </TouchableOpacity>
             ))}
           </View>
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.row}>
+            <View style={{flex: 1}}>
+              <Text style={styles.cardTitle}>Push Notifications</Text>
+              <Text style={styles.navDesc}>Training updates and chat messages</Text>
+            </View>
+            <Switch
+              value={notificationsOn}
+              onValueChange={handleToggleNotifications}
+              trackColor={{false: colors.border, true: colors.primary + '60'}}
+              thumbColor={notificationsOn ? colors.primary : colors.textMuted}
+            />
+          </View>
+          {lastNotification && (
+            <View style={[styles.card, {backgroundColor: colors.surface, marginTop: 8, borderRadius: radii.sm}]}>
+              <Text style={[styles.navDesc, {fontSize: 11}]}>{lastNotification}</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.card}>

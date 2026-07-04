@@ -595,3 +595,171 @@ async def sync_status(request: Request):
         "server_time": int(__import__("time").time() * 1000),
         "inference_count": health.get("inference_count", 0),
     }
+
+
+# ── Push Notifications ───────────────────────────────────────────────────────
+
+class DeviceRegistrationRequest(BaseModel):
+    """Request body for registering a push notification device."""
+    token: str
+    platform: str  # "ios" | "android" | "web"
+    user_id: str = "default"
+    topics: Optional[List[str]] = None
+
+
+class NotificationSendRequest(BaseModel):
+    """Request body for sending a push notification."""
+    title: str
+    body: str
+    topic: Optional[str] = None
+    data: Optional[dict] = None
+    tokens: Optional[List[str]] = None
+    badge: Optional[int] = None
+
+
+@router.post("/notifications/register")
+async def register_device(body: DeviceRegistrationRequest):
+    """
+    Register a mobile device for push notifications.
+
+    Args:
+        body: Device token, platform, user_id, and topic subscriptions.
+
+    Returns:
+        Registration status.
+    """
+    from domains.mobile.notifications import get_notification_service
+
+    svc = get_notification_service()
+    result = svc.register_device(
+        token=body.token,
+        platform=body.platform,
+        user_id=body.user_id,
+        topics=body.topics,
+    )
+    return result
+
+
+@router.post("/notifications/unregister")
+async def unregister_device(body: dict):
+    """
+    Unregister a device from push notifications.
+
+    Args:
+        body: {"token": "expo-push-token..."}.
+
+    Returns:
+        Unregistration status.
+    """
+    from domains.mobile.notifications import get_notification_service
+
+    svc = get_notification_service()
+    token = body.get("token", "")
+    removed = svc.unregister_device(token)
+    return {"status": "removed" if removed else "not_found"}
+
+
+@router.get("/notifications/devices")
+async def list_devices(topic: Optional[str] = Query(None)):
+    """
+    List registered devices.
+
+    Args:
+        topic: Optional topic filter.
+
+    Returns:
+        List of registered devices.
+    """
+    from domains.mobile.notifications import get_notification_service
+
+    svc = get_notification_service()
+    return {"devices": svc.get_devices(topic=topic)}
+
+
+@router.post("/notifications/send")
+async def send_notification(body: NotificationSendRequest):
+    """
+    Send a push notification to registered devices.
+
+    Args:
+        body: Title, body, topic filter, data payload, optional token list.
+
+    Returns:
+        Send result with recipient count.
+    """
+    from domains.mobile.notifications import get_notification_service, NotificationPayload
+
+    svc = get_notification_service()
+    payload = NotificationPayload(
+        title=body.title,
+        body=body.body,
+        data=body.data or {},
+        badge=body.badge,
+        topic=body.topic,
+    )
+    result = svc.send_notification(
+        payload=payload,
+        tokens=body.tokens,
+        topic=body.topic,
+    )
+    return result
+
+
+@router.get("/notifications/history")
+async def notification_history(limit: int = Query(50, ge=1, le=200)):
+    """
+    Get recent notification history.
+
+    Args:
+        limit: Max entries to return.
+
+    Returns:
+        Recent notification records.
+    """
+    from domains.mobile.notifications import get_notification_service
+
+    svc = get_notification_service()
+    return {"history": svc.get_history(limit=limit)}
+
+
+@router.post("/notifications/cleanup")
+async def cleanup_devices():
+    """
+    Remove devices inactive for 30+ days.
+
+    Returns:
+        Count of removed devices.
+    """
+    from domains.mobile.notifications import get_notification_service
+
+    svc = get_notification_service()
+    removed = svc.cleanup_stale()
+    return {"removed": removed}
+
+
+@router.post("/notify/training-complete")
+async def notify_training_complete(request: Request):
+    """
+    Send a training-complete notification to all registered devices.
+
+    Side effects:
+        - Reads training status from internal endpoint.
+        - Sends push notification to all devices subscribed to 'training' topic.
+    """
+    from domains.mobile.notifications import get_notification_service, NotificationPayload
+
+    svc = get_notification_service()
+    training = await _internal_get(request, "/training/status") or {}
+
+    status = training.get("status", "unknown")
+    loss = training.get("final_loss")
+
+    payload = NotificationPayload(
+        title="Training Complete",
+        body=f"Model training finished. Final loss: {loss:.4f}" if loss else f"Training {status}",
+        data={"type": "training_complete", "status": status},
+        topic="training",
+    )
+
+    result = svc.send_notification(payload=payload, topic="training")
+    return result

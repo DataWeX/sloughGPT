@@ -19,6 +19,7 @@ import {ErrorBoundary} from './src/components/ErrorBoundary';
 import {LoadingScreen} from './src/components/LoadingScreen';
 import {colors} from './src/theme';
 import {initInference} from './src/services/activity-inference';
+import {registerForPushNotifications, onNotification} from './src/services/push-notifications';
 
 
 const Tab = createBottomTabNavigator();
@@ -58,6 +59,15 @@ function AppInner() {
 
   useEffect(() => {
     Promise.all([refresh(), initInference()]).finally(() => setReady(true));
+
+    // Register for push notifications on startup (non-blocking)
+    registerForPushNotifications().catch(() => {});
+
+    // Listen for incoming notifications (non-blocking)
+    const unsub = onNotification((title, body) => {
+      console.log('[Push]', title, body);
+    });
+    return unsub;
   }, []);
 
   if (!ready) {
