@@ -3,7 +3,7 @@ Embedding service — foundational base layer for vector operations.
 
 This is the foundational base layer, not opinion. It provides:
 - Embedding computation (delegates to best available backend)
-- Anchor store integration (fixed reference points)
+- Meaning point integration (fixed semantic reference points)
 - Dimension management (padding/truncation)
 
 Usage:
@@ -15,7 +15,7 @@ Usage:
 import numpy as np
 from typing import Dict, List, Optional
 
-from .anchor_store import AnchorStore, get_default_anchors
+from .anchor_store import MeaningPoints, get_default_meaning_points
 
 
 class EmbeddingService:
@@ -27,7 +27,7 @@ class EmbeddingService:
 
     def __init__(self, dimension: int = 128):
         self.dimension = dimension
-        self._anchor_store = get_default_anchors(dimension=dimension)
+        self._meaning_points = get_default_meaning_points(dimension=dimension)
         self._backend = None  # lazy-loaded
 
     def embed(self, text: str) -> List[float]:
@@ -46,30 +46,36 @@ class EmbeddingService:
         return [self.embed(t) for t in texts]
 
     def classify(self, text: str) -> str:
-        """Classify text by nearest anchor point.
+        """Classify text by nearest meaning point.
 
-        Returns the name of the closest anchor (e.g., "truth", "question").
+        Returns the name of the closest meaning point (e.g., "factual", "interrogative").
+        Uses embedding distance to fixed semantic meaning points.
         """
         vec = self.embed(text)
-        return self._anchor_store.classify(vec)
+        return self._meaning_points.classify(vec)
 
     def distances(self, text: str) -> Dict[str, float]:
-        """Compute distance from text to all anchor points.
+        """Compute distance from text to all meaning points.
 
         Returns dict of {name: distance} where 0.0 = same direction.
         """
         vec = self.embed(text)
-        return self._anchor_store.distances(vec)
+        return self._meaning_points.distances(vec)
 
-    def similarity(self, text: str, anchor: str) -> float:
-        """Cosine similarity between text and named anchor."""
+    def similarity(self, text: str, point_name: str) -> float:
+        """Cosine similarity between text and named meaning point."""
         vec = self.embed(text)
-        return self._anchor_store.similarity(vec, anchor)
+        return self._meaning_points.similarity(vec, point_name)
 
     @property
-    def anchors(self) -> AnchorStore:
-        """Access the anchor store (read-only tape recording)."""
-        return self._anchor_store
+    def meaning_points(self) -> MeaningPoints:
+        """Access the meaning point store (read-only tape recording)."""
+        return self._meaning_points
+
+    @property
+    def anchors(self) -> MeaningPoints:
+        """Backward compat alias for meaning_points."""
+        return self._meaning_points
 
 
 # Module-level singleton

@@ -98,8 +98,9 @@ def test_contrastive_loss():
     # Perfect alignment — loss should be low
     z = np.random.randn(B, D).astype(np.float32)
     z = z / (np.linalg.norm(z, axis=1, keepdims=True) + 1e-10)
-    loss = _contrastive_loss(z, z, temperature=0.07)
+    loss, constraint = _contrastive_loss(z, z, temperature=0.07)
     assert loss < 1.0  # low loss for identical pairs
+    assert constraint == 0.0  # no anchors → no constraint
 
 
 def test_contrastive_loss_random():
@@ -109,7 +110,7 @@ def test_contrastive_loss_random():
     z_j = np.random.randn(B, D).astype(np.float32)
     z_i = z_i / (np.linalg.norm(z_i, axis=1, keepdims=True) + 1e-10)
     z_j = z_j / (np.linalg.norm(z_j, axis=1, keepdims=True) + 1e-10)
-    loss = _contrastive_loss(z_i, z_j, temperature=0.07)
+    loss, constraint = _contrastive_loss(z_i, z_j, temperature=0.07)
     assert loss > 0.5  # high loss for random pairs
     assert loss < 10.0  # but not insane
 

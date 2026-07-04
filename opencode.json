@@ -10,6 +10,11 @@
       "template": "Load relevant docs for the given task area (frontend, backend, core, sdk, infra, cli). Read the doc map in .opencode/agents/doc-aware-engineer.md, then load the docs.",
       "description": "Load relevant project docs before making changes",
       "agent": "doc-aware-engineer"
+    },
+    "ui-fix": {
+      "template": "Read the UI error log at ~/.opencode-ui-error-log.json and the live backend errors at http://localhost:8000/errors/recent. Diagnose the most recent frontend error, identify the file and root cause, and apply a fix.",
+      "description": "Diagnose and fix the most recent frontend UI error using the UI error watcher",
+      "agent": "ui-error-fixer"
     }
   },
   "agent": {
@@ -19,6 +24,10 @@
     },
     "doc-aware-engineer": {
       "description": "Reads project manuals and docs before making changes. Trigger with 'opencode doc-aware' or when asked to engineer code with doc context.",
+      "mode": "subagent"
+    },
+    "ui-error-fixer": {
+      "description": "Diagnoses and fixes frontend UI errors. Reads the UI error log from the ui-error-watcher plugin and live backend errors. Trigger with 'opencode ui-fix' or when a UI build/test fails.",
       "mode": "subagent"
     }
   }

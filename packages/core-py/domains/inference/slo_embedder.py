@@ -248,14 +248,14 @@ def _contrastive_loss(
     anchor_store=None,
     constraint_weight: float = 0.5,
 ) -> Tuple[float, float]:
-    """InfoNCE loss with hard anchor constraints.
+    """InfoNCE loss with meaning point constraints.
 
     z_i, z_j: (B, D) — L2-normalized embeddings
-    anchor_labels: optional list of anchor names per text (e.g., ["truth", "question"])
-    anchor_store: AnchorStore instance with fixed reference vectors
-    constraint_weight: how much to weight the anchor constraint (0.0 = ignore anchors)
+    anchor_labels: optional list of meaning point labels per text (e.g., ["factual", "interrogative"])
+    anchor_store: MeaningPoints instance with fixed reference vectors
+    constraint_weight: how much to weight the meaning point constraint (0.0 = ignore)
 
-    Returns (total_loss, constraint_loss) — constraint_loss is 0 if no anchors provided.
+    Returns (total_loss, constraint_loss) — constraint_loss is 0 if no labels provided.
     """
     B = z_i.shape[0]
     # Cosine similarity matrix (already L2-normalized → dot product)
@@ -273,17 +273,17 @@ def _contrastive_loss(
     log_probs = logits - log_sum_exp[:, None]
     info_nce_loss = -log_probs[labels, labels].mean()
 
-    # Hard constraint: penalize distance from known anchor
+    # Hard constraint: penalize distance from known meaning point
     constraint_loss = 0.0
     if anchor_labels and anchor_store is not None:
         penalties = []
         for i, label in enumerate(anchor_labels):
             if label and anchor_store.get(label) is not None:
-                anchor_vec = anchor_store.get(label)
-                # Cosine similarity to anchor — should be high
-                sim_to_anchor = float(np.dot(z_i[i], anchor_vec))
+                point_vec = anchor_store.get(label)
+                # Cosine similarity to meaning point — should be high
+                sim_to_point = float(np.dot(z_i[i], point_vec))
                 # Penalty: 1 - sim (zero when perfectly aligned)
-                penalties.append(1.0 - sim_to_anchor)
+                penalties.append(1.0 - sim_to_point)
         if penalties:
             constraint_loss = float(np.mean(penalties))
 
@@ -291,26 +291,24 @@ def _contrastive_loss(
     return float(total), constraint_loss
 
 
-def _assign_anchor_label(text: str) -> Optional[str]:
-    """Assign an anchor label to text based on simple heuristics.
+def _label_by_meaning(text: str, points_store=None) -> Optional[str]:
+    """Label text by nearest meaning point in embedding space.
 
-    This is the "first glance" truth detector — encodes what we already know
-    about text structure without any training.
+    Uses n-gram TF-IDF embed (always available, no download) to position
+    text relative to fixed semantic meaning points. The label is the meaning
+    point whose region the text falls into.
+
+    This bootstraps without requiring a trained embedder. As training
+    progresses the embedding space aligns such that texts semantically
+    near each other land near the same meaning point.
     """
-    text = text.strip()
-    if not text:
+    from domains.inference.vector_store import simple_embed
+    if points_store is None:
         return None
-    # Questions
-    if text.endswith("?") or text.lower().startswith(("what", "how", "why", "when", "where", "who", "which", "is", "are", "do", "does", "can", "could", "should", "would")):
-        return "question"
-    # Instructions / commands
-    if text.lower().startswith(("you should", "you must", "you need to", "please", "do this", "run", "create", "make", "build", "write", "delete", "move", "copy", "install", "update")):
-        return "instruction"
-    # Observations / descriptions
-    if text.lower().startswith(("the ", "a ", "an ", "this ", "that ", "it ", "there ", "here ", "in ", "on ", "at ")) and not text.endswith(("!", "?")):
-        return "observation"
-    # Default: factual assertion
-    return "truth"
+    vec = simple_embed(text, dimension=points_store.dimension)
+    if not vec or all(v == 0.0 for v in vec):
+        return None
+    return points_store.classify(vec)
 
 
 def train_embedder(
@@ -371,10 +369,10 @@ def train_embedder(
     params = encoder.parameters()
     logger.info("Encoder params: %d tensors", len(params))
 
-    # 2b. Load anchor store (the stars — fixed reference points)
-    from domains.infrastructure.anchor_store import AnchorStore, get_default_anchors, _seed_anchor_from_text
-    anchor_store = get_default_anchors(dimension=embed_dim)
-    logger.info("Loaded %d anchor points: %s", len(anchor_store.names()), anchor_store.names())
+    # 2b. Load meaning points (the stars — fixed semantic reference points)
+    from domains.infrastructure.anchor_store import MeaningPoints, get_default_meaning_points
+    meaning_points = get_default_meaning_points(dimension=embed_dim)
+    logger.info("Loaded %d meaning points: %s", len(meaning_points.names()), meaning_points.names())
 
     # 3. Training loop
     logger.info("Training embedder: %d texts, %d epochs, batch_size=%d", len(texts), epochs, batch_size)
@@ -417,14 +415,14 @@ def train_embedder(
             orig_norm = orig_emb.data / (np.linalg.norm(orig_emb.data, axis=1, keepdims=True) + 1e-10)
             aug_norm = aug_emb.data / (np.linalg.norm(aug_emb.data, axis=1, keepdims=True) + 1e-10)
 
-            # Assign anchor labels (the "first glance" truth detector)
-            batch_labels = [_assign_anchor_label(t) for t in orig_texts]
+            # Label by meaning (nearest meaning point in embedding space)
+            batch_labels = [_label_by_meaning(t, meaning_points) for t in orig_texts]
 
-            # Compute contrastive loss with anchor constraints
+            # Compute contrastive loss with meaning point constraints
             loss_val, constraint_loss = _contrastive_loss(
                 orig_norm, aug_norm,
                 anchor_labels=batch_labels,
-                anchor_store=anchor_store,
+                anchor_store=meaning_points,
                 constraint_weight=0.5,
             )
 
