@@ -1,22 +1,33 @@
 import React, {useState} from 'react';
 import {
   View,
+  Text,
   TouchableOpacity,
   StyleSheet,
   Alert,
 } from 'react-native';
 import {Markdown} from './Markdown';
 import {copyToClipboard} from '../services/clipboard';
-import {colors, spacing, radii} from '../theme';
+import {colors, spacing, radii, typography} from '../theme';
 import type {Message} from '../types';
+
+function formatTime(ts: number): string {
+  const d = new Date(ts);
+  const h = d.getHours();
+  const m = d.getMinutes().toString().padStart(2, '0');
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${h12}:${m} ${ampm}`;
+}
 
 interface Props {
   message: Message;
+  highlight?: boolean;
   onRegenerate?: () => void;
   onFeedback?: (positive: boolean) => void;
 }
 
-export function MessageBubble({message, onRegenerate, onFeedback}: Props) {
+export function MessageBubble({message, highlight, onRegenerate, onFeedback}: Props) {
   const isUser = message.role === 'user';
   const [showActions, setShowActions] = useState(false);
 
@@ -44,6 +55,10 @@ export function MessageBubble({message, onRegenerate, onFeedback}: Props) {
           <Markdown content={message.content || 'Thinking...'} style={styles.assistantText} />
         )}
       </TouchableOpacity>
+
+      <Text style={[styles.timestamp, isUser && styles.timestampUser]}>
+        {formatTime(message.timestamp)}
+      </Text>
 
       {showActions && (
         <View style={styles.actions}>
@@ -124,5 +139,14 @@ const styles = StyleSheet.create({
     borderRadius: radii.full,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  timestamp: {
+    ...typography.small,
+    color: colors.textMuted,
+    marginTop: 2,
+    paddingHorizontal: spacing.md,
+  },
+  timestampUser: {
+    textAlign: 'right',
   },
 });

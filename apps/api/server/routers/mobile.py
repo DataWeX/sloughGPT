@@ -486,3 +486,112 @@ async def delete_knowledge(request: Request, item_id: str):
     """
     result = await _internal_delete(request, f"/knowledge/{item_id}")
     return {"status": "deleted", "id": item_id}
+
+
+# ── Offline Sync ─────────────────────────────────────────────────────────────
+
+class PendingMessage(BaseModel):
+    """A single pending message from the offline queue."""
+    id: str
+    session_id: str
+    content: str
+    timestamp: int
+    retry_count: int = 0
+
+
+class SyncRequest(BaseModel):
+    """Offline sync payload from mobile."""
+    pending_messages: List[PendingMessage] = []
+    last_sync_timestamp: Optional[int] = None
+
+
+class SyncResult(BaseModel):
+    """Result of syncing a single pending message."""
+    id: str
+    status: str  # "sent" | "error"
+    assistant_message: Optional[dict] = None
+    error: Optional[str] = None
+
+
+@router.post("/sync")
+async def sync_offline(request: Request, body: SyncRequest):
+    """
+    Sync offline messages when mobile reconnects.
+
+    Processes queued messages from the offline cache, sends them to the
+    chat endpoint, and returns results for each.
+
+    Args:
+        body: List of pending messages and optional last sync timestamp.
+
+    Returns:
+        List of sync results (one per pending message) + updated sessions.
+
+    Side effects:
+        - Calls POST /chat for each pending message.
+        - Calls /chat/sessions to refresh session list.
+    """
+    results: List[SyncResult] = []
+
+    for msg in body.pending_messages:
+        try:
+            chat_result = await _internal_post(
+                request,
+                "/chat",
+                {
+                    "messages": [{"role": "user", "content": msg.content}],
+                    "session_id": msg.session_id,
+                },
+            )
+
+            if chat_result and chat_result.get("message"):
+                results.append(SyncResult(
+                    id=msg.id,
+                    status="sent",
+                    assistant_message={
+                        "role": "assistant",
+                        "content": chat_result["message"],
+                        "timestamp": chat_result.get("timestamp", 0),
+                    },
+                ))
+            else:
+                results.append(SyncResult(
+                    id=msg.id,
+                    status="error",
+                    error="No response from server",
+                ))
+        except Exception as e:
+            results.append(SyncResult(
+                id=msg.id,
+                status="error",
+                error=str(e),
+            ))
+
+    # Return updated session list
+    sessions_data = await _internal_get(request, "/chat/sessions") or {}
+    sessions = sessions_data.get("sessions", []) if isinstance(sessions_data, dict) else []
+
+    return {
+        "results": [r.model_dump() for r in results],
+        "synced_count": sum(1 for r in results if r.status == "sent"),
+        "failed_count": sum(1 for r in results if r.status == "error"),
+        "sessions": sessions[:20],
+    }
+
+
+@router.get("/sync/status")
+async def sync_status(request: Request):
+    """
+    Check server connectivity and last sync state.
+
+    Returns:
+        Server reachable status, model state, and current timestamp.
+    """
+    health = await _internal_get(request, "/health") or {}
+
+    return {
+        "reachable": health.get("status") == "healthy",
+        "model_loaded": health.get("model_loaded", False),
+        "server_time": int(__import__("time").time() * 1000),
+        "inference_count": health.get("inference_count", 0),
+    }

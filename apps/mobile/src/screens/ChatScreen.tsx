@@ -14,6 +14,7 @@ import {
   Alert,
   Keyboard,
   Share,
+  RefreshControl,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useChatStore} from '../stores/chat-store';
@@ -22,6 +23,7 @@ import {useOnlineStatus} from '../hooks/useOnlineStatus';
 import {MessageBubble} from '../components/MessageBubble';
 import {ChatInput} from '../components/ChatInput';
 import {StatusBadge} from '../components/StatusBadge';
+import {triggerHaptic} from '../services/haptics';
 import {colors, spacing, radii, typography} from '../theme';
 import type {Message, Session} from '../types';
 
@@ -46,6 +48,8 @@ export function ChatScreen() {
     loadSession,
     deleteSession,
     createSession,
+    offlineQueue,
+    retryPendingSends,
   } = useChatStore();
   const {health, currentSoul, souls, switchSoul} = useModelStore();
   const online = useOnlineStatus();
@@ -54,10 +58,27 @@ export function ChatScreen() {
   const [showDrawer, setShowDrawer] = useState(false);
   const [showSoulPicker, setShowSoulPicker] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     refreshSessions();
   }, []);
+
+  const onPullRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await triggerHaptic('light');
+    await refreshSessions();
+    const state = useChatStore.getState();
+    if (state.activeSessionId) {
+      await loadSession(state.activeSessionId);
+    }
+    if (state.offlineQueue > 0) {
+      await retryPendingSends();
+    }
+    setRefreshing(false);
+  }, [refreshSessions, loadSession, retryPendingSends]);
 
   useEffect(() => {
     if (atBottom && messages.length > 0) {
@@ -85,6 +106,7 @@ export function ChatScreen() {
     ({item}: {item: Message}) => (
       <MessageBubble
         message={item}
+        highlight={searchQuery ? item.content.toLowerCase().includes(searchQuery.toLowerCase()) : false}
         onRegenerate={
           item.role === 'assistant' ? () => regenerate(item.id) : undefined
         }
@@ -95,7 +117,7 @@ export function ChatScreen() {
         }
       />
     ),
-    [regenerate, recordFeedback],
+    [regenerate, recordFeedback, searchQuery],
   );
 
   const keyExtractor = useCallback((item: Message) => item.id, []);
@@ -133,6 +155,11 @@ export function ChatScreen() {
             )}
           </View>
           <View style={styles.headerRight}>
+            <TouchableOpacity
+              style={styles.menuBtn}
+              onPress={() => { setShowSearch(!showSearch); setSearchQuery(''); }}>
+              <Text style={styles.menuBtn}>🔍</Text>
+            </TouchableOpacity>
             {messages.length > 0 && (
               <TouchableOpacity
                 style={styles.exportBtn}
@@ -167,6 +194,35 @@ export function ChatScreen() {
           </TouchableOpacity>
         )}
 
+        {!online && (
+          <View style={styles.offlineBanner}>
+            <Text style={styles.offlineText}>Offline</Text>
+            {offlineQueue > 0 && (
+              <TouchableOpacity onPress={retryPendingSends}>
+                <Text style={styles.offlineRetry}>{offlineQueue} queued — tap to retry</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {showSearch && (
+          <View style={styles.searchBar}>
+            <TextInput
+              style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search messages..."
+              placeholderTextColor={colors.textMuted}
+              autoFocus
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Text style={styles.searchClear}>×</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
         {messages.length === 0 && !streaming ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyEmoji}>💬</Text>
@@ -197,6 +253,13 @@ export function ChatScreen() {
               contentContainerStyle={styles.messageList}
               onScroll={onScroll}
               scrollEventThrottle={16}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onPullRefresh}
+                  tintColor={colors.primary}
+                />
+              }
               onContentSizeChange={() => {
               if (atBottom) {
                 flatListRef.current?.scrollToEnd({animated: false});
@@ -217,6 +280,7 @@ export function ChatScreen() {
           onSend={handleSend}
           disabled={streaming}
           onStop={cancelStream}
+          isRecording={false}
         />
 
         {!atBottom && messages.length > 0 && (
@@ -293,53 +357,6 @@ export function ChatScreen() {
       </Modal>
 
       {/* Soul picker */}
-      <Modal visible={showSoulPicker} animationType="slide" transparent>
-        <TouchableOpacity
-          style={styles.drawerOverlay}
-          activeOpacity={1}
-          onPress={() => setShowSoulPicker(false)}>
-          <TouchableOpacity activeOpacity={1} style={styles.drawer} onPress={() => {}}>
-            <View style={styles.drawerHeader}>
-              <Text style={styles.drawerTitle}>Personality</Text>
-              <TouchableOpacity onPress={() => setShowSoulPicker(false)}>
-                <Text style={styles.drawerClose}>×</Text>
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={souls}
-              keyExtractor={item => item.name}
-              renderItem={({item: soul}) => (
-                <TouchableOpacity
-                  style={[
-                    styles.sessionItem,
-                    soul.name === currentSoul?.name && styles.sessionItemActive,
-                  ]}
-                  onPress={() => {
-                    switchSoul(soul.name);
-                    setShowSoulPicker(false);
-                  }}>
-                  <View style={styles.sessionInfo}>
-                    <Text style={styles.sessionTitle}>{soul.name}</Text>
-                    {soul.description && (
-                      <Text style={styles.sessionMeta} numberOfLines={2}>
-                        {soul.description}
-                      </Text>
-                    )}
-                  </View>
-                  {soul.name === currentSoul?.name && (
-                    <Text style={styles.checkMark}>✓</Text>
-                  )}
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                <Text style={styles.drawerEmpty}>No personalities available</Text>
-              }
-            />
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Soul picker modal */}
       <Modal visible={showSoulPicker} animationType="slide" transparent>
         <View style={styles.drawerOverlay}>
           <View style={styles.drawer}>
@@ -493,6 +510,48 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontWeight: '600',
     marginLeft: spacing.sm,
+  },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFF3CD',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  offlineText: {
+    ...typography.caption,
+    color: '#856404',
+    fontWeight: '600',
+  },
+  offlineRetry: {
+    ...typography.small,
+    color: '#856404',
+    textDecorationLine: 'underline',
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    gap: spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    ...typography.body,
+    color: colors.text,
+    backgroundColor: colors.background,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  searchClear: {
+    fontSize: 18,
+    color: colors.textMuted,
+    padding: spacing.xs,
   },
   messageList: {
     paddingTop: spacing.md,

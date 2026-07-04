@@ -69,4 +69,30 @@ export const api = {
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
   delete: <T>(path: string) => request<T>('DELETE', path),
+
+  /** Upload a file (image/audio) via multipart form data. */
+  upload: async <T>(path: string, formData: FormData): Promise<T> => {
+    const baseUrl = await getApiUrl();
+    const res = await fetch(`${baseUrl}${path}`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      throw new ApiError(res.status, (data as any)?.detail || res.statusText, data);
+    }
+    const text = await res.text();
+    if (!text) return undefined as T;
+    return JSON.parse(text) as T;
+  },
+
+  /** Sync offline messages with the server. */
+  sync: <T>(body: {pending_messages: any[]; last_sync_timestamp?: number}) =>
+    request<T>('POST', '/mobile/sync', body),
+
+  /** Check server connectivity. */
+  syncStatus: <T>() => request<T>('GET', '/mobile/sync/status'),
 };
