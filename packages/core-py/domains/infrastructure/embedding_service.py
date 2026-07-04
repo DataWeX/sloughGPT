@@ -3,19 +3,25 @@ Embedding service — foundational base layer for vector operations.
 
 This is the foundational base layer, not opinion. It provides:
 - Embedding computation (delegates to best available backend)
-- Meaning point integration (fixed semantic reference points)
+- Meaning tag integration (fixed semantic reference points)
 - Dimension management (padding/truncation)
+- Truth verdict (distance to meaning regions)
+- Model hash tagging (MD5 of checkpoint file)
 
 Usage:
     from domains.infrastructure.embedding_service import EmbeddingService
     svc = EmbeddingService(dimension=128)
     vec = svc.embed("hello world")
     label = svc.classify("the sky is blue")
+    verdict = svc.truth_verdict("the sky is blue")
 """
+import hashlib
+import json
 import numpy as np
+from pathlib import Path
 from typing import Dict, List, Optional
 
-from .anchor_store import MeaningPoints, get_default_meaning_points
+from .anchor_store import MeaningTags, get_default_meaning_tags
 
 
 class EmbeddingService:
@@ -25,10 +31,11 @@ class EmbeddingService:
     mean, only how to compute and compare them.
     """
 
-    def __init__(self, dimension: int = 128):
+    def __init__(self, dimension: int = 384):
         self.dimension = dimension
-        self._meaning_points = get_default_meaning_points(dimension=dimension)
+        self._meaning_tags = get_default_meaning_tags(dimension=dimension)
         self._backend = None  # lazy-loaded
+        self._model_hash: Optional[str] = None
 
     def embed(self, text: str) -> List[float]:
         """Embed text into a vector of fixed dimension.
@@ -46,43 +53,89 @@ class EmbeddingService:
         return [self.embed(t) for t in texts]
 
     def classify(self, text: str) -> str:
-        """Classify text by nearest meaning point.
+        """Classify text by nearest meaning tag.
 
-        Returns the name of the closest meaning point (e.g., "factual", "interrogative").
-        Uses embedding distance to fixed semantic meaning points.
+        Returns the name of the closest meaning tag (e.g., "factual", "interrogative").
+        Uses embedding distance to fixed semantic meaning tags.
         """
         vec = self.embed(text)
-        return self._meaning_points.classify(vec)
+        return self._meaning_tags.classify(vec)
 
     def distances(self, text: str) -> Dict[str, float]:
-        """Compute distance from text to all meaning points.
+        """Compute distance from text to all meaning tags.
 
         Returns dict of {name: distance} where 0.0 = same direction.
         """
         vec = self.embed(text)
-        return self._meaning_points.distances(vec)
+        return self._meaning_tags.distances(vec)
 
-    def similarity(self, text: str, point_name: str) -> float:
-        """Cosine similarity between text and named meaning point."""
+    def similarity(self, text: str, tag_name: str) -> float:
+        """Cosine similarity between text and named meaning tag."""
         vec = self.embed(text)
-        return self._meaning_points.similarity(vec, point_name)
+        return self._meaning_tags.similarity(vec, tag_name)
+
+    def truth_verdict(self, text: str) -> Dict:
+        """Compute truth verdict for text based on distance to meaning regions.
+
+        Returns dict with:
+            - verdict: nearest meaning tag name
+            - distances: dict of {name: distance} for all meaning tags
+            - confidence: 1 - distance to nearest tag (0-1)
+            - model_hash: MD5 hash of loaded model checkpoint (if any)
+        """
+        vec = self.embed(text)
+        dists = self._meaning_tags.distances(vec)
+        nearest = min(dists, key=dists.get)
+        nearest_dist = dists[nearest]
+
+        return {
+            "verdict": nearest,
+            "distances": dists,
+            "confidence": max(0.0, 1.0 - nearest_dist),
+            "model_hash": self._model_hash,
+        }
+
+    def set_model_hash(self, checkpoint_path: Optional[str] = None) -> Optional[str]:
+        """Compute and cache MD5 hash of a model checkpoint file.
+
+        Args:
+            checkpoint_path: path to .sou checkpoint file. If None, clears hash.
+
+        Returns:
+            MD5 hex digest string, or None if no path provided or file not found.
+        """
+        if checkpoint_path is None:
+            self._model_hash = None
+            return None
+
+        path = Path(checkpoint_path)
+        if not path.exists():
+            self._model_hash = None
+            return None
+
+        h = hashlib.md5()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                h.update(chunk)
+        self._model_hash = h.hexdigest()
+        return self._model_hash
 
     @property
-    def meaning_points(self) -> MeaningPoints:
-        """Access the meaning point store (read-only tape recording)."""
-        return self._meaning_points
+    def meaning_tags(self) -> MeaningTags:
+        """Access the meaning tag store (read-only tape recording)."""
+        return self._meaning_tags
 
     @property
-    def anchors(self) -> MeaningPoints:
-        """Backward compat alias for meaning_points."""
-        return self._meaning_points
+    def model_hash(self) -> Optional[str]:
+        """Current model hash (MD5 of checkpoint, or None)."""
+        return self._model_hash
 
 
 # Module-level singleton
 _service: Optional[EmbeddingService] = None
 
 
-def get_embedding_service(dimension: int = 128) -> EmbeddingService:
+def get_embedding_service(dimension: int = 384) -> EmbeddingService:
     """Get or create the embedding service singleton."""
     global _service
     if _service is None or _service.dimension != dimension:

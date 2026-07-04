@@ -1,4 +1,5 @@
 'use client'
+export const dynamic = 'force-dynamic'
 
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
@@ -8,10 +9,10 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/display'
 import { Badge } from '@/components/ui/badge'
 import { StatCard, KpiGrid } from '@/components/ui'
-import dynamic from 'next/dynamic'
+import dynamicNext from 'next/dynamic'
 import type { LossPoint, RewardPoint } from '@/components/training/LossChart'
 
-const LossChart = dynamic(() => import('@/components/training/LossChart').then(m => m.LossChart), { ssr: false })
+const LossChart = dynamicNext(() => import('@/components/training/LossChart').then(m => m.LossChart), { ssr: false })
 import { IconTrash, IconRefresh, IconDownload } from '@/components/ui'
 import { trainingJobsController, type TrainingJob } from '@/lib/training-controller'
 import { modelController } from '@/lib/model-controller'

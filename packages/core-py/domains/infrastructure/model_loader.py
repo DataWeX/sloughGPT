@@ -10,27 +10,33 @@ After loading, the model is verified for integrity:
   - Forward pass smoke test with dummy input → non-NaN logits
 
 Raises RuntimeError if any check fails.
+
+Design: uses ml_types for dtypes and device detection. Torch is only
+imported when actually loading HF models (torch.nn.Module instances).
+SloNet models bypass torch entirely.
 """
 
 import logging
 from typing import Optional
 
-import torch
+from domains.infrastructure.ml_types import (
+    float32 as ml_float32,
+    _mps_available as mps_available,
+    _cuda_available as cuda_available,
+    isnan as ml_isnan,
+    isinf as ml_isinf,
+    auto_device,
+)
 
 logger = logging.getLogger("man.infrastructure.model_loader")
 
 
-def _mps_available() -> bool:
+def _torch_available() -> bool:
+    """Check if PyTorch is installed."""
     try:
-        return torch.backends.mps.is_available()
-    except Exception:
-        return False
-
-
-def _cuda_available() -> bool:
-    try:
-        return torch.cuda.is_available()
-    except Exception:
+        from domains.training.slonet_compat import torch
+        return True
+    except ImportError:
         return False
 
 
@@ -49,14 +55,13 @@ def verify_model_integrity(model, model_id: str, tokenizer) -> None:
     # ── check 1: no NaN / Inf weights ──────────────────────────────────
     nan_params = []
     inf_params = []
-    zero_params = []
     for name, param in model.named_parameters():
-        if torch.isnan(param).any():
+        # Works for both torch tensors and numpy arrays
+        param_np = param.detach().cpu().numpy() if hasattr(param, 'detach') else param
+        if ml_isnan(param_np).any():
             nan_params.append(name)
-        if torch.isinf(param).any():
+        if ml_isinf(param_np).any():
             inf_params.append(name)
-        if (param == 0).all():
-            zero_params.append(name)
 
     if nan_params:
         raise RuntimeError(
@@ -71,20 +76,22 @@ def verify_model_integrity(model, model_id: str, tokenizer) -> None:
 
     # ── check 2: forward-pass smoke test ───────────────────────────────
     try:
+        import torch
+
         device = next(model.parameters()).device
-        # Use pad_token_id if available, otherwise fallback to 0
         pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
         dummy_input = torch.tensor([[pad_id]], device=device)
         with torch.no_grad():
             output = model(dummy_input)
         logits = output.logits if hasattr(output, "logits") else output[0]
 
-        if torch.isnan(logits).any():
+        logits_np = logits.detach().cpu().numpy()
+        if ml_isnan(logits_np).any():
             raise RuntimeError(
                 f"Model {model_id} produced NaN logits on a forward pass. "
                 f"The download may be incomplete."
             )
-        if torch.isinf(logits).any():
+        if ml_isinf(logits_np).any():
             raise RuntimeError(
                 f"Model {model_id} produced Inf logits on a forward pass. "
                 f"The download may be incomplete."
@@ -110,27 +117,20 @@ def load_hf_model(model_id: str, device: Optional[str] = None):
 
     Returns (model, tokenizer, resolved_device).
 
-    On MPS, always forces torch.float32 (BFloat16 not supported).
+    On MPS, always forces float32 (BFloat16 not supported).
 
     Raises RuntimeError if the model fails integrity checks (partial download).
     """
     import os
     from pathlib import Path
-    from transformers import AutoModelForCausalLM, AutoTokenizer
 
     if device is None or device == "auto":
-        if _mps_available():
-            resolved = "mps"
-        elif _cuda_available():
-            resolved = "cuda"
-        else:
-            resolved = "cpu"
+        resolved = auto_device()
     else:
         resolved = device
 
     # ── check HF cache before downloading ──────────────────────────────
     cache_id = model_id.replace("/", "--")
-    # Check project-local cache first, then global cache
     hf_home = os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))
     cache_dir = Path(hf_home) / "hub" / f"models--{cache_id}"
     if cache_dir.exists():
@@ -140,44 +140,56 @@ def load_hf_model(model_id: str, device: Optional[str] = None):
 
     logger.info("Loading %s → %s (float32)", model_id, resolved)
 
-    # Monkey-patch Mistral regex check that tries remote even in offline mode
+    # Try torch first (for full HF model support)
     try:
-        import transformers.tokenization_utils_base as _tub
-        _tub._patch_mistral_regex = lambda cls, name: cls
-    except Exception:
-        pass
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            dtype=torch.float32,
-            local_files_only=True,
-            device_map="cpu" if resolved == "cpu" else None,
-        )
-        logger.info("%s loaded from local cache", model_id)
-    except OSError:
-        logger.info("%s not in cache — downloading from HuggingFace", model_id)
-        tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=False)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            dtype=torch.float32,
-            local_files_only=False,
-            device_map="cpu" if resolved == "cpu" else None,
-        )
-        logger.info("%s downloaded successfully", model_id)
+        # Monkey-patch Mistral regex check that tries remote even in offline mode
+        try:
+            import transformers.tokenization_utils_base as _tub
+            _tub._patch_mistral_regex = lambda cls, name: cls
+        except Exception:
+            pass
 
-    if resolved == "mps":
-        model = model.to("mps")
-    elif resolved == "cuda":
-        model = model.to("cuda")
-    else:
-        model = model.cpu()
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
+            model = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                dtype=torch.float32,
+                local_files_only=True,
+                device_map="cpu" if resolved == "cpu" else None,
+            )
+            logger.info("%s loaded from local cache", model_id)
+        except OSError:
+            logger.info("%s not in cache — downloading from HuggingFace", model_id)
+            tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=False)
+            model = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                dtype=torch.float32,
+                local_files_only=False,
+                device_map="cpu" if resolved == "cpu" else None,
+            )
+            logger.info("%s downloaded successfully", model_id)
 
-    model.eval()
+        if resolved == "mps":
+            model = model.to("mps")
+        elif resolved == "cuda":
+            model = model.to("cuda")
+        else:
+            model = model.cpu()
 
-    verify_model_integrity(model, model_id, tokenizer)
+        model.eval()
+        verify_model_integrity(model, model_id, tokenizer)
+        return model, tokenizer, resolved
 
-    logger.info("Model %s → %s (device=%s)", model_id, resolved, next(model.parameters()).device)
+    except ImportError:
+        # No torch — use safetensors for weight loading
+        logger.info("torch not available — using safetensors loader")
+        from domains.infrastructure.safetensors_loader import load_model_weights, load_model_config
 
-    return model, tokenizer, resolved
+        weights = load_model_weights(model_id)
+        config = load_model_config(model_id)
+
+        # Return numpy weights dict and config (no model object)
+        return weights, config, resolved

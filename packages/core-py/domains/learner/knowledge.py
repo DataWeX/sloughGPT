@@ -171,7 +171,7 @@ def _search_ddg(query: str, max_results: int = 5) -> list[dict]:
 class KnowledgeMemory:
     """Structured fact storage backed by a VectorStore.
 
-    Facts are embedded with ``simple_embed`` and stored as vectors in the store.
+    Facts are embedded via ``EmbeddingService`` and stored as vectors in the store.
     Supports topic-filtered queries, keyword-less semantic search, dedup by
     content hash, and importance scoring (stored as metadata).
     """
@@ -201,7 +201,9 @@ class KnowledgeMemory:
             self._vector_store = vector_store
         else:
             from domains.inference.vector_store import InMemoryVectorStore
-            self._vector_store = InMemoryVectorStore(dimension=384)
+            from domains.infrastructure.embedding_service import get_embedding_service
+            dim = get_embedding_service().dimension
+            self._vector_store = InMemoryVectorStore(dimension=dim)
             try:
                 self._run_async(self._vector_store.connect())
             except Exception:
@@ -211,11 +213,15 @@ class KnowledgeMemory:
         self._load_entries()
         self._migrate_from_json_topics()
 
+    def _zero_vec(self) -> list[float]:
+        from domains.infrastructure.embedding_service import get_embedding_service
+        return [0.0] * get_embedding_service().dimension
+
     def _get_embedding(self, text: str) -> list[float]:
         if self._embed_fn:
             return self._embed_fn(text)
-        from domains.inference.vector_store import simple_embed
-        return simple_embed(text)
+        from domains.infrastructure.embedding_service import get_embedding_service
+        return get_embedding_service().embed(text)
 
     # ---- persistence -------------------------------------------------------
 
@@ -258,16 +264,26 @@ class KnowledgeMemory:
             data = json.loads(ENTRIES_PATH.read_text())
             if not data:
                 return
+            # Skip entries with wrong dimension
+            expected_dim = self._vector_store.dimension
             entries = []
+            skipped = 0
             for d in data:
+                vec = d["vector"]
+                if len(vec) != expected_dim:
+                    skipped += 1
+                    continue
                 entry = VectorEntry(
                     id=d["id"],
-                    vector=d["vector"],
+                    vector=vec,
                     text=d["text"],
                     metadata=d.get("metadata", {}),
                 )
                 entries.append(entry)
-            self._run_async(self._vector_store.upsert(entries))
+            if skipped:
+                logger.warning(f"Skipped {skipped} entries with wrong dimension (expected {expected_dim})")
+            if entries:
+                self._run_async(self._vector_store.upsert(entries))
             logger.info(f"Loaded {len(entries)} persisted entries from {ENTRIES_PATH}")
         except Exception as e:
             logger.warning(f"Failed to load entries: {e}")
@@ -381,7 +397,7 @@ class KnowledgeMemory:
             if hasattr(self._vector_store, 'count_sync'):
                 total = self._vector_store.count_sync()
                 results = self._vector_store.query_sync(
-                    vector=[0.0] * 384,
+                    vector=self._zero_vec(),
                     top_k=total or 1000,
                     filter_metadata={"topic": topic},
                 )
@@ -389,7 +405,7 @@ class KnowledgeMemory:
                 total = self._run_async(self._vector_store.count())
                 results = self._run_async(
                     self._vector_store.query(
-                        vector=[0.0] * 384,
+                        vector=self._zero_vec(),
                         top_k=total or 1000,
                         filter_metadata={"topic": topic},
                     )
@@ -466,10 +482,10 @@ class KnowledgeMemory:
         """Return all stored facts by querying with a zero vector."""
         try:
             if hasattr(self._vector_store, 'query_sync'):
-                results = self._vector_store.query_sync(vector=[0.0] * 384, top_k=top_k)
+                results = self._vector_store.query_sync(vector=self._zero_vec(), top_k=top_k)
             else:
                 results = self._run_async(
-                    self._vector_store.query(vector=[0.0] * 384, top_k=top_k)
+                    self._vector_store.query(vector=self._zero_vec(), top_k=top_k)
                 )
             facts = []
             for r in results:
@@ -492,7 +508,7 @@ class KnowledgeMemory:
         """Delete a fact by its vector store entry ID."""
         try:
             all_entries = self._run_async(
-                self._vector_store.query(vector=[0.0] * 384, top_k=5000)
+                self._vector_store.query(vector=self._zero_vec(), top_k=5000)
             )
             removed_hash = None
             for r in all_entries:
@@ -514,7 +530,7 @@ class KnowledgeMemory:
         """Delete all stored facts from the vector store. Returns count removed."""
         try:
             all_entries = self._run_async(
-                self._vector_store.query(vector=[0.0] * 384, top_k=5000)
+                self._vector_store.query(vector=self._zero_vec(), top_k=5000)
             )
             ids = [r.id for r in all_entries]
             if ids:

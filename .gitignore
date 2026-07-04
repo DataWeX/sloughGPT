@@ -201,3 +201,6 @@ data/
 # Monorepo duplicates
 packages/apps/apps/
 .opencode/tmp/
+
+# Server-side model artifacts
+apps/api/server/models/

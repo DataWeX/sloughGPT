@@ -13,7 +13,7 @@ import threading
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
-import torch
+from domains.training.slonet_compat import torch
 from peft import LoraConfig, get_peft_model, PeftModel, TaskType
 
 logger = logging.getLogger("man.infrastructure.knowledge_weight_integrator")

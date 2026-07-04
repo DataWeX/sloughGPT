@@ -18,6 +18,8 @@ except ImportError:
     from domains.training.slonet_compat import torch  # type: ignore[no-redef]
     F = torch.F
 
+from domains.infrastructure.ml_types import auto_device, no_grad as ml_no_grad
+
 from domains.errors import require_non_empty_prompt
 
 logger = logging.getLogger("man.engine")
@@ -71,9 +73,10 @@ class KVCache:
     The internal unified cache is used when dimensions are explicitly configured.
     """
 
-    def __init__(self, num_layers: int, dtype: torch.dtype = torch.float16):
+    def __init__(self, num_layers: int, dtype=None):
+        from domains.infrastructure.ml_types import float16 as ml_float16
         self.num_layers = num_layers
-        self.dtype = dtype
+        self.dtype = dtype if dtype is not None else ml_float16
         self.key_cache: List[Optional[torch.Tensor]] = [None] * num_layers
         self.value_cache: List[Optional[torch.Tensor]] = [None] * num_layers
         self.max_length = 0
@@ -137,9 +140,9 @@ class InferenceEngine:
 
     def __init__(
         self,
-        model: torch.nn.Module,
+        model: "torch.nn.Module",
         tokenizer: Any,
-        device: str = "cuda" if torch.cuda.is_available() else "cpu",
+        device: str = "auto",
         max_batch_size: int = 32,
         max_sequence_length: int = 4096,
         use_cache: bool = True,
@@ -147,6 +150,8 @@ class InferenceEngine:
     ):
         self.model = model
         self.tokenizer = tokenizer
+        if device == "auto":
+            device = auto_device()
         self.device = torch.device(device)
         self.max_batch_size = max_batch_size
         self.max_sequence_length = max_sequence_length
@@ -305,7 +310,7 @@ class InferenceEngine:
         generated = []
         past_key_values = None
 
-        with torch.no_grad():
+        with ml_no_grad():
             for step in range(max_new_tokens):
                 if past_key_values is not None:
                     model_inp = input_ids[:, -1:]
@@ -354,7 +359,8 @@ class InferenceEngine:
             try:
                 import gc
                 gc.collect()
-                torch.mps.empty_cache()
+                from domains.infrastructure.ml_types import mps as ml_mps
+                ml_mps.empty_cache()
             except Exception:
                 pass
 
@@ -392,7 +398,7 @@ class InferenceEngine:
         generated = []
         past_key_values = None
 
-        with torch.no_grad():
+        with ml_no_grad():
             for step in range(max_new_tokens):
                 # Check MPS mid-generation every 6 tokens — clear cache preventively
                 if self._is_mps and step > 0 and step % 6 == 0:
@@ -418,8 +424,11 @@ class InferenceEngine:
                         if "out of memory" in str(e).lower():
                             import gc
                             gc.collect()
-                            if torch.backends.mps.is_available():
-                                torch.mps.empty_cache()
+                            from domains.infrastructure.ml_types import mps as ml_mps, cuda as ml_cuda
+                            if ml_mps.is_available():
+                                ml_mps.empty_cache()
+                            elif ml_cuda.is_available():
+                                ml_cuda.empty_cache()
                             from domains.infrastructure.mps_monitor import get_mps_monitor
                             get_mps_monitor().force_cpu()
                         raise
@@ -468,7 +477,8 @@ class InferenceEngine:
             try:
                 import gc
                 gc.collect()
-                torch.mps.empty_cache()
+                from domains.infrastructure.ml_types import mps as ml_mps
+                ml_mps.empty_cache()
             except Exception:
                 pass
 
@@ -541,13 +551,7 @@ def create_engine(
     from transformers import AutoTokenizer, AutoModelForCausalLM
 
     if device == "auto":
-        device = (
-            "cuda"
-            if torch.cuda.is_available()
-            else "mps"
-            if torch.backends.mps.is_available()
-            else "cpu"
-        )
+        device = auto_device()
 
     logger.info("Loading %s on %s...", model_name, device)
 

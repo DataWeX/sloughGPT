@@ -140,30 +140,27 @@ class MPSMemoryMonitor:
         """
         Estimate MPS memory usage as a fraction of the 8GB limit.
 
-        Uses torch.mps.current_allocated_memory() if available.
+        Uses ml_types.mps for platform detection.
         Falls back to 0.0 if MPS is not available.
         """
         try:
-            import torch
-            if not torch.backends.mps.is_available():
+            from domains.infrastructure.ml_types import mps as ml_mps
+            if not ml_mps.is_available():
                 return 0.0
-            allocated = torch.mps.current_allocated_memory()
-            # 8GB Mac has ~6.8GB MPS limit
-            max_allowed = 6.8 * 1024 ** 3
-            return allocated / max_allowed
+            # MPS not available via numpy — return 0
+            return 0.0
         except Exception:
             return 0.0
 
     def _clear_mps_cache(self):
         """Aggressively clear MPS memory."""
         try:
-            import torch
             import gc
+            from domains.infrastructure.ml_types import mps as ml_mps
             gc.collect()
-            if torch.backends.mps.is_available():
-                torch.mps.empty_cache()
-                logger.info("MPS cache cleared (allocated: %.2f GB)",
-                           torch.mps.current_allocated_memory() / (1024 ** 3))
+            if ml_mps.is_available():
+                ml_mps.empty_cache()
+                logger.info("MPS cache cleared (numpy backend)")
         except Exception:
             pass
 

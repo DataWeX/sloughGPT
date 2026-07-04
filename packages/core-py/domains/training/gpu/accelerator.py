@@ -47,26 +47,12 @@ class _MetalAccelerator:
         self._available = self._check_metal()
 
     def _check_metal(self) -> bool:
-        """Check if MPS is available via PyTorch, without polluting sys.modules."""
-        import sys
-        saved = sys.path.copy()
-        sys.path = [p for p in sys.path if '/domains/training' not in p]
-        saved_shim = sys.modules.pop('torch', None)
-        for mn in list(sys.modules.keys()):
-            if mn.startswith('torch.'):
-                del sys.modules[mn]
+        """Check if MPS is available via the torch shim."""
         try:
-            import torch as _rt
-            return hasattr(_rt.backends, 'mps') and _rt.backends.mps.is_available()
+            from domains.training.slonet_compat import torch
+            return hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()
         except Exception:
             return False
-        finally:
-            sys.path = saved
-            if saved_shim is not None:
-                sys.modules['torch'] = saved_shim
-            for mn in list(sys.modules.keys()):
-                if mn.startswith('torch.') and mn != 'torch':
-                    del sys.modules[mn]
 
     def is_available(self) -> bool:
         return self._available

@@ -1,7 +1,8 @@
 'use client'
+export const dynamic = 'force-dynamic'
 
 import { useEffect, useCallback, useMemo, useState } from 'react'
-import dynamic from 'next/dynamic'
+import dynamicNext from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useApiHealth } from '@/hooks/useApiHealth'
 import { soulsController } from '@/lib/controllers'
@@ -39,16 +40,16 @@ import { useChatToolbarValue } from '@/hooks/useChatToolbarValue'
 import { useChatHealthValue, useChatModelValue, useChatUIValue } from '@/hooks/useChatContextValue'
 
 
-const VoiceChatMode = dynamic(() => import('@/components/chat/VoiceChatMode').then(m => m.VoiceChatMode), { ssr: false })
-const ConversationViewer = dynamic(() => import('@/components/chat/ConversationViewer').then(m => m.ConversationViewer), { ssr: false })
-const ConversationSearch = dynamic(() => import('@/components/chat/ConversationSearch').then(m => m.ConversationSearch), { ssr: false })
-const SearchConversationsDialog = dynamic(() => import('@/components/chat/SearchConversationsDialog').then(m => m.SearchConversationsDialog), { ssr: false })
-const ChatSettings = dynamic(() => import('@/components/chat/ChatSettings').then(m => m.ChatSettings), { ssr: false })
-const ConversationSidebar = dynamic(() => import('@/components/chat/ConversationSidebar').then(m => m.ConversationSidebar), { ssr: false })
-const ChatToolPanel = dynamic(() => import('@/components/chat/ChatToolPanel').then(m => m.ChatToolPanel), { ssr: false })
-const DownloadDialog = dynamic(() => import('@/components/chat/DownloadDialog').then(m => m.DownloadDialog), { ssr: false })
-const SystemPromptDialog = dynamic(() => import('@/components/chat/SystemPromptDialog').then(m => m.SystemPromptDialog), { ssr: false })
-const ReadFileSection = dynamic(() => import('@/components/chat/ReadFileSection'), { ssr: false })
+const VoiceChatMode = dynamicNext(() => import('@/components/chat/VoiceChatMode').then(m => m.VoiceChatMode), { ssr: false })
+const ConversationViewer = dynamicNext(() => import('@/components/chat/ConversationViewer').then(m => m.ConversationViewer), { ssr: false })
+const ConversationSearch = dynamicNext(() => import('@/components/chat/ConversationSearch').then(m => m.ConversationSearch), { ssr: false })
+const SearchConversationsDialog = dynamicNext(() => import('@/components/chat/SearchConversationsDialog').then(m => m.SearchConversationsDialog), { ssr: false })
+const ChatSettings = dynamicNext(() => import('@/components/chat/ChatSettings').then(m => m.ChatSettings), { ssr: false })
+const ConversationSidebar = dynamicNext(() => import('@/components/chat/ConversationSidebar').then(m => m.ConversationSidebar), { ssr: false })
+const ChatToolPanel = dynamicNext(() => import('@/components/chat/ChatToolPanel').then(m => m.ChatToolPanel), { ssr: false })
+const DownloadDialog = dynamicNext(() => import('@/components/chat/DownloadDialog').then(m => m.DownloadDialog), { ssr: false })
+const SystemPromptDialog = dynamicNext(() => import('@/components/chat/SystemPromptDialog').then(m => m.SystemPromptDialog), { ssr: false })
+const ReadFileSection = dynamicNext(() => import('@/components/chat/ReadFileSection'), { ssr: false })
 
 export default function ChatPage() {
   const showToast = useCallback((message: string, type: string = 'success') => {

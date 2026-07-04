@@ -22,8 +22,8 @@ from pathlib import Path
 from typing import Optional
 
 try:
-    import torch
-    from torch import nn
+    from domains.training.slonet_compat import torch
+    nn = torch.nn
     from transformers import (
         AutoModelForCausalLM,
         AutoTokenizer,

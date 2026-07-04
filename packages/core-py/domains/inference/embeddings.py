@@ -114,10 +114,16 @@ class SentenceTransformerEmbedder(BaseEmbedder):
         if device is None:
             if os.getenv("CUDA_VISIBLE_DEVICES"):
                 device = "cuda"
-            elif hasattr(__import__("torch"), "backends") and __import__("torch").backends.mps.is_available():
-                device = "mps"
             else:
-                device = "cpu"
+                try:
+                    from domains.training.slonet_compat import torch as _torch
+                    _mps_ok = hasattr(_torch, "backends") and _torch.backends.mps.is_available()
+                except Exception:
+                    _mps_ok = False
+                if _mps_ok:
+                    device = "mps"
+                else:
+                    device = "cpu"
         
         try:
             from sentence_transformers import SentenceTransformer
@@ -207,7 +213,7 @@ class HuggingFaceEmbedder(BaseEmbedder):
         
         try:
             from transformers import AutoTokenizer, AutoModel
-            import torch
+            from domains.training.slonet_compat import torch
             
             self.tokenizer = AutoTokenizer.from_pretrained(model, token=token)
             self.model = AutoModel.from_pretrained(model, token=token)
@@ -224,7 +230,7 @@ class HuggingFaceEmbedder(BaseEmbedder):
         if isinstance(texts, str):
             texts = [texts]
         
-        import torch
+        from domains.training.slonet_compat import torch
         
         with torch.no_grad():
             inputs = self.tokenizer(

@@ -69,6 +69,7 @@ const translations: Record<Locale, Translations> = {
     'nav.multimodal': 'Multimodal',
     'nav.agents': 'Agents',
     'nav.files': 'Files',
+    'nav.errors': 'Errors',
 
     // Home page
     'home.title': 'Home',

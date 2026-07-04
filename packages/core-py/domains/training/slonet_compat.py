@@ -1716,6 +1716,10 @@ class _TorchNamespace:
         return Tensor(1.0 / np.sqrt(np.maximum(_data(tensor), 1e-10)), requires_grad=False)
 
     @staticmethod
+    def log(tensor):
+        return Tensor(np.log(np.maximum(_data(tensor), 1e-12)).astype(np.float32), requires_grad=False)
+
+    @staticmethod
     def quantile(tensor, q, dim=None, keepdim=False):
         d = _data(tensor)
         if dim is not None:

@@ -165,7 +165,7 @@ class ElasticWeightConsolidation:
         Compute Fisher information matrix.
         Higher Fisher = more important for previous task.
         """
-        import torch
+        from domains.training.slonet_compat import torch
 
         self.model.eval()
         fisher_accum = defaultdict(float)
@@ -201,16 +201,14 @@ class ElasticWeightConsolidation:
         Compute EWC penalty.
         Penalizes changes to important weights.
         """
-        import torch
-
         loss = 0.0
         for name, param in self.model.named_parameters():
-            if name in self.fisher:
-                fisher = self.fisher[name]
-                old_param = self.optimal_params[name]
-                if isinstance(old_param, torch.Tensor):
-                    old_param = old_param.item()
-                loss += fisher * (param.data.item() - old_param) ** 2
+                if name in self.fisher:
+                    fisher = self.fisher[name]
+                    old_param = self.optimal_params[name]
+                    if hasattr(old_param, "item"):
+                        old_param = old_param.item()
+                    loss += fisher * (param.data.item() - old_param) ** 2
 
         return self.lambda_ewc * loss
 

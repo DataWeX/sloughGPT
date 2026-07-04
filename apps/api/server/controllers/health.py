@@ -89,9 +89,8 @@ class HealthController:
             try:
                 import state as server_state
                 if server_state.model is not None:
-                    import torch
                     model = server_state.model
-                    if isinstance(model, torch.nn.Module):
+                    if hasattr(model, "parameters") and callable(getattr(model, "parameters", None)):
                         result["num_parameters"] = sum(p.numel() for p in model.parameters())
             except Exception:
                 pass

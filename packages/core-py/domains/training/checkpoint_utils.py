@@ -15,6 +15,8 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 
+from domains.training.slonet_compat import torch
+
 try:
     from domains.models import SloughGPTModel
 except (ImportError, ModuleNotFoundError):
@@ -30,8 +32,12 @@ def torch_load_checkpoint(
     map_location: str = "cpu",
 ) -> Dict[str, Any]:
     """Load a ``.pt`` checkpoint as a dict with numpy arrays."""
-    import torch
-    raw = torch.load(path, map_location=map_location, weights_only=False)
+    try:
+        from domains.infrastructure.pt_loader import load_pt_file
+        raw = load_pt_file(path, map_location=map_location)
+    except Exception:
+        from domains.training.slonet_compat import torch
+        raw = torch.load(path, map_location=map_location, weights_only=False)
     if not isinstance(raw, dict):
         raise TypeError(f"Expected checkpoint at {path!r} to load to dict, got {type(raw).__name__}")
     return _to_numpy_dict(raw)

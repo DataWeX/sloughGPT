@@ -69,7 +69,7 @@ class ServerSpeechRecognizer:
         """Load whisper model."""
         try:
             from transformers import WhisperForConditionalGeneration, WhisperProcessor
-            import torch
+            from domains.training.slonet_compat import torch
             
             self._processor = WhisperProcessor.from_pretrained(f"openai/{self.model_name}")
             self._model = WhisperForConditionalGeneration.from_pretrained(
@@ -83,7 +83,7 @@ class ServerSpeechRecognizer:
     
     def recognize(self, audio_data: bytes, language: str = "en") -> TranscriptionResult:
         """Recognize speech from audio bytes."""
-        import torch
+        from domains.training.slonet_compat import torch
         import io
         from scipy.io import wavfile
         

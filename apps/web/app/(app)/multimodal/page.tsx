@@ -1,4 +1,5 @@
 'use client'
+export const dynamic = 'force-dynamic'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
@@ -9,10 +10,10 @@ import { multimodalController } from '@/lib/controllers'
 import type { MultimodalCapabilities, TrainingReport, TrainingStatus } from '@/lib/multimodal-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { apiPost } from '@/lib/http-client'
-import dynamic from 'next/dynamic'
+import dynamicNext from 'next/dynamic'
 import CapabilitiesCard from '@/components/multimodal/CapabilitiesCard'
 
-const TrainingCard = dynamic(() => import('@/components/multimodal/TrainingCard'), { ssr: false })
+const TrainingCard = dynamicNext(() => import('@/components/multimodal/TrainingCard'), { ssr: false })
 import ImageTrainingCard from '@/components/multimodal/ImageTrainingCard'
 import BatchTrainingCard from '@/components/multimodal/BatchTrainingCard'
 import VisualDatasetCard from '@/components/multimodal/VisualDatasetCard'

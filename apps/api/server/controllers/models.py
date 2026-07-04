@@ -38,12 +38,10 @@ class ModelsController:
         """
         if device is None or device == "auto":
             try:
-                import torch
-                if torch.cuda.is_available():
-                    return "cuda"
+                from domains.infrastructure.ml_types import auto_device
+                return auto_device()
             except Exception:
-                pass
-            return "cpu"
+                return "cpu"
         return device
     
     def _find_model_path(self, model_id: str) -> Optional[Path]:

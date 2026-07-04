@@ -1,4 +1,5 @@
 'use client'
+export const dynamic = 'force-dynamic'
 
 import { useEffect, useMemo, useState } from 'react'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
@@ -11,9 +12,9 @@ import ModelsCard from '@/components/compare/ModelsCard'
 import ComparisonTableCard from '@/components/compare/ComparisonTableCard'
 import SummaryCard from '@/components/compare/SummaryCard'
 import OutputComparisonCard from '@/components/compare/OutputComparisonCard'
-import dynamic from 'next/dynamic'
+import dynamicNext from 'next/dynamic'
 
-const VisualComparisonCard = dynamic(() => import('@/components/compare/VisualComparisonCard'), { ssr: false })
+const VisualComparisonCard = dynamicNext(() => import('@/components/compare/VisualComparisonCard'), { ssr: false })
 
 interface ModelEntry {
   id: string

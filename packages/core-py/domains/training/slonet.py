@@ -3051,23 +3051,36 @@ def _rebuild_net_from_params(net: SloNet, weights: Dict[str, Any]) -> None:
 
 
 def _load_pytorch_zip_weights(zip_data: bytes) -> Dict[str, np.ndarray]:
-    """Load weights from a PyTorch ZIP checkpoint (used by auto-train)."""
+    """Load weights from a PyTorch ZIP checkpoint using torch-free pt_loader."""
+    import tempfile, os
     try:
-        import torch, io
-        sd = torch.load(io.BytesIO(zip_data), map_location="cpu", weights_only=False)
-        result = {}
-        for k, v in sd.items():
-            if isinstance(v, np.ndarray):
-                result[k] = v.astype(np.float32)
-            elif hasattr(v, 'numpy'):
-                result[k] = v.cpu().numpy().astype(np.float32)
-            else:
-                result[k] = np.array(v, dtype=np.float32)
-        return result
+        from domains.infrastructure.pt_loader import load_pt_file
+        # Write to temp file since pt_loader expects a path
+        with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as f:
+            f.write(zip_data)
+            tmp_path = f.name
+        try:
+            return load_pt_file(tmp_path)
+        finally:
+            os.unlink(tmp_path)
     except Exception as e:
-        import sys
-        print(f"_load_pytorch_zip_weights failed: {type(e).__name__}: {e}", file=sys.stderr)
-        return {}
+        # Fallback: try torch if available
+        try:
+            import torch, io
+            sd = torch.load(io.BytesIO(zip_data), map_location="cpu", weights_only=False)
+            result = {}
+            for k, v in sd.items():
+                if isinstance(v, np.ndarray):
+                    result[k] = v.astype(np.float32)
+                elif hasattr(v, 'numpy'):
+                    result[k] = v.cpu().numpy().astype(np.float32)
+                else:
+                    result[k] = np.array(v, dtype=np.float32)
+            return result
+        except Exception:
+            import sys
+            print(f"_load_pytorch_zip_weights failed: {type(e).__name__}: {e}", file=sys.stderr)
+            return {}
 
 
 def souls_from_directory(dir_path) -> List[SloNet]:

@@ -156,8 +156,8 @@ class CircuitBreaker:
 
 def _has_mps() -> bool:
     try:
-        import torch
-        return hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+        from domains.infrastructure.ml_types import mps as ml_mps
+        return ml_mps.is_available()
     except ImportError:
         return False
 
@@ -165,10 +165,10 @@ def _has_mps() -> bool:
 def _mps_oom_recovery() -> None:
     """Clear MPS cache and potentially force CPU fallback."""
     try:
-        import torch
         gc.collect()
+        from domains.infrastructure.ml_types import mps as ml_mps
         if _has_mps():
-            torch.mps.empty_cache()
+            ml_mps.empty_cache()
     except Exception:
         pass
 
@@ -569,7 +569,8 @@ class ModelServer:
         gen_kwargs.update(kwargs)
 
         import torch
-        with torch.no_grad():
+        from domains.infrastructure.ml_types import no_grad as ml_no_grad
+        with ml_no_grad():
             output = model.generate(**gen_kwargs)
 
         tokens_generated = output.shape[1] - input_ids.shape[1]
@@ -635,7 +636,8 @@ class ModelServer:
             gen_kwargs["stopping_criteria"].append(_CancelCriteria())
 
         import torch
-        with torch.no_grad():
+        from domains.infrastructure.ml_types import no_grad as ml_no_grad
+        with ml_no_grad():
             model.generate(**gen_kwargs)
 
         return streamer
@@ -756,7 +758,8 @@ class ModelServer:
 
             def _generate_inner():
                 try:
-                    with torch.no_grad():
+                    from domains.infrastructure.ml_types import no_grad as ml_no_grad
+                    with ml_no_grad():
                         model.generate(**gen_kwargs)
                 except Exception as e:
                     _error.append(e)

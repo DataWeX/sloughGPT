@@ -16,7 +16,7 @@ logger = logging.getLogger("man.models")
 
 def _get_nn():
     """Lazily get torch.nn module."""
-    import torch
+    from domains.training.slonet_compat import torch
 
     return torch.nn
 

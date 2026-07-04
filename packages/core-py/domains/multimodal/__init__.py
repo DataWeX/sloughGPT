@@ -15,7 +15,7 @@ from typing import Optional, Tuple, List
 from dataclasses import dataclass
 
 try:
-    import torch
+    from domains.training.slonet_compat import torch
     import torch.nn as nn
     import torch.nn.functional as F
     _HAS_TORCH = True

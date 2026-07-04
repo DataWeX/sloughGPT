@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 import logging
 
 from domains.inference.prompt_formatter import PromptFormatter
+from domains.training.slonet_compat import torch
 
 logger = logging.getLogger("man.models.provider")
 
@@ -774,7 +775,6 @@ def discover_checkpoints(checkpoint_dir: str = "models/auto-training") -> List[D
         return results
     for pt in sorted(base.glob("*.pt"), key=lambda p: p.stat().st_mtime, reverse=True):
         try:
-            import torch
             ckpt = torch.load(str(pt), map_location="cpu", weights_only=False)
             tok = ckpt.get("tokenizer", {})
             stoi = tok.get("stoi") or ckpt.get("stoi")

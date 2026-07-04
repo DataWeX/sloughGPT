@@ -489,8 +489,12 @@ def _start_watchdog() -> None:
 if __name__ == "__main__":
     import argparse
     import atexit
+    import signal
     import subprocess
     import uvicorn
+
+    # Ignore SIGHUP so server survives shell session close
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)
 
     def _handle_uncaught_exception(exc_type, exc_value, exc_tb):
         if issubclass(exc_type, (KeyboardInterrupt, SystemExit)):
@@ -519,7 +523,27 @@ if __name__ == "__main__":
         default=cfg.enable_web,
         help="Serve web frontend alongside API",
     )
+    parser.add_argument(
+        "--daemon",
+        action="store_true",
+        default=False,
+        help="Run as daemon (detach from terminal)",
+    )
     args = parser.parse_args()
+
+    # Daemonize if requested
+    if args.daemon:
+        pid = os.fork()
+        if pid > 0:
+            print(f"Server started as daemon (PID {pid})")
+            sys.exit(0)
+        os.setsid()
+        # Redirect stdio to /dev/null
+        devnull = os.open(os.devnull, os.O_RDWR)
+        os.dup2(devnull, 0)
+        os.dup2(devnull, 1)
+        os.dup2(devnull, 2)
+        os.close(devnull)
 
     # Kill orphan processes on target port to avoid port conflicts
     bind_port = args.port or cfg.port

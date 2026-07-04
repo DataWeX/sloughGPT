@@ -176,7 +176,7 @@ class LoRAEvaluator:
             return
 
         try:
-            import torch
+            from domains.training.slonet_compat import torch
             from transformers import AutoTokenizer, AutoModelForCausalLM
 
             if self.base_model and Path(self.base_model).exists():
@@ -202,7 +202,7 @@ class LoRAEvaluator:
             # Fallback: simulate generation
             return self._simulate_generation(prompt, adapter_path)
 
-        import torch
+        from domains.training.slonet_compat import torch
         from transformers import TextIteratorStreamer
         import threading
 
@@ -296,7 +296,7 @@ class LoRAEvaluator:
             return 1.0 + (1.0 - unique_ratio) * 30  # Range: 1-31
 
         try:
-            import torch
+            from domains.training.slonet_compat import torch
 
             full_text = prompt + " " + text
             inputs = self._tokenizer(full_text, return_tensors="pt")

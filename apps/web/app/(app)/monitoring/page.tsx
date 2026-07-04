@@ -1,4 +1,5 @@
 'use client'
+export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
@@ -9,9 +10,9 @@ import { systemController, type DetailedHealth, type SystemMetrics, type SystemI
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { benchmarkController } from '@/lib/benchmark-controller'
 import { multimodalController } from '@/lib/controllers'
-import dynamic from 'next/dynamic'
+import dynamicNext from 'next/dynamic'
 
-const SystemChart = dynamic(() => import('@/components/monitoring/SystemChart').then(m => m.SystemChart), {
+const SystemChart = dynamicNext(() => import('@/components/monitoring/SystemChart').then(m => m.SystemChart), {
   ssr: false,
   loading: () => <div className="h-40 w-full animate-pulse bg-muted rounded-lg" />,
 })

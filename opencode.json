@@ -19,16 +19,19 @@
   },
   "agent": {
     "error-fixer": {
-      "description": "Diagnoses and fixes errors detected in CLI logs. Trigger with 'opencode fix' or when a command fails repeatedly.",
-      "mode": "subagent"
+      "description": "Diagnoses and fixes errors detected in CLI logs.",
+      "mode": "subagent",
+      "hidden": true
     },
     "doc-aware-engineer": {
-      "description": "Reads project manuals and docs before making changes. Trigger with 'opencode doc-aware' or when asked to engineer code with doc context.",
-      "mode": "subagent"
+      "description": "Reads project manuals and docs before making changes.",
+      "mode": "subagent",
+      "hidden": true
     },
     "ui-error-fixer": {
-      "description": "Diagnoses and fixes frontend UI errors. Reads the UI error log from the ui-error-watcher plugin and live backend errors. Trigger with 'opencode ui-fix' or when a UI build/test fails.",
-      "mode": "subagent"
+      "description": "Diagnoses and fixes frontend UI errors.",
+      "mode": "subagent",
+      "hidden": true
     }
   }
 }

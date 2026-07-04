@@ -53,11 +53,77 @@ DEFAULT_BATCH_SIZE = 32
 DEFAULT_LR = 1e-4
 DEFAULT_EPOCHS = 15
 CONTRASTIVE_TEMPERATURE = 0.07
+LSE_THRESHOLD = 15.0
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+from contextlib import contextmanager
+
+@contextmanager
+def _no_accel():
+    """Context manager to temporarily disable Metal/GPU accelerator."""
+    import domains.training.slonet as _slonet
+    prev = getattr(_slonet, "_ACCELERATOR", None)
+    try:
+        _slonet._ACCELERATOR = "none"
+        yield
+    finally:
+        _slonet._ACCELERATOR = prev
 
 # Where the trained embedder lives
 _EMBEDDER_DIR = Path(__file__).resolve().parents[4] / "data" / "models"
 _EMBEDDER_PATH = _EMBEDDER_DIR / "text-embedder.sou"
 _TOKENIZER_PATH = _EMBEDDER_DIR / "text-embedder-tokenizer.json"
+
+
+# ---------------------------------------------------------------------------
+# Binary log-sum-exp tree — no flat sum of exponentials
+# ---------------------------------------------------------------------------
+
+def _lse_pair(a, b, coeff=1.0, threshold=LSE_THRESHOLD):
+    """Binary log-sum-exp pair: log(coeff*exp(a) + exp(b)).
+
+    coeff=1 → standard LSE (expands)
+    coeff=0 → returns max(a, b) - |diff| = min(a, b) (contracts)
+
+    The threshold prevents overflow: when |a - b| > threshold,
+    the smaller term is negligible and we return max directly.
+    """
+    mx = np.maximum(a, b)
+    diff = np.abs(a - b)
+    mask = diff <= threshold
+    adj = np.where(mask, np.log(coeff + np.exp(-diff)), 0.0)
+    return mx + adj
+
+
+def _lse_tree(x, axis=-1, threshold=LSE_THRESHOLD):
+    """Log-sum-exp via binary pairing tree with threshold overflow prevention.
+
+    Every node uses coeff=1 (standard LSE). The threshold prevents
+    overflow: when |a - b| > threshold, the smaller term is negligible
+    and we return max directly.
+
+    This is mathematically equivalent to flat LSE for values within
+    threshold, and prevents spillover for extreme values.
+    """
+    N = x.shape[axis]
+    if N == 1:
+        return x.squeeze(axis=axis)
+    if N == 2:
+        return _lse_pair(x[..., 0], x[..., 1], coeff=1.0, threshold=threshold)
+
+    pairs = []
+    for i in range(0, N, 2):
+        a = np.take(x, i, axis=axis)
+        if i + 1 < N:
+            b = np.take(x, i + 1, axis=axis)
+            pairs.append(_lse_pair(a, b, coeff=1.0, threshold=threshold))
+        else:
+            pairs.append(a)
+    return _lse_tree(np.stack(pairs, axis=axis), axis=axis, threshold=threshold)
 
 
 # ---------------------------------------------------------------------------
@@ -244,16 +310,16 @@ def _contrastive_loss(
     z_i: np.ndarray,
     z_j: np.ndarray,
     temperature: float = CONTRASTIVE_TEMPERATURE,
-    anchor_labels: Optional[List[str]] = None,
-    anchor_store=None,
+    point_labels: Optional[List[str]] = None,
+    meaning_tags=None,
     constraint_weight: float = 0.5,
 ) -> Tuple[float, float]:
-    """InfoNCE loss with meaning point constraints.
+    """InfoNCE loss with meaning tag constraints.
 
     z_i, z_j: (B, D) — L2-normalized embeddings
-    anchor_labels: optional list of meaning point labels per text (e.g., ["factual", "interrogative"])
-    anchor_store: MeaningPoints instance with fixed reference vectors
-    constraint_weight: how much to weight the meaning point constraint (0.0 = ignore)
+    point_labels: optional list of meaning tag labels per text (e.g., ["factual", "interrogative"])
+    meaning_tags: MeaningTags instance with fixed reference vectors
+    constraint_weight: how much to weight the meaning tag constraint (0.0 = ignore)
 
     Returns (total_loss, constraint_loss) — constraint_loss is 0 if no labels provided.
     """
@@ -268,22 +334,21 @@ def _contrastive_loss(
     # Numerator: positive pair similarity
     logits_max = sim.max(axis=1, keepdims=True)
     logits = sim - logits_max  # numerical stability
-    exp_logits = np.exp(logits)
-    log_sum_exp = np.log(exp_logits.sum(axis=1) + 1e-10)
+    log_sum_exp = _lse_tree(logits, axis=1)
     log_probs = logits - log_sum_exp[:, None]
     info_nce_loss = -log_probs[labels, labels].mean()
 
     # Hard constraint: penalize distance from known meaning point
     constraint_loss = 0.0
-    if anchor_labels and anchor_store is not None:
+    if point_labels and meaning_tags is not None:
         penalties = []
-        for i, label in enumerate(anchor_labels):
-            if label and anchor_store.get(label) is not None:
-                point_vec = anchor_store.get(label)
-                # Cosine similarity to meaning point — should be high
-                sim_to_point = float(np.dot(z_i[i], point_vec))
+        for i, label in enumerate(point_labels):
+            if label and meaning_tags.get(label) is not None:
+                tag_vec = meaning_tags.get(label)
+                # Cosine similarity to meaning tag — should be high
+                sim_to_tag = float(np.dot(z_i[i], tag_vec))
                 # Penalty: 1 - sim (zero when perfectly aligned)
-                penalties.append(1.0 - sim_to_point)
+                penalties.append(1.0 - sim_to_tag)
         if penalties:
             constraint_loss = float(np.mean(penalties))
 
@@ -369,15 +434,17 @@ def train_embedder(
     params = encoder.parameters()
     logger.info("Encoder params: %d tensors", len(params))
 
-    # 2b. Load meaning points (the stars — fixed semantic reference points)
-    from domains.infrastructure.anchor_store import MeaningPoints, get_default_meaning_points
-    meaning_points = get_default_meaning_points(dimension=embed_dim)
-    logger.info("Loaded %d meaning points: %s", len(meaning_points.names()), meaning_points.names())
+    # 2b. Load meaning tags (the stars — fixed semantic reference points)
+    from domains.infrastructure.anchor_store import MeaningTags, get_default_meaning_tags
+    meaning_tags = get_default_meaning_tags(dimension=embed_dim)
+    logger.info("Loaded %d meaning tags: %s", len(meaning_tags.names()), meaning_tags.names())
 
     # 3. Training loop
     logger.info("Training embedder: %d texts, %d epochs, batch_size=%d", len(texts), epochs, batch_size)
     rng_train = np.random.RandomState(123)
     losses = []
+    refine_stats = []
+    maintain_stats = []
 
     for epoch in range(epochs):
         epoch_loss = 0.0
@@ -415,25 +482,23 @@ def train_embedder(
             orig_norm = orig_emb.data / (np.linalg.norm(orig_emb.data, axis=1, keepdims=True) + 1e-10)
             aug_norm = aug_emb.data / (np.linalg.norm(aug_emb.data, axis=1, keepdims=True) + 1e-10)
 
-            # Label by meaning (nearest meaning point in embedding space)
-            batch_labels = [_label_by_meaning(t, meaning_points) for t in orig_texts]
+            # Label by meaning (nearest meaning tag in embedding space)
+            batch_labels = [_label_by_meaning(t, meaning_tags) for t in orig_texts]
 
-            # Compute contrastive loss with meaning point constraints
+            # Compute contrastive loss with meaning tag constraints
             loss_val, constraint_loss = _contrastive_loss(
                 orig_norm, aug_norm,
-                anchor_labels=batch_labels,
-                anchor_store=meaning_points,
+                point_labels=batch_labels,
+                meaning_tags=meaning_tags,
                 constraint_weight=0.5,
             )
 
             # Vectorized InfoNCE gradient w.r.t. orig_norm
             B = len(batch_idx)
             temperature = CONTRASTIVE_TEMPERATURE
-            sim = orig_norm @ aug_norm.T / temperature
-            sim_max = sim.max(axis=1, keepdims=True)
-            exp_sim = np.exp(sim - sim_max)
-            sum_exp = exp_sim.sum(axis=1, keepdims=True)
-            probs = exp_sim / sum_exp  # (B, B)
+            logits = orig_norm @ aug_norm.T / temperature
+            log_sum_exp_tree = _lse_tree(logits, axis=1)
+            probs = np.exp(logits - log_sum_exp_tree[:, np.newaxis])  # (B, B)
 
             # d(loss)/d(orig_norm) — fully vectorized, no Python loops
             eye = np.eye(B)
@@ -467,6 +532,37 @@ def train_embedder(
         avg_constraint = epoch_constraint / max(n_batches, 1)
         losses.append(avg_loss)
 
+        # --- Post-epoch self-correction ---
+
+        # Step A: Refine meaning tags toward centroids
+        with _no_accel():
+            all_ids = np.stack([_encode_tokens(t, vocab, max_seq_len) for t in texts])
+            all_emb = encoder.forward(all_ids)
+            all_norm = all_emb.data / (np.linalg.norm(all_emb.data, axis=1, keepdims=True) + 1e-10)
+
+        refined = meaning_tags.refine(texts, all_norm, lr=0.1, min_samples=max(3, len(texts) // 10))
+        if refined:
+            refine_stats.append({"epoch": epoch + 1, "refined": refined})
+            logger.info("Epoch %d refine: %s", epoch + 1, {k: v for k, v in refined.items()})
+
+        # Step B: Correct misclassified texts via TruthMaintainer
+        from domains.infrastructure.truth_maintainer import get_truth_maintainer
+        maintainer = get_truth_maintainer()
+        misclassified = maintainer.find_misclassified(texts, all_norm, meaning_tags)
+        if misclassified and len(misclassified) >= 3:
+            queries, positives, negatives = maintainer.generate_corrective_pairs(
+                misclassified, texts, all_norm, meaning_tags, max_pairs=min(30, len(misclassified))
+            )
+            if queries:
+                corr_loss = maintainer.apply_correction(
+                    encoder, queries, positives, negatives,
+                    meaning_tags, vocab, encode_fn=encode_fn,
+                    max_seq_len=max_seq_len, lr=lr * 0.5,
+                )
+                maintain_stats.append({"epoch": epoch + 1, "misclassified": len(misclassified), "corrected": len(queries), "loss": corr_loss})
+                logger.info("Epoch %d maintain: %d misclassified → %d corrected (loss=%.4f)",
+                           epoch + 1, len(misclassified), len(queries), corr_loss)
+
         if progress_callback:
             progress_callback(epoch + 1, avg_loss, epochs)
 
@@ -485,6 +581,9 @@ def train_embedder(
         "embed_dim": embed_dim,
         "n_params": sum(p.data.size for p in params),
         "save_path": out_path,
+        "refine_epochs": len(refine_stats),
+        "maintain_epochs": len(maintain_stats),
+        "total_corrected": sum(s["corrected"] for s in maintain_stats),
     }
 
 
