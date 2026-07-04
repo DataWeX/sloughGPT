@@ -24,7 +24,7 @@ describe('ModelStatusCard', () => {
   it('renders active pipeline when online', () => {
     render(<ModelStatusCard {...base} />)
     expect(screen.getByText('Active Pipeline')).toBeDefined()
-    expect(screen.getByText('GPT-2')).toBeDefined()
+    expect(screen.getByText('GPT 2')).toBeDefined()
     expect(screen.getByText('friendly')).toBeDefined()
   })
 

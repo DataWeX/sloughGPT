@@ -100,37 +100,61 @@ def _describe_model(model_id: str, parameters: int, loaded: bool) -> str:
 def _model_display_name(model_id: str) -> str:
     """Generate a human-friendly display name from a HuggingFace model ID.
 
+    Fully algorithmic — no hardcoded lookup tables.
+
     Examples:
         "Qwen/Qwen2.5-0.5B-Instruct" → "Qwen 2.5 0.5B Instruct"
-        "gpt2" → "GPT-2"
+        "gpt2" → "GPT 2"
+        "gpt2-medium" → "GPT 2 Medium"
+        "gpt2-xl" → "GPT 2 XL"
         "microsoft/Phi-3.5-mini-instruct" → "Phi 3.5 Mini Instruct"
         "meta-llama/Llama-3-8B" → "Llama 3 8B"
     """
+    import re
     name = model_id.split("/")[-1] if "/" in model_id else model_id
 
-    # Known special cases
-    _DISPLAY_NAMES = {
-        "gpt2": "GPT-2",
-        "gpt2-medium": "GPT-2 Medium",
-        "gpt2-large": "GPT-2 Large",
-        "gpt2-xl": "GPT-2 XL",
-    }
-    if model_id in _DISPLAY_NAMES:
-        return _DISPLAY_NAMES[model_id]
+    # Strip cache prefix: "models--Qwen--Qwen2.5..." → "Qwen2.5..."
+    if name.startswith("models--"):
+        after = name[len("models--"):]
+        # "models--org--model" → take everything after second "--"
+        idx = after.find("--")
+        if idx >= 0:
+            name = after[idx + 2:]
 
-    # Strip common prefixes
-    for prefix in ["models--", "models--"]:
-        if name.startswith(prefix):
-            name = name[len(prefix):]
+    # Split on common separators
+    parts = re.split(r'[/\-_]', name)
 
-    # Replace hyphens/underscores with spaces, clean up version dots
-    display = name.replace("-", " ").replace("_", " ")
-
-    # Collapse multiple spaces
-    while "  " in display:
-        display = display.replace("  ", " ")
-
-    return display.strip()
+    result = []
+    for part in parts:
+        if not part:
+            continue
+        # Short all-lowercase abbreviations (xl, bp, etc.) → uppercase all
+        if len(part) <= 3 and part.isalpha() and part.islower():
+            result.append(part.upper())
+        # All lowercase letters followed by digits: "gpt2", "llama3"
+        elif re.match(r'^[a-z]+\d+$', part):
+            match = re.match(r'^([a-z]+)(\d+)$', part)
+            if match:
+                result.append(match.group(1).upper())
+                result.append(match.group(2))
+            else:
+                result.append(part.upper())
+        # Number with size suffix: "0.5B", "3B", "8B"
+        elif re.match(r'^\d+\.?\d*[a-zA-Z]$', part):
+            result.append(part)
+        else:
+            # Normal mixed case: split at letter→digit and digit→letter boundaries
+            # But keep short digit-letter patterns together (e.g., "4e1t")
+            sub = re.sub(r'([a-zA-Z]{2,})(\d)', r'\1 \2', part)
+            sub = re.sub(r'(\d)([a-zA-Z]{2,})', r'\1 \2', sub)
+            # Capitalize first letter of each sub-word
+            words = sub.split()
+            for w in words:
+                if re.match(r'^[\d.]+$', w):
+                    result.append(w)
+                else:
+                    result.append(w[0].upper() + w[1:])
+    return " ".join(result)
 
 
 @router.post("/load", response_model=LoadModelResponse)

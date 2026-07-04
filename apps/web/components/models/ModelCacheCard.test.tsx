@@ -18,7 +18,7 @@ describe('ModelCacheCard', () => {
     render(<ModelCacheCard {...base} />)
     expect(screen.getByText('4')).toBeDefined()
     expect(screen.getByText('3.5 GB')).toBeDefined()
-    expect(screen.getByText('GPT-2')).toBeDefined()
+    expect(screen.getByText('GPT 2')).toBeDefined()
   })
 
   it('shows loading state when cacheUsage is null', () => {

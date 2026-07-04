@@ -31,6 +31,20 @@ Engineering means building properly, not hackily. Every change must be:
 - ✅ Use config over magic values
 - ✅ Handle errors explicitly
 
+### No Mocks — Everything Must Be Programmatic
+Every feature must be **real, computed, and programmable**. No hardcoded lookup tables, no text-file mocks, no placeholder data that pretends to work.
+
+- ❌ Hardcoded `_DISPLAY_NAMES = {"gpt2": "GPT-2", ...}` lookup tables
+- ❌ Text files or JSON configs that simulate behavior
+- ❌ Switch/case on known values when an algorithm would handle all values
+- ❌ "Works for the 5 examples we thought of" — must work for any input
+- ✅ Algorithms that compute results from input (e.g., `re.sub` for display names)
+- ✅ Config-driven behavior, not value-driven
+- ✅ Every function handles arbitrary input, not just the happy path
+- ✅ If a feature can be computed, never hardcode it
+
+**Test**: "If I add a new model / new input / new edge case, does it work without code changes?" If no, it's a mock.
+
 ### No Verbose Summaries
 - ❌ Long narrative summaries of past sessions
 - ❌ Explanatory preamble or postamble unless asked
