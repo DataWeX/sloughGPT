@@ -1,16 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  output: 'standalone',
-  transpilePackages: ['@sloughgpt/strui'],
-  // Disable Next.js default error overlay in development
-  // We use our own CustomErrorHandler component instead
+  ...(process.env.NODE_ENV === 'production' && { output: 'standalone' }),
   onDemandEntries: {
     maxInactiveAge: 25 * 1000,
     pagesBufferLength: 2,
-  },
-  async rewrites() {
-    return []
   },
 }
 

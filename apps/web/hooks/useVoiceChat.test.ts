@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { renderHook, act, cleanup } from '@testing-library/react'
 import { useVoiceChat, VoiceSettings } from './useVoiceChat'

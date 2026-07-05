@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { renderHook, cleanup } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createRef } from 'react'

@@ -264,7 +264,7 @@ export default function ChatPage() {
     } catch (err: any) {
       showToast(`Command failed: ${err?.message || 'Unknown error'}`, 'error')
     }
-  }, [chat, clearChat, model, showToast, router, ui, setSearchConversationsOpen, setSearchConversationsQuery])
+  }, [chat, clearChat, model, showToast, router, setSearchConversationsOpen, setSearchConversationsQuery])
 
   const handleSelectAgentWithToast = useCallback((agent: any) => {
     agents.setCurrentAgent(agent)
@@ -374,7 +374,7 @@ export default function ChatPage() {
       removeBookmark(messageId)
     }
     showToast('Message deleted', 'info')
-  }, [chat.setMessages, isBookmarked, removeBookmark, showToast])
+  }, [chat, isBookmarked, removeBookmark, showToast])
 
   const handleReadFile = useCallback(async (file: File) => {
     setReadLoading(true)

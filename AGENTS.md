@@ -166,6 +166,44 @@ cd apps/web && npx tsc --noEmit
 python3 -m py_compile <file>
 ```
 
+## Development Velocity
+
+### Test Strategy (Fast → Slow)
+Don't run the full 2000+ test suite on every change. Use targeted scripts:
+
+| Command | What it runs | Expected time | Use when |
+|---------|-------------|---------------|----------|
+| `npm run typecheck` | `tsc --noEmit` | 5-10s | **Every edit** — always first |
+| `npm run test:lib` | Pure logic (no jsdom) | 10-20s | Changing lib/ controllers/utils |
+| `npm run test:components` | Component + UI tests | 40-60s | Changing components/ |
+| `npm run test:hooks` | Hook tests | 15-30s | Changing hooks/ |
+| `npm run test:changed` | Tests in changed files only | 20-40s | Quick pre-commit sanity check |
+| `npm run test` | Full suite (209 files, 2113 tests) | 150-200s | **Pre-push / CI only** |
+
+**Flow**: `typecheck` → `test:changed` → commit → `test` before push.
+
+### Vitest Performance Optimizations
+- **No `@vitest-environment jsdom` per file** — environment is set via `environmentMatchGlobs` in `vitest.config.ts`. All `components/`, `hooks/`, `app/` test files use jsdom by glob config. `lib/` tests use node (default).
+- **Pool: forks** with 1-4 workers — balances isolation vs parallelism. Use `singleFork: true` if test isolation issues arise.
+- **Cache enabled** at `node_modules/.vitest-cache` — re-runs skip unchanged transforms.
+- **Never add `jest.mock` or `vi.mock` at module level** without `vi.hoisted()`. Mock factory hoisting prevents TDZ errors. Use `__test-helper.ts` for shared mock declarations.
+
+### Dev Server Speed
+- `npm run dev` uses Next.js dev mode — fine for development.
+- `output: 'standalone'` is production-only (conditional on `NODE_ENV`).
+- `transpilePackages` should only list external local packages that need transpilation.
+
+### Python Test Strategy
+- **Syntax first**: `python3 -m py_compile <file>` (instant)
+- **Unit changes**: `python3 -m pytest tests/test_file.py -x -q` (targeted)
+- **Full suite**: 1768 tests — only before push or when changing foundational infrastructure
+
+### Dead Code Prevention
+- Check `grep -r "import.*from X"` before assuming a module has consumers
+- Delete dead exports on sight — dead code is speed debt
+- `grep -rl "old_function_name" --include="*.py" --include="*.ts"` before removing anything
+- Use `git log --oneline --diff-filter=D -- <file>` to verify deletion history
+
 ### Key Files (Annotated)
 
 | File | Purpose | Key Exports/Functions |

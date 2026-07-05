@@ -38,11 +38,9 @@ function ToggleGroup({
   className,
   children,
 }: ToggleGroupRootProps) {
-  const getValue = () => controlledValue ?? defaultValue
-
   const handleValueChange = useCallback(
     (itemValue: string) => {
-      const current = getValue()
+      const current = controlledValue ?? defaultValue
       if (type === 'single') {
         onValueChange?.(itemValue)
       } else {
@@ -57,7 +55,7 @@ function ToggleGroup({
   )
 
   return (
-    <ToggleGroupContext.Provider value={{ type, value: getValue(), onValueChange: handleValueChange }}>
+    <ToggleGroupContext.Provider value={{ type, value: controlledValue ?? defaultValue, onValueChange: handleValueChange }}>
       <div
         role="group"
         className={cn(

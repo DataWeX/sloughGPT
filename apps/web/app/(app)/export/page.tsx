@@ -33,7 +33,7 @@ export default function ExportPage() {
         exportController.getFormats().catch(() => []),
       ])
       setModels(list)
-      setFormats(fmts.length > 0 ? fmts : formats)
+      setFormats(prev => fmts.length > 0 ? fmts : prev)
       const loaded = list.find(m => m.loaded || health?.model_type?.includes(m.id || m.name)) || null
       setLoadedModel(loaded)
     } catch {} finally {

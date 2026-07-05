@@ -1,5 +1,4 @@
 /**
- * @vitest-environment jsdom
  */
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, act } from '@testing-library/react'
