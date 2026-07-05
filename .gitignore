@@ -198,6 +198,9 @@ data/
 *.db
 *.sqlite
 
+# Rust build output (crates/)
+**/target/
+
 # Monorepo duplicates
 packages/apps/apps/
 .opencode/tmp/
