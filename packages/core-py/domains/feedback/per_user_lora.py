@@ -280,7 +280,7 @@ class PerUserLoRAStore:
 
         cursor.execute(
             """
-            INSERT OR REPLACE INTO user_adapters 
+            INSERT OR REPLACE INTO user_adapters
             (user_id, rank, alpha, model_dim, created_at, updated_at, feedback_count)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """,

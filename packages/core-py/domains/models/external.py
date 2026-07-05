@@ -10,18 +10,18 @@ Provides a standardized way to import any model from various sources:
 
 Usage:
     from domains.models.external import ModelImporter
-    
+
     # From HuggingFace
     model = ModelImporter.from_huggingface("gpt2")
     model = ModelImporter.from_huggingface("meta-llama/Llama-2-7b")
-    
+
     # From local file
     model = ModelImporter.from_local("model.slo")
     model = ModelImporter.from_local("model.pt")
-    
+
     # From Ollama
     model = ModelImporter.from_ollama("llama2")
-    
+
     # Auto-detect source
     model = ModelImporter.auto_load("gpt2")  # HuggingFace
     model = ModelImporter.auto_load("model.slo")  # Local
@@ -48,7 +48,7 @@ SOURCE_ONLINE = "online"
 class ModelImporter:
     """
     Unified interface for importing models from various sources.
-    
+
     Supports:
     - HuggingFace Hub (models, safetensors)
     - Local files (.slo, .pt, .safetensors, .gguf)
@@ -73,12 +73,12 @@ class ModelImporter:
     ) -> "ModelInterface":
         """
         Load a model from HuggingFace Hub.
-        
+
         Args:
             model_id: HuggingFace model ID (e.g., "gpt2", "meta-llama/Llama-2-7b")
             device: Device to load model on ("cpu", "cuda")
             **kwargs: Additional arguments for AutoModelForCausalLM.from_pretrained
-        
+
         Returns:
             Model wrapped in ModelInterface
         """
@@ -130,18 +130,18 @@ class ModelImporter:
     ) -> "ModelInterface":
         """
         Load a model from a local file.
-        
+
         Supports:
         - .slo files (SloughGPT Slo Unit format)
         - .pt/.pth files (PyTorch checkpoints)
         - .safetensors files
         - .gguf files (via llama-cpp-python)
-        
+
         Args:
             path: Path to model file
             device: Device to load model on
             **kwargs: Additional arguments
-        
+
         Returns:
             Model wrapped in ModelInterface
         """
@@ -175,12 +175,12 @@ class ModelImporter:
     ) -> "OllamaWrapper":
         """
         Load a model via Ollama API.
-        
+
         Args:
             model_name: Ollama model name (e.g., "llama2", "mistral")
             base_url: Ollama server URL
             **kwargs: Additional arguments
-        
+
         Returns:
             OllamaWrapper instance
         """
@@ -196,13 +196,13 @@ class ModelImporter:
     ) -> Any:
         """
         Load a model via llama.cpp bindings.
-        
+
         Args:
             model_path: Path to GGUF model file
             n_ctx: Context size
             n_gpu_layers: Number of layers to offload to GPU
             **kwargs: Additional llama.cpp arguments
-        
+
         Returns:
             Llama instance
         """
@@ -230,13 +230,13 @@ class ModelImporter:
     ) -> "ModelInterface":
         """
         Download and load a model from a URL.
-        
+
         Args:
             url: Direct URL to model file
             output_path: Local path to save downloaded file
             device: Device to load model on
             **kwargs: Additional arguments
-        
+
         Returns:
             Model wrapped in ModelInterface
         """
@@ -265,18 +265,18 @@ class ModelImporter:
     ) -> "ModelInterface":
         """
         Auto-detect source and load model.
-        
+
         Detects:
         - HuggingFace model IDs (e.g., "gpt2", "meta-llama/...")
         - Local file paths
         - URLs (http://, https://)
         - Ollama models (ollama://...)
-        
+
         Args:
             source: Model source (ID, path, or URL)
             device: Device to load model on
             **kwargs: Additional arguments
-        
+
         Returns:
             Model wrapped in ModelInterface
         """
@@ -322,7 +322,7 @@ class ModelImporter:
 class OllamaWrapper:
     """
     Wrapper for Ollama API.
-    
+
     Provides a ModelInterface-compatible wrapper for Ollama models.
     """
 
@@ -420,7 +420,7 @@ class OllamaWrapper:
 class LLamaCppWrapper:
     """
     Wrapper for llama.cpp (llama-cpp-python) models.
-    
+
     Provides a ModelInterface-compatible wrapper for GGUF models.
     """
 

@@ -889,7 +889,7 @@ class LlamaCLIInferenceEngine:
                 "--temp", str(temperature),
                 "-no-cnv",  # Non-conversation mode
             ])
-            
+
             result = subprocess.run(
                 cmd_str,
                 shell=True,
@@ -900,14 +900,14 @@ class LlamaCLIInferenceEngine:
 
             output = result.stdout + result.stderr
             logger.info(f"llama output[:300]: {output[:300]}")
-            
+
             # Parse: output is "prompt + generated text" + perf lines
             if prompt in output:
                 # Get rest after prompt
                 generated = output.split(prompt)[-1].strip()
             else:
                 generated = output
-            
+
             # Remove trailing performance metrics
             lines = generated.split("\n")
             clean = [l for l in lines if l.strip() and not l.strip().startswith(("~", "main:", "llama_", "load", "common_", "print_", "init_", "load_"))]

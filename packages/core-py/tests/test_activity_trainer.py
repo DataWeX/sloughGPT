@@ -127,6 +127,3 @@ class TestActivityTrainerWithData:
         assert d["success"] is True
         assert "val_accuracy" in d
         assert isinstance(json.dumps(d), str)
-
-
-

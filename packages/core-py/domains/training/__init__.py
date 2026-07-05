@@ -28,27 +28,27 @@ class DatasetType(Enum):
 
 def detect_dataset_type(path: str) -> DatasetType:
     """Auto-detect dataset type by sampling file contents.
-    
+
     Scans first 10 lines of each file to determine modality.
-    
+
     Args:
         path: Path to dataset file or directory
-        
+
     Returns:
         Detected DatasetType
     """
     from pathlib import Path
     import json
-    
+
     p = Path(path)
     if p.is_dir():
         files = list(p.glob("*.jsonl")) + list(p.glob("*.json")) + list(p.glob("*.txt"))
         if not files:
             return DatasetType.TEXT
         return detect_dataset_type(str(files[0]))
-    
+
     text = p.read_text(encoding="utf-8", errors="replace")[:2000]
-    
+
     # Check if JSON/JSONL
     if p.suffix in (".jsonl", ".json"):
         lines = text.strip().split("\n")
@@ -66,14 +66,14 @@ def detect_dataset_type(path: str) -> DatasetType:
                     return DatasetType.CONVERSATION
             except (json.JSONDecodeError, ValueError):
                 continue
-    
+
     # Check for code (contains common programming keywords)
     import re
     code_patterns = ["def ", "class ", "import ", "function ", "const ", "fn "]
     code_lines = sum(1 for pat in code_patterns if pat in text)
     if code_lines >= 3:
         return DatasetType.CODE
-    
+
     return DatasetType.TEXT
 
 
@@ -94,7 +94,7 @@ class DatasetConfig:
 
 class DatasetManager:
     """Unified dataset manager for multiple dataset types.
-    
+
     Auto-categorizes datasets by modality so you only load what's needed.
     """
 
@@ -136,40 +136,40 @@ class DatasetManager:
 
     def scan_directory(self, directory: str = "datasets") -> int:
         """Auto-discover and register all datasets in a directory.
-        
+
         Scans each subdirectory for .txt, .jsonl, .json files and auto-detects
         the dataset type by sampling content. Skips already-registered datasets.
-        
+
         Args:
             directory: Root datasets directory
-            
+
         Returns:
             Number of newly registered datasets
         """
         from pathlib import Path
-        
+
         base = Path(directory)
         if not base.exists():
             self.logger.warning(f"Directory not found: {directory}")
             return 0
-        
+
         count = 0
         for entry in sorted(base.iterdir()):
             if not entry.is_dir() or entry.name.startswith("_"):
                 continue
-            
+
             if entry.name in self.datasets:
                 continue
-            
+
             # Find data files
             files = list(entry.glob("*.txt")) + list(entry.glob("*.jsonl")) + list(entry.glob("*.json"))
             if not files:
                 continue
-            
+
             path = str(files[0])
             dtype = detect_dataset_type(path)
             fmt = DataFormat.JSONL if path.endswith(".jsonl") else DataFormat.JSON if path.endswith(".json") else DataFormat.JSON
-            
+
             config = DatasetConfig(
                 name=entry.name,
                 dataset_type=dtype,
@@ -179,7 +179,7 @@ class DatasetManager:
             self.datasets[entry.name] = config
             count += 1
             self.logger.info(f"  [{dtype.value:>12}] {entry.name} ({files[0].name})")
-        
+
         return count
 
     def summarize(self) -> Dict[str, List[str]]:

@@ -47,7 +47,7 @@ class SecurityConfig:
 
 class SecurityBoundary:
     """Security boundaries for safe execution."""
-    
+
     BLOCKED_PATTERNS = [
         r"import\s+os\s*.*remove",
         r"import\s+shutil\s*.*rmtree",
@@ -60,25 +60,25 @@ class SecurityBoundary:
         r"marshal",
         r"compile\s*\(",
     ]
-    
+
     ALLOWED_DIRS = [
         "data",
-        "models", 
+        "models",
         "datasets",
         "temp",
     ]
-    
+
     def __init__(self, config: Optional[SecurityConfig] = None):
         self.config = config or SecurityConfig()
         self._blocked_re = [re.compile(p) for p in self.BLOCKED_PATTERNS]
-    
+
     def is_allowed(self, code: str) -> tuple[bool, str]:
         """Check if code is safe to execute."""
         for pattern in self._blocked_re:
             if pattern.search(code):
                 return False, f"Blocked pattern: {pattern.pattern}"
         return True, ""
-    
+
     @contextmanager
     def resource_limit(self, tool: str):
         """Context manager for resource limits."""
@@ -93,7 +93,7 @@ class SecurityBoundary:
 class ToolCapability(Enum):
     """Tool capability levels."""
     CODE_EXECUTION = "code_execution"
-    FILE_SEARCH = "file_search" 
+    FILE_SEARCH = "file_search"
     WEB_SEARCH = "web_search"
     CITATION = "citation"
     MEMORY = "memory"
@@ -121,15 +121,15 @@ class ToolExecutionContext:
 class ToolRunner:
     """
     Internal tool runner - NOT exposed to API.
-    
+
     This is the core infrastructure that agent uses internally.
     """
-    
+
     def __init__(self, security: Optional[SecurityBoundary] = None):
         self.security = security or SecurityBoundary()
         self._executed_count = 0
         self._last_reset = asyncio.get_event_loop().time()
-    
+
     async def execute(
         self,
         tool_name: str,
@@ -140,7 +140,7 @@ class ToolRunner:
         # Rate limit check
         if not self._check_rate_limit():
             return {"error": "Rate limit exceeded", "success": False}
-        
+
         # Route to correct tool
         if tool_name == ToolCapability.CODE_EXECUTION.value:
             return await self._run_code(args, context)
@@ -152,19 +152,19 @@ class ToolRunner:
             return await self._run_citation(args, context)
         else:
             return {"error": f"Unknown tool: {tool_name}", "success": False}
-    
+
     def _check_rate_limit(self) -> bool:
         """Check rate limits."""
         now = asyncio.get_event_loop().time()
         if now - self._last_reset > 60:
             self._executed_count = 0
             self._last_reset = now
-        
+
         if self._executed_count >= self.security.config.rate_limit_per_minute:
             return False
         self._executed_count += 1
         return True
-    
+
     async def _run_code(
         self,
         args: Dict[str, Any],
@@ -173,12 +173,12 @@ class ToolRunner:
         """Execute code internally."""
         code = args.get("code", "")
         language = args.get("language", "python")
-        
+
         # Security check
         safe, msg = self.security.is_allowed(code)
         if not safe:
             return {"error": msg, "success": False}
-        
+
         # Execute in subprocess with timeout
         try:
             result = await asyncio.wait_for(
@@ -190,7 +190,7 @@ class ToolRunner:
             return {"error": "Execution timed out", "success": False}
         except Exception as e:
             return {"error": str(e), "success": False}
-    
+
     async def _execute_subprocess(
         self,
         code: str,
@@ -198,7 +198,7 @@ class ToolRunner:
     ) -> Dict[str, Any]:
         """Execute code in subprocess."""
         suffix = ".py" if language == "python" else ".js"
-        
+
         with tempfile.NamedTemporaryFile(
             mode="w",
             suffix=suffix,
@@ -206,15 +206,15 @@ class ToolRunner:
         ) as f:
             f.write(code)
             path = f.name
-        
+
         cmd = ["python3", path] if language == "python" else ["node", path]
-        
+
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        
+
         try:
             stdout, stderr = await proc.communicate()
             return {
@@ -224,7 +224,7 @@ class ToolRunner:
             }
         finally:
             os.unlink(path)
-    
+
     async def _run_file_search(
         self,
         args: Dict[str, Any],
@@ -234,16 +234,16 @@ class ToolRunner:
         query = args.get("query", "")
         path = args.get("path", ".")
         limit = args.get("limit", 20)
-        
+
         if not query:
             return {"error": "query required", "success": False}
-        
+
         try:
             files = await self._search_files(query, path, limit)
             return {"success": True, "files": files, "count": len(files)}
         except Exception as e:
             return {"error": str(e), "success": False}
-    
+
     async def _search_files(
         self,
         query: str,
@@ -257,11 +257,11 @@ class ToolRunner:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        
+
         stdout, _ = await proc.communicate()
         files = stdout.decode().strip().split("\n")
         return [f for f in files if f][:limit]
-    
+
     async def _run_web_search(
         self,
         args: Dict[str, Any],
@@ -269,16 +269,16 @@ class ToolRunner:
     ) -> Dict[str, Any]:
         """Search web using libraries."""
         query = args.get("query", "")
-        
+
         if not query:
             return {"error": "query required", "success": False}
-        
+
         try:
             results = await self._search_web(query)
             return {"success": True, "results": results, "count": len(results)}
         except Exception as e:
             return {"error": str(e), "success": False}
-    
+
     async def _search_web(
         self,
         query: str,
@@ -287,26 +287,26 @@ class ToolRunner:
         """Search web using httpx + BeautifulSoup."""
         import httpx
         from bs4 import BeautifulSoup
-        
+
         url = "https://html.duckduckgo.com/html/"
         data = {"q": query}
-        
+
         async with httpx.AsyncClient() as client:
             response = await client.post(url, data=data, timeout=15)
             soup = BeautifulSoup(response.text, "html.parser")
-            
+
             results = []
             for result in soup.select(".result")[:limit]:
                 title = result.select_one(".result__title")
                 snippet = result.select_one(".result__snippet")
-                
+
                 results.append({
                     "title": title.get_text(strip=True) if title else "",
                     "snippet": snippet.get_text(strip=True) if snippet else "",
                 })
-            
+
             return results
-    
+
     async def _run_citation(
         self,
         args: Dict[str, Any],
@@ -315,13 +315,13 @@ class ToolRunner:
         """Generate citations internally."""
         text = args.get("text", "")
         sources = args.get("sources", [])
-        
+
         if not text:
             return {"error": "text required", "success": False}
-        
+
         citations = self._generate_citations(text, sources)
         return {"success": True, "citations": citations, "count": len(citations)}
-    
+
     def _generate_citations(
         self,
         text: str,
@@ -330,12 +330,12 @@ class ToolRunner:
         """Generate citation objects."""
         words = set(text.lower().split())
         citations = []
-        
+
         for i, source in enumerate(sources):
             source_text = source.get("text", "").lower()
             source_words = set(source_text.split())
             overlap = words & source_words
-            
+
             if overlap:
                 citations.append({
                     "id": f"source_{i}",
@@ -343,7 +343,7 @@ class ToolRunner:
                     "url": source.get("url", ""),
                     "relevance": len(overlap) / len(source_words) if source_words else 0,
                 })
-        
+
         return sorted(citations, key=lambda x: x["relevance"], reverse=True)
 
 
@@ -368,15 +368,15 @@ class AgentConfig:
 class Agent:
     """
     Main agent class - orchestrates tool usage internally.
-    
+
     The agent uses ToolRunner internally, tools are NOT
     exposed via API. Frontend sends requests to agent,
     agent decides which tools to use.
-    
+
     When an ``inference_fn`` is provided, ``_plan_execution`` uses LLM-based
     reasoning to plan tool usage. Falls back to keyword matching otherwise.
     """
-    
+
     def __init__(self, config: Optional[AgentConfig] = None,
                  inference_fn: Optional[Callable] = None):
         self.config = config or AgentConfig()
@@ -384,11 +384,11 @@ class Agent:
         self._runner = ToolRunner(security)
         self._inference_fn = inference_fn
         self._sessions: Dict[str, Dict[str, Any]] = {}
-    
+
     def set_inference_fn(self, fn: Callable) -> None:
         """Set or replace the inference function for LLM planning."""
         self._inference_fn = fn
-    
+
     async def execute(
         self,
         user_request: str,
@@ -397,16 +397,16 @@ class Agent:
     ) -> Dict[str, Any]:
         """
         Execute agent on user request.
-        
+
         This is the main entry point - frontend calls this,
         NOT tools directly.
         """
         # Get or create session
         context = self._get_session(session_id, user_id)
-        
+
         # Agent reasoning to decide tools
         plan = await self._plan_execution(user_request, context)
-        
+
         # Execute planned tools
         results = []
         for tool_name, args in plan:
@@ -419,19 +419,19 @@ class Agent:
                 "tool": tool_name,
                 "result": result,
             })
-        
+
         # Generate response (use inference if no tools ran)
         if not results and self._inference_fn:
             response = self._generate_response(user_request, context)
         else:
             response = self._compose_response(user_request, results)
-        
+
         return {
             "response": response,
             "tools_used": results,
             "session_id": session_id,
         }
-    
+
     def _generate_response(self, request: str, context: ToolExecutionContext) -> str:
         """Generate a response via LLM when no tools are needed."""
         try:
@@ -447,7 +447,7 @@ class Agent:
         except Exception as e:
             logger.warning("Inference failed: %s", e)
             return self._compose_response(request, [])
-    
+
     def _get_session(
         self,
         session_id: str,
@@ -460,7 +460,7 @@ class Agent:
             user_id=user_id,
             timestamp=time.time(),
         )
-    
+
     async def _plan_execution(
         self,
         request: str,
@@ -468,14 +468,14 @@ class Agent:
     ) -> List[tuple[str, Dict[str, Any]]]:
         """
         Plan which tools to use.
-        
+
         Uses LLM reasoning when ``inference_fn`` is available,
         falls back to keyword matching otherwise.
         """
         if self._inference_fn:
             return await self._plan_with_llm(request)
         return self._plan_with_keywords(request)
-    
+
     def _plan_with_keywords(
         self,
         request: str,
@@ -483,7 +483,7 @@ class Agent:
         """Plan tools using simple keyword matching."""
         plan = []
         lower = request.lower()
-        
+
         if "code" in lower or "execute" in lower or "run" in lower:
             code_match = re.search(r"```(\w+)?\n(.+?)```", request, re.DOTALL)
             if code_match:
@@ -491,7 +491,7 @@ class Agent:
                     ToolCapability.CODE_EXECUTION.value,
                     {"code": code_match.group(2), "language": "python"},
                 ))
-        
+
         if "search" in lower or "find" in lower:
             query = re.search(r"(?:search|find)\s+(?:for\s+)?['\"](.+?)['\"]", lower)
             if query:
@@ -499,15 +499,15 @@ class Agent:
                     ToolCapability.FILE_SEARCH.value,
                     {"query": query.group(1)},
                 ))
-        
+
         if "cite" in lower or "source" in lower:
             plan.append((
                 ToolCapability.CITATION.value,
                 {"text": request, "sources": []},
             ))
-        
+
         return plan
-    
+
     async def _plan_with_llm(
         self,
         request: str,
@@ -540,7 +540,7 @@ class Agent:
         except Exception as e:
             logger.warning("LLM planning failed: %s", e)
             return self._plan_with_keywords(request)
-    
+
     def _compose_response(
         self,
         request: str,
@@ -548,7 +548,7 @@ class Agent:
     ) -> str:
         """Compose final response from tool results."""
         outputs = []
-        
+
         for tr in tool_results:
             result = tr.get("result", {})
             if result.get("success"):
@@ -562,7 +562,7 @@ class Agent:
                     outputs.append(f"Generated {result['count']} citations")
             else:
                 outputs.append(f"Error: {result.get('error', 'Unknown')}")
-        
+
         return "\n".join(outputs) if outputs else "No results"
 
 

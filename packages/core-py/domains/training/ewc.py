@@ -44,10 +44,10 @@ class TaskSnapshot:
 class DiagonalFisherEstimator:
     """
     Estimates diagonal elements of the Fisher Information Matrix.
-    
+
     For diagonal approximation:
     F_ii ≈ (1/N) * Σ (∂log p(y|x,θ) / ∂θ_i)²
-    
+
     This is the empirical Fisher, computed from gradient samples.
     """
 
@@ -79,7 +79,7 @@ class DiagonalFisherEstimator:
     ) -> Dict[str, torch.Tensor]:
         """
         Estimate Fisher Information Matrix diagonal.
-        
+
         Uses gradient squares averaged over samples.
         """
         self.model.eval()
@@ -148,10 +148,10 @@ class DiagonalFisherEstimator:
     ) -> Dict[str, torch.Tensor]:
         """
         Estimate Fisher from logits (for classification).
-        
+
         Uses:
         F_ii = (1/N) * Σ ∂L/∂θ_i * ∂L/∂θ_i
-        
+
         where L is the negative log-likelihood.
         """
         self.model.eval()
@@ -179,12 +179,12 @@ class DiagonalFisherEstimator:
 class EwcContinualLearner:
     """
     Production-grade EWC for continual learning.
-    
+
     Prevents catastrophic forgetting by penalizing changes to
     important parameters (those critical for previous tasks).
-    
+
     Loss = L_current(θ) + λ/2 * Σ F_i (θ_i - θ*_i)²
-    
+
     where:
     - L_current is the loss on the current task
     - F_i is the Fisher Information for parameter θ_i
@@ -224,7 +224,7 @@ class EwcContinualLearner:
     ) -> TaskSnapshot:
         """
         Save a snapshot of model after learning a task.
-        
+
         This captures:
         - Current parameter values
         - Fisher Information diagonal
@@ -285,7 +285,7 @@ class EwcContinualLearner:
     def ewc_loss(self, task_id: Optional[str] = None) -> Tuple[torch.Tensor, Dict[str, float]]:
         """
         Calculate EWC regularization loss.
-        
+
         Returns:
         - ewc_loss: The regularization term
         - ewc_stats: Statistics about the calculation
@@ -330,7 +330,7 @@ class EwcContinualLearner:
     def multi_task_ewc_loss(self) -> Tuple[torch.Tensor, Dict[str, float]]:
         """
         Calculate EWC loss for all previous tasks.
-        
+
         For online EWC (memory-efficient):
         - Use running sum of Fisher estimates
         - Only store current task's optimal parameters
@@ -373,7 +373,7 @@ class EwcContinualLearner:
     ) -> Tuple[torch.Tensor, Dict[str, Any]]:
         """
         Forward pass with EWC loss.
-        
+
         Total loss = task_loss + λ/2 * Σ F_i (θ_i - θ*_i)²
         """
         # Task loss
@@ -406,7 +406,7 @@ class EwcContinualLearner:
     ) -> Dict[str, int]:
         """
         Identify which parameters to protect most.
-        
+
         Returns parameter names that should be most protected.
         """
         if not self.task_snapshots:

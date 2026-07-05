@@ -500,7 +500,7 @@ class TestTemperatureAnnealing:
 
         # Step 1: high temperature
         l1 = engine.train_step(images_np=img, text_tokens=tok_arr, lr=1e-3, temperature=2.0)
-        # Step 2: lower temperature  
+        # Step 2: lower temperature
         l2 = engine.train_step(images_np=img, text_tokens=tok_arr, lr=1e-3, temperature=1.5)
         # Step 3: no temperature
         l3 = engine.train_step(images_np=img, text_tokens=tok_arr, lr=1e-3, temperature=1.0)

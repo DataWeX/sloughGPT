@@ -6,7 +6,7 @@ Every op is either CPU numpy or GPU-backed. No external dependencies.
 
 Fused operations:
 - Fused softmax + mask
-- Fused attention score computation  
+- Fused attention score computation
 - Fused layer norm
 - Memory-efficient operations
 """

@@ -307,4 +307,3 @@ def init_db(database_url: str = None):
     global db
     db = DatabaseManager(database_url)
     return db.connect()
-

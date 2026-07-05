@@ -313,7 +313,7 @@ class HuggingFaceWrapper(ModelInterface):
 
 class SloughGPTModel(SloTransformer, ModelInterface):
     """First-party SloNet Transformer implementing ModelInterface.
-    
+
     Native SloNet decoder-only causal LM with RoPE, RMSNorm, SwiGLU, KV-cache.
     No PyTorch dependency. Drop-in for the old torch-based SloughGPTModel.
     """

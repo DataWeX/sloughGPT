@@ -3,7 +3,7 @@ Production-Grade Vector Store - Pinecone Only
 
 Usage:
     from domains.inference.vector_store import PineconeVectorStore
-    
+
     store = PineconeVectorStore(
         api_key="your-api-key",
         index_name="production"

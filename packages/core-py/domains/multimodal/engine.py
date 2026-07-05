@@ -712,7 +712,7 @@ class MultimodalEngine:
 
 class VisionEncoder:
     """ViT-style image encoder with patch positional embeddings.
-    
+
     Processes 224x224 RGB images by splitting into 32x32 patches (49 patches),
     projecting each patch to embed_dim, and adding positional embeddings.
     Output: (B, num_patches+1, embed_dim) with class token.
@@ -1254,7 +1254,7 @@ def contrastive_loss(z1: Tensor, z2: Tensor, negatives: List[Tensor], temperatur
     # Positive similarity
     sim_pos = (z1_n * z2_n).sum() / temperature
 
-    # Similarity with negatives  
+    # Similarity with negatives
     neg_sims = []
     for neg in negatives:
         neg_n = _l2_norm(neg)

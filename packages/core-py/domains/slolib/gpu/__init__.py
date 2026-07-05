@@ -36,7 +36,7 @@ logger = logging.getLogger("man.gpu")
 class _BufferPool:
     """Simple memory pool that reuses numpy arrays of matching shape/dtype.
     Avoids repeated malloc/free for frequently-used buffer sizes.
-    
+
     Usage::
         pool = _BufferPool()
         buf = pool.get((128, 768), np.float32)

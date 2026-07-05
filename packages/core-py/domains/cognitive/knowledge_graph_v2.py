@@ -61,7 +61,7 @@ class Fact:
 class KnowledgeGraph:
     """
     Production-grade knowledge graph.
-    
+
     Features:
     - Efficient adjacency storage
     - Multi-hop traversal
@@ -250,7 +250,7 @@ class KnowledgeGraph:
     ) -> Dict[str, List[Tuple[str, str]]]:
         """
         Breadth-first search from start entity.
-        
+
         Returns:
             {entity_id: [(predicate, source_entity), ...]}
         """
@@ -283,7 +283,7 @@ class KnowledgeGraph:
     ) -> List[List[Tuple[str, str]]]:
         """
         Depth-first search from start entity.
-        
+
         Returns:
             List of paths, each path is [(predicate, entity), ...]
         """
@@ -314,7 +314,7 @@ class KnowledgeGraph:
     ) -> List[List[str]]:
         """
         Find paths between start and end entities using BFS.
-        
+
         Returns:
             List of paths, each path is [start, ..., end]
         """

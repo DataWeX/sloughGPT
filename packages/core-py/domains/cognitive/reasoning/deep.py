@@ -677,12 +677,12 @@ class FormalLogicEngine:
     ) -> Dict[str, Any]:
         """
         Prove a categorical syllogism.
-        
+
         Args:
             premise1: (S, copula, P) e.g., ("All", "are", "mortal") means "All S are P"
             premise2: (S, copula, P)
             conclusion: (S, copula, P)
-        
+
         Returns:
             Dict with proof result, figure, mood, and validity
         """

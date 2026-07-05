@@ -75,14 +75,14 @@ for M, N, K in [(256, 256, 256), (512, 512, 512), (1024, 1024, 1024)]:
 print("\n--- LSTM ---")
 for vocab, seq, hidden in [(256, 16, 256), (1000, 32, 512)]:
     x_np = np.random.randint(0, vocab, (1, seq)).astype(np.int64)
-    
+
     sn_lstm = SloLSTM(vocab, 256, hidden, 2, 0.0)
     def make_sn(m, x):
         def sn():
             with no_grad():
                 m.forward(Tensor(x))[0].data
         return sn
-    
+
     if HAS_TORCH:
         class T_LSTM(nn.Module):
             def __init__(self):
@@ -115,12 +115,12 @@ for B, H, N, E in [(4, 4, 32, 16), (8, 4, 128, 64)]:
     k = np.random.randn(B, H, S, E).astype(np.float32)
     v = np.random.randn(B, H, S, E).astype(np.float32)
     scale = 1.0 / math.sqrt(E)
-    
+
     def make_sn(qn, kn, vn):
         def sn():
             cpu.scaled_dot_attention(qn, kn, vn)
         return sn
-    
+
     if HAS_TORCH:
         tq = torch.from_numpy(q)
         tk = torch.from_numpy(k)

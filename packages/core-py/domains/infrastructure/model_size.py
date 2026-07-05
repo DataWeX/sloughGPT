@@ -86,7 +86,7 @@ def compute_model_size_gb(model_id: str) -> Optional[float]:
 
 def is_model_cached(model_id: str, deep_check: bool = False) -> bool:
     """Check if a model is fully downloaded to local HF cache.
-    
+
     Args:
         model_id: HuggingFace model ID
         deep_check: If True, verifies every expected weight file exists

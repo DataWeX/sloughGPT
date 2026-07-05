@@ -65,7 +65,7 @@ class PromptFormatter:
 
     def messages_to_prompt(self, messages: List[dict]) -> str:
         """Convert messages to a prompt string.
-        
+
         Resolution: format_fn → apply_chat_template → User:/Assistant: base format.
         """
         if self._format_fn is not None:
@@ -116,7 +116,7 @@ class PromptFormatter:
 
     def _base_format(self, messages: List[dict]) -> str:
         """Base model prompt: ``User: ...\\n\\nAssistant:``
-        
+
         System messages are skipped for base models.
         """
         parts: List[str] = []

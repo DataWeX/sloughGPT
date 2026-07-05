@@ -35,7 +35,7 @@ class ContextFrame:
     total_tokens: int
     max_tokens: int
     created_at: str
-    
+
     def to_prompt(self) -> str:
         """Render as model input string."""
         parts = [self.system_prompt]
@@ -47,18 +47,18 @@ class ContextFrame:
 class ContextCore:
     """
     Multi-layer context management system.
-    
+
     Layers (bottom to top):
     1. system - system prompt, agent instructions
     2. session - current conversation messages
     3. memory - episodic/semantic memory from past conversations
     4. rag - retrieved documents from vector store
     """
-    
-    DEFAULT_SYSTEM = """You are SloughGPT, a helpful AI assistant. 
+
+    DEFAULT_SYSTEM = """You are SloughGPT, a helpful AI assistant.
 You have access to conversation history and retrieved context.
 Be concise, accurate, and helpful."""
-    
+
     def __init__(
         self,
         max_tokens: int = 2048,
@@ -146,35 +146,35 @@ Be concise, accurate, and helpful."""
         """Set vector store and embedding function for RAG."""
         self._vector_store = store
         self._embedding_fn = embedding_fn or simple_embed
-    
+
     def set_rag_config(self, top_k: int = 3, max_chars: int = 500) -> None:
         """Configure RAG retrieval."""
         self.rag_top_k = top_k
         self.rag_max_chars = max_chars
-    
+
     def set_system_prompt(self, prompt: str) -> None:
         """Set system prompt."""
         self.system_prompt = prompt
         self._add_sensory(f"System prompt updated: {len(prompt)} chars")
-    
+
     def set_session_id(self, session_id: str) -> None:
         """Set current session."""
         self.session_id = session_id
         if session_id not in self.episodic_memory:
             self.episodic_memory[session_id] = []
-    
+
     def add_message(self, role: str, content: str) -> None:
         """Add message to session."""
         self.session_messages.append({"role": role, "content": content})
         self._add_sensory(f"User message: {content[:50]}...")
         self._to_working({"role": role, "content": content})
-    
+
     def add_response(self, content: str, model: str = "gpt2") -> None:
         """Add assistant response."""
         self.session_messages.append({"role": "assistant", "content": content})
         self._add_sensory(f"Response: {content[:50]}...")
         self._to_working({"role": "assistant", "content": content, "model": model})
-    
+
     def _add_sensory(self, data: Any) -> None:
         """Add to sensory buffer."""
         self.sensory_buffer.append({
@@ -183,7 +183,7 @@ Be concise, accurate, and helpful."""
         })
         if len(self.sensory_buffer) > 100:
             self.sensory_buffer = self.sensory_buffer[-50:]
-    
+
     def _to_working(self, item: Dict) -> None:
         """Move item to working memory."""
         cap = self._memory.working_capacity if self._memory else self.working_capacity
@@ -193,7 +193,7 @@ Be concise, accurate, and helpful."""
         self.working_memory.append(item)
         if not hasattr(self, 'system_prompt'):
             self.system_prompt = self.DEFAULT_SYSTEM
-    
+
     def _consolidate_episode(self, item: Dict) -> None:
         """Consolidate to episodic memory."""
         if self.session_id:
@@ -202,7 +202,7 @@ Be concise, accurate, and helpful."""
                 "timestamp": datetime.now().isoformat(),
                 "importance": 1.0,
             })
-    
+
     def store_fact(self, key: str, value: Any) -> None:
         """Store in semantic memory."""
         if key in self.semantic_memory:
@@ -215,14 +215,14 @@ Be concise, accurate, and helpful."""
                 "accessed": datetime.now().isoformat(),
             }
         self._add_sensory(f"Stored fact: {key}")
-    
+
     def recall_fact(self, key: str) -> Optional[Any]:
         """Recall from semantic memory."""
         if key in self.semantic_memory:
             self.semantic_memory[key]["accessed"] = datetime.now().isoformat()
             return self.semantic_memory[key]["value"]
         return None
-    
+
     def search_semantic(self, query: str, limit: int = 5) -> List[Dict]:
         """Search semantic memory."""
         query_lower = query.lower()
@@ -231,16 +231,16 @@ Be concise, accurate, and helpful."""
             if query_lower in key.lower() or query_lower in str(val.get("value", "")).lower():
                 results.append({"key": key, **val})
         return sorted(results, key=lambda x: x.get("strength", 0), reverse=True)[:limit]
-    
+
     def get_episodic_context(self, query: str = "", limit: int = 3) -> str:
         """Get episodic context for query."""
         if not self.memory_enabled or not self.session_id:
             return ""
-        
+
         episodes = self.episodic_memory.get(self.session_id, [])
         if not episodes:
             return ""
-        
+
         if query:
             query_lower = query.lower()
             scored = []
@@ -252,7 +252,7 @@ Be concise, accurate, and helpful."""
             episodes = [ep for _, ep in scored[:limit]]
         else:
             episodes = episodes[-limit:]
-        
+
         parts = []
         for ep in episodes:
             content = ep.get("content", {})
@@ -262,9 +262,9 @@ Be concise, accurate, and helpful."""
                 parts.append(f"[{role}]: {text[:200]}")
             else:
                 parts.append(str(content)[:200])
-        
+
         return "\n".join(parts)
-    
+
     def _auto_ingest(self) -> None:
         """Trigger repo auto-ingestion if vector store is empty."""
         import threading
@@ -277,12 +277,12 @@ Be concise, accurate, and helpful."""
             except Exception:
                 pass
         threading.Thread(target=_do, daemon=True).start()
-    
+
     async def get_rag_context(self, query: str) -> str:
         """Get RAG context from vector store."""
         if not self.rag_enabled:
             return ""
-        
+
         if self._vector_store is None:
             # Query KnowledgeMemory (vector store) for relevant facts
             import asyncio
@@ -301,30 +301,30 @@ Be concise, accurate, and helpful."""
             if not hasattr(self, '_auto_ingest_triggered'):
                 self._auto_ingest_triggered = True
                 self._auto_ingest()
-            
+
             facts = self.search_semantic(query, limit=self.rag_top_k)
             if facts:
                 parts = [f"Related: {f['key']} = {f['value']}" for f in facts]
                 return "\n".join(parts)
             return ""
-        
+
         try:
             # Generate embedding for query
             if self._embedding_fn:
                 query_vec = self._embedding_fn(query)
             else:
                 query_vec = simple_embed(query)
-            
+
             results = await self._vector_store.query(query_vec, top_k=self.rag_top_k)
-            
+
             if not results:
                 return ""
-            
+
             parts = []
             for r in results:
                 text = r.text[:self.rag_max_chars] if len(r.text) > self.rag_max_chars else r.text
                 parts.append(f"[Doc: {r.id}] {text}")
-            
+
             return "\n".join(parts)
         except Exception:
             # Fallback to semantic memory
@@ -333,7 +333,7 @@ Be concise, accurate, and helpful."""
                 parts = [f"Related: {f['key']} = {f['value']}" for f in facts]
                 return "\n".join(parts)
             return ""
-    
+
     async def build_context_frame(
         self,
         include_rag: bool = True,
@@ -348,7 +348,7 @@ Be concise, accurate, and helpful."""
         frame_id = hashlib.md5(f"{datetime.now().isoformat()}{query}".encode()).hexdigest()[:12]
         layers: List[ContextLayer] = []
         used_tokens = self._estimate_tokens(system_prompt)
-        
+
         # Layer 1: Session messages
         session_content = "\n".join(
             f"[{m['role']}]: {m['content']}" for m in self.session_messages[-10:]
@@ -364,7 +364,7 @@ Be concise, accurate, and helpful."""
             )
             layers.append(layer)
             used_tokens += layer.tokens
-        
+
         # Layer 2: Memory
         if include_memory and self.memory_enabled:
             memory_content = self.get_episodic_context(query)
@@ -380,7 +380,7 @@ Be concise, accurate, and helpful."""
                 if used_tokens + layer.tokens <= self.max_tokens:
                     layers.append(layer)
                     used_tokens += layer.tokens
-        
+
         # Layer 3: RAG
         if include_rag and self.rag_enabled:
             rag_content = await self.get_rag_context(query)
@@ -396,7 +396,7 @@ Be concise, accurate, and helpful."""
                 if used_tokens + layer.tokens <= self.max_tokens:
                     layers.append(layer)
                     used_tokens += layer.tokens
-        
+
         frame = ContextFrame(
             id=frame_id,
             system_prompt=system_prompt,
@@ -405,17 +405,17 @@ Be concise, accurate, and helpful."""
             max_tokens=self.max_tokens,
             created_at=datetime.now().isoformat(),
         )
-        
+
         self.frame_history.append(frame)
         if len(self.frame_history) > 50:
             self.frame_history = self.frame_history[-50:]
-        
+
         return frame
-    
+
     def _estimate_tokens(self, text: str) -> int:
         """Rough token estimation (1 token ≈ 4 chars)."""
         return max(1, len(text) // 4)
-    
+
     def get_context_inspector(self) -> Dict[str, Any]:
         """Get full context state for UI inspection."""
         return {
@@ -428,7 +428,7 @@ Be concise, accurate, and helpful."""
             "frame_history_size": len(self.frame_history),
             "last_frame": asdict(self.frame_history[-1]) if self.frame_history else None,
         }
-    
+
     def export_memory(self) -> Dict[str, Any]:
         """Export all memory for persistence."""
         return {
@@ -436,7 +436,7 @@ Be concise, accurate, and helpful."""
             "episodic": self.episodic_memory,
             "sensory": self.sensory_buffer[-100:],
         }
-    
+
     def import_memory(self, data: Dict) -> None:
         """Import memory from persistence."""
         if "semantic" in data:
@@ -445,13 +445,13 @@ Be concise, accurate, and helpful."""
             self.episodic_memory = data["episodic"]
         if "sensory" in data:
             self.sensory_buffer = data["sensory"]
-    
+
     def reset_session(self) -> None:
         """Reset session but keep memory."""
         self.session_messages = []
         self.working_memory = []
         self.session_id = None
-    
+
     def reset_all(self) -> None:
         """Reset everything."""
         self.session_messages = []

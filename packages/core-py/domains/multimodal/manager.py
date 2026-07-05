@@ -42,15 +42,15 @@ class MultimodalCapabilities:
 class MultimodalManager:
     """
     Unified multimodal manager.
-    
+
     Uses a pure NumPy vision+text model for vision understanding.
     Learns freely from user-provided image data — no supervised categories.
-    
+
     Provides:
     - Speech-to-text (voice input via Web Speech API or Whisper)
     - Image captioning (learned from scratch)
     """
-    
+
     def __init__(self):
         self._speech_recognizer = None
         self._multimodal_engine: Optional[MultimodalEngine] = None
@@ -125,7 +125,7 @@ class MultimodalManager:
             return meta.get("images_learned", 0)
         except Exception:
             return 0
-    
+
     @property
     def capabilities(self) -> MultimodalCapabilities:
         """Get available capabilities.
@@ -142,7 +142,7 @@ class MultimodalManager:
             speech_model="whisper" if server_asr_ready else "browser",
             vision_model="slonet",
         )
-    
+
     def recognize_speech(
         self,
         audio_data: bytes,
@@ -152,13 +152,13 @@ class MultimodalManager:
         if self._speech_recognizer is None:
             self._speech_recognizer = get_speech_recognizer(use_server=self._speech_server_mode)
         return self._speech_recognizer.recognize(audio_data, language)
-    
+
     def _pil_to_np(self, image):
         """Convert PIL Image to (1, 224, 224, 3) numpy array, normalized to [0,1]."""
         img = image.convert("RGB").resize((224, 224))
         arr = np.array(img, dtype=np.float32) / 255.0
         return arr.reshape(1, 224, 224, 3)
-    
+
     _SEED_CAPTIONS = [
         "a bright red rectangle on a dark background",
         "a green circle next to a blue square",
@@ -405,7 +405,7 @@ class MultimodalManager:
         except Exception as e:
             logger.error(f"MultimodalEngine caption error: {e}")
             return ImageCaption(text="[caption failed]", confidence=0.0, tags=["error"])
-    
+
     def train_on_path(self, path: str) -> ImageCaption:
         """Load image from file path and train on it.
 
@@ -419,7 +419,7 @@ class MultimodalManager:
         """Detect objects in image (limited — uses caption)."""
         cap = self.caption_image(image)
         return [VisualObject(label=cap.text, bbox=[0, 0, 0, 0], confidence=cap.confidence)]
-    
+
     def get_browser_speech_config(self) -> dict:
         """Get config for browser Web Speech API."""
         if self._speech_recognizer is None:

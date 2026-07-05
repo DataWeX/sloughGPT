@@ -181,6 +181,3 @@ class TestPDFVLMProcessor:
         assert page.page_num == 3
         assert page.text == "hello"
         assert page.image is img
-
-
-

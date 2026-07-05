@@ -96,7 +96,7 @@ class KVCacheOptimizer:
 
 class AttentionMask:
     """Optimized attention mask operations."""
-    
+
     @staticmethod
     def create_causal_mask(
         seq_len: int,
@@ -108,7 +108,7 @@ class AttentionMask:
             diagonal=1
         )
         return mask.masked_fill(mask, float("-inf"))
-    
+
     @staticmethod
     def create_padder_mask(
         input_ids: torch.Tensor,
@@ -120,10 +120,10 @@ class AttentionMask:
 
 class BatchProcessor:
     """Efficient batch processing for inference."""
-    
+
     def __init__(self, max_batch_size: int = 32):
         self.max_batch_size = max_batch_size
-    
+
     def pad_to_batch(
         self,
         input_ids_list: List[torch.Tensor],
@@ -131,7 +131,7 @@ class BatchProcessor:
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Pad sequences to same length for batched inference."""
         max_len = max(ids.shape[1] for ids in input_ids_list)
-        
+
         batch_tensor = torch.full(
             (len(input_ids_list), max_len),
             pad_token_id,
@@ -141,14 +141,14 @@ class BatchProcessor:
             (len(input_ids_list), max_len),
             dtype=torch.long
         )
-        
+
         for i, ids in enumerate(input_ids_list):
             seq_len = ids.shape[1]
             batch_tensor[i, :seq_len] = ids
             attention_mask[i, :seq_len] = 1
-        
+
         return batch_tensor, attention_mask
-    
+
     def split_by_length(
         self,
         input_ids: torch.Tensor,
@@ -157,18 +157,18 @@ class BatchProcessor:
         """Split long sequences into chunks."""
         batch_size, seq_len = input_ids.shape
         chunks = []
-        
+
         for b in range(batch_size):
             for i in range(0, seq_len, max_length):
                 chunk = input_ids[b:b+1, i:i+max_length]
                 chunks.append(chunk)
-        
+
         return chunks
 
 
 class SpeculativeDecoder:
     """Speculative decoding for faster inference."""
-    
+
     def __init__(
         self,
         draft_model: nn.Module,
@@ -178,7 +178,7 @@ class SpeculativeDecoder:
         self.draft_model = draft_model
         self.target_model = target_model
         self.speculative_tokens = speculative_tokens
-    
+
     @torch.no_grad()
     def generate(
         self,
@@ -189,7 +189,7 @@ class SpeculativeDecoder:
         """Generate with speculative decoding."""
         draft_model = self.draft_model
         target_model = self.target_model
-        
+
         for _ in range(max_new_tokens):
             draft_tokens = input_ids
             for _ in range(self.speculative_tokens):
@@ -197,22 +197,22 @@ class SpeculativeDecoder:
                 draft_logits = draft_output.logits[:, -1, :] / temperature
                 draft_next = torch.argmax(draft_logits, dim=-1, keepdim=True)
                 draft_tokens = torch.cat([draft_tokens, draft_next], dim=1)
-            
+
             target_output = target_model(draft_tokens)
             target_logits = target_output.logits[:, -self.speculative_tokens - 1:, :] / temperature
-            
+
             for i in range(self.speculative_tokens):
                 idx = self.speculative_tokens - i - 1
                 draft_token = draft_tokens[:, -(i + 1)]
                 target_prob = torch.softmax(target_logits[:, idx, :], dim=-1)
                 target_token = torch.argmax(target_prob, dim=-1)
-                
+
                 if not torch.allclose(draft_token, target_token):
                     input_ids = draft_tokens[:, :-(i + 1)]
                     break
             else:
                 input_ids = draft_tokens
-        
+
         return input_ids
 
 
@@ -229,11 +229,11 @@ def estimate_inference_memory(
         "int8": 1,
         "int4": 0.5,
     }
-    
+
     bytes_per = bytes_per_param.get(precision, 2)
     model_memory = (num_parameters * bytes_per) / (1024 ** 3)
     total_memory = model_memory * kv_cache_multiplier
-    
+
     return {
         "model_memory_gb": model_memory,
         "kv_cache_memory_gb": model_memory * (kv_cache_multiplier - 1),
@@ -250,7 +250,7 @@ def optimize_model_for_inference(
 ) -> nn.Module:
     """Apply inference optimizations to model."""
     model.eval()
-    
+
     if use_quantization:
         if precision == "int8":
             model = torch.quantization.quantize_dynamic(
@@ -258,7 +258,7 @@ def optimize_model_for_inference(
             )
         elif precision in ("fp16", "bf16"):
             model = model.half()
-    
+
     return model
 
 

@@ -486,7 +486,7 @@ class ShellREPL:
 
     def _parse_pipeline(self, line: str):
         """Return (commands, is_background, should_time) where commands is a list of (cmd_str, operator) tuples.
-        
+
         Operators: None (pipe to next), '&&', '||', ';' (chain), '|' (pipe).
         """
         bg = False
@@ -498,7 +498,7 @@ class ShellREPL:
         if stripped.startswith("time "):
             should_time = True
             stripped = stripped[5:].lstrip()
-        
+
         # Split by chaining operators (&&, ||, ;) and pipes
         chain_re = re.compile(r'(&&|\|\||;|\|)')
         tokens = []
@@ -524,7 +524,7 @@ class ShellREPL:
                     pos = m.end()
         if pos < len(stripped):
             tokens.append((stripped[pos:].strip(), None))
-        
+
         # Group by pipes within each chain segment
         commands = []
         for seg, op in tokens:
@@ -532,7 +532,7 @@ class ShellREPL:
             for pp in pipe_parts[:-1]:
                 commands.append((pp, '|'))
             commands.append((pipe_parts[-1], op))
-        
+
         return commands, bg, should_time
 
     def _strip_redirection(self, raw_args: str):
@@ -644,7 +644,7 @@ class ShellREPL:
 
     def _execute_pipeline(self, commands: list, should_time: bool = False) -> None:
         """Execute a pipeline of chained commands with &&, ||, ;, and | operators.
-        
+
         Args:
             commands: list of (cmd_str, operator) tuples
         """
@@ -655,21 +655,21 @@ class ShellREPL:
         if should_time:
             import time as _time
             t0 = _time.time()
-        
+
         for i, (raw, op) in enumerate(commands):
             is_last = i == len(commands) - 1
-            
+
             # Check if we should skip based on previous exit code
             if op == '&&' and self._last_exit_code != 0:
                 continue
             if op == '||' and self._last_exit_code == 0:
                 continue
-            
+
             out = self._execute_single(raw, piped)
             if is_last or op != '|':
                 self._print(out, end="")
             piped = out if op == '|' else ""
-        
+
         if should_time and t0 is not None:
             import time as _time
             elapsed = _time.time() - t0
@@ -1280,7 +1280,7 @@ Unix filesystem:
   touch <file>            Create/update file timestamps
   chmod <mode> <file>     Change file permissions
   find [path] -name <glob>  Recursively find files matching a pattern
-  
+
 Clipboard (macOS):
   pbcopy                  Copy piped input to clipboard. E.g. gen hello | pbcopy
   pbpaste                 Paste from clipboard
@@ -2330,7 +2330,7 @@ Examples:
                     if who != 'a':
                         # Restrict mask to only the specified who bits
                         mask = mask & who_map.get(who, 0o777)
-                        # Also shift to group/other 
+                        # Also shift to group/other
                         if who == 'g':
                             mask = (mask >> 3) & 0o777
                         elif who == 'o':

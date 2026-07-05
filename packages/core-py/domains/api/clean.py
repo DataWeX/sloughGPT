@@ -25,7 +25,7 @@ class ChatRequest(BaseModel):
 async def chat(req: ChatRequest):
     """Simple chat using domain."""
     from domains import get_chat_domain
-    
+
     domain = get_chat_domain()
     result = await domain.respond(
         messages=req.messages,
@@ -36,7 +36,7 @@ async def chat(req: ChatRequest):
         session_id=req.session_id or "default",
         user_id=req.user_id or "default",
     )
-    
+
     return {
         "text": result.text,
         "session_id": result.session_id,
@@ -51,7 +51,7 @@ async def chat(req: ChatRequest):
 async def get_companion():
     """Get companion info."""
     from domains import get_companion
-    
+
     comp = get_companion()
     return comp.to_dict()
 
@@ -60,13 +60,13 @@ async def get_companion():
 async def set_personality(personality_id: str):
     """Set personality."""
     from domains import get_companion
-    
+
     comp = get_companion()
     if hasattr(comp, 'set_personality'):
         comp.set_personality(personality_id)
     elif hasattr(comp, 'set_persona'):
         comp.set_persona(personality_id)
-    
+
     return {"status": "ok", "personality": personality_id}
 
 
@@ -74,7 +74,7 @@ async def set_personality(personality_id: str):
 async def list_presets():
     """List available personalities."""
     from domains import get_companion
-    
+
     comp = get_companion()
     if hasattr(comp, 'traits'):
         return {
@@ -92,7 +92,7 @@ async def list_presets():
 async def benchmark_stats():
     """Get benchmark stats."""
     from domains import get_benchmark_domain
-    
+
     domain = get_benchmark_domain()
     return domain.get_stats()
 
@@ -101,7 +101,7 @@ async def benchmark_stats():
 async def benchmark_quality(limit: int = 50):
     """Get quality metrics."""
     from domains import get_benchmark_domain
-    
+
     domain = get_benchmark_domain()
     return domain.evaluate_latest(limit=limit)
 
@@ -112,7 +112,7 @@ async def benchmark_quality(limit: int = 50):
 async def get_responses(limit: int = 20):
     """Get recent logged responses."""
     from domains import get_chat_domain
-    
+
     domain = get_chat_domain()
     return {"responses": domain.get_recent_responses(limit=limit)}
 

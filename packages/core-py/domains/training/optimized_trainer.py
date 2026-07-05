@@ -44,7 +44,7 @@ class TrainingConfig:
     n_head: int = 8
     block_size: int = 512
     dropout: float = 0.1
-    
+
     # Training
     batch_size: int = 8
     gradient_accumulation_steps: int = 4  # Effective batch = 32
@@ -53,23 +53,23 @@ class TrainingConfig:
     max_steps: int = 10000
     warmup_steps: int = 500
     clip_grad_norm: float = 1.0
-    
+
     # Optimizations
     use_mixed_precision: bool = True  # FP16/BF16
     use_gradient_checkpointing: bool = True  # Save memory
     use_flash_attention: bool = True  # Fast attention
     use_compile: bool = False  # torch.compile (needs PyTorch 2.0+)
     compile_mode: str = "default"  # "default", "reduce-overhead", "max-autotune"
-    
+
     # Device
     device: str = "auto"  # auto, cuda, mps, rocm, cpu
     dtype: str = "bf16"  # "fp16" or "bf16"
-    
+
     # DataLoader
     num_workers: int = 4
     prefetch_factor: int = 2
     pin_memory: bool = True
-    
+
     # Logging
     log_interval: int = 10
     eval_interval: int = 500
@@ -80,7 +80,7 @@ class TrainingConfig:
 
 class Presets:
     """Pre-configured optimization presets for different hardware."""
-    
+
     @staticmethod
     def high_end_gpu() -> TrainingConfig:
         """RTX 3090, RTX 4090, A100, H100, MI300."""
@@ -96,7 +96,7 @@ class Presets:
             compile_mode="reduce-overhead",
             num_workers=4,
         )
-    
+
     @staticmethod
     def mid_range_gpu() -> TrainingConfig:
         """RTX 2080, RTX 3060, V100, MI250."""
@@ -112,7 +112,7 @@ class Presets:
             compile_mode="default",
             num_workers=4,
         )
-    
+
     @staticmethod
     def apple_silicon() -> TrainingConfig:
         """M1, M2, M3 Pro/Max/Ultra."""
@@ -128,7 +128,7 @@ class Presets:
             compile_mode="default",
             num_workers=0,
         )
-    
+
     @staticmethod
     def cpu_only() -> TrainingConfig:
         """CPU training (slow)."""
@@ -143,12 +143,12 @@ class Presets:
             use_compile=False,
             num_workers=8,
         )
-    
+
     @staticmethod
     def auto() -> TrainingConfig:
         """Auto-detect best settings for current hardware."""
         device = get_optimal_device()
-        
+
         if device == "cuda":
             if torch.cuda.is_available():
                 cap = torch.cuda.get_device_capability()
@@ -207,14 +207,14 @@ def get_best_dtype() -> torch.dtype:
 
 class OptimizedTextDataset(Dataset):
     """Optimized text dataset with memory efficiency."""
-    
+
     def __init__(self, data: torch.Tensor, block_size: int):
         self.data = data
         self.block_size = block_size
-    
+
     def __len__(self):
         return max(0, len(self.data) - self.block_size)
-    
+
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         x = self.data[idx : idx + self.block_size].clone()
         y = self.data[idx + 1 : idx + self.block_size + 1].clone()
@@ -223,7 +223,7 @@ class OptimizedTextDataset(Dataset):
 
 class OptimizedDataLoader:
     """High-performance DataLoader with prefetching."""
-    
+
     def __init__(
         self,
         dataset: Dataset,
@@ -248,7 +248,7 @@ class OptimizedDataLoader:
             dl_kw["prefetch_factor"] = pf
         self.dataloader = DataLoader(**dl_kw)
         self.iter = None
-    
+
     def get_batch(self):
         """Get next batch, prefetching in background."""
         if self.iter is None:
@@ -262,7 +262,7 @@ class OptimizedDataLoader:
 
 def apply_gradient_checkpointing(model: nn.Module) -> nn.Module:
     """Apply gradient checkpointing to save memory during training.
-    
+
     Trades compute for memory: ~50% memory reduction with ~30% extra compute.
     """
     for module in model.modules():
@@ -270,10 +270,10 @@ def apply_gradient_checkpointing(model: nn.Module) -> nn.Module:
             module.gradient_checkpointing_enable()
         elif hasattr(module, 'use_checkpoint'):
             module.use_checkpoint = True
-    
+
     def checkpoint_wrapper(module):
         original_forward = module.forward
-        
+
         @contextmanager
         def checkpoint_context():
             try:
@@ -281,23 +281,23 @@ def apply_gradient_checkpointing(model: nn.Module) -> nn.Module:
                 yield
             finally:
                 module._checkpointing = False
-        
+
         def forward(*args, **kwargs):
             if hasattr(module, '_checkpointing') and module._checkpointing:
                 return torch.utils.checkpoint.checkpoint(
                     original_forward, *args, **kwargs
                 )
             return original_forward(*args, **kwargs)
-        
+
         module.forward = forward
         return module
-    
+
     return model
 
 
 class FlashAttentionWrapper(nn.Module):
     """Wrapper to use Flash Attention when available."""
-    
+
     @staticmethod
     def is_available() -> bool:
         """Check if Flash Attention is available."""
@@ -306,26 +306,26 @@ class FlashAttentionWrapper(nn.Module):
             return True
         except ImportError:
             return False
-    
+
     @staticmethod
     def wrap_attention(attention_layer, layer_idx: int = 0):
         """Wrap standard attention with Flash Attention."""
         if FlashAttentionWrapper.is_available():
             from flash_attn import flash_attn_func
-            
+
             original_forward = attention_layer.forward
-            
+
             def flash_forward(query, key, value, attention_mask=None, **kwargs):
                 batch_size = query.shape[0]
                 seq_len = query.shape[1]
-                
+
                 query = query.view(batch_size, seq_len, -1)
                 key = key.view(batch_size, seq_len, -1)
                 value = value.view(batch_size, seq_len, -1)
-                
+
                 out = flash_attn_func(query, key, value, dropout_p=0.0, softmax_scale=1.0)
                 return out.view(batch_size * seq_len, -1)
-            
+
             attention_layer.forward = flash_forward
         return attention_layer
 

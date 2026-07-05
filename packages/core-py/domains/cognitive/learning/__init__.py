@@ -49,11 +49,11 @@ class LearningOptimizer(BaseComponent):
 
     async def optimize_learning_session(self, session_data: Dict[str, Any]) -> Dict[str, Any]:
         """Optimize a learning session using adaptive learning principles.
-        
+
         Args:
-            session_data: Dict containing session_id, user_id, content, difficulty, 
+            session_data: Dict containing session_id, user_id, content, difficulty,
                          performance_history, time_spent
-            
+
         Returns:
             Optimized session parameters and recommendations
         """
@@ -61,9 +61,9 @@ class LearningOptimizer(BaseComponent):
         difficulty = session_data.get("difficulty", 0.5)
         performance_history = session_data.get("performance_history", [])
         time_spent = session_data.get("time_spent", 0)
-        
+
         avg_performance = sum(performance_history) / len(performance_history) if performance_history else 0.5
-        
+
         if avg_performance > 0.85:
             next_difficulty = min(1.0, difficulty + 0.1)
             recommendation = "increase_difficulty"
@@ -73,9 +73,9 @@ class LearningOptimizer(BaseComponent):
         else:
             next_difficulty = difficulty
             recommendation = "maintain"
-        
+
         optimal_session_length = max(15, min(45, 30 - (time_spent / 60) * 10))
-        
+
         return {
             "optimized": True,
             "session_id": session_id,
@@ -88,15 +88,15 @@ class LearningOptimizer(BaseComponent):
 
     async def schedule_spaced_repetition(self, memory_ids: List[str]) -> Dict[str, Any]:
         """Schedule spaced repetition using SM-2 algorithm.
-        
+
         SM-2 Algorithm:
         - EF (Easiness Factor): starts at 2.5, adjusted based on quality
         - Quality: 0-5 scale (0=complete blackout, 5=perfect response)
         - Interval calculation based on EF and repetition count
-        
+
         Args:
             memory_ids: List of memory/item IDs to schedule
-            
+
         Returns:
             Spaced repetition schedule with intervals
         """
@@ -110,7 +110,7 @@ class LearningOptimizer(BaseComponent):
                     "next_review": None,
                     "quality_history": []
                 }
-            
+
             entry = self.spaced_repetition_schedule[memory_id]
             schedule[memory_id] = {
                 "interval_days": entry["interval"],
@@ -118,21 +118,21 @@ class LearningOptimizer(BaseComponent):
                 "repetitions": entry["repetitions"],
                 "next_review_days": entry["interval"]
             }
-        
+
         return {"scheduled": True, "count": len(memory_ids), "schedule": schedule}
 
     async def update_memory_strength(self, memory_id: str, quality: int) -> Dict[str, Any]:
         """Update memory strength using SM-2 algorithm.
-        
+
         Args:
             memory_id: Memory identifier
             quality: Response quality (0-5)
-            
+
         Returns:
             Updated memory parameters
         """
         quality = max(0, min(5, quality))
-        
+
         if memory_id not in self.spaced_repetition_schedule:
             self.spaced_repetition_schedule[memory_id] = {
                 "easiness_factor": 2.5,
@@ -140,10 +140,10 @@ class LearningOptimizer(BaseComponent):
                 "repetitions": 0,
                 "quality_history": []
             }
-        
+
         entry = self.spaced_repetition_schedule[memory_id]
         entry["quality_history"].append(quality)
-        
+
         if quality < 3:
             entry["repetitions"] = 0
             entry["interval"] = 1
@@ -155,9 +155,9 @@ class LearningOptimizer(BaseComponent):
             else:
                 entry["interval"] = round(entry["interval"] * entry["easiness_factor"])
             entry["repetitions"] += 1
-        
+
         entry["easiness_factor"] = max(1.3, entry["easiness_factor"] + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)))
-        
+
         return {
             "memory_id": memory_id,
             "new_interval": entry["interval"],
@@ -168,17 +168,17 @@ class LearningOptimizer(BaseComponent):
 
     async def consolidate_knowledge(self, topic: str, related_items: List[str]) -> Dict[str, Any]:
         """Consolidate related knowledge items into coherent structure.
-        
+
         Args:
             topic: Main topic name
             related_items: List of related memory/content IDs
-            
+
         Returns:
             Consolidated knowledge summary
         """
         if not related_items:
             return {"topic": topic, "consolidated": False, "items": []}
-        
+
         item_data = []
         for item_id in related_items:
             if item_id in self.spaced_repetition_schedule:
@@ -188,12 +188,12 @@ class LearningOptimizer(BaseComponent):
                     "strength": entry["easiness_factor"] * entry["repetitions"],
                     "interval": entry["interval"]
                 })
-        
+
         item_data.sort(key=lambda x: x["strength"], reverse=True)
-        
+
         core_items = [item["id"] for item in item_data[:5]]
         supporting_items = [item["id"] for item in item_data[5:]]
-        
+
         return {
             "topic": topic,
             "consolidated": True,

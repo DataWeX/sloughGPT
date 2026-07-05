@@ -369,9 +369,9 @@ class FeedbackDB:
             # Get all messages with embeddings
             if rating:
                 cursor.execute(
-                    """SELECT m.id, m.content, m.embedding, f.rating 
-                       FROM messages m 
-                       JOIN feedback f ON m.id = f.message_id 
+                    """SELECT m.id, m.content, m.embedding, f.rating
+                       FROM messages m
+                       JOIN feedback f ON m.id = f.message_id
                        WHERE m.embedding IS NOT NULL AND f.rating = ?
                        LIMIT 1000""",
                     (rating,),
@@ -418,9 +418,9 @@ class FeedbackDB:
 
             if rating:
                 cursor.execute(
-                    """SELECT m.id, m.content, f.rating 
-                       FROM messages m 
-                       JOIN feedback f ON m.id = f.message_id 
+                    """SELECT m.id, m.content, f.rating
+                       FROM messages m
+                       JOIN feedback f ON m.id = f.message_id
                        WHERE f.rating = ?
                        LIMIT 500""",
                     (rating,),
@@ -593,7 +593,7 @@ class FeedbackDB:
 
                 cursor.execute(
                     """
-                    UPDATE user_meta_weights 
+                    UPDATE user_meta_weights
                     SET temperature_boost = ?, repetition_boost = ?,
                         thumbs_up_count = ?, thumbs_down_count = ?, last_updated = ?
                     WHERE user_id = ?
@@ -609,7 +609,7 @@ class FeedbackDB:
 
                 cursor.execute(
                     """
-                    INSERT INTO user_meta_weights 
+                    INSERT INTO user_meta_weights
                     (id, user_id, temperature_boost, repetition_boost, top_p_boost, top_k_boost,
                      thumbs_up_count, thumbs_down_count, last_updated, created_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

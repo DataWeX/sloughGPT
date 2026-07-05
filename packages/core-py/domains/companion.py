@@ -27,16 +27,16 @@ class CompanionTraits:
     """Personality traits for the AI companion."""
     name: str = "Friend"
     warmth: float = 0.7      # 0-1: how caring
-    curiosity: float = 0.6    # 0-1: how curious  
+    curiosity: float = 0.6    # 0-1: how curious
     creativity: float = 0.5    # 0-1: how creative
     confidence: float = 0.5   # 0-1: how confident
     humor: float = 0.4       # 0-1: how funny
-    
+
     # Speaking style
     response_length: str = "medium"  # short/medium/long
     use_questions: bool = True
     share_personal: bool = False
-    
+
     # What to avoid
     avoid_topics: List[str] = field(default_factory=list)
     no_robot_phrases: bool = True
@@ -55,10 +55,10 @@ class ConversationContext:
 class CompanionSystem:
     """
     The AI Companion - talks like a human friend.
-    
+
     Usage:
         companion = CompanionSystem()
-        
+
         # Set personality
         companion.set_personality(
             name="Alex",
@@ -66,25 +66,25 @@ class CompanionSystem:
             curiosity=0.7,
             humor=0.5,
         )
-        
+
         # Generate response
         response = companion.respond(
             user_message="Hey, how's it going?",
             context=conversation_context,
         )
     """
-    
+
     ROBOT_PHRASES = [
         "As an AI", "I am an AI", "I was trained",
         "My training data", "As a language model",
         "I don't have feelings", "I'm just a program",
     ]
-    
+
     def __init__(self):
         self.traits = CompanionTraits()
         self.context = ConversationContext()
         self._system_prompt = self._build_system_prompt()
-    
+
     def set_personality(
         self,
         name: str = "Friend",
@@ -102,25 +102,25 @@ class CompanionSystem:
         self.traits.confidence = confidence
         self.traits.humor = humor
         self._system_prompt = self._build_system_prompt()
-    
+
     def _build_system_prompt(self) -> str:
         """Build system prompt from traits."""
         t = self.traits
-        
+
         warmth_guide = {
             0.9: "Very warm and caring. Express genuine interest in their wellbeing.",
             0.7: "Friendly and supportive. Show you care about their day.",
             0.5: "Polite but not overly warm. Standard friendly.",
             0.3: "More reserved. Friendly but brief.",
         }
-        
+
         curiosity_guide = {
             0.9: "Ask lots of follow-up questions. Show deep interest in their thoughts.",
             0.7: "Ask some questions to understand better.",
             0.5: "Occasional questions when something interests you.",
             0.3: "Mostly listen. Ask rare questions.",
         }
-        
+
         style = ""
         if t.humor > 0.5:
             style += "Use light humor when appropriate. "
@@ -128,7 +128,7 @@ class CompanionSystem:
             style += "Be creative in your responses. "
         if t.share_personal:
             style += "Share relevant personal experiences occasionally. "
-        
+
         return f"""You are {t.name}, a human friend talking naturally.
 - Be conversational, not robotic. Never mention being AI.
 - {warmth_guide.get(t.warmth, "Be friendly.")}
@@ -139,28 +139,28 @@ class CompanionSystem:
 - Use questions to keep conversation going: {t.use_questions}
 - Don't use phrases like: {', '.join(self.ROBOT_PHRASES)}
 """
-    
+
     def get_system_prompt(self) -> str:
         """Get current system prompt."""
         return self._system_prompt
-    
+
     def clean_response(self, response: str) -> str:
         """Clean response to sound more human."""
         # Remove robot phrases
         for phrase in self.ROBOT_PHRASES:
             if phrase.lower() in response.lower():
                 response = response.replace(phrase, "")
-        
+
         # Clean up artifacts
         response = response.replace("  ", " ")
         response = response.strip()
-        
+
         # Ensure punctuation
         if response and response[-1] not in ".!?":
             response += "."
-        
+
         return response
-    
+
     def respond(
         self,
         user_message: str,
@@ -168,31 +168,31 @@ class CompanionSystem:
     ) -> str:
         """Generate a natural response."""
         self.context.turn_count += 1
-        
+
         # Track topics
         if context:
             self.context.topics = context.topics or self.context.topics
-        
+
         # Build full prompt
         prompt = self._system_prompt
-        
+
         if self.context.user_name:
             prompt += f"\nThe user's name is {self.context.user_name}."
-        
+
         prompt += f"\nUser: {user_message}\n{self.traits.name}:"
-        
+
         return prompt
-    
+
     def adjust_for_mood(self, user_mood: str) -> None:
         """Adjust tone based on user's mood."""
         self.context.user_mood = user_mood
-        
+
         if user_mood in ["sad", "down", "upset"]:
             self.traits.warmth = min(1.0, self.traits.warmth + 0.2)
             self.traits.humor = max(0, self.traits.humor - 0.2)
         elif user_mood in ["happy", "excited"]:
             self.traits.warmth = min(1.0, self.traits.warmth + 0.1)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dict."""
         return {
@@ -226,23 +226,23 @@ def create_companion(
 ) -> CompanionSystem:
     """Create a new companion with preset personalities."""
     companion = CompanionSystem()
-    
+
     presets = {
         "warm": {"warmth": 0.9, "curiosity": 0.6, "humor": 0.3},
         "curious": {"warmth": 0.6, "curiosity": 0.9, "humor": 0.3},
         "playful": {"warmth": 0.7, "curiosity": 0.5, "humor": 0.8},
         "balanced": {"warmth": 0.7, "curiosity": 0.6, "humor": 0.5},
     }
-    
+
     preset = presets.get(personality, presets["balanced"])
     companion.set_personality(name=name, **preset)
-    
+
     return companion
 
 
 __all__ = [
     "ResponseStyle",
-    "CompanionTraits", 
+    "CompanionTraits",
     "ConversationContext",
     "CompanionSystem",
     "get_companion",

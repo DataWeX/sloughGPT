@@ -11,7 +11,7 @@ Any class with the right methods IS a ModelProvider.
 
 ProviderRouter chains message processors + a text provider:
   messages → processor 1 → processor 2 → ... → text provider → tokens
-  
+
 Each MessageProcessor transforms messages before they reach the text provider.
 Processors are composable, swappable, and testable independently.
 

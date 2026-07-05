@@ -628,7 +628,7 @@ class VirtualCPU:
 
     def _handle_syscall(self) -> None:
         """Dispatch syscall by R0 value.
-        
+
         Syscall numbers:
           0 — exit
           1 — write string (address in R1)

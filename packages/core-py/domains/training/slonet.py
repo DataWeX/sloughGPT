@@ -40,11 +40,11 @@ _NO_GRAD = False
 
 class no_grad:
     """Context manager / decorator to disable gradient computation.
-    
+
     All tensors created inside the context have ``requires_grad=False``
     and no ``_children`` / ``_backward_fn`` are set, saving the overhead
     of building the autograd graph.
-    
+
     Usage::
         with no_grad():
             y = model(x)   # no graph built
@@ -113,7 +113,7 @@ _ACCEL_THRESHOLD = 4096
 
 def _accel_op(op_name: str, *args, threshold: int = _ACCEL_THRESHOLD):
     """Run an accelerator operation with numpy fallback.
-    
+
     Returns the numpy result if the accelerator is available and tensor
     size exceeds the threshold, otherwise runs the numpy fallback.
     The numpy fallback is provided as the last positional argument.
@@ -1111,7 +1111,7 @@ def _sample_from_logits(logits: np.ndarray, temperature: float = 1.0,
                         generated_ids: Optional[np.ndarray] = None,
                         eos_token: Optional[int] = None) -> int:
     """Full logit processing pipeline: penalties → filtering → temperature → sample.
-    
+
     Args:
         logits: Raw logits shape (1, vocab_size)
         temperature: Sampling temperature (>0). Low = greedy, high = random.
@@ -1122,7 +1122,7 @@ def _sample_from_logits(logits: np.ndarray, temperature: float = 1.0,
         presence_penalty: Subtract penalty for any token that has appeared.
         generated_ids: Array of already-generated token IDs.
         eos_token: If set, mask it during sampling (except for required termination).
-    
+
     Returns:
         Sampled token ID.
     """
@@ -1364,7 +1364,7 @@ class SloLSTM(SloLayer):
 
     def forward_numpy(self, x: np.ndarray, hidden=None, adapter=None, skip_embed=False) -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
         """NumPy-only forward pass — no Tensor overhead. Pre-computes all input gates.
-        
+
         Args:
             x: input — either integer token IDs (1D = (seq_len,) or 2D = (B, T)) or
                pre-embedded features (2D = (T, feat) or 3D = (B, T, feat)) when skip_embed=True
@@ -1968,7 +1968,7 @@ class SloMultiHeadAttention(SloLayer):
 
 class SloCrossAttention(SloLayer):
     """Cross-attention layer for multimodal fusion.
-    
+
     Queries come from text decoder, keys/values come from image encoder.
     Used in BLIP/Flamingo-style architectures for image captioning.
     """
@@ -3052,35 +3052,13 @@ def _rebuild_net_from_params(net: SloNet, weights: Dict[str, Any]) -> None:
 
 def _load_pytorch_zip_weights(zip_data: bytes) -> Dict[str, np.ndarray]:
     """Load weights from a PyTorch ZIP checkpoint using torch-free pt_loader."""
-    import tempfile, os
     try:
-        from domains.infrastructure.pt_loader import load_pt_file
-        # Write to temp file since pt_loader expects a path
-        with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as f:
-            f.write(zip_data)
-            tmp_path = f.name
-        try:
-            return load_pt_file(tmp_path)
-        finally:
-            os.unlink(tmp_path)
+        from domains.infrastructure.pt_loader import load_pt_bytes as _load_pt
+        return _load_pt(zip_data)
     except Exception as e:
-        # Fallback: try torch if available
-        try:
-            import torch, io
-            sd = torch.load(io.BytesIO(zip_data), map_location="cpu", weights_only=False)
-            result = {}
-            for k, v in sd.items():
-                if isinstance(v, np.ndarray):
-                    result[k] = v.astype(np.float32)
-                elif hasattr(v, 'numpy'):
-                    result[k] = v.cpu().numpy().astype(np.float32)
-                else:
-                    result[k] = np.array(v, dtype=np.float32)
-            return result
-        except Exception:
-            import sys
-            print(f"_load_pytorch_zip_weights failed: {type(e).__name__}: {e}", file=sys.stderr)
-            return {}
+        import sys
+        print(f"_load_pytorch_zip_weights failed: {type(e).__name__}: {e}", file=sys.stderr)
+        return {}
 
 
 def souls_from_directory(dir_path) -> List[SloNet]:
@@ -3135,7 +3113,7 @@ def train_char_lstm_from_gpt(gpt_fn, soul_name="Slo", epochs=10, temperature=0.8
 
 class SloTransformer(SloNet):
     """Native SloNet decoder-only Transformer: embedding → blocks → norm → lm_head.
-    
+
     Architecture: RoPE, RMSNorm, SwiGLU, KV-cache, GQA support.
     Drop-in replacement for SloughGPTModel (no PyTorch).
     """
@@ -3544,10 +3522,10 @@ def log_softmax(x, dim=-1):
 
 def kl_div_loss(input_log_prob, target_prob, reduction="batchmean"):
     """KL divergence D_KL(target || input) with backward.
-    
+
     Computes Σ target * (log(target) - input) where input = log Q, target = P.
     This is the same formula as torch.nn.KLDivLoss.
-    
+
     input_log_prob: log-probabilities (from log_softmax, i.e. log Q)
     target_prob: probabilities (from softmax, i.e. P)
     """
@@ -3662,13 +3640,13 @@ def eye(n, m=None):
 
 class SloDataset:
     """Base dataset class (analogous to torch.utils.data.Dataset)."""
-    
+
     def __len__(self):
         raise NotImplementedError
-    
+
     def __getitem__(self, idx):
         raise NotImplementedError
-    
+
     def __iter__(self):
         for i in range(len(self)):
             yield self[i]
@@ -3676,14 +3654,14 @@ class SloDataset:
 
 class SloDataLoader:
     """Basic data loader with batching and shuffling (analogous to torch.utils.data.DataLoader).
-    
+
     Args:
         dataset: SloDataset instance
         batch_size: Number of samples per batch
         shuffle: Whether to shuffle indices each epoch
         collate_fn: Optional function to collate batch items
     """
-    
+
     def __init__(self, dataset, batch_size=1, shuffle=False, collate_fn=None, drop_last=False):
         self.dataset = dataset
         self.batch_size = batch_size
@@ -3692,13 +3670,13 @@ class SloDataLoader:
         self.drop_last = drop_last
         self._idx = 0
         self._indices = None
-    
+
     def __len__(self):
         n = len(self.dataset) // self.batch_size
         if not self.drop_last and len(self.dataset) % self.batch_size != 0:
             n += 1
         return max(1, n)
-    
+
     def __iter__(self):
         self._idx = 0
         indices = list(range(len(self.dataset)))
@@ -3706,7 +3684,7 @@ class SloDataLoader:
             np.random.shuffle(indices)
         self._indices = indices
         return self
-    
+
     def __next__(self):
         if self._idx >= len(self._indices):
             raise StopIteration
@@ -3718,7 +3696,7 @@ class SloDataLoader:
         if self.collate_fn:
             return self.collate_fn(batch)
         return batch
-    
+
     def reset(self):
         """Reset for a new epoch."""
         self._idx = 0
@@ -3732,10 +3710,10 @@ class SloDataLoader:
 
 class SloLRScheduler:
     """Base LR scheduler (analogous to torch.optim.lr_scheduler._LRScheduler).
-    
+
     Works with SloSGD / SloAdam via the .lr attribute on the optimizer.
     """
-    
+
     def __init__(self, optimizer, last_epoch=-1):
         self.optimizer = optimizer
         if hasattr(optimizer, 'lr'):
@@ -3747,10 +3725,10 @@ class SloLRScheduler:
         self.last_epoch = last_epoch
         if last_epoch == -1:
             self.step()
-    
+
     def get_lr(self):
         raise NotImplementedError
-    
+
     def step(self, epoch=None):
         if epoch is None:
             self.last_epoch += 1
@@ -3760,15 +3738,15 @@ class SloLRScheduler:
         if new_lrs:
             self.optimizer.lr = new_lrs[0]
         self._last_lrs = new_lrs
-    
+
     def get_last_lr(self):
         if hasattr(self, '_last_lrs') and self._last_lrs:
             return self._last_lrs
         return self.get_lr()
-    
+
     def state_dict(self):
         return {"last_epoch": self.last_epoch, "base_lrs": self.base_lrs}
-    
+
     def load_state_dict(self, state_dict):
         self.last_epoch = state_dict["last_epoch"]
         self.base_lrs = state_dict["base_lrs"]
@@ -3776,24 +3754,24 @@ class SloLRScheduler:
 
 class SloStepLR(SloLRScheduler):
     """Decays LR by gamma every step_size epochs."""
-    
+
     def __init__(self, optimizer, step_size, gamma=0.1, last_epoch=-1):
         self.step_size = step_size
         self.gamma = gamma
         super().__init__(optimizer, last_epoch)
-    
+
     def get_lr(self):
         return [base_lr * (self.gamma ** (self.last_epoch // self.step_size)) for base_lr in self.base_lrs]
 
 
 class SloCosineAnnealingLR(SloLRScheduler):
     """Cosine annealing LR scheduler."""
-    
+
     def __init__(self, optimizer, T_max, eta_min=0, last_epoch=-1):
         self.T_max = T_max
         self.eta_min = eta_min
         super().__init__(optimizer, last_epoch)
-    
+
     def get_lr(self):
         if self.last_epoch >= self.T_max:
             return [self.eta_min for _ in self.base_lrs]
@@ -3803,10 +3781,10 @@ class SloCosineAnnealingLR(SloLRScheduler):
 
 class SloReduceLROnPlateau:
     """Reduce LR when a metric has stopped improving.
-    
+
     Analogous to torch.optim.lr_scheduler.ReduceLROnPlateau.
     """
-    
+
     def __init__(self, optimizer, mode='min', factor=0.1, patience=10,
                  threshold=1e-4, threshold_mode='rel', cooldown=0,
                  min_lr=0, eps=1e-8):
@@ -3830,14 +3808,14 @@ class SloReduceLROnPlateau:
         else:
             self.best = -float('inf')
             self.mode_worse = -float('inf')
-    
+
     def _is_better(self, current, best):
         if self.threshold_mode == 'rel':
             diff = best * (1 - self.threshold) if self.mode == 'min' else best * (1 + self.threshold)
         else:
             diff = best - self.threshold if self.mode == 'min' else best + self.threshold
         return current < diff if self.mode == 'min' else current > diff
-    
+
     def step(self, metrics):
         current = float(metrics) if hasattr(metrics, '__float__') else metrics
         if self.best is None or self.best == float('inf') or self.best == -float('inf'):
@@ -3848,22 +3826,22 @@ class SloReduceLROnPlateau:
             self.num_bad_epochs = 0
         else:
             self.num_bad_epochs += 1
-        
+
         if self.cooldown_counter > 0:
             self.cooldown_counter -= 1
             self.num_bad_epochs = 0
-        
+
         if self.num_bad_epochs > self.patience:
             self.cooldown_counter = self.cooldown
             self.num_bad_epochs = 0
             new_lr = max(self.optimizer.lr * self.factor, self.min_lr)
             self.optimizer.lr = new_lr
             self.last_lr = new_lr
-    
+
     def state_dict(self):
         return {"best": self.best, "num_bad_epochs": self.num_bad_epochs,
                 "cooldown_counter": self.cooldown_counter, "last_lr": self.last_lr}
-    
+
     def load_state_dict(self, state_dict):
         self.best = state_dict["best"]
         self.num_bad_epochs = state_dict["num_bad_epochs"]
@@ -3873,7 +3851,7 @@ class SloReduceLROnPlateau:
 
 class WarmupCosineScheduler(SloLRScheduler):
     """Cosine annealing with linear warmup (same as torch-independent version in lr_schedulers.py)."""
-    
+
     def __init__(self, optimizer, warmup_steps=0, total_steps=10000,
                  min_lr=1e-6, num_cycles=0.5, last_epoch=-1):
         self.warmup_steps = warmup_steps
@@ -3881,7 +3859,7 @@ class WarmupCosineScheduler(SloLRScheduler):
         self.min_lr = min_lr
         self.num_cycles = num_cycles
         super().__init__(optimizer, last_epoch)
-    
+
     def get_lr(self):
         if self.last_epoch < self.warmup_steps:
             warmup_factor = float(self.last_epoch) / float(max(1, self.warmup_steps))
@@ -3895,13 +3873,13 @@ class WarmupCosineScheduler(SloLRScheduler):
 
 class PolynomialDecayScheduler(SloLRScheduler):
     """Polynomial learning rate decay."""
-    
+
     def __init__(self, optimizer, total_steps=10000, min_lr=0.0, power=1.0, last_epoch=-1):
         self.total_steps = total_steps
         self.min_lr = min_lr
         self.power = power
         super().__init__(optimizer, last_epoch)
-    
+
     def get_lr(self):
         if self.last_epoch >= self.total_steps:
             return [self.min_lr for _ in self.base_lrs]
@@ -3911,7 +3889,7 @@ class PolynomialDecayScheduler(SloLRScheduler):
 
 class LinearWarmupScheduler(SloLRScheduler):
     """Linear warmup then hold or decay."""
-    
+
     def __init__(self, optimizer, warmup_steps=500, base_lr=1e-4, hold_steps=0,
                  decay_type="none", min_lr=0.0, total_steps=None, last_epoch=-1):
         self.warmup_steps = warmup_steps
@@ -3921,7 +3899,7 @@ class LinearWarmupScheduler(SloLRScheduler):
         self.min_lr = min_lr
         self.total_steps = total_steps or warmup_steps + hold_steps + 10000
         super().__init__(optimizer, last_epoch)
-    
+
     def get_lr(self):
         if self.last_epoch < self.warmup_steps:
             factor = self.last_epoch / max(1, self.warmup_steps)
@@ -3944,14 +3922,14 @@ class LinearWarmupScheduler(SloLRScheduler):
 
 class SloConstantLR(SloLRScheduler):
     """Constant LR (identity scheduler)."""
-    
+
     def get_lr(self):
         return self.base_lrs
 
 
 class SloOneCycleLR(SloLRScheduler):
     """One-cycle LR schedule: warmup to max_lr then decay."""
-    
+
     def __init__(self, optimizer, max_lr, total_steps=10000, pct_start=0.1,
                  anneal_strategy="cos", div_factor=25.0, final_div_factor=1e4, last_epoch=-1):
         self.max_lr = max_lr
@@ -3961,7 +3939,7 @@ class SloOneCycleLR(SloLRScheduler):
         self.div_factor = div_factor
         self.final_div_factor = final_div_factor
         super().__init__(optimizer, last_epoch)
-    
+
     def get_lr(self):
         step = self.last_epoch
         total = self.total_steps
@@ -3982,7 +3960,7 @@ class SloOneCycleLR(SloLRScheduler):
 
 class SloCyclicLR(SloLRScheduler):
     """Cyclic LR with triangular/triangular2 mode."""
-    
+
     def __init__(self, optimizer, base_lr, max_lr, step_size_up=2000, step_size_down=None,
                  mode="triangular2", gamma=0.5, last_epoch=-1):
         self.base_lr = base_lr
@@ -3992,7 +3970,7 @@ class SloCyclicLR(SloLRScheduler):
         self.mode = mode
         self.gamma = gamma
         super().__init__(optimizer, last_epoch)
-    
+
     def get_lr(self):
         cycle_len = self.step_size_up + self.step_size_down
         cycle_pos = self.last_epoch % cycle_len

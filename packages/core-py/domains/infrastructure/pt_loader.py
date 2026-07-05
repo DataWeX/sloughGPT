@@ -206,7 +206,26 @@ def load_pt_state_dict(path: Union[str, Path]) -> Dict[str, np.ndarray]:
     return {k: v for k, v in data.items() if isinstance(v, np.ndarray)}
 
 
+def load_pt_file(path: Union[str, Path]) -> Dict[str, np.ndarray]:
+    """Alias for load_pt_state_dict — loads a .pt file and returns weight dict."""
+    return load_pt_state_dict(path)
+
+
+def load_pt_bytes(data: bytes) -> Dict[str, np.ndarray]:
+    """Load weights from .pt bytes directly (no temp file needed)."""
+    import tempfile, os
+    with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as f:
+        f.write(data)
+        tmp_path = f.name
+    try:
+        return load_pt_state_dict(tmp_path)
+    finally:
+        os.unlink(tmp_path)
+
+
 __all__ = [
     "load_pt_checkpoint",
     "load_pt_state_dict",
+    "load_pt_file",
+    "load_pt_bytes",
 ]

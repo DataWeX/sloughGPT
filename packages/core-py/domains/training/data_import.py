@@ -683,7 +683,7 @@ class HuggingFaceImporter:
             output_path.mkdir(parents=True, exist_ok=True)
 
             logger.info(f"Downloading {dataset_id}...")
-            
+
             # Handle datasets with subsets/config
             try:
                 dataset = load_dataset(dataset_id, trust_remote_code=True)
@@ -691,7 +691,7 @@ class HuggingFaceImporter:
                 # Try with default config for datasets with subsets
                 logger.warning(f"Full load failed, trying default config: {config_err}")
                 dataset = load_dataset(dataset_id, split="train", trust_remote_code=True)
-            
+
             # Handle both DatasetDict and Dataset
             total_chars = 0
             corpus_file = output_path / "corpus.jsonl"

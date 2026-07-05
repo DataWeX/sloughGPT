@@ -59,8 +59,8 @@ class FeedbackTrainer:
         cursor.execute(
             """
             SELECT m.content, f.rating, f.quality_score,
-                   (SELECT mm.content FROM messages mm 
-                    WHERE mm.conversation_id = m.conversation_id 
+                   (SELECT mm.content FROM messages mm
+                    WHERE mm.conversation_id = m.conversation_id
                     AND mm.role = 'user'
                     AND mm.created_at < m.created_at
                     ORDER BY mm.created_at DESC LIMIT 1) as prompt
@@ -99,7 +99,7 @@ class FeedbackTrainer:
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT DISTINCT m.conversation_id 
+            SELECT DISTINCT m.conversation_id
             FROM feedback f
             JOIN messages m ON f.message_id = m.id
             GROUP BY m.conversation_id
@@ -118,8 +118,8 @@ class FeedbackTrainer:
             cursor.execute(
                 """
                 SELECT m.content, f.rating,
-                       (SELECT mm.content FROM messages mm 
-                        WHERE mm.conversation_id = m.conversation_id 
+                       (SELECT mm.content FROM messages mm
+                        WHERE mm.conversation_id = m.conversation_id
                         AND mm.role = 'user'
                         AND mm.created_at < m.created_at
                         ORDER BY mm.created_at DESC LIMIT 1) as prompt
@@ -242,7 +242,7 @@ class FeedbackTrainer:
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT rating, COUNT(*) as count 
+            SELECT rating, COUNT(*) as count
             FROM feedback f
             JOIN messages m ON f.message_id = m.id
             WHERE m.role = 'assistant'

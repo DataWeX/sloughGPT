@@ -37,10 +37,10 @@ class ResponseLog:
 class ResponseTracker:
     """
     Track chat responses for quality evaluation.
-    
+
     Usage:
         tracker = ResponseTracker()
-        
+
         # Log a response
         tracker.log(
             user_message="What is Python?",
@@ -52,14 +52,14 @@ class ResponseTracker:
             tokens_generated=45,
             duration_ms=1200,
         )
-        
+
         # Get logged responses
         responses = tracker.get_responses(limit=100)
-        
+
         # Export for benchmarking
         tracker.export_jsonl("data/response_logs.jsonl")
     """
-    
+
     def __init__(self, log_dir: str = "data/response_logs"):
         # Use absolute path from package location
         import os
@@ -70,7 +70,7 @@ class ResponseTracker:
         self.current_file = self.log_dir / f"responses_{datetime.now().strftime('%Y%m%d')}.jsonl"
         self._buffer: List[ResponseLog] = []
         self._buffer_size = 1
-    
+
     def log(
         self,
         user_message: str,
@@ -99,20 +99,20 @@ class ResponseTracker:
             has_images=has_images,
             context_tokens=context_tokens,
         )
-        
+
         self._buffer.append(entry)
-        
+
         # Flush to file
         if len(self._buffer) >= self._buffer_size:
             self._flush()
-        
+
         return entry
-    
+
     def _flush(self):
         """Flush buffer to file."""
         if not self._buffer:
             return
-        
+
         with open(self.current_file, "a") as f:
             for entry in self._buffer:
                 f.write(json.dumps({
@@ -129,10 +129,10 @@ class ResponseTracker:
                     "has_images": entry.has_images,
                     "context_tokens": entry.context_tokens,
                 }) + "\n")
-        
+
         self._buffer.clear()
         logger.info(f"Flushed {len(self._buffer)} responses to {self.current_file}")
-    
+
     def get_responses(
         self,
         limit: int = 100,
@@ -141,30 +141,30 @@ class ResponseTracker:
     ) -> List[ResponseLog]:
         """Get recent responses."""
         responses = []
-        
+
         # Read from today's file
         if self.current_file.exists():
             with open(self.current_file) as f:
                 for line in f:
                     try:
                         data = json.loads(line)
-                        
+
                         if model and data.get("model") != model:
                             continue
                         if since and data.get("timestamp") < since:
                             continue
-                        
+
                         responses.append(ResponseLog(**data))
                     except:
                         continue
-        
+
         return responses[-limit:]
-    
+
     def export_jsonl(self, path: str):
         """Export all responses to JSONL."""
         output_path = Path(path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         with open(output_path, "w") as f:
             for entry in self.get_responses(limit=10000):
                 f.write(json.dumps({
@@ -174,22 +174,22 @@ class ResponseTracker:
                     "model": entry.model,
                     "session_id": entry.session_id,
                 }) + "\n")
-        
+
         logger.info(f"Exported to {output_path}")
         return str(output_path)
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """Get aggregated stats."""
         responses = self.get_responses(limit=1000)
-        
+
         if not responses:
             return {"total": 0}
-        
+
         total = len(responses)
         avg_tokens = sum(r.tokens_generated for r in responses) / total
         avg_duration = sum(r.duration_ms for r in responses) / total
         models = set(r.model for r in responses)
-        
+
         return {
             "total": total,
             "avg_tokens": avg_tokens,

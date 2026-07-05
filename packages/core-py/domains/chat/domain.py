@@ -22,7 +22,7 @@ class ChatRequest:
     user_id: Optional[str] = None
 
 
-@dataclass  
+@dataclass
 class ChatResponse:
     text: str
     session_id: str
@@ -34,24 +34,24 @@ class ChatResponse:
 class ChatDomain:
     """
     Clean chat domain - handles chat generation and logging.
-    
+
     Usage:
         chat = ChatDomain()
-        
+
         # Generate response
         response = chat.respond(
             messages=[{"role": "user", "content": "Hello!"}],
             model="gpt2"
         )
-        
+
         # Returns response and logs automatically
     """
-    
+
     def __init__(self, log_dir: str = "data/response_logs", engine: Optional[Any] = None):
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self._engine = engine
-    
+
     async def respond(
         self,
         messages: List[Dict[str, str]],
@@ -64,14 +64,14 @@ class ChatDomain:
     ) -> ChatResponse:
         """Generate chat response."""
         start_time = time.perf_counter()
-        
+
         # Get last user message
         user_msg = ""
         for m in reversed(messages):
             if m.get("role") == "user":
                 user_msg = m.get("content", "")
                 break
-        
+
         # Generate response (placeholder - uses external model)
         text = await self._generate(
             user_msg=user_msg,
@@ -81,10 +81,10 @@ class ChatDomain:
             max_tokens=max_tokens,
             messages=messages,
         )
-        
+
         duration_ms = int((time.perf_counter() - start_time) * 1000)
         tokens = len(text.split()) if text else 0
-        
+
         # Log response
         self._log(
             user_message=user_msg,
@@ -97,14 +97,14 @@ class ChatDomain:
             tokens_generated=tokens,
             duration_ms=duration_ms,
         )
-        
+
         return ChatResponse(
             text=text or "[no response]",
             session_id=session_id,
             tokens_generated=tokens,
             duration_ms=duration_ms,
         )
-    
+
     def set_engine(self, engine) -> None:
         """Set the inference engine to reuse (avoids loading a fresh model per call)."""
         self._engine = engine
@@ -120,7 +120,7 @@ class ChatDomain:
     ) -> str:
         """Generate response using provider pipeline or core inference engine."""
         import asyncio
-        
+
         # Try the provider pipeline first (supports loaded HF models like TinyLlama)
         try:
             from domains.models.provider import get_provider
@@ -183,7 +183,7 @@ class ChatDomain:
         parts.append(f"User: {user_msg}")
         parts.append("Assistant:")
         return "\n".join(parts)
-    
+
     def _log(
         self,
         user_message: str,
@@ -198,7 +198,7 @@ class ChatDomain:
     ) -> None:
         """Log response to file."""
         import datetime
-        
+
         entry = {
             "timestamp": datetime.datetime.now().isoformat(),
             "user_message": user_message[:500],
@@ -211,41 +211,41 @@ class ChatDomain:
             "tokens_generated": tokens_generated,
             "duration_ms": duration_ms,
         }
-        
+
         log_file = self.log_dir / f"responses_{datetime.datetime.now().strftime('%Y%m%d')}.jsonl"
-        
+
         with open(log_file, "a") as f:
             f.write(json.dumps(entry) + "\n")
-    
+
     def get_recent_responses(self, limit: int = 10) -> List[Dict[str, Any]]:
         """Get recent logged responses."""
         responses = []
         log_file = self.log_dir / f"responses_{time.strftime('%Y%m%d')}.jsonl"
-        
+
         if not log_file.exists():
             return responses
-        
+
         with open(log_file) as f:
             for line in f:
                 try:
                     responses.append(json.loads(line))
                 except (json.JSONDecodeError, ValueError):
                     continue
-        
+
         return responses[-limit:]
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """Get response statistics."""
         responses = self.get_recent_responses(100)
-        
+
         if not responses:
             return {"total": 0}
-        
+
         total = len(responses)
         avg_tokens = sum(r.get("tokens_generated", 0) for r in responses) / total
         avg_duration = sum(r.get("duration_ms", 0) for r in responses) / total
         models = set(r.get("model") for r in responses)
-        
+
         return {
             "total": total,
             "avg_tokens": round(avg_tokens, 1),
@@ -254,7 +254,7 @@ class ChatDomain:
         }
 
 
-# Global instance  
+# Global instance
 _chat_domain: Optional[ChatDomain] = None
 
 
@@ -268,7 +268,7 @@ def get_chat_domain() -> ChatDomain:
 
 __all__ = [
     "ChatRequest",
-    "ChatResponse", 
+    "ChatResponse",
     "ChatDomain",
     "get_chat_domain",
 ]

@@ -77,7 +77,7 @@ class QuantizedLinear(nn.Module):
     bias: Optional[torch.Tensor]
     weight_scale: torch.Tensor
     weight_zero_point: Optional[torch.Tensor]
-    
+
     def __init__(
         self,
         weight: torch.Tensor,
@@ -90,39 +90,39 @@ class QuantizedLinear(nn.Module):
         self.bias = nn.Parameter(bias) if bias is not None else None
         self.weight_scale = nn.Parameter(weight_scale, requires_grad=False)
         self.weight_zero_point = nn.Parameter(weight_zero_point, requires_grad=False) if weight_zero_point is not None else None
-    
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.nn.functional.linear(x, self.weight, self.bias)
 
 
 class DynamicQuantizer:
     """Dynamic quantization - converts weights to INT8 on-the-fly during inference."""
-    
+
     def __init__(self, bits: int = 8):
         self.bits = bits
         self.quant_min = -(2 ** (bits - 1))
         self.quant_max = 2 ** (bits - 1) - 1
-    
+
     def quantize_tensor(self, tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Quantize a single tensor to int8."""
         scale = tensor.abs().max() / self.quant_max
         if scale == 0:
             scale = 1.0
-        
+
         quantized = torch.round(tensor / scale).to(torch.int8)
         zero_point = torch.tensor(0, dtype=torch.int8)
-        
+
         return quantized, scale, zero_point
-    
+
     def quantize_model(self, model: nn.Module) -> nn.Module:
         """Apply dynamic quantization to model."""
         model.eval()
-        
+
         quantized_modules = {}
         for name, module in model.named_modules():
             if isinstance(module, nn.Linear):
                 weight, scale, zero_point = self.quantize_tensor(module.weight.data)
-                
+
                 quantized_linear = QuantizedLinear(
                     weight=weight,
                     bias=module.bias.data if module.bias is not None else None,
@@ -130,9 +130,9 @@ class DynamicQuantizer:
                     weight_zero_point=zero_point
                 )
                 quantized_modules[name] = quantized_linear
-        
+
         return self._replace_modules(model, quantized_modules)
-    
+
     def _replace_modules(self, model: nn.Module, quantized_modules: Dict[str, QuantizedLinear]) -> nn.Module:
         """Replace linear modules with quantized versions."""
         for name, quantized_module in quantized_modules.items():
@@ -143,19 +143,19 @@ class DynamicQuantizer:
                 setattr(parent, child_name, quantized_module)
             else:
                 setattr(model, name, quantized_module)
-        
+
         return model
 
 
 class StaticQuantizer:
     """Static quantization with per-channel scaling."""
-    
+
     def __init__(self, bits: int = 8, group_size: Optional[int] = None):
         self.bits = bits
         self.group_size = group_size
         self.quant_min = -(2 ** (bits - 1))
         self.quant_max = 2 ** (bits - 1) - 1
-    
+
     def quantize_tensor(self, tensor: torch.Tensor, axis: int = 0) -> tuple[torch.Tensor, torch.Tensor]:
         """Quantize tensor with per-channel scaling."""
         if axis == 0:
@@ -163,20 +163,20 @@ class StaticQuantizer:
             scale = scale.max(dim=2, keepdim=True)[0].max(dim=3, keepdim=True)[0]
         else:
             scale = tensor.abs().max(dim=axis, keepdim=True)[0].clamp(min=1e-8)
-        
+
         quantized = torch.round(tensor / scale).clamp(self.quant_min, self.quant_max)
-        
+
         return quantized.to(torch.int8), scale
-    
+
     def quantize_model(self, model: nn.Module) -> nn.Module:
         """Quantize model with static quantization."""
         model.eval()
-        
+
         quantized_modules = {}
         for name, module in model.named_modules():
             if isinstance(module, nn.Linear):
                 quantized_weight, scale = self.quantize_tensor(module.weight.data)
-                
+
                 quantized_linear = QuantizedLinear(
                     weight=quantized_weight,
                     bias=module.bias.data if module.bias is not None else None,
@@ -184,13 +184,13 @@ class StaticQuantizer:
                     weight_zero_point=None
                 )
                 quantized_modules[name] = quantized_linear
-        
+
         return DynamicQuantizer()._replace_modules(model, quantized_modules)
 
 
 class FP16Quantizer:
     """Convert model to half precision (FP16)."""
-    
+
     def quantize_model(self, model: nn.Module) -> nn.Module:
         """Convert model to FP16."""
         return model.half()
@@ -198,7 +198,7 @@ class FP16Quantizer:
 
 class BF16Quantizer:
     """Convert model to bfloat16."""
-    
+
     def quantize_model(self, model: nn.Module) -> nn.Module:
         """Convert model to BF16."""
         return model.to(torch.bfloat16)
@@ -206,11 +206,11 @@ class BF16Quantizer:
 
 class Quantizer:
     """Main quantizer class."""
-    
+
     def __init__(self, quantization_type: QuantizationType = QuantizationType.INT8_DYNAMIC):
         self.quantization_type = quantization_type
         self._impl = self._create_implementation()
-    
+
     def _create_implementation(self) -> Callable[[nn.Module], nn.Module]:
         """Create quantization implementation based on type."""
         if self.quantization_type == QuantizationType.INT8_DYNAMIC:
@@ -225,11 +225,11 @@ class Quantizer:
             return BF16Quantizer().quantize_model
         else:
             return lambda m: m
-    
+
     def quantize_model(self, model: nn.Module) -> nn.Module:
         """Quantize model."""
         return self._impl(model)
-    
+
     def get_quantization_info(self, model: nn.Module) -> QuantizationInfo:
         """Get quantization information for model."""
         bits_map = {
@@ -243,12 +243,12 @@ class Quantizer:
             QuantizationType.Q5_K: 5,
             QuantizationType.Q8_0: 8,
         }
-        
+
         bits = bits_map.get(self.quantization_type, 32)
-        
+
         original_size = sum(p.numel() * p.element_size() for p in model.parameters()) / (1024 * 1024)
         quantized_size = original_size * (bits / 32)
-        
+
         return QuantizationInfo(
             quantization_type=self.quantization_type,
             bits=bits,
@@ -261,15 +261,15 @@ class Quantizer:
 
 class SouModelQuantizer:
     """Model quantizer for .soul models."""
-    
+
     def __init__(self, quantization_type: QuantizationType = QuantizationType.Q4_K):
         self.quantizer = Quantizer(quantization_type)
         self.quantization_type = quantization_type
-    
+
     def quantize_model(self, model: nn.Module) -> nn.Module:
         """Quantize a model."""
         return self.quantizer.quantize_model(model)
-    
+
     def get_quantization_info(self, model: nn.Module) -> QuantizationInfo:
         """Get quantization info."""
         return self.quantizer.get_quantization_info(model)
@@ -281,20 +281,20 @@ def quantize_model(
 ) -> tuple[nn.Module, QuantizationInfo]:
     """
     Quantize a model.
-    
+
     Args:
         model: PyTorch model to quantize
         quantization_type: One of "fp16", "bf16", "int8", "int8_dynamic", "int4"
-    
+
     Returns:
         Tuple of (quantized_model, quantization_info)
     """
     qtype = QuantizationType(quantization_type)
     quantizer = Quantizer(qtype)
-    
+
     quantized = quantizer.quantize_model(model)
     info = quantizer.get_quantization_info(model)
-    
+
     return quantized, info
 
 
@@ -310,12 +310,12 @@ def estimate_memory(
         "int8": 1,
         "int4": 0.5,
     }
-    
+
     bytes_per_param = precision_map.get(quantization_type, 4)
     memory_bytes = num_parameters * bytes_per_param
     memory_mb = memory_bytes / (1024 * 1024)
     memory_gb = memory_mb / 1024
-    
+
     return {
         "num_parameters": num_parameters,
         "quantization_type": quantization_type,
