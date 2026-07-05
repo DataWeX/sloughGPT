@@ -190,5 +190,3 @@ class TestGenerationStatus:
         data = resp.json()
         assert "models_loaded" in data
         assert "capabilities" in data
-
-

@@ -26,14 +26,14 @@ def self_train(
     model: str = "gpt2",
 ):
     """Model generates, that becomes next input - runs overnight."""
-    
+
     print(f"Loading {model}...")
     config = HFLocalConfig(model="gpt2", device="cpu")
     hf = HuggingFaceLocalLoader(config)
     hf.load()
     model = hf.model
     tokenizer = hf.tokenizer
-    
+
     current_text = seed
     step = 0
     while True:
@@ -47,31 +47,31 @@ def self_train(
                 do_sample=True,
             )
         generated = tokenizer.decode(outputs[0], skip_special_tokens=True)
-        
+
         # Extract new text
         if len(generated) > len(current_text):
             new_text = generated[len(current_text):].strip()
         else:
             new_text = generated
-        
+
         if not new_text:
             new_text = seed  # Reset if empty
         print(f"[{step+1}] {new_text[:80]}")
-        
+
         # Save to history
         Path("data/self_train_history.txt").open("a").write(f"{new_text}\n")
-        
+
         # Use generated as next input
         current_text = new_text
         step += 1
-        
+
         if delay_seconds:
             time.sleep(delay_seconds)
-        
+
         # Stop if not forever and reached max_steps
         if not forever and step >= max_steps:
             break
-    
+
     print(f"Done after {step} steps")
 
 
@@ -85,7 +85,7 @@ if __name__ == "__main__":
     parser.add_argument("--max_tokens", type=int, default=50)
     parser.add_argument("--forever", action="store_true", help="Run forever until ctrl+c")
     args = parser.parse_args()
-    
+
 self_train(
         seed=args.seed,
         max_steps=args.steps,

@@ -46,13 +46,13 @@ def get_model_list():
     for gguf_file in MODEL_DIR.glob('*.gguf'):
         size = gguf_file.stat().st_size
         metadata = load_metadata()
-        
+
         model_info = {
             'filename': gguf_file.name,
             'size': size,
             'size_mb': round(size / 1024 / 1024, 2),
         }
-        
+
         if metadata and metadata.get('filename') == gguf_file.name:
             model_info.update(metadata)
         else:
@@ -63,21 +63,21 @@ def get_model_list():
                 'sha256': get_file_hash(gguf_file),
                 'updated_at': datetime.now().isoformat(),
             })
-        
+
         models.append(model_info)
-    
+
     return models
 
 def main():
     import http.server
     import socketserver
-    
+
     ensure_dirs()
-    
+
     class ModelHandler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(MODEL_DIR), **kwargs)
-        
+
         def do_GET(self):
             if self.path == '/' or self.path == '/models':
                 self.send_json({
@@ -85,38 +85,38 @@ def main():
                     'version': '1.0.0',
                     'models': get_model_list(),
                 })
-            
+
             elif self.path == '/health':
                 self.send_json({'status': 'healthy'})
-            
+
             elif self.path.startswith('/models/'):
                 model_name = self.path[8:]  # Remove '/models/'
-                
+
                 if model_name == '':
                     self.send_json({'models': get_model_list()})
                     return
-                
+
                 if model_name == 'list':
                     self.send_json({'models': get_model_list()})
                     return
-                
+
                 # Check for specific model info or download
                 gguf_path = MODEL_DIR / model_name
                 gguf_path_meta = MODEL_DIR / f"{model_name}.gguf"
-                
+
                 if model_name.endswith('/version'):
                     model_id = model_name.replace('/version', '')
                     info = self._get_model_info(model_id)
                     self.send_json(info or {'error': 'Model not found'})
-                
+
                 elif model_name.endswith('/download'):
                     model_id = model_name.replace('/download', '')
                     self._serve_download(model_id)
-                
+
                 elif model_name.endswith('.gguf'):
                     # Direct GGUF download
                     self._serve_file(gguf_path)
-                
+
                 else:
                     # Model info endpoint
                     info = self._get_model_info(model_name)
@@ -124,10 +124,10 @@ def main():
                         self.send_json(info)
                     else:
                         self.send_error(404, 'Model not found')
-            
+
             else:
                 self.send_error(404, 'Not found')
-        
+
         def _get_model_info(self, model_id):
             """Get model info by ID."""
             models = get_model_list()
@@ -147,7 +147,7 @@ def main():
                         'updated_at': m.get('updated_at', ''),
                     }
             return None
-        
+
         def _serve_download(self, model_id):
             """Serve model file for download."""
             models = get_model_list()
@@ -158,25 +158,25 @@ def main():
                         self._serve_file(gguf_path)
                         return
             self.send_error(404, 'Model not found')
-        
+
         def _serve_file(self, filepath):
             """Serve a file."""
             if not filepath.exists():
                 self.send_error(404, 'File not found')
                 return
-            
+
             size = filepath.stat().st_size
-            
+
             self.send_response(200)
             self.send_header('Content-Type', 'application/octet-stream')
             self.send_header('Content-Disposition', f'attachment; filename="{filepath.name}"')
             self.send_header('Content-Length', str(size))
             self.send_header('Accept-Ranges', 'bytes')
             self.end_headers()
-            
+
             with open(filepath, 'rb') as f:
                 self.wfile.write(f.read())
-        
+
         def send_json(self, data):
             """Send JSON response."""
             json_str = json.dumps(data, indent=2)
@@ -186,10 +186,10 @@ def main():
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(json_str.encode())
-        
+
         def log_message(self, format, *args):
             print(f"[ModelServer] {args[0]}")
-    
+
     with socketserver.TCPServer((SERVER_HOST, SERVER_PORT), ModelHandler) as httpd:
         print(f"""
 ╔══════════════════════════════════════════════════════════════╗
@@ -207,7 +207,7 @@ def main():
 ║    GET /models/<name>/download   - Download model         ║
 ╚══════════════════════════════════════════════════════════════╝
         """)
-        
+
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:

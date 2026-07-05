@@ -145,20 +145,20 @@ def export_to_gguf(
     metadata: Optional[Dict] = None
 ) -> bool:
     """Export a checkpoint to GGUF format."""
-    
+
     print(f"\n{'='*60}")
     print(f"GGUF Export: {checkpoint_path} -> {output_path}")
     print(f"Quantization: {quant_type}")
     print(f"{'='*60}\n")
-    
+
     # Load checkpoint
     data = load_checkpoint(checkpoint_path)
     state_dict = data['state_dict']
     config = data['config']
-    
+
     # Build GGUF file
     tensors = []
-    
+
     # Metadata
     meta = {
         'general.architecture': 'llama',
@@ -173,43 +173,43 @@ def export_to_gguf(
         'tokenizer.ggml.model': 'llama',
         'tokenizer.ggml.tokens': config.get('vocab_size', 256),
     }
-    
+
     if metadata:
         meta.update(metadata)
-    
+
     # Convert tensors
     for name, tensor in state_dict.items():
         if isinstance(tensor, torch.Tensor):
             data = tensor.detach().cpu().numpy().flatten()
         else:
             data = np.array(tensor).flatten()
-        
+
         # Quantize
         qdata = quantize_tensor(data, quant_type)
-        
+
         tensors.append({
             'name': name,
             'data': qdata,
             'shape': list(tensor.shape) if isinstance(tensor, torch.Tensor) else list(np.array(tensor).shape),
             'dtype': quant_type,
         })
-    
+
     # Write GGUF file
     print(f"Writing {len(tensors)} tensors...")
-    
+
     with open(output_path, 'wb') as f:
         # Header
         f.write(struct.pack('<I', GGUF_MAGIC))
         f.write(struct.pack('<I', GGUF_VERSION))
         f.write(struct.pack('<I', len(meta)))
         f.write(struct.pack('<I', len(tensors)))
-        
+
         # Metadata
         for key, value in meta.items():
             key_bytes = key.encode('utf-8')
             f.write(struct.pack('<I', len(key_bytes)))
             f.write(key_bytes)
-            
+
             if isinstance(value, str):
                 f.write(struct.pack('<I', 8))
                 val_bytes = value.encode('utf-8')
@@ -224,12 +224,12 @@ def export_to_gguf(
             else:
                 f.write(struct.pack('<I', 4))
                 f.write(struct.pack('<i', int(value)))
-        
+
         # Tensor data
         tensor_offsets = []
         for tensor in tensors:
             tensor_offsets.append(f.tell())
-            
+
             name_bytes = tensor['name'].encode('utf-8')
             f.write(struct.pack('<I', len(name_bytes)))
             f.write(name_bytes)
@@ -239,24 +239,24 @@ def export_to_gguf(
             f.write(struct.pack('<I', QUANT_TYPES.get(tensor['dtype'], 0)))
             f.write(struct.pack('<Q', len(tensor['data'])))
             f.write(tensor['data'])
-        
+
         # Tensor offsets (for indexing)
         for offset in tensor_offsets:
             f.write(struct.pack('<Q', offset))
-    
+
     size = Path(output_path).stat().st_size
     print(f"\n✓ Exported to {output_path}")
     print(f"  Size: {size / 1024 / 1024:.2f} MB")
-    
+
     return True
 
 
 def list_available_models(models_dir: str = 'models') -> List[Dict]:
     """List available trained models."""
     models = []
-    
+
     base_dir = Path(__file__).parent.parent / models_dir
-    
+
     for pt_file in base_dir.glob('*.pt'):
         if 'sloughgpt' in pt_file.name.lower():
             size = pt_file.stat().st_size
@@ -265,7 +265,7 @@ def list_available_models(models_dir: str = 'models') -> List[Dict]:
                 'path': str(pt_file),
                 'size_mb': size / 1024 / 1024,
             })
-    
+
     return models
 
 
@@ -273,16 +273,16 @@ def main():
     parser = argparse.ArgumentParser(description='Export sloughgpt models to GGUF')
     parser.add_argument('--model', '-m', help='Model path (.pt file)')
     parser.add_argument('--output', '-o', help='Output path (.gguf file)')
-    parser.add_argument('--quantization', '-q', default='f16', 
+    parser.add_argument('--quantization', '-q', default='f16',
                        choices=['f32', 'f16', 'q8_0', 'q4_0', 'q4_k', 'q5_k', 'q6_k'],
                        help='Quantization type (default: f16)')
     parser.add_argument('--list', '-l', action='store_true', help='List available models')
     parser.add_argument('--upload', action='store_true', help='Upload to model server')
     parser.add_argument('--server-url', default='http://localhost:8001',
                        help='Model server URL')
-    
+
     args = parser.parse_args()
-    
+
     if args.list:
         print("\nAvailable trained models:")
         print("-" * 50)
@@ -292,7 +292,7 @@ def main():
             print(f"    Size: {model['size_mb']:.2f} MB")
             print()
         return
-    
+
     if not args.model:
         # Auto-detect latest model
         models = list_available_models()
@@ -301,15 +301,15 @@ def main():
             return
         args.model = models[0]['path']
         print(f"Auto-selected model: {args.model}")
-    
+
     if not args.output:
         base = Path(args.model)
         quant_suffix = f"_{args.quantization}" if args.quantization != 'f16' else ''
         args.output = str(base.parent / f"{base.stem}{quant_suffix}.gguf")
-    
+
     # Export
     success = export_to_gguf(args.model, args.output, args.quantization)
-    
+
     if success and args.upload:
         print(f"\nUploading to {args.server_url}...")
         # In production, implement actual upload

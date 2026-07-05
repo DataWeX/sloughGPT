@@ -65,7 +65,7 @@ try:
         print(f"    SUCCESS! Keys: {list(checkpoint.keys()) if isinstance(checkpoint, dict) else type(checkpoint)}")
     except Exception as e:
         print(f"    FAILED: {e}")
-    
+
 except TimeoutError:
     print("  TIMEOUT: Model loading took too long (>15s)")
     print("  This usually means the model is very large or there's a deadlock.")
@@ -102,8 +102,8 @@ print("RECOMMENDATIONS:")
 print("=" * 60)
 print("""
 1. For immediate use: The server will fall back to GPT-2 automatically.
-   
-2. To use sloughgpt_finetuned.pt, we need to convert it to 
+
+2. To use sloughgpt_finetuned.pt, we need to convert it to
    standard torch.save format. The file is in safetensors format
    which requires special handling.
 

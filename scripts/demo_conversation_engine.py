@@ -86,14 +86,14 @@ def demo_conversation_engine():
     print("=" * 60)
     print("""
 How it works with existing infrastructure:
-  
+
   1. Frontend sends message with session_id
   2. /chat/stream saves user message to conversation DB
   3. Model generates response
-  4. Response saved to conversation DB  
+  4. Response saved to conversation DB
   5. Next message: _build_context_prompt() fetches history
   6. History prepended to prompt for better context
-  
+
 No breaking changes - it's all additive integration!
 """)
 

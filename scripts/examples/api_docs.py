@@ -12,15 +12,15 @@ def main():
     print("=" * 70)
     print("SloughGPT API Documentation")
     print("=" * 70)
-    
+
     # Base URL for examples
     base = "http://localhost:8000"
-    
+
     print("\n📍 BASE URL")
     print("-" * 70)
     print(f"  Development: {base}")
     print(f"  Production: https://api.sloughgpt.example.com")
-    
+
     print("\n\n📍 HEALTH ENDPOINTS")
     print("-" * 70)
     endpoints = [
@@ -31,7 +31,7 @@ def main():
     ]
     for method, path, desc in endpoints:
         print(f"  {method:6} {path:30} - {desc}")
-    
+
     print("\n\n📍 AUTHENTICATION ENDPOINTS")
     print("-" * 70)
     endpoints = [
@@ -41,7 +41,7 @@ def main():
     ]
     for method, path, desc in endpoints:
         print(f"  {method:6} {path:30} - {desc}")
-    
+
     print("\n\n📍 INFERENCE ENDPOINTS")
     print("-" * 70)
     endpoints = [
@@ -54,7 +54,7 @@ def main():
     ]
     for method, path, desc in endpoints:
         print(f"  {method:6} {path:30} - {desc}")
-    
+
     print("\n\n📍 RATE LIMITING & CACHE")
     print("-" * 70)
     endpoints = [
@@ -65,7 +65,7 @@ def main():
     ]
     for method, path, desc in endpoints:
         print(f"  {method:8} {path:30} - {desc}")
-    
+
     print("\n\n📍 METRICS & MONITORING")
     print("-" * 70)
     endpoints = [
@@ -76,7 +76,7 @@ def main():
     ]
     for method, path, desc in endpoints:
         print(f"  {method:6} {path:30} - {desc}")
-    
+
     print("\n\n📍 TRAINING ENDPOINTS")
     print("-" * 70)
     endpoints = [
@@ -86,7 +86,7 @@ def main():
     ]
     for method, path, desc in endpoints:
         print(f"  {method:6} {path:30} - {desc}")
-    
+
     print("\n\n📍 MODELS ENDPOINTS")
     print("-" * 70)
     endpoints = [
@@ -97,7 +97,7 @@ def main():
     ]
     for method, path, desc in endpoints:
         print(f"  {method:6} {path:30} - {desc}")
-    
+
     print("\n\n📍 EXAMPLE REQUESTS")
     print("-" * 70)
     examples = [
@@ -109,7 +109,7 @@ def main():
     for title, cmd in examples:
         print(f"\n  {title}:")
         print(f"    {cmd}")
-    
+
     print("\n\n📍 ENVIRONMENT VARIABLES")
     print("-" * 70)
     env_vars = [
@@ -120,7 +120,7 @@ def main():
     ]
     for var, desc in env_vars:
         print(f"  {var:40} - {desc}")
-    
+
     print("\n" + "=" * 70)
     print("For full API docs, visit: http://localhost:8000/docs")
     print("=" * 70 + "\n")

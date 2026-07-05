@@ -23,7 +23,7 @@ def generate_from_teacher(prompts: list, model_name: str = "gpt2", max_tokens: i
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForCausalLM.from_pretrained(model_name)
     model.eval()
-    
+
     outputs = []
     for prompt in prompts:
         inputs = tokenizer(prompt, return_tensors="pt")
@@ -32,7 +32,7 @@ def generate_from_teacher(prompts: list, model_name: str = "gpt2", max_tokens: i
         text = tokenizer.decode(out[0])
         outputs.append(text.strip())
         print(f"  {prompt} → {text[:50]}...")
-    
+
     return outputs
 
 
@@ -43,10 +43,10 @@ def main():
     parser.add_argument("--prompts", nargs="*", default=["Hello", "The", "Once", "In", "With"])
     parser.add_argument("--output", default="data/teacher_data.txt")
     args = parser.parse_args()
-    
+
     # Generate
     data = generate_from_teacher(args.prompts, args.teacher)
-    
+
     # Save
     Path(args.output).write_text("\n".join(data))
     print(f"\nSaved {len(data)} examples to {args.output}")

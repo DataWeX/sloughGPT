@@ -10,23 +10,23 @@ def main():
     print("=" * 60)
     print("Inference Example")
     print("=" * 60)
-    
+
     try:
         from domains.inference.engine import InferenceEngine
-        
+
         print("\nInitializing engine...")
         engine = InferenceEngine()
-        
+
         print("\nGenerating text...")
         result = engine.generate_single(
             prompt="The quick brown fox",
             max_new_tokens=20,
             temperature=0.8
         )
-        
+
         print(f"\nResult: {result}")
         print("\nInference complete!")
-        
+
     except Exception as e:
         print(f"\nError: {e}")
         print("\nStart the API server first:")

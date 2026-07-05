@@ -20,11 +20,11 @@ echo
 # Check Python version
 check_python() {
     echo -e "${YELLOW}🔍 Checking Python version...${NC}"
-    
+
     if command -v python3 &> /dev/null; then
         PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
         REQUIRED_VERSION="3.9"
-        
+
         if python3 -c "import sys; exit(0 if sys.version_info >= (3, 9) else 1)"; then
             echo -e "${GREEN}✅ Python $PYTHON_VERSION found${NC}"
             PYTHON_CMD="python3"
@@ -43,7 +43,7 @@ check_python() {
 # Check system requirements
 check_system() {
     echo -e "${YELLOW}🔍 Checking system requirements...${NC}"
-    
+
     # Check OS
     if [[ "$OSTYPE" == "linux-gnu"* ]]; then
         OS="Linux"
@@ -54,9 +54,9 @@ check_system() {
     else
         OS="Unknown"
     fi
-    
+
     echo -e "${GREEN}✅ Operating System: $OS${NC}"
-    
+
     # Check available memory
     if command -v free &> /dev/null; then
         MEMORY_GB=$(($(free -g | awk '/^Mem:/{print $2}')))
@@ -65,7 +65,7 @@ check_system() {
         MEMORY_GB=$(($(sysctl -n hw.memsize) / 1024 / 1024 / 1024))
         echo -e "${GREEN}✅ Available Memory: ${MEMORY_GB}GB${NC}"
     fi
-    
+
     # Check disk space
     DISK_GB=$(df . | tail -1 | awk '{print int($4/1024/1024)}')
     echo -e "${GREEN}✅ Available Disk: ${DISK_GB}GB${NC}"
@@ -75,15 +75,15 @@ check_system() {
 # Install Python dependencies
 install_python_deps() {
     echo -e "${YELLOW}📦 Installing Python dependencies...${NC}"
-    
+
     # Upgrade pip
     echo -e "${BLUE}   Upgrading pip...${NC}"
     $PYTHON_CMD -m pip install --upgrade pip setuptools wheel
-    
+
     # Fix NumPy compatibility first
     echo -e "${BLUE}   Installing NumPy compatible version...${NC}"
     $PYTHON_CMD -m pip install "numpy<2.0"
-    
+
     # Install core dependencies without torch first
     echo -e "${BLUE}   Installing core dependencies...${NC}"
     $PYTHON_CMD -m pip install fastapi uvicorn sqlalchemy alembic redis
@@ -91,16 +91,16 @@ install_python_deps() {
     $PYTHON_CMD -m pip install python-multipart psutil prometheus-client
     $PYTHON_CMD -m pip install pytest pytest-asyncio pytest-cov
     $PYTHON_CMD -m pip install aiosmtplib aiofiles aiohttp websockets
-    
+
     # Install PyTorch with compatibility
     echo -e "${BLUE}   Installing PyTorch (CPU version)...${NC}"
     $PYTHON_CMD -m pip install torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cpu
-    
+
     # Install additional dependencies
     echo -e "${BLUE}   Installing additional dependencies...${NC}"
     $PYTHON_CMD -m pip install scikit-learn pandas matplotlib seaborn
     $PYTHON_CMD -m pip install jupyter ipykernel notebook plotly dash streamlit
-    
+
     echo -e "${GREEN}✅ Python dependencies installed successfully${NC}"
     echo
 }
@@ -109,19 +109,19 @@ install_python_deps() {
 create_venv() {
     if [[ "$1" == "--venv" ]]; then
         echo -e "${YELLOW}🐍 Creating virtual environment...${NC}"
-        
+
         VENV_DIR="sloughgpt-venv"
-        
+
         # Create virtual environment
         $PYTHON_CMD -m venv $VENV_DIR
-        
+
         # Activate it
         source $VENV_DIR/bin/activate
-        
+
         echo -e "${GREEN}✅ Virtual environment created: $VENV_DIR${NC}"
         echo -e "${YELLOW}To activate: source $VENV_DIR/bin/activate${NC}"
         echo
-        
+
         PYTHON_CMD="$VENV_DIR/bin/python"
     fi
 }
@@ -129,7 +129,7 @@ create_venv() {
 # Verify installation
 verify_installation() {
     echo -e "${YELLOW}🧪 Verifying installation...${NC}"
-    
+
     # Test critical imports
     $PYTHON_CMD -c "
 import sys
@@ -145,14 +145,14 @@ for module in modules_to_test:
     except ImportError as e:
         failed.append(module)
         print(f'❌ {module}')
-        
+
 if failed:
     print(f'\\n⚠️  Missing modules: {failed}')
     sys.exit(1)
 else:
     print('\\n🎉 All critical dependencies verified!')
 "
-    
+
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✅ Installation verification passed${NC}"
     else
@@ -164,7 +164,7 @@ else:
 # Setup configuration
 setup_config() {
     echo -e "${YELLOW}⚙️  Setting up configuration...${NC}"
-    
+
     # Create .env file if it doesn't exist
     if [ ! -f ".env" ]; then
         echo -e "${BLUE}   Creating .env file...${NC}"
@@ -195,7 +195,7 @@ EOF
     else
         echo -e "${BLUE}   .env file already exists${NC}"
     fi
-    
+
     # Create data directories
     mkdir -p data logs models checkpoints
     echo -e "${GREEN}✅ Created data directories${NC}"
@@ -205,7 +205,7 @@ EOF
 # Run tests
 run_tests() {
     echo -e "${YELLOW}🧪 Running basic tests...${NC}"
-    
+
     # Test SloughGPT import
     echo -e "${BLUE}   Testing SloughGPT import...${NC}"
     $PYTHON_CMD -c "
@@ -217,7 +217,7 @@ except Exception as e:
     import sys
     sys.exit(1)
 "
-    
+
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✅ Basic tests passed${NC}"
     else
@@ -254,13 +254,13 @@ main() {
     echo -e "${BLUE}🚀 Starting SloughGPT Installation${NC}"
     echo -e "${BLUE}==================================${NC}"
     echo
-    
+
     # Parse command line arguments
     CREATE_VENV=false
     if [[ "$1" == "--venv" ]]; then
         CREATE_VENV=true
     fi
-    
+
     # Run installation steps
     check_python
     check_system

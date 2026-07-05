@@ -73,7 +73,7 @@ from domains.models import SloughGPTModel
         self.ln = nn.LayerNorm(n_embed)
         self.lm_head = nn.Linear(n_embed, vocab_size, bias=False)
         self.lm_head.weight = self.token_emb.weight
-        
+
     def forward(self, idx, targets=None):
         B, T = idx.size()
         x = self.token_emb(idx) + self.pos_emb(torch.arange(T, device=idx.device))

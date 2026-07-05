@@ -28,18 +28,18 @@ except ImportError:
 def convert_gpt2_to_gguf(input_path, output_path, quantization='Q4_K_M'):
     """
     Convert a GPT-2 style model to GGUF format.
-    
+
     This script creates a GGUF-compatible binary file that can be loaded by llama.cpp.
     """
-    
+
     print(f"Loading model from {input_path}...")
-    
+
     # Load model
     if os.path.exists(input_path):
         # Try loading as fine-tuned model
         try:
             checkpoint = torch.load(input_path, map_location='cpu', weights_only=False)
-            
+
             if 'model_state_dict' in checkpoint:
                 state_dict = checkpoint['model_state_dict']
                 config = checkpoint.get('training_info', {})
@@ -59,7 +59,7 @@ def convert_gpt2_to_gguf(input_path, output_path, quantization='Q4_K_M'):
         print(f"Model not found locally, will use HuggingFace model")
         state_dict = None
         config = {}
-    
+
     # If no local model, use a small pretrained model
     if state_dict is None:
         model_name = 'openai-community/gpt2'  # Smallest GPT-2
@@ -75,21 +75,21 @@ def convert_gpt2_to_gguf(input_path, output_path, quantization='Q4_K_M'):
             'n_head': model.config.n_head,
         }
         print(f"Loaded GPT-2: vocab={config['vocab_size']}, embed={config['n_embd']}, layers={config['n_layer']}")
-    
+
     # Create output directory
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Prepare GGUF format
     print(f"Converting to GGUF format ({quantization})...")
-    
+
     # GGUF header (simplified)
     gguf_magic = b'GGUF'
     gguf_version = 3
-    
+
     # Count tensors
     n_tensors = len(state_dict)
-    
+
     # Create metadata
     metadata = {
         'general.architecture': 'gpt2',
@@ -103,23 +103,23 @@ def convert_gpt2_to_gguf(input_path, output_path, quantization='Q4_K_M'):
         f'gpt2.rope.freq_base': 10000.0,
         f'gpt2.vocab_size': config.get('vocab_size', 50257),
     }
-    
+
     # Write GGUF file
     print(f"Writing to {output_path}...")
-    
+
     with open(output_path, 'wb') as f:
         # Write header
         f.write(gguf_magic)
         f.write(np.array(gguf_version, dtype=np.uint32).tobytes())
         f.write(np.array(n_tensors, dtype=np.uint32).tobytes())
         f.write(np.array(len(metadata), dtype=np.uint32).tobytes())
-        
+
         # Write metadata
         for key, value in metadata.items():
             key_bytes = key.encode('utf-8')
             f.write(np.array(len(key_bytes), dtype=np.uint32).tobytes())
             f.write(key_bytes)
-            
+
             if isinstance(value, str):
                 f.write(np.array(1, dtype=np.uint32).tobytes())  # type: string
                 value_bytes = value.encode('utf-8')
@@ -131,34 +131,34 @@ def convert_gpt2_to_gguf(input_path, output_path, quantization='Q4_K_M'):
             elif isinstance(value, float):
                 f.write(np.array(5, dtype=np.uint32).tobytes())  # type: float32
                 f.write(np.array(value, dtype=np.float32).tobytes())
-        
+
         # Write tensors
         for name, tensor in state_dict.items():
             name_bytes = name.encode('utf-8')
             n_dims = len(tensor.shape)
             shape = tensor.shape
-            
+
             # Convert to numpy and quantize if needed
             data = tensor.detach().numpy()
-            
+
             # For simplicity, store as float32
             # Real quantization would use Q4_K_M algorithm
             data = data.flatten().astype(np.float32)
-            
+
             f.write(np.array(len(name_bytes), dtype=np.uint32).tobytes())
             f.write(name_bytes)
             f.write(np.array(n_dims, dtype=np.uint32).tobytes())
             for dim in shape:
                 f.write(np.array(dim, dtype=np.uint64).tobytes())
-            
+
             # Data type (2 = F32, 7 = Q4_K_M)
             data_type = 2 if quantization == 'F16' else 7
             f.write(np.array(data_type, dtype=np.uint32).tobytes())
-            
+
             # Write data
             f.write(np.array(len(data), dtype=np.uint64).tobytes())
             f.write(data.tobytes())
-    
+
     file_size = output_path.stat().st_size
     print(f"""
 ╔══════════════════════════════════════════════════════════════╗
@@ -189,17 +189,17 @@ def main():
     parser.add_argument('--quantization', '-q', type=str, default='Q4_K_M',
                         choices=['F16', 'Q4_K_M', 'Q8_0'],
                         help='Quantization type')
-    
+
     args = parser.parse_args()
-    
+
     input_path = Path(args.input)
-    
+
     if not input_path.exists():
         print(f"Input file not found: {input_path}")
         print("Will use HuggingFace GPT-2 model instead...")
-    
+
     output_path = Path(args.output)
-    
+
     convert_gpt2_to_gguf(input_path, output_path, args.quantization)
 
 

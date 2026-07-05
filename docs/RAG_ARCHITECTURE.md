@@ -112,7 +112,7 @@ and hybrid retrieval (BM25 + embedding). External vector DB support is planned.
 ────────────────────────────────────────
 
    Raw Documents → Chunking → Embedding → Vector Store
-   
+
    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
    │ PDF, Web,   │───▶│ Chunking     │───▶│ Embedding    │───▶│ Vector DB   │
    │ Notion, DB  │    │ 512 tokens   │    │ (OpenAI,    │    │ (Pinecone,  │

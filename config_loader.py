@@ -111,16 +111,16 @@ class Config:
 def load_config(config_path: str = "config.yaml") -> Config:
     """Load configuration from YAML file."""
     path = Path(config_path)
-    
+
     if not path.exists():
         return Config()
-    
+
     with open(path, 'r') as f:
         data = yaml.safe_load(f)
-    
+
     if data is None:
         return Config()
-    
+
     return Config(
         model=ModelConfig(**data.get('model', {})),
         data=DataConfig(**data.get('data', {})),
@@ -148,17 +148,17 @@ def get_device(config: DeviceConfig) -> str:
 def merge_args_with_config(config: Config, args) -> Config:
     """Merge CLI args with config."""
     import argparse
-    
+
     if hasattr(args, 'dataset') and args.dataset:
         config.data.dataset = args.dataset
         config.data.data_path = f"datasets/{args.dataset}/input.txt"
-    
+
     if hasattr(args, 'epochs') and args.epochs:
         config.training.epochs = args.epochs
-    
+
     if hasattr(args, 'batch_size') and args.batch_size:
         config.training.batch_size = args.batch_size
-    
+
     if hasattr(args, 'lr') and args.lr:
         config.training.learning_rate = args.lr
 
@@ -173,7 +173,7 @@ def merge_args_with_config(config: Config, args) -> Config:
 
     if hasattr(args, "weight_decay") and getattr(args, "weight_decay", None) is not None:
         config.training.weight_decay = float(args.weight_decay)
-    
+
     if hasattr(args, 'use_lora') and args.use_lora:
         config.lora.enabled = True
 
@@ -182,7 +182,7 @@ def merge_args_with_config(config: Config, args) -> Config:
 
     if hasattr(args, "lora_alpha") and getattr(args, "lora_alpha", None) is not None:
         config.lora.alpha = int(args.lora_alpha)
-    
+
     if hasattr(args, 'resume') and args.resume:
         config.checkpoint.resume = args.resume
 
@@ -197,7 +197,7 @@ def merge_args_with_config(config: Config, args) -> Config:
 
     if hasattr(args, "max_checkpoints") and getattr(args, "max_checkpoints", None) is not None:
         config.checkpoint.max_checkpoints = int(args.max_checkpoints)
-    
+
     if hasattr(args, "max_steps") and getattr(args, "max_steps", None) is not None:
         config.training.max_steps = int(args.max_steps)
 

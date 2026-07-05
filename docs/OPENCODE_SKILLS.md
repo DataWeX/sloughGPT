@@ -539,13 +539,13 @@ import pytest
 @pytest.mark.asyncio
 async def test_component_init():
     from domains.domain import Component
-    
+
     component = Component()
     assert not component.is_initialized
-    
+
     await component.initialize()
     assert component.is_initialized
-    
+
     await component.shutdown()
     assert not component.is_initialized
 ```
@@ -700,12 +700,12 @@ When appropriate for the context (games, dashboards, admin panels):
   --rpg-text-primary: #e8e1d5;
   --rpg-text-muted: #8a7f75;
   --rpg-glow: rgba(201, 162, 39, 0.3);
-  
+
   /* Typography */
   --rpg-font-header: 'Crimson Pro', serif;
   --rpg-font-body: 'Source Sans 3', sans-serif;
   --rpg-font-mono: 'JetBrains Mono', monospace;
-  
+
   /* Effects */
   --rpg-border-ornate: 2px solid var(--rpg-border);
   --rpg-shadow-glow: 0 0 20px var(--rpg-glow);
@@ -720,7 +720,7 @@ When appropriate for the context (games, dashboards, admin panels):
   border: var(--rpg-border-ornate);
   border-radius: 4px;
   padding: 1.5rem;
-  box-shadow: 
+  box-shadow:
     inset 0 0 40px rgba(0, 0, 0, 0.5),
     var(--rpg-shadow-glow);
   position: relative;
@@ -910,17 +910,17 @@ Is this a code/technical display?
   --color-bg-secondary: #14141f;
   --color-text-primary: #f0f0f5;
   --color-text-muted: #8888aa;
-  
+
   /* Accent - sharp and distinctive */
   --color-accent: #00d4aa;
   --color-accent-glow: rgba(0, 212, 170, 0.4);
-  
+
   /* Status colors - meaningful contrast */
   --color-success: #00ff88;
   --color-warning: #ffaa00;
   --color-error: #ff4466;
   --color-info: #66aaff;
-  
+
   /* Semantic */
   --color-border: #2a2a3a;
   --color-surface: #1a1a2a;
@@ -943,7 +943,7 @@ Is this a code/technical display?
 .card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  box-shadow: 
+  box-shadow:
     0 4px 20px rgba(0, 0, 0, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }

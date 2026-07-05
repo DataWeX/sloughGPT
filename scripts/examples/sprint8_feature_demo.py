@@ -35,7 +35,7 @@ if models:
         print(f"Successfully created model: {test_model.name}")
         print(f"  - Parameters: {sum(p.numel() for p in model.parameters()):,}")
         print(f"  - Config: {model.config}")
-        
+
         # Test forward pass
         dummy_input = torch.randint(0, 100, (2, 10))
         logits, _ = model(dummy_input)
@@ -56,22 +56,22 @@ from domains.training.lora import LoRAConfig, LoRATrainer, apply_lora_to_model
 if models:
     # Get a model to apply LoRA to
     model = create_model(models[0].id)
-    
+
     # Apply LoRA
     config = LoRAConfig(rank=4, alpha=16.0, target_modules=["q_proj", "v_proj", "k_proj"])
     try:
         lora_model = apply_lora_to_model(model, config)
         print("LoRA applied successfully")
-        
+
         # Test LoRA trainer
         trainer = LoRATrainer(lora_model, config, learning_rate=1e-4)
         print("LoRA trainer created successfully")
-        
+
         # Test training step
         dummy_input = torch.randint(0, 100, (2, 10))
         logits, _ = lora_model(dummy_input)
         print(f"  - LoRA forward pass successful, output shape: {logits.shape}")
-        
+
         # Create dummy loss
         loss_fn = lambda out, _: F.cross_entropy(out.view(-1, out.size(-1)), torch.randint(0, 100, (2*10,)), ignore_index=-1)
         train_result = trainer.train_step({
@@ -79,11 +79,11 @@ if models:
             "labels": torch.randint(0, 100, (2, 10))
         }, loss_fn)
         print(f"  - LoRA training step successful, loss: {train_result['loss']:.4f}")
-        
+
         # Test parameter counting
         lora_params = sum(p.numel() for p in lora_model.parameters() if any("lora_" in n for n in p.names))
         print(f"  - LoRA parameters: {lora_params:,}")
-        
+
     except Exception as e:
         print(f"LoRA test failed: {e}")
 else:
@@ -100,11 +100,11 @@ from domains.training.rlhf import PPOTrainer, RewardModel, RLHFConfig
 if models:
     # Get a model for RLHF
     model = create_model(models[0].id)
-    
+
     try:
         # Create value model (same as policy)
         value_model = model
-        
+
         # Create RLHF trainer
         config = RLHFConfig(
             ppo_epochs=2,
@@ -113,32 +113,32 @@ if models:
             value_loss_coef=0.5,
             entropy_coef=0.01
         )
-        
+
         trainer = PPOTrainer(model, value_model, config)
         print("PPO trainer created successfully")
-        
+
         # Test advantage computation
         rewards = torch.randn(2, 10)
         values = torch.randn(2, 10)
         next_values = torch.zeros(2)
         advantages, returns = trainer.compute_advantages(rewards, values, next_values)
         print(f"  - Advantage computation successful, shapes: {advantages.shape}, {returns.shape}")
-        
+
         # Test PPO loss
         log_probs = torch.randn(2, 10)
         old_log_probs = torch.randn(2, 10)
         policy_loss, value_loss = trainer.ppo_loss(log_probs, old_log_probs, advantages, values, returns)
         print(f"  - PPO loss computation successful, policy_loss: {policy_loss.item():.4f}, value_loss: {value_loss.item():.4f}")
-        
+
         # Test reward model
         reward_model = RewardModel(model, hidden_size=256)
         print("Reward model created successfully")
-        
+
         # Test reward computation
         dummy_input = torch.randint(0, 100, (2, 10))
         rewards = reward_model(dummy_input)
         print(f"  - Reward model forward pass successful, rewards shape: {rewards.shape}")
-        
+
     except Exception as e:
         print(f"RLHF test failed: {e}")
 else:
@@ -154,26 +154,26 @@ from domains.training.pruning import MagnitudePruner, StructuredPruner
 # Test pruning functionality
 if models:
     model = create_model(models[0].id)
-    
+
     try:
         # Test magnitude pruning
         pruner = MagnitudePruner(model, sparsity=0.3)
         print("Magnitude pruner created successfully")
-        
+
         masks = pruner.prune()
         print(f"  - Magnitude pruning applied, {len(masks)} layers pruned")
-        
+
         # Test structured pruning
         structured = StructuredPruner(model)
         print("Structured pruner created successfully")
-        
+
         # Try to prune attention heads (if available)
         try:
             head_mask = structured.prune_attention_heads(num_heads_to_prune=2)
             print(f"  - Attention head pruning successful, mask shape: {head_mask.shape}")
         except Exception as e:
             print(f"  - Attention head pruning skipped: {e}")
-        
+
         # Test memory estimation
         from domains.training.efficient_inference import estimate_memory_usage
         mem_est = estimate_memory_usage(
@@ -183,7 +183,7 @@ if models:
             sequence_length=10
         )
         print(f"  - Memory estimate: {mem_est}")
-        
+
     except Exception as e:
         print(f"Pruning test failed: {e}")
 else:
@@ -202,9 +202,9 @@ if models:
         # Create teacher and student models
         teacher = create_model(models[0].id)
         student = create_model(models[0].id)  # For testing, use same architecture
-        
+
         print("Teacher and student models created successfully")
-        
+
         # Create distillation trainer
         config = DistillationConfig(
             temperature=4.0,
@@ -212,17 +212,17 @@ if models:
             beta=0.5,
             distillation_type="logits"
         )
-        
+
         trainer = DistillationTrainer(teacher, student, config)
         print("Distillation trainer created successfully")
-        
+
         # Test distillation step
         dummy_input = torch.randint(0, 100, (2, 10))
         labels = torch.randint(0, 100, (2, 10))
-        
+
         losses = trainer.step(dummy_input, labels)
         print(f"  - Distillation step successful, losses: {losses}")
-        
+
     except Exception as e:
         print(f"Distillation test failed: {e}")
 else:
@@ -238,16 +238,16 @@ from domains.training.efficient_inference import Quantizer, EfficientInference
 # Test quantization functionality
 if models:
     model = create_model(models[0].id)
-    
+
     try:
         # Test dynamic quantization
         quantized_model = Quantizer.dynamic_quantize(model, torch.qint8)
         print("Dynamic quantization (INT8) successful")
-        
+
         # Test INT4 quantization
         quantized_model_int4 = Quantizer.dynamic_quantize(model, torch.qint4)
         print("Dynamic quantization (INT4) successful")
-        
+
         # Test efficient inference
         config = EfficientInference(
             model,
@@ -257,15 +257,15 @@ if models:
                 use_compile=True
             )
         )
-        
+
         optimized_model = config.optimize()
         print("Efficient inference optimization successful")
-        
+
         # Test inference
         dummy_input = torch.randint(0, 100, (2, 10))
         output = config.inference(dummy_input, max_new_tokens=5)
         print(f"  - Efficient inference successful, output shape: {output.shape}")
-        
+
     except Exception as e:
         print(f"Quantization test failed: {e}")
 else:
@@ -281,35 +281,35 @@ from domains.training.efficient_inference import AWQQuantizer, GPTQQuantizer
 # Test advanced quantization
 if models:
     model = create_model(models[0].id)
-    
+
     try:
         # Test AWQ quantization
         awq = AWQQuantizer(model)
         print("AWQ quantizer created successfully")
-        
+
         # Test calibration (with dummy data)
         try:
             dummy_data = [torch.randint(0, 100, (2, 10)) for _ in range(10)]
             awq.calibrate(dummy_data, num_samples=5)
             print("AWQ calibration successful")
-            
+
             # Test quantization
             awq.quantize(bits=4)
             print("AWQ quantization successful")
         except Exception as e:
             print(f"AWQ test partial: {e}")
-        
+
         # Test GPTQ quantization
         gptq = GPTQQuantizer(model, bits=4)
         print("GPTQ quantizer created successfully")
-        
+
         # Test quantization of a layer
         for name, module in model.named_modules():
             if isinstance(module, nn.Linear):
                 quantized_layer = gptq.quantize_layer(name, module)
                 print(f"  - GPTQ layer quantization successful for {name}")
                 break
-        
+
     except Exception as e:
         print(f"AWQ/GPTQ test failed: {e}")
 else:
@@ -329,29 +329,29 @@ if model:
     try:
         optimizer = KVCacheOptimizer(max_sequence_length=512, page_size=64)
         print("KV cache optimizer created successfully")
-        
+
         # Test cache allocation
         batch_size = 2
         num_heads = 4
         head_dim = 64
-        
+
         keys, values = optimizer.allocate(batch_size, num_heads, head_dim)
         print(f"  - KV cache allocation successful, shapes: {keys.shape}, {values.shape}")
-        
+
         # Test cache update
         seq_id = 1
         page_idx = 0
         new_keys = torch.randn(batch_size, num_heads, 10, head_dim)
         new_values = torch.randn(batch_size, num_heads, 10, head_dim)
-        
+
         optimizer.update(seq_id, page_idx, new_keys, new_values)
         print("  - KV cache update successful")
-        
+
         # Test cache retrieval
         cache = optimizer.get_cache(seq_id)
         if cache:
             print(f"  - KV cache retrieval successful, cache shapes: {cache[0].shape}, {cache[1].shape}")
-        
+
     except Exception as e:
         print(f"KV cache test failed: {e}")
 else:
@@ -369,17 +369,17 @@ try:
     # Test thread optimization
     CPUOptimizer.optimize_threads()
     print("CPU thread optimization successful")
-    
+
     # Test MKL-DNN
     CPUOptimizer.enable_mkldnn()
     print("MKL-DNN enabled successfully")
-    
+
     # Test optimal batch size
     if models:
         model = create_model(models[0].id)
         optimal_batch = CPUOptimizer.get_optimal_batch_size(model, input_shape=(10,), device="cpu")
         print(f"  - Optimal batch size: {optimal_batch}")
-    
+
 except Exception as e:
     print(f"CPU optimization test failed: {e}")
 

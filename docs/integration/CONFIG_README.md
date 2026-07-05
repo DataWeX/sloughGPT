@@ -72,7 +72,7 @@ LOGGING wandb_run_name=custom
 ## Available Configs
 
 - `config/small.config` - Tiny model for testing (2 layers, 128 dim)
-- `config/standard.config` - Medium model (6 layers, 384 dim) 
+- `config/standard.config` - Medium model (6 layers, 384 dim)
 - `config/large.config` - Large model for serious training (12 layers, 768 dim)
 - `config/inheritance-test.config` - Example of inheritance
 

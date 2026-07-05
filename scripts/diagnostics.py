@@ -48,7 +48,7 @@ def check_python():
 def check_gpu():
     """Check GPU availability."""
     print("\n[GPU Support]")
-    
+
     # CUDA
     try:
         import torch
@@ -86,7 +86,7 @@ def check_gpu():
 def check_directories():
     """Check required directories."""
     print("\n[Directories]")
-    
+
     dirs = [
         ("Models", "models"),
         ("Datasets", "datasets"),
@@ -94,7 +94,7 @@ def check_directories():
         ("Configs", "configs"),
         ("Checkpoints", "checkpoints"),
     ]
-    
+
     for name, path in dirs:
         exists = Path(path).is_dir()
         status = "[OK]" if exists else "[MISSING]"
@@ -104,12 +104,12 @@ def check_directories():
 def check_models():
     """Check available models."""
     print("\n[Available Models]")
-    
+
     models_dir = Path("models")
     if not models_dir.exists():
         print("  Models directory not found")
         return
-    
+
     models = list(models_dir.glob("*.pt")) + list(models_dir.glob("*.pth"))
     if models:
         for m in models:
@@ -122,12 +122,12 @@ def check_models():
 def check_datasets():
     """Check available datasets."""
     print("\n[Available Datasets]")
-    
+
     datasets_dir = Path("datasets")
     if not datasets_dir.exists():
         print("  Datasets directory not found")
         return
-    
+
     datasets = [d for d in datasets_dir.iterdir() if d.is_dir()]
     if datasets:
         for d in datasets:
@@ -140,11 +140,11 @@ def check_datasets():
 def check_docker():
     """Check Docker status."""
     print("\n[Docker]")
-    
+
     code, out, _ = run_command("docker --version")
     if code == 0:
         print(f"  Docker: {out}")
-        
+
         # Check docker-compose
         code, out, _ = run_command("docker compose version")
         if code == 0:
@@ -160,13 +160,13 @@ def check_docker():
 def check_kubernetes():
     """Check Kubernetes status."""
     print("\n[Kubernetes]")
-    
+
     code, out, _ = run_command("kubectl version --client 2>/dev/null")
     if code == 0:
         print(f"  kubectl: {out}")
     else:
         print("  kubectl: NOT INSTALLED")
-    
+
     code, out, _ = run_command("helm version --client 2>/dev/null")
     if code == 0:
         print(f"  Helm: {out}")
@@ -177,7 +177,7 @@ def check_kubernetes():
 def check_api_server():
     """Check API server status."""
     print("\n[API Server]")
-    
+
     code, out, err = run_command("curl -s http://localhost:8000/health 2>/dev/null", timeout=5)
     if code == 0:
         try:
@@ -193,7 +193,7 @@ def check_api_server():
 def check_experiments():
     """Check experiments log."""
     print("\n[Experiments]")
-    
+
     exp_file = Path("data/experiments/experiments.json")
     if exp_file.exists():
         with open(exp_file) as f:
@@ -209,14 +209,14 @@ def check_experiments():
 def check_environment():
     """Check environment variables."""
     print("\n[Environment Variables]")
-    
+
     env_vars = [
         "MAN_API_KEY",
         "MAN_JWT_SECRET",
         "MODEL_PATH",
         "CUDA_VISIBLE_DEVICES",
     ]
-    
+
     for var in env_vars:
         val = os.getenv(var)
         if val:
@@ -231,13 +231,13 @@ def check_environment():
 def check_portability():
     """Check code portability features."""
     print("\n[Portability]")
-    
+
     checks = [
         ("CPU-only mode", os.getenv("CUDA_VISIBLE_DEVICES", "") == ""),
         ("Cross-platform paths", True),
         ("Environment config", Path(".env").exists()),
     ]
-    
+
     for name, status in checks:
         mark = "[OK]" if status else "[--]"
         print(f"  {mark} {name}")
@@ -248,11 +248,11 @@ def generate_report():
     print("=" * 60)
     print("SLOUGHGPT DIAGNOSTICS REPORT")
     print("=" * 60)
-    
+
     print(f"\nGenerated: {subprocess.run('date', capture_output=True, text=True).stdout.strip()}")
     print(f"Platform: {platform.platform()}")
     print(f"Python: {sys.version.split()[0]}")
-    
+
     check_python()
     check_gpu()
     check_directories()
@@ -264,7 +264,7 @@ def generate_report():
     check_experiments()
     check_environment()
     check_portability()
-    
+
     print("\n" + "=" * 60)
     print("Run 'python3 cli.py config check' for detailed environment check")
     print("Run 'python3 cli.py profile' for performance profiling")

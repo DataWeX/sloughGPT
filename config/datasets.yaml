@@ -11,8 +11,8 @@ datasets:
     streaming: false
     weight: 0.4
     description: "Web articles and content"
-    
-  # Code dataset  
+
+  # Code dataset
   - name: "code"
     sources:
       - "repositories/python_code/"
@@ -21,7 +21,7 @@ datasets:
     streaming: true
     weight: 0.3
     description: "Source code from multiple repositories"
-    
+
   # Documentation dataset
   - name: "docs"
     sources:
@@ -31,7 +31,7 @@ datasets:
     streaming: false
     weight: 0.2
     description: "Technical documentation"
-    
+
   # Custom domain dataset
   - name: "domain_specific"
     sources:
@@ -50,19 +50,19 @@ training:
     code: 0.3
     docs: 0.2
     domain_specific: 0.1
-    
+
   # Global settings
   batch_size: 32
   learning_rate: 3e-4
   max_iters: 10000
-  
+
 # Dataset preprocessing options
 preprocessing:
   # Text cleaning
   remove_extra_whitespace: true
   normalize_line_endings: true
   min_line_length: 10
-  
+
   # Tokenization
   vocab_size: 50000
   special_tokens:

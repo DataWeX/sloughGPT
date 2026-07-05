@@ -99,10 +99,10 @@ RETURNS void AS $$
 BEGIN
     -- Delete API logs older than 30 days
     DELETE FROM api_logs WHERE created_at < NOW() - INTERVAL '30 days';
-    
+
     -- Delete audit logs older than 90 days
     DELETE FROM audit_log WHERE created_at < NOW() - INTERVAL '90 days';
-    
+
     -- Delete expired cache entries
     DELETE FROM cache_entries WHERE expires_at < NOW();
 END;

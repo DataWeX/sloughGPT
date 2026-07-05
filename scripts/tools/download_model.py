@@ -57,14 +57,14 @@ def ensure_huggingface_hub():
 def download_model(model_id, output_dir):
     """Download GGUF model from HuggingFace."""
     ensure_huggingface_hub()
-    
+
     from huggingface_hub import hf_hub_download
-    
+
     model_info = MODELS.get(model_id, MODELS['smollm3-135m'])
-    
+
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     print(f"""
 ╔══════════════════════════════════════════════════════════════╗
 ║              Downloading GGUF Model                          ║
@@ -74,7 +74,7 @@ def download_model(model_id, output_dir):
 ║  Output:  {output_dir}
 ╚══════════════════════════════════════════════════════════════╝
     """)
-    
+
     try:
         local_path = hf_hub_download(
             repo_id=model_info['repo'],
@@ -82,9 +82,9 @@ def download_model(model_id, output_dir):
             local_dir=output_dir,
             local_dir_use_symlinks=False,
         )
-        
+
         print(f"\n✓ Downloaded to: {local_path}")
-        
+
         # Create metadata
         import json
         metadata = {
@@ -99,10 +99,10 @@ def download_model(model_id, output_dir):
             'download_url': f'/models/{model_info["filename"]}/download',
             'updated_at': '2026-03-22T00:00:00Z',
         }
-        
+
         with open(output_dir / 'model_metadata.json', 'w') as f:
             json.dump(metadata, f, indent=2)
-        
+
         print(f"✓ Metadata saved")
         print(f"""
 ╔══════════════════════════════════════════════════════════════╗
@@ -115,15 +115,15 @@ def download_model(model_id, output_dir):
 ║  Test:        curl http://localhost:8001/models             ║
 ╚══════════════════════════════════════════════════════════════╝
         """)
-        
+
         return local_path
-        
+
     except Exception as e:
         print(f"\n✗ Download failed: {e}")
         print("""
 Note: You may need to accept the model license or be logged in.
       For public models, try:
-      
+
       export HF_HOMEPAGE_DOWNLOAD=1
       python3 scripts/tools/download_model.py --model smollm3-135m
         """)
@@ -137,7 +137,7 @@ def main():
                         help='Model to download')
     parser.add_argument('--output', '-o', type=str, default='dist/models',
                         help='Output directory')
-    
+
     args = parser.parse_args()
     download_model(args.model, args.output)
 

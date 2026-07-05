@@ -109,14 +109,14 @@ print_info() {
 # Check prerequisites
 check_prerequisites() {
     print_info "Checking prerequisites..."
-    
+
     if command -v git &> /dev/null; then
         print_status "Git found"
     else
         print_error "Git not found. Please install Git."
         exit 1
     fi
-    
+
     if command -v docker &> /dev/null; then
         print_status "Docker found"
         DOCKER_VERSION=$(docker --version)
@@ -125,13 +125,13 @@ check_prerequisites() {
         print_warning "Docker not found. Docker setup will be skipped."
         MODE="local"
     fi
-    
+
     # macOS fix: Disable library injection for PyTorch
     if [[ "$OSTYPE" == "darwin"* ]]; then
         export DYLD_INSERT_LIBRARIES=""
         print_info "Applied macOS PyTorch compatibility fix"
     fi
-    
+
     if command -v $PYTHON_CMD &> /dev/null; then
         PYTHON_VERSION=$($PYTHON_CMD --version)
         print_status "Python found: $PYTHON_VERSION"
@@ -139,14 +139,14 @@ check_prerequisites() {
         print_error "Python not found. Please install Python 3.9 or higher."
         exit 1
     fi
-    
+
     echo ""
 }
 
 # Create .env file if it doesn't exist
 setup_env() {
     print_info "Setting up environment configuration..."
-    
+
     if [ ! -f .env ]; then
         if [ -f .env.example ]; then
             cp .env.example .env
@@ -182,16 +182,16 @@ EOF
     else
         print_info ".env already exists, skipping"
     fi
-    
+
     echo ""
 }
 
 # Create necessary directories
 setup_directories() {
     print_info "Creating directories..."
-    
+
     DIRS=("models" "datasets" "data" "checkpoints" "experiments" "logs" "cache")
-    
+
     for dir in "${DIRS[@]}"; do
         if [ ! -d "$dir" ]; then
             mkdir -p "$dir"
@@ -200,7 +200,7 @@ setup_directories() {
             print_info "$dir/ already exists"
         fi
     done
-    
+
     echo ""
 }
 
@@ -211,25 +211,25 @@ install_python_deps() {
         install_conda_deps
         return
     fi
-    
+
     print_info "Setting up Python virtual environment..."
-    
+
     if [ ! -d "$VENV_DIR" ]; then
         $PYTHON_CMD -m venv "$VENV_DIR"
         print_status "Created virtual environment at $VENV_DIR/"
     else
         print_info "Virtual environment already exists"
     fi
-    
+
     # Activate virtual environment
     source "$VENV_DIR/bin/activate"
-    
+
     print_info "Upgrading pip..."
     python -m pip install --upgrade pip
-    
+
     print_info "Installing core dependencies..."
     python -m pip install fastapi uvicorn pydantic pydantic-settings httpx aiofiles PyJWT python-multipart
-    
+
     print_info "Installing ML dependencies..."
     if [ "$GPU_SUPPORT" = true ]; then
         print_info "Installing PyTorch with CUDA $CUDA_VERSION..."
@@ -237,15 +237,15 @@ install_python_deps() {
     else
         python -m pip install torch torchvision torchaudio
     fi
-    
+
     python -m pip install transformers accelerate bitsandbytes scipy
-    
+
     print_info "Installing data processing..."
     python -m pip install networkx numpy pandas pillow
-    
+
     print_info "Installing development tools..."
     python -m pip install pytest pytest-asyncio pytest-cov ruff black mypy
-    
+
     print_status "Python dependencies installed"
     echo ""
 }
@@ -253,7 +253,7 @@ install_python_deps() {
 # Install Python dependencies using conda
 install_conda_deps() {
     print_info "Setting up with conda..."
-    
+
     # Check if conda is available
     if ! command -v conda &> /dev/null; then
         print_error "Conda not found! Please install Miniconda or Anaconda."
@@ -265,9 +265,9 @@ install_conda_deps() {
         install_python_deps
         return
     fi
-    
+
     print_info "Conda found: $(conda --version)"
-    
+
     # Create conda environment
     print_info "Creating conda environment: $CONDA_ENV"
     if conda env list | grep -q "^$CONDA_ENV "; then
@@ -276,11 +276,11 @@ install_conda_deps() {
         conda create -n "$CONDA_ENV" python=3.11 -y
         print_status "Created conda environment: $CONDA_ENV"
     fi
-    
+
     # Activate conda environment
     source "$(conda info --base)/etc/profile.d/conda.sh"
     conda activate "$CONDA_ENV"
-    
+
     # Install PyTorch via conda (best for macOS)
     print_info "Installing PyTorch via conda..."
     if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -295,10 +295,10 @@ install_conda_deps() {
             conda install pytorch torchvision torchaudio -c pytorch -y
         fi
     fi
-    
+
     print_info "Installing other dependencies via pip..."
     python -m pip install -r requirements.txt
-    
+
     print_status "Conda environment setup complete!"
     echo ""
     echo "To activate this environment in the future, run:"
@@ -312,9 +312,9 @@ setup_docker() {
         print_warning "Docker not available, skipping Docker setup"
         return
     fi
-    
+
     print_info "Setting up Docker..."
-    
+
     # Create .dockerignore if it doesn't exist
     if [ ! -f .dockerignore ]; then
         cat > .dockerignore << 'EOF'
@@ -344,10 +344,10 @@ Thumbs.db
 EOF
         print_status "Created .dockerignore"
     fi
-    
+
     # Build Docker images
     print_info "Building Docker images..."
-    
+
     if [ "$GPU_SUPPORT" = true ]; then
         print_info "Building GPU-enabled images..."
         docker build -t sloughgpt:gpu -f infra/docker/Dockerfile.gpu . 2>/dev/null || \
@@ -355,7 +355,7 @@ EOF
     else
         docker build -t sloughgpt:latest -f infra/docker/Dockerfile .
     fi
-    
+
     print_status "Docker image built successfully"
     echo ""
 }
@@ -363,7 +363,7 @@ EOF
 # Create convenient scripts
 create_scripts() {
     print_info "Creating convenience scripts..."
-    
+
     # Start script (do not overwrite repo-shipped scripts/deploy/start.sh)
     mkdir -p scripts/deploy
     if [ ! -f scripts/deploy/start.sh ]; then
@@ -382,7 +382,7 @@ EOF
     else
     print_status "Keeping existing scripts/deploy/start.sh"
     fi
-    
+
     # Development script
     if [ ! -f dev.sh ]; then
     cat > dev.sh << 'EOF'
@@ -401,7 +401,7 @@ EOF
     else
     print_status "Keeping existing dev.sh"
     fi
-    
+
     # Docker start script
     if [ ! -f docker-start.sh ]; then
     cat > docker-start.sh << 'EOF'
@@ -423,7 +423,7 @@ EOF
     else
     print_status "Keeping existing docker-start.sh"
     fi
-    
+
     # Test script
     if [ ! -f test.sh ]; then
     cat > test.sh << 'EOF'
@@ -446,7 +446,7 @@ EOF
     else
     print_status "Keeping existing test.sh"
     fi
-    
+
     # Benchmark script
     if [ ! -f benchmark.sh ]; then
     cat > benchmark.sh << 'EOF'
@@ -478,7 +478,7 @@ EOF
     else
     print_status "Keeping existing benchmark.sh"
     fi
-    
+
     echo ""
 }
 
@@ -488,7 +488,7 @@ print_next_steps() {
     echo -e "${BLUE}       Setup Complete!${NC}"
     echo -e "${BLUE}========================================${NC}"
     echo ""
-    
+
     if [ "$USE_CONDA" = true ]; then
         echo "Conda environment: ${GREEN}$CONDA_ENV${NC}"
         echo ""
@@ -513,7 +513,7 @@ print_next_steps() {
         echo -e "   ${GREEN}./run.sh python3 cli.py train --epochs 3${NC}"
         echo ""
     fi
-    
+
     echo "3. Start the API server:"
     echo -e "   ${GREEN}./scripts/deploy/start.sh${NC}"
     echo "   or"
@@ -524,7 +524,7 @@ print_next_steps() {
     echo "   - Docs: http://localhost:8000/docs"
     echo "   - ReDoc: http://localhost:8000/redoc"
     echo ""
-    
+
     if command -v docker &> /dev/null; then
         echo "5. Docker deployment:"
         echo -e "   ${GREEN}./docker-start.sh${NC}"
@@ -532,11 +532,11 @@ print_next_steps() {
         echo -e "   ${GREEN}docker compose -f infra/docker/docker-compose.yml up -d api${NC}"
         echo ""
     fi
-    
+
     echo "6. Run tests:"
     echo -e "   ${GREEN}./run.sh python3 -m pytest tests/ -x${NC}"
     echo ""
-    
+
     echo "7. Verify PyTorch:"
     echo -e "   ${GREEN}./run.sh python3 -c \"import torch; print(f'PyTorch {torch.__version__}')\"${NC}"
     echo ""
@@ -547,15 +547,15 @@ main() {
     check_prerequisites
     setup_env
     setup_directories
-    
+
     if [ "$MODE" != "docker" ]; then
         install_python_deps
     fi
-    
+
     if [ "$MODE" != "local" ]; then
         setup_docker
     fi
-    
+
     create_scripts
     print_next_steps
 }

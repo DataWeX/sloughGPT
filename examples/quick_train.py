@@ -16,7 +16,7 @@ def main():
     print("=" * 50)
     print("SloughGPT Quick Training Example")
     print("=" * 50)
-    
+
     # Create trainer with small config for quick training
     trainer = SloughGPTTrainer(
         data_path='datasets/shakespeare/input.txt',
@@ -29,10 +29,10 @@ def main():
         lr=1e-3,
         max_steps=100,  # Quick test - remove for full training
     )
-    
+
     # Train (returns stats dict; ``trainer.model`` holds weights)
     trainer.train()
-    
+
     # Generate text
     print("\n=== Generation ===")
     prompt = "The king"
@@ -40,7 +40,7 @@ def main():
         text = trainer.generate(prompt, max_tokens=100, temperature=0.8)
         print(f"\nPrompt: {prompt}")
         print(f"Generated: {text[:200]}...")
-    
+
     # Save
     trainer.save("models/quick_model.pt")
     print("\nModel saved!")

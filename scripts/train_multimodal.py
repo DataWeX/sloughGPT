@@ -121,7 +121,7 @@ def generate_audio_dataset(n: int, sample_rate: int = 16000) -> tuple:
 
 def train(args):
     np.random.seed(42)
-    
+
     if args.load:
         print(f"Loading engine from {args.load}...")
         engine = MultimodalEngine.load(args.load)

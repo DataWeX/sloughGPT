@@ -49,25 +49,25 @@ Implementation:
 
 class UserSpecificRAG:
     """RAG scoped to individual user data."""
-    
+
     def __init__(self):
         self.user_rags: dict[str, ProductionRAG] = {}
-    
+
     def add_user_document(self, user_id: str, document: str, metadata: dict):
         """Add document to user's RAG."""
         if user_id not in self.user_rags:
             self.user_rags[user_id] = ProductionRAG()
-        
+
         self.user_rags[user_id].add_document(
             content=document,
             metadata=metadata,
         )
-    
+
     def query_user(self, user_id: str, question: str) -> dict:
         """Query only user's documents."""
         if user_id not in self.user_rags:
             return {"error": "No documents for user"}
-        
+
         return self.user_rags[user_id].query(question)
 
 
@@ -109,28 +109,28 @@ Implementation:
 
 class TemporalRAG:
     """RAG with temporal filtering."""
-    
+
     def __init__(self):
         self.documents: list[tuple[str, str, float]] = []  # (content, metadata, timestamp)
-    
+
     def add_document(self, document: str, metadata: dict, timestamp: float):
         """Add document with timestamp."""
         self.documents.append((document, metadata, timestamp))
-    
+
     def query_recent(self, question: str, days_back: int = 180) -> list:
         """Query only recent documents."""
         import time
         cutoff = time.time() - (days_back * 86400)
-        
+
         recent = [
-            (doc, meta, ts) 
-            for doc, meta, ts in self.documents 
+            (doc, meta, ts)
+            for doc, meta, ts in self.documents
             if ts >= cutoff
         ]
-        
+
         # Sort by recency
         recent.sort(key=lambda x: -x[2])
-        
+
         return recent[:5]  # Top 5 recent
 
 
@@ -177,24 +177,24 @@ RAG that chains through multiple documents.
 
 class MultiHopRAG:
     """RAG that chains through multiple document types."""
-    
+
     def __init__(self):
         self.collections: dict[str, ProductionRAG] = {}
-    
+
     def add_collection(self, name: str, documents: list[str]):
         """Add a collection of related documents."""
         self.collections[name] = ProductionRAG()
         for doc in documents:
             self.collections[name].add_document(doc)
-    
+
     def multi_hop_query(self, query: str) -> dict:
         """Query across multiple hops."""
         # Hop 1: Find primary context
         primary = self.query_primary(query)
-        
+
         # Hop 2: Use result to find secondary context
         secondary = self.query_secondary(primary["answer"])
-        
+
         return {
             "primary_context": primary["context"],
             "secondary_context": secondary["context"],
@@ -244,7 +244,7 @@ The LLM decides WHEN and WHAT to retrieve.
 
 class AgenticRAG:
     """RAG with agentic decision making."""
-    
+
     # Tool definitions for the agent
     TOOLS = [
         {
@@ -253,7 +253,7 @@ class AgenticRAG:
             "parameters": {"query": "string"},
         },
         {
-            "name": "browse_web", 
+            "name": "browse_web",
             "description": "Search the web for current information",
             "parameters": {"query": "string"},
         },
@@ -263,26 +263,26 @@ class AgenticRAG:
             "parameters": {"query": "string"},
         },
     ]
-    
+
     def decide_and_retrieve(self, user_message: str, history: list) -> dict:
         """LLM decides what to retrieve."""
         # In production: Use LLM to decide tool + query
         # Here: simple rule-based demo
-        
+
         if "calendar" in user_message.lower() or "available" in user_message.lower():
             return {
                 "tool": "retrieve_documents",
                 "query": "calendar availability",
                 "result": "User is free Mon-Fri next week",
             }
-        
+
         if "flight" in user_message.lower() or "fly" in user_message.lower():
             return {
                 "tool": "browse_web",
                 "query": user_message,
                 "result": "[Flight options would go here]",
             }
-        
+
         return {
             "tool": None,
             "query": None,
@@ -323,28 +323,28 @@ RAG that remembers conversation context.
 
 class ConversationalRAG:
     """RAG with conversation memory."""
-    
+
     def __init__(self, rag: ProductionRAG, memory_limit: int = 5):
         self.rag = rag
         self.memory: list[str] = []
         self.memory_limit = memory_limit
-    
+
     def query_with_memory(self, question: str) -> dict:
         """Query with conversation context."""
         # Build context from memory
         context = "\n".join(self.memory)
-        
+
         # Enhance query with memory context
         enhanced_query = f"{context}\n\nQuestion: {question}"
-        
+
         # Retrieve
         result = self.rag.query(enhanced_query)
-        
+
         # Update memory
         self.memory.append(result.get("context", "")[:500])
         if len(self.memory) > self.memory_limit:
             self.memory = self.memory[-self.memory_limit:]
-        
+
         return result
 
 
@@ -360,23 +360,23 @@ Law Firm Contract Assistant
 class ContractAssistant:
     """
     Production RAG for contract review.
-    
+
     Real data:
     - ~5-20 contracts per client
     - ~10-50 pages per contract
     - Specific queries like "What are termination terms?"
-    
+
     NOT: 100,000 random documents.
     """
-    
+
     def __init__(self):
         self.client_rags: dict[str, ProductionRAG] = {}
         self.global_knowledge = ProductionRAG()  # Legal glossary, templates
-    
+
     def setup_client(self, client_id: str, contracts: list[dict]):
         """Setup RAG for a client with their contracts."""
         self.client_rags[client_id] = ProductionRAG()
-        
+
         for contract in contracts:
             self.client_rags[client_id].add_document(
                 content=contract["text"],
@@ -386,21 +386,21 @@ class ContractAssistant:
                     "date": contract.get("date"),
                 },
             )
-        
+
         # Add global legal knowledge
         self.global_knowledge.add_document(
             content="Legal glossary and standard terms...",
             metadata={"type": "glossary"},
         )
-    
+
     def answer_question(self, client_id: str, question: str) -> dict:
         """Answer question about client's contracts."""
         # 1. Search client's contracts
         client_results = self.client_rags[client_id].query(question)
-        
+
         # 2. Enrich with legal knowledge
         legal_results = self.global_knowledge.query(question)
-        
+
         # 3. Synthesize answer
         answer = f"""
 Based on {client_id}'s contract(s):
@@ -412,12 +412,12 @@ Relevant legal definitions:
 
 Please review the full documents for complete details.
 """
-        
+
         # 4. Verify
         verification = self.client_rags[client_id].verify_and_ground(
             answer, question
         )
-        
+
         return {
             "answer": answer,
             "confidence": verification.get("confidence", 0.5),

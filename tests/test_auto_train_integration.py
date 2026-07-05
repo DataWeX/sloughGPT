@@ -35,7 +35,7 @@ class TestAutoTrainIntegration:
                 json={"teacher_model": "gpt2", "temperature": 0.8, "epochs": 2, "soul_name": "assistant"}
             )
             assert start_resp.status_code == 200, f"Start failed: {start_resp.text}"
-            
+
             events = []
             async with client.stream("GET", f"{api_base_url}/auto-train/stream") as resp:
                 async for line in resp.aiter_lines():
@@ -46,7 +46,7 @@ class TestAutoTrainIntegration:
                             break
                         if len(events) >= 10:
                             break
-            
+
             stop_resp = await client.post(f"{api_base_url}/auto-train/stop")
             assert stop_resp.status_code == 200
 
@@ -64,7 +64,7 @@ class TestAutoTrainIntegration:
                             break
                         if len(events) >= 5:
                             break
-            
+
             assert len(events) > 0
             # Router auto-starts, so first event may be working, not error
             assert True  # Stream initiated

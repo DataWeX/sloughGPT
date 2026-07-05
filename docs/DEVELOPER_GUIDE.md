@@ -130,13 +130,13 @@ from typing import Dict, Any, List, Optional
 # Class definitions
 class ExampleService(BaseService):
     """Example service following OOP principles."""
-    
+
     def __init__(self, config: Dict[str, Any]) -> None:
         """Initialize service with configuration."""
         super().__init__()
         self.config = config
         self.logger = logging.getLogger(__name__)
-    
+
     async def process_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Process data and return results."""
         # Implementation
@@ -171,19 +171,19 @@ def process_memory(
     options: Optional[Dict[str, Any]] = None
 ) -> str:
     """Process memory data and return storage confirmation.
-    
+
     Args:
         memory_data: Dictionary containing memory content and metadata
         memory_type: Type of memory (episodic, semantic, procedural, working)
         options: Optional configuration options
-        
+
     Returns:
         Confirmation string with memory ID
-        
+
     Raises:
         ValidationError: If input data is invalid
         StorageError: If storage operation fails
-        
+
     Example:
         >>> result = process_memory(
         ...memory_data...,
@@ -256,7 +256,7 @@ logger = logging.getLogger(__name__)
 class CognitiveService:
     def __init__(self):
         self.logger = logging.getLogger(f"man.{self.__class__.__name__}")
-    
+
     async def process_request(self, request):
         self.logger.info(f"Processing request: {request.id}")
         try:
@@ -321,13 +321,13 @@ class OptimizedProcessor:
         """Process items concurrently for better performance."""
         # Create tasks for all items
         tasks = [self._process_single(item) for item in items]
-        
+
         # Wait for all to complete
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         # Filter out failed tasks
         return [r for r in results if not isinstance(r, Exception)]
-    
+
     async def _process_single(self, item: Dict[str, Any]) -> Dict[str, Any]:
         """Process a single item."""
         # Implementation
@@ -360,14 +360,14 @@ class CacheStrategy:
         # L1: In-memory cache
         if key in self.memory_cache:
             return self.memory_cache[key]
-        
+
         # L2: Redis cache
         if await self.redis_cache.exists(key):
             return await self.redis_cache.get(key)
-        
+
         # L3: Database cache
         return await self.database_cache.get(key)
-    
+
     async def set_data(self, key: str, value: Any, ttl: int = 3600):
         # Set in all cache levels with different TTLs
         await self.set_memory_cache(key, value, ttl=60)
@@ -389,7 +389,7 @@ class UserCreateRequest(BaseModel):
     username: str
     email: str
     password: str
-    
+
     @validator('password')
     def validate_password(cls, v):
         if len(v) < 8:
@@ -457,11 +457,11 @@ class JWTManager:
             expire = datetime.utcnow() + expires_delta
         else:
             expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        
+
         to_encode.update({"exp": expire})
         encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
         return encoded_jwt
-    
+
     def verify_token(self, token: str) -> dict:
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])

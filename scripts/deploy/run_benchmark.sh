@@ -28,24 +28,24 @@ print_error() {
 # Check dependencies
 check_dependencies() {
     print_status "Checking dependencies..."
-    
+
     if ! command -v python3 &> /dev/null; then
         print_error "Python 3 is required"
         exit 1
     fi
-    
+
     if ! python3 -c "import torch" 2>/dev/null; then
         print_error "PyTorch is required"
         exit 1
     fi
-    
+
     print_status "Dependencies check passed."
 }
 
 # Run quick benchmark
 run_quick_benchmark() {
     print_status "Running quick benchmark..."
-    
+
     cat > quick_benchmark.py << 'EOF'
 import sys
 import time
@@ -56,22 +56,22 @@ from sloughgpt.optimizations import create_optimized_model
 
 def benchmark_config(name, config):
     print(f"\\n🧪 Benchmarking {name}...")
-    
+
     # Create model
     model = create_optimized_model(config, enable_quantization=True)
     model.eval()
-    
+
     # Test parameters
     batch_size = 4
     seq_length = 100
     num_runs = 5
-    
+
     # Warmup
     input_ids = torch.randint(0, config.vocab_size, (batch_size, seq_length))
     with torch.no_grad():
         for _ in range(3):
             _ = model(input_ids)
-    
+
     # Benchmark
     times = []
     for _ in range(num_runs):
@@ -80,16 +80,16 @@ def benchmark_config(name, config):
             output = model(input_ids)
         end_time = time.perf_counter()
         times.append(end_time - start_time)
-    
+
     avg_time = sum(times) / len(times)
     throughput = (batch_size * seq_length) / avg_time
     parameters = model.count_parameters()
-    
+
     print(f"  ⏱️  Avg time: {avg_time*1000:.1f}ms")
     print(f"  🚀 Throughput: {throughput:.1f} tokens/sec")
     print(f"  📊 Parameters: {parameters:,}")
     print(f"  💾 Model size: {parameters * 4 / (1024**2):.1f}MB")
-    
+
     return {
         "name": name,
         "avg_time_ms": avg_time * 1000,
@@ -101,13 +101,13 @@ def benchmark_config(name, config):
 def main():
     print("🏁 SloughGPT Quick Benchmark")
     print("==========================")
-    
+
     configs = {
         "small": ModelConfig(d_model=256, n_heads=4, n_layers=4),
-        "medium": ModelConfig(d_model=512, n_heads=8, n_layers=6), 
+        "medium": ModelConfig(d_model=512, n_heads=8, n_layers=6),
         "large": ModelConfig(d_model=1024, n_heads=16, n_layers=12)
     }
-    
+
     results = []
     for name, config in configs.items():
         try:
@@ -115,18 +115,18 @@ def main():
             results.append(result)
         except Exception as e:
             print(f"❌ Failed to benchmark {name}: {e}")
-    
+
     # Summary
     print(f"\\n{'Model':<10} {'Time (ms)':<12} {'Throughput':<15} {'Size (MB)':<10}")
     print("-" * 55)
     for result in results:
         print(f"{result['name']:<10} {result['avg_time_ms']:>12.1f} {result['throughput_tokens_per_sec']:>15.1f} {result['model_size_mb']:>10.1f}")
-    
+
     # Save results
     import json
     with open("benchmark_summary.json", "w") as f:
         json.dump(results, f, indent=2)
-    
+
     print(f"\\n💾 Results saved to benchmark_summary.json")
 
 if __name__ == "__main__":
@@ -139,7 +139,7 @@ EOF
 # Run memory benchmark
 run_memory_benchmark() {
     print_status "Running memory benchmark..."
-    
+
     cat > memory_benchmark.py << 'EOF'
 import sys
 import torch
@@ -150,37 +150,37 @@ from sloughgpt.neural_network import SloughGPT
 def memory_benchmark():
     print("💾 Memory Usage Analysis")
     print("=" * 30)
-    
+
     configs = [
         ("tiny", ModelConfig(d_model=128, n_heads=2, n_layers=2)),
         ("small", ModelConfig(d_model=256, n_heads=4, n_layers=4)),
         ("medium", ModelConfig(d_model=512, n_heads=8, n_layers=6)),
         ("large", ModelConfig(d_model=1024, n_heads=16, n_layers=12))
     ]
-    
+
     print(f"{'Config':<10} {'Params':<12} {'Model (MB)':<12} {'Peak Mem (MB)':<15}")
     print("-" * 55)
-    
+
     for name, config in configs:
         model = SloughGPT(config)
         params = model.count_parameters()
         model_size_mb = params * 4 / (1024**2)
-        
+
         # Test memory usage
         if torch.cuda.is_available():
             torch.cuda.reset_peak_memory_stats()
-        
+
         input_ids = torch.randint(0, config.vocab_size, (1, 100))
-        
+
         with torch.no_grad():
             output = model(input_ids)
-        
+
         if torch.cuda.is_available():
             peak_memory = torch.cuda.max_memory_allocated() / (1024**2)
         else:
             # System memory (less precise)
             peak_memory = psutil.virtual_memory().used / (1024**2)
-        
+
         print(f"{name:<10} {params:>12,} {model_size_mb:>12.1f} {peak_memory:>15.1f}")
 
 if __name__ == "__main__":
@@ -193,7 +193,7 @@ EOF
 # Run generation benchmark
 run_generation_benchmark() {
     print_status "Running generation benchmark..."
-    
+
     cat > generation_benchmark.py << 'EOF'
 import sys
 import time
@@ -204,26 +204,26 @@ from sloughgpt.neural_network import SloughGPT
 def generation_benchmark():
     print("✍ Text Generation Benchmark")
     print("=" * 30)
-    
+
     config = ModelConfig(d_model=512, n_heads=8, n_layers=6)
     model = SloughGPT(config)
     model.eval()
-    
+
     test_cases = [
         (20, 0.7, "conservative"),
         (50, 1.0, "balanced"),
         (100, 1.3, "creative")
     ]
-    
+
     print(f"{'Length':<10} {'Temp':<8} {'Style':<12} {'Tokens/sec':<12} {'Time (ms)':<12}")
     print("-" * 60)
-    
+
     for length, temp, style in test_cases:
         times = []
-        
+
         for _ in range(5):
             input_ids = torch.randint(0, config.vocab_size, (1, 10))
-            
+
             start_time = time.perf_counter()
             with torch.no_grad():
                 generated = model.generate(
@@ -233,13 +233,13 @@ def generation_benchmark():
                     do_sample=True
                 )
             end_time = time.perf_counter()
-            
+
             times.append(end_time - start_time)
-        
+
         avg_time = sum(times) / len(times)
         tokens_generated = length - 10
         tokens_per_sec = tokens_generated / avg_time
-        
+
         print(f"{length:<10} {temp:<8.1f} {style:<12} {tokens_per_sec:>12.1f} {avg_time*1000:>12.1f}")
 
 if __name__ == "__main__":
@@ -252,7 +252,7 @@ EOF
 # Generate benchmark report
 generate_report() {
     print_status "Generating benchmark report..."
-    
+
     cat > benchmark_report.md << 'EOF'
 # SloughGPT Benchmark Report
 
@@ -305,16 +305,16 @@ EOF
 # Main execution
 main() {
     check_dependencies
-    
+
     echo "Select benchmark type:"
     echo "1) Quick benchmark (recommended)"
-    echo "2) Memory benchmark" 
+    echo "2) Memory benchmark"
     echo "3) Generation benchmark"
     echo "4) Full benchmark suite"
     echo "5) Generate report"
-    
+
     read -p "Enter choice [1-5]: " -n 1 -r
-    
+
     case $REPLY in
         1)
             run_quick_benchmark
@@ -337,7 +337,7 @@ main() {
             exit 1
             ;;
     esac
-    
+
     print_status "Benchmark completed!"
 }
 

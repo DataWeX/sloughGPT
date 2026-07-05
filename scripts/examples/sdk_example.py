@@ -18,7 +18,7 @@ from sloughgpt_sdk import (
 def example_basic_generation(client):
     """Basic text generation example."""
     print("\n=== Basic Generation ===")
-    
+
     result = client.generate(
         prompt="The capital of France is",
         max_new_tokens=20,
@@ -33,12 +33,12 @@ def example_basic_generation(client):
 def example_chat(client):
     """Chat completion example."""
     print("\n=== Chat Completion ===")
-    
+
     messages = [
         ChatMessage.system("You are a helpful AI assistant."),
         ChatMessage.user("What is machine learning?"),
     ]
-    
+
     result = client.chat(messages)
     print(f"User: What is machine learning?")
     print(f"Assistant: {result.message.content}")
@@ -47,7 +47,7 @@ def example_chat(client):
 def example_streaming(client):
     """Streaming generation example."""
     print("\n=== Streaming Generation ===")
-    
+
     print("Generating: ", end="", flush=True)
     for token in client.generate_stream(
         prompt="Once upon a time in a distant galaxy",
@@ -61,7 +61,7 @@ def example_streaming(client):
 def example_models(client):
     """List and inspect models."""
     print("\n=== Available Models ===")
-    
+
     models = client.list_models()
     for model in models[:5]:
         print(f"  - {model.id}: {model.source or 'unknown'}")
@@ -70,7 +70,7 @@ def example_models(client):
 def example_datasets(client):
     """List available datasets."""
     print("\n=== Available Datasets ===")
-    
+
     datasets = client.list_datasets()
     for ds in datasets[:5]:
         print(f"  - {ds.id}")
@@ -79,7 +79,7 @@ def example_datasets(client):
 def example_metrics(client):
     """Check API metrics."""
     print("\n=== API Metrics ===")
-    
+
     try:
         metrics = client.metrics()
         print(f"  Total Requests: {metrics.requests_total}")
@@ -94,7 +94,7 @@ def example_metrics(client):
 def example_health(client):
     """Check API health."""
     print("\n=== Health Check ===")
-    
+
     health = client.health()
     print(f"  Status: {health.status}")
     print(f"  Version: {health.version}")
@@ -105,7 +105,7 @@ def example_health(client):
 def example_system_info(client):
     """Get system information."""
     print("\n=== System Info ===")
-    
+
     info = client.info()
     print(f"  Version: {info.version}")
     print(f"  PyTorch: {info.pytorch_version}")
@@ -196,9 +196,9 @@ def main():
     """Run all examples."""
     base_url = os.environ.get("MAN_API_URL", "http://localhost:8000")
     print(f"Connecting to: {base_url}")
-    
+
     client = SloughGPTClient(base_url=base_url, timeout=60)
-    
+
     try:
         example_health(client)
         example_system_info(client)
@@ -214,15 +214,15 @@ def main():
         example_system(client)
         example_workflow(client)
         example_auto_train(client)
-        
+
         print("\n=== All examples completed! ===")
-        
+
     except Exception as e:
         print(f"\nError: {e}")
         print("\nMake sure the SloughGPT API server is running:")
         print("  uvicorn server.main:app --port 8000")
         return 1
-    
+
     return 0
 
 
