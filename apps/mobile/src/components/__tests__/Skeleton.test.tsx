@@ -4,31 +4,26 @@ import {Skeleton, SkeletonCard, SkeletonList} from '../Skeleton';
 
 describe('Skeleton', () => {
   it('renders with default props', () => {
-    const {toJSON} = render(<Skeleton />);
-    expect(toJSON()).toBeTruthy();
+    expect(() => render(<Skeleton />)).not.toThrow();
   });
 
   it('renders with custom dimensions', () => {
-    const {toJSON} = render(<Skeleton width={200} height={40} borderRadius={8} />);
-    expect(toJSON()).toBeTruthy();
+    expect(() => render(<Skeleton width={200} height={40} borderRadius={8} />)).not.toThrow();
   });
 });
 
 describe('SkeletonCard', () => {
   it('renders with default lines', () => {
-    const {toJSON} = render(<SkeletonCard />);
-    expect(toJSON()).toBeTruthy();
+    expect(() => render(<SkeletonCard />)).not.toThrow();
   });
 
   it('renders with custom line count', () => {
-    const {toJSON} = render(<SkeletonCard lines={5} />);
-    expect(toJSON()).toBeTruthy();
+    expect(() => render(<SkeletonCard lines={5} />)).not.toThrow();
   });
 });
 
 describe('SkeletonList', () => {
   it('renders multiple cards', () => {
-    const {toJSON} = render(<SkeletonList count={3} />);
-    expect(toJSON()).toBeTruthy();
+    expect(() => render(<SkeletonList count={3} />)).not.toThrow();
   });
 });

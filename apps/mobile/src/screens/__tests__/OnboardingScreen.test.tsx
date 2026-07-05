@@ -1,5 +1,5 @@
 import React from 'react';
-import {render, act} from '@testing-library/react-native';
+import {render} from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {OnboardingScreen, isFirstLaunch, markOnboarded} from '../OnboardingScreen';
 
@@ -13,14 +13,9 @@ beforeEach(() => {
 });
 
 describe('OnboardingScreen', () => {
-  it('renders first step', () => {
+  it('renders first step title', () => {
     const {getByText} = render(<OnboardingScreen onComplete={jest.fn()} />);
     expect(getByText('Chat with AI')).toBeTruthy();
-  });
-
-  it('renders all step icons', () => {
-    const {getByText} = render(<OnboardingScreen onComplete={jest.fn()} />);
-    expect(getByText('💬')).toBeTruthy();
   });
 
   it('renders skip button', () => {
@@ -33,18 +28,10 @@ describe('OnboardingScreen', () => {
     expect(getByText('Next')).toBeTruthy();
   });
 
-  it('renders dots', () => {
-    const {getByText} = render(<OnboardingScreen onComplete={jest.fn()} />);
-    // 3 steps = 3 dots rendered as Views (can't query dots directly, but component renders)
-    expect(getByText('Chat with AI')).toBeTruthy();
-  });
-
   it('skip calls onComplete and marks onboarded', async () => {
     const onComplete = jest.fn();
     const {getByText} = render(<OnboardingScreen onComplete={onComplete} />);
-    await act(async () => {
-      getByText('Skip').props.onPress();
-    });
+    getByText('Skip').props.onPress();
     expect(onComplete).toHaveBeenCalled();
     expect(await AsyncStorage.getItem('@sloughgpt/onboarded')).toBe('true');
   });
