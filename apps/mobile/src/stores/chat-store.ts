@@ -12,6 +12,7 @@ import {
   cacheActiveSessionId,
 } from '../services/offline-cache';
 import {triggerHaptic} from '../services/haptics';
+import {toast} from '../services/toast';
 import type {Message, Session} from '../types';
 
 interface ChatState {
@@ -110,6 +111,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       try {
         sessionId = await get().createSession();
       } catch {
+        toast.error('Failed to create session. Check your connection.');
         set({error: 'Failed to create session. Check your connection.'});
         return;
       }
@@ -172,6 +174,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               return false;
             }
             set({error: event.error, streaming: false});
+            toast.error(event.error);
             await triggerHaptic('error');
             return true;
           }
@@ -196,6 +199,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           await new Promise(r => setTimeout(r, 500 * retries));
           return false;
         }
+        toast.warn('Offline — message queued for retry');
         set({error: 'Offline — message queued for retry', streaming: false});
         await triggerHaptic('error');
         return true;
@@ -285,6 +289,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     } catch (err: any) {
       if (err.name === 'AbortError') return;
+      toast.error('Regeneration failed');
       set({error: err.message});
       await triggerHaptic('error');
     } finally {
@@ -317,10 +322,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const pending = await getPendingSends();
     if (pending.length === 0) return;
 
+    toast.info(`Retrying ${pending.length} queued message${pending.length > 1 ? 's' : ''}...`);
     for (const send of pending) {
       set({activeSessionId: send.sessionId});
       await get().sendMessage(send.content);
     }
     set({offlineQueue: 0});
+    toast.success('Messages synced');
   },
 }));

@@ -17,6 +17,8 @@ import {useSettingsStore} from './src/stores/settings-store';
 import {ThemeProvider, useTheme} from './src/theme/ThemeContext';
 import {ErrorBoundary} from './src/components/ErrorBoundary';
 import {LoadingScreen} from './src/components/LoadingScreen';
+import {ConnectionStatusBar} from './src/components/ConnectionStatusBar';
+import {ToastContainer} from './src/components/ToastContainer';
 import {colors} from './src/theme';
 import {initInference} from './src/services/activity-inference';
 import {registerForPushNotifications, onNotification} from './src/services/push-notifications';
@@ -107,6 +109,8 @@ function AppInner() {
     <SafeAreaProvider>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#0F0D15' : '#FFFFFF'} />
       <NavigationContainer theme={navTheme}>
+        <ConnectionStatusBar />
+        <ToastContainer />
         <Tab.Navigator
           screenOptions={({route}) => ({
             headerShown: false,
