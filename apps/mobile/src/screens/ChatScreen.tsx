@@ -22,6 +22,7 @@ import {useModelStore} from '../stores/model-store';
 import {useOnlineStatus} from '../hooks/useOnlineStatus';
 import {MessageBubble} from '../components/MessageBubble';
 import {ChatInput} from '../components/ChatInput';
+import {TypingIndicator} from '../components/TypingIndicator';
 import {StatusBadge} from '../components/StatusBadge';
 import {triggerHaptic} from '../services/haptics';
 import {colors, spacing, radii, typography} from '../theme';
@@ -271,12 +272,7 @@ export function ChatScreen() {
           </Pressable>
         )}
 
-        {streaming && (
-          <View style={styles.thinkingRow}>
-            <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={styles.thinkingText}>Thinking...</Text>
-          </View>
-        )}
+        <TypingIndicator visible={streaming && messages.length > 0 && !messages[messages.length - 1]?.content} />
 
         <ChatInput
           onSend={handleSend}
