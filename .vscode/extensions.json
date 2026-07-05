@@ -1,0 +1,14 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "bradlc.vscode-tailwindcss",
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "charliermarsh.ruff",
+    "esbenp.prettier-vscode",
+    "vitest.explorer",
+    "tamasfe.even-better-toml",
+    "rust-lang.rust-analyzer",
+    "yzhang.markdown-all-in-one"
+  ]
+}

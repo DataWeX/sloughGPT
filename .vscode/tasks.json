@@ -1,0 +1,75 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start API",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/python3 ${workspaceFolder}/apps/api/server/main.py",
+      "group": "none",
+      "problemMatcher": [],
+      "detail": "Start FastAPI server on port 8000"
+    },
+    {
+      "label": "Start Web",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": { "cwd": "${workspaceFolder}/apps/web" },
+      "group": "none",
+      "problemMatcher": [],
+      "detail": "Start Next.js dev server on port 3000"
+    },
+    {
+      "label": "Start Stack (API + Web)",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/dev-stack.sh",
+      "group": "none",
+      "problemMatcher": [],
+      "detail": "Start both API and Web servers"
+    },
+    {
+      "label": "Type Check",
+      "type": "shell",
+      "command": "npx tsc --noEmit",
+      "options": { "cwd": "${workspaceFolder}/apps/web" },
+      "group": "build",
+      "problemMatcher": "$tsc",
+      "detail": "Run TypeScript type checker"
+    },
+    {
+      "label": "Test (lib)",
+      "type": "shell",
+      "command": "npx vitest run lib/",
+      "options": { "cwd": "${workspaceFolder}/apps/web" },
+      "group": "test",
+      "problemMatcher": [],
+      "detail": "Run pure logic tests only (fastest)"
+    },
+    {
+      "label": "Test (changed)",
+      "type": "shell",
+      "command": "npx vitest run --changed",
+      "options": { "cwd": "${workspaceFolder}/apps/web" },
+      "group": "test",
+      "problemMatcher": [],
+      "detail": "Run tests for changed files only"
+    },
+    {
+      "label": "Test (all frontend)",
+      "type": "shell",
+      "command": "npx vitest run",
+      "options": { "cwd": "${workspaceFolder}/apps/web" },
+      "group": "test",
+      "problemMatcher": [],
+      "detail": "Run full frontend test suite"
+    },
+    {
+      "label": "Test (Python)",
+      "type": "shell",
+      "command": "python3 -m pytest -n auto --dist loadgroup -x -q",
+      "options": { "cwd": "${workspaceFolder}/packages/core-py" },
+      "group": "test",
+      "problemMatcher": [],
+      "detail": "Run Python tests in parallel"
+    }
+  ]
+}

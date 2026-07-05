@@ -75,8 +75,11 @@ venv.bak/
 # TypeScript (tsc --incremental)
 *.tsbuildinfo
 
-# IDE
-.vscode/
+# IDE (track workspace settings, ignore personal data)
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
 .idea/
 *.swp
 *.swo
