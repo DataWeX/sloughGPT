@@ -76,7 +76,7 @@ export function GlobalErrorHandler() {
 
     const handleError = (event: ErrorEvent) => {
       const message = event.message || 'Unknown error'
-      
+
       // Non-fatal errors: show as toast only, don't add to error store
       if (isNonFatalError(message)) {
         addToast(message, 'info')
@@ -104,7 +104,7 @@ export function GlobalErrorHandler() {
     const handleRejection = (event: PromiseRejectionEvent) => {
       const reason = event.reason
       const message = reason instanceof Error ? reason.message : typeof reason === 'string' ? reason : 'Unhandled Promise Rejection'
-      
+
       // Non-fatal errors: show as toast only
       if (isNonFatalError(message)) {
         addToast(message, 'info')

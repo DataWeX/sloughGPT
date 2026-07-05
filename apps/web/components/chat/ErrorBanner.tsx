@@ -41,7 +41,7 @@ export function ErrorBanner({ error, onRetry, onDismiss }: ErrorBannerProps) {
   const info = ERROR_MESSAGES[error.type]
 
   return (
-    <section 
+    <section
       className="shrink-0 border-b border-destructive/20 bg-destructive/5 px-3 py-2.5 sm:px-4 sm:py-3"
       role="alert"
       aria-live="assertive"
@@ -57,9 +57,9 @@ export function ErrorBanner({ error, onRetry, onDismiss }: ErrorBannerProps) {
         </div>
         <div className="flex shrink-0 gap-1.5 sm:gap-2">
           {error.canRetry && (
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={onRetry}
               className="h-7 text-xs sm:h-8 border-destructive/30 text-destructive hover:bg-destructive/10"
               aria-label={`Retry ${info.title.toLowerCase()}`}
@@ -67,9 +67,9 @@ export function ErrorBanner({ error, onRetry, onDismiss }: ErrorBannerProps) {
               Retry
             </Button>
           )}
-          <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={onDismiss}
             className="h-7 text-xs sm:h-8 text-muted-foreground"
             aria-label="Dismiss error message"

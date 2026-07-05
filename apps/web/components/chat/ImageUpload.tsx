@@ -32,8 +32,8 @@ interface ImagePreviewProps {
 export function ImagePreview({ image, onRemove }: ImagePreviewProps) {
   return (
     <div className="relative group">
-      <img 
-        src={image.dataUrl} 
+      <img
+        src={image.dataUrl}
         alt={image.name}
         className="h-16 w-16 rounded-lg object-cover border border-border"
       />

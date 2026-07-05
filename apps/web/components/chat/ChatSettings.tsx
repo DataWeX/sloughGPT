@@ -45,7 +45,7 @@ export function ChatSettings({
 }: ChatSettingsProps) {
   const modelOptions = availableModels.length > 0 ? availableModels : DEFAULT_MODELS
   return (
-    <section 
+    <section
       className={cn(
         "shrink-0 border-b border-border/40 bg-muted/20 px-3 py-2 transition-all duration-200 sm:px-4",
         isOpen ? "max-h-20 opacity-100" : "max-h-0 border-transparent p-0 opacity-0 overflow-hidden"
@@ -115,10 +115,10 @@ export function ChatSettings({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        
-        <Button 
-          variant="outline" 
-          size="sm" 
+
+        <Button
+          variant="outline"
+          size="sm"
           onClick={onClear}
           className="text-xs hover:opacity-80 active:opacity-70 disabled:opacity-50"
           disabled={!hasMessages}

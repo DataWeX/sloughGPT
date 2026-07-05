@@ -1,6 +1,6 @@
 /**
  * Frontend Controllers Index
- * 
+ *
  * Single source of truth for all MVC controllers.
  */
 

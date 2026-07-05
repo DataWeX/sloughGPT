@@ -32,7 +32,7 @@ const ICONS: Record<SystemBannerType, React.ReactNode> = {
 
 export function SystemBanner({ type, title, message, actionLabel, onAction, onDismiss }: SystemBannerProps) {
   return (
-    <div 
+    <div
       className={`mb-3 rounded-lg border p-3 text-xs ${STYLES[type]}`}
       role="alert"
       aria-live="assertive"
@@ -45,9 +45,9 @@ export function SystemBanner({ type, title, message, actionLabel, onAction, onDi
         </div>
         <div className="flex shrink-0 gap-2">
           {actionLabel && onAction && (
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={onAction}
               className="h-7 text-xs"
             >

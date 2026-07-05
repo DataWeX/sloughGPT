@@ -77,7 +77,7 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
             onAction={onRefreshHealth}
           />
         )}
-        
+
         {sessionLoading && (
           <div className="mx-auto w-full max-w-2xl px-3 sm:px-4 py-8 space-y-4" role="status" aria-busy="true" aria-label="Loading messages">
             <span className="sr-only">Loading conversation...</span>
@@ -102,7 +102,7 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
           </div>
         )}
 
-        <div 
+        <div
           id="chat-messages"
           className="mx-auto w-full max-w-2xl space-y-3 sm:space-y-4 px-3 sm:px-4 pb-2"
           role="feed"
@@ -116,7 +116,7 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
             const isStreaming = loading && isLast && message.role === 'assistant'
             const prevMsg = index > 0 ? messages[index - 1] : null
             const showDateDivider = !prevMsg || isDifferentDay(prevMsg.timestamp, message.timestamp)
-            
+
             return (
               <React.Fragment key={message.id}>
               {showDateDivider && (
@@ -186,11 +186,11 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
               </div>
             )
           })()}
-          
+
           {loading && messages.length > 0 && messages[messages.length - 1].role !== 'assistant' && (
             <ReasoningPanel isThinking={true} className="py-1" />
           )}
-          
+
           <div ref={ref} />
         </div>
       </div>

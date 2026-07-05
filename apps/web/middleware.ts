@@ -25,7 +25,7 @@ function sanitizeHeaders(headers: Headers): Record<string, string> {
 export function middleware(request: NextRequest) {
   const start = Date.now()
   const { method, nextUrl, headers } = request
-  
+
   const ignorePath = IGNORE_PATHS.some(path => nextUrl.pathname.startsWith(path))
   if (ignorePath) {
     return NextResponse.next()
@@ -42,7 +42,7 @@ export function middleware(request: NextRequest) {
 
   const userAgent = headers.get('user-agent') || 'unknown'
   const clientIp = headers.get('x-forwarded-for') || headers.get('x-real-ip') || '-'
-  
+
   const logLine = [
     `[${level}]`,
     `${methodColor}${method}${reset}`,

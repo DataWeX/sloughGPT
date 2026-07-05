@@ -54,13 +54,13 @@ function highlightText(text: string, query: string): (string | JSX.Element)[] {
   )
 }
 
-export const MessageBubble = memo(function MessageBubble({ 
-  content, 
-  role, 
-  timestamp, 
-  showTimestamp, 
-  images, 
-  onCopy, 
+export const MessageBubble = memo(function MessageBubble({
+  content,
+  role,
+  timestamp,
+  showTimestamp,
+  images,
+  onCopy,
   onRegenerate,
   onThumbsUp,
   onThumbsDown,
@@ -84,11 +84,11 @@ export const MessageBubble = memo(function MessageBubble({
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
   const [isCollapsed, setIsCollapsed] = useState(true)
   const bubbleRef = useRef<HTMLDivElement>(null)
-  
+
   useEffect(() => {
     setIsVisible(true)
   }, [])
-  
+
   useEffect(() => {
     setDisplayContent(content)
     setEditContent(content)
@@ -146,8 +146,8 @@ export const MessageBubble = memo(function MessageBubble({
       }}
       className={cn(
         "group flex flex-col transition-all duration-300 ease-out",
-        isVisible 
-          ? "opacity-100 translate-y-0" 
+        isVisible
+          ? "opacity-100 translate-y-0"
           : "opacity-0 translate-y-3",
         role === 'user' ? 'items-end' : 'items-start'
       )}
@@ -210,7 +210,7 @@ export const MessageBubble = memo(function MessageBubble({
             onClose={() => setLightboxSrc(null)}
           />
         )}
-        
+
         {hasContent && (
           role === 'assistant' ? (
             searchQuery && content.toLowerCase().includes(searchQuery.toLowerCase()) ? (
@@ -237,7 +237,7 @@ export const MessageBubble = memo(function MessageBubble({
               </article>
             )
           ) : isEditing ? (
-            <form 
+            <form
               className="space-y-2"
               onSubmit={(e) => {
                 e.preventDefault()
@@ -299,7 +299,7 @@ export const MessageBubble = memo(function MessageBubble({
             </div>
           )
         )}
-        
+
         {!hasContent && role === 'assistant' && (
           <div className="flex gap-1 items-center h-5" aria-hidden="true">
             <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce [animation-delay:0ms]" />
@@ -307,7 +307,7 @@ export const MessageBubble = memo(function MessageBubble({
             <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce [animation-delay:300ms]" />
           </div>
         )}
-        
+
         {showTimestamp && (
           <p className={cn(
             "mt-1.5 text-[10px] font-normal leading-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity",
@@ -333,7 +333,7 @@ export const MessageBubble = memo(function MessageBubble({
           onDelete={onDelete}
         />
       )}
-      
+
       {role === 'user' && hasContent && !isEditing && onEdit && (
         <MessageActions
           content={content}

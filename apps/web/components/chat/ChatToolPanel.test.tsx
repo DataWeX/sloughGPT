@@ -99,7 +99,7 @@ const defaultCtx = {
 describe('ChatToolPanel', () => {
   const onClose = vi.fn()
 
-  beforeEach(() => { 
+  beforeEach(() => {
     vi.clearAllMocks()
     mockUseChatContext.mockReturnValue(defaultCtx)
   })

@@ -13,7 +13,7 @@ interface AvatarProps {
 
 export function Avatar({ src, alt, fallback, size = 'md', className }: AvatarProps) {
   const sizes = { sm: 'h-6 w-6 text-[10px]', md: 'h-8 w-8 text-xs', lg: 'h-10 w-10 text-sm' }
-  
+
   return (
     <div className={cn("relative rounded-full overflow-hidden bg-primary/10 flex items-center justify-center", sizes[size], className)}>
       {src ? (
@@ -91,7 +91,7 @@ interface SpinnerProps {
 
 export function Spinner({ size = 'md', className }: SpinnerProps) {
   const sizes = { sm: 'w-4 h-4', md: 'w-6 h-6', lg: 'w-8 h-8' }
-  
+
   return (
     <svg className={cn("animate-spin", sizes[size], className)} fill="none" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />

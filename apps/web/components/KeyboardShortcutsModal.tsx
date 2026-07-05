@@ -25,11 +25,11 @@ const SHORTCUTS: Shortcut[] = [
   { keys: ['Ctrl', 'N'], description: 'New chat', category: 'Chat' },
   { keys: ['Ctrl', 'Shift', 'C'], description: 'Copy last response', category: 'Chat' },
   { keys: ['Ctrl', 'Shift', 'F'], description: 'Search conversations', category: 'Chat' },
-  
+
   // General shortcuts
   { keys: ['?'], description: 'Show keyboard shortcuts', category: 'General' },
   { keys: ['Ctrl', 'K'], description: 'Command palette', category: 'General' },
-  
+
   // Navigation shortcuts
   { keys: ['Ctrl', '1'], description: 'Chat', category: 'Navigation' },
   { keys: ['Ctrl', '2'], description: 'Personalities', category: 'Navigation' },
@@ -41,9 +41,9 @@ const SHORTCUTS: Shortcut[] = [
 
 function KeyboardKey({ k, 'aria-describedby': ariaDescribedBy }: { k: string; 'aria-describedby'?: string }) {
   const isModifier = ['Ctrl', 'Shift', 'Alt', 'Meta', 'Cmd'].includes(k)
-  
+
   return (
-    <kbd 
+    <kbd
       className={cn(
         "inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-md border border-border/60 bg-muted/50 px-1.5 py-0.5 text-xs font-medium text-muted-foreground shadow-sm",
         isModifier && "bg-muted/70"
@@ -62,7 +62,7 @@ interface KeyboardShortcutsModalProps {
 
 export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcutsModalProps) {
   const [isOpen, setIsOpen] = useState(open ?? false)
-  
+
   useEffect(() => {
     if (open !== undefined) {
       setIsOpen(open)
@@ -75,7 +75,7 @@ export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcuts
       }
     }
   }, [open])
-  
+
   const handleOpenChange = (newOpen: boolean) => {
     setIsOpen(newOpen)
     if (typeof window !== 'undefined') {
@@ -87,7 +87,7 @@ export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcuts
     }
     onOpenChange?.(newOpen)
   }
-  
+
   // Group shortcuts by category
   const categories = SHORTCUTS.reduce((acc, shortcut) => {
     if (!acc[shortcut.category]) {
@@ -96,7 +96,7 @@ export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcuts
     acc[shortcut.category].push(shortcut)
     return acc
   }, {} as Record<string, Shortcut[]>)
-  
+
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md">
@@ -106,7 +106,7 @@ export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcuts
             Quick keyboard shortcuts to navigate and use the app faster.
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="space-y-4 py-2">
           {Object.entries(categories).map(([category, shortcuts]) => (
             <fieldset key={category}>
@@ -145,7 +145,7 @@ export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcuts
 // Compact badge for showing "Press ? for shortcuts"
 export function ShortcutsHint() {
   const [showModal, setShowModal] = useState(false)
-  
+
   return (
     <>
       <Button
@@ -166,7 +166,7 @@ export function ShortcutsHint() {
 // Hook to show modal with ? key
 export function useKeyboardShortcuts() {
   const [showModal, setShowModal] = useState(false)
-  
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Show shortcuts when pressing ?
@@ -178,10 +178,10 @@ export function useKeyboardShortcuts() {
         }
       }
     }
-    
+
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
-  
+
   return { showModal, setShowModal }
 }

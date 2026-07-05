@@ -124,9 +124,9 @@ export function DatasetPreview({ datasetId, onUseForTraining }: DatasetPreviewPr
         {languageEntries.length > 1 && (
           <figure className="space-y-1">
             <figcaption className="text-xs font-medium text-muted-foreground">Language Distribution</figcaption>
-            <div 
-              className="flex h-2 overflow-hidden rounded-full bg-muted" 
-              role="img" 
+            <div
+              className="flex h-2 overflow-hidden rounded-full bg-muted"
+              role="img"
               aria-label={`Language distribution: ${languageEntries.slice(0, 6).map(([lang, count]) => `${lang} ${Math.round((count / totalFiles) * 100)}%`).join(', ')}`}
             >
               {languageEntries.slice(0, 6).map(([lang, count]) => (

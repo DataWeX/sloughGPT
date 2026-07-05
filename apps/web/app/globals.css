@@ -246,7 +246,7 @@ html {
 
   /* Typography hierarchy: h1 > h2 > subtitle > body > caption */
   /* Use these utility classes everywhere for consistency */
-  
+
   /* Headings */
   .sl-h1 {
     @apply text-2xl md:text-3xl font-semibold tracking-tight text-foreground;
@@ -663,7 +663,7 @@ html.dark {
 
 /*
  * Pixel-perfect spacing reference:
- * 
+ *
  * Touch targets: h-11 (44px) minimum — Apple HIG / Material
  * Buttons: h-9 (36px), h-10 (40px), h-11 (44px), h-12 (48px)
  * Icons: h-6 w-6 (24px), h-8 w-8 (32px), h-10 w-10 (40px)
@@ -676,8 +676,8 @@ html.dark {
  * rounded-lg: 8px — cards, panels, modals
  * rounded-xl: 12px — chat bubbles (AI)
  * rounded-2xl: 16px — large chat bubbles
- * 
- * Custom: 
+ *
+ * Custom:
  *   min-h-[2.25rem] = 36px (nav links)
  *   min-h-[3.25rem] = 52px (headers)
  *   min-h-[60px] = 60px (textareas)
@@ -702,7 +702,7 @@ html.dark {
 
 .sl-sidebar-surface {
   background-color: color-mix(in srgb, rgb(var(--background)) 96%, rgb(var(--card)) 4%);
-  background-image: 
+  background-image:
     radial-gradient(ellipse at 30% -10%, color-mix(in srgb, rgb(var(--primary)) 8%, transparent) 0%, transparent 50%),
     radial-gradient(ellipse at 70% 110%, color-mix(in srgb, rgb(var(--accent)) 7%, transparent) 0%, transparent 40%);
   border-right: 1px solid color-mix(in srgb, rgb(var(--border)) 70%, transparent);
@@ -711,7 +711,7 @@ html.dark {
 
 .dark .sl-sidebar-surface {
   background-color: color-mix(in srgb, rgb(var(--background)) 94%, rgb(var(--card)) 6%);
-  background-image: 
+  background-image:
     radial-gradient(ellipse at 30% -10%, color-mix(in srgb, rgb(var(--primary)) 10%, transparent) 0%, transparent 50%),
     radial-gradient(ellipse at 70% 110%, color-mix(in srgb, rgb(var(--accent)) 8%, transparent) 0%, transparent 40%);
   border-right: 1px solid color-mix(in srgb, rgb(var(--border)) 70%, transparent);
@@ -720,7 +720,7 @@ html.dark {
 
 .sl-mobile-header {
   background-color: rgb(var(--background));
-  background-image: 
+  background-image:
     radial-gradient(ellipse at 20% 0%, color-mix(in srgb, rgb(var(--primary)) 8%, transparent) 0%, transparent 60%),
     radial-gradient(ellipse at 80% 100%, color-mix(in srgb, rgb(var(--accent)) 10%, transparent) 0%, transparent 50%);
   border-bottom: 1px solid color-mix(in srgb, rgb(var(--border)) 35%, transparent);
@@ -728,7 +728,7 @@ html.dark {
 
 .dark .sl-mobile-header {
   background-color: rgb(var(--background));
-  background-image: 
+  background-image:
     radial-gradient(ellipse at 20% 0%, color-mix(in srgb, rgb(var(--primary)) 8%, transparent) 0%, transparent 60%),
     radial-gradient(ellipse at 80% 100%, color-mix(in srgb, rgb(var(--accent)) 10%, transparent) 0%, transparent 50%);
   border-bottom: 1px solid color-mix(in srgb, rgb(var(--border)) 50%, transparent);

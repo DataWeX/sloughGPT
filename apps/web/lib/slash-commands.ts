@@ -81,7 +81,7 @@ export function findMatchingCommands(query: string): SlashCommand[] {
 export function parseSlashCommand(input: string): { command: SlashCommand | null; text: string } {
   const match = input.match(/^\/(\w+)\s*([\s\S]*)$/)
   if (!match) return { command: null, text: input }
-  
+
   const [, cmdName, text] = match
   const command = slashCommands.find((c) => c.name === cmdName)
   return { command: command || null, text: text.trim() }

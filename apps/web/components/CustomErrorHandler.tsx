@@ -44,15 +44,15 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
     }
   }
 
-  const isNetworkError = error.message.includes('fetch') || 
+  const isNetworkError = error.message.includes('fetch') ||
                          error.message.includes('network') ||
                          error.message.includes('ECONNREFUSED') ||
                          error.message.includes('Failed to fetch')
 
-  const isAuthError = error.message.includes('401') || 
+  const isAuthError = error.message.includes('401') ||
                       error.message.includes('Unauthorized')
 
-  const isNotFoundError = error.message.includes('404') || 
+  const isNotFoundError = error.message.includes('404') ||
                           error.message.includes('Not Found')
 
   return (
@@ -65,9 +65,9 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
             </div>
             <div className="flex-1 min-w-0">
               <CardTitle className="text-base font-semibold">
-                {isNetworkError ? 'Connection Error' : 
+                {isNetworkError ? 'Connection Error' :
                  isAuthError ? 'Authentication Error' :
-                 isNotFoundError ? 'Page Not Found' : 
+                 isNotFoundError ? 'Page Not Found' :
                  'Something went wrong'}
               </CardTitle>
               <p className="text-xs text-muted-foreground mt-0.5 truncate">
@@ -106,9 +106,9 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
               <IconRefresh className="h-3.5 w-3.5 mr-1.5" />
               Try again
             </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => window.location.href = '/'} 
+            <Button
+              variant="outline"
+              onClick={() => window.location.href = '/'}
               className="flex-1"
               size="sm"
             >

@@ -47,7 +47,7 @@ export function CustomDropdown({ trigger, items, align = 'start', grid = false, 
       <div ref={triggerRef} onClick={() => setOpen(!open)}>
         {trigger}
       </div>
-      
+
       {open && (
         <div
           ref={menuRef}
@@ -72,7 +72,7 @@ export function CustomDropdown({ trigger, items, align = 'start', grid = false, 
                 }}
                 className={cn(
                   'w-full',
-                   grid 
+                   grid
                     ? 'flex flex-col items-center justify-center gap-0.5 p-1.5 text-xs rounded-sm hover:bg-primary/10'
                     : 'flex items-center gap-2 px-2 py-2 text-sm rounded-sm hover:bg-primary/10',
                   item.destructive

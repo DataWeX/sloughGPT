@@ -18,9 +18,9 @@ export function ThemeSwitcher() {
       >
         {mode === 'dark' ? <IconMoon aria-hidden="true" /> : <IconSun aria-hidden="true" />}
       </Button>
-      
+
       <span className="text-xs text-muted-foreground/50 font-medium">or</span>
-      
+
       <div className="flex items-center gap-1" role="radiogroup" aria-label="Color theme">
         {THEMES.map((t) => (
           <button

@@ -184,13 +184,13 @@ export function Sidebar({ variant = 'desktop', onNavigate, onClose }: SidebarPro
             </button>
           }
           items={[
-            { 
-              label: `${t('sidebar.signOut')} (offline)`, 
+            {
+              label: `${t('sidebar.signOut')} (offline)`,
               onClick: () => {
-                import('@/lib/toast-store').then(({ useToastStore }) => 
+                import('@/lib/toast-store').then(({ useToastStore }) =>
                   useToastStore.getState().addToast('Auth is running in offline mode. Sign-in coming soon.')
                 ).catch(() => {})
-              }, 
+              },
             },
           ]}
         />

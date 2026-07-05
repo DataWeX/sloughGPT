@@ -47,7 +47,7 @@ export function ConversationDataSection() {
     setExporting(true)
     try {
       const data = await trainingJobsController.exportFeedbackPairs(0, targetCount) as { pairs_count?: number; filepath?: string; error?: string }
-      
+
       if (data.error) {
         addToast(String(data.error), 'error')
       } else {

@@ -22,7 +22,7 @@ export interface ModelContextValue {
   loading: boolean
   loadingModelId: string | null
   error: string | null
-  
+
   loadModel: (modelId: string, opts?: { mode?: string; device?: string }) => Promise<{ success: boolean; error?: string }>
   loadModelPath: (path: string) => Promise<{ success: boolean; error?: string }>
   unloadModel: (modelId: string) => Promise<{ success: boolean; error?: string }>

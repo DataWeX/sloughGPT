@@ -22,12 +22,12 @@ export interface ChatInputProps {
   onExecuteCommand?: (cmd: any, args: string[]) => void
 }
 
-export function ChatInput({ 
-  value, 
-  onChange, 
-  onSend, 
+export function ChatInput({
+  value,
+  onChange,
+  onSend,
   onStop,
-  loading, 
+  loading,
   health,
   images = [],
   onAddImage,
@@ -69,15 +69,15 @@ export function ChatInput({
 
   const isDisabled = loading || health === 'offline'
   const hasModel = health !== null && health !== 'offline' && 'model_loaded' in health && health.model_loaded
-  const placeholder = health === 'offline' 
-    ? 'API offline...' 
-    : hasModel 
-      ? 'Type a message...' 
+  const placeholder = health === 'offline'
+    ? 'API offline...'
+    : hasModel
+      ? 'Type a message...'
       : 'Loading model...'
   const hasContent = value.trim().length > 0 || images.length > 0
 
   return (
-    <section 
+    <section
       className="shrink-0 bg-background/95 backdrop-blur-sm px-3 sm:px-4 pb-3"
       style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
     >
@@ -95,15 +95,15 @@ export function ChatInput({
         {images.length > 0 && (
           <div className="flex gap-2 flex-wrap pb-2" aria-label="Attached images">
             {images.map((img) => (
-              <ImagePreview 
-                key={img.id} 
-                image={img} 
+              <ImagePreview
+                key={img.id}
+                image={img}
                 onRemove={handleRemoveImage}
               />
             ))}
           </div>
         )}
-        
+
         <ChatInputRow
           value={value}
           onChange={onChange}
