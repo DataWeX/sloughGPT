@@ -50,7 +50,7 @@ class Plan:
     features: List[str]
     limits: Dict[str, Any]
     is_active: bool = True
-    
+
     def get_price(self, cycle: BillingCycle) -> float:
         """Get price for billing cycle."""
         if cycle == BillingCycle.MONTHLY:
@@ -60,7 +60,7 @@ class Plan:
         elif cycle == BillingCycle.YEARLY:
             return self.price_yearly * 0.8
         return self.price_monthly
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -89,22 +89,22 @@ class Subscription:
     cancelled_at: Optional[float] = None
     trial_end: Optional[float] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
-    
+
     def is_active(self) -> bool:
         """Check if subscription is currently active."""
         return self.status == SubscriptionStatus.ACTIVE
-    
+
     def is_trial(self) -> bool:
         """Check if in trial period."""
         if self.trial_end:
             return time.time() < self.trial_end
         return False
-    
+
     def get_remaining_days(self) -> int:
         """Get remaining days in current period."""
         remaining = self.current_period_end - time.time()
         return max(0, int(remaining / 86400))
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -137,11 +137,11 @@ class Invoice:
     paid_at: Optional[float] = None
     items: List[Dict[str, Any]] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
-    
+
     def is_paid(self) -> bool:
         """Check if invoice is paid."""
         return self.status == PaymentStatus.SUCCEEDED
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -170,7 +170,7 @@ class UsageRecord:
     tokens_used: int
     timestamp: float = field(default_factory=time.time)
     cost: float = 0
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -187,14 +187,14 @@ class UsageRecord:
 class BillingManager:
     """
     Manages subscriptions, billing, and payments.
-    
+
     Example:
-    
+
     ```python
     from sloughgpt_sdk.billing import BillingManager, Plan, BillingCycle
-    
+
     billing = BillingManager()
-    
+
     # Define plans
     billing.create_plan(
         id="pro",
@@ -204,29 +204,29 @@ class BillingManager:
         features=["Unlimited requests", "Priority support"],
         limits={"requests_per_day": 10000}
     )
-    
+
     # Create subscription
     subscription = billing.create_subscription(
         customer_id="cus_123",
         plan_id="pro",
         billing_cycle=BillingCycle.MONTHLY
     )
-    
+
     # Generate invoice
     invoice = billing.create_invoice(subscription.id)
-    
+
     # Record usage
     billing.record_usage("cus_123", requests=100, tokens=5000)
-    
+
     # Get current bill
     current_bill = billing.get_current_bill("cus_123")
     ```
     """
-    
+
     def __init__(self, storage_path: str = "./.billing.json"):
         """
         Initialize billing manager.
-        
+
         Args:
             storage_path: Path to store billing data.
         """
@@ -238,36 +238,36 @@ class BillingManager:
         self._customers: Dict[str, Dict[str, Any]] = {}
         self._load_data()
         self._setup_default_plans()
-    
+
     def _load_data(self):
         """Load billing data from storage."""
         try:
             with open(self._storage_path, "r") as f:
                 data = json.load(f)
-                
+
                 for plan_data in data.get("plans", []):
                     plan = Plan(**plan_data)
                     self._plans[plan.id] = plan
-                
+
                 for sub_data in data.get("subscriptions", []):
                     sub_data["status"] = SubscriptionStatus(sub_data["status"])
                     sub_data["billing_cycle"] = BillingCycle(sub_data["billing_cycle"])
                     sub = Subscription(**sub_data)
                     self._subscriptions[sub.id] = sub
-                
+
                 for inv_data in data.get("invoices", []):
                     inv_data["status"] = PaymentStatus(inv_data["status"])
                     inv = Invoice(**inv_data)
                     self._invoices[inv.id] = inv
-                
+
                 for usage_data in data.get("usage", []):
                     usage = UsageRecord(**usage_data)
                     self._usage.append(usage)
-                
+
                 self._customers = data.get("customers", {})
         except (FileNotFoundError, json.JSONDecodeError):
             pass
-    
+
     def _save_data(self):
         """Save billing data to storage."""
         data = {
@@ -279,7 +279,7 @@ class BillingManager:
         }
         with open(self._storage_path, "w") as f:
             json.dump(data, f, indent=2, default=str)
-    
+
     def _setup_default_plans(self):
         """Setup default subscription plans."""
         if not self._plans:
@@ -292,7 +292,7 @@ class BillingManager:
                 features=["100 requests/day", "Basic models"],
                 limits={"requests_per_day": 100, "requests_per_month": 1000},
             )
-            
+
             self.create_plan(
                 id="starter",
                 name="Starter",
@@ -302,7 +302,7 @@ class BillingManager:
                 features=["1K requests/day", "All models", "Email support"],
                 limits={"requests_per_day": 1000, "requests_per_month": 10000},
             )
-            
+
             self.create_plan(
                 id="pro",
                 name="Pro",
@@ -312,7 +312,7 @@ class BillingManager:
                 features=["10K requests/day", "All models", "Priority support", "Webhooks"],
                 limits={"requests_per_day": 10000, "requests_per_month": 100000},
             )
-            
+
             self.create_plan(
                 id="enterprise",
                 name="Enterprise",
@@ -322,12 +322,12 @@ class BillingManager:
                 features=["Unlimited requests", "Dedicated support", "SLA", "Custom integrations"],
                 limits={"requests_per_day": -1, "requests_per_month": -1},
             )
-    
+
     @staticmethod
     def generate_id(prefix: str) -> str:
         """Generate a unique ID."""
         return f"{prefix}_{secrets.token_hex(8)}"
-    
+
     def create_plan(
         self,
         id: str,
@@ -351,15 +351,15 @@ class BillingManager:
         self._plans[id] = plan
         self._save_data()
         return plan
-    
+
     def get_plan(self, plan_id: str) -> Optional[Plan]:
         """Get a plan by ID."""
         return self._plans.get(plan_id)
-    
+
     def list_plans(self) -> List[Plan]:
         """List all active plans."""
         return [p for p in self._plans.values() if p.is_active]
-    
+
     def create_customer(
         self,
         email: str,
@@ -378,11 +378,11 @@ class BillingManager:
         self._customers[customer_id] = customer
         self._save_data()
         return customer
-    
+
     def get_customer(self, customer_id: str) -> Optional[Dict[str, Any]]:
         """Get customer by ID."""
         return self._customers.get(customer_id)
-    
+
     def create_subscription(
         self,
         customer_id: str,
@@ -394,18 +394,18 @@ class BillingManager:
         plan = self._plans.get(plan_id)
         if not plan:
             return None
-        
+
         subscription_id = self.generate_id("sub")
         now = time.time()
-        
+
         period_days = {
             BillingCycle.MONTHLY: 30,
             BillingCycle.QUARTERLY: 90,
             BillingCycle.YEARLY: 365,
         }
-        
+
         period_length = period_days[billing_cycle]
-        
+
         subscription = Subscription(
             id=subscription_id,
             customer_id=customer_id,
@@ -416,22 +416,22 @@ class BillingManager:
             current_period_end=now + (period_length * 86400),
             trial_end=now + (trial_days * 86400) if trial_days > 0 else None,
         )
-        
+
         self._subscriptions[subscription_id] = subscription
         self._save_data()
         return subscription
-    
+
     def get_subscription(self, subscription_id: str) -> Optional[Subscription]:
         """Get subscription by ID."""
         return self._subscriptions.get(subscription_id)
-    
+
     def get_customer_subscription(self, customer_id: str) -> Optional[Subscription]:
         """Get active subscription for customer."""
         for sub in self._subscriptions.values():
             if sub.customer_id == customer_id and sub.is_active():
                 return sub
         return None
-    
+
     def cancel_subscription(self, subscription_id: str) -> bool:
         """Cancel a subscription."""
         sub = self._subscriptions.get(subscription_id)
@@ -441,7 +441,7 @@ class BillingManager:
             self._save_data()
             return True
         return False
-    
+
     def change_plan(
         self,
         subscription_id: str,
@@ -450,14 +450,14 @@ class BillingManager:
         """Change subscription plan."""
         sub = self._subscriptions.get(subscription_id)
         new_plan = self._plans.get(new_plan_id)
-        
+
         if not sub or not new_plan:
             return None
-        
+
         sub.plan_id = new_plan_id
         self._save_data()
         return sub
-    
+
     def create_invoice(
         self,
         subscription_id: str,
@@ -467,19 +467,19 @@ class BillingManager:
         sub = self._subscriptions.get(subscription_id)
         if not sub:
             return None
-        
+
         plan = self._plans.get(sub.plan_id)
         if not plan:
             return None
-        
+
         amount = plan.get_price(sub.billing_cycle)
-        
+
         period_length = {
             BillingCycle.MONTHLY: 30,
             BillingCycle.QUARTERLY: 90,
             BillingCycle.YEARLY: 365,
         }
-        
+
         invoice = Invoice(
             id=self.generate_id("inv"),
             customer_id=sub.customer_id,
@@ -491,40 +491,40 @@ class BillingManager:
                 {"description": f"{plan.name} - {sub.billing_cycle.value}", "amount": amount}
             ],
         )
-        
+
         self._invoices[invoice.id] = invoice
         self._save_data()
         return invoice
-    
+
     def pay_invoice(self, invoice_id: str) -> bool:
         """Mark invoice as paid."""
         invoice = self._invoices.get(invoice_id)
         if invoice:
             invoice.status = PaymentStatus.SUCCEEDED
             invoice.paid_at = time.time()
-            
+
             sub = self._subscriptions.get(invoice.subscription_id)
             if sub and sub.status == SubscriptionStatus.PAST_DUE:
                 sub.status = SubscriptionStatus.ACTIVE
-            
+
             self._save_data()
             return True
         return False
-    
+
     def fail_invoice(self, invoice_id: str) -> bool:
         """Mark invoice as failed."""
         invoice = self._invoices.get(invoice_id)
         if invoice:
             invoice.status = PaymentStatus.FAILED
-            
+
             sub = self._subscriptions.get(invoice.subscription_id)
             if sub:
                 sub.status = SubscriptionStatus.PAST_DUE
-            
+
             self._save_data()
             return True
         return False
-    
+
     def record_usage(
         self,
         customer_id: str,
@@ -544,13 +544,13 @@ class BillingManager:
         self._usage.append(record)
         self._save_data()
         return record
-    
+
     def _calculate_cost(self, requests: int, tokens: int) -> float:
         """Calculate cost for usage."""
         cost_per_request = 0.001
         cost_per_token = 0.00001
         return (requests * cost_per_request) + (tokens * cost_per_token)
-    
+
     def get_usage(
         self,
         customer_id: str,
@@ -559,31 +559,31 @@ class BillingManager:
     ) -> List[UsageRecord]:
         """Get usage records for customer."""
         records = [r for r in self._usage if r.customer_id == customer_id]
-        
+
         if start_date:
             records = [r for r in records if r.timestamp >= start_date]
         if end_date:
             records = [r for r in records if r.timestamp <= end_date]
-        
+
         return records
-    
+
     def get_current_bill(self, customer_id: str) -> Dict[str, Any]:
         """Get current billing period summary."""
         sub = self.get_customer_subscription(customer_id)
         if not sub:
             return {"error": "No active subscription"}
-        
+
         plan = self._plans.get(sub.plan_id)
         usage = self.get_usage(
             customer_id,
             start_date=sub.current_period_start,
             end_date=sub.current_period_end,
         )
-        
+
         total_requests = sum(r.requests for r in usage)
         total_tokens = sum(r.tokens_used for r in usage)
         total_cost = sum(r.cost for r in usage)
-        
+
         return {
             "subscription_id": sub.id,
             "plan": plan.to_dict() if plan else None,
@@ -602,7 +602,7 @@ class BillingManager:
                 if inv.subscription_id == sub.id
             ],
         }
-    
+
     def get_invoices(self, customer_id: str) -> List[Invoice]:
         """Get all invoices for customer."""
         return [

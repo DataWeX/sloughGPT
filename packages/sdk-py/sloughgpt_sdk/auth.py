@@ -43,17 +43,17 @@ class APIKey:
     usage_today: int = 0
     usage_this_month: int = 0
     metadata: Dict[str, Any] = field(default_factory=dict)
-    
+
     def is_expired(self) -> bool:
         """Check if key is expired."""
         if self.expires_at is None:
             return False
         return time.time() > self.expires_at
-    
+
     def is_valid(self) -> bool:
         """Check if key is valid (active, not expired)."""
         return self.is_active and not self.is_expired()
-    
+
     def check_quota(self) -> Tuple[bool, str]:
         """Check if quota is available. Returns (allowed, reason)."""
         if self.usage_today >= self.quota_daily:
@@ -61,7 +61,7 @@ class APIKey:
         if self.usage_this_month >= self.quota_monthly:
             return False, "Monthly quota exceeded"
         return True, "OK"
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -85,39 +85,39 @@ class APIKey:
 class APIKeyManager:
     """
     Manages API keys for the SloughGPT SDK.
-    
+
     Example:
-    
+
     ```python
     from sloughgpt_sdk.auth import APIKeyManager, KeyTier
-    
+
     manager = APIKeyManager()
-    
+
     # Generate a new API key
     key, key_data = manager.create_key(
         name="My App",
         tier=KeyTier.PRO,
         quota_daily=1000
     )
-    
+
     # Store key securely
     print(f"API Key: {key}")  # Only shown once!
-    
+
     # Validate a key
     is_valid, reason = manager.validate_key(key)
-    
+
     # Track usage
     manager.record_usage(key, tokens_used=100)
-    
+
     # Revoke a key
     manager.revoke_key(key_id="key_xxx")
     ```
     """
-    
+
     def __init__(self, storage_path: str = "./.api_keys.json"):
         """
         Initialize the API key manager.
-        
+
         Args:
             storage_path: Path to store key data.
         """
@@ -125,7 +125,7 @@ class APIKeyManager:
         self._keys: Dict[str, APIKey] = {}
         self._key_lookup: Dict[str, str] = {}  # hash -> key_id
         self._load_keys()
-    
+
     def _load_keys(self):
         """Load keys from storage."""
         try:
@@ -155,7 +155,7 @@ class APIKeyManager:
                     self._key_lookup[key.key_hash] = key.key_id
         except (FileNotFoundError, json.JSONDecodeError):
             pass
-    
+
     def _save_keys(self):
         """Save keys to storage."""
         data = {
@@ -163,23 +163,23 @@ class APIKeyManager:
         }
         with open(self._storage_path, "w") as f:
             json.dump(data, f, indent=2)
-    
+
     @staticmethod
     def _hash_key(key: str) -> str:
         """Hash an API key for secure storage."""
         return hashlib.sha256(key.encode()).hexdigest()
-    
+
     @staticmethod
     def _generate_key_id() -> str:
         """Generate a unique key ID."""
         return f"sk_{secrets.token_hex(8)}"
-    
+
     @staticmethod
     def _generate_api_key(prefix: str = "slough") -> str:
         """Generate a new API key."""
         key_body = secrets.token_urlsafe(32)
         return f"{prefix}_{key_body}"
-    
+
     def create_key(
         self,
         name: str,
@@ -193,7 +193,7 @@ class APIKeyManager:
     ) -> Tuple[str, APIKey]:
         """
         Create a new API key.
-        
+
         Returns:
             Tuple of (plaintext_key, APIKey object)
             The plaintext key is only returned once - store it securely!
@@ -202,16 +202,16 @@ class APIKeyManager:
         prefix = f"sk_{secrets.token_hex(4)}"
         plaintext_key = self._generate_api_key(prefix)
         key_hash = self._hash_key(plaintext_key)
-        
+
         tier_quotas = {
             KeyTier.FREE: (60, 100, 1000),
             KeyTier.STARTER: (120, 1000, 10000),
             KeyTier.PRO: (300, 10000, 100000),
             KeyTier.ENTERPRISE: (1000, 100000, 1000000),
         }
-        
+
         default_rate, default_daily, default_monthly = tier_quotas.get(tier, tier_quotas[KeyTier.FREE])
-        
+
         api_key = APIKey(
             key_id=key_id,
             key_hash=key_hash,
@@ -226,43 +226,43 @@ class APIKeyManager:
             quota_monthly=quota_monthly or default_monthly,
             metadata=metadata or {},
         )
-        
+
         self._keys[key_id] = api_key
         self._key_lookup[key_hash] = key_id
         self._save_keys()
-        
+
         return plaintext_key, api_key
-    
+
     def validate_key(self, key: str) -> Tuple[bool, str, Optional[APIKey]]:
         """
         Validate an API key.
-        
+
         Returns:
             Tuple of (is_valid, reason, api_key)
         """
         key_hash = self._hash_key(key)
-        
+
         if key_hash not in self._key_lookup:
             return False, "Invalid API key", None
-        
+
         key_id = self._key_lookup[key_hash]
         api_key = self._keys.get(key_id)
-        
+
         if api_key is None:
             return False, "Key not found", None
-        
+
         if not api_key.is_valid():
             if not api_key.is_active:
                 return False, "API key is deactivated", api_key
             if api_key.is_expired():
                 return False, "API key has expired", api_key
-        
+
         allowed, reason = api_key.check_quota()
         if not allowed:
             return False, reason, api_key
-        
+
         return True, "OK", api_key
-    
+
     def record_usage(
         self,
         key: str,
@@ -271,40 +271,40 @@ class APIKeyManager:
     ) -> bool:
         """
         Record usage for an API key.
-        
+
         Returns:
             True if usage was recorded successfully.
         """
         key_hash = self._hash_key(key)
-        
+
         if key_hash not in self._key_lookup:
             return False
-        
+
         key_id = self._key_lookup[key_hash]
         api_key = self._keys.get(key_id)
-        
+
         if api_key is None:
             return False
-        
+
         api_key.usage_count += requests_count
         api_key.usage_today += requests_count
         api_key.usage_this_month += requests_count
         api_key.last_used_at = time.time()
-        
+
         self._save_keys()
         return True
-    
+
     def get_key_info(self, key_id: str) -> Optional[APIKey]:
         """Get information about an API key."""
         return self._keys.get(key_id)
-    
+
     def list_keys(self, user_id: Optional[str] = None) -> List[APIKey]:
         """List all API keys, optionally filtered by user."""
         keys = list(self._keys.values())
         if user_id:
             keys = [k for k in keys if k.user_id == user_id]
         return keys
-    
+
     def revoke_key(self, key_id: str) -> bool:
         """Revoke an API key."""
         if key_id in self._keys:
@@ -312,7 +312,7 @@ class APIKeyManager:
             self._save_keys()
             return True
         return False
-    
+
     def delete_key(self, key_id: str) -> bool:
         """Delete an API key permanently."""
         if key_id in self._keys:
@@ -322,20 +322,20 @@ class APIKeyManager:
             self._save_keys()
             return True
         return False
-    
+
     def rotate_key(self, key_id: str) -> Tuple[str, APIKey]:
         """
         Rotate an API key (revoke old, create new).
-        
+
         Returns:
             Tuple of (new_plaintext_key, new_APIKey)
         """
         old_key = self._keys.get(key_id)
         if old_key is None:
             raise ValueError(f"Key not found: {key_id}")
-        
+
         self.revoke_key(key_id)
-        
+
         new_key, new_api_key = self.create_key(
             name=old_key.name,
             tier=old_key.tier,
@@ -345,9 +345,9 @@ class APIKeyManager:
             quota_monthly=old_key.quota_monthly,
             metadata=old_key.metadata,
         )
-        
+
         return new_key, new_api_key
-    
+
     def reset_usage(self, key_id: str) -> bool:
         """Reset usage counters for a key."""
         if key_id in self._keys:
@@ -356,7 +356,7 @@ class APIKeyManager:
             self._save_keys()
             return True
         return False
-    
+
     def update_tier(self, key_id: str, tier: KeyTier) -> bool:
         """Update the tier for a key."""
         if key_id in self._keys:
@@ -364,7 +364,7 @@ class APIKeyManager:
             self._save_keys()
             return True
         return False
-    
+
     def set_quota(
         self,
         key_id: str,
@@ -380,13 +380,13 @@ class APIKeyManager:
             self._save_keys()
             return True
         return False
-    
+
     def get_usage_stats(self, key_id: str) -> Optional[Dict[str, Any]]:
         """Get usage statistics for a key."""
         api_key = self._keys.get(key_id)
         if api_key is None:
             return None
-        
+
         return {
             "total_requests": api_key.usage_count,
             "requests_today": api_key.usage_today,
@@ -403,15 +403,15 @@ class APIKeyManager:
 class APIKeyMiddleware:
     """
     Middleware for validating API keys in requests.
-    
+
     Example:
-    
+
     ```python
     from sloughgpt_sdk.auth import APIKeyMiddleware, APIKeyManager
-    
+
     manager = APIKeyManager()
     middleware = APIKeyMiddleware(manager)
-    
+
     # In your FastAPI app:
     @app.middleware("http")
     async def validate_api_key(request, call_next):
@@ -419,46 +419,46 @@ class APIKeyMiddleware:
         return response
     ```
     """
-    
+
     def __init__(self, manager: APIKeyManager):
         """Initialize middleware."""
         self._manager = manager
-    
+
     def extract_key(self, request) -> Optional[str]:
         """Extract API key from request headers."""
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
             return auth_header[7:]
-        
+
         api_key = request.headers.get("X-API-Key")
         if api_key:
             return api_key
-        
+
         api_key = request.query_params.get("api_key")
         if api_key:
             return api_key
-        
+
         return None
-    
+
     async def validate_request(self, request, call_next):
         """Validate API key and process request."""
         key = self.extract_key(request)
-        
+
         if not key:
             return {"error": "API key required", "status": 401}
-        
+
         is_valid, reason, api_key = self._manager.validate_key(key)
-        
+
         if not is_valid:
             return {"error": reason, "status": 401 if "Invalid" in reason else 429}
-        
+
         response = await call_next(request)
-        
+
         self._manager.record_usage(key)
-        
+
         response.headers["X-RateLimit-Limit"] = str(api_key.rate_limit)
         response.headers["X-RateLimit-Remaining"] = str(
             api_key.rate_limit - api_key.usage_today
         )
-        
+
         return response

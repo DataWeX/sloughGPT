@@ -50,7 +50,7 @@ class Webhook:
     last_failure_at: Optional[float] = None
     failure_count: int = 0
     metadata: Dict[str, Any] = field(default_factory=dict)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -74,7 +74,7 @@ class WebhookPayload:
     timestamp: float
     data: Dict[str, Any]
     webhook_id: str
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -83,7 +83,7 @@ class WebhookPayload:
             "data": self.data,
             "webhook_id": self.webhook_id,
         }
-    
+
     def to_json(self) -> str:
         """Convert to JSON string."""
         return json.dumps(self.to_dict(), default=str)
@@ -112,35 +112,35 @@ class WebhookDelivery:
 class WebhookManager:
     """
     Manages webhook subscriptions and deliveries.
-    
+
     Example:
-    
+
     ```python
     from sloughgpt_sdk.webhooks import WebhookManager, WebhookEvent
-    
+
     manager = WebhookManager()
-    
+
     # Register a webhook
     webhook = manager.create_webhook(
         url="https://mysite.com/webhooks",
         events=[WebhookEvent.KEY_CREATED, WebhookEvent.QUOTA_EXCEEDED],
     )
-    
+
     # Trigger an event
     manager.trigger_event(
         event=WebhookEvent.KEY_CREATED,
         data={"key_id": "sk_xxx", "tier": "pro"}
     )
-    
+
     # Verify webhook signature
     is_valid = manager.verify_signature(signature, payload, webhook.secret)
     ```
     """
-    
+
     def __init__(self, storage_path: str = "./.webhooks.json"):
         """
         Initialize webhook manager.
-        
+
         Args:
             storage_path: Path to store webhook data.
         """
@@ -151,7 +151,7 @@ class WebhookManager:
         self._worker_thread: Optional[threading.Thread] = None
         self._running = False
         self._load_webhooks()
-    
+
     def _load_webhooks(self):
         """Load webhooks from storage."""
         try:
@@ -175,7 +175,7 @@ class WebhookManager:
                     self._webhooks[webhook.id] = webhook
         except (FileNotFoundError, json.JSONDecodeError):
             pass
-    
+
     def _save_webhooks(self):
         """Save webhooks to storage."""
         data = {
@@ -183,18 +183,18 @@ class WebhookManager:
         }
         with open(self._storage_path, "w") as f:
             json.dump(data, f, indent=2)
-    
+
     @staticmethod
     def generate_webhook_id() -> str:
         """Generate a unique webhook ID."""
         return f"wh_{int(time.time())}_{secrets.token_hex(4)}"
-    
+
     @staticmethod
     def generate_secret() -> str:
         """Generate a secure webhook secret."""
         import secrets
         return secrets.token_urlsafe(32)
-    
+
     def create_webhook(
         self,
         url: str,
@@ -204,19 +204,19 @@ class WebhookManager:
     ) -> Webhook:
         """
         Create a new webhook subscription.
-        
+
         Args:
             url: The URL to send webhooks to.
             events: List of events to subscribe to.
             secret: Optional secret for signature verification.
             metadata: Optional metadata.
-        
+
         Returns:
             The created Webhook object.
         """
         webhook_id = self.generate_webhook_id()
         webhook_secret = secret or self.generate_secret()
-        
+
         webhook = Webhook(
             id=webhook_id,
             url=url,
@@ -224,23 +224,23 @@ class WebhookManager:
             secret=webhook_secret,
             metadata=metadata or {},
         )
-        
+
         self._webhooks[webhook_id] = webhook
         self._save_webhooks()
-        
+
         return webhook
-    
+
     def get_webhook(self, webhook_id: str) -> Optional[Webhook]:
         """Get a webhook by ID."""
         return self._webhooks.get(webhook_id)
-    
+
     def list_webhooks(self, event_filter: Optional[WebhookEvent] = None) -> List[Webhook]:
         """List all webhooks, optionally filtered by event."""
         webhooks = list(self._webhooks.values())
         if event_filter:
             webhooks = [wh for wh in webhooks if event_filter in wh.events]
         return webhooks
-    
+
     def update_webhook(
         self,
         webhook_id: str,
@@ -252,17 +252,17 @@ class WebhookManager:
         webhook = self._webhooks.get(webhook_id)
         if not webhook:
             return False
-        
+
         if url is not None:
             webhook.url = url
         if events is not None:
             webhook.events = events
         if is_active is not None:
             webhook.is_active = is_active
-        
+
         self._save_webhooks()
         return True
-    
+
     def delete_webhook(self, webhook_id: str) -> bool:
         """Delete a webhook."""
         if webhook_id in self._webhooks:
@@ -270,13 +270,13 @@ class WebhookManager:
             self._save_webhooks()
             return True
         return False
-    
+
     def register_handler(self, event: WebhookEvent, handler: Callable):
         """Register an event handler."""
         if event not in self._event_handlers:
             self._event_handlers[event] = []
         self._event_handlers[event].append(handler)
-    
+
     def trigger_event(
         self,
         event: WebhookEvent,
@@ -284,27 +284,27 @@ class WebhookManager:
     ) -> List[WebhookDelivery]:
         """
         Trigger an event to all subscribed webhooks.
-        
+
         Returns:
             List of delivery results.
         """
         webhooks = self.list_webhooks(event)
         deliveries = []
-        
+
         for webhook in webhooks:
             if not webhook.is_active:
                 continue
-            
+
             payload = WebhookPayload(
                 event=event,
                 timestamp=time.time(),
                 data=data,
                 webhook_id=webhook.id,
             )
-            
+
             delivery = self._deliver_webhook(webhook, payload)
             deliveries.append(delivery)
-            
+
             webhook.last_triggered_at = time.time()
             if delivery.success:
                 webhook.last_success_at = time.time()
@@ -312,10 +312,10 @@ class WebhookManager:
             else:
                 webhook.last_failure_at = time.time()
                 webhook.failure_count += 1
-        
+
         self._save_webhooks()
         return deliveries
-    
+
     def _deliver_webhook(
         self,
         webhook: Webhook,
@@ -324,13 +324,13 @@ class WebhookManager:
         """Deliver a webhook to its URL."""
         import requests
         import secrets
-        
+
         start_time = time.time()
         delivery = WebhookDelivery(
             webhook_id=webhook.id,
             payload=payload.to_dict(),
         )
-        
+
         try:
             headers = {
                 "Content-Type": "application/json",
@@ -341,19 +341,19 @@ class WebhookManager:
                     payload.to_json(), webhook.secret
                 ),
             }
-            
+
             response = requests.post(
                 webhook.url,
                 data=payload.to_json(),
                 headers=headers,
                 timeout=30,
             )
-            
+
             delivery.status_code = response.status_code
             delivery.success = 200 <= response.status_code < 300
             if not delivery.success:
                 delivery.error = f"HTTP {response.status_code}"
-            
+
         except requests.exceptions.Timeout:
             delivery.success = False
             delivery.error = "Request timeout"
@@ -362,9 +362,9 @@ class WebhookManager:
             delivery.error = str(e)
         finally:
             delivery.duration_ms = (time.time() - start_time) * 1000
-        
+
         return delivery
-    
+
     @staticmethod
     def _generate_signature(payload: str, secret: str) -> str:
         """Generate HMAC signature for payload."""
@@ -374,32 +374,32 @@ class WebhookManager:
             hashlib.sha256
         ).hexdigest()
         return f"sha256={signature}"
-    
+
     @staticmethod
     def verify_signature(signature: str, payload: str, secret: str) -> bool:
         """
         Verify webhook signature.
-        
+
         Args:
             signature: The signature from the request header.
             payload: The raw request body.
             secret: The webhook's secret.
-        
+
         Returns:
             True if signature is valid.
         """
         if not signature.startswith("sha256="):
             return False
-        
+
         expected = WebhookManager._generate_signature(payload, secret)
         return hmac.compare_digest(signature, expected)
-    
+
     def get_webhook_stats(self, webhook_id: str) -> Optional[Dict[str, Any]]:
         """Get delivery statistics for a webhook."""
         webhook = self._webhooks.get(webhook_id)
         if not webhook:
             return None
-        
+
         return {
             "id": webhook.id,
             "url": webhook.url,
@@ -421,26 +421,26 @@ class WebhookManager:
 class WebhookTester:
     """
     Test webhook endpoints.
-    
+
     Example:
-    
+
     ```python
     from sloughgpt_sdk.webhooks import WebhookTester, WebhookEvent
-    
+
     tester = WebhookTester()
-    
+
     # Test a webhook URL
     result = tester.test_webhook(
         url="https://mysite.com/webhooks",
         event=WebhookEvent.KEY_CREATED,
         secret="webhook_secret"
     )
-    
+
     print(f"Success: {result['success']}")
     print(f"Response time: {result['duration_ms']}ms")
     ```
     """
-    
+
     @staticmethod
     def test_webhook(
         url: str,
@@ -451,27 +451,27 @@ class WebhookTester:
         """Test a webhook endpoint."""
         import requests
         import secrets
-        
+
         payload = {
             "event": event.value,
             "timestamp": time.time(),
             "data": test_data or {"test": True, "message": "This is a test webhook"},
             "webhook_id": f"test_{secrets.token_hex(4)}",
         }
-        
+
         headers = {
             "Content-Type": "application/json",
             "X-Webhook-Test": "true",
         }
-        
+
         if secret:
             payload_str = json.dumps(payload)
             headers["X-Webhook-Signature"] = WebhookManager._generate_signature(
                 payload_str, secret
             )
-        
+
         start_time = time.time()
-        
+
         try:
             response = requests.post(
                 url,
@@ -479,9 +479,9 @@ class WebhookTester:
                 headers=headers,
                 timeout=30,
             )
-            
+
             duration_ms = (time.time() - start_time) * 1000
-            
+
             return {
                 "success": 200 <= response.status_code < 300,
                 "status_code": response.status_code,
@@ -489,7 +489,7 @@ class WebhookTester:
                 "response_body": response.text[:500] if response.text else None,
                 "error": None,
             }
-            
+
         except requests.exceptions.Timeout:
             return {
                 "success": False,

@@ -44,7 +44,7 @@ class ModelMetrics:
     max_latency_ms: float = 0
     memory_usage_mb: float = 0
     last_used: Optional[float] = None
-    
+
     def record_request(self, latency_ms: float, tokens: int = 0, success: bool = True):
         """Record a request."""
         self.total_requests += 1
@@ -52,14 +52,14 @@ class ModelMetrics:
             self.successful_requests += 1
         else:
             self.failed_requests += 1
-        
+
         self.total_tokens += tokens
         self.total_latency_ms += latency_ms
         self.avg_latency_ms = self.total_latency_ms / self.total_requests
         self.min_latency_ms = min(self.min_latency_ms, latency_ms)
         self.max_latency_ms = max(self.max_latency_ms, latency_ms)
         self.last_used = time.time()
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "total_requests": self.total_requests,
@@ -93,7 +93,7 @@ class ModelInfo:
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
     config: Dict[str, Any] = field(default_factory=dict)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
@@ -117,14 +117,14 @@ class ModelInfo:
 class ModelRegistry:
     """
     Centralized model registry.
-    
+
     Example:
-    
+
     ```python
     from sloughgpt_sdk.registry import ModelRegistry, ModelStatus, ModelTag
-    
+
     registry = ModelRegistry()
-    
+
     # Register a model
     registry.register(
         id="gpt2-large",
@@ -134,25 +134,25 @@ class ModelRegistry:
         tags=[ModelTag.STABLE, ModelTag.GPU],
         config={"max_length": 1024}
     )
-    
+
     # Get best model for task
     model = registry.get_best_model(criteria="latency")
-    
+
     # Record usage
     registry.record_request("gpt2-large", latency_ms=50)
-    
+
     # Get all models
     models = registry.list_models(status=ModelStatus.READY)
     ```
     """
-    
+
     def __init__(self, storage_path: str = "./.model_registry.json"):
         """Initialize registry."""
         self._storage_path = storage_path
         self._models: Dict[str, ModelInfo] = {}
         self._lock = threading.RLock()
         self._load()
-    
+
     def _load(self):
         """Load registry from storage."""
         try:
@@ -166,14 +166,14 @@ class ModelRegistry:
                     self._models[model_data["id"]] = ModelInfo(**model_data)
         except (FileNotFoundError, json.JSONDecodeError):
             pass
-    
+
     def _save(self):
         """Save registry to storage."""
         with self._lock:
             data = {"models": [m.to_dict() for m in self._models.values()]}
             with open(self._storage_path, "w") as f:
                 json.dump(data, f, indent=2, default=str)
-    
+
     def register(
         self,
         id: str,
@@ -190,7 +190,7 @@ class ModelRegistry:
     ) -> ModelInfo:
         """
         Register a new model.
-        
+
         Args:
             id: Unique model ID
             name: Human-readable name
@@ -203,14 +203,14 @@ class ModelRegistry:
             tags: Model tags (latest, stable, etc.)
             metadata: Additional metadata
             config: Model configuration
-        
+
         Returns:
             Registered ModelInfo
         """
         tags = tags or [ModelTag.STABLE.value]
         metadata = metadata or {}
         config = config or {}
-        
+
         model = ModelInfo(
             id=id,
             name=name,
@@ -225,13 +225,13 @@ class ModelRegistry:
             metadata=metadata,
             config=config,
         )
-        
+
         with self._lock:
             self._models[id] = model
             self._save()
-        
+
         return model
-    
+
     def unregister(self, model_id: str) -> bool:
         """Unregister a model."""
         with self._lock:
@@ -240,11 +240,11 @@ class ModelRegistry:
                 self._save()
                 return True
         return False
-    
+
     def get(self, model_id: str) -> Optional[ModelInfo]:
         """Get model by ID."""
         return self._models.get(model_id)
-    
+
     def list_models(
         self,
         status: Optional[ModelStatus] = None,
@@ -253,28 +253,28 @@ class ModelRegistry:
     ) -> List[ModelInfo]:
         """
         List models with optional filters.
-        
+
         Args:
             status: Filter by status
             tags: Filter by tags (any match)
             framework: Filter by framework
-        
+
         Returns:
             List of matching models
         """
         models = list(self._models.values())
-        
+
         if status:
             models = [m for m in models if m.status == status]
-        
+
         if tags:
             models = [m for m in models if any(t in m.tags for t in tags)]
-        
+
         if framework:
             models = [m for m in models if m.framework == framework]
-        
+
         return sorted(models, key=lambda m: m.updated_at, reverse=True)
-    
+
     def update_status(self, model_id: str, status: ModelStatus) -> bool:
         """Update model status."""
         model = self._models.get(model_id)
@@ -284,7 +284,7 @@ class ModelRegistry:
             self._save()
             return True
         return False
-    
+
     def update_metrics(self, model_id: str, memory_mb: float) -> bool:
         """Update model memory metrics."""
         model = self._models.get(model_id)
@@ -293,7 +293,7 @@ class ModelRegistry:
             self._save()
             return True
         return False
-    
+
     def record_request(
         self,
         model_id: str,
@@ -309,12 +309,12 @@ class ModelRegistry:
             self._save()
             return True
         return False
-    
+
     def get_metrics(self, model_id: str) -> Optional[Dict[str, Any]]:
         """Get model metrics."""
         model = self._models.get(model_id)
         return model.metrics.to_dict() if model else None
-    
+
     def get_best_model(
         self,
         criteria: str = "latency",
@@ -322,19 +322,19 @@ class ModelRegistry:
     ) -> Optional[ModelInfo]:
         """
         Get best model based on criteria.
-        
+
         Args:
             criteria: Selection criteria (latency, throughput, memory)
             tags: Filter by tags
-        
+
         Returns:
             Best model or None
         """
         models = self.list_models(status=ModelStatus.READY, tags=tags)
-        
+
         if not models:
             return None
-        
+
         if criteria == "latency":
             return min(models, key=lambda m: m.metrics.avg_latency_ms)
         elif criteria == "throughput":
@@ -346,16 +346,16 @@ class ModelRegistry:
                 models,
                 key=lambda m: m.metrics.successful_requests / max(m.metrics.total_requests, 1)
             )
-        
+
         return models[0]
-    
+
     def get_latest(self, name: str) -> Optional[ModelInfo]:
         """Get latest version of a model by name."""
         models = [m for m in self._models.values() if m.name == name]
         if not models:
             return None
         return max(models, key=lambda m: m.version)
-    
+
     def tag_model(self, model_id: str, tag: str) -> bool:
         """Add tag to model."""
         model = self._models.get(model_id)
@@ -365,7 +365,7 @@ class ModelRegistry:
             self._save()
             return True
         return False
-    
+
     def untag_model(self, model_id: str, tag: str) -> bool:
         """Remove tag from model."""
         model = self._models.get(model_id)
@@ -375,7 +375,7 @@ class ModelRegistry:
             self._save()
             return True
         return False
-    
+
     def deprecate(self, model_id: str, replacement: Optional[str] = None) -> bool:
         """Deprecate a model."""
         model = self._models.get(model_id)
@@ -389,7 +389,7 @@ class ModelRegistry:
             self._save()
             return True
         return False
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """Get registry statistics."""
         total = len(self._models)
@@ -397,13 +397,13 @@ class ModelRegistry:
         by_framework = defaultdict(int)
         total_requests = 0
         total_tokens = 0
-        
+
         for model in self._models.values():
             by_status[model.status.value] += 1
             by_framework[model.framework] += 1
             total_requests += model.metrics.total_requests
             total_tokens += model.metrics.total_tokens
-        
+
         return {
             "total_models": total,
             "by_status": dict(by_status),
@@ -411,14 +411,14 @@ class ModelRegistry:
             "total_requests": total_requests,
             "total_tokens": total_tokens,
         }
-    
+
     def export_config(self) -> Dict[str, Any]:
         """Export registry configuration."""
         return {
             "models": [m.to_dict() for m in self._models.values()],
             "exported_at": time.time(),
         }
-    
+
     def import_config(self, config: Dict[str, Any]) -> int:
         """Import registry configuration."""
         count = 0
@@ -431,7 +431,7 @@ class ModelRegistry:
                 count += 1
             except Exception:
                 pass
-        
+
         self._save()
         return count
 
@@ -439,28 +439,28 @@ class ModelRegistry:
 class ModelSelector:
     """
     Intelligent model selection based on request requirements.
-    
+
     Example:
-    
+
     ```python
     selector = ModelSelector(registry)
-    
+
     # Select model for task
     model = selector.select(
         task="chat",
         prefer_fast=True,
         max_latency_ms=100,
     )
-    
+
     # Or let it decide automatically
     model = selector.auto_select(task="generation")
     ```
     """
-    
+
     def __init__(self, registry: ModelRegistry):
         """Initialize selector."""
         self._registry = registry
-    
+
     def select(
         self,
         task: Optional[str] = None,
@@ -472,7 +472,7 @@ class ModelSelector:
     ) -> Optional[ModelInfo]:
         """
         Select best model for requirements.
-        
+
         Args:
             task: Task type (chat, generate, embed, etc.)
             prefer_fast: Prefer low latency
@@ -480,27 +480,27 @@ class ModelSelector:
             max_latency_ms: Maximum acceptable latency
             max_memory_mb: Maximum memory usage
             tags: Preferred tags
-        
+
         Returns:
             Selected model or None
         """
         models = self._registry.list_models(status=ModelStatus.READY)
-        
+
         if tags:
             models = [m for m in models if any(t in m.tags for t in tags)]
-        
+
         if max_latency_ms:
             models = [
                 m for m in models
                 if m.metrics.avg_latency_ms <= max_latency_ms or m.metrics.total_requests == 0
             ]
-        
+
         if max_memory_mb:
             models = [m for m in models if m.metrics.memory_usage_mb <= max_memory_mb]
-        
+
         if not models:
             return None
-        
+
         if prefer_fast:
             return min(models, key=lambda m: m.metrics.avg_latency_ms)
         elif prefer_cheap:
@@ -511,9 +511,9 @@ class ModelSelector:
             return self._registry.get_best_model("throughput", tags=None)
         elif task == "embedding":
             return self._registry.get_best_model("memory", tags=None)
-        
+
         return models[0]
-    
+
     def auto_select(self, task: str) -> Optional[ModelInfo]:
         """Auto-select model based on task."""
         task_defaults = {
@@ -524,6 +524,6 @@ class ModelSelector:
             "analyze": {"prefer_fast": True},
             "summarize": {"prefer_fast": True},
         }
-        
+
         kwargs = task_defaults.get(task, {})
         return self.select(task=task, **kwargs)

@@ -31,15 +31,15 @@ export function ProgressBar({
       {...props}
     >
       {indeterminate ? (
-        <div 
+        <div
           className="absolute inset-0 h-full"
           style={{
-            background: `linear-gradient(135deg, 
-              #90EE90 25%, 
-              transparent 25%, 
-              transparent 50%, 
-              #90EE90 50%, 
-              #90EE90 75%, 
+            background: `linear-gradient(135deg,
+              #90EE90 25%,
+              transparent 25%,
+              transparent 50%,
+              #90EE90 50%,
+              #90EE90 75%,
               transparent 75%
             )`,
             backgroundSize: '16px 16px',
@@ -48,15 +48,15 @@ export function ProgressBar({
         />
       ) : (
         <>
-          <div 
+          <div
             className="absolute inset-0 h-full"
             style={{
-              background: `linear-gradient(135deg, 
-                rgba(144, 238, 144, 0.3) 25%, 
-                transparent 25%, 
-                transparent 50%, 
-                rgba(144, 238, 144, 0.3) 50%, 
-                rgba(144, 238, 144, 0.3) 75%, 
+              background: `linear-gradient(135deg,
+                rgba(144, 238, 144, 0.3) 25%,
+                transparent 25%,
+                transparent 50%,
+                rgba(144, 238, 144, 0.3) 50%,
+                rgba(144, 238, 144, 0.3) 75%,
                 transparent 75%
               )`,
               backgroundSize: '12px 12px',
@@ -65,7 +65,7 @@ export function ProgressBar({
           />
           <div
             className="absolute inset-y-0 left-0 h-full transition-[width] duration-300 ease-smooth"
-            style={{ 
+            style={{
               width: `${pct}%`,
               background: 'linear-gradient(90deg, #98FB98 0%, #7CFC00 50%, #98FB98 100%)',
             }}

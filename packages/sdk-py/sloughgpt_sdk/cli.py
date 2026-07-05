@@ -36,7 +36,7 @@ def main():
         description="SloughGPT SDK CLI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    
+
     parser.add_argument(
         "--url", "-u",
         default=os.environ.get("MAN_API_URL", "http://localhost:8000"),
@@ -74,12 +74,12 @@ def main():
         action="store_true",
         help="Verbose output"
     )
-    
+
     subparsers = parser.add_subparsers(dest="command", help="Commands")
-    
+
     health = subparsers.add_parser("health", help="Check API health")
     info = subparsers.add_parser("info", help="Get system info")
-    
+
     gen = subparsers.add_parser(
         "generate",
         aliases=["gen"],
@@ -87,56 +87,56 @@ def main():
     )
     gen.add_argument("prompt", help="Prompt for generation")
     gen.add_argument("--stream", "-s", action="store_true", help="Stream output")
-    
+
     chat = subparsers.add_parser("chat", help="Chat completion")
     chat.add_argument("message", help="User message")
     chat.add_argument("--system", help="System prompt")
-    
+
     models = subparsers.add_parser("models", help="List available models")
     models.add_argument("--hf", action="store_true", help="Include HuggingFace models")
-    
+
     datasets = subparsers.add_parser("datasets", help="List available datasets")
-    
+
     metrics = subparsers.add_parser("metrics", help="Get API metrics")
     metrics.add_argument("--prometheus", action="store_true", help="Prometheus format")
-    
+
     key = subparsers.add_parser("key", help="API key management")
     key_subparsers = key.add_subparsers(dest="key_action", help="Key actions")
-    
+
     key_create = key_subparsers.add_parser("create", help="Create a new API key")
     key_create.add_argument("--name", "-n", required=True, help="Key name")
     key_create.add_argument("--tier", "-t", default="free", choices=["free", "starter", "pro", "enterprise"], help="Subscription tier")
     key_create.add_argument("--expires", "-e", type=int, help="Days until expiration")
     key_create.add_argument("--quota-daily", type=int, help="Daily quota limit")
     key_create.add_argument("--quota-monthly", type=int, help="Monthly quota limit")
-    
+
     key_list = key_subparsers.add_parser("list", help="List API keys")
-    
+
     key_info = key_subparsers.add_parser("info", help="Get key info")
     key_info.add_argument("key_id", help="Key ID")
-    
+
     key_rotate = key_subparsers.add_parser("rotate", help="Rotate API key")
     key_rotate.add_argument("key_id", help="Key ID to rotate")
-    
+
     key_revoke = key_subparsers.add_parser("revoke", help="Revoke API key")
     key_revoke.add_argument("key_id", help="Key ID to revoke")
-    
+
     key_delete = key_subparsers.add_parser("delete", help="Delete API key")
     key_delete.add_argument("key_id", help="Key ID to delete")
-    
+
     key_usage = key_subparsers.add_parser("usage", help="Get key usage stats")
     key_usage.add_argument("key_id", help="Key ID")
-    
+
     key_reset = key_subparsers.add_parser("reset", help="Reset key usage")
     key_reset.add_argument("key_id", help="Key ID")
-    
+
     registry = subparsers.add_parser("registry", help="Model registry")
     reg_subparsers = registry.add_subparsers(dest="reg_action", help="Registry actions")
-    
+
     reg_list = reg_subparsers.add_parser("list", help="List registered models")
     reg_list.add_argument("--status", help="Filter by status (ready, loading, error)")
     reg_list.add_argument("--tag", action="append", help="Filter by tag")
-    
+
     reg_register = reg_subparsers.add_parser("register", help="Register a model")
     reg_register.add_argument("--id", "-i", required=True, help="Model ID")
     reg_register.add_argument("--name", "-n", required=True, help="Model name")
@@ -146,32 +146,32 @@ def main():
     reg_register.add_argument("--size", "-s", type=float, default=0, help="Size in MB")
     reg_register.add_argument("--params", type=int, default=0, help="Number of parameters")
     reg_register.add_argument("--tag", action="append", help="Tags (can repeat)")
-    
+
     reg_info = reg_subparsers.add_parser("info", help="Get model info")
     reg_info.add_argument("model_id", help="Model ID")
-    
+
     reg_metrics = reg_subparsers.add_parser("metrics", help="Get model metrics")
     reg_metrics.add_argument("model_id", help="Model ID")
-    
+
     reg_best = reg_subparsers.add_parser("best", help="Get best model")
     reg_best.add_argument("--criteria", "-c", default="latency", choices=["latency", "throughput", "memory"], help="Selection criteria")
     reg_best.add_argument("--tag", action="append", help="Filter by tag")
-    
+
     reg_stats = reg_subparsers.add_parser("stats", help="Get registry statistics")
-    
+
     args = parser.parse_args()
-    
+
     if not args.command:
         parser.print_help()
         return 0
-    
+
     try:
         client = SloughGPTClient(
             base_url=args.url,
             api_key=args.api_key,
             timeout=60,
         )
-        
+
         if args.command == "health":
             result = client.health()
             if args.json:
@@ -183,7 +183,7 @@ def main():
                 if result.model_name:
                     print(f"Model: {result.model_name}")
                 print(f"Device: {result.device}")
-        
+
         elif args.command == "info":
             result = client.info()
             if args.json:
@@ -195,7 +195,7 @@ def main():
                 if result.cuda:
                     print(f"GPU: {result.cuda.get('device', 'N/A')}")
                 print(f"CPU Cores: {result.cpu_count}")
-        
+
         elif args.command == "generate":
             if args.stream:
                 print("Generating (stream): ", end="", flush=True)
@@ -216,29 +216,29 @@ def main():
                     print(format_json(result.raw_response))
                 else:
                     print(result.generated_text)
-                
+
                 if args.verbose:
                     print(f"\nTokens: {result.tokens_generated}")
                     print(f"Time: {result.inference_time_ms:.2f}ms")
-        
+
         elif args.command == "chat":
             messages = []
             if args.system:
                 messages.append(ChatMessage.system(args.system))
             messages.append(ChatMessage.user(args.message))
-            
+
             result = client.chat(
                 messages,
                 model=args.model,
                 max_new_tokens=args.max_tokens,
                 temperature=args.temperature,
             )
-            
+
             if args.json:
                 print(format_json(result.raw_response))
             else:
                 print(result.message.content)
-        
+
         elif args.command == "models":
             models_list = client.list_models()
             if args.json:
@@ -250,7 +250,7 @@ def main():
                         print(f"    Source: {m.source}")
                     if m.description:
                         print(f"    {m.description}")
-        
+
         elif args.command == "datasets":
             datasets_list = client.list_datasets()
             if args.json:
@@ -260,7 +260,7 @@ def main():
                     print(f"  {d.id}")
                     if d.description:
                         print(f"    {d.description}")
-        
+
         elif args.command == "metrics":
             if args.prometheus:
                 print(client.metrics_prometheus())
@@ -275,10 +275,10 @@ def main():
                     print(f"Cache Hits: {result.cache_hits}")
                     print(f"Cache Misses: {result.cache_misses}")
                     print(f"Avg Response Time: {result.avg_response_time_ms:.2f}ms")
-        
+
         elif args.command == "key":
             key_manager = APIKeyManager()
-            
+
             if args.key_action == "create":
                 tier = KeyTier(args.tier)
                 new_key, key_data = key_manager.create_key(
@@ -300,7 +300,7 @@ def main():
                 print(f"Monthly Quota: {key_data.quota_monthly}")
                 print("\n⚠️  Save this key securely - it will not be shown again!")
                 print("="*50)
-            
+
             elif args.key_action == "list":
                 keys = key_manager.list_keys()
                 if not keys:
@@ -313,14 +313,14 @@ def main():
                         print(f"   Tier: {k.tier.value}")
                         print(f"   Active: {k.is_active}")
                         print(f"   Usage: {k.usage_today}/{k.quota_daily} today, {k.usage_this_month}/{k.quota_monthly} this month")
-            
+
             elif args.key_action == "info":
                 key_data = key_manager.get_key_info(args.key_id)
                 if key_data:
                     print(format_json(key_data.to_dict()))
                 else:
                     print(f"Key not found: {args.key_id}")
-            
+
             elif args.key_action == "rotate":
                 try:
                     new_key, new_data = key_manager.rotate_key(args.key_id)
@@ -335,19 +335,19 @@ def main():
                     print("="*50)
                 except ValueError as e:
                     print(f"Error: {e}")
-            
+
             elif args.key_action == "revoke":
                 if key_manager.revoke_key(args.key_id):
                     print(f"Key revoked: {args.key_id}")
                 else:
                     print(f"Key not found: {args.key_id}")
-            
+
             elif args.key_action == "delete":
                 if key_manager.delete_key(args.key_id):
                     print(f"Key deleted: {args.key_id}")
                 else:
                     print(f"Key not found: {args.key_id}")
-            
+
             elif args.key_action == "usage":
                 stats = key_manager.get_usage_stats(args.key_id)
                 if stats:
@@ -359,21 +359,21 @@ def main():
                     print(f"  Remaining This Month: {stats['monthly_remaining']}")
                 else:
                     print(f"Key not found: {args.key_id}")
-            
+
             elif args.key_action == "reset":
                 if key_manager.reset_usage(args.key_id):
                     print(f"Usage reset for: {args.key_id}")
                 else:
                     print(f"Key not found: {args.key_id}")
-            
+
             else:
                 key.print_help()
-        
+
         elif args.command == "registry":
             from sloughgpt_sdk import ModelRegistry, ModelStatus
-            
+
             reg = ModelRegistry()
-            
+
             if args.reg_action == "list":
                 models = reg.list_models()
                 if args.status:
@@ -381,7 +381,7 @@ def main():
                     models = [m for m in models if m.status == status]
                 if args.tag:
                     models = [m for m in models if any(t in m.tags for t in args.tag)]
-                
+
                 if not models:
                     print("No models found.")
                 else:
@@ -394,7 +394,7 @@ def main():
                         if m.metrics.total_requests > 0:
                             print(f"   Requests: {m.metrics.total_requests}")
                             print(f"   Avg Latency: {m.metrics.avg_latency_ms:.2f}ms")
-            
+
             elif args.reg_action == "register":
                 tags = args.tag or ["stable"]
                 model = reg.register(
@@ -408,7 +408,7 @@ def main():
                     tags=tags,
                 )
                 print(f"✓ Registered model: {model.name} ({model.id})")
-            
+
             elif args.reg_action == "info":
                 model = reg.get(args.model_id)
                 if model:
@@ -424,7 +424,7 @@ def main():
                     print(f"    Success Rate: {model.metrics.successful_requests / max(model.metrics.total_requests, 1) * 100:.1f}%")
                 else:
                     print(f"Model not found: {args.model_id}")
-            
+
             elif args.reg_action == "metrics":
                 metrics = reg.get_metrics(args.model_id)
                 if metrics:
@@ -436,7 +436,7 @@ def main():
                     print(f"  Min/Max Latency: {metrics['min_latency_ms']}/{metrics['max_latency_ms']}ms")
                 else:
                     print(f"Model not found: {args.model_id}")
-            
+
             elif args.reg_action == "best":
                 model = reg.get_best_model(args.criteria, tags=args.tag)
                 if model:
@@ -446,7 +446,7 @@ def main():
                     print(f"  Total Requests: {model.metrics.total_requests}")
                 else:
                     print("No models found matching criteria.")
-            
+
             elif args.reg_action == "stats":
                 stats = reg.get_stats()
                 print(f"\nRegistry Statistics:")
@@ -459,12 +459,12 @@ def main():
                 print(f"\nBy Framework:")
                 for framework, count in stats['by_framework'].items():
                     print(f"  {framework}: {count}")
-            
+
             else:
                 registry.print_help()
-        
+
         return 0
-        
+
     except KeyboardInterrupt:
         print("\nInterrupted")
         return 130

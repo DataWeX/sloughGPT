@@ -5,13 +5,13 @@ A Python client library for the SloughGPT API.
 Usage:
     from sloughgpt_sdk import SloughGPTClient
     from sloughgpt_sdk.models import GenerationResult, ChatMessage
-    
+
     # Or for WebSocket streaming
     from sloughgpt_sdk.websocket import WebSocketClient
-    
+
     # Or for caching
     from sloughgpt_sdk.cache import InMemoryCache
-    
+
     # CLI
     # sloughgpt-cli generate "Hello"
 """

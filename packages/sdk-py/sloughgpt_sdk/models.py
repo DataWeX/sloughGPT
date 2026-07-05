@@ -20,7 +20,7 @@ class GenerateRequest:
     num_beams: int = 1
     early_stopping: bool = False
     personality: Optional[str] = None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API request."""
         data = {"prompt": self.prompt}
@@ -51,24 +51,24 @@ class ChatMessage:
     role: str
     content: str
     name: Optional[str] = None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         data = {"role": self.role, "content": self.content}
         if self.name:
             data["name"] = self.name
         return data
-    
+
     @classmethod
     def user(cls, content: str) -> "ChatMessage":
         """Create a user message."""
         return cls(role="user", content=content)
-    
+
     @classmethod
     def assistant(cls, content: str) -> "ChatMessage":
         """Create an assistant message."""
         return cls(role="assistant", content=content)
-    
+
     @classmethod
     def system(cls, content: str) -> "ChatMessage":
         """Create a system message."""
@@ -85,7 +85,7 @@ class ChatRequest:
     top_p: Optional[float] = 0.9
     top_k: Optional[int] = 50
     stream: bool = False
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API request."""
         data = {
@@ -110,7 +110,7 @@ class BatchRequest:
     prompts: List[str]
     max_new_tokens: Optional[int] = 100
     temperature: Optional[float] = 0.8
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API request."""
         return {
@@ -129,7 +129,7 @@ class GenerationResult:
     tokens_generated: Optional[int] = None
     inference_time_ms: Optional[float] = None
     raw_response: Optional[Dict[str, Any]] = None
-    
+
     @classmethod
     def from_response(cls, response: Dict[str, Any], prompt: str) -> "GenerationResult":
         """Create from API response."""
@@ -151,7 +151,7 @@ class ChatResult:
     model: Optional[str] = None
     tokens_generated: Optional[int] = None
     raw_response: Optional[Dict[str, Any]] = None
-    
+
     @classmethod
     def from_response(cls, response: Dict[str, Any]) -> "ChatResult":
         """Create from API response (SloughGPT ``POST /chat`` or OpenAI-style ``choices``)."""
@@ -180,7 +180,7 @@ class BatchResult:
     successful: int
     failed: int
     total_time_ms: Optional[float] = None
-    
+
     @classmethod
     def from_response(cls, response: Dict[str, Any], prompts: List[str]) -> "BatchResult":
         """Create from API response."""
@@ -189,7 +189,7 @@ class BatchResult:
         for i, r in enumerate(raw_results):
             prompt = prompts[i] if i < len(prompts) else ""
             results.append(GenerationResult.from_response(r, prompt))
-        
+
         return cls(
             results=results,
             total_prompts=len(prompts),
@@ -210,7 +210,7 @@ class ModelInfo:
     parameters: Optional[int] = None
     tags: List[str] = field(default_factory=list)
     raw: Optional[Dict[str, Any]] = None
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ModelInfo":
         """Create from dictionary."""
@@ -236,7 +236,7 @@ class DatasetInfo:
     num_samples: Optional[int] = None
     description: Optional[str] = None
     raw: Optional[Dict[str, Any]] = None
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "DatasetInfo":
         """Create from dictionary."""
@@ -260,12 +260,12 @@ class HealthStatus:
     model_name: Optional[str] = None
     device: Optional[str] = None
     raw: Optional[Dict[str, Any]] = None
-    
+
     @property
     def is_healthy(self) -> bool:
         """Check if service is healthy."""
         return self.status in ("ok", "healthy", "alive")
-    
+
     @classmethod
     def from_response(cls, response: Dict[str, Any]) -> "HealthStatus":
         """Create from API response."""
@@ -291,7 +291,7 @@ class SystemInfo:
     cpu_count: Optional[int] = None
     memory_total: Optional[int] = None
     raw: Optional[Dict[str, Any]] = None
-    
+
     @classmethod
     def from_response(cls, response: Dict[str, Any]) -> "SystemInfo":
         """Create from API response."""
@@ -319,7 +319,7 @@ class MetricsData:
     cache_misses: int = 0
     active_connections: int = 0
     raw: Optional[Dict[str, Any]] = None
-    
+
     @classmethod
     def from_response(cls, response: Dict[str, Any]) -> "MetricsData":
         """Create from API response."""

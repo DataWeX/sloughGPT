@@ -47,7 +47,7 @@ export function ToolCallCard({
         {stateBadge(state)}
       </div>
       {argsPreview ? (
-        <pre 
+        <pre
           className="str-tool-args overflow-x-auto whitespace-pre-wrap break-all text-muted-foreground"
           aria-label={`Arguments for ${name}`}
         >

@@ -10,7 +10,7 @@ export interface StepIndicatorProps {
 /** Horizontal wizard / pipeline steps (training stages, onboarding). */
 export function StepIndicator({ steps, current, className }: StepIndicatorProps) {
   return (
-    <nav 
+    <nav
       className={cn('flex flex-wrap items-center gap-2 text-xs sm:gap-3', className)}
       aria-label="Progress steps"
     >

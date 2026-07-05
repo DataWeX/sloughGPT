@@ -25,8 +25,8 @@ const copy: Record<JobStatusState, { label: string; variant: BadgeVariant }> = {
 export function JobStatus({ status, className }: JobStatusProps) {
   const { label, variant } = copy[status]
   return (
-    <Badge 
-      variant={variant} 
+    <Badge
+      variant={variant}
       className={cn('font-mono text-[0.65rem] uppercase', className)}
       role="status"
       aria-label={`Job status: ${label}`}
