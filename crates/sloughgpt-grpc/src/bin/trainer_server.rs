@@ -1,5 +1,5 @@
 //! Trainer Server Binary
-//! 
+//!
 //! Runs the trainer as a gRPC server.
 
 use sloughgpt_grpc::{TrainerGrpcService, GradientAggregator};
@@ -22,12 +22,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _aggregator = GradientAggregator::new(1);
 
     tracing::info!("Trainer initialized");
-    tracing::info!("Config: vocab_size={}, layers={}, dim={}", 
+    tracing::info!("Config: vocab_size={}, layers={}, dim={}",
         config.vocab_size, config.num_layers, config.embedding_dim);
 
     // Note: Full gRPC server with tonic requires proto compilation
     // Run `cargo build` after proto files are generated
-    
+
     // Example usage:
     // let loss = service.step(vec![1, 2, 3], vec![2, 3, 4]).await;
     // tracing::info!("Step loss: {}", loss);

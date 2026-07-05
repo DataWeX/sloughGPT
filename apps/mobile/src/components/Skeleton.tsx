@@ -1,67 +1,99 @@
+/**
+ * Skeleton loading placeholder — animated pulse effect.
+ * Reusable for any loading state in the app.
+ */
+
 import React, {useEffect, useRef} from 'react';
 import {View, Animated, StyleSheet} from 'react-native';
 import {colors, radii} from '../theme';
 
-interface Props {
+interface SkeletonProps {
   width?: number | string;
   height?: number;
   borderRadius?: number;
-  style?: any;
+  style?: object;
 }
 
-export function Skeleton({width, height = 16, borderRadius = radii.sm, style}: Props) {
-  const opacity = useRef(new Animated.Value(0.3)).current;
+export function Skeleton({width, height = 16, borderRadius = radii.sm, style}: SkeletonProps) {
+  const pulse = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
-    const anim = Animated.loop(
+    const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(opacity, {
-          toValue: 0.7,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0.3,
-          duration: 800,
-          useNativeDriver: true,
-        }),
+        Animated.timing(pulse, {toValue: 0.6, duration: 800, useNativeDriver: true}),
+        Animated.timing(pulse, {toValue: 0.3, duration: 800, useNativeDriver: true}),
       ]),
     );
-    anim.start();
-    return () => anim.stop();
+    loop.start();
+    return () => loop.stop();
   }, []);
 
   return (
     <Animated.View
       style={[
-        {
-          width,
-          height,
-          borderRadius,
-          backgroundColor: colors.border,
-          opacity,
-        },
+        {width, height, borderRadius, backgroundColor: colors.border, opacity: pulse},
         style,
       ]}
     />
   );
 }
 
-export function CardSkeleton() {
+/** Pre-built skeleton patterns for common layouts */
+
+export function SkeletonCard({lines = 3}: {lines?: number}) {
   return (
-    <View style={skeletonStyles.card}>
-      <Skeleton width="40%" height={18} />
-      <Skeleton width="100%" height={14} style={{marginTop: 12}} />
-      <Skeleton width="80%" height={14} style={{marginTop: 6}} />
-      <Skeleton width="60%" height={14} style={{marginTop: 6}} />
+    <View style={cardStyles.card}>
+      <Skeleton width="40%" height={14} />
+      <View style={{gap: 8, marginTop: 12}}>
+        {Array.from({length: lines}).map((_, i) => (
+          <Skeleton
+            key={i}
+            width={i === lines - 1 ? '60%' : '100%'}
+            height={12}
+          />
+        ))}
+      </View>
     </View>
   );
 }
 
-const skeletonStyles = StyleSheet.create({
+export function SkeletonChatBubble() {
+  return (
+    <View style={chatStyles.row}>
+      <Skeleton width="70%" height={40} borderRadius={16} />
+    </View>
+  );
+}
+
+export function SkeletonList({count = 4, lines = 2}: {count?: number; lines?: number}) {
+  return (
+    <View style={listStyles.container}>
+      {Array.from({length: count}).map((_, i) => (
+        <SkeletonCard key={i} lines={lines} />
+      ))}
+    </View>
+  );
+}
+
+const cardStyles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
-    borderRadius: radii.lg,
+    borderRadius: radii.md,
+    padding: 16,
+    marginBottom: 12,
+  },
+});
+
+const chatStyles = StyleSheet.create({
+  row: {
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    alignItems: 'flex-start',
+  },
+});
+
+const listStyles = StyleSheet.create({
+  container: {
     padding: 16,
   },
 });

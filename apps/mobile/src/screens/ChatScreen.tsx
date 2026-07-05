@@ -47,6 +47,7 @@ export function ChatScreen() {
     refreshSessions,
     loadSession,
     deleteSession,
+    deleteMessage,
     createSession,
     offlineQueue,
     retryPendingSends,
@@ -115,9 +116,10 @@ export function ChatScreen() {
             ? positive => recordFeedback(item.id, positive)
             : undefined
         }
+        onDelete={() => deleteMessage(item.id)}
       />
     ),
-    [regenerate, recordFeedback, searchQuery],
+    [regenerate, recordFeedback, searchQuery, deleteMessage],
   );
 
   const keyExtractor = useCallback((item: Message) => item.id, []);

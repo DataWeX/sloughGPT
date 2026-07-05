@@ -19,6 +19,7 @@ import {ErrorBoundary} from './src/components/ErrorBoundary';
 import {LoadingScreen} from './src/components/LoadingScreen';
 import {ConnectionStatusBar} from './src/components/ConnectionStatusBar';
 import {ToastContainer} from './src/components/ToastContainer';
+import {OnboardingScreen, isFirstLaunch} from './src/screens/OnboardingScreen';
 import {colors} from './src/theme';
 import {initInference} from './src/services/activity-inference';
 import {registerForPushNotifications, onNotification} from './src/services/push-notifications';
@@ -58,9 +59,11 @@ function AppInner() {
   const refresh = useModelStore(s => s.refresh);
   const {isDark} = useTheme();
   const [ready, setReady] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
     Promise.all([refresh(), initInference()]).finally(() => setReady(true));
+    isFirstLaunch().then(setNeedsOnboarding);
 
     // Register for push notifications on startup (non-blocking)
     registerForPushNotifications().catch(() => {});
@@ -77,6 +80,15 @@ function AppInner() {
       <SafeAreaProvider>
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#0F0D15' : '#FFFFFF'} />
         <LoadingScreen />
+      </SafeAreaProvider>
+    );
+  }
+
+  if (needsOnboarding) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#0F0D15' : '#FFFFFF'} />
+        <OnboardingScreen onComplete={() => setNeedsOnboarding(false)} />
       </SafeAreaProvider>
     );
   }

@@ -50,5 +50,3 @@ export async function getDataset(): Promise<{
 export async function deleteAllData(): Promise<{deleted: number}> {
   return api.delete<{deleted: number}>('/activity/data');
 }
-
-

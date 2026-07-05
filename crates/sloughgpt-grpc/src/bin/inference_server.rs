@@ -1,5 +1,5 @@
 //! Inference Server Binary
-//! 
+//!
 //! Runs the inference engine as a gRPC server.
 
 use sloughgpt_grpc::InferenceGrpcService;

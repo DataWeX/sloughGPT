@@ -1,7 +1,7 @@
 //! SloughGPT gRPC Services
-//! 
+//!
 //! Async gRPC services for distributed training and inference.
-//! 
+//!
 //! Architecture:
 //! - Local: Direct PyO3 calls (fastest)
 //! - Distributed: gRPC over network

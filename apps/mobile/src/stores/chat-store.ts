@@ -26,6 +26,7 @@ interface ChatState {
   loadSession: (id: string) => Promise<void>;
   createSession: () => Promise<string>;
   deleteSession: (id: string) => Promise<void>;
+  deleteMessage: (messageId: string) => void;
   sendMessage: (content: string) => Promise<void>;
   regenerate: (messageId: string) => Promise<void>;
   cancelStream: () => void;
@@ -101,6 +102,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } catch (err: any) {
       set({error: err.message});
     }
+  },
+
+  deleteMessage: (messageId: string) => {
+    set(s => ({messages: s.messages.filter(m => m.id !== messageId)}));
   },
 
   sendMessage: async (content: string) => {

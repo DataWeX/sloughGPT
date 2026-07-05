@@ -1,148 +1,143 @@
-import React, {useState} from 'react';
+/**
+ * First-launch onboarding flow — 3 swipeable cards explaining key features.
+ * Shows once, then stored in AsyncStorage. Accessible from Settings.
+ */
+
+import React, {useState, useRef} from 'react';
 import {
   View,
   Text,
-  ScrollView,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
+  TouchableOpacity,
+  Animated,
+  PanResponder,
   Dimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {colors, spacing, radii, typography} from '../theme';
-import {api, setApiUrl} from '../services/api-client';
+import {triggerHaptic} from '../services/haptics';
+import {colors, radii, typography} from '../theme';
 
-const {width} = Dimensions.get('window');
+const {width: SCREEN_W} = Dimensions.get('window');
 
 const STEPS = [
   {
-    icon: '🧠',
-    title: 'Welcome to SloughGPT',
-    desc: 'Train and run custom AI models from your phone.',
-  },
-  {
-    icon: '🔌',
-    title: 'Connect to Server',
-    desc: 'Enter your SloughGPT server URL to get started.',
-  },
-  {
     icon: '💬',
-    title: 'Start Chatting',
-    desc: 'Load a model, pick a personality, and start chatting.',
+    title: 'Chat with AI',
+    desc: 'Send messages and get streaming responses. Swipe left on any message to delete it.',
+  },
+  {
+    icon: '🧠',
+    title: 'Switch Personalities',
+    desc: 'Choose different AI souls in Models — each has a unique personality and style.',
   },
   {
     icon: '🏋️',
     title: 'Train Your Own',
-    desc: 'Paste text or pick a dataset to train a custom model.',
+    desc: 'Auto-train custom models from text or datasets. Track progress with live loss charts.',
   },
 ];
 
-export function OnboardingScreen({onDone}: {onDone: () => void}) {
-  const [step, setStep] = useState(0);
-  const [serverUrl, setServerUrl] = useState('http://localhost:8000');
-  const [connecting, setConnecting] = useState(false);
-  const [connected, setConnected] = useState<boolean | null>(null);
+const ONBOARD_KEY = '@sloughgpt/onboarded';
 
-  const handleConnect = async () => {
-    setConnecting(true);
-    setConnected(null);
-    try {
-      const url = serverUrl.trim();
-      await setApiUrl(url);
-      const res = await fetch(url + '/health');
-      setConnected(res.ok);
-    } catch {
-      setConnected(false);
-    }
-    setConnecting(false);
+export async function isFirstLaunch(): Promise<boolean> {
+  const val = await AsyncStorage.getItem(ONBOARD_KEY);
+  return val !== 'true';
+}
+
+export async function markOnboarded() {
+  await AsyncStorage.setItem(ONBOARD_KEY, 'true');
+}
+
+interface Props {
+  onComplete: () => void;
+}
+
+export function OnboardingScreen({onComplete}: Props) {
+  const [step, setStep] = useState(0);
+  const translateX = useRef(new Animated.Value(0)).current;
+  const panRef = useRef({startX: 0});
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) =>
+        Math.abs(g.dx) > 20 && Math.abs(g.dx) > Math.abs(g.dy),
+      onPanResponderGrant: () => {
+        panRef.current.startX = step * -SCREEN_W;
+      },
+      onPanResponderMove: (_, g) => {
+        const base = panRef.current.startX;
+        translateX.setValue(base + g.dx);
+      },
+      onPanResponderRelease: (_, g) => {
+        const base = panRef.current.startX;
+        const target = g.dx < -50 ? (step + 1) * -SCREEN_W : step * -SCREEN_W;
+        const nextStep = g.dx < -50 ? Math.min(step + 1, STEPS.length - 1) : step;
+
+        Animated.spring(translateX, {toValue: target, useNativeDriver: true}).start();
+        if (nextStep !== step) {
+          setStep(nextStep);
+          triggerHaptic('light');
+        }
+      },
+    }),
+  ).current;
+
+  const handleSkip = () => {
+    markOnboarded();
+    onComplete();
   };
 
-  const handleFinish = async () => {
-    await AsyncStorage.setItem('@sloughgpt/onboarded', 'true');
-    onDone();
+  const handleNext = () => {
+    if (step < STEPS.length - 1) {
+      const next = step + 1;
+      setStep(next);
+      Animated.spring(translateX, {toValue: next * -SCREEN_W, useNativeDriver: true}).start();
+      triggerHaptic('light');
+    } else {
+      markOnboarded();
+      triggerHaptic('success');
+      onComplete();
+    }
   };
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        contentOffset={{x: step * width, y: 0}}
-        scrollEnabled={false}>
-        {STEPS.map((s, i) => (
-          <View key={i} style={[styles.page, {width}]}>
-            <Text style={styles.icon}>{s.icon}</Text>
-            <Text style={styles.title}>{s.title}</Text>
-            <Text style={styles.desc}>{s.desc}</Text>
+      {/* Skip */}
+      <TouchableOpacity style={styles.skipBtn} onPress={handleSkip}>
+        <Text style={styles.skipText}>Skip</Text>
+      </TouchableOpacity>
 
-            {i === 1 && (
-              <View style={styles.serverSection}>
-                <TextInput
-                  style={styles.urlInput}
-                  value={serverUrl}
-                  onChangeText={setServerUrl}
-                  placeholder="http://localhost:8000"
-                  placeholderTextColor={colors.textMuted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                />
-                <TouchableOpacity
-                  style={[styles.connectBtn, connecting && styles.connectBtnLoading]}
-                  onPress={handleConnect}
-                  disabled={connecting}>
-                  <Text style={styles.connectBtnText}>
-                    {connecting ? 'Connecting...' : connected === true ? 'Connected ✓' : 'Connect'}
-                  </Text>
-                </TouchableOpacity>
-                {connected === false && (
-                  <Text style={styles.connectError}>
-                    Could not connect. Make sure the server is running.
-                  </Text>
-                )}
-              </View>
-            )}
-          </View>
-        ))}
-      </ScrollView>
-
-      <View style={styles.footer}>
-        <View style={styles.dots}>
-          {STEPS.map((_, i) => (
-            <View
-              key={i}
-              style={[styles.dot, i === step && styles.dotActive]}
-            />
+      {/* Cards */}
+      <View style={styles.cardsWrap}>
+        <Animated.View
+          style={[styles.cardsRow, {transform: [{translateX}]}]}
+          {...panResponder.panHandlers}>
+          {STEPS.map((s, i) => (
+            <View key={i} style={styles.card}>
+              <Text style={styles.icon}>{s.icon}</Text>
+              <Text style={styles.title}>{s.title}</Text>
+              <Text style={styles.desc}>{s.desc}</Text>
+            </View>
           ))}
-        </View>
-        <View style={styles.btnRow}>
-          {step > 0 && (
-            <TouchableOpacity style={styles.backBtn} onPress={() => setStep(s => s - 1)}>
-              <Text style={styles.backBtnText}>Back</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={[styles.nextBtn, step === STEPS.length - 1 && connected === false && styles.nextBtnDisabled]}
-            onPress={() => {
-              if (step < STEPS.length - 1) {
-                setStep(s => s + 1);
-              } else {
-                handleFinish();
-              }
-            }}
-            disabled={step === STEPS.length - 1 && connected === false}>
-            <Text style={styles.nextBtnText}>
-              {step === STEPS.length - 1 ? 'Get Started' : 'Next'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-        {step === STEPS.length - 1 && (
-          <TouchableOpacity onPress={handleFinish}>
-            <Text style={styles.skipText}>Skip for now</Text>
-          </TouchableOpacity>
-        )}
+        </Animated.View>
       </View>
+
+      {/* Dots */}
+      <View style={styles.dots}>
+        {STEPS.map((_, i) => (
+          <View
+            key={i}
+            style={[styles.dot, i === step && styles.dotActive]}
+          />
+        ))}
+      </View>
+
+      {/* CTA */}
+      <TouchableOpacity style={styles.cta} onPress={handleNext} activeOpacity={0.8}>
+        <Text style={styles.ctaText}>
+          {step < STEPS.length - 1 ? 'Next' : 'Get Started'}
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -152,74 +147,55 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  page: {
+  skipBtn: {
+    position: 'absolute',
+    top: 56,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+  },
+  skipText: {
+    ...typography.body,
+    color: colors.textMuted,
+  },
+  cardsWrap: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  cardsRow: {
+    flexDirection: 'row',
+    width: SCREEN_W * STEPS.length,
+    flex: 1,
+  },
+  card: {
+    width: SCREEN_W,
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.xxxl,
-    paddingBottom: 120,
+    paddingHorizontal: 40,
   },
   icon: {
     fontSize: 64,
-    marginBottom: spacing.xxl,
+    marginBottom: 24,
   },
   title: {
-    ...typography.h1,
+    fontSize: 24,
+    fontWeight: '700',
     color: colors.text,
+    marginBottom: 12,
     textAlign: 'center',
-    marginBottom: spacing.md,
   },
   desc: {
     ...typography.body,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     textAlign: 'center',
-    lineHeight: 24,
-  },
-  serverSection: {
-    width: '100%',
-    marginTop: spacing.xxl,
-    gap: spacing.sm,
-  },
-  urlInput: {
-    ...typography.body,
-    color: colors.text,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  connectBtn: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    alignItems: 'center',
-  },
-  connectBtnLoading: {
-    opacity: 0.6,
-  },
-  connectBtnText: {
-    ...typography.body,
-    color: colors.white,
-    fontWeight: '600',
-  },
-  connectError: {
-    ...typography.caption,
-    color: colors.error,
-    textAlign: 'center',
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: spacing.xxxl,
-    paddingBottom: spacing.xxxl,
-    gap: spacing.lg,
+    lineHeight: 22,
   },
   dots: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: spacing.sm,
+    gap: 8,
+    paddingVertical: 20,
   },
   dot: {
     width: 8,
@@ -231,42 +207,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     width: 24,
   },
-  btnRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  backBtn: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  backBtnText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  nextBtn: {
-    flex: 2,
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    alignItems: 'center',
+  cta: {
+    marginHorizontal: 32,
+    marginBottom: 48,
     backgroundColor: colors.primary,
+    paddingVertical: 16,
+    borderRadius: radii.md,
+    alignItems: 'center',
   },
-  nextBtnDisabled: {
-    opacity: 0.4,
-  },
-  nextBtnText: {
+  ctaText: {
     ...typography.body,
     color: colors.white,
     fontWeight: '600',
-  },
-  skipText: {
-    ...typography.caption,
-    color: colors.textMuted,
-    textAlign: 'center',
+    fontSize: 16,
   },
 });

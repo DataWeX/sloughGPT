@@ -1,5 +1,5 @@
 //! Trainer gRPC Service
-//! 
+//!
 //! Async service for distributed training coordination.
 
 use sloughgpt_trainer::{TrainConfig, Trainer};
@@ -23,7 +23,7 @@ impl TrainerGrpcService {
         let mut trainer = self.trainer.write().await;
         let loss = trainer.step(&batch, &targets);
         let config = trainer.get_config();
-        
+
         TrainingResult {
             loss,
             learning_rate: config.learning_rate,
@@ -92,7 +92,7 @@ impl GradientAggregator {
 
     pub async fn aggregate(&self) -> Option<HashMap<String, Vec<f32>>> {
         let pending = self.pending_updates.read().await;
-        
+
         if pending.len() < self.num_nodes {
             return None;
         }
@@ -101,7 +101,7 @@ impl GradientAggregator {
         drop(pending);
         let mut pending = self.pending_updates.write().await;
         let updates: Vec<_> = pending.drain(..).collect();
-        
+
         if updates.is_empty() {
             return None;
         }

@@ -1,7 +1,7 @@
 //! Inference gRPC Service
-//! 
+//!
 //! Async service for inference serving.
-//! 
+//!
 //! Note: Inference is delegated to llama.cpp (Python). This service
 //! provides gRPC interface for distributed inference coordination.
 
