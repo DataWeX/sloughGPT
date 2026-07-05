@@ -1,25 +1,66 @@
-# Optional shortcuts — see README.md (Google Colab), scripts/run_colab_notebook_smoke.sh --help
-.PHONY: help colab-smoke colab-test train-demo dev-stack test-repo-root
+.PHONY: api web tsc lint test-py test-web test dev install precommit
 
-help:
-	@echo "make dev-stack     API (:8000) + Next dev (:3000) — ./scripts/dev-stack.sh (or: npm run dev:stack)"
-	@echo "make test-repo-root  pytest tests/test_repo_root_package_json.py (root package.json contract)"
-	@echo "make colab-smoke   ./scripts/run_colab_notebook_smoke.sh (needs pip install -e \".[notebook]\")"
-	@echo "make colab-test    pytest tests/test_sloughgpt_colab_notebook.py -q"
-	@echo "make train-demo    short local char-LM train (CPU; good first run after pip install -e .)"
-	@echo "Run: ./scripts/run_colab_notebook_smoke.sh --help"
+# ── Dev Servers ──────────────────────────────────────────
+api:
+	.venv/bin/python3 apps/api/server/main.py
 
-dev-stack:
+web:
+	cd apps/web && npm run dev
+
+stack:
 	./scripts/dev-stack.sh
 
-test-repo-root:
-	python3 -m pytest tests/test_repo_root_package_json.py -q
+# ── Type Check ──────────────────────────────────────────
+tsc:
+	cd apps/web && npx tsc --noEmit
 
-colab-smoke:
-	./scripts/run_colab_notebook_smoke.sh
+# ── Lint ────────────────────────────────────────────────
+lint:
+	cd apps/web && npm run lint
 
-colab-test:
-	python3 -m pytest tests/test_sloughgpt_colab_notebook.py -q
+# ── Tests (Targeted) ────────────────────────────────────
+test-py:
+	cd packages/core-py && python3 -m pytest $(ARGS)
 
-train-demo:
-	python3 cli.py train --max-steps 5 --batch-size 4 --train-device cpu --no-mixed-precision --epochs 1 --log-interval 1 --eval-interval 99999
+test-py-fast:
+	cd packages/core-py && python3 -m pytest -n auto --dist loadgroup -x -q $(ARGS)
+
+test-web:
+	cd apps/web && npm run test $(ARGS)
+
+test-web-lib:
+	cd apps/web && npm run test:lib
+
+test-web-components:
+	cd apps/web && npm run test:components
+
+test-web-hooks:
+	cd apps/web && npm run test:hooks
+
+test-web-changed:
+	cd apps/web && npm run test:changed
+
+test: test-py-fast test-web-lib
+
+# ── Install ──────────────────────────────────────────────
+install:
+	cd apps/web && npm ci
+	.venv/bin/pip install -e packages/core-py/
+
+# ── Tooling Setup ───────────────────────────────────────
+precommit:
+	.venv/bin/pre-commit install
+	.venv/bin/pre-commit install-hooks
+	@echo "pre-commit hooks installed. Run 'make precommit-run' to check all files."
+
+precommit-run:
+	.venv/bin/pre-commit run --all-files
+
+precommit-update:
+	.venv/bin/pre-commit autoupdate
+
+# ── Cleanup ─────────────────────────────────────────────
+clean:
+	cd apps/web && rm -rf .next node_modules/.vitest-cache
+	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name "*.pyc" -delete

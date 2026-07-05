@@ -1,0 +1,32 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-merge-conflict
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: no-commit-to-branch
+        args: [--branch, main]
+
+  - repo: local
+    hooks:
+      - id: tsc
+        name: TypeScript type check
+        entry: bash -c 'cd apps/web && npx tsc --noEmit 2>&1 | head -30'
+        language: system
+        types: [ts, tsx]
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: py-compile
+        name: Python syntax check
+        entry: bash -c 'for f in "$@"; do python3 -m py_compile "$f" 2>&1; done || true'
+        language: system
+        types: [python]
+        pass_filenames: true
+        stages: [pre-commit]

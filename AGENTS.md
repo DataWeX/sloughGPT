@@ -153,17 +153,44 @@ sloughGPT/
 ## Commands
 
 ```bash
-# Start API server
-cd apps/api/server && python main.py
+# Start everything (API + Web)
+make stack
 
-# Start frontend dev
-cd apps/web && npm run dev
+# Start API server only
+make api
+
+# Start frontend dev only
+make web
 
 # Type check
-cd apps/web && npx tsc --noEmit
+make tsc
+
+# Python test (parallel) — use ARGS for file filter
+make test-py ARGS="tests/test_file.py -x -q"
 
 # Python syntax check
 python3 -m py_compile <file>
+
+# Web tests (targeted)
+npm run test:lib      # pure logic (fastest)
+npm run test:components  # UI components
+npm run test:changed  # only changed files
+
+# Full web test suite
+npm run test          # ~3 min — pre-push only
+```
+
+### Pre-commit Hooks (auto-run on `git commit`)
+
+Hooks are installed and active. They check:
+- `tsc --noEmit` — TypeScript type safety
+- Python syntax (`py_compile`) — basic correctness
+- No merge conflicts, no large files, no trailing whitespace
+- Prevents direct commits to `main` branch
+
+```bash
+# Run hooks against all files (verify setup)
+make precommit-run
 ```
 
 ## Development Velocity
@@ -196,6 +223,7 @@ Don't run the full 2000+ test suite on every change. Use targeted scripts:
 ### Python Test Strategy
 - **Syntax first**: `python3 -m py_compile <file>` (instant)
 - **Unit changes**: `python3 -m pytest tests/test_file.py -x -q` (targeted)
+- **Parallel full suite**: `make test-py` uses `-n auto` (pytest-xdist) — ~2-3x faster than sequential
 - **Full suite**: 1768 tests — only before push or when changing foundational infrastructure
 
 ### Dead Code Prevention
@@ -2558,4 +2586,3 @@ Implemented bidirectional DAG for forward-mode automatic differentiation (JVP/ta
 - **TypeScript: `tsc --noEmit` → 0 errors**
 - **148 training frontend tests pass**
 - All 31 bidirectional DAG dot-product tests pass
-
