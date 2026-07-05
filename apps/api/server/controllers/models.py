@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class ModelsController:
     """Controller for model management"""
-    
+
     def __init__(self, repo_root: Path):
         self.repo_root = repo_root
         self.models_dir = repo_root / "models"
@@ -27,7 +27,7 @@ class ModelsController:
         self._total_tokens_generated: int = 0
         self._last_inference_time: Optional[float] = None
         self._is_inferencing: bool = False
-    
+
     def _resolve_device(self, device: str) -> str:
         """Resolve device string for PyTorch model placement.
 
@@ -43,30 +43,30 @@ class ModelsController:
             except Exception:
                 return "cpu"
         return device
-    
+
     def _find_model_path(self, model_id: str) -> Optional[Path]:
         """Find model file by ID"""
         model_path = self.models_dir / f"{model_id}.pt"
         if model_path.exists():
             return model_path
-        
+
         model_path = self.models_dir / f"{model_id}.gguf"
         if model_path.exists():
             return model_path
-        
+
         for f in self.models_dir.glob("*.pt"):
             if f.stem == model_id:
                 return f
         for f in self.models_dir.glob("*.gguf"):
             if f.stem == model_id:
                 return f
-        
+
         return None
-    
+
     def _infer_config(self, state_dict: Dict[str, Any]) -> Dict[str, Any]:
         """Infer model config from state dict"""
         config = {}
-        
+
         for key, value in state_dict.items():
             if "tok_emb.weight" in key:
                 config["vocab_size"] = value.shape[0]
@@ -75,13 +75,13 @@ class ModelsController:
             elif "blocks.0.attn.q_proj.weight" in key:
                 config["n_embed"] = value.shape[1]
                 config["n_layer"] = len([k for k in state_dict.keys() if k.startswith("blocks.") and ".norm1.weight" in k])
-        
+
         return config
-    
+
     def list_available_models(self) -> List[Dict[str, Any]]:
         """List available models"""
         models = []
-        
+
         local_dir = self.models_dir
         if local_dir.exists():
             for f in local_dir.glob("*.pt"):
@@ -98,9 +98,9 @@ class ModelsController:
                     "type": "gguf",
                     "size_mb": f.stat().st_size / (1024 * 1024),
                 })
-        
+
         return models
-    
+
     def _load_hf_model(self, model_id: str, device: str, use_slonet: bool = False) -> Dict[str, Any]:
         """Load a HuggingFace model.
 
@@ -144,36 +144,45 @@ class ModelsController:
             self._tokenizer = tokenizer
             self._hf_model = model
 
-            total_params = sum(p.numel() for p in model.parameters())
+            # Handle safetensors path (returns dict of weights + config instead of model object)
+            if isinstance(model, dict):
+                from domains.infrastructure.safetensors_loader import load_model_config
+                config = load_model_config(model_id) if not isinstance(tokenizer, dict) else tokenizer
+                total_params = sum(arr.size for arr in model.values())
+                # Store weights for provider — no model object available
+                self._hf_weights = model
+                self._hf_config = config if isinstance(config, dict) else {}
+            else:
+                total_params = sum(p.numel() for p in model.parameters())
 
             # Update server_state so health endpoints reflect the active model
             server_state.model = model
             server_state.tokenizer = tokenizer
 
             # Register model with ModelRegistry BEFORE setup_providers()
-            # so that setup_providers() can find the ModelServer and wire
-            # it into providers (enables semaphore, timeout, circuit breaker, warmup).
-            from domains.infrastructure.model_registry import get_model_registry
-            model_registry = get_model_registry()
-            model_registry.register(
-                model_id, model, tokenizer,
-                make_default=True,
-                generate_timeout=120.0,
-            )
-            logger.info("Registered model in ModelRegistry: %s", model_id)
-
-            # Create InferenceEngine for the new model so the inference-engine
-            # provider (which is preferred over hf-default) works with current weights.
-            inference_engine = None
-            try:
-                from domains.inference.engine import InferenceEngine
-                inference_engine = InferenceEngine(
-                    model=model,
-                    tokenizer=tokenizer,
-                    device=actual_device,
+            # Only register if we have a real model object (not safetensors dict)
+            if not isinstance(model, dict):
+                from domains.infrastructure.model_registry import get_model_registry
+                model_registry = get_model_registry()
+                model_registry.register(
+                    model_id, model, tokenizer,
+                    make_default=True,
+                    generate_timeout=120.0,
                 )
-            except Exception as e:
-                logger.warning("Failed to create InferenceEngine: %s", e)
+                logger.info("Registered model in ModelRegistry: %s", model_id)
+
+            # Create InferenceEngine for the new model (requires torch model object)
+            inference_engine = None
+            if not isinstance(model, dict):
+                try:
+                    from domains.inference.engine import InferenceEngine
+                    inference_engine = InferenceEngine(
+                        model=model,
+                        tokenizer=tokenizer,
+                        device=actual_device,
+                    )
+                except Exception as e:
+                    logger.warning("Failed to create InferenceEngine: %s", e)
 
             # Register all providers via setup_providers (handles priority,
             # hf-default registration, and default router wiring).
@@ -210,29 +219,29 @@ class ModelsController:
         except Exception as e:
             logger.error(f"Failed to load HF model {model_id}: {e}")
             raise
-    
+
     def _load_gguf_model(self, model_path: str, device: str) -> Dict[str, Any]:
         """Load a GGUF model using llama.cpp"""
         try:
             from llama_cpp import Llama
-            
+
             logger.info(f"Loading GGUF model: {model_path}")
-            
+
             # Determine device for llama.cpp
             if device == "mps" or device == "cuda":
                 n_gpu_layers = 999 if device == "cuda" else 1
             else:
                 n_gpu_layers = 0
-            
+
             self._gguf_model = Llama(
                 model_path=model_path,
                 n_gpu_layers=n_gpu_layers,
                 n_ctx=4096,
                 verbose=False,
             )
-            
+
             self._model_type = "gguf"
-            
+
             return {
                 "model_id": model_path,
                 "type": "gguf",
@@ -242,7 +251,7 @@ class ModelsController:
         except Exception as e:
             logger.error(f"Failed to load GGUF model {model_path}: {e}")
             raise
-    
+
     def load_model(self, model_id: str, device: str = "auto", quantize: Optional[str] = None,
                     use_slonet: bool = False) -> Dict[str, Any]:
         """Load a model into memory (local or HuggingFace).
@@ -252,7 +261,7 @@ class ModelsController:
                         instead of PyTorch. No PyTorch at inference time.
         """
         resolved_device = self._resolve_device(device)
-        
+
         # Treat any model_id as a HuggingFace model first.
         # Falls back to local file if HuggingFace loading fails.
         try:
@@ -277,33 +286,33 @@ class ModelsController:
                 "status": "error",
                 "error": f"Model not found: {model_id}",
             }
-        
+
         try:
             if model_path.suffix == ".pt":
                 import torch
                 checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
-                
+
                 if isinstance(checkpoint, dict):
                     raw_state_dict = checkpoint.get("model", checkpoint)
                     config = checkpoint.get("config", {})
                 else:
                     raw_state_dict = checkpoint
                     config = {}
-                
+
                 state_dict = {}
                 for k, v in raw_state_dict.items():
                     if hasattr(v, 'cpu'):
                         state_dict[k] = v.cpu().numpy().astype(np.float32)
                     else:
                         state_dict[k] = np.array(v, dtype=np.float32)
-                
+
                 if not config:
                     config = self._infer_config(state_dict)
-                
+
                 model_type = config.get("model_type", "sloughgpt")
-                
+
                 from domains.models import SloughGPTModel
-                
+
                 model = SloughGPTModel(
                     vocab_size=config.get("vocab_size", 256),
                     n_embed=config.get("n_embed", 256),
@@ -315,18 +324,18 @@ class ModelsController:
                 model.load_state_dict(state_dict, strict=False)
                 model = model.to(resolved_device)
                 model.eval()
-                
+
                 self._model_instance = model
             else:
                 return {
                     "status": "error",
                     "error": "GGUF loading not implemented in controller",
                 }
-            
+
             self._current_model = model_id
             self._current_device = resolved_device
             self._loaded_at = datetime.now()
-            
+
             return {
                 "status": "loaded",
                 "model_id": model_id,
@@ -335,13 +344,13 @@ class ModelsController:
                 "path": str(model_path),
                 "loaded_at": self._loaded_at.isoformat(),
             }
-            
+
         except Exception as e:
             return {
                 "status": "error",
                 "error": str(e),
             }
-    
+
     def unload_model(self) -> Dict[str, Any]:
         """Unload current model and clean up ModelRegistry entry."""
         if self._model_instance is not None:
@@ -384,19 +393,19 @@ class ModelsController:
         self._current_device = None
         self._loaded_at = None
         return result
-    
+
     def get_current_model(self) -> Optional[Dict[str, Any]]:
         """Get current loaded model info"""
         if not self._current_model:
             return None
-        
+
         return {
             "model_id": self._current_model,
             "status": "loaded",
             "device": self._current_device,
             "loaded_at": self._loaded_at.isoformat() if self._loaded_at else None,
         }
-    
+
     def get_inference_stats(self) -> Dict[str, Any]:
         """Get inference statistics"""
         return {
@@ -405,18 +414,18 @@ class ModelsController:
             "is_inferencing": self._is_inferencing,
             "last_inference_time": self._last_inference_time,
         }
-    
+
     def record_inference_start(self):
         """Record inference start"""
         self._is_inferencing = True
         self._inference_count += 1
         self._last_inference_time = time.time()
-    
+
     def record_inference_end(self, tokens_generated: int = 0):
         """Record inference end"""
         self._is_inferencing = False
         self._total_tokens_generated += tokens_generated
-    
+
     def list_hf_models(self, q: Optional[str] = None) -> List[Dict[str, Any]]:
         """Search HuggingFace Hub for causal LM models.
 

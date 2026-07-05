@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 
 class ConfigController:
     """Controller for configuration management"""
-    
+
     def __init__(self):
         self._config = {
             "temperature": 0.8,
@@ -16,11 +16,11 @@ class ConfigController:
             "max_new_tokens": 200,
             "max_context_length": 1024,
         }
-    
+
     def get_generation_config(self) -> Dict[str, Any]:
         """Get current generation config"""
         return self._config.copy()
-    
+
     def update_generation_config(self, **kwargs) -> Dict[str, Any]:
         """Update generation config"""
         for key, value in kwargs.items():

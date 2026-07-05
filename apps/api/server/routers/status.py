@@ -13,9 +13,9 @@ _start_time = datetime.now()
 async def get_status():
     """Get overall service status"""
     import psutil
-    
+
     uptime = (datetime.now() - _start_time).total_seconds()
-    
+
     return {
         "status": "healthy",
         "uptime_seconds": uptime,

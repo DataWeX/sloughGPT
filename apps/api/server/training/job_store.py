@@ -228,8 +228,8 @@ class JobStore:
 
             cursor = conn.execute(
                 """
-                SELECT * FROM jobs 
-                WHERE status = 'running' 
+                SELECT * FROM jobs
+                WHERE status = 'running'
                 AND last_heartbeat < datetime(?, 'unixepoch')
                 AND crashed = 0
             """,
@@ -266,9 +266,9 @@ class JobStore:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
                 """
-                SELECT * FROM job_events 
-                WHERE job_id = ? 
-                ORDER BY timestamp DESC 
+                SELECT * FROM job_events
+                WHERE job_id = ?
+                ORDER BY timestamp DESC
                 LIMIT ?
             """,
                 (job_id, limit),

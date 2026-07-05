@@ -8,12 +8,12 @@ import json
 
 class DatasetsController:
     """Controller for dataset management"""
-    
+
     def __init__(self, repo_root: Path):
         self.repo_root = repo_root
         self.data_dir = repo_root / "data" / "features"
         self.datasets_dir = repo_root / "datasets"
-    
+
     def list_datasets(self, q: Optional[str] = None, dataset_type: Optional[str] = None) -> List[Dict[str, Any]]:
         """List available datasets"""
         # Use datasets/ directory primarily
@@ -22,15 +22,15 @@ class DatasetsController:
             datasets_dir = self.data_dir
         if not datasets_dir.exists():
             return []
-        
+
         datasets = []
         for d in datasets_dir.iterdir():
             if not d.is_dir():
                 continue
-            
+
             input_file = d / "input.txt"
             corpus_file = d / "corpus.jsonl"
-            
+
             has_corpus = corpus_file.exists()
             size = corpus_file.stat().st_size if has_corpus else (input_file.stat().st_size if input_file.exists() else 0)
             num_samples = 0
@@ -71,30 +71,30 @@ class DatasetsController:
                     dataset["visual_metadata"] = json.loads(visual_meta_path.read_text())
                 except Exception:
                     pass
-            
+
             # Filters
             if q and q.lower() not in d.name.lower() and q.lower() not in dataset["name"].lower():
                 continue
             if dataset_type and dataset["type"] != dataset_type:
                 continue
-            
+
             datasets.append(dataset)
-        
+
         return datasets
-    
+
     def get_dataset(self, dataset_id: str) -> Optional[Dict[str, Any]]:
         """Get dataset details"""
         path = self.datasets_dir / dataset_id
         if not path.exists():
             return None
-        
+
         return {
             "id": dataset_id,
             "name": path.name,
             "path": str(path),
             "exists": True,
         }
-    
+
     def get_dataset_stats(self, dataset_id: str) -> Optional[Dict[str, Any]]:
         """Get dataset statistics with plain-language description."""
         path = self.datasets_dir / dataset_id
@@ -183,19 +183,19 @@ class DatasetsController:
             parts.append("— large dataset, training will take longer but learn more")
 
         return " ".join(parts) + "."
-    
+
     def search_datasets(self, q: str) -> List[str]:
         """Search datasets by name"""
         if not self.datasets_dir.exists():
             return []
-        
+
         return [d.name for d in self.datasets_dir.iterdir() if d.is_dir() and q.lower() in d.name.lower()]
-    
+
     def create_dataset(self, name: str, description: Optional[str] = None) -> Dict[str, Any]:
         """Create a new dataset"""
         path = self.datasets_dir / name
         path.mkdir(parents=True, exist_ok=True)
-        
+
         return {
             "id": name,
             "name": name,
@@ -203,7 +203,7 @@ class DatasetsController:
             "created": True,
             "path": str(path),
         }
-    
+
     def update_dataset(self, dataset_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update dataset metadata (name is the directory name)"""
         path = self.datasets_dir / dataset_id
@@ -215,7 +215,7 @@ class DatasetsController:
             "description": updates.get("description", ""),
             "path": str(path),
         }
-    
+
     def delete_dataset(self, dataset_id: str) -> bool:
         """Delete a dataset directory"""
         path = self.datasets_dir / dataset_id
@@ -224,7 +224,7 @@ class DatasetsController:
         import shutil
         shutil.rmtree(path)
         return True
-    
+
     def add_data(self, dataset_id: str, data: List[str]) -> Optional[int]:
         """Append data rows to a dataset's corpus file"""
         # Existing implementation unchanged (kept for context)
@@ -238,7 +238,7 @@ class DatasetsController:
                 f.write(json.dumps({"text": line}) + "\n")
                 count += 1
         return count
-    
+
     # --- Versioning helpers -------------------------------------------------
     def _ensure_versions_dir(self, dataset_id: str) -> Path:
         """Return the versions directory for a dataset, creating it if needed."""

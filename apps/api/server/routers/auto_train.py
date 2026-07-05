@@ -142,26 +142,26 @@ def _enforce_checkpoint_budget():
 
 def _parse_subtitle_text(text: str) -> list:
     """Parse SRT, VTT, or plain text into training lines.
-    
+
     SRT format:
         1
         00:00:01,000 --> 00:00:04,000
         Text here
-        
+
     VTT format:
         00:01.000 --> 00:04.000
         Text here
-        
+
     Plain text: one line per training example.
     """
     lines = []
-    
+
     # Try SRT format (look for timestamp pattern)
     srt_pattern = re.compile(r'\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}')
-    
+
     # Try VTT format
     vtt_pattern = re.compile(r'\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2}:\d{2}\.\d{3}')
-    
+
     if srt_pattern.search(text) or vtt_pattern.search(text):
         # Parse as subtitles
         for line in text.split('\n'):
@@ -183,7 +183,7 @@ def _parse_subtitle_text(text: str) -> list:
             line = line.strip()
             if line and len(line) > 2:
                 lines.append(line)
-    
+
     return lines
 
 
@@ -926,8 +926,3 @@ async def download_checkpoint(name: str):
         if fp.exists() and fp.suffix in (".soul", ".pt"):
             return FileResponse(str(fp), media_type="application/octet-stream", filename=name)
     raise HTTPException(status_code=404, detail="Checkpoint not found")
-
-
-
-
-

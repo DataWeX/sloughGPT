@@ -132,30 +132,30 @@ class FeedbackController:
             "rating": rating,
             "timestamp": feedback["timestamp"],
         }
-    
+
     def get_feedback(self, message_id: str) -> Optional[Dict[str, Any]]:
         """Get feedback for a message"""
         feedback_file = self.feedback_dir / "feedback.jsonl"
         if not feedback_file.exists():
             return None
-        
+
         with open(feedback_file) as f:
             for line in f:
                 fb = json.loads(line)
                 if fb.get("message_id") == message_id:
                     return fb
         return None
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """Get feedback statistics"""
         feedback_file = self.feedback_dir / "feedback.jsonl"
         if not feedback_file.exists():
             return {"thumbs_up": 0, "thumbs_down": 0, "total": 0}
-        
+
         thumbs_up = 0
         thumbs_down = 0
         total = 0
-        
+
         with open(feedback_file) as f:
             for line in f:
                 fb = json.loads(line)
@@ -164,7 +164,7 @@ class FeedbackController:
                     thumbs_up += 1
                 elif fb.get("rating") == "thumbs_down":
                     thumbs_down += 1
-        
+
         return {
             "thumbs_up": thumbs_up,
             "thumbs_down": thumbs_down,

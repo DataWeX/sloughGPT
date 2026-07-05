@@ -78,12 +78,12 @@ async def set_personality(req: SetPersonalityRequest):
 async def use_preset(req: PresetRequest):
     """Use preset personality."""
     from domains.companion import create_companion
-    
+
     global _companion
     _companion = create_companion(name=req.name, personality=req.preset)
-    
+
     return {
-        "status": "ok", 
+        "status": "ok",
         "preset": req.preset,
         "traits": _companion.to_dict()["traits"],
     }
@@ -100,11 +100,11 @@ async def get_prompt():
 async def chat(req: ChatRequest):
     """Chat with companion — generates a response using the active model."""
     comp = _get_companion()
-    
+
     # Adjust for mood
     if req.user_mood:
         comp.adjust_for_mood(req.user_mood)
-    
+
     # Get system prompt
     system_prompt = comp.get_system_prompt() if req.include_system_prompt else ""
 

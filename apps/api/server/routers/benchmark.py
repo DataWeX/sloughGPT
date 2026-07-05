@@ -17,21 +17,21 @@ def _get_model_metrics(model: str) -> Dict[str, Any]:
     """Get real model metrics from the model controller."""
     try:
         from controllers.models import get_models_controller
-        
+
         ctrl = get_models_controller()
-        
+
         if not ctrl._hf_model:
             return {"model": model, "model_loaded": False}
-        
+
         inference_time = time.time() - ctrl._last_inference_time if ctrl._last_inference_time else 0
         total_tokens = ctrl._total_tokens_generated
         total_inferences = ctrl._inference_count
-        
+
         # Calculate throughput
         tokens_per_sec = 0
         if inference_time > 0 and total_tokens > 0:
             tokens_per_sec = total_tokens / (inference_time * total_inferences) if total_inferences > 0 else 0
-        
+
         # Memory estimate
         memory_mb = 0
         if ctrl._hf_model:
@@ -40,7 +40,7 @@ def _get_model_metrics(model: str) -> Dict[str, Any]:
                 memory_mb = torch.cuda.memory_allocated() / (1024 * 1024) if torch.cuda.is_available() else 0
             except Exception:
                 memory_mb = 500  # Rough estimate
-        
+
         return {
             "model": model,
             "model_loaded": True,
@@ -74,22 +74,22 @@ async def calculate_perplexity(text: str = "Sample text for evaluation"):
     try:
         import torch
         from controllers.models import get_models_controller
-        
+
         ctrl = get_models_controller()
         if not ctrl._tokenizer or not ctrl._hf_model:
             raise HTTPException(status_code=400, detail="Model not loaded")
-        
+
         # Tokenize
         inputs = ctrl._tokenizer(text, return_tensors="pt")
         if ctrl._hf_model.device.type == "cuda":
             inputs = {k: v.to(ctrl._hf_model.device) for k, v in inputs.items()}
-        
+
         # Get loss
         with torch.no_grad():
             outputs = ctrl._hf_model(**inputs, labels=inputs["input_ids"])
             loss = outputs.loss.item()
             perplexity = torch.exp(torch.tensor(loss)).item()
-        
+
         return {
             "text": text[:30],
             "perplexity": round(perplexity, 2),
@@ -109,13 +109,13 @@ async def get_quality_metrics(
 ) -> Dict[str, Any]:
     """
     Get response quality metrics from logged responses.
-    
+
     Returns coherence_score, quality_score, repetition_rate, etc.
     Uses BenchmarkDomain for clean architecture.
     """
     try:
         from domains import get_benchmark_domain
-        
+
         bench = get_benchmark_domain()
         return bench.evaluate_latest(limit=limit)
     except Exception as e:
@@ -130,10 +130,10 @@ async def get_logged_responses(
     """Get recent logged responses for review."""
     try:
         from domains.feedback.response_tracker import get_response_tracker
-        
+
         tracker = get_response_tracker()
         responses = tracker.get_responses(limit=limit, model=model)
-        
+
         return {
             "responses": [
                 {

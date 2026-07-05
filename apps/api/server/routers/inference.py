@@ -258,14 +258,14 @@ async def generate(req: GenerateRequest) -> GenerateResponse:
     """Non-streaming generation — returns complete text response."""
     from domains.models.provider import get_provider
     from startup_progress import STARTUP_PHASE
-    
+
     # Check if model is ready before processing
     if STARTUP_PHASE.get("phase") != "ready":
         raise HTTPException(
             status_code=503,
             detail=f"Model still loading (phase: {STARTUP_PHASE.get('phase', 'unknown')}). Please wait."
         )
-    
+
     provider = get_provider("default")
     if provider is None:
         raise HTTPException(status_code=503, detail="No provider available")
@@ -295,7 +295,7 @@ async def generate(req: GenerateRequest) -> GenerateResponse:
 async def generate_stream(req: GenerateRequest, request: Request) -> StreamingResponse:
     """Streaming generation — yields tokens as SSE."""
     from startup_progress import STARTUP_PHASE
-    
+
     # Check if model is ready before processing
     if STARTUP_PHASE.get("phase") != "ready":
         async def error_stream() -> AsyncIterator[str]:
@@ -305,7 +305,7 @@ async def generate_stream(req: GenerateRequest, request: Request) -> StreamingRe
                 f"Model still loading (phase: {STARTUP_PHASE.get('phase', 'unknown')}). Please wait."
             )
         return StreamingResponse(error_stream(), media_type="text/event-stream")
-    
+
     async def generate() -> AsyncIterator[str]:
         from domains.models.provider import get_provider
         provider = get_provider("default")
@@ -470,7 +470,7 @@ async def list_chat_tools():
 async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
     """Stream chat responses with multi-layer context + live knowledge enrichment."""
     from startup_progress import STARTUP_PHASE
-    
+
     # Check if model is ready before processing
     if STARTUP_PHASE.get("phase") != "ready":
         async def error_stream() -> AsyncIterator[str]:
@@ -480,16 +480,16 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                 f"Model still loading (phase: {STARTUP_PHASE.get('phase', 'unknown')}). Please wait."
             )
         return StreamingResponse(error_stream(), media_type="text/event-stream")
-    
+
     async def generate() -> AsyncIterator[str]:
         cancel_event = threading.Event()
         user_msg = _extract_user_message(req.messages)
         if not user_msg:
             yield sse_error("chat", "IDLE", "No user message")
             return
-        
+
         start_time = datetime.datetime.now()
-        
+
         # ── Progressive: emit "thinking" immediately, start enrichment in parallel ──
         yield _sse_event("chat", "STREAMING", "thinking",
             data={}, message="Thinking...")
@@ -525,16 +525,16 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                 if provider_messages[i]["role"] == "user":
                     provider_messages[i]["content"] = content_parts
                     break
-        
+
         session_id = req.session_id or f"session_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
-        
+
         session_data = _get_session(session_id)
         session_data.setdefault("messages", []).append({
             "role": "user",
             "content": user_msg,
             "timestamp": datetime.datetime.now().isoformat(),
         })
-        
+
         ctx_core = _get_context_core()
         context_info = {}
         frame = None
@@ -567,7 +567,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                         break
                 else:
                     provider_messages.insert(0, {"role": "system", "content": frame.system_prompt})
-        
+
         # ── Inject agent instructions into system prompt ──
         if req.agent_id:
             try:
@@ -587,7 +587,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                         provider_messages.insert(0, agent_msg)
             except Exception:
                 logger.warning("Failed to inject agent instructions", exc_info=True)
-        
+
         # ── Tool intent detection & execution ──
         tool_result_data = None
         try:
@@ -638,7 +638,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
             yield _sse_event("chat", "STREAMING", "working",
                 data={"context": context_info},
                 message=f"{len(context_info.get('layers', []))} context layers")
-        
+
         # ── Knowledge enrichment from KnowledgeMemory (offload to thread to avoid event loop deadlock) ──
         knowledge_retrieved = []
         try:
@@ -656,7 +656,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
         try:
             from domains.models.provider import get_provider
             provider = get_provider("default")
-            
+
             if provider is not None:
                 if req.knowledge:
                     knowledge_str = "\n".join(f"- {k}" for k in req.knowledge)
@@ -771,7 +771,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                     return
 
                 yield sse_token("chat", "", done=True)
-            
+
             # Log response for benchmarking
             try:
                 from domains.feedback.response_tracker import get_response_tracker
@@ -799,7 +799,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                 get_server_state().record_inference(tokens=tokens, elapsed_ms=elapsed_ms, model=req.model)
             except Exception:
                 pass
-            
+
             # Save response (memory cache + async disk flush)
             session_data["messages"].append({
                 "role": "assistant",
@@ -808,7 +808,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
             })
             _save_session(session_id, session_data)
             await _flush_session_to_disk(session_id)
-            
+
             # Update ContextCore with response
             if ctx_core and req.use_context_core:
                 ctx_core.add_response(full_response, model=req.model)
@@ -832,7 +832,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
         except Exception as e:
             yield sse_error("chat", "STREAMING", str(e))
             yield sse_token("chat", "", done=True)
-    
+
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 
@@ -885,26 +885,26 @@ async def chat(req: ChatRequest) -> ChatResponse:
     """Non-streaming chat using ChatDomain."""
     from domains import get_chat_domain
     from startup_progress import STARTUP_PHASE
-    
+
     # Check if model is ready before processing
     if STARTUP_PHASE.get("phase") != "ready":
         raise HTTPException(
             status_code=503,
             detail=f"Model still loading (phase: {STARTUP_PHASE.get('phase', 'unknown')}). Please wait."
         )
-    
+
     user_msg = _extract_user_message(req.messages)
     if not user_msg:
         raise HTTPException(status_code=400, detail="No user message")
-    
+
     system_prompt = req.system_prompt or ""
-    
+
     # Build messages list for domain
     messages = [{"role": m.role, "content": m.content} for m in req.messages]
-    
+
     # Use ChatDomain for generation + logging
     chat_domain = get_chat_domain()
-    
+
     # Inject agent instructions into system prompt if provided
     if req.agent_id:
         try:
@@ -915,12 +915,12 @@ async def chat(req: ChatRequest) -> ChatResponse:
                 system_prompt = f"{system_prompt}\n\n[AGENT: {req.agent_id}]\n{agent_instructions}" if system_prompt else f"[AGENT: {req.agent_id}]\n{agent_instructions}"
         except Exception:
             logger.warning("Failed to inject agent instructions", exc_info=True)
-    
+
     # Inject knowledge into system prompt if provided
     if req.knowledge:
         knowledge_str = "\n".join(f"- {k}" for k in req.knowledge)
         system_prompt = f"{system_prompt}\n\nUse the following context to answer:\n{knowledge_str}" if system_prompt else f"Use the following context to answer:\n{knowledge_str}"
-    
+
     # Knowledge enrichment from KnowledgeMemory
     try:
         enrichment = await asyncio.to_thread(_enrich_knowledge, user_msg, False, 5)
@@ -929,7 +929,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
             system_prompt = f"{system_prompt}\n\nUse the following context to answer:\n{k_text}" if system_prompt else f"Use the following context to answer:\n{k_text}"
     except Exception:
         pass
-    
+
     result = await chat_domain.respond(
         messages=messages,
         model=req.model,

@@ -37,7 +37,7 @@ def _get_model_info() -> Tuple[bool, Optional[str]]:
             return True, server_state.model_type
     except ImportError:
         pass
-    
+
     return False, None
 
 
@@ -62,7 +62,7 @@ class HealthController:
         self._start_time = datetime.now()
         self._cache: Dict[str, Any] = {}
         self._cache_time: float = 0.0
-    
+
     def get_basic_health(self) -> Dict[str, Any]:
         """Get basic health status with flow-based summary."""
         model_loaded, model_type = _get_model_info()
@@ -96,7 +96,7 @@ class HealthController:
                 pass
 
         return result
-    
+
     def get_detailed_health(self) -> Dict[str, Any]:
         """Get detailed health with system metrics and GPU info (cached up to CACHE_TTL seconds)."""
         now = time.monotonic()
@@ -217,7 +217,7 @@ class HealthController:
     def get_liveness(self) -> Dict[str, Any]:
         """Kubernetes liveness probe"""
         return {"status": "alive"}
-    
+
     def get_readiness(self) -> Dict[str, Any]:
         """Kubernetes readiness probe"""
         return {"status": "ready"}

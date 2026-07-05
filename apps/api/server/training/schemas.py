@@ -250,6 +250,3 @@ class UnifiedStartRequest(BaseModel):
     skip_deploy: bool = False
 
     device: str = "auto"
-
-
-

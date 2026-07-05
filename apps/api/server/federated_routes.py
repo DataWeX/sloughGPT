@@ -9,7 +9,7 @@ POST /federated/register
 
 POST /federated/update
   - Receive weight updates from clients
-  
+
 GET /federated/model
   - Get latest model weights (polled by clients)
 
@@ -36,7 +36,7 @@ class Storage:
     updates = []
     global_weights = None
     global_version = 1
-    
+
     @classmethod
     def reset(cls):
         cls.clients = {}
@@ -101,9 +101,9 @@ class AggregatorStatus(BaseModel):
 @router.post("/register", response_model=ClientRegistrationResponse)
 async def register_client(registration: ClientRegistration):
     """Register a new client device for federated learning."""
-    
+
     client_id = registration.client_id
-    
+
     if client_id in Storage.clients:
         # Return existing token
         return ClientRegistrationResponse(
@@ -111,12 +111,12 @@ async def register_client(registration: ClientRegistration):
             token=Storage.clients[client_id]['token'],
             registered=True
         )
-    
+
     # Generate token
     token = hashlib.sha256(
         f"{client_id}{datetime.now().isoformat()}".encode()
     ).hexdigest()[:16]
-    
+
     Storage.clients[client_id] = {
         'token': token,
         'registered_at': datetime.now(),
@@ -124,7 +124,7 @@ async def register_client(registration: ClientRegistration):
         'last_update': None,
         'update_count': 0,
     }
-    
+
     return ClientRegistrationResponse(
         client_id=client_id,
         token=token,
@@ -135,19 +135,19 @@ async def register_client(registration: ClientRegistration):
 @router.post("/update", response_model=WeightUpdateResponse)
 async def receive_update(update: WeightUpdate):
     """Receive weight update from a client."""
-    
+
     # Validate client
     if update.client_id not in Storage.clients:
         raise HTTPException(status_code=401, detail="Unregistered client")
-    
+
     if Storage.clients[update.client_id]['token'] != update.token:
         raise HTTPException(status_code=401, detail="Invalid token")
-    
+
     # Store update
     update_id = hashlib.sha256(
         f"{update.client_id}{datetime.now().isoformat()}".encode()
     ).hexdigest()[:12]
-    
+
     Storage.updates.append({
         'id': update_id,
         'client_id': update.client_id,
@@ -157,11 +157,11 @@ async def receive_update(update: WeightUpdate):
         'metadata': update.metadata,
         'received_at': datetime.now(),
     })
-    
+
     # Update client status
     Storage.clients[update.client_id]['last_update'] = datetime.now()
     Storage.clients[update.client_id]['update_count'] += 1
-    
+
     return WeightUpdateResponse(
         received=True,
         update_id=update_id,
@@ -175,16 +175,16 @@ async def get_model_update(
     current_version: int = 1
 ):
     """Get model update if available."""
-    
+
     is_update_available = current_version < Storage.global_version
-    
+
     if not is_update_available:
         return ModelUpdateResponse(
             version=Storage.global_version,
             weights={},
             is_update_available=False
         )
-    
+
     return ModelUpdateResponse(
         version=Storage.global_version,
         weights=Storage.global_weights or {},
@@ -195,7 +195,7 @@ async def get_model_update(
 @router.get("/status", response_model=AggregatorStatus)
 async def get_status():
     """Get federated learning aggregator status."""
-    
+
     last_agg = None
     if Storage.updates:
         # Find most recent aggregation time
@@ -203,7 +203,7 @@ async def get_status():
             if 'aggregated_at' in u:
                 if last_agg is None or u['aggregated_at'] > last_agg:
                     last_agg = u['aggregated_at']
-    
+
     return AggregatorStatus(
         global_version=Storage.global_version,
         pending_updates=len(Storage.updates),
@@ -215,25 +215,25 @@ async def get_status():
 @router.post("/aggregate")
 async def trigger_aggregation():
     """Trigger weight aggregation (admin endpoint)."""
-    
+
     if len(Storage.updates) == 0:
         return {"message": "No pending updates to aggregate"}
-    
+
     # Simple FedAvg implementation
     # Aggregate weight deltas across all clients
     aggregated = {}
-    
+
     for update in Storage.updates:
         weight = update.get('total_training_samples', 1) or 1
-        
+
         for layer_delta in update['layer_deltas']:
             layer_name = layer_delta.layer_name
-            
+
             # Compute delta
             old = layer_delta.old_weights
             new = layer_delta.new_weights
             delta = [n - o for o, n in zip(old, new)]
-            
+
             if layer_name not in aggregated:
                 aggregated[layer_name] = {'sum': delta, 'total_weight': weight}
             else:
@@ -245,16 +245,16 @@ async def trigger_aggregation():
                     + delta[i] * weight / current['total_weight']
                     for i in range(len(delta))
                 ]
-    
+
     # Update global model
     Storage.global_weights = {k: v['sum'] for k, v in aggregated.items()}
     Storage.global_version += 1
-    
+
     # Mark updates as aggregated
     for u in Storage.updates:
         u['aggregated_at'] = datetime.now()
     Storage.updates = []
-    
+
     return {
         "message": f"Aggregated {len(aggregated)} layers",
         "new_version": Storage.global_version,

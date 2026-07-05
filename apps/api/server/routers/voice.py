@@ -16,7 +16,7 @@ router = APIRouter(prefix="/voice", tags=["voice"])
 
 class _TTSBackend:
     """Lazy-loaded TTS engine using HuggingFace transformers."""
-    
+
     def __init__(self):
         self._pipeline = None
         self._model_id = None
@@ -92,10 +92,10 @@ class TTSResponse(BaseModel):
 @router.post("/tts", response_model=TTSResponse)
 async def text_to_speech(request: TTSRequest):
     """Convert text to speech audio.
-    
+
     Uses HuggingFace TTS model (bark-small) if available.
     Returns base64-encoded WAV audio with sample rate metadata.
-    
+
     Falls back with a browser-fallback signal so the frontend
     can use native speechSynthesis instead.
     """
