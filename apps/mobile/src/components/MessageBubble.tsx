@@ -10,6 +10,7 @@ import {
   Modal,
   Pressable,
   Image,
+  Share,
 } from 'react-native';
 import {Markdown} from './Markdown';
 import {copyToClipboard} from '../services/clipboard';
@@ -116,12 +117,15 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
 
   const contextActions: ContextAction[] = [
     {icon: '📋', label: 'Copy', onPress: handleCopy},
+    {icon: '↗', label: 'Share', onPress: async () => {
+      setShowContextMenu(false);
+      await Share.share({message: message.content});
+    }},
     ...(isUser ? [] : [
       {icon: '👍', label: 'Good response', onPress: () => { setShowContextMenu(false); onFeedback?.(true); }},
       {icon: '👎', label: 'Bad response', onPress: () => { setShowContextMenu(false); onFeedback?.(false); }},
       {icon: '↻', label: 'Regenerate', onPress: () => { setShowContextMenu(false); onRegenerate?.(); }},
     ]),
-    ...(!message.content && isUser ? [{icon: '↻', label: 'Retry', onPress: () => { setShowContextMenu(false); onRetry?.(); }}] : []),
     {icon: '🗑', label: 'Delete', destructive: true, onPress: handleDelete},
   ];
 
