@@ -56,6 +56,7 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
   const [bookmarked, setBookmarked] = useState(false);
   const [reactions, setReactions] = useState<ReactionEmoji[]>([]);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [showFullDate, setShowFullDate] = useState(false);
   const translateX = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(8)).current;
@@ -223,12 +224,18 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
         </TouchableOpacity>
       </Animated.View>
 
-      <Text style={[styles.timestamp, isUser && styles.timestampUser]}>
-        {formatTime(message.timestamp)}
-        {message.content && message.content.length > 200 && (
-          <Text style={styles.readTime}> · {Math.max(1, Math.ceil(message.content.split(/\s+/).length / 200))} min read</Text>
-        )}
-      </Text>
+      <TouchableOpacity
+        onPress={() => setShowFullDate(d => !d)}
+        style={[styles.timestampRow, isUser && styles.timestampRowUser]}>
+        <Text style={[styles.timestamp, isUser && styles.timestampUser]}>
+          {showFullDate
+            ? new Date(message.timestamp).toLocaleString()
+            : formatTime(message.timestamp)}
+          {message.content && message.content.length > 200 && (
+            <Text style={styles.readTime}> · {Math.max(1, Math.ceil(message.content.split(/\s+/).length / 200))} min read</Text>
+          )}
+        </Text>
+      </TouchableOpacity>
 
       {/* Reaction display */}
       {reactions.length > 0 && (
@@ -376,6 +383,13 @@ const styles = StyleSheet.create({
   },
   timestampUser: {
     textAlign: 'right',
+  },
+  timestampRow: {
+    marginTop: 2,
+    paddingHorizontal: spacing.md,
+  },
+  timestampRowUser: {
+    alignItems: 'flex-end',
   },
   reactionRow: {
     flexDirection: 'row',
