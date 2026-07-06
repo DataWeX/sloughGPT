@@ -439,6 +439,39 @@ export function ChatScreen() {
           </Pressable>
         )}
 
+        {/* Select mode toolbar */}
+        {selectMode && (
+          <View style={styles.selectToolbar}>
+            <TouchableOpacity
+              style={styles.selectToolbarBtn}
+              onPress={() => {
+                if (selectedIds.size === messages.length) {
+                  setSelectedIds(new Set());
+                } else {
+                  setSelectedIds(new Set(messages.map(m => m.id)));
+                }
+              }}>
+              <Text style={styles.selectToolbarText}>
+                {selectedIds.size === messages.length ? 'Deselect all' : 'Select all'}
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.selectToolbarCount}>
+              {selectedIds.size} selected
+            </Text>
+            <TouchableOpacity
+              style={[styles.selectToolbarBtn, styles.selectToolbarDelete]}
+              onPress={deleteSelected}
+              disabled={selectedIds.size === 0}>
+              <Text style={[styles.selectToolbarText, selectedIds.size > 0 && {color: colors.error}]}>
+                Delete
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.selectToolbarBtn} onPress={toggleSelectMode}>
+              <Text style={styles.selectToolbarText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <TypingIndicator visible={streaming && messages.length > 0 && !messages[messages.length - 1]?.content} />
 
         <ChatInput
@@ -901,6 +934,30 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
   },
+  selectToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  selectToolbarBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  selectToolbarText: {
+    ...typography.body,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  selectToolbarCount: {
+    ...typography.small,
+    color: colors.textMuted,
+  },
+  selectToolbarDelete: {},
   jumpBtn: {
     position: 'absolute',
     right: spacing.lg,

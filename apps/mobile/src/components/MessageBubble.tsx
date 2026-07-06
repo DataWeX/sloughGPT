@@ -197,6 +197,18 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
 
   return (
     <Animated.View style={[styles.row, isUser && styles.rowUser, {opacity, transform: [{translateY}]}]}>
+      {/* Selection checkbox */}
+      {selectMode && (
+        <TouchableOpacity
+          style={styles.selectCheckbox}
+          onPress={onSelect}
+          activeOpacity={0.7}>
+          <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
+            {selected && <Text style={styles.checkmark}>✓</Text>}
+          </View>
+        </TouchableOpacity>
+      )}
+
       {/* Delete button behind the bubble */}
       <View style={styles.deleteContainer}>
         <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete} activeOpacity={0.7}>
@@ -210,8 +222,8 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
         {...panResponder.panHandlers}>
         <TouchableOpacity
           style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble, highlight && styles.highlight]}
-          onPress={handleDoubleTap}
-          onLongPress={handleLongPress}
+          onPress={selectMode ? onSelect : handleDoubleTap}
+          onLongPress={selectMode ? onSelect : (onLongPressSelect || handleLongPress)}
           activeOpacity={0.8}>
           {message.images && message.images.length > 0 && (
             <View style={styles.imageContainer}>
@@ -344,6 +356,32 @@ const styles = StyleSheet.create({
   },
   deleteIcon: {
     fontSize: 16,
+  },
+  selectCheckbox: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.xs,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  checkmark: {
+    color: colors.white,
+    fontSize: 12,
+    fontWeight: '700',
   },
   swipeable: {
     maxWidth: '80%',
