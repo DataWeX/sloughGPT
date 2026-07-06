@@ -21,19 +21,8 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: |
-            apps/web/package-lock.json
-            packages/strui/package-lock.json
+          cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
-        working-directory: apps/web
-      - run: npm ci
-        working-directory: packages/strui
-      - name: Ensure @sloughgpt/strui symlink
-        run: |
-          if [ ! -L node_modules/@sloughgpt/strui ]; then
-            mkdir -p node_modules/@sloughgpt
-            ln -sfn ../../../../packages/strui node_modules/@sloughgpt/strui
-          fi
         working-directory: apps/web
       - run: npx tsc --noEmit
         working-directory: apps/web
@@ -47,19 +36,8 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: |
-            apps/web/package-lock.json
-            packages/strui/package-lock.json
+          cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
-        working-directory: apps/web
-      - run: npm ci
-        working-directory: packages/strui
-      - name: Ensure @sloughgpt/strui symlink
-        run: |
-          if [ ! -L node_modules/@sloughgpt/strui ]; then
-            mkdir -p node_modules/@sloughgpt
-            ln -sfn ../../../../packages/strui node_modules/@sloughgpt/strui
-          fi
         working-directory: apps/web
       - run: npm run test:lib
         working-directory: apps/web
@@ -73,19 +51,8 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: |
-            apps/web/package-lock.json
-            packages/strui/package-lock.json
+          cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
-        working-directory: apps/web
-      - run: npm ci
-        working-directory: packages/strui
-      - name: Ensure @sloughgpt/strui symlink
-        run: |
-          if [ ! -L node_modules/@sloughgpt/strui ]; then
-            mkdir -p node_modules/@sloughgpt
-            ln -sfn ../../../../packages/strui node_modules/@sloughgpt/strui
-          fi
         working-directory: apps/web
       - run: npm run build
         working-directory: apps/web
@@ -100,19 +67,8 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: |
-            apps/web/package-lock.json
-            packages/strui/package-lock.json
+          cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
-        working-directory: apps/web
-      - run: npm ci
-        working-directory: packages/strui
-      - name: Ensure @sloughgpt/strui symlink
-        run: |
-          if [ ! -L node_modules/@sloughgpt/strui ]; then
-            mkdir -p node_modules/@sloughgpt
-            ln -sfn ../../../../packages/strui node_modules/@sloughgpt/strui
-          fi
         working-directory: apps/web
       - run: npm run build
         working-directory: apps/web

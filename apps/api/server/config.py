@@ -54,7 +54,7 @@ class ServerConfig:
     use_slonet: bool = False
 
     inference_pool_size: int = field(default_factory=lambda: max(1, multiprocessing.cpu_count() // 2))
-    request_timeout_seconds: float = 60.0
+    request_timeout_seconds: float = 120.0
     streaming_skip_paths: tuple[str, ...] = (
         "/chat/stream", "/auto-train/stream", "/session/",
         "/generate/stream", "/models/load", "/inference/generate", "/chat",
@@ -89,7 +89,7 @@ class ServerConfig:
             autoload_device=(os.getenv("MAN_AUTOLOAD_DEVICE") or "auto").strip(),
             use_slonet=os.getenv("MAN_USE_SLONET", "0").strip().lower() in ("1", "true", "yes"),
             inference_pool_size=int(os.getenv("MAN_INFERENCE_POOL_SIZE", str(max(1, multiprocessing.cpu_count() // 2)))),
-            request_timeout_seconds=float(os.getenv("MAN_REQUEST_TIMEOUT", "60.0")),
+            request_timeout_seconds=float(os.getenv("MAN_REQUEST_TIMEOUT", "120.0")),
             enable_watchdog=os.getenv("MAN_WATCHDOG", "true").lower() == "true",
             enable_process_guard=os.getenv("MAN_ENABLE_PROCESS_GUARD", "").lower() in ("1", "true", "yes"),
             enable_workflow=os.getenv("MAN_AUTO_WORKFLOW", "true").lower() == "true",

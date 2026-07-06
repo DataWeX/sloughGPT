@@ -767,7 +767,7 @@ async def stream(request: Request):
                     break
 
             await worker_task
-        except _asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("Auto-train SSE queue timed out — no event for 30s")
             yield sse_error("auto-train", "TIMEOUT", "No training progress for 30 seconds")
         except Exception:
