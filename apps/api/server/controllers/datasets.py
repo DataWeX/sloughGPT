@@ -4,6 +4,7 @@ Datasets Controller - Business logic for dataset management
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 import json
+import shutil
 
 
 class DatasetsController:
@@ -221,7 +222,6 @@ class DatasetsController:
         path = self.datasets_dir / dataset_id
         if not path.exists():
             return False
-        import shutil
         shutil.rmtree(path)
         return True
 
@@ -375,7 +375,6 @@ class DatasetsController:
                 return export_path
             return None
         export_path = path / f"{dataset_id}.{format}"
-        import shutil
         shutil.copy2(corpus_file, export_path)
         return export_path
 
