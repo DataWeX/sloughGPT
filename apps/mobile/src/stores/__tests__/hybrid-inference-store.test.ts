@@ -214,7 +214,7 @@ describe('executeLocal', () => {
 
     const res = await useHybridStore.getState().executeLocal('hi', []);
     expect(res).toEqual({text: 'hello back', tokens_generated: 3, elapsed_ms: 15});
-    expect(mockSloNet.generate).toHaveBeenCalledWith('hi');
+    expect(mockSloNet.generate).toHaveBeenCalledWith('hi', 64, 0.8, 40, 0.9, 0, undefined);
   });
 
   it('delegates to qwen', async () => {

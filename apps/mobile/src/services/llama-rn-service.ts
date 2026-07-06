@@ -49,6 +49,9 @@ export interface LlamaGenerateResult {
   elapsedMs: number;
 }
 
+/** Callback for streaming tokens. */
+export type OnTokenCallback = (token: string) => void;
+
 let _context: any = null;
 let _modelPath: string | null = null;
 
@@ -186,17 +189,44 @@ export function isLoaded(): boolean {
 
 // ── Inference ───────────────────────────────────────────────────────────
 
-/** Chat completion via llama.rn (non-streaming). */
+/** Chat completion via llama.rn (non-streaming, with optional onToken). */
 export async function chatCompletion(
   messages: Array<{role: string; content: string}>,
   opts?: LlamaGenerateOptions,
+  onToken?: OnTokenCallback,
 ): Promise<LlamaGenerateResult> {
   if (!_context) throw new Error('Model not loaded');
   const t0 = Date.now();
-
-  // Build prompt from messages using Qwen's chat template
   const prompt = _buildChatTemplate(messages);
 
+  // Use streaming under the hood if onToken is provided
+  if (onToken) {
+    const stream = await _context.completion({
+      prompt,
+      nPredict: opts?.maxTokens ?? 256,
+      temperature: opts?.temperature ?? 0.7,
+      topK: opts?.topK ?? 40,
+      topP: opts?.topP ?? 0.9,
+      repeatPenalty: opts?.repetitionPenalty ?? 1.1,
+      stop: opts?.stop ?? ['<|im_end|>', '<|end|>', 'User:'],
+    });
+
+    let fullText = '';
+    let tokensGenerated = 0;
+    for await (const token of stream) {
+      fullText += token;
+      tokensGenerated++;
+      onToken(token);
+    }
+
+    return {
+      text: fullText,
+      tokensGenerated,
+      elapsedMs: Date.now() - t0,
+    };
+  }
+
+  // Non-streaming path
   const result = await _context.completion({
     prompt,
     nPredict: opts?.maxTokens ?? 256,

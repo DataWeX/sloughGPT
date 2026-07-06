@@ -11,7 +11,7 @@ import { useToastStore } from '@/lib/toast-store'
 import ModelsCard from '@/components/compare/ModelsCard'
 import ComparisonTableCard from '@/components/compare/ComparisonTableCard'
 import SummaryCard from '@/components/compare/SummaryCard'
-import OutputComparisonCard from '@/components/compare/OutputComparisonCard'
+const OutputComparisonCard = dynamicNext(() => import('@/components/compare/OutputComparisonCard'), { ssr: false })
 import dynamicNext from 'next/dynamic'
 
 const VisualComparisonCard = dynamicNext(() => import('@/components/compare/VisualComparisonCard'), { ssr: false })

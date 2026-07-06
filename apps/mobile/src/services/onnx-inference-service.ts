@@ -495,6 +495,7 @@ export async function generate(
     topP,
     maxNewTokens,
     eosToken,
+    onToken,
   );
 
   return {

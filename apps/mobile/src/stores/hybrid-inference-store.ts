@@ -13,7 +13,7 @@ import {create} from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as slonet from '../services/onnx-inference-service';
 import * as llamaRn from '../services/llama-rn-service';
-import type {LocalGenerateResult, HybridState, RoutingDecision, ActiveEngine} from '../types/local-inference';
+import type {LocalGenerateResult, HybridState, RoutingDecision, ActiveEngine, OnTokenCallback} from '../types/local-inference';
 
 const STORAGE_KEY = '@sloughgpt/hybrid_config';
 
@@ -54,6 +54,7 @@ interface HybridStoreState extends HybridState {
   executeLocal: (
     content: string,
     messages: Array<{role: string; content: string}>,
+    onToken?: OnTokenCallback,
   ) => Promise<LocalGenerateResult | null>;
 }
 
@@ -127,18 +128,18 @@ export const useHybridStore = create<HybridStoreState>((set, get) => ({
 
   decideRoute: (content: string) => _route(content, get()),
 
-  executeLocal: async (content, messages) => {
+  executeLocal: async (content, messages, onToken) => {
     const route = get().decideRoute(content);
     if (route.target !== 'local') return null;
 
     try {
       if (route.engine === 'slonet') {
-        const result = await slonet.generate(content);
+        const result = await slonet.generate(content, 64, 0.8, 40, 0.9, 0, onToken);
         return result;
       }
 
       if (route.engine === 'qwen') {
-        const result = await llamaRn.chatCompletion(messages);
+        const result = await llamaRn.chatCompletion(messages, undefined, onToken);
         return {
           text: result.text,
           tokens_generated: result.tokensGenerated,

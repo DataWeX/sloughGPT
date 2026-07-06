@@ -218,7 +218,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
           role: m.role,
           content: m.content,
         }));
-        const result = await hybridState.executeLocal(content, messages);
+        let localAccumulated = '';
+        const result = await hybridState.executeLocal(
+          content,
+          messages,
+          (token: string) => {
+            localAccumulated += token;
+            const currentContent = localAccumulated;
+            set(s => ({
+              messages: s.messages.map(m =>
+                m.id === assistantMsg.id ? {...m, content: currentContent} : m,
+              ),
+            }));
+          },
+        );
 
         if (result && result.text) {
           set(s => ({
@@ -378,9 +391,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (route.target === 'local') {
       try {
+        let localAccumulated = '';
         const result = await hybridState.executeLocal(
           contextMessages[contextMessages.length - 1]?.content ?? '',
           contextMessages,
+          (token: string) => {
+            localAccumulated += token;
+            const currentContent = localAccumulated;
+            set(s => ({
+              messages: s.messages.map(m =>
+                m.id === assistantMsg.id ? {...m, content: currentContent} : m,
+              ),
+            }));
+          },
         );
         if (result?.text) {
           set(s => ({
