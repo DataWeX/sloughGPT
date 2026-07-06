@@ -16,6 +16,8 @@ import {Markdown} from './Markdown';
 import {copyToClipboard} from '../services/clipboard';
 import {triggerHaptic} from '../services/haptics';
 import {sounds} from '../services/sounds';
+import {addBookmark, removeBookmark, isBookmarked} from '../services/bookmarks';
+import {toast} from '../services/toast';
 import {colors, spacing, radii, typography} from '../theme';
 import type {Message} from '../types';
 
@@ -50,6 +52,7 @@ interface Props {
 export function MessageBubble({message, highlight, onRegenerate, onFeedback, onDelete, onRetry}: Props) {
   const isUser = message.role === 'user';
   const [showContextMenu, setShowContextMenu] = useState(false);
+  const [bookmarked, setBookmarked] = useState(false);
   const translateX = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(8)).current;
@@ -59,6 +62,8 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
       Animated.timing(opacity, {toValue: 1, duration: 200, useNativeDriver: true}),
       Animated.timing(translateY, {toValue: 0, duration: 200, useNativeDriver: true}),
     ]).start();
+    // Check bookmark state
+    isBookmarked(message.content, message.id).then(setBookmarked);
   }, []);
   const isSwipeOpen = useRef(false);
 
@@ -124,12 +129,27 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
     ]);
   };
 
+  const handleToggleBookmark = async () => {
+    setShowContextMenu(false);
+    if (bookmarked) {
+      await removeBookmark(message.id);
+      setBookmarked(false);
+      toast.info('Bookmark removed');
+    } else {
+      await addBookmark(message.content, message.role as 'user' | 'assistant', message.id);
+      setBookmarked(true);
+      triggerHaptic('success');
+      toast.success('Message bookmarked');
+    }
+  };
+
   const contextActions: ContextAction[] = [
     {icon: '📋', label: 'Copy', onPress: handleCopy},
     {icon: '↗', label: 'Share', onPress: async () => {
       setShowContextMenu(false);
       await Share.share({message: message.content});
     }},
+    {icon: bookmarked ? '★' : '☆', label: bookmarked ? 'Remove bookmark' : 'Bookmark', onPress: handleToggleBookmark},
     ...(isUser ? [] : [
       {icon: '👍', label: 'Good response', onPress: () => { setShowContextMenu(false); onFeedback?.(true); }},
       {icon: '👎', label: 'Bad response', onPress: () => { setShowContextMenu(false); onFeedback?.(false); }},

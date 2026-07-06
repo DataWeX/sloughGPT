@@ -13,6 +13,7 @@ import {SettingsScreen} from './src/screens/SettingsScreen';
 import {HealthScreen} from './src/screens/HealthScreen';
 import {AboutScreen} from './src/screens/AboutScreen';
 import {SearchScreen} from './src/screens/SearchScreen';
+import {BookmarksScreen} from './src/screens/BookmarksScreen';
 import {useModelStore} from './src/stores/model-store';
 import {useSettingsStore} from './src/stores/settings-store';
 import {ThemeProvider, useTheme} from './src/theme/ThemeContext';
@@ -52,6 +53,7 @@ function SettingsStack() {
       <Stack.Screen name="SettingsMain" component={SettingsScreen} />
       <Stack.Screen name="Health" component={HealthScreen} />
       <Stack.Screen name="About" component={AboutScreen} />
+      <Stack.Screen name="Bookmarks" component={BookmarksScreen} />
     </Stack.Navigator>
   );
 }

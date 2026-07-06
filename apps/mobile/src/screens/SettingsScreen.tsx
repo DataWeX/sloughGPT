@@ -253,6 +253,18 @@ export function SettingsScreen() {
 
         <TouchableOpacity
           style={styles.card}
+          onPress={() => navigation.navigate('Bookmarks')}>
+          <View style={styles.navRow}>
+            <View>
+              <Text style={styles.cardTitle}>Bookmarks</Text>
+              <Text style={styles.navDesc}>Saved messages for quick access</Text>
+            </View>
+            <Text style={styles.navArrow}>→</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.card}
           onPress={() => navigation.navigate('About')}>
           <View style={styles.navRow}>
             <View>
