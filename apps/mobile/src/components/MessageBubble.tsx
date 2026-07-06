@@ -1,4 +1,4 @@
-import React, {useState, useRef} from 'react';
+import React, {useState, useRef, useEffect} from 'react';
 import {
   View,
   Text,
@@ -51,6 +51,15 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
   const isUser = message.role === 'user';
   const [showContextMenu, setShowContextMenu] = useState(false);
   const translateX = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(8)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {toValue: 1, duration: 200, useNativeDriver: true}),
+      Animated.timing(translateY, {toValue: 0, duration: 200, useNativeDriver: true}),
+    ]).start();
+  }, []);
   const isSwipeOpen = useRef(false);
 
   const panResponder = useRef(
@@ -130,7 +139,7 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
   ];
 
   return (
-    <View style={[styles.row, isUser && styles.rowUser]}>
+    <Animated.View style={[styles.row, isUser && styles.rowUser, {opacity, transform: [{translateY}]}]}>
       {/* Delete button behind the bubble */}
       <View style={styles.deleteContainer}>
         <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete} activeOpacity={0.7}>
@@ -201,7 +210,7 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
           </View>
         </Pressable>
       </Modal>
-    </View>
+    </Animated.View>
   );
 }
 
