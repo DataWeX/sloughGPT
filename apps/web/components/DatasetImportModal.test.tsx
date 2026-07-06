@@ -2,18 +2,21 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import React from 'react'
 
-vi.mock('@/components/ui/dialog', () => ({
+vi.mock('@sloughgpt/strui', () => ({
   Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) => (open ? <div>{children}</div> : null),
   DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DialogDescription: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DialogTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-}))
-
-vi.mock('@/components/ui', () => ({
   Spinner: () => <div data-testid="spinner" />,
   IconCheck: () => <div data-testid="icon-check" />,
+  Button: ({ children, onClick, variant, size, ...rest }: any) => (
+    <button onClick={onClick} data-variant={variant} data-size={size} {...rest}>{children}</button>
+  ),
+  Input: (props: any) => <input data-testid="input" {...props} />,
+  Label: ({ children, ...props }: any) => <label {...props}>{children}</label>,
+  Badge: ({ children, variant }: any) => <span data-testid="badge" data-variant={variant}>{children}</span>,
 }))
 
 const mocks = vi.hoisted(() => ({

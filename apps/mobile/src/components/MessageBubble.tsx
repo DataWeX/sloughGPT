@@ -48,9 +48,14 @@ interface Props {
   onFeedback?: (positive: boolean) => void;
   onDelete?: () => void;
   onRetry?: () => void;
+  onEdit?: (newContent: string) => void;
+  selectMode?: boolean;
+  selected?: boolean;
+  onSelect?: () => void;
+  onLongPressSelect?: () => void;
 }
 
-export function MessageBubble({message, highlight, onRegenerate, onFeedback, onDelete, onRetry}: Props) {
+export function MessageBubble({message, highlight, onRegenerate, onFeedback, onDelete, onRetry, onEdit, selectMode, selected, onSelect, onLongPressSelect}: Props) {
   const isUser = message.role === 'user';
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
@@ -160,6 +165,10 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
       setShowContextMenu(false);
       await Share.share({message: message.content});
     }},
+    ...(isUser && onEdit ? [{icon: '✏️', label: 'Edit', onPress: () => {
+      setShowContextMenu(false);
+      onEdit(message.content);
+    }}] : []),
     {icon: bookmarked ? '★' : '☆', label: bookmarked ? 'Remove bookmark' : 'Bookmark', onPress: handleToggleBookmark},
     {icon: '😊', label: 'React', onPress: () => { setShowContextMenu(false); setShowReactionPicker(true); }},
     ...(isUser ? [] : [

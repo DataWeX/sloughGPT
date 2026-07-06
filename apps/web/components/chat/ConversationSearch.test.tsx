@@ -12,23 +12,17 @@ vi.mock('@/lib/session-controller', () => ({
   sessionController: { search: vi.fn().mockRejectedValue(new Error('no server')) },
 }))
 
-vi.mock('@/components/ui/input', () => ({
-  Input: (props: any) => <input data-testid="search-input" {...props} />,
-}))
-
-vi.mock('@/components/ui/button', () => ({
-  Button: ({ children, onClick, variant, size, ...rest }: any) => (
-    <button onClick={onClick} data-variant={variant} data-size={size} {...rest}>{children}</button>
-  ),
-}))
-
-vi.mock('@/components/ui', () => {
+vi.mock('@sloughgpt/strui', () => {
   const iconMock = (name: string) => {
     const C = () => <span data-testid={`icon-${name}`}>{name}</span>
     C.displayName = `Icon${name}`
     return C
   }
   return {
+    Input: (props: any) => <input data-testid="search-input" {...props} />,
+    Button: ({ children, onClick, variant, size, ...rest }: any) => (
+      <button onClick={onClick} data-variant={variant} data-size={size} {...rest}>{children}</button>
+    ),
     IconSearch: iconMock('search'),
     IconX: iconMock('x'),
     IconMessage: iconMock('message'),

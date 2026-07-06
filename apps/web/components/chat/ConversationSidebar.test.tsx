@@ -8,15 +8,12 @@ vi.mock('next/link', () => ({
   ),
 }))
 
-vi.mock('@/components/ui/button', () => ({
-  Button: ({ children, onClick, variant, size, className }: any) => (
-    <button onClick={onClick} className={className} data-variant={variant} data-size={size}>{children}</button>
-  ),
-}))
-
-vi.mock('@/components/ui', () => {
+vi.mock('@sloughgpt/strui', () => {
   const iconMock = (name: string) => { const C = () => <span data-testid={`icon-${name}`}>{name}</span>; C.displayName = `Icon${name}`; return C }
   return {
+    Button: ({ children, onClick, variant, size, className }: any) => (
+      <button onClick={onClick} className={className} data-variant={variant} data-size={size}>{children}</button>
+    ),
     IconPlus: iconMock('plus'),
     IconStar: ({ filled }: any) => <span data-testid="icon-star" data-filled={String(filled)}>star</span>,
     IconPin: iconMock('pin'),

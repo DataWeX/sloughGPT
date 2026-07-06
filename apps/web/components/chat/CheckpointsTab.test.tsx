@@ -6,7 +6,7 @@ vi.mock('./ModelDropdown', () => ({
   ModelDropdown: ({ variant }: any) => <div data-testid="model-dropdown" data-variant={variant} />,
 }))
 
-vi.mock('@/components/ui', () => ({
+vi.mock('@sloughgpt/strui', () => ({
   IconCheck: () => <span data-testid="icon-check">check</span>,
 }))
 

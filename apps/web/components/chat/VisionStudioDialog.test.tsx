@@ -2,20 +2,14 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import React from 'react'
 
-vi.mock('@/components/ui/dialog', () => ({
+vi.mock('@sloughgpt/strui', () => ({
   Dialog: ({ children, open }: any) => open ? <div data-testid="dialog">{children}</div> : null,
   DialogContent: ({ children }: any) => <div data-testid="dialog-content">{children}</div>,
   DialogHeader: ({ children }: any) => <div>{children}</div>,
   DialogTitle: ({ children }: any) => <h2>{children}</h2>,
-}))
-
-vi.mock('@/components/ui/button', () => ({
   Button: ({ children, onClick, disabled, variant, size, className, ...rest }: any) => (
     <button onClick={onClick} disabled={disabled} className={className} data-variant={variant} data-size={size} {...rest}>{children}</button>
   ),
-}))
-
-vi.mock('@/components/ui/tabs', () => ({
   Tabs: ({ value, onChange, tabs: tabDefs, children }: any) => (
     <div data-testid="tabs" data-current={value}>
       {tabDefs.map((t: any) => (
@@ -26,13 +20,7 @@ vi.mock('@/components/ui/tabs', () => ({
       {children}
     </div>
   ),
-}))
-
-vi.mock('@/components/ui/display', () => ({
   Skeleton: ({ className }: any) => <div data-testid="skeleton" className={className} />,
-}))
-
-vi.mock('@/components/ui', () => ({
   IconUpload: () => <span data-testid="icon-upload">upload</span>,
   IconTrash: () => <span data-testid="icon-trash">trash</span>,
   IconSend: () => <span data-testid="icon-send">send</span>,

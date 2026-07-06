@@ -206,3 +206,45 @@ class ProcessGuard:
                         cb(self.worker_id)
                     except Exception:
                         logger.exception("ProcessGuard restart callback failed")
+
+
+def create_model_guard(
+    model_id: str,
+    device: str = "cpu",
+    worker_id: Optional[str] = None,
+    max_restarts: int = 3,
+    restart_delay: float = 2.0,
+    memory_limit_mb: Optional[float] = None,
+    generate_timeout: float = 120.0,
+    max_concurrent: int = 1,
+) -> ProcessGuard:
+    """Create a ProcessGuard for an HF model.
+
+    Convenience factory that configures the guard to load the model
+    in a subprocess via ``HFModelWorker``.
+
+    Args:
+        model_id: HuggingFace model ID (e.g. "gpt2").
+        device: Device string ("cpu", "mps", "cuda", "auto").
+        worker_id: Optional worker name. Defaults to ``f"guard-{model_id}"``.
+        max_restarts: Max worker restarts before giving up.
+        restart_delay: Seconds to wait between restarts.
+        memory_limit_mb: Optional RSS memory limit (MB).
+        generate_timeout: Max seconds per generate() call.
+        max_concurrent: Max concurrent requests.
+
+    Returns:
+        Started ProcessGuard instance.
+    """
+    guard = ProcessGuard(
+        model_cls_path="domains.infrastructure.hf_model_worker.hf_model_loader",
+        model_kwargs={"model_id": model_id, "device": device},
+        worker_id=worker_id or f"guard-{model_id.split('/')[-1]}",
+        max_restarts=max_restarts,
+        restart_delay=restart_delay,
+        memory_limit_mb=memory_limit_mb,
+        generate_timeout=generate_timeout,
+        max_concurrent=max_concurrent,
+    )
+    guard.start()
+    return guard

@@ -11,7 +11,7 @@ vi.mock('@/lib/souls-controller', () => ({
 
 vi.mock('@/components/souls/PersonalitySummary', () => ({ deriveArchetype: vi.fn().mockReturnValue(null) }))
 
-vi.mock('@/components/ui/dropdown-menu', () => {
+vi.mock('@sloughgpt/strui', () => {
   function DM({ children }: any) { return <div>{children}</div> }
   function DMT({ children, asChild }: any) { return asChild ? <>{children}</> : <button>{children}</button> }
   function DMI({ children, onSelect }: any) {
@@ -24,6 +24,13 @@ vi.mock('@/components/ui/dropdown-menu', () => {
     DropdownMenuGroup: ({ children }: any) => <div>{children}</div>,
     DropdownMenuSub: ({ children }: any) => <div>{children}</div>, DropdownMenuRadioGroup: ({ children }: any) => <div>{children}</div>,
     DropdownMenuSubTrigger: DMT, DropdownMenuSubContent: ({ children }: any) => <div>{children}</div>,
+    Button: ({ children, onClick, variant, size, ...rest }: any) => (
+      <button onClick={onClick} data-variant={variant} data-size={size} {...rest}>{children}</button>
+    ),
+    IconChevronDown: () => <span data-testid="icon-chevron-down">▼</span>,
+    IconCheck: () => <span data-testid="icon-check">✓</span>,
+    IconHeart: () => <span data-testid="icon-heart">♥</span>,
+    IconChevronRight: () => <span data-testid="icon-chevron-right">▸</span>,
   }
 })
 

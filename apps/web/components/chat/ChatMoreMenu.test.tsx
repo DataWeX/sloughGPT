@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import React from 'react'
-vi.mock('@/components/ui/dropdown-menu', () => {
+vi.mock('@sloughgpt/strui', () => {
   function DM({ children }: any) { return <div>{children}</div> }
   function DMT({ children, asChild, ...props }: any) {
     const btnProps: any = {}
@@ -18,6 +18,11 @@ vi.mock('@/components/ui/dropdown-menu', () => {
     DropdownMenuPortal: ({ children }: any) => <div>{children}</div>,
     DropdownMenuSub: ({ children }: any) => <div>{children}</div>, DropdownMenuRadioGroup: ({ children }: any) => <div>{children}</div>,
     DropdownMenuSubTrigger: DMT, DropdownMenuSubContent: ({ children }: any) => <div>{children}</div>,
+    Button: ({ children, onClick, variant, size, ...rest }: any) => (
+      <button onClick={onClick} data-variant={variant} data-size={size} {...rest}>{children}</button>
+    ),
+    IconMore: () => <span data-testid="icon-more">more</span>,
+    IconSettings: () => <span data-testid="icon-settings">settings</span>,
   }
 })
 

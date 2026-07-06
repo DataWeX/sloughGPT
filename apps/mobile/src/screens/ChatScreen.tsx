@@ -76,6 +76,9 @@ export function ChatScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [editingMessage, setEditingMessage] = useState<string | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const recordingStopRef = useRef<(() => Promise<{uri: string; duration: number} | null>) | null>(null);
 
   useEffect(() => {
@@ -95,6 +98,27 @@ export function ChatScreen() {
     });
     return () => sub.remove();
   }, [showDrawer, showSoulPicker, showSettings, showSearch, showInfo]);
+
+  const toggleSelectMode = useCallback(() => {
+    setSelectMode(s => !s);
+    setSelectedIds(new Set());
+  }, []);
+
+  const toggleSelectMessage = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const deleteSelected = useCallback(async () => {
+    for (const id of selectedIds) deleteMessage(id);
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    triggerHaptic('medium');
+  }, [selectedIds, deleteMessage]);
 
   const onPullRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -200,6 +224,18 @@ export function ChatScreen() {
             : undefined
         }
         onDelete={() => deleteMessage(item.id)}
+        onEdit={
+          item.role === 'user' ? (newContent: string) => setEditingMessage(newContent) : undefined
+        }
+        selectMode={selectMode}
+        selected={selectedIds.has(item.id)}
+        onSelect={() => toggleSelectMessage(item.id)}
+        onLongPressSelect={() => {
+          if (!selectMode) {
+            setSelectMode(true);
+            setSelectedIds(new Set([item.id]));
+          }
+        }}
       />
     ),
     [regenerate, recordFeedback, searchQuery, deleteMessage],
@@ -414,6 +450,8 @@ export function ChatScreen() {
           onStop={cancelStream}
           isRecording={isRecording}
           sessionId={activeSessionId}
+          editText={editingMessage}
+          onCancelEdit={() => setEditingMessage(null)}
         />
 
         {!atBottom && messages.length > 0 && (

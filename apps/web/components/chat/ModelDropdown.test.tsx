@@ -29,7 +29,7 @@ const mockCtx: {
 }
 vi.mock('@/contexts/ChatToolbarContext', () => ({ useChatToolbarContext: () => mockCtx }))
 
-vi.mock('@/components/ui/dropdown-menu', () => {
+vi.mock('@sloughgpt/strui', () => {
   function DM({ children }: any) { return <div>{children}</div> }
   function DMT({ children, asChild, ...props }: any) { return asChild ? <>{children}</> : <button>{children}</button> }
   function DMI({ children, onSelect, disabled }: any) {
@@ -42,6 +42,10 @@ vi.mock('@/components/ui/dropdown-menu', () => {
     DropdownMenuGroup: ({ children }: any) => <div>{children}</div>,
     DropdownMenuSub: ({ children }: any) => <div>{children}</div>, DropdownMenuRadioGroup: ({ children }: any) => <div>{children}</div>,
     DropdownMenuSubTrigger: DMT, DropdownMenuSubContent: ({ children }: any) => <div>{children}</div>,
+    Button: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
+    IconChevronDown: () => <span data-testid="icon-chevron-down">▼</span>,
+    IconCheck: () => <span data-testid="icon-check">✓</span>,
+    IconRefresh: () => <span data-testid="icon-refresh">↻</span>,
   }
 })
 

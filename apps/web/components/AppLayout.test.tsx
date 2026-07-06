@@ -20,7 +20,10 @@ vi.mock('@/components/Sidebar', () => ({
 
 vi.mock('@/components/StatusBar', () => ({ StatusBar: () => <div data-testid="status-bar" /> }))
 vi.mock('@/components/GlobalErrorHandler', () => ({ GlobalErrorHandler: () => <div data-testid="error-handler" /> }))
-vi.mock('@/components/ui/error-panel', () => ({ ErrorPanel: () => <div data-testid="error-panel" /> }))
+vi.mock('@sloughgpt/strui', () => ({
+  Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  ErrorPanel: () => <div data-testid="error-panel" />,
+}))
 vi.mock('@/components/chat/Toast', () => ({ ToastContainer: () => <div data-testid="toast-container" />, RadixToastContainer: () => <div data-testid="toast-container" /> }))
 vi.mock('@/components/CommandPalette', () => ({ CommandPalette: () => <div data-testid="command-palette" /> }))
 vi.mock('@/components/KeyboardShortcutsModal', () => ({ KeyboardShortcutsModal: ({ open }: any) => open ? <div data-testid="shortcuts-modal" /> : null }))

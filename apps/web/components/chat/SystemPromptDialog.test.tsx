@@ -14,29 +14,27 @@ const localStorageMock = (() => {
 
 vi.stubGlobal('localStorage', localStorageMock)
 
-vi.mock('@/components/ui/dialog', () => {
+vi.mock('@sloughgpt/strui', () => {
   function Dialog({ children, open }: any) { return open ? <div data-testid="dialog">{children}</div> : null }
   function DialogContent({ children }: any) { return <div data-testid="content">{children}</div> }
   function DialogHeader({ children }: any) { return <div>{children}</div> }
   function DialogTitle({ children }: any) { return <div>{children}</div> }
   function DialogPortal({ children }: any) { return <>{children}</> }
   function DialogOverlay() { return <div data-testid="overlay" /> }
-  return { Dialog, DialogContent, DialogHeader, DialogTitle, DialogPortal, DialogOverlay }
+  return {
+    Dialog, DialogContent, DialogHeader, DialogTitle, DialogPortal, DialogOverlay,
+    Input: ({ value, onChange, onKeyDown, ...props }: any) => (
+      <input value={value} onChange={onChange} onKeyDown={onKeyDown} {...props} />
+    ),
+    Button: ({ children, onClick, ...props }: any) => (
+      <button onClick={onClick} {...props}>{children}</button>
+    ),
+    IconTrash: () => <span data-testid="icon-trash">trash</span>,
+    IconPlus: () => <span data-testid="icon-plus">+</span>,
+  }
 })
 
-vi.mock('@/components/ui/input', () => ({
-  Input: ({ value, onChange, onKeyDown, ...props }: any) => (
-    <input value={value} onChange={onChange} onKeyDown={onKeyDown} {...props} />
-  ),
-}))
-
 import { SystemPromptDialog } from './SystemPromptDialog'
-
-vi.mock('@/components/ui/button', () => ({
-  Button: vi.fn(({ children, onClick, ...props }: any) => (
-    <button onClick={onClick} {...props}>{children}</button>
-  )),
-}))
 
 describe('SystemPromptDialog', () => {
   beforeEach(() => localStorageMock.clear())

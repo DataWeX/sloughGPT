@@ -23,13 +23,23 @@ interface Props {
   onStop?: () => void;
   isRecording?: boolean;
   sessionId?: string | null;
+  editText?: string | null;
+  onCancelEdit?: () => void;
 }
 
-export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, isRecording, sessionId}: Props) {
+export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, isRecording, sessionId, editText, onCancelEdit}: Props) {
   const [text, setText] = useState('');
   const [showPrompts, setShowPrompts] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const draftTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Load edit text when provided
+  useEffect(() => {
+    if (editText) {
+      setText(editText);
+      inputRef.current?.focus();
+    }
+  }, [editText]);
 
   // Load draft when session changes
   useEffect(() => {
@@ -121,6 +131,17 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
           blurOnSubmit={false}
           onSubmitEditing={handleSend}
         />
+
+        {editText && onCancelEdit && (
+          <TouchableOpacity
+            style={styles.cancelEditBtn}
+            onPress={() => {
+              setText('');
+              onCancelEdit();
+            }}>
+            <Text style={styles.cancelEditText}>✕</Text>
+          </TouchableOpacity>
+        )}
 
         {disabled ? (
           <TouchableOpacity style={styles.stopBtn} onPress={onStop}>
@@ -219,6 +240,21 @@ const styles = StyleSheet.create({
   stopIcon: {
     color: colors.white,
     fontSize: 16,
+  },
+  cancelEditBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: radii.full,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  cancelEditText: {
+    color: colors.textMuted,
+    fontSize: 14,
+    fontWeight: '600',
   },
   voiceBtn: {
     width: 40,

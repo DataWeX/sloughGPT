@@ -356,6 +356,23 @@ def _autoload_model(cfg: ServerConfig):
     server_state.tokenizer = tokenizer
     server_state.model_type = cfg.autoload_model
 
+    # Optionally wrap in ProcessGuard for crash isolation
+    process_guard = None
+    if cfg.enable_process_guard:
+        try:
+            from domains.infrastructure.process_guard import create_model_guard
+            process_guard = create_model_guard(
+                model_id=cfg.autoload_model,
+                device=cfg.autoload_device,
+                max_restarts=3,
+                restart_delay=2.0,
+                memory_limit_mb=4096,
+            )
+            logger.info("Autoload: ProcessGuard started for %s", cfg.autoload_model)
+        except Exception as e:
+            logger.warning("Autoload: ProcessGuard init failed (continuing without): %s", e)
+            process_guard = None
+
     # Register with ModelRegistry for lifecycle management
     try:
         from domains.infrastructure.model_registry import get_model_registry
@@ -367,6 +384,7 @@ def _autoload_model(cfg: ServerConfig):
             make_default=True,
             max_concurrent=1,
             generate_timeout=120.0,
+            process_guard=process_guard,
         )
         from domains.models.provider import register_provider, HFModelProvider, ProviderRouter, VisionProcessor
         model_server = registry.get(cfg.autoload_model)
@@ -377,7 +395,8 @@ def _autoload_model(cfg: ServerConfig):
         router.add_processor(VisionProcessor("multimodal"))
         router.set_text_provider("hf-default")
         register_provider("default", router)
-        logger.info("Autoload: registered with ModelRegistry + provider + default router")
+        logger.info("Autoload: registered with ModelRegistry + provider + default router%s",
+                     " (process guard enabled)" if process_guard else "")
     except Exception as e:
         logger.warning("Autoload: registry registration failed: %s", e)
 

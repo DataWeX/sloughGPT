@@ -2,22 +2,16 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import React from 'react'
 
-vi.mock('@/components/ui/dialog', () => ({
+vi.mock('@sloughgpt/strui', () => ({
   Dialog: ({ children, open }: any) => open ? <div data-testid="dialog">{children}</div> : null,
   DialogContent: ({ children }: any) => <div data-testid="dialog-content">{children}</div>,
   DialogHeader: ({ children }: any) => <div>{children}</div>,
   DialogTitle: ({ children }: any) => <h2>{children}</h2>,
   DialogDescription: ({ children }: any) => <p>{children}</p>,
   DialogFooter: ({ children }: any) => <div>{children}</div>,
-}))
-
-vi.mock('@/components/ui/checkbox', () => ({
   Checkbox: ({ checked, onCheckedChange }: any) => (
     <input type="checkbox" checked={checked} onChange={() => onCheckedChange?.(!checked)} data-testid="checkbox" />
   ),
-}))
-
-vi.mock('@/components/ui/button', () => ({
   Button: ({ children, onClick, variant, size, ...rest }: any) => (
     <button onClick={onClick} data-variant={variant} data-size={size} {...rest}>{children}</button>
   ),

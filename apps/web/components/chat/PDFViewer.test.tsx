@@ -2,14 +2,14 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import React from 'react'
 
-vi.mock('@/components/ui/button', () => ({
+vi.mock('@sloughgpt/strui', () => ({
   Button: ({ children, onClick, disabled, variant, size, ...rest }: any) => (
     <button onClick={onClick} disabled={disabled} data-variant={variant} data-size={size} {...rest}>{children}</button>
   ),
-}))
-
-vi.mock('@/components/ui/tags', () => ({
   Chip: ({ label, onClick }: any) => <button onClick={onClick} data-testid="chip">{label}</button>,
+  IconChevronLeft: () => <span data-testid="icon-chevron-left">left</span>,
+  IconChevronRight: () => <span data-testid="icon-chevron-right">right</span>,
+  IconX: () => <span data-testid="icon-x">x</span>,
 }))
 
 import { PDFViewer } from './PDFViewer'

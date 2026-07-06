@@ -2,13 +2,10 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import React from 'react'
 
-vi.mock('@/components/ui/button', () => ({
+vi.mock('@sloughgpt/strui', () => ({
   Button: ({ children, onClick, disabled, ...rest }: any) => (
     <button onClick={onClick} disabled={disabled} {...rest}>{children}</button>
   ),
-}))
-
-vi.mock('@/components/ui', () => ({
   IconBrain: () => <span data-testid="icon-brain">brain</span>,
   IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
 }))

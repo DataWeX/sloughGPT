@@ -2,17 +2,27 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 import React from 'react'
 
-vi.mock('@/components/ui/button', () => ({
-  Button: ({ children, onClick, ...rest }: any) => (
-    <button onClick={onClick} {...rest}>{children}</button>
-  ),
-}))
-
-vi.mock('@/components/ui', () => ({
-  IconX: () => <span data-testid="icon-x">x</span>,
-  IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
-  IconSettings: () => <span data-testid="icon-settings">settings</span>,
-}))
+vi.mock('@sloughgpt/strui', () => {
+  function SelectTrigger({ children, ...props }: any) {
+    return <button {...props}>{children}</button>
+  }
+  return {
+    Button: ({ children, onClick, ...rest }: any) => (
+      <button onClick={onClick} {...rest}>{children}</button>
+    ),
+    IconX: () => <span data-testid="icon-x">x</span>,
+    IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
+    IconSettings: () => <span data-testid="icon-settings">settings</span>,
+    Slider: ({ value, onValueChange, min, max, step }: any) => (
+      <input type="range" value={value?.[0]} onChange={(e) => onValueChange?.([Number(e.target.value)])} min={min} max={max} step={step} data-testid="slider" />
+    ),
+    Select: ({ children }: any) => <div data-testid="select">{children}</div>,
+    SelectTrigger,
+    SelectValue: ({ placeholder }: any) => <span data-testid="select-value">{placeholder}</span>,
+    SelectContent: ({ children }: any) => <div data-testid="select-content">{children}</div>,
+    SelectItem: ({ children, value }: any) => <button data-testid="select-item" data-value={value}>{children}</button>,
+  }
+})
 
 import { VoiceChatMode } from './VoiceChatMode'
 

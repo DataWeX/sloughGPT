@@ -324,6 +324,22 @@ def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> 
         except Exception as e:
             logger.warning("Knowledge adapter load skipped: %s", e)
 
+        # Optionally wrap in ProcessGuard for crash isolation
+        process_guard = None
+        if os.environ.get("MAN_ENABLE_PROCESS_GUARD", "").lower() in ("1", "true", "yes"):
+            try:
+                from domains.infrastructure.process_guard import create_model_guard
+                process_guard = create_model_guard(
+                    model_id=request.model_id,
+                    device=request.device or "cpu",
+                    max_restarts=3,
+                    restart_delay=2.0,
+                    memory_limit_mb=4096,
+                )
+                logger.info("_load_hf_model_core: ProcessGuard started for %s", request.model_id)
+            except Exception as e:
+                logger.warning("_load_hf_model_core: ProcessGuard init failed (without): %s", e)
+
         # Register with ModelRegistry
         try:
             from domains.infrastructure.model_registry import get_model_registry
@@ -336,6 +352,7 @@ def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> 
                 make_default=True,
                 max_concurrent=1,
                 generate_timeout=120.0,
+                process_guard=process_guard,
             )
             from domains.models.provider import register_provider, HFModelProvider, ProviderRouter, VisionProcessor
 

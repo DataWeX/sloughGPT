@@ -69,6 +69,7 @@ class ServerConfig:
     enable_health_monitor: bool = True
     health_monitor_interval: int = 300
 
+    enable_process_guard: bool = False
     enable_web: bool = False
 
     jwt_secret: str = "dev-secret-change-in-production"
@@ -90,6 +91,7 @@ class ServerConfig:
             inference_pool_size=int(os.getenv("MAN_INFERENCE_POOL_SIZE", str(max(1, multiprocessing.cpu_count() // 2)))),
             request_timeout_seconds=float(os.getenv("MAN_REQUEST_TIMEOUT", "60.0")),
             enable_watchdog=os.getenv("MAN_WATCHDOG", "true").lower() == "true",
+            enable_process_guard=os.getenv("MAN_ENABLE_PROCESS_GUARD", "").lower() in ("1", "true", "yes"),
             enable_workflow=os.getenv("MAN_AUTO_WORKFLOW", "true").lower() == "true",
             enable_health_monitor=os.getenv("MAN_HEALTH_MONITOR", "true").lower() == "true",
             health_monitor_interval=int(os.getenv("MAN_HEALTH_INTERVAL", "300")),

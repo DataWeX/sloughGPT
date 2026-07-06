@@ -13,13 +13,10 @@ vi.mock('@/lib/knowledge-controller', () => ({
   knowledgeController: mockKnowledgeController,
 }))
 
-vi.mock('@/components/ui/button', () => ({
+vi.mock('@sloughgpt/strui', () => ({
   Button: ({ children, onClick, variant, size, className, ...rest }: any) => (
     <button onClick={onClick} className={className} data-variant={variant} data-size={size} {...rest}>{children}</button>
   ),
-}))
-
-vi.mock('@/components/ui', () => ({
   IconX: () => <span data-testid="icon-x">x</span>,
 }))
 

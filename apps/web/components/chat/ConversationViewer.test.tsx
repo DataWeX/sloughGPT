@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import React from 'react'
 
-vi.mock('@/components/ui', () => {
+vi.mock('@sloughgpt/strui', () => {
   const iconMock = (name: string) => { const C = () => <span data-testid={`icon-${name}`}>{name}</span>; C.displayName = `Icon${name}`; return C }
   return {
     IconX: iconMock('x'),
@@ -13,14 +13,11 @@ vi.mock('@/components/ui', () => {
     IconCopy: iconMock('copy'),
     IconCheck: iconMock('check'),
     IconDownload: iconMock('download'),
+    Button: ({ children, onClick, variant, size, className, ...rest }: any) => (
+      <button onClick={onClick} className={className} data-variant={variant} data-size={size} {...rest}>{children}</button>
+    ),
   }
 })
-
-vi.mock('@/components/ui/button', () => ({
-  Button: ({ children, onClick, variant, size, className, ...rest }: any) => (
-    <button onClick={onClick} className={className} data-variant={variant} data-size={size} {...rest}>{children}</button>
-  ),
-}))
 
 import { ConversationViewer } from './ConversationViewer'
 
