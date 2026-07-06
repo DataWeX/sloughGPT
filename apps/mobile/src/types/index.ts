@@ -3,6 +3,8 @@ export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: number;
+  images?: string[];
+  audio?: string;
 }
 
 export interface Session {

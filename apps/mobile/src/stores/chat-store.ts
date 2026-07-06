@@ -28,7 +28,7 @@ interface ChatState {
   createSession: () => Promise<string>;
   deleteSession: (id: string) => Promise<void>;
   deleteMessage: (messageId: string) => void;
-  sendMessage: (content: string) => Promise<void>;
+  sendMessage: (content: string, images?: string[]) => Promise<void>;
   regenerate: (messageId: string) => Promise<void>;
   cancelStream: () => void;
   recordFeedback: (messageId: string, positive: boolean) => Promise<void>;
@@ -109,7 +109,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set(s => ({messages: s.messages.filter(m => m.id !== messageId)}));
   },
 
-  sendMessage: async (content: string) => {
+  sendMessage: async (content: string, images?: string[]) => {
     const state = get();
     let sessionId = state.activeSessionId;
 
@@ -130,6 +130,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       role: 'user',
       content,
       timestamp: Date.now(),
+      images: images && images.length > 0 ? images : undefined,
     };
 
     const assistantMsg: Message = {
@@ -157,6 +158,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       messages: [...state.messages, userMsg].map(m => ({
         role: m.role,
         content: m.content,
+        images: m.images,
       })),
       temperature: settings.temperature,
       max_new_tokens: settings.maxTokens,

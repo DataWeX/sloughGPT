@@ -25,6 +25,9 @@ import {ChatInput} from '../components/ChatInput';
 import {TypingIndicator} from '../components/TypingIndicator';
 import {StatusBadge} from '../components/StatusBadge';
 import {triggerHaptic} from '../services/haptics';
+import {pickImage, takePhoto, imageDataUrl} from '../services/image-upload';
+import {startRecording, transcribeAudio} from '../services/voice-input';
+import {toast} from '../services/toast';
 import {colors, spacing, radii, typography} from '../theme';
 import type {Message, Session} from '../types';
 
@@ -63,6 +66,8 @@ export function ChatScreen() {
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const recordingStopRef = useRef<(() => Promise<{uri: string; duration: number} | null>) | null>(null);
 
   useEffect(() => {
     refreshSessions();
@@ -96,6 +101,52 @@ export function ChatScreen() {
     },
     [sendMessage],
   );
+
+  const handleImage = useCallback(async () => {
+    try {
+      const result = await pickImage();
+      if (result) {
+        const dataUrl = imageDataUrl(result);
+        sendMessage('What do you see in this image?', [dataUrl]);
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to pick image');
+    }
+  }, [sendMessage]);
+
+  const handleVoice = useCallback(async () => {
+    if (isRecording) {
+      // Stop recording
+      const stop = recordingStopRef.current;
+      if (stop) {
+        const recording = await stop();
+        setIsRecording(false);
+        recordingStopRef.current = null;
+        if (recording) {
+          try {
+            const text = await transcribeAudio(recording.uri);
+            if (text) {
+              sendMessage(text);
+            } else {
+              toast.warn('Could not transcribe audio');
+            }
+          } catch {
+            toast.error('Transcription failed');
+          }
+        }
+      }
+    } else {
+      // Start recording
+      try {
+        const {stop} = await startRecording();
+        recordingStopRef.current = stop;
+        setIsRecording(true);
+        triggerHaptic('medium');
+      } catch (e: any) {
+        toast.error(e.message || 'Failed to start recording');
+      }
+    }
+  }, [isRecording, sendMessage]);
 
   const handleSuggestion = useCallback(
     (s: string) => {
@@ -286,9 +337,11 @@ export function ChatScreen() {
 
         <ChatInput
           onSend={handleSend}
+          onImage={handleImage}
+          onVoice={handleVoice}
           disabled={streaming}
           onStop={cancelStream}
-          isRecording={false}
+          isRecording={isRecording}
         />
 
         {!atBottom && messages.length > 0 && (

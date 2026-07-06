@@ -9,6 +9,7 @@ import {
   PanResponder,
   Modal,
   Pressable,
+  Image,
 } from 'react-native';
 import {Markdown} from './Markdown';
 import {copyToClipboard} from '../services/clipboard';
@@ -140,6 +141,18 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
           style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble, highlight && styles.highlight]}
           onLongPress={handleLongPress}
           activeOpacity={0.8}>
+          {message.images && message.images.length > 0 && (
+            <View style={styles.imageContainer}>
+              {message.images.map((uri, i) => (
+                <Image
+                  key={i}
+                  source={{uri}}
+                  style={styles.messageImage}
+                  resizeMode="cover"
+                />
+              ))}
+            </View>
+          )}
           {isUser ? (
             <Markdown content={message.content} style={styles.userText} />
           ) : (
@@ -242,6 +255,15 @@ const styles = StyleSheet.create({
   },
   assistantText: {
     color: colors.text,
+  },
+  imageContainer: {
+    marginBottom: spacing.xs,
+    gap: spacing.xs,
+  },
+  messageImage: {
+    width: 200,
+    height: 150,
+    borderRadius: radii.md,
   },
   timestamp: {
     ...typography.small,
