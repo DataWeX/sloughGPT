@@ -408,6 +408,21 @@ export function ChatScreen() {
                 <Text style={styles.soulText}>{currentSoul.name}</Text>
               </TouchableOpacity>
             )}
+            <View
+              style={[
+                styles.enginePill,
+                hybrid.activeEngine === 'slonet' && styles.enginePillLocal,
+                hybrid.activeEngine === 'qwen' && styles.enginePillAccent,
+                hybrid.activeEngine === 'remote' && styles.enginePillRemote,
+              ]}>
+              <Text style={styles.enginePillText}>
+                {hybrid.activeEngine === 'slonet'
+                  ? 'SloNet'
+                  : hybrid.activeEngine === 'qwen'
+                  ? 'Qwen'
+                  : 'Server'}
+              </Text>
+            </View>
           </View>
           <View style={styles.headerRight}>
             <TouchableOpacity
@@ -1105,6 +1120,26 @@ const styles = StyleSheet.create({
   soulText: {
     ...typography.small,
     color: colors.primary,
+  },
+  enginePill: {
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 1,
+    borderRadius: radii.sm,
+  },
+  enginePillLocal: {
+    backgroundColor: colors.success + '20',
+  },
+  enginePillAccent: {
+    backgroundColor: colors.accent + '20',
+  },
+  enginePillRemote: {
+    backgroundColor: colors.primary + '20',
+  },
+  enginePillText: {
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    color: colors.textSecondary,
   },
   headerRight: {
     flexDirection: 'row',

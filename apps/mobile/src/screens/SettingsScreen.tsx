@@ -8,12 +8,14 @@ import {
   StyleSheet,
   Alert,
   Switch,
+  ActivityIndicator,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useNavigation} from '@react-navigation/native';
 import {useSettingsStore} from '../stores/settings-store';
 import {useModelStore} from '../stores/model-store';
 import {StatusBadge} from '../components/StatusBadge';
+import {useHybridStore} from '../stores/hybrid-inference-store';
 import {api, getApiUrl, setApiUrl} from '../services/api-client';
 import {
   registerForPushNotifications,
@@ -35,6 +37,7 @@ export function SettingsScreen() {
   const [notificationsOn, setNotificationsOn] = useState(false);
   const [lastNotification, setLastNotification] = useState<string | null>(null);
   const [soundsOn, setSoundsOn] = useState(sounds.isEnabled());
+  const hybrid = useHybridStore();
 
   useEffect(() => {
     getApiUrl().then(setServerUrl);
@@ -122,6 +125,87 @@ export function SettingsScreen() {
             <Text style={styles.navArrow}>→</Text>
           </View>
         </TouchableOpacity>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Inference</Text>
+
+          {/* Engine selector */}
+          <View style={styles.inferenceChips}>
+            {(['slonet', 'qwen', 'remote'] as const).map(engine => {
+              const active = hybrid.activeEngine === engine;
+              const label =
+                engine === 'slonet' ? 'SloNet' : engine === 'qwen' ? 'Qwen' : 'Server';
+              return (
+                <TouchableOpacity
+                  key={engine}
+                  style={[styles.inferenceChip, active && styles.inferenceChipActive]}
+                  onPress={() => hybrid.setActiveEngine(engine)}>
+                  <Text
+                    style={[
+                      styles.inferenceChipText,
+                      active && styles.inferenceChipTextActive,
+                    ]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* SloNet status */}
+          <View style={styles.inferenceRow}>
+            <View style={{flex: 1}}>
+              <Text style={styles.inferenceName}>SloNet</Text>
+              <Text style={styles.inferenceMeta}>
+                {hybrid.slonet.loaded
+                  ? `Loaded — ${hybrid.slonet.modelName}`
+                  : 'Not loaded'}
+              </Text>
+            </View>
+            {hybrid.slonet.loaded ? (
+              <TouchableOpacity style={styles.inferenceUnloadBtn} onPress={hybrid.unloadSloNet}>
+                <Text style={styles.inferenceUnloadText}>Unload</Text>
+              </TouchableOpacity>
+            ) : hybrid.slonet.downloadProgress !== null && hybrid.slonet.downloadProgress < 1 ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <TouchableOpacity style={styles.inferenceLoadBtn} onPress={() => hybrid.loadSloNet()}>
+                <Text style={styles.inferenceLoadText}>Load</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Qwen status */}
+          <View style={styles.inferenceRow}>
+            <View style={{flex: 1}}>
+              <Text style={styles.inferenceName}>Qwen 0.5B GGUF</Text>
+              <Text style={styles.inferenceMeta}>
+                {hybrid.qwen.loaded
+                  ? 'Loaded — 15-30 tok/s'
+                  : hybrid.qwen.downloadProgress !== null && hybrid.qwen.downloadProgress < 1
+                  ? `Downloading ${Math.round(hybrid.qwen.downloadProgress * 100)}%`
+                  : 'Not downloaded'}
+              </Text>
+            </View>
+            {hybrid.qwen.loaded ? (
+              <TouchableOpacity style={styles.inferenceUnloadBtn} onPress={() => hybrid.unloadQwen()}>
+                <Text style={styles.inferenceUnloadText}>Unload</Text>
+              </TouchableOpacity>
+            ) : hybrid.qwen.downloadProgress !== null && hybrid.qwen.downloadProgress < 1 ? (
+              <View style={styles.inferenceProgressWrap}>
+                <View style={[styles.inferenceProgressFill, {width: `${hybrid.qwen.downloadProgress * 100}%`}]} />
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.inferenceLoadBtn} onPress={() => hybrid.loadQwen()}>
+                <Text style={styles.inferenceLoadText}>Download</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {hybrid.lastError && (
+            <Text style={styles.inferenceError}>{hybrid.lastError}</Text>
+          )}
+        </View>
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Appearance</Text>
@@ -431,6 +515,89 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.white,
     fontWeight: '600',
+  },
+  inferenceChips: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginBottom: spacing.md,
+  },
+  inferenceChip: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  inferenceChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  inferenceChipText: {
+    ...typography.small,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  inferenceChipTextActive: {
+    color: colors.white,
+  },
+  inferenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  inferenceName: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  inferenceMeta: {
+    ...typography.small,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  inferenceLoadBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radii.md,
+    backgroundColor: colors.primary,
+  },
+  inferenceLoadText: {
+    ...typography.caption,
+    color: colors.white,
+    fontWeight: '600',
+  },
+  inferenceUnloadBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radii.md,
+    backgroundColor: colors.error + '15',
+  },
+  inferenceUnloadText: {
+    ...typography.caption,
+    color: colors.error,
+    fontWeight: '600',
+  },
+  inferenceProgressWrap: {
+    width: 60,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.border,
+    overflow: 'hidden',
+  },
+  inferenceProgressFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
+    borderRadius: 3,
+  },
+  inferenceError: {
+    ...typography.small,
+    color: colors.error,
+    marginTop: spacing.sm,
   },
   themeRow: {
     flexDirection: 'row',
