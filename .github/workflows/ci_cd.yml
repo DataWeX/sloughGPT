@@ -147,11 +147,25 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: apps/web/package-lock.json
+          cache-dependency-path: |
+            apps/web/package-lock.json
+            packages/strui/package-lock.json
 
-      - name: Install web dependencies
+      - run: npm ci
         working-directory: apps/web
-        run: npm ci
+      - run: npm ci --omit=peer
+        working-directory: packages/strui
+      - name: Ensure @sloughgpt/strui symlink
+        run: |
+          if [ ! -L node_modules/@sloughgpt/strui ] && [ ! -d node_modules/@sloughgpt/strui ]; then
+            mkdir -p node_modules/@sloughgpt
+            ln -sfn ../../../../packages/strui node_modules/@sloughgpt/strui
+          fi
+        working-directory: apps/web
+
+      - name: Lint
+        working-directory: apps/web
+        run: npx next lint --max-warnings 0
 
       - name: Typecheck
         working-directory: apps/web
