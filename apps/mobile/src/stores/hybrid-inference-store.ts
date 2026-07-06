@@ -20,6 +20,13 @@ const STORAGE_KEY = '@sloughgpt/hybrid_config';
 // ── Pure routing (O(1), no string scanning at all) ─────────────────────
 
 function _route(_content: string, state: HybridState): RoutingDecision {
+  // Offline-only mode: never route to remote
+  if (state.offlineOnly) {
+    if (state.slonet.loaded) return {target: 'local', engine: 'slonet'};
+    if (state.qwen.loaded) return {target: 'local', engine: 'qwen'};
+    return {target: 'remote', reason: 'offline-only — load a local engine in Settings'};
+  }
+
   if (state.activeEngine === 'remote') {
     return {target: 'remote', reason: 'user selected remote'};
   }
@@ -45,6 +52,7 @@ interface HybridStoreState extends HybridState {
   lastError: string | null;
 
   setActiveEngine: (engine: ActiveEngine) => Promise<void>;
+  setOfflineOnly: (enabled: boolean) => Promise<void>;
   loadSloNet: (checkpointName?: string) => Promise<void>;
   loadQwen: (onProgress?: (f: number) => void) => Promise<void>;
   unloadSloNet: () => void;
@@ -74,12 +82,22 @@ export const useHybridStore = create<HybridStoreState>((set, get) => ({
     description: '500M chat model (local, any prompt)',
   },
   activeEngine: 'remote',
+  offlineOnly: false,
   downloadProgress: 0,
   lastError: null,
 
   setActiveEngine: async engine => {
+    if (get().offlineOnly && engine === 'remote') return;
     set({activeEngine: engine});
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({activeEngine: engine}));
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({activeEngine: engine, offlineOnly: get().offlineOnly}));
+  },
+
+  setOfflineOnly: async enabled => {
+    set({offlineOnly: enabled});
+    if (enabled && get().activeEngine === 'remote') {
+      set({activeEngine: 'slonet'});
+    }
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({activeEngine: get().activeEngine, offlineOnly: enabled}));
   },
 
   loadSloNet: async (checkpointName?: string) => {
@@ -162,7 +180,9 @@ export const useHybridStore = create<HybridStoreState>((set, get) => ({
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed.activeEngine) {
+      if (parsed.offlineOnly) {
+        useHybridStore.setState({offlineOnly: true, activeEngine: 'slonet'});
+      } else if (parsed.activeEngine) {
         useHybridStore.getState().setActiveEngine(parsed.activeEngine);
       }
     }

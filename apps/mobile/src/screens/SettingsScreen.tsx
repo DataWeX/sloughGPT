@@ -205,6 +205,31 @@ export function SettingsScreen() {
           {hybrid.lastError && (
             <Text style={styles.inferenceError}>{hybrid.lastError}</Text>
           )}
+
+          <View style={styles.offlineRow}>
+            <View style={{flex: 1}}>
+              <Text style={styles.cardTitle}>Run Completely Offline</Text>
+              <Text style={styles.navDesc}>
+                {hybrid.offlineOnly
+                  ? 'Server disabled — conversations use local engines only'
+                  : 'Disables server fallback — load SloNet or Qwen first'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.offlineToggle,
+                hybrid.offlineOnly && styles.offlineToggleActive,
+              ]}
+              onPress={() => hybrid.setOfflineOnly(!hybrid.offlineOnly)}>
+              <Text
+                style={[
+                  styles.offlineToggleText,
+                  hybrid.offlineOnly && styles.offlineToggleTextActive,
+                ]}>
+                {hybrid.offlineOnly ? 'ON' : 'OFF'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.card}>
@@ -598,6 +623,37 @@ const styles = StyleSheet.create({
     ...typography.small,
     color: colors.error,
     marginTop: spacing.sm,
+  },
+  offlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  offlineToggle: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minWidth: 56,
+    alignItems: 'center',
+  },
+  offlineToggleActive: {
+    backgroundColor: colors.success + '20',
+    borderColor: colors.success,
+  },
+  offlineToggleText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  offlineToggleTextActive: {
+    color: colors.success,
   },
   themeRow: {
     flexDirection: 'row',

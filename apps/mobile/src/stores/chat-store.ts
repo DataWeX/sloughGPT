@@ -255,6 +255,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // Fall through to remote if local fails
     }
 
+    // Offline-only mode: block remote fallback
+    if (useHybridStore.getState().offlineOnly) {
+      set({error: 'Offline mode: load a local engine in Settings', streaming: false});
+      toast.warn('Enable offline mode only when a local engine is loaded');
+      await triggerHaptic('medium');
+      return;
+    }
+
     // ── Remote server (SSE streaming) ──────────────────────────────────
     abortController = new AbortController();
     let accumulated = '';
@@ -420,6 +428,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
       } catch {
         // Fall through to remote
       }
+    }
+
+    // Offline-only mode: block remote fallback
+    if (useHybridStore.getState().offlineOnly) {
+      set({error: 'Offline mode: load a local engine in Settings', streaming: false});
+      toast.warn('Enable offline mode only when a local engine is loaded');
+      await triggerHaptic('warning');
+      return;
     }
 
     // ── Remote server (SSE streaming) ──────────────────────────────────

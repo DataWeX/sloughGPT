@@ -47,4 +47,5 @@ export interface HybridState {
   slonet: LocalModelState;
   qwen: LocalModelState;
   activeEngine: ActiveEngine;
+  offlineOnly: boolean;
 }
