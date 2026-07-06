@@ -158,6 +158,22 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
     {icon: '🗑', label: 'Delete', destructive: true, onPress: handleDelete},
   ];
 
+  const lastTap = useRef<number>(0);
+
+  const handleDoubleTap = () => {
+    const now = Date.now();
+    if (now - lastTap.current < 300) {
+      // Double tap — copy
+      copyToClipboard(message.content).then(ok => {
+        if (ok) {
+          triggerHaptic('success');
+          toast.success('Copied to clipboard');
+        }
+      });
+    }
+    lastTap.current = now;
+  };
+
   return (
     <Animated.View style={[styles.row, isUser && styles.rowUser, {opacity, transform: [{translateY}]}]}>
       {/* Delete button behind the bubble */}
@@ -173,6 +189,7 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
         {...panResponder.panHandlers}>
         <TouchableOpacity
           style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble, highlight && styles.highlight]}
+          onPress={handleDoubleTap}
           onLongPress={handleLongPress}
           activeOpacity={0.8}>
           {message.images && message.images.length > 0 && (
