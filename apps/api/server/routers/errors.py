@@ -262,3 +262,55 @@ async def clear_errors():
 async def unread_count():
     """Return the number of errors logged since last clear."""
     return {"unread_count": _error_count_since_clear}
+
+
+@router.get("/log")
+async def get_opencode_log():
+    """
+    Read error logs from the opencode log-monitor and ui-error-watcher plugins.
+    Returns a unified list of log entries from both ~/.opencode-error-log.json
+    and ~/.opencode-ui-error-log.json, sorted newest-first.
+    """
+    import os
+    home = os.path.expanduser("~")
+    entries: list[dict] = []
+
+    # Read CLI error log (log-monitor plugin)
+    cli_log_path = os.path.join(home, ".opencode-error-log.json")
+    try:
+        if os.path.exists(cli_log_path):
+            with open(cli_log_path) as f:
+                data = json.load(f)
+            for rec in data:
+                entries.append({
+                    "timestamp": rec.get("timestamp", ""),
+                    "command": rec.get("command", ""),
+                    "category": "cli",
+                    "pattern": rec.get("pattern", ""),
+                    "snippet": rec.get("snippet", ""),
+                    "cwd": rec.get("cwd", ""),
+                })
+    except Exception:
+        pass
+
+    # Read UI error log (ui-error-watcher plugin)
+    ui_log_path = os.path.join(home, ".opencode-ui-error-log.json")
+    try:
+        if os.path.exists(ui_log_path):
+            with open(ui_log_path) as f:
+                data = json.load(f)
+            for rec in data:
+                entries.append({
+                    "timestamp": rec.get("timestamp", ""),
+                    "command": rec.get("command", ""),
+                    "category": rec.get("category", "unknown"),
+                    "pattern": rec.get("pattern", ""),
+                    "snippet": rec.get("snippet", ""),
+                    "cwd": rec.get("cwd", ""),
+                })
+    except Exception:
+        pass
+
+    # Sort newest first
+    entries.sort(key=lambda e: e.get("timestamp", ""), reverse=True)
+    return {"entries": entries[:200], "total": len(entries)}
