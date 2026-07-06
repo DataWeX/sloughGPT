@@ -12,6 +12,7 @@ import {
   cacheActiveSessionId,
 } from '../services/offline-cache';
 import {triggerHaptic} from '../services/haptics';
+import {sounds} from '../services/sounds';
 import {toast} from '../services/toast';
 import type {Message, Session} from '../types';
 
@@ -117,6 +118,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         sessionId = await get().createSession();
       } catch {
         toast.error('Failed to create session. Check your connection.');
+        sounds.error();
         set({error: 'Failed to create session. Check your connection.'});
         return;
       }
@@ -142,6 +144,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       streaming: true,
       error: null,
     });
+
+    sounds.send();
 
     // Cache user message immediately
     await appendCachedMessage(sessionId, userMsg);
@@ -180,6 +184,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             }
             set({error: event.error, streaming: false});
             toast.error(event.error);
+            sounds.error();
             await triggerHaptic('error');
             return true;
           }
@@ -222,6 +227,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         await appendCachedMessage(sessionId, {...assistantMsg, content: accumulated});
         await removePendingSend(userMsg.id);
         await triggerHaptic('success');
+        sounds.receive();
       }
 
       api
@@ -295,6 +301,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } catch (err: any) {
       if (err.name === 'AbortError') return;
       toast.error('Regeneration failed');
+      sounds.error();
       set({error: err.message});
       await triggerHaptic('error');
     } finally {

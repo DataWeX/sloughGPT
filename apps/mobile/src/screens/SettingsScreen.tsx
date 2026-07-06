@@ -21,6 +21,7 @@ import {
   isNotificationsEnabled,
   onNotification,
 } from '../services/push-notifications';
+import {sounds} from '../services/sounds';
 import {colors, spacing, radii, typography} from '../theme';
 import type {HealthStatus} from '../types';
 import type {ThemeMode} from '../types';
@@ -33,6 +34,7 @@ export function SettingsScreen() {
   const [healthData, setHealthData] = useState<HealthStatus | null>(null);
   const [notificationsOn, setNotificationsOn] = useState(false);
   const [lastNotification, setLastNotification] = useState<string | null>(null);
+  const [soundsOn, setSoundsOn] = useState(sounds.isEnabled());
 
   useEffect(() => {
     getApiUrl().then(setServerUrl);
@@ -162,6 +164,24 @@ export function SettingsScreen() {
               <Text style={[styles.navDesc, {fontSize: 11}]}>{lastNotification}</Text>
             </View>
           )}
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.row}>
+            <View style={{flex: 1}}>
+              <Text style={styles.cardTitle}>Sound Effects</Text>
+              <Text style={styles.navDesc}>Audio feedback on send/receive</Text>
+            </View>
+            <Switch
+              value={soundsOn}
+              onValueChange={(val) => {
+                setSoundsOn(val);
+                sounds.setEnabled(val);
+              }}
+              trackColor={{false: colors.border, true: colors.primary + '60'}}
+              thumbColor={soundsOn ? colors.primary : colors.textMuted}
+            />
+          </View>
         </View>
 
         <View style={styles.card}>
