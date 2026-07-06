@@ -1,6 +1,7 @@
 """Tests for ToolRegistry — tool detection, execution, and safety."""
 
 import pytest
+pytestmark = pytest.mark.slow
 from domains.agents.tools import ToolRegistry, ToolSpec, ToolParam, ToolResult
 
 

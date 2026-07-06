@@ -918,6 +918,75 @@ async def auto_train_log():
     return {"lines": lines, "total": len(lines)}
 
 
+@router.get("/checkpoints/{name}/export-mobile")
+async def export_checkpoint_mobile(name: str):
+    """Export a checkpoint as flat binary for on-device inference.
+
+    Returns a JSON object with ``config`` (architecture) and ``weights_b64``
+    (Base64-encoded float32 flat array).
+    """
+    import numpy as np
+    from domains.training.slonet import import_from_sou
+    import base64
+    import io
+    import struct
+
+    for d in (CHECKPOINTS_DIR, LORA_DIR):
+        fp = d / name
+        if fp.exists() and fp.suffix in (".soul", ".slo"):
+            break
+    else:
+        raise HTTPException(status_code=404, detail="Checkpoint not found")
+
+    try:
+        net = import_from_sou(str(fp))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to load checkpoint: {e}")
+
+    sd = net.state_dict()
+    n_embed = net.n_embed
+    n_layer = net.n_layer
+    n_head = net.n_head
+    vocab_size = net.vocab_size
+    block_size = getattr(net, 'block_size', 64)
+    dim_ff = n_embed * 8 // 3
+    dim_ff = ((dim_ff + 63) // 64) * 64
+
+    weights = []
+    def _push(name):
+        arr = sd.get(name)
+        if arr is not None:
+            weights.append(arr.astype(np.float32).ravel())
+
+    _push("tok_emb.weight")
+    for i in range(n_layer):
+        _push(f"blocks.{i}.attn_norm.weight")
+        _push(f"blocks.{i}.attn.q_proj.weight")
+        _push(f"blocks.{i}.attn.k_proj.weight")
+        _push(f"blocks.{i}.attn.v_proj.weight")
+        _push(f"blocks.{i}.attn.o_proj.weight")
+        _push(f"blocks.{i}.ff_norm.weight")
+        _push(f"blocks.{i}.ff.w1.weight")
+        _push(f"blocks.{i}.ff.w2.weight")
+        _push(f"blocks.{i}.ff.w3.weight")
+    _push("norm.weight")
+    _push("lm_head.weight")
+
+    flat = np.concatenate(weights) if weights else np.array([], dtype=np.float32)
+    weights_b64 = base64.b64encode(flat.tobytes()).decode()
+
+    config = {
+        "vocab_size": vocab_size,
+        "n_embed": n_embed,
+        "n_layer": n_layer,
+        "n_head": n_head,
+        "block_size": block_size,
+        "num_weights": len(weights),
+    }
+
+    return {"config": config, "weights_b64": weights_b64}
+
+
 @router.get("/checkpoints/{name}/download")
 async def download_checkpoint(name: str):
     """Download a checkpoint .soul file for local (WebGPU) inference."""

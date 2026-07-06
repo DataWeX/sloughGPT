@@ -345,7 +345,7 @@ export default function ActivityPage() {
               <Input
                 type="number"
                 value={trainEpochs}
-                onChange={e => setTrainEpochs(Math.max(1, parseInt(e.target.value) || 30))}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTrainEpochs(Math.max(1, parseInt(e.target.value) || 30))}
                 className="w-20 text-sm"
               />
               <Button size="sm" onClick={handleTrain} disabled={training || (status?.num_labels ?? 0) < 3}>

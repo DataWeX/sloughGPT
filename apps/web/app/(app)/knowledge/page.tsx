@@ -259,7 +259,7 @@ export default function KnowledgePage() {
               <div className="h-8 animate-pulse bg-muted rounded" />
             ) : adapterStatus.adapter_exists ? (
               <div className="flex items-center gap-4 text-sm flex-wrap">
-                <Badge variant="default" label="Trained" />
+                <Badge variant={"default" as const} label="Trained" />
                 <span className="text-muted-foreground">
                   {adapterStatus.fact_count} facts
                 </span>
@@ -491,7 +491,7 @@ export default function KnowledgePage() {
                         <div className="flex-1 min-w-0 cursor-pointer" onClick={() => startEdit(item)}>
                           <p className="text-sm leading-relaxed line-clamp-3">{item.content}</p>
                           <div className="flex items-center gap-2 mt-2">
-                            <Badge variant="default" className="text-[10px] px-1.5 py-0 font-medium" label={item.topic} />
+                            <Badge variant={"default" as const} className="text-[10px] px-1.5 py-0 font-medium" label={item.topic} />
                             {item.source && (
                               <span className="text-[10px] text-muted-foreground/70 italic truncate max-w-[120px]">{item.source}</span>
                             )}

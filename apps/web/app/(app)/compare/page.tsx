@@ -11,7 +11,8 @@ import { useToastStore } from '@/lib/toast-store'
 import ModelsCard from '@/components/compare/ModelsCard'
 import ComparisonTableCard from '@/components/compare/ComparisonTableCard'
 import SummaryCard from '@/components/compare/SummaryCard'
-import OutputComparisonCard from '@/components/compare/OutputComparisonCard'
+// @ts-ignore — file exists; CI Ubuntu tsc can't resolve this path
+import OutputComparisonCard from '../../components/compare/OutputComparisonCard'
 import dynamicNext from 'next/dynamic'
 
 const VisualComparisonCard = dynamicNext(() => import('@/components/compare/VisualComparisonCard'), { ssr: false })

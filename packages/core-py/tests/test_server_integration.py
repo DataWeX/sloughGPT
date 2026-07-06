@@ -15,7 +15,7 @@ import asyncio
 import time
 from unittest.mock import patch
 import pytest
-
+pytestmark = pytest.mark.slow
 from domains.infrastructure.server_state import get_server_state
 from domains.infrastructure.model_registry import get_model_registry, ModelRegistry
 from domains.infrastructure.model_server import ModelServer, ModelStatus, CircuitBreakerState

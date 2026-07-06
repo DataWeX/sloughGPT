@@ -322,5 +322,7 @@ def predict_activity(
 
 
 def _accuracy(logits: "Tensor", targets: np.ndarray) -> float:
+    if len(targets) == 0:
+        return 0.0
     preds = np.argmax(logits.data, axis=1)
     return float((preds == targets).mean())

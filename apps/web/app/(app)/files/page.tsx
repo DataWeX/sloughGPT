@@ -141,7 +141,7 @@ export default function FilesPage() {
                   className="pl-9 text-sm"
                   placeholder="Search files..."
                   value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
                 />
               </div>
               <input
@@ -215,7 +215,7 @@ export default function FilesPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium truncate">{file.filename}</span>
-                        <Badge label={file.extension || '?'} variant="outline" />
+                        <Badge label={file.extension || '?'} variant={"outline" as const} />
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {filesController.formatSize(file.size_bytes)} &middot; {filesController.formatDate(file.uploaded_at)}

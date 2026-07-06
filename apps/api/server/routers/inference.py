@@ -1,8 +1,8 @@
 """
 Inference Router - Chat and text generation endpoints
 """
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
+from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List, AsyncIterator, Any
 from pathlib import Path
@@ -39,6 +39,9 @@ router = APIRouter(prefix="", tags=["inference"])
 
 _SESSIONS_DIR = Path(__file__).parent.parent.parent.parent / "data" / "chat_sessions"
 _SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+
+_VOICE_DIR = Path(__file__).parent.parent.parent.parent / "data" / "voice_messages"
+_VOICE_DIR.mkdir(parents=True, exist_ok=True)
 
 # FileRepository-backed session store
 from domains.infrastructure.repository import FileRepository, Serializer
@@ -107,6 +110,9 @@ class ChatRequest(BaseModel):
     model: str = "gpt2"
     temperature: float = Field(default=0.8, ge=0.0, le=2.0)
     max_tokens: int = Field(default=256, ge=1, le=2048)
+    top_p: float = Field(default=0.9, ge=0.0, le=1.0)
+    top_k: int = Field(default=50, ge=0, le=500)
+    repetition_penalty: float = Field(default=1.2, ge=0.5, le=2.0)
     session_id: Optional[str] = None
     user_id: Optional[str] = None
     system_prompt: Optional[str] = None
@@ -672,8 +678,10 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                             provider_messages,
                             max_tokens=req.max_tokens,
                             temperature=req.temperature,
+                            top_p=req.top_p,
+                            top_k=req.top_k,
+                            repetition_penalty=req.repetition_penalty,
                             cancel_event=cancel_event,
-                            repetition_penalty=1.3,
                         ):
                             if await request.is_disconnected():
                                 cancel_event.set()
@@ -982,6 +990,60 @@ def _build_session_cache() -> list:
     _session_cache = sessions
     _session_cache_ts = now
     return sessions
+
+
+@router.post("/chat/voice/{session_id}")
+async def send_voice_message(
+    session_id: str,
+    file: UploadFile = File(...),
+    duration_ms: int = Form(0),
+):
+    """Upload a voice message to a session. Stores audio and creates a message entry."""
+    if not file.content_type or not file.content_type.startswith("audio/"):
+        raise HTTPException(status_code=400, detail="Only audio files accepted")
+
+    msg_id = str(uuid.uuid4())
+    session_msg_dir = _VOICE_DIR / session_id
+    session_msg_dir.mkdir(parents=True, exist_ok=True)
+    ext = Path(file.filename or "audio.m4a").suffix or ".m4a"
+    audio_path = session_msg_dir / f"{msg_id}{ext}"
+
+    content = await file.read()
+    audio_path.write_bytes(content)
+
+    session_data = _get_session(session_id)
+    session_data.setdefault("messages", []).append({
+        "role": "user",
+        "content": "[Voice Message]",
+        "audio_path": f"{session_id}/{msg_id}{ext}",
+        "audio_duration_ms": duration_ms,
+        "timestamp": datetime.datetime.now().isoformat(),
+        "_voice": True,
+    })
+    _save_session(session_id, session_data)
+
+    return {
+        "status": "ok",
+        "message_id": msg_id,
+        "audio_path": f"{session_id}/{msg_id}{ext}",
+        "session_id": session_id,
+    }
+
+
+@router.get("/chat/audio/{session_id}/{message_id}")
+async def get_voice_audio(session_id: str, message_id: str):
+    """Serve a stored voice message audio file."""
+    audio_path = _VOICE_DIR / session_id / message_id
+    if not audio_path.exists():
+        # Try with common extensions
+        for ext in [".m4a", ".wav", ".mp3", ".ogg", ".webm"]:
+            candidate = audio_path.parent / f"{audio_path.stem}{ext}"
+            if candidate.exists():
+                audio_path = candidate
+                break
+        else:
+            raise HTTPException(status_code=404, detail="Audio not found")
+    return FileResponse(str(audio_path), media_type="audio/m4a")
 
 
 @router.get("/chat/sessions")

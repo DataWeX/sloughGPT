@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
-
+pytestmark = pytest.mark.slow
 from domains.inference.pdf_vlm import PDFVLMProcessor
 
 

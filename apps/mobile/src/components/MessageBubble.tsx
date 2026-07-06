@@ -17,9 +17,11 @@ import {copyToClipboard} from '../services/clipboard';
 import {triggerHaptic} from '../services/haptics';
 import {sounds} from '../services/sounds';
 import {addBookmark, removeBookmark, isBookmarked} from '../services/bookmarks';
+import {pinMessage, unpinMessage, isPinned} from '../services/pins';
 import {getMessageReactions, toggleReaction, REACTION_EMOJIS, type ReactionEmoji} from '../services/reactions';
 import {toast} from '../services/toast';
 import {colors, spacing, radii, typography} from '../theme';
+import {AudioPlayer} from './AudioPlayer';
 import type {Message} from '../types';
 
 function formatTime(ts: number): string {
@@ -43,6 +45,7 @@ interface ContextAction {
 
 interface Props {
   message: Message;
+  sessionId?: string;
   highlight?: boolean;
   onRegenerate?: () => void;
   onFeedback?: (positive: boolean) => void;
@@ -50,16 +53,18 @@ interface Props {
   onRetry?: () => void;
   onEdit?: (newContent: string) => void;
   onReply?: () => void;
+  onForward?: () => void;
   selectMode?: boolean;
   selected?: boolean;
   onSelect?: () => void;
   onLongPressSelect?: () => void;
 }
 
-export function MessageBubble({message, highlight, onRegenerate, onFeedback, onDelete, onRetry, onEdit, onReply, selectMode, selected, onSelect, onLongPressSelect}: Props) {
+export function MessageBubble({message, sessionId, highlight, onRegenerate, onFeedback, onDelete, onRetry, onEdit, onReply, onForward, selectMode, selected, onSelect, onLongPressSelect}: Props) {
   const isUser = message.role === 'user';
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
+  const [pinned, setPinned] = useState(false);
   const [reactions, setReactions] = useState<ReactionEmoji[]>([]);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showFullDate, setShowFullDate] = useState(false);
@@ -73,6 +78,7 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
       Animated.timing(translateY, {toValue: 0, duration: 200, useNativeDriver: true}),
     ]).start();
     isBookmarked(message.content, message.id).then(setBookmarked);
+    if (sessionId) isPinned(sessionId, message.id).then(setPinned);
     getMessageReactions(message.id).then(setReactions);
   }, []);
   const isSwipeOpen = useRef(false);
@@ -153,6 +159,21 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
     }
   };
 
+  const handleTogglePin = async () => {
+    setShowContextMenu(false);
+    if (!sessionId) return;
+    if (pinned) {
+      await unpinMessage(sessionId, message.id);
+      setPinned(false);
+      toast.info('Message unpinned');
+    } else {
+      await pinMessage(sessionId, message.id);
+      setPinned(true);
+      triggerHaptic('success');
+      toast.success('Message pinned');
+    }
+  };
+
   const handleToggleReaction = async (emoji: ReactionEmoji) => {
     const updated = await toggleReaction(message.id, emoji);
     setReactions(updated);
@@ -170,10 +191,15 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
       setShowContextMenu(false);
       onReply();
     }}] : []),
+    ...(onForward ? [{icon: '↪', label: 'Forward', onPress: () => {
+      setShowContextMenu(false);
+      onForward();
+    }}] : []),
     ...(isUser && onEdit ? [{icon: '✏️', label: 'Edit', onPress: () => {
       setShowContextMenu(false);
       onEdit(message.content);
     }}] : []),
+    {icon: pinned ? '📌' : '📍', label: pinned ? 'Unpin' : 'Pin', onPress: handleTogglePin},
     {icon: bookmarked ? '★' : '☆', label: bookmarked ? 'Remove bookmark' : 'Bookmark', onPress: handleToggleBookmark},
     {icon: '😊', label: 'React', onPress: () => { setShowContextMenu(false); setShowReactionPicker(true); }},
     ...(isUser ? [] : [
@@ -226,10 +252,13 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
         style={[styles.swipeable, {transform: [{translateX}]}]}
         {...panResponder.panHandlers}>
         <TouchableOpacity
-          style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble, highlight && styles.highlight]}
+          style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble, highlight && styles.highlight, pinned && styles.pinnedBubble]}
           onPress={selectMode ? onSelect : handleDoubleTap}
           onLongPress={selectMode ? onSelect : (onLongPressSelect || handleLongPress)}
           activeOpacity={0.8}>
+          {pinned && (
+            <Text style={styles.pinBadge}>📌</Text>
+          )}
           {message.images && message.images.length > 0 && (
             <View style={styles.imageContainer}>
               {message.images.map((uri, i) => (
@@ -241,6 +270,13 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
                 />
               ))}
             </View>
+          )}
+          {(message._voice || message.audio_path || message.audio) && (
+            <AudioPlayer
+              audioUrl={message.audio}
+              audioPath={message.audio_path}
+              durationMs={message.audio_duration_ms}
+            />
           )}
           {isUser ? (
             <Markdown content={message.content} style={styles.userText} />
@@ -407,6 +443,14 @@ const styles = StyleSheet.create({
   assistantBubble: {
     backgroundColor: colors.surface,
     borderBottomLeftRadius: radii.sm,
+  },
+  pinnedBubble: {
+    borderWidth: 1,
+    borderColor: colors.primary + '40',
+  },
+  pinBadge: {
+    fontSize: 12,
+    marginBottom: spacing.xs,
   },
   userText: {
     color: colors.white,

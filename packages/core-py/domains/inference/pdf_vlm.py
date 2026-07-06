@@ -114,11 +114,14 @@ class PDFVLMProcessor:
                 logger.warning("VLM PDF analysis failed: %s", e)
 
         # Fallback: text-only
-        text = self._extract_text(pdf_path)
-        if not text:
-            return "Could not extract text from this PDF."
-
-        return f"PDF text content ({len(text)} chars):\n\n{text[:3000]}..."
+        try:
+            text = self._extract_text(pdf_path)
+            if not text:
+                return "Could not extract text from this PDF."
+            return f"PDF text content ({len(text)} chars):\n\n{text[:3000]}..."
+        except Exception as e:
+            logger.warning("PDF text extraction failed: %s", e)
+            return f"Could not analyze PDF: {e}"
 
     def analyze_pages(
         self,

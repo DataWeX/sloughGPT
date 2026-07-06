@@ -4,7 +4,16 @@ export interface Message {
   content: string;
   timestamp: number;
   images?: string[];
+  /** Base64 encoded audio data or local file URI for voice messages. */
   audio?: string;
+  /** Server-side audio file path (returned by voice message endpoint). */
+  audio_path?: string;
+  /** Duration of voice message in milliseconds. */
+  audio_duration_ms?: number;
+  /** True if this is a voice message (recorded audio, not text). */
+  _voice?: boolean;
+  /** Delivery status */
+  status?: 'sending' | 'sent' | 'failed';
 }
 
 export interface Session {
@@ -13,6 +22,7 @@ export interface Session {
   created_at: string;
   updated_at: string;
   message_count: number;
+  archived?: boolean;
 }
 
 export interface ModelInfo {
@@ -121,3 +131,18 @@ export const ACTIVITY_NAMES = [
   'driving',
   'cycling',
 ];
+
+export interface SearchMatch {
+  role: string;
+  content: string;
+  timestamp: string;
+}
+
+export interface SearchResult {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+  match_count: number;
+  matches: SearchMatch[];
+}

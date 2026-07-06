@@ -1,6 +1,7 @@
 """Tests for SloTextEmbedder — train, embed, save/load, vector store integration."""
 
 import pytest
+pytestmark = pytest.mark.slow
 import numpy as np
 import os
 import tempfile

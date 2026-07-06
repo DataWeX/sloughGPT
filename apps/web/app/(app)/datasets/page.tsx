@@ -89,7 +89,7 @@ export default function DatasetsPage() {
           <Input
             placeholder="Search datasets..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
             className="h-8 text-sm max-w-xs"
           />
         )}
@@ -126,7 +126,7 @@ export default function DatasetsPage() {
                     variant="ghost"
                     size="sm"
                     className="h-7 w-7 ml-2 shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={e => { e.stopPropagation(); handleDelete(ds) }}
+                    onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); handleDelete(ds) }}
                     aria-label={`Delete ${ds.name}`}
                   >
                     <IconTrash className="h-3.5 w-3.5" />

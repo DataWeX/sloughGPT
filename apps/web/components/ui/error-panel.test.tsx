@@ -11,7 +11,7 @@ const mockErrors = [
 
 let currentState = { errors: mockErrors, dismissError: vi.fn(), clearErrors: vi.fn() }
 
-vi.mock('@sloughgpt/strui/lib/error-store', () => ({
+vi.mock('@/lib/error-store', () => ({
   useErrorStore: (selector: (s: Record<string, unknown>) => unknown) => selector(currentState as unknown as Record<string, unknown>),
 }))
 

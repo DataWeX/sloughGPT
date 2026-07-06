@@ -8,6 +8,8 @@ import {
   loadCheckpoint,
   listDatasets,
   streamTraining,
+  startHFFineTune,
+  listTrainingJobs,
   type TrainConfig,
   type Checkpoint,
   type Dataset,
@@ -26,6 +28,18 @@ export type TrainPhase =
   | 'COMPLETE'
   | 'FAILED';
 
+export type TrainingMethod = 'distill' | 'finetune';
+
+interface HFTrainingOpts {
+  model: string;
+  dataset: string;
+  epochs: number;
+  batch_size: number;
+  learning_rate: number;
+  use_lora: boolean;
+  lora_rank: number;
+}
+
 interface TrainingState {
   phase: TrainPhase;
   running: boolean;
@@ -39,9 +53,17 @@ interface TrainingState {
   checkpoints: Checkpoint[];
   datasets: Dataset[];
   config: TrainConfig;
+  method: TrainingMethod;
+  hfOpts: HFTrainingOpts;
+  hfJobId: string | null;
+  hfJobs: any[];
+  hfFinetunedPath: string | null;
 
   setConfig: (partial: Partial<TrainConfig>) => void;
+  setHfOpts: (partial: Partial<HFTrainingOpts>) => void;
+  setMethod: (m: TrainingMethod) => void;
   start: () => Promise<void>;
+  startHFFineTune: () => Promise<void>;
   stop: () => Promise<void>;
   refresh: () => Promise<void>;
   loadCheckpoint: (name: string) => Promise<void>;
@@ -50,6 +72,7 @@ interface TrainingState {
 }
 
 let abortController: AbortController | null = null;
+let hfPollTimer: ReturnType<typeof setInterval> | null = null;
 
 const defaultConfig: TrainConfig = {
   epochs: 10,
@@ -57,6 +80,16 @@ const defaultConfig: TrainConfig = {
   batch_size: 64,
   soul_name: 'assistant',
   algo: 'bpe',
+};
+
+const defaultHfOpts: HFTrainingOpts = {
+  model: '',
+  dataset: '',
+  epochs: 3,
+  batch_size: 4,
+  learning_rate: 2e-5,
+  use_lora: true,
+  lora_rank: 8,
 };
 
 export const useTrainingStore = create<TrainingState>((set, get) => ({
@@ -72,11 +105,23 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
   checkpoints: [],
   datasets: [],
   config: {...defaultConfig},
+  method: 'distill',
+  hfOpts: {...defaultHfOpts},
+  hfJobId: null,
+  hfJobs: [],
+  hfFinetunedPath: null,
 
   setConfig: partial => set(s => ({config: {...s.config, ...partial}})),
+  setHfOpts: partial => set(s => ({hfOpts: {...s.hfOpts, ...partial}})),
+  setMethod: method => set({method, error: null, hfJobId: null, hfFinetunedPath: null}),
 
   start: async () => {
     const state = get();
+    if (state.method === 'finetune') {
+      await get().startHFFineTune();
+      return;
+    }
+
     const cfg = state.config;
 
     if (!cfg.source_text && !cfg.dataset_id && !cfg.checkpoint_name) {
@@ -176,7 +221,86 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
     }
   },
 
+  startHFFineTune: async () => {
+    const {hfOpts, config} = get();
+    const dataset = hfOpts.dataset || config.dataset_id;
+    if (!dataset) {
+      set({error: 'Select a dataset for fine-tuning'});
+      return;
+    }
+    const model = hfOpts.model || 'gpt2';
+
+    set({
+      phase: 'TRAINING',
+      running: true,
+      loss: null,
+      epoch: 0,
+      totalEpochs: hfOpts.epochs,
+      steps: 0,
+      error: null,
+      hfFinetunedPath: null,
+    });
+
+    try {
+      const result = await startHFFineTune({
+        model,
+        dataset,
+        epochs: hfOpts.epochs,
+        batch_size: hfOpts.batch_size,
+        learning_rate: hfOpts.learning_rate,
+        use_lora: hfOpts.use_lora,
+        lora_rank: hfOpts.lora_rank,
+      });
+      const jobId = result.job_id;
+      set({hfJobId: jobId});
+
+      // Poll for completion
+      hfPollTimer = setInterval(async () => {
+        try {
+          const jobs = await listTrainingJobs();
+          const job = (jobs || []).find((j: any) => j.job_id === jobId || j.id === jobId);
+          if (!job) return;
+
+          const jobStatus = job.status || '';
+          const jobPhase = job.phase || 'TRAINING';
+          set({
+            phase: jobPhase === 'complete' ? 'COMPLETE' : jobPhase === 'failed' ? 'FAILED' : 'TRAINING' as TrainPhase,
+            steps: job.steps || job.global_step || get().steps,
+            epoch: job.epoch || job.current_epoch || get().epoch,
+            loss: job.loss ?? job.final_loss ?? get().loss,
+            hfJobs: jobs || [],
+          });
+
+          if (job.model_path) {
+            set({hfFinetunedPath: job.model_path});
+          }
+
+          if (jobStatus === 'completed' || jobPhase === 'complete') {
+            set({phase: 'COMPLETE', running: false, loss: job.final_loss ?? job.loss ?? get().loss});
+            clearInterval(hfPollTimer!);
+            hfPollTimer = null;
+            get().refresh();
+          } else if (jobStatus === 'failed' || jobPhase === 'failed') {
+            set({phase: 'FAILED', error: job.error || 'Fine-tuning failed', running: false});
+            clearInterval(hfPollTimer!);
+            hfPollTimer = null;
+          }
+        } catch {}
+      }, 3000);
+    } catch (err: any) {
+      set({phase: 'FAILED', error: err.message, running: false});
+    }
+  },
+
   stop: async () => {
+    if (get().method === 'finetune') {
+      if (hfPollTimer) {
+        clearInterval(hfPollTimer);
+        hfPollTimer = null;
+      }
+      set({phase: 'idle', running: false, hfJobId: null});
+      return;
+    }
     abortController?.abort();
     try {
       await stopTraining();
@@ -186,15 +310,17 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
 
   refresh: async () => {
     try {
-      const [ckpts, datasets, status] = await Promise.all([
+      const [ckpts, datasets, status, hfJobs] = await Promise.all([
         listCheckpoints().catch(() => []),
         listDatasets().catch(() => []),
         getTrainingStatus().catch(() => ({running: false, config: {}})),
+        listTrainingJobs().catch(() => []),
       ]);
       set({
         checkpoints: ckpts,
         datasets,
         running: status.running,
+        hfJobs,
       });
     } catch {}
   },

@@ -55,7 +55,6 @@ class EventBus:
         self._wildcards: list[Subscription] = []
         self._history: dict[str, list[Event]] = defaultdict(list)
         self._max_history = max_history
-        self._lock = asyncio.Lock()
 
     # ── Subscribe ──
 

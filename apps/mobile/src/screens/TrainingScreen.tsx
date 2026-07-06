@@ -12,7 +12,7 @@ import {
   Modal,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {useTrainingStore, type TrainPhase} from '../stores/training-store';
+import {useTrainingStore, type TrainPhase, type TrainingMethod} from '../stores/training-store';
 import {useModelStore} from '../stores/model-store';
 import {api} from '../services/api-client';
 import {StatusBadge} from '../components/StatusBadge';
@@ -97,7 +97,13 @@ export function TrainingScreen() {
     checkpoints,
     datasets,
     config,
+    method,
+    hfOpts,
+    hfJobs,
+    hfFinetunedPath,
     setConfig,
+    setHfOpts,
+    setMethod,
     start,
     stop,
     refresh,
@@ -211,6 +217,138 @@ export function TrainingScreen() {
 
         {!isTraining && !isDone && (
           <View style={styles.card}>
+            <Text style={styles.cardTitle}>Method</Text>
+            <View style={styles.modeRow}>
+              <TouchableOpacity
+                style={[styles.modeBtn, method === 'distill' && styles.modeBtnActive]}
+                onPress={() => setMethod('distill')}>
+                <Text style={[styles.modeBtnText, method === 'distill' && styles.modeBtnTextActive]}>
+                  Distill
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modeBtn, method === 'finetune' && styles.modeBtnActive]}
+                onPress={() => setMethod('finetune')}>
+                <Text style={[styles.modeBtnText, method === 'finetune' && styles.modeBtnTextActive]}>
+                  Fine-tune
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {!isTraining && !isDone && method === 'finetune' && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Fine-tune Settings</Text>
+            <View style={styles.paramRow}>
+              <Text style={styles.paramLabel}>Base Model</Text>
+              <TextInput
+                style={styles.textInput}
+                value={hfOpts.model}
+                onChangeText={v => setHfOpts({model: v})}
+                placeholder="gpt2, Qwen/Qwen2.5-0.5B, ..."
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+            <View style={styles.paramRow}>
+              <Text style={styles.paramLabel}>Dataset</Text>
+              <View style={styles.datasetList}>
+                {datasets.length === 0 ? (
+                  <Text style={styles.empty}>No datasets found. Import one first.</Text>
+                ) : (
+                  datasets.map(ds => (
+                    <TouchableOpacity
+                      key={ds.id}
+                      style={[styles.datasetItem, hfOpts.dataset === ds.id && styles.datasetItemActive]}
+                      onPress={() => setHfOpts({dataset: ds.id})}>
+                      <View style={styles.datasetInfo}>
+                        <Text style={styles.datasetName}>{ds.name}</Text>
+                        <Text style={styles.datasetMeta}>
+                          {ds.file_count} files · {ds.total_chars.toLocaleString()} chars
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.previewBtn}
+                        onPress={() => fetchPreview(ds.id)}>
+                        <Text style={styles.previewBtnText}>Preview</Text>
+                      </TouchableOpacity>
+                      {hfOpts.dataset === ds.id && <Text style={styles.check}>✓</Text>}
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+            </View>
+            <View style={styles.paramRow}>
+              <Text style={styles.paramLabel}>Epochs</Text>
+              <View style={styles.paramBtns}>
+                {[1, 2, 3, 5].map(v => (
+                  <TouchableOpacity
+                    key={v}
+                    style={[styles.paramBtn, hfOpts.epochs === v && styles.paramBtnActive]}
+                    onPress={() => setHfOpts({epochs: v})}>
+                    <Text style={[styles.paramBtnText, hfOpts.epochs === v && styles.paramBtnTextActive]}>{v}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <View style={styles.paramRow}>
+              <Text style={styles.paramLabel}>Batch Size</Text>
+              <View style={styles.paramBtns}>
+                {[2, 4, 8, 16].map(v => (
+                  <TouchableOpacity
+                    key={v}
+                    style={[styles.paramBtn, hfOpts.batch_size === v && styles.paramBtnActive]}
+                    onPress={() => setHfOpts({batch_size: v})}>
+                    <Text style={[styles.paramBtnText, hfOpts.batch_size === v && styles.paramBtnTextActive]}>{v}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <View style={styles.paramRow}>
+              <Text style={styles.paramLabel}>Learning Rate</Text>
+              <View style={styles.paramBtns}>
+                {[1e-5, 2e-5, 5e-5, 1e-4].map(v => (
+                  <TouchableOpacity
+                    key={v}
+                    style={[styles.paramBtn, Math.abs(hfOpts.learning_rate - v) < 1e-6 && styles.paramBtnActive]}
+                    onPress={() => setHfOpts({learning_rate: v})}>
+                    <Text style={[styles.paramBtnText, Math.abs(hfOpts.learning_rate - v) < 1e-6 && styles.paramBtnTextActive]}>{v.toExponential()}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <View style={styles.paramRow}>
+              <View style={styles.switchRow}>
+                <Text style={styles.paramLabel}>Use LoRA</Text>
+                <TouchableOpacity
+                  style={[styles.switch, hfOpts.use_lora && styles.switchOn]}
+                  onPress={() => setHfOpts({use_lora: !hfOpts.use_lora})}>
+                  <View style={[styles.switchThumb, hfOpts.use_lora && styles.switchThumbOn]} />
+                </TouchableOpacity>
+              </View>
+            </View>
+            {hfOpts.use_lora && (
+              <View style={styles.paramRow}>
+                <Text style={styles.paramLabel}>LoRA Rank</Text>
+                <View style={styles.paramBtns}>
+                  {[4, 8, 16, 32].map(v => (
+                    <TouchableOpacity
+                      key={v}
+                      style={[styles.paramBtn, hfOpts.lora_rank === v && styles.paramBtnActive]}
+                      onPress={() => setHfOpts({lora_rank: v})}>
+                      <Text style={[styles.paramBtnText, hfOpts.lora_rank === v && styles.paramBtnTextActive]}>{v}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
+        {!isTraining && !isDone && method === 'distill' && (
+          <View style={styles.card}>
             <Text style={styles.cardTitle}>Training Data</Text>
             <View style={styles.modeRow}>
               <TouchableOpacity
@@ -269,7 +407,7 @@ export function TrainingScreen() {
           </View>
         )}
 
-        {!isTraining && !isDone && (
+        {!isTraining && !isDone && method === 'distill' && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Hyperparameters</Text>
             <View style={styles.paramRow}>
@@ -389,6 +527,53 @@ export function TrainingScreen() {
             </TouchableOpacity>
           )}
         </View>
+
+        {isDone && hfFinetunedPath && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Fine-tune Complete</Text>
+            <StatusBadge label="Success" variant="success" />
+            <Text style={styles.completeText}>Model saved to: {hfFinetunedPath}</Text>
+            <Text style={styles.completeMeta}>
+              Loss: {loss?.toFixed(4) || '—'} · {steps} steps
+            </Text>
+            <TouchableOpacity
+              style={styles.loadBtn}
+              onPress={async () => {
+                try {
+                  await modelStore.loadModel(hfFinetunedPath);
+                  Alert.alert('Loaded', `Fine-tuned model loaded for chat`);
+                } catch (err: any) {
+                  Alert.alert('Error', err.message || 'Failed to load model');
+                }
+              }}>
+              <Text style={styles.loadBtnText}>Load Model for Chat</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {hfJobs.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Job History</Text>
+            {hfJobs.slice().reverse().map((job: any, i: number) => (
+              <View key={job.job_id || job.id || i} style={styles.ckptRow}>
+                <View style={styles.ckptInfo}>
+                  <Text style={styles.ckptName}>
+                    {job.model || 'Model'} · {job.dataset || 'dataset'}
+                  </Text>
+                  <Text style={styles.ckptMeta}>
+                    Status: {job.status || job.phase || 'unknown'}{' '}
+                    {job.loss != null ? `· Loss: ${Number(job.loss).toFixed(4)}` : ''}{' '}
+                    {job.epoch != null ? `· Epoch ${job.epoch}` : ''}
+                  </Text>
+                </View>
+                <StatusBadge
+                  label={job.status === 'completed' ? 'Done' : job.status === 'failed' ? 'Failed' : job.status === 'running' ? 'Running' : job.phase || '—'}
+                  variant={job.status === 'completed' ? 'success' : job.status === 'failed' ? 'error' : 'info'}
+                />
+              </View>
+            ))}
+          </View>
+        )}
 
         {checkpoints.length > 0 && (
           <View style={styles.card}>
@@ -527,6 +712,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     minHeight: 120,
+  },
+  textInput: {
+    ...typography.body,
+    color: colors.text,
+    backgroundColor: colors.background,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  switch: {
+    width: 44,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.border,
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  switchOn: {
+    backgroundColor: colors.primary,
+  },
+  switchThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.white,
+    alignSelf: 'flex-start',
+  },
+  switchThumbOn: {
+    alignSelf: 'flex-end',
   },
   datasetList: {gap: spacing.xs},
   datasetItem: {

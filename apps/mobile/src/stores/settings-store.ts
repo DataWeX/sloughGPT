@@ -6,8 +6,12 @@ interface SettingsState {
   theme: ThemeMode;
   temperature: number;
   maxTokens: number;
+  topP: number;
+  topK: number;
+  repetitionPenalty: number;
   memoryContext: string;
   apiUrl: string;
+  chatBackground: string;
   setTheme: (theme: ThemeMode) => void;
   update: (partial: Partial<SettingsState>) => void;
   reset: () => void;
@@ -19,8 +23,12 @@ const defaults: Omit<SettingsState, 'setTheme' | 'update' | 'reset'> = {
   theme: 'system',
   temperature: 0.8,
   maxTokens: 256,
+  topP: 0.9,
+  topK: 50,
+  repetitionPenalty: 1.2,
   memoryContext: '',
   apiUrl: 'http://localhost:8000',
+  chatBackground: '',
 };
 
 let _loaded = false;

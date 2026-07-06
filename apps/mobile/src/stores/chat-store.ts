@@ -2,6 +2,7 @@ import {create} from 'zustand';
 import {api} from '../services/api-client';
 import {streamSSE} from '../services/sse-client';
 import {useSettingsStore} from './settings-store';
+import {useHybridStore} from './hybrid-inference-store';
 import {
   cacheMessages,
   getCachedMessages,
@@ -27,9 +28,11 @@ interface ChatState {
   loadSession: (id: string) => Promise<void>;
   createSession: () => Promise<string>;
   deleteSession: (id: string) => Promise<void>;
+  archiveSession: (id: string, archived: boolean) => Promise<void>;
   renameSession: (id: string, title: string) => Promise<void>;
   deleteMessage: (messageId: string) => void;
   sendMessage: (content: string, images?: string[]) => Promise<void>;
+  forwardMessage: (content: string, targetSessionId: string) => Promise<void>;
   regenerate: (messageId: string) => Promise<void>;
   cancelStream: () => void;
   recordFeedback: (messageId: string, positive: boolean) => Promise<void>;
@@ -106,6 +109,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
+  archiveSession: async (id: string, archived: boolean) => {
+    try {
+      await api.archiveSession(id, archived);
+      await get().refreshSessions();
+    } catch (err: any) {
+      set({error: err.message});
+    }
+  },
+
   renameSession: async (id: string, title: string) => {
     try {
       await api.renameSession(id, title);
@@ -117,6 +129,40 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   deleteMessage: (messageId: string) => {
     set(s => ({messages: s.messages.filter(m => m.id !== messageId)}));
+  },
+
+  forwardMessage: async (content: string, targetSessionId: string) => {
+    const userMsg = {
+      id: genId(),
+      role: 'user' as const,
+      content,
+      timestamp: Date.now(),
+    };
+    const assistantMsg = {
+      id: genId(),
+      role: 'assistant' as const,
+      content: '',
+      timestamp: Date.now(),
+    };
+
+    try {
+      // Save to target session
+      await api.post('/chat/sessions/messages', {
+        session_id: targetSessionId,
+        messages: [userMsg],
+      });
+
+      // If forwarding to current session, also update local state
+      if (get().activeSessionId === targetSessionId) {
+        set(s => ({messages: [...s.messages, userMsg, assistantMsg]}));
+      }
+
+      triggerHaptic('light');
+      sounds.send();
+      toast.success('Message forwarded');
+    } catch {
+      toast.error('Failed to forward message');
+    }
   },
 
   sendMessage: async (content: string, images?: string[]) => {
@@ -141,6 +187,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       content,
       timestamp: Date.now(),
       images: images && images.length > 0 ? images : undefined,
+      status: 'sending',
     };
 
     const assistantMsg: Message = {
@@ -161,6 +208,41 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // Cache user message immediately
     await appendCachedMessage(sessionId, userMsg);
 
+    // ── Try local inference first ──────────────────────────────────────
+    const hybridState = useHybridStore.getState();
+    const route = hybridState.decideRoute(content);
+
+    if (route.target === 'local') {
+      try {
+        const messages = [...state.messages, userMsg].map(m => ({
+          role: m.role,
+          content: m.content,
+        }));
+        const result = await hybridState.executeLocal(content, messages);
+
+        if (result && result.text) {
+          set(s => ({
+            messages: s.messages.map(m =>
+              m.id === assistantMsg.id ? {...m, content: result.text} : m,
+            ),
+          }));
+
+          await appendCachedMessage(sessionId, {
+            ...assistantMsg,
+            content: result.text,
+          });
+          await removePendingSend(userMsg.id);
+          await triggerHaptic('success');
+          sounds.receive();
+          set({streaming: false});
+          await get().refreshSessions();
+          return;
+        }
+      } catch {}
+      // Fall through to remote if local fails
+    }
+
+    // ── Remote server (SSE streaming) ──────────────────────────────────
     abortController = new AbortController();
     let accumulated = '';
     const settings = useSettingsStore.getState();
@@ -171,7 +253,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         images: m.images,
       })),
       temperature: settings.temperature,
-      max_new_tokens: settings.maxTokens,
+      max_tokens: settings.maxTokens,
+      top_p: settings.topP,
+      top_k: settings.topK,
+      repetition_penalty: settings.repetitionPenalty,
+      session_id: sessionId,
     };
 
     let retries = 0;
@@ -206,7 +292,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       } catch (err: any) {
         if (err.name === 'AbortError') return true;
 
-        // Queue for offline retry
         await addPendingSend({
           id: userMsg.id,
           sessionId,
@@ -234,7 +319,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         done = await attemptStream();
       }
 
-      // Cache completed assistant message
       if (accumulated) {
         await appendCachedMessage(sessionId, {...assistantMsg, content: accumulated});
         await removePendingSend(userMsg.id);
@@ -288,6 +372,34 @@ export const useChatStore = create<ChatState>((set, get) => ({
       error: null,
     });
 
+    // ── Try local inference first ──────────────────────────────────────
+    const hybridState = useHybridStore.getState();
+    const route = hybridState.decideRoute(contextMessages[contextMessages.length - 1]?.content ?? '');
+
+    if (route.target === 'local') {
+      try {
+        const result = await hybridState.executeLocal(
+          contextMessages[contextMessages.length - 1]?.content ?? '',
+          contextMessages,
+        );
+        if (result?.text) {
+          set(s => ({
+            messages: s.messages.map(m =>
+              m.id === assistantMsg.id ? {...m, content: result.text} : m,
+            ),
+          }));
+          await appendCachedMessage(sessionId, {...assistantMsg, content: result.text});
+          await triggerHaptic('success');
+          sounds.receive();
+          set({streaming: false});
+          return;
+        }
+      } catch {
+        // Fall through to remote
+      }
+    }
+
+    // ── Remote server (SSE streaming) ──────────────────────────────────
     abortController = new AbortController();
     let accumulated = '';
 

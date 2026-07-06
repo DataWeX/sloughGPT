@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type {SearchResult} from '../types';
 
 const API_URL_KEY = '@sloughgpt/api_url';
 const DEFAULT_URL = 'http://localhost:8000';
@@ -96,6 +97,29 @@ export const api = {
   /** Rename a session. */
   renameSession: (sessionId: string, title: string) =>
     api.put(`/chat/sessions/${sessionId}`, {title}),
+
+  /** Archive or unarchive a session. */
+  archiveSession: (sessionId: string, archived: boolean) =>
+    api.put(`/chat/sessions/${sessionId}`, {archived}),
+
+  /** Search across all sessions. */
+  searchSessions: (q: string, limit?: number) =>
+    api.get<{results: SearchResult[]}>(`/chat/sessions/search?q=${encodeURIComponent(q)}${limit ? `&limit=${limit}` : ''}`),
+
+  /** Send a voice message (audio upload) to a session. */
+  sendVoiceMessage: (sessionId: string, audioUri: string, durationMs: number) => {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: audioUri,
+      type: 'audio/m4a',
+      name: 'voice.m4a',
+    } as any);
+    formData.append('duration_ms', String(durationMs));
+    return api.upload<{status: string; message_id: string; audio_path: string; session_id: string}>(
+      `/chat/voice/${sessionId}`,
+      formData,
+    );
+  },
 
   /** Check server connectivity. */
   syncStatus: <T>() => request<T>('GET', '/mobile/sync/status'),

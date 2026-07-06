@@ -20,11 +20,14 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {useChatStore} from '../stores/chat-store';
 import {useModelStore} from '../stores/model-store';
 import {useOnlineStatus} from '../hooks/useOnlineStatus';
+import {useHybridStore} from '../stores/hybrid-inference-store';
 import {MessageBubble} from '../components/MessageBubble';
 import {ChatInput} from '../components/ChatInput';
 import {TypingIndicator} from '../components/TypingIndicator';
+import {SearchSessionsModal} from '../components/SearchSessionsModal';
 import {StatusBadge} from '../components/StatusBadge';
 import {triggerHaptic} from '../services/haptics';
+import {api} from '../services/api-client';
 import {pickImage, takePhoto, imageDataUrl} from '../services/image-upload';
 import {startRecording, transcribeAudio} from '../services/voice-input';
 import {toast} from '../services/toast';
@@ -37,6 +40,19 @@ const SUGGESTIONS = [
   'Tell me something interesting',
   'Help me brainstorm',
   'Explain a concept',
+];
+
+const BG_PRESETS = [
+  {label: 'None', value: ''},
+  {label: 'Navy', value: '#1a1a2e'},
+  {label: 'Plum', value: '#2d1b2e'},
+  {label: 'Forest', value: '#1b2e1a'},
+  {label: 'Amber', value: '#2e2e1b'},
+  {label: 'Maroon', value: '#2a1a1a'},
+  {label: 'Cream', value: '#f5f0e8'},
+  {label: 'Ice', value: '#e8f0f5'},
+  {label: 'Lavender', value: '#f0e8f5'},
+  {label: 'Rose', value: '#f5e8e8'},
 ];
 
 export function ChatScreen() {
@@ -54,8 +70,10 @@ export function ChatScreen() {
     refreshSessions,
     loadSession,
     deleteSession,
+    archiveSession,
     renameSession,
     deleteMessage,
+    forwardMessage,
     createSession,
     offlineQueue,
     retryPendingSends,
@@ -64,7 +82,9 @@ export function ChatScreen() {
   const {isDark} = useTheme();
   const themeMode = useSettingsStore(s => s.theme);
   const updateTheme = useSettingsStore(s => s.update);
+  const chatBackground = useSettingsStore(s => s.chatBackground);
   const online = useOnlineStatus();
+  const hybrid = useHybridStore();
   const flatListRef = useRef<FlatList>(null);
   const lastHeaderTap = useRef<number>(0);
   const [atBottom, setAtBottom] = useState(true);
@@ -72,6 +92,7 @@ export function ChatScreen() {
   const [showSoulPicker, setShowSoulPicker] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [showSearchSessions, setShowSearchSessions] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -80,11 +101,71 @@ export function ChatScreen() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [forwardTo, setForwardTo] = useState<Message | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const [labelFilter, setLabelFilter] = useState<string | null>(null);
+  const [sessionLabels, setSessionLabels] = useState<Record<string, string[]>>({});
+  const [allLabels, setAllLabels] = useState<string[]>([]);
+  const [labelInput, setLabelInput] = useState('');
+  const [starredIds, setStarredIds] = useState<string[]>([]);
+  const [pinnedIds, setPinnedIds] = useState<string[]>([]);
+  const activeSessions = sessions.filter(s => !s.archived);
+  const archivedSessions = sessions.filter(s => s.archived);
   const recordingStopRef = useRef<(() => Promise<{uri: string; duration: number} | null>) | null>(null);
+  const [voiceMessageMode, setVoiceMessageMode] = useState(false);
+  const voiceTimerRef = useRef<{start: number} | null>(null);
+
+  useEffect(() => {
+    if (activeSessionId) {
+      import('../services/pins').then(m => m.getPinnedIds(activeSessionId)).then(setPinnedIds);
+    } else {
+      setPinnedIds([]);
+    }
+  }, [activeSessionId]);
 
   useEffect(() => {
     refreshSessions();
+    import('../services/stars').then(m => m.getStarredIds()).then(setStarredIds);
+    import('../services/labels').then(m => {
+      m.getAllDistinctLabels().then(setAllLabels);
+    });
   }, []);
+
+  useEffect(() => {
+    if (showInfo && activeSessionId) {
+      import('../services/labels').then(m => {
+        m.getLabels(activeSessionId).then(labels => {
+          setSessionLabels(prev => ({...prev, [activeSessionId]: labels}));
+        });
+      });
+    }
+  }, [showInfo, activeSessionId]);
+
+  useEffect(() => {
+    if (showDrawer) {
+      import('../services/labels').then(m => m.getLabels).then(async getLabels => {
+        const all: Record<string, string[]> = {};
+        for (const s of sessions) {
+          all[s.id] = await getLabels(s.id);
+        }
+        setSessionLabels(prev => ({...prev, ...all}));
+        const distinct = await (await import('../services/labels')).getAllDistinctLabels();
+        setAllLabels(distinct);
+      });
+    }
+  }, [showDrawer, sessions]);
+
+  // Sort sessions: starred first (by star order), then by updated_at
+  const sortedActiveSessions = [...activeSessions].sort((a, b) => {
+    const aStarred = starredIds.includes(a.id);
+    const bStarred = starredIds.includes(b.id);
+    if (aStarred && !bStarred) return -1;
+    if (!aStarred && bStarred) return 1;
+    if (aStarred && bStarred) {
+      return starredIds.indexOf(a.id) - starredIds.indexOf(b.id);
+    }
+    return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+  });
 
   // Keyboard shortcuts for external keyboards
   useEffect(() => {
@@ -179,15 +260,48 @@ export function ChatScreen() {
         setIsRecording(false);
         recordingStopRef.current = null;
         if (recording) {
-          try {
-            const text = await transcribeAudio(recording.uri);
-            if (text) {
-              sendMessage(text);
-            } else {
-              toast.warn('Could not transcribe audio');
+          if (voiceMessageMode) {
+            // Send raw audio
+            let sid = activeSessionId;
+            if (!sid) {
+              await createSession();
+              sid = useChatStore.getState().activeSessionId;
             }
-          } catch {
-            toast.error('Transcription failed');
+            if (sid) {
+              try {
+                const result = await api.sendVoiceMessage(sid, recording.uri, recording.duration);
+                if (result.status === 'ok' || result.status === 'created') {
+                  const voiceMsg: Message = {
+                    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+                    role: 'user',
+                    content: '🎤 Voice message',
+                    timestamp: Date.now(),
+                    audio_path: result.audio_path,
+                    audio_duration_ms: recording.duration,
+                    _voice: true,
+                    status: 'sent',
+                  };
+                  useChatStore.setState(s => ({
+                    messages: [...s.messages, voiceMsg],
+                  }));
+                  toast.success('Voice message sent');
+                }
+              } catch {
+                toast.error('Failed to send voice message');
+              }
+            }
+          } else {
+            // Transcribe and send as text
+            try {
+              const text = await transcribeAudio(recording.uri);
+              if (text) {
+                sendMessage(text);
+              } else {
+                toast.warn('Could not transcribe audio');
+              }
+            } catch {
+              toast.error('Transcription failed');
+            }
           }
         }
       }
@@ -202,7 +316,7 @@ export function ChatScreen() {
         toast.error(e.message || 'Failed to start recording');
       }
     }
-  }, [isRecording, sendMessage]);
+  }, [isRecording, sendMessage, voiceMessageMode, activeSessionId, createSession]);
 
   const handleSuggestion = useCallback(
     (s: string) => {
@@ -211,10 +325,18 @@ export function ChatScreen() {
     [sendMessage],
   );
 
+  const handleSelectSearchSession = useCallback(
+    (sessionId: string) => {
+      loadSession(sessionId);
+    },
+    [loadSession],
+  );
+
   const renderItem = useCallback(
     ({item}: {item: Message}) => (
       <MessageBubble
         message={item}
+        sessionId={activeSessionId || undefined}
         highlight={searchQuery ? item.content.toLowerCase().includes(searchQuery.toLowerCase()) : false}
         onRegenerate={
           item.role === 'assistant' ? () => regenerate(item.id) : undefined
@@ -229,6 +351,7 @@ export function ChatScreen() {
           item.role === 'user' ? (newContent: string) => setEditingMessage(newContent) : undefined
         }
         onReply={() => setReplyTo(item)}
+        onForward={() => setForwardTo(item)}
         selectMode={selectMode}
         selected={selectedIds.has(item.id)}
         onSelect={() => toggleSelectMessage(item.id)}
@@ -240,7 +363,7 @@ export function ChatScreen() {
         }}
       />
     ),
-    [regenerate, recordFeedback, searchQuery, deleteMessage],
+    [regenerate, recordFeedback, searchQuery, deleteMessage, activeSessionId],
   );
 
   const keyExtractor = useCallback((item: Message) => item.id, []);
@@ -297,7 +420,7 @@ export function ChatScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.menuBtn}
-              onPress={() => { setShowSearch(!showSearch); setSearchQuery(''); }}>
+              onPress={() => setShowSearchSessions(true)}>
               <Text style={styles.menuBtn}>🔍</Text>
             </TouchableOpacity>
             {messages.length > 0 && (
@@ -386,7 +509,7 @@ export function ChatScreen() {
         )}
 
         {messages.length === 0 && !streaming ? (
-          <View style={styles.emptyContainer}>
+          <View style={[styles.emptyContainer, chatBackground ? {backgroundColor: chatBackground} : null]}>
             <View style={styles.emptyIllustration}>
               <Text style={styles.emptyEmoji}>💬</Text>
               <View style={styles.emptyDotRow}>
@@ -416,7 +539,7 @@ export function ChatScreen() {
             <Text style={styles.emptyHint}>Swipe left on a message to delete it</Text>
           </View>
         ) : (
-          <Pressable style={{flex: 1}} onPress={() => Keyboard.dismiss()}>
+          <Pressable style={[styles.flatListContainer, chatBackground ? {backgroundColor: chatBackground} : null]} onPress={() => Keyboard.dismiss()}>
             <FlatList
               ref={flatListRef}
               data={messages}
@@ -439,6 +562,23 @@ export function ChatScreen() {
             }}
             />
           </Pressable>
+        )}
+
+        {/* Pinned messages banner */}
+        {pinnedIds.length > 0 && !selectMode && (
+          <TouchableOpacity
+            style={styles.pinnedBanner}
+            onPress={() => {
+              const firstPinnedIndex = messages.findIndex(m => pinnedIds.includes(m.id));
+              if (firstPinnedIndex >= 0) {
+                flatListRef.current?.scrollToIndex({index: firstPinnedIndex, animated: true, viewPosition: 0});
+              }
+            }}>
+            <Text style={styles.pinnedBannerIcon}>📌</Text>
+            <Text style={styles.pinnedBannerText}>
+              {pinnedIds.length} pinned {pinnedIds.length === 1 ? 'message' : 'messages'} — tap to jump
+            </Text>
+          </TouchableOpacity>
         )}
 
         {/* Select mode toolbar */}
@@ -493,6 +633,46 @@ export function ChatScreen() {
           </View>
         )}
 
+        {/* Forward to session modal */}
+        <Modal
+          visible={forwardTo !== null}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setForwardTo(null)}>
+          <Pressable style={styles.overlay} onPress={() => setForwardTo(null)}>
+            <Pressable style={styles.forwardModal} onPress={e => e.stopPropagation()}>
+              <Text style={styles.forwardTitle}>Forward to...</Text>
+              <Text style={styles.forwardPreview} numberOfLines={1}>
+                {forwardTo?.content}
+              </Text>
+              <FlatList
+                data={sessions}
+                keyExtractor={s => s.id}
+                renderItem={({item: session}) => (
+                  <TouchableOpacity
+                    style={styles.forwardSessionItem}
+                    onPress={async () => {
+                      if (forwardTo) {
+                        await forwardMessage(forwardTo.content, session.id);
+                      }
+                      setForwardTo(null);
+                    }}>
+                    <Text style={styles.forwardSessionTitle} numberOfLines={1}>
+                      {session.title || 'New conversation'}
+                    </Text>
+                    <Text style={styles.forwardSessionMeta}>
+                      {session.message_count || 0} messages
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              />
+              <TouchableOpacity style={styles.forwardCancel} onPress={() => setForwardTo(null)}>
+                <Text style={styles.forwardCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
         <ChatInput
           onSend={handleSend}
           onImage={handleImage}
@@ -504,6 +684,8 @@ export function ChatScreen() {
           sessionId={activeSessionId}
           editText={editingMessage}
           onCancelEdit={() => setEditingMessage(null)}
+          voiceMessageMode={voiceMessageMode}
+          onVoiceMessageToggle={() => setVoiceMessageMode(v => !v)}
         />
 
         {!atBottom && messages.length > 0 && (
@@ -556,6 +738,75 @@ export function ChatScreen() {
                 {isConnected ? 'Connected' : 'Offline'}
               </Text>
             </View>
+            <View style={styles.bgSection}>
+              <Text style={styles.bgSectionLabel}>Chat Background</Text>
+              <View style={styles.bgSwatchRow}>
+                {BG_PRESETS.map(p => {
+                  const active = chatBackground === p.value;
+                  return (
+                    <TouchableOpacity
+                      key={p.value || 'none'}
+                      style={[
+                        styles.bgSwatch,
+                        p.value ? {backgroundColor: p.value} : styles.bgSwatchDefault,
+                        active && styles.bgSwatchActive,
+                      ]}
+                      accessible
+                      accessibilityLabel={p.label}
+                      onPress={() => updateTheme({chatBackground: p.value})}>
+                      {active && (
+                        <Text style={[styles.bgSwatchCheck, p.value && !p.value.startsWith('#f') && styles.bgSwatchCheckLight]}>
+                          ✓
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+            <View style={styles.bgSection}>
+              <Text style={styles.bgSectionLabel}>Labels</Text>
+              {activeSessionId && (sessionLabels[activeSessionId] || []).length > 0 && (
+                <View style={styles.labelChipRow}>
+                  {(sessionLabels[activeSessionId] || []).map(label => (
+                    <TouchableOpacity
+                      key={label}
+                      style={styles.labelChip}
+                      onPress={async () => {
+                        const {removeLabel} = await import('../services/labels');
+                        await removeLabel(activeSessionId, label);
+                        const labels = await (await import('../services/labels')).getLabels(activeSessionId);
+                        setSessionLabels(prev => ({...prev, [activeSessionId]: labels}));
+                        const distinct = await (await import('../services/labels')).getAllDistinctLabels();
+                        setAllLabels(distinct);
+                      }}>
+                      <Text style={styles.labelChipText}>{label} ×</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+              <View style={styles.labelAddRow}>
+                <TextInput
+                  style={styles.labelInput}
+                  value={labelInput}
+                  onChangeText={setLabelInput}
+                  placeholder="Add label..."
+                  placeholderTextColor={colors.textMuted}
+                  returnKeyType="done"
+                  onSubmitEditing={async () => {
+                    if (labelInput.trim() && activeSessionId) {
+                      const {addLabel} = await import('../services/labels');
+                      await addLabel(activeSessionId, labelInput.trim());
+                      setLabelInput('');
+                      const labels = await (await import('../services/labels')).getLabels(activeSessionId);
+                      setSessionLabels(prev => ({...prev, [activeSessionId]: labels}));
+                      const distinct = await (await import('../services/labels')).getAllDistinctLabels();
+                      setAllLabels(distinct);
+                    }
+                  }}
+                />
+              </View>
+            </View>
           </View>
         </Pressable>
       </Modal>
@@ -575,10 +826,37 @@ export function ChatScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* Label filter chips */}
+            {allLabels.length > 0 && (
+              <View style={styles.labelFilterRow}>
+                <TouchableOpacity
+                  style={[styles.labelFilterChip, labelFilter === null && styles.labelFilterChipActive]}
+                  onPress={() => setLabelFilter(null)}>
+                  <Text style={[styles.labelFilterText, labelFilter === null && styles.labelFilterTextActive]}>
+                    All
+                  </Text>
+                </TouchableOpacity>
+                {allLabels.map(label => (
+                  <TouchableOpacity
+                    key={label}
+                    style={[styles.labelFilterChip, labelFilter === label && styles.labelFilterChipActive]}
+                    onPress={() => setLabelFilter(label === labelFilter ? null : label)}>
+                    <Text style={[styles.labelFilterText, labelFilter === label && styles.labelFilterTextActive]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* Filtered sessions */}
             <FlatList
-              data={sessions}
+              data={labelFilter ? sortedActiveSessions.filter(s => (sessionLabels[s.id] || []).includes(labelFilter!)) : sortedActiveSessions}
               keyExtractor={item => item.id}
-              renderItem={({item: session}) => (
+              renderItem={({item: session}) => {
+                const isStarred = starredIds.includes(session.id);
+                return (
                 <TouchableOpacity
                   style={[
                     styles.sessionItem,
@@ -600,35 +878,122 @@ export function ChatScreen() {
                           }
                         }, 'plain-text', currentTitle);
                       }}>
-                      <Text style={styles.sessionTitle} numberOfLines={1}>
-                        {session.title || 'New conversation'}
-                      </Text>
+                      <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
+                        {isStarred && <Text style={styles.starIndicator}>★</Text>}
+                        <Text style={styles.sessionTitle} numberOfLines={1}>
+                          {session.title || 'New conversation'}
+                        </Text>
+                      </View>
                     </TouchableOpacity>
                     <Text style={styles.sessionMeta}>
                       {session.message_count || 0} messages
                     </Text>
+                    {(sessionLabels[session.id] || []).length > 0 && (
+                      <View style={styles.drawerLabelRow}>
+                        {(sessionLabels[session.id] || []).map(label => (
+                          <View key={label} style={styles.drawerLabelChip}>
+                            <Text style={styles.drawerLabelText}>{label}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
                   </View>
-                  <TouchableOpacity
-                    onPress={() => {
-                      Alert.alert('Delete', 'Delete this conversation?', [
-                        {text: 'Cancel', style: 'cancel'},
-                        {
-                          text: 'Delete',
-                          style: 'destructive',
-                          onPress: () => deleteSession(session.id),
-                        },
-                      ]);
-                    }}>
-                    <Text style={styles.sessionDelete}>×</Text>
-                  </TouchableOpacity>
+                  <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
+                    <TouchableOpacity
+                      onPress={async () => {
+                        if (isStarred) {
+                          const {unstarSession} = await import('../services/stars');
+                          await unstarSession(session.id);
+                          setStarredIds(prev => prev.filter(id => id !== session.id));
+                        } else {
+                          const {starSession} = await import('../services/stars');
+                          await starSession(session.id);
+                          setStarredIds(prev => [session.id, ...prev]);
+                        }
+                        triggerHaptic('light');
+                      }}>
+                      <Text style={styles.starBtn}>{isStarred ? '★' : '☆'}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        Alert.alert('Archive', 'Archive this conversation?', [
+                          {text: 'Cancel', style: 'cancel'},
+                          {
+                            text: 'Archive',
+                            onPress: () => archiveSession(session.id, true),
+                          },
+                        ]);
+                      }}>
+                      <Text style={styles.sessionArchive}>📦</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        Alert.alert('Delete', 'Delete this conversation?', [
+                          {text: 'Cancel', style: 'cancel'},
+                          {
+                            text: 'Delete',
+                            style: 'destructive',
+                            onPress: () => deleteSession(session.id),
+                          },
+                        ]);
+                      }}>
+                      <Text style={styles.sessionDelete}>×</Text>
+                    </TouchableOpacity>
+                  </View>
                 </TouchableOpacity>
-              )}
+              )}}
               ListEmptyComponent={
                 <Text style={styles.drawerEmpty}>
                   No conversations yet
                 </Text>
               }
+              ListFooterComponent={
+                archivedSessions.length > 0 ? (
+                  <TouchableOpacity
+                    style={styles.archivedToggle}
+                    onPress={() => setShowArchived(s => !s)}>
+                    <Text style={styles.archivedToggleText}>
+                      {showArchived ? 'Hide' : 'Show'} archived ({archivedSessions.length})
+                    </Text>
+                  </TouchableOpacity>
+                ) : null
+              }
             />
+            {showArchived && archivedSessions.length > 0 && (
+              <View style={{maxHeight: 200}}>
+                <Text style={styles.archivedHeader}>Archived</Text>
+                <FlatList
+                  data={archivedSessions}
+                  keyExtractor={item => item.id}
+                  renderItem={({item: session}) => (
+                    <TouchableOpacity
+                      style={[
+                        styles.sessionItem,
+                        styles.archivedItem,
+                        session.id === useChatStore.getState().activeSessionId &&
+                          styles.sessionItemActive,
+                      ]}
+                      onPress={() => {
+                        loadSession(session.id);
+                        setShowDrawer(false);
+                      }}>
+                      <View style={styles.sessionInfo}>
+                        <Text style={styles.sessionTitle} numberOfLines={1}>
+                          {session.title || 'New conversation'}
+                        </Text>
+                        <Text style={styles.sessionMeta}>
+                          {session.message_count || 0} messages
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => archiveSession(session.id, false)}>
+                        <Text style={styles.sessionUnarchive}>Unarchive</Text>
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  )}
+                />
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -690,6 +1055,12 @@ export function ChatScreen() {
           </View>
         </View>
       </Modal>
+
+      <SearchSessionsModal
+        visible={showSearchSessions}
+        onClose={() => setShowSearchSessions(false)}
+        onSelectSession={handleSelectSearchSession}
+      />
     </SafeAreaView>
   );
 }
@@ -1014,6 +1385,49 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 12,
   },
+  forwardModal: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    margin: spacing.xl,
+    maxHeight: '60%',
+    overflow: 'hidden',
+  },
+  forwardTitle: {
+    ...typography.body,
+    fontWeight: '700',
+    padding: spacing.md,
+    paddingBottom: spacing.xs,
+  },
+  forwardPreview: {
+    ...typography.small,
+    color: colors.textMuted,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  forwardSessionItem: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  forwardSessionTitle: {
+    ...typography.body,
+    fontWeight: '500',
+  },
+  forwardSessionMeta: {
+    ...typography.small,
+    color: colors.textMuted,
+  },
+  forwardCancel: {
+    padding: spacing.md,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  forwardCancelText: {
+    ...typography.body,
+    color: colors.textMuted,
+  },
   jumpBtn: {
     position: 'absolute',
     right: spacing.lg,
@@ -1137,5 +1551,194 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 4,
     marginTop: 4,
+  },
+  sessionArchive: {
+    fontSize: 16,
+    padding: spacing.xs,
+  },
+  sessionUnarchive: {
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '500',
+    padding: spacing.xs,
+  },
+  archivedToggle: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  archivedToggleText: {
+    ...typography.small,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  archivedHeader: {
+    ...typography.small,
+    color: colors.textMuted,
+    fontWeight: '600',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  archivedItem: {
+    opacity: 0.8,
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  pinnedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.primary + '10',
+    borderTopWidth: 1,
+    borderTopColor: colors.primary + '30',
+  },
+  pinnedBannerIcon: {
+    fontSize: 14,
+  },
+  pinnedBannerText: {
+    ...typography.small,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  starBtn: {
+    fontSize: 18,
+    color: '#f5a623',
+    padding: spacing.xs,
+  },
+  starIndicator: {
+    fontSize: 14,
+    color: '#f5a623',
+  },
+  flatListContainer: {
+    flex: 1,
+  },
+  labelFilterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  labelFilterChip: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radii.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  labelFilterChipActive: {
+    backgroundColor: colors.primary + '20',
+    borderColor: colors.primary,
+  },
+  labelFilterText: {
+    ...typography.small,
+    color: colors.textSecondary,
+    fontSize: 11,
+  },
+  labelFilterTextActive: {
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  labelChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  labelChip: {
+    backgroundColor: colors.primary + '15',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radii.full,
+  },
+  labelChipText: {
+    ...typography.small,
+    color: colors.primary,
+    fontSize: 11,
+  },
+  labelAddRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  labelInput: {
+    flex: 1,
+    ...typography.small,
+    color: colors.text,
+    backgroundColor: colors.background,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  drawerLabelRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 3,
+    marginTop: 3,
+  },
+  drawerLabelChip: {
+    backgroundColor: colors.primary + '15',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: radii.full,
+  },
+  drawerLabelText: {
+    fontSize: 10,
+    color: colors.primary,
+  },
+  bgSection: {
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  bgSectionLabel: {
+    ...typography.small,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    marginBottom: spacing.sm,
+  },
+  bgSwatchRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  bgSwatch: {
+    width: 36,
+    height: 36,
+    borderRadius: radii.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  bgSwatchDefault: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+  },
+  bgSwatchActive: {
+    borderColor: colors.primary,
+  },
+  bgSwatchCheck: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '700',
+  },
+  bgSwatchCheckLight: {
+    color: '#fff',
   },
 });

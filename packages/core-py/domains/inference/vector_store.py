@@ -5,15 +5,48 @@ External providers (Pinecone, ChromaDB) live in the ``vector_stores/`` package.
 """
 
 import hashlib
+import json
 import logging
+import pickle
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
 
 logger = logging.getLogger("man.inference.vector_store")
+
+# Prompt injection detection patterns
+_INJECTION_PATTERNS: list[str] = [
+    "ignore previous",
+    "disregard previous",
+    "ignore all rules",
+    "system prompt",
+    "you are now",
+    "new instructions",
+    "remove previous",
+    "forget everything",
+    "[important",
+]
+
+
+def sanitize_input(content: str) -> str:
+    """Raise ``ValueError`` if *content* matches known injection patterns.
+
+    Checks common prompt-injection phrases. Returns the cleaned (stripped)
+    content on success so callers can inline it.
+    """
+    cleaned = content.strip()
+    lower = cleaned.lower()
+    for pattern in _INJECTION_PATTERNS:
+        if pattern in lower:
+            raise ValueError(f"Blocked: suspicious pattern {pattern!r}")
+    if cleaned.startswith("[") and "IMPORTANT" in cleaned.upper():
+        raise ValueError("Blocked: potential prompt injection")
+    return cleaned
 
 
 class VectorStoreType(str, Enum):
@@ -155,12 +188,140 @@ class InMemoryVectorStore(VectorStore):
         return len(self._entries)
 
 
+class MogDBVectorStore(VectorStore):
+    """Persistent vector store backed by MogDB.
+
+    Vectors, text, and metadata are persisted to disk via MogDB's append-only
+    journal. On startup, all entries are loaded into memory for fast cosine
+    similarity queries. Every upsert/delete is written through to MogDB.
+
+    Parameters
+    ----------
+    dimension:
+        Embedding dimension (default 384).
+    path:
+        MogDB database path (default ``data/vector_store``).
+    """
+
+    def __init__(self, dimension: int = 384, path: str = "data/vector_store"):
+        self.dimension = dimension
+        self._path = path
+        self._entries: Dict[str, VectorEntry] = {}
+        self._mogdb: Optional[Any] = None
+        self._coll: Optional[Any] = None
+
+    async def connect(self) -> bool:
+        from mogdb import MogDB
+        self._mogdb = MogDB(self._path)
+        self._coll = self._mogdb.collection("vectors")
+        # Load existing entries from disk
+        for doc in self._coll.find():
+            vec = json.loads(doc.get("_vector_json", "[]"))
+            entry = VectorEntry(
+                id=doc["_id"],
+                vector=vec,
+                text=doc.get("text", ""),
+                metadata=doc.get("metadata", {}),
+            )
+            self._entries[entry.id] = entry
+        logger.info("MogDBVectorStore loaded %d entries from %s", len(self._entries), self._path)
+        return True
+
+    async def disconnect(self) -> None:
+        if self._mogdb:
+            self._mogdb.close()
+            self._mogdb = None
+            self._coll = None
+
+    def query_sync(
+        self,
+        vector: List[float],
+        top_k: int = 5,
+        filter_metadata: Optional[Dict[str, Any]] = None,
+    ) -> List[QueryResult]:
+        if not self._entries:
+            return []
+        q = np.asarray(vector, dtype=np.float64)
+        scored: List[tuple[float, VectorEntry]] = []
+        for entry in self._entries.values():
+            if filter_metadata and entry.metadata:
+                if not all(entry.metadata.get(k) == v for k, v in filter_metadata.items()):
+                    continue
+            v = np.asarray(entry.vector, dtype=np.float64)
+            scored.append((_cosine_similarity(q, v), entry))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        out: List[QueryResult] = []
+        for score, entry in scored[:top_k]:
+            out.append(
+                QueryResult(
+                    id=entry.id,
+                    score=score,
+                    text=entry.text,
+                    metadata=dict(entry.metadata),
+                )
+            )
+        return out
+
+    def upsert_sync(self, entries: List[VectorEntry]) -> int:
+        if not self._coll:
+            return 0
+        for e in entries:
+            self._entries[e.id] = e
+            self._coll.update_one(
+                    {"_id": e.id},
+                    {"$set": {
+                        "_vector_json": json.dumps(e.vector),
+                        "text": e.text,
+                        "metadata": e.metadata,
+                    }},
+                ) or self._coll.insert_one({
+                    "_id": e.id,
+                    "_vector_json": json.dumps(e.vector),
+                    "text": e.text,
+                    "metadata": e.metadata,
+                })
+        return len(entries)
+
+    def count_sync(self) -> int:
+        return len(self._entries)
+
+    async def upsert(self, entries: List[VectorEntry]) -> int:
+        return self.upsert_sync(entries)
+
+    async def query(
+        self,
+        vector: List[float],
+        top_k: int = 5,
+        filter_metadata: Optional[Dict[str, Any]] = None,
+    ) -> List[QueryResult]:
+        return self.query_sync(vector, top_k, filter_metadata)
+
+    async def delete(self, ids: List[str]) -> bool:
+        removed = 0
+        for i in ids:
+            if i in self._entries:
+                del self._entries[i]
+                removed += 1
+            if self._coll:
+                self._coll.delete_one({"_id": i})
+        return removed > 0
+
+    async def count(self) -> int:
+        return len(self._entries)
+
+
 async def create_vector_store(provider: str = "in_memory", **kwargs: Any) -> VectorStore:
     """Factory used by ``apps/api/server/main.py`` for ``/vector/*`` endpoints."""
     key = (provider or "in_memory").lower()
     if key in ("in_memory", "memory", "local"):
         dim = int(kwargs.get("dimension", 384))
         store = InMemoryVectorStore(dimension=dim)
+        await store.connect()
+        return store
+    if key in ("mogdb", "persist", "persistent"):
+        dim = int(kwargs.get("dimension", 384))
+        path = kwargs.get("path", "data/vector_store")
+        store = MogDBVectorStore(dimension=dim, path=path)
         await store.connect()
         return store
     if key == "chromadb":
@@ -184,7 +345,7 @@ async def create_vector_store(provider: str = "in_memory", **kwargs: Any) -> Vec
         return store
     raise NotImplementedError(
         f"Vector store provider {provider!r} is not implemented. "
-        f"Use 'in_memory', 'chromadb', or 'pinecone'."
+        f"Use 'in_memory', 'mogdb', 'chromadb', or 'pinecone'."
     )
 
 
@@ -335,6 +496,7 @@ __all__ = [
     "VectorEntry",
     "QueryResult",
     "InMemoryVectorStore",
+    "MogDBVectorStore",
     "create_vector_store",
     "simple_embed",
 ]

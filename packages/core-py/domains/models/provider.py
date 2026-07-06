@@ -548,9 +548,13 @@ class HFModelProvider:
             max_new_tokens=max_tokens,
             do_sample=temperature > 0,
             temperature=temperature,
+            top_p=kwargs.pop("top_p", 0.9),
+            top_k=kwargs.pop("top_k", 50),
+            repetition_penalty=kwargs.pop("repetition_penalty", 1.2),
             pad_token_id=self._tokenizer.eos_token_id,
             streamer=streamer,
         )
+        gen_kwargs.update(kwargs)
 
         _error: list[Exception] = []
 

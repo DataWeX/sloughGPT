@@ -38,7 +38,7 @@ vi.mock('@/lib/multimodal-controller', () => ({
   multimodalController: { trainImage: vi.fn().mockResolvedValue({ caption: 'test' }), getCapabilities: vi.fn().mockResolvedValue({}), getTrainingReport: vi.fn().mockResolvedValue({}) },
 }))
 
-vi.mock('@/lib/db', () => ({ chatDB: { loadSessions: vi.fn().mockResolvedValue([]), saveSession: vi.fn().mockResolvedValue(undefined), loadSession: vi.fn().mockResolvedValue(null) } }))
+vi.mock('@/lib/db', () => ({ chatDB: { loadSessions: vi.fn(() => Promise.resolve([])), saveSession: vi.fn(() => Promise.resolve(undefined)), loadSession: vi.fn(() => Promise.resolve(null)) } }))
 
 vi.mock('@/lib/error-store', () => ({ useErrorStore: { getState: vi.fn(() => ({ addError: vi.fn() })) } }))
 

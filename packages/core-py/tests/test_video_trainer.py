@@ -6,6 +6,9 @@ from pathlib import Path
 import json
 import tempfile
 import numpy as np
+import pytest
+
+pytestmark = pytest.mark.slow
 
 from domains.training.video_trainer import VideoCaptionTrainer, list_video_checkpoints
 

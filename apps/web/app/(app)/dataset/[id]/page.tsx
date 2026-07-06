@@ -150,7 +150,7 @@ export default function DatasetDetailPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <CardTitle className="text-base">Details</CardTitle>
-                    {dataset.type && <Badge variant="secondary" className="text-xs">{dataset.type}</Badge>}
+                    {dataset.type && <Badge variant={"secondary" as const} className="text-xs">{dataset.type}</Badge>}
                   </div>
                   <div className="flex items-center gap-2">
                     <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleExport}>
@@ -167,10 +167,10 @@ export default function DatasetDetailPage() {
                   <div className="flex items-center gap-2 mb-3">
                     <Input
                       value={renameText}
-                      onChange={e => setRenameText(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRenameText(e.target.value)}
                       className="h-8 text-sm max-w-xs"
                       autoFocus
-                      onKeyDown={e => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenaming(false) }}
+                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenaming(false) }}
                     />
                     <Button variant="ghost" size="icon-sm" className="h-7 w-7" onClick={commitRename} aria-label="Confirm rename">
                       <IconCheck className="h-4 w-4 text-success" />
@@ -199,7 +199,7 @@ export default function DatasetDetailPage() {
                   <div className="flex items-center gap-1.5 mt-3">
                     <span className="text-xs text-muted-foreground">Tags:</span>
                     {dataset.tags.map(t => (
-                      <Badge key={t} variant="default" size="sm">{t}</Badge>
+                      <Badge key={t} variant={"default" as const} size="sm">{t}</Badge>
                     ))}
                   </div>
                 )}
@@ -237,7 +237,7 @@ export default function DatasetDetailPage() {
                   {stats.suggested_method && stats.suggested_method !== 'unknown' && (
                     <div className="flex items-center gap-2 mt-2">
                       <span className="text-xs text-muted-foreground">Recommended method:</span>
-                      <Badge variant="secondary" size="sm">{stats.suggested_method}</Badge>
+                      <Badge variant={"secondary" as const} size="sm">{stats.suggested_method}</Badge>
                     </div>
                   )}
                 </CardContent>

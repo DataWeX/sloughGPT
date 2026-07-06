@@ -3,6 +3,7 @@
 import math
 import numpy as np
 import pytest
+pytestmark = pytest.mark.slow
 from pathlib import Path
 import sys
 

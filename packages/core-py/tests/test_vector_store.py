@@ -1,9 +1,13 @@
-"""Tests for InMemoryVectorStore — core vector CRUD + similarity search."""
+"""Tests for InMemoryVectorStore and MogDBVectorStore — core vector CRUD + similarity search."""
+
+import os
+import tempfile
 
 import pytest
 import numpy as np
 from domains.inference.vector_store import (
     InMemoryVectorStore,
+    MogDBVectorStore,
     VectorEntry,
     simple_embed,
     _cosine_similarity,
@@ -81,6 +85,125 @@ async def test_delete_partial(store):
     ])
     assert await store.delete(["a", "nonexistent"]) is True
     assert await store.count() == 1
+
+
+# =========================================================================
+# MogDBVectorStore tests
+# =========================================================================
+
+
+class TestMogDBVectorStore:
+    @pytest.fixture
+    def store(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            s = MogDBVectorStore(dimension=384, path=os.path.join(tmp, "vectors"))
+            import asyncio
+            asyncio.run(s.connect())
+            yield s
+            asyncio.run(s.disconnect())
+
+    @pytest.mark.asyncio
+    async def test_upsert_and_count(self, store):
+        entries = [VectorEntry(id="a", vector=[1.0] * 384, text="hello", metadata={"topic": "greeting"})]
+        n = await store.upsert(entries)
+        assert n == 1
+        assert await store.count() == 1
+
+    @pytest.mark.asyncio
+    async def test_upsert_overwrite(self, store):
+        e1 = VectorEntry(id="x", vector=[1.0] * 384, text="first")
+        e2 = VectorEntry(id="x", vector=[0.0] * 384, text="second")
+        await store.upsert([e1])
+        await store.upsert([e2])
+        assert await store.count() == 1
+
+    @pytest.mark.asyncio
+    async def test_query_returns_results(self, store):
+        await store.upsert([
+            VectorEntry(id="a", vector=[1.0] * 384, text="alpha"),
+            VectorEntry(id="b", vector=[0.0] * 384, text="beta"),
+        ])
+        results = await store.query(vector=[1.0] * 384, top_k=5)
+        assert len(results) == 2
+        assert results[0].id == "a"
+        assert results[0].score >= results[1].score
+
+    @pytest.mark.asyncio
+    async def test_query_with_filter(self, store):
+        await store.upsert([
+            VectorEntry(id="a", vector=[1.0] * 384, text="doc a", metadata={"lang": "en"}),
+            VectorEntry(id="b", vector=[1.0] * 384, text="doc b", metadata={"lang": "fr"}),
+        ])
+        results = await store.query(vector=[1.0] * 384, top_k=5, filter_metadata={"lang": "en"})
+        assert len(results) == 1
+        assert results[0].id == "a"
+
+    @pytest.mark.asyncio
+    async def test_query_empty_store(self, store):
+        results = await store.query(vector=[1.0] * 384, top_k=5)
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_delete_existing(self, store):
+        await store.upsert([VectorEntry(id="keep", vector=[1.0] * 384, text="keep")])
+        assert await store.delete(["keep"]) is True
+        assert await store.count() == 0
+
+    @pytest.mark.asyncio
+    async def test_delete_nonexistent(self, store):
+        assert await store.delete(["ghost"]) is False
+
+    @pytest.mark.asyncio
+    async def test_delete_partial(self, store):
+        await store.upsert([
+            VectorEntry(id="a", vector=[1.0] * 384, text="a"),
+            VectorEntry(id="b", vector=[1.0] * 384, text="b"),
+        ])
+        assert await store.delete(["a", "nonexistent"]) is True
+        assert await store.count() == 1
+
+    @pytest.mark.asyncio
+    async def test_persistence_survives_reconnect(self):
+        """Entries survive closing and re-opening the MogDBVectorStore."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "vec")
+            s1 = MogDBVectorStore(dimension=384, path=path)
+            await s1.connect()
+            await s1.upsert([
+                VectorEntry(id="p1", vector=[1.0] * 384, text="persistent"),
+                VectorEntry(id="p2", vector=[0.5] * 384, text="also here"),
+            ])
+            assert await s1.count() == 2
+            await s1.disconnect()
+
+            s2 = MogDBVectorStore(dimension=384, path=path)
+            await s2.connect()
+            assert await s2.count() == 2
+            results = await s2.query(vector=[1.0] * 384, top_k=5)
+            assert len(results) == 2
+            ids = {r.id for r in results}
+            assert ids == {"p1", "p2"}
+            await s2.disconnect()
+
+    @pytest.mark.asyncio
+    async def test_persist_and_reload_after_delete(self):
+        """Deletes are reflected after reconnect."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "vec")
+            s1 = MogDBVectorStore(dimension=384, path=path)
+            await s1.connect()
+            await s1.upsert([
+                VectorEntry(id="keep", vector=[1.0] * 384, text="keep me"),
+                VectorEntry(id="gone", vector=[0.0] * 384, text="delete me"),
+            ])
+            await s1.delete(["gone"])
+            await s1.disconnect()
+
+            s2 = MogDBVectorStore(dimension=384, path=path)
+            await s2.connect()
+            assert await s2.count() == 1
+            assert (await s2.query(vector=[1.0] * 384))[0].id == "keep"
+            await s2.disconnect()
 
 
 def test_cosine_similarity_identical():

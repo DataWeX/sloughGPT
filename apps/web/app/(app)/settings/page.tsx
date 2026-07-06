@@ -42,7 +42,7 @@ function SettingsSlider({
         <label className="text-sm font-medium">{label}</label>
         <span className="text-sm text-muted-foreground">{display}</span>
       </div>
-      <Slider value={[value]} onValueChange={([v]) => onChange(v)} min={min} max={max} step={step} />
+      <Slider value={[value]} onValueChange={([v]: number[]) => onChange(v)} min={min} max={max} step={step} />
     </div>
   )
 }
@@ -135,7 +135,7 @@ export default function SettingsPage() {
               className="min-h-[120px]"
               placeholder="e.g., You are a helpful coding assistant. Keep responses concise..."
               value={settings.customContext}
-              onChange={(e) => updateSettings({ customContext: e.target.value })}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateSettings({ customContext: e.target.value })}
               aria-label="Custom instructions"
             />
           </CardContent>

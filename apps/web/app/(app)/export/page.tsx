@@ -179,7 +179,7 @@ export default function ExportPage() {
 
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-1">Output path (relative to repo root)</p>
-              <Input value={outputPath} onChange={e => setOutputPath(e.target.value)} />
+              <Input value={outputPath} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOutputPath(e.target.value)} />
             </div>
 
             <label className="flex items-center gap-2 cursor-pointer">

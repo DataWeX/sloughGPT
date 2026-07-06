@@ -10,6 +10,10 @@ Tests that:
 
 from __future__ import annotations
 
+import pytest
+
+pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
+
 
 def _assert_result_shape(result: dict):
     assert "status" in result

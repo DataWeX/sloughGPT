@@ -472,6 +472,37 @@ async def cache_usage() -> Dict[str, Any]:
     }
 
 
+@router.get("/download/qwen-gguf")
+async def download_qwen_gguf():
+    """Download Qwen2.5-0.5B-Instruct GGUF (Q4_K_M) from HuggingFace Hub.
+
+    Returns the GGUF file as a streaming download.  The mobile app calls this
+    to get the model for llama.rn inference.
+    """
+    from huggingface_hub import hf_hub_download
+    import tempfile, shutil
+
+    repo_id = "Qwen/Qwen2.5-0.5B-Instruct-GGUF"
+    filename = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
+
+    cache_dir = Path.home() / ".cache" / "sloughgpt" / "gguf"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cached_path = cache_dir / filename
+
+    if cached_path.exists():
+        logger.info("Serving cached GGUF: %s", cached_path)
+        return FileResponse(str(cached_path), media_type="application/octet-stream", filename=filename)
+
+    logger.info("Downloading Qwen GGUF from HuggingFace Hub (this may take a while)...")
+    try:
+        downloaded = hf_hub_download(repo_id=repo_id, filename=filename, cache_dir=str(cache_dir))
+        shutil.copy2(downloaded, cached_path)
+        logger.info("GGUF downloaded and cached: %s", cached_path)
+        return FileResponse(str(cached_path), media_type="application/octet-stream", filename=filename)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to download GGUF model: {e}")
+
+
 @router.post("/visual-load")
 async def visual_model_load(model_dir: str = "", model_id: str = ""):
     """Load a vision / multimodal model from a local directory.

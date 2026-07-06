@@ -176,10 +176,10 @@ export default function TokenizerPage() {
             <div className="flex gap-2">
               <Input
                 value={input}
-                onChange={e => setInput(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
                 placeholder="Type text to tokenize..."
                 className="text-sm"
-                onKeyDown={e => e.key === 'Enter' && handleTokenize()}
+                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleTokenize()}
                 aria-label="Text to tokenize"
               />
               <Button size="sm" onClick={handleTokenize} disabled={tokLoading}>

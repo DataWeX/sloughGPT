@@ -9,6 +9,15 @@ Tests that:
 from __future__ import annotations
 
 import json
+import sys
+from pathlib import Path
+
+# Ensure server modules are importable (from repo-root /apps/api/server)
+_server_path = str(Path(__file__).resolve().parents[2] / "apps/api/server")
+if _server_path not in sys.path:
+    sys.path.insert(0, _server_path)
+
+import pytest
 
 
 class TestUnifiedStartRequest:
@@ -96,6 +105,7 @@ class TestRouteRegistration:
 class TestUnifiedPipelineIntegration:
     """Test the pipeline creation from UnifiedStartRequest config."""
 
+    @pytest.mark.filterwarnings("ignore::DeprecationWarning")
     def test_pipeline_from_request_config(self):
         from apps.api.server.training.schemas import UnifiedStartRequest
         from domains.training.unified_pipeline import UnifiedTrainingPipeline, UnifiedTrainingConfig

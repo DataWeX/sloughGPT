@@ -214,15 +214,6 @@ class ModelServer:
         self._lock = Lock()  # protects model reference swap
         self._process_guard = process_guard  # optional ProcessGuard for bulk gen
 
-        # Wire guard crash callbacks to circuit breaker
-        if self._process_guard is not None and self._circuit_breaker is not None:
-            self._process_guard.on_crash(
-                lambda wid: self._circuit_breaker.record_failure()
-            )
-            self._process_guard.on_restart(
-                lambda wid: self._circuit_breaker.record_success()
-            )
-
         # Warmup
         self._enable_warmup = enable_warmup
         self._warmup_prompt = warmup_prompt
@@ -230,12 +221,9 @@ class ModelServer:
         self._warmup_error: Optional[str] = None
         self._warmup_lock = Lock()
 
-        # Concurrency control
-        try:
-            self._semaphore = asyncio.Semaphore(max_concurrent)
-        except RuntimeError:
-            # No event loop in this thread; run with unlimited concurrency
-            self._semaphore = None
+        # Concurrency control (per-event-loop semaphore — handles warmup/test loops)
+        self._max_concurrent = max_concurrent
+        self._semaphores: dict[int, asyncio.Semaphore] = {}
 
         # Timeout
         self._generate_timeout = generate_timeout
@@ -245,6 +233,15 @@ class ModelServer:
             failure_threshold=failure_threshold,
             recovery_timeout=recovery_timeout,
         ) if enable_circuit_breaker else None
+
+        # Wire guard crash callbacks to circuit breaker
+        if self._process_guard is not None and self._circuit_breaker is not None:
+            self._process_guard.on_crash(
+                lambda wid: self._circuit_breaker.record_failure()
+            )
+            self._process_guard.on_restart(
+                lambda wid: self._circuit_breaker.record_success()
+            )
 
         # Metrics
         self._metrics_lock = Lock()
@@ -349,6 +346,23 @@ class ModelServer:
 
     # --- Status ---
 
+    async def _get_semaphore(self) -> Optional[asyncio.Semaphore]:
+        """Get an asyncio semaphore for the current event loop.
+
+        Each event loop gets its own semaphore so warmup (daemon thread with
+        its own loop) and main-request ``asyncio.run()`` loops don't collide.
+        """
+        if self._max_concurrent is None:
+            return None
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return None
+        loop_id = id(loop)
+        if loop_id not in self._semaphores:
+            self._semaphores[loop_id] = asyncio.Semaphore(self._max_concurrent)
+        return self._semaphores[loop_id]
+
     @property
     def status(self) -> ModelStatus:
         with self._status_lock:
@@ -372,7 +386,9 @@ class ModelServer:
         base["status"] = self.status.value
         base["device"] = self._device or "unknown"
         base["circuit_breaker"] = self._circuit_breaker.state.value if self._circuit_breaker else "disabled"
-        base["semaphore_locked"] = self._semaphore.locked() if self._semaphore is not None else False
+        base["semaphore_locked"] = any(
+            s.locked() for s in self._semaphores.values()
+        ) if self._semaphores else False
         base["warmup_completed"] = warmup_ok
         base["warmup_error"] = warmup_err
         return base
@@ -416,10 +432,11 @@ class ModelServer:
 
         # Acquire semaphore (serialize concurrent access)
         acquired = False
-        if self._semaphore is not None:
+        semaphore = await self._get_semaphore()
+        if semaphore is not None:
             try:
-                result = await asyncio.wait_for(
-                    self._semaphore.acquire(),
+                await asyncio.wait_for(
+                    semaphore.acquire(),
                     timeout=min(self._generate_timeout, 30.0),
                 )
                 acquired = True
@@ -479,8 +496,8 @@ class ModelServer:
             _mps_oom_recovery()
             raise
         finally:
-            if acquired and self._semaphore is not None:
-                self._semaphore.release()
+            if acquired and semaphore is not None:
+                semaphore.release()
             # Post-generation hooks (KV cache reset, memory cleanup)
             for hook in self._post_generate_hooks:
                 try:
@@ -590,6 +607,7 @@ class ModelServer:
         max_new_tokens: int = 100,
         temperature: float = 0.7,
         top_p: float = 0.9,
+        top_k: int = 50,
         repetition_penalty: float = 1.0,
         cancel_event=None,
         **kwargs: Any,
@@ -657,6 +675,7 @@ class ModelServer:
             do_sample=True,
             temperature=temperature,
             top_p=top_p,
+            top_k=top_k,
             repetition_penalty=repetition_penalty,
             pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
             eos_token_id=tokenizer.eos_token_id,
@@ -686,6 +705,7 @@ class ModelServer:
         max_new_tokens: int = 100,
         temperature: float = 0.7,
         top_p: float = 0.9,
+        top_k: int = 50,
         repetition_penalty: float = 1.0,
         cancel_event=None,
         **kwargs: Any,
@@ -725,12 +745,13 @@ class ModelServer:
             except Exception as e:
                 logger.warning("Pre-gen hook failed: %s", e)
 
-        # Acquire semaphore
+        # Acquire semaphore (serialize concurrent access, per-event-loop)
         acquired = False
-        if self._semaphore is not None:
+        semaphore = await self._get_semaphore()
+        if semaphore is not None:
             try:
                 await asyncio.wait_for(
-                    self._semaphore.acquire(),
+                    semaphore.acquire(),
                     timeout=min(self._generate_timeout, 30.0),
                 )
                 acquired = True
@@ -776,6 +797,7 @@ class ModelServer:
                 do_sample=True,
                 temperature=temperature,
                 top_p=top_p,
+                top_k=top_k,
                 repetition_penalty=repetition_penalty,
                 pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
                 eos_token_id=tokenizer.eos_token_id,
@@ -856,8 +878,8 @@ class ModelServer:
             _mps_oom_recovery()
             raise
         finally:
-            if acquired and self._semaphore is not None:
-                self._semaphore.release()
+            if acquired and semaphore is not None:
+                semaphore.release()
             # Post-generation hooks (KV cache reset, memory cleanup)
             for hook in self._post_generate_hooks:
                 try:

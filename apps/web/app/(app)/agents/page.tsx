@@ -191,8 +191,8 @@ export default function AgentsPage() {
         <Card>
           <CardHeader><CardTitle className="text-base">New Agent</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <Input placeholder="Name" value={newName} onChange={e => setNewName(e.target.value)} />
-            <Input placeholder="Description (optional)" value={newDesc} onChange={e => setNewDesc(e.target.value)} />
+            <Input placeholder="Name" value={newName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewName(e.target.value)} />
+            <Input placeholder="Description (optional)" value={newDesc} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewDesc(e.target.value)} />
             <textarea
               className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[80px]"
               placeholder="Instructions — how the agent should behave"
@@ -244,8 +244,8 @@ export default function AgentsPage() {
                 <div key={agent.id} className="rounded-lg border p-3 space-y-2">
                   {editingId === agent.id ? (
                     <div className="space-y-2">
-                      <Input value={editName} onChange={e => setEditName(e.target.value)} placeholder="Name" />
-                      <Input value={editDesc} onChange={e => setEditDesc(e.target.value)} placeholder="Description" />
+                      <Input value={editName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditName(e.target.value)} placeholder="Name" />
+                      <Input value={editDesc} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditDesc(e.target.value)} placeholder="Description" />
                       <textarea
                         className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[60px]"
                         value={editInstructions}
@@ -306,8 +306,8 @@ export default function AgentsPage() {
                             <Input
                               placeholder="What should this agent do?"
                               value={execPrompt}
-                              onChange={e => setExecPrompt(e.target.value)}
-                              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleExecute(agent.id) } }}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setExecPrompt(e.target.value)}
+                              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleExecute(agent.id) } }}
                             />
                             <div className="flex gap-2">
                               <Button size="sm" onClick={() => handleExecute(agent.id)} disabled={execRunning || !execPrompt.trim()}>
@@ -348,8 +348,8 @@ export default function AgentsPage() {
             <Input
               placeholder="Goal — e.g. research transformers and write a summary"
               value={orchGoal}
-              onChange={e => setOrchGoal(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && orchGoal.trim() && !orchRunning) { e.preventDefault(); handleOrchestrate() } }}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOrchGoal(e.target.value)}
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter' && !e.shiftKey && orchGoal.trim() && !orchRunning) { e.preventDefault(); handleOrchestrate() } }}
             />
             <textarea
               className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[60px]"

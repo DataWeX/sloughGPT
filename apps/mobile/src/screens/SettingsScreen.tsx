@@ -236,6 +236,81 @@ export function SettingsScreen() {
               ))}
             </View>
           </View>
+          <View style={styles.sliderRow}>
+            <Text style={styles.label}>
+              Top-P: {settings.topP.toFixed(1)}
+            </Text>
+            <View style={styles.sliderBtns}>
+              {[0.7, 0.8, 0.9, 1.0].map(v => (
+                <TouchableOpacity
+                  key={v}
+                  style={[
+                    styles.tempBtn,
+                    Math.abs(settings.topP - v) < 0.05 && styles.tempBtnActive,
+                  ]}
+                  onPress={() => settings.update({topP: v})}>
+                  <Text
+                    style={[
+                      styles.tempBtnText,
+                      Math.abs(settings.topP - v) < 0.05 &&
+                        styles.tempBtnTextActive,
+                    ]}>
+                    {v.toFixed(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          <View style={styles.sliderRow}>
+            <Text style={styles.label}>
+              Top-K: {settings.topK}
+            </Text>
+            <View style={styles.sliderBtns}>
+              {[20, 50, 100, 200].map(v => (
+                <TouchableOpacity
+                  key={v}
+                  style={[
+                    styles.tempBtn,
+                    settings.topK === v && styles.tempBtnActive,
+                  ]}
+                  onPress={() => settings.update({topK: v})}>
+                  <Text
+                    style={[
+                      styles.tempBtnText,
+                      settings.topK === v && styles.tempBtnTextActive,
+                    ]}>
+                    {v}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          <View style={styles.sliderRow}>
+            <Text style={styles.label}>
+              Repetition Penalty: {settings.repetitionPenalty.toFixed(1)}
+            </Text>
+            <View style={styles.sliderBtns}>
+              {[1.0, 1.1, 1.2, 1.5, 2.0].map(v => (
+                <TouchableOpacity
+                  key={v}
+                  style={[
+                    styles.tempBtn,
+                    Math.abs(settings.repetitionPenalty - v) < 0.05 &&
+                      styles.tempBtnActive,
+                  ]}
+                  onPress={() => settings.update({repetitionPenalty: v})}>
+                  <Text
+                    style={[
+                      styles.tempBtnText,
+                      Math.abs(settings.repetitionPenalty - v) < 0.05 &&
+                        styles.tempBtnTextActive,
+                    ]}>
+                    {v.toFixed(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
         </View>
 
         <View style={styles.card}>

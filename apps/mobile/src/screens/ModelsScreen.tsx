@@ -1,4 +1,4 @@
-import React, {useEffect, useState, useMemo} from 'react';
+import React, {useEffect, useState, useMemo, useCallback} from 'react';
 import {
   View,
   Text,
@@ -12,9 +12,11 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useModelStore} from '../stores/model-store';
+import {useHybridStore} from '../stores/hybrid-inference-store';
 import {StatusBadge} from '../components/StatusBadge';
 import {colors, spacing, radii, typography} from '../theme';
 import type {ModelInfo} from '../types';
+import type {ActiveEngine} from '../types/local-inference';
 
 export function ModelsScreen() {
   const {
@@ -58,6 +60,7 @@ export function ModelsScreen() {
     setRefreshing(false);
   };
 
+  const hybrid = useHybridStore();
   const isLoaded = health?.model_loaded;
 
   return (
@@ -112,6 +115,110 @@ export function ModelsScreen() {
             <TouchableOpacity style={styles.unloadBtn} onPress={unloadModel}>
               <Text style={styles.unloadText}>Unload model</Text>
             </TouchableOpacity>
+          )}
+        </View>
+
+        {/* ── Local Inference Card ─────────────────────────────── */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>On-Device Inference</Text>
+
+          {/* Engine selector */}
+          <View style={styles.routingRow}>
+            {(['slonet', 'qwen', 'remote'] as ActiveEngine[]).map(engine => {
+              const active = hybrid.activeEngine === engine;
+              const label =
+                engine === 'slonet'
+                  ? 'SloNet'
+                  : engine === 'qwen'
+                  ? 'Qwen'
+                  : 'Server';
+              return (
+                <TouchableOpacity
+                  key={engine}
+                  style={[styles.routingChip, active && styles.routingChipActive]}
+                  onPress={() => hybrid.setActiveEngine(engine)}>
+                  <Text
+                    style={[
+                      styles.routingChipText,
+                      active && styles.routingChipTextActive,
+                    ]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* SloNet engine */}
+          <View style={styles.engineRow}>
+            <View style={styles.engineInfo}>
+              <Text style={styles.engineName}>SloNet (Baby Transformer)</Text>
+              <Text style={styles.engineMeta}>
+                {hybrid.slonet.loaded
+                  ? `Loaded — ${hybrid.slonet.modelName}`
+                  : 'Not loaded — fast local completions'}
+              </Text>
+            </View>
+            {hybrid.slonet.loaded ? (
+              <TouchableOpacity
+                style={styles.unloadMiniBtn}
+                onPress={hybrid.unloadSloNet}>
+                <Text style={styles.unloadMiniText}>Unload</Text>
+              </TouchableOpacity>
+            ) : hybrid.slonet.downloadProgress !== null &&
+              hybrid.slonet.downloadProgress < 1 ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <TouchableOpacity
+                style={styles.loadBtnMini}
+                onPress={() => hybrid.loadSloNet()}>
+                <Text style={styles.loadBtnMiniText}>Load</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Qwen GGUF engine */}
+          <View style={styles.engineRow}>
+            <View style={styles.engineInfo}>
+              <Text style={styles.engineName}>Qwen 0.5B (GGUF)</Text>
+              <Text style={styles.engineMeta}>
+                {hybrid.qwen.loaded
+                  ? 'Loaded — full chat via llama.rn'
+                  : hybrid.qwen.downloadProgress !== null &&
+                    hybrid.qwen.downloadProgress < 1
+                  ? `Downloading... ${Math.round(
+                      hybrid.qwen.downloadProgress * 100,
+                    )}%`
+                  : 'Not loaded — complex chat, 15-30 tok/s'}
+              </Text>
+            </View>
+            {hybrid.qwen.loaded ? (
+              <TouchableOpacity
+                style={styles.unloadMiniBtn}
+                onPress={async () => hybrid.unloadQwen()}>
+                <Text style={styles.unloadMiniText}>Unload</Text>
+              </TouchableOpacity>
+            ) : hybrid.qwen.downloadProgress !== null &&
+              hybrid.qwen.downloadProgress < 1 ? (
+              <View style={styles.progressWrap}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    {width: `${hybrid.qwen.downloadProgress * 100}%`},
+                  ]}
+                />
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.loadBtnMini}
+                onPress={() => hybrid.loadQwen()}>
+                <Text style={styles.loadBtnMiniText}>Download</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {hybrid.lastError && (
+            <Text style={styles.errorHint}>{hybrid.lastError}</Text>
           )}
         </View>
 
@@ -556,5 +663,93 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.error,
     fontWeight: '600',
+  },
+  // Local inference
+  routingRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginBottom: spacing.md,
+  },
+  routingChip: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  routingChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  routingChipText: {
+    ...typography.small,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  routingChipTextActive: {
+    color: colors.white,
+  },
+  engineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  engineInfo: {
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  engineName: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  engineMeta: {
+    ...typography.small,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  loadBtnMini: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radii.md,
+    backgroundColor: colors.primary,
+  },
+  loadBtnMiniText: {
+    ...typography.caption,
+    color: colors.white,
+    fontWeight: '600',
+  },
+  unloadMiniBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radii.md,
+    backgroundColor: colors.error + '15',
+  },
+  unloadMiniText: {
+    ...typography.caption,
+    color: colors.error,
+    fontWeight: '600',
+  },
+  progressWrap: {
+    width: 60,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.border,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
+    borderRadius: 3,
+  },
+  errorHint: {
+    ...typography.small,
+    color: colors.error,
+    marginTop: spacing.sm,
   },
 });

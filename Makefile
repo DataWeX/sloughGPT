@@ -28,10 +28,16 @@ lint:
 
 # ── Tests (Targeted) ────────────────────────────────────
 test-py:
-	cd packages/core-py && python3 -m pytest $(ARGS)
+	cd packages/core-py && .venv/bin/python -m pytest $(ARGS)
 
 test-py-fast:
-	cd packages/core-py && python3 -m pytest -n auto --dist loadgroup -x -q $(ARGS)
+	cd packages/core-py && .venv/bin/python -m pytest -n auto --dist loadgroup -x -q $(ARGS)
+
+test-py-slow:
+	cd packages/core-py && .venv/bin/python -m pytest -m slow $(ARGS)
+
+test-py-all:
+	cd packages/core-py && .venv/bin/python -m pytest -m "" $(ARGS)
 
 test-web:
 	cd apps/web && npm run test $(ARGS)

@@ -184,7 +184,7 @@ export default function ModelDetailPage() {
                     <CardTitle className="text-base">Status</CardTitle>
                     <Badge
                       label={isLoaded ? 'Loaded' : loadState === 'loading' ? 'Loading…' : loadState === 'error' ? 'Error' : 'Inactive'}
-                      variant={isLoaded ? 'success' : loadState === 'error' ? 'error' : 'warning'}
+                      variant={isLoaded ? 'success' as const : loadState === 'error' ? 'error' as const : 'warning' as const}
                       size="sm"
                     />
                   </div>
@@ -318,7 +318,7 @@ export default function ModelDetailPage() {
                       <span className="text-xs text-muted-foreground block mb-1">Tags</span>
                       <div className="flex flex-wrap gap-1">
                         {model.tags.map(t => (
-                          <Badge key={t} label={t} variant="default" size="sm" />
+                          <Badge key={t} label={t} variant={"default" as const} size="sm" />
                         ))}
                       </div>
                     </div>
@@ -375,7 +375,7 @@ function ConfigSlider({ label, value, min, max, step, onChange }: {
         <label className="text-xs text-muted-foreground">{label}</label>
         <span className="text-xs font-mono tabular-nums">{value}</span>
       </div>
-      <Slider value={[value]} onValueChange={([v]) => onChange(v)} min={min} max={max} step={step} />
+      <Slider value={[value]} onValueChange={([v]: number[]) => onChange(v)} min={min} max={max} step={step} />
     </div>
   )
 }

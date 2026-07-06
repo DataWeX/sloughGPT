@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-
+pytestmark = pytest.mark.slow
 torch = pytest.importorskip("torch")
 
 
@@ -72,7 +72,7 @@ class TestSloughGPTTrainerBasic:
         result = trainer.train(on_progress=lambda d: progress_events.append(d))
 
         assert len(progress_events) > 0
-        assert any("loss" in e for e in progress_events)
+        assert any("train_loss" in e for e in progress_events)
 
 
 class TestPipelineSensitivitySSE:

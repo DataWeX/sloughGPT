@@ -25,9 +25,12 @@ interface Props {
   sessionId?: string | null;
   editText?: string | null;
   onCancelEdit?: () => void;
+  /** When true, voice button sends audio as voice message instead of transcribing. */
+  voiceMessageMode?: boolean;
+  onVoiceMessageToggle?: () => void;
 }
 
-export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, isRecording, sessionId, editText, onCancelEdit}: Props) {
+export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, isRecording, sessionId, editText, onCancelEdit, voiceMessageMode, onVoiceMessageToggle}: Props) {
   const [text, setText] = useState('');
   const [showPrompts, setShowPrompts] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -154,11 +157,23 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
             <Text style={styles.sendIcon}>↑</Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity
-            style={[styles.voiceBtn, isRecording && styles.voiceBtnActive]}
-            onPress={onVoice}>
-            <Text style={styles.voiceIcon}>{isRecording ? '■' : '🎤'}</Text>
-          </TouchableOpacity>
+          <View style={styles.voiceRow}>
+            {onVoiceMessageToggle && !isRecording && (
+              <TouchableOpacity
+                style={styles.vmToggle}
+                onPress={onVoiceMessageToggle}
+                activeOpacity={0.7}>
+                <Text style={styles.vmToggleText}>
+                  {voiceMessageMode ? '🎤' : '🎙'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[styles.voiceBtn, isRecording && styles.voiceBtnActive]}
+              onPress={onVoice}>
+              <Text style={styles.voiceIcon}>{isRecording ? '■' : voiceMessageMode ? '🎵' : '🎤'}</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
@@ -255,6 +270,24 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 14,
     fontWeight: '600',
+  },
+  voiceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  vmToggle: {
+    width: 28,
+    height: 28,
+    borderRadius: radii.full,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  vmToggleText: {
+    fontSize: 12,
   },
   voiceBtn: {
     width: 40,

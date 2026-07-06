@@ -1,6 +1,7 @@
 """Tests for meta-weight manager — feedback-based generation adjustment."""
 
 import pytest
+pytestmark = pytest.mark.slow
 import numpy as np
 from unittest.mock import patch, MagicMock
 from domains.feedback.meta_weights import (
