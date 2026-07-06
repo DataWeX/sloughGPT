@@ -79,6 +79,7 @@ export function ChatScreen() {
   const [editingMessage, setEditingMessage] = useState<string | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
   const recordingStopRef = useRef<(() => Promise<{uri: string; duration: number} | null>) | null>(null);
 
   useEffect(() => {
@@ -227,6 +228,7 @@ export function ChatScreen() {
         onEdit={
           item.role === 'user' ? (newContent: string) => setEditingMessage(newContent) : undefined
         }
+        onReply={() => setReplyTo(item)}
         selectMode={selectMode}
         selected={selectedIds.has(item.id)}
         onSelect={() => toggleSelectMessage(item.id)}
@@ -473,6 +475,23 @@ export function ChatScreen() {
         )}
 
         <TypingIndicator visible={streaming && messages.length > 0 && !messages[messages.length - 1]?.content} />
+
+        {/* Reply quote bar */}
+        {replyTo && (
+          <View style={styles.replyBar}>
+            <View style={styles.replyBarContent}>
+              <Text style={styles.replyBarLabel}>
+                Replying to {replyTo.role === 'user' ? 'yourself' : 'assistant'}
+              </Text>
+              <Text style={styles.replyBarText} numberOfLines={1}>
+                {replyTo.content}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setReplyTo(null)} style={styles.replyBarClose}>
+              <Text style={styles.replyBarCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <ChatInput
           onSend={handleSend}
@@ -958,6 +977,43 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   selectToolbarDelete: {},
+  replyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+  },
+  replyBarContent: {
+    flex: 1,
+    marginRight: spacing.xs,
+  },
+  replyBarLabel: {
+    ...typography.small,
+    color: colors.primary,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  replyBarText: {
+    ...typography.small,
+    color: colors.textMuted,
+  },
+  replyBarClose: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  replyBarCloseText: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
   jumpBtn: {
     position: 'absolute',
     right: spacing.lg,
