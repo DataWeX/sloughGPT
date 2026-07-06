@@ -215,17 +215,32 @@ export function ChatScreen() {
               <Text style={styles.menuBtn}>🔍</Text>
             </TouchableOpacity>
             {messages.length > 0 && (
-              <TouchableOpacity
-                style={styles.exportBtn}
-                onPress={async () => {
-                  const md = messages.map(m => {
-                    const role = m.role === 'user' ? 'You' : 'Assistant';
-                    return `**${role}:**\n${m.content}`;
-                  }).join('\n\n---\n\n');
-                  await Share.share({title: 'Chat Export', message: md});
-                }}>
-                <Text style={styles.exportBtnText}>Export</Text>
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity
+                  style={styles.exportBtn}
+                  onPress={async () => {
+                    // Generate summary via AI
+                    const conversationText = messages
+                      .filter(m => m.content)
+                      .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+                      .join('\n');
+                    const summaryPrompt = `Summarize this conversation in 3-5 bullet points:\n\n${conversationText.slice(0, 2000)}`;
+                    sendMessage(summaryPrompt);
+                  }}>
+                  <Text style={styles.exportBtnText}>Summary</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.exportBtn}
+                  onPress={async () => {
+                    const md = messages.map(m => {
+                      const role = m.role === 'user' ? 'You' : 'Assistant';
+                      return `**${role}:**\n${m.content}`;
+                    }).join('\n\n---\n\n');
+                    await Share.share({title: 'Chat Export', message: md});
+                  }}>
+                  <Text style={styles.exportBtnText}>Export</Text>
+                </TouchableOpacity>
+              </>
             )}
             <TouchableOpacity
               style={styles.newChatBtn}
