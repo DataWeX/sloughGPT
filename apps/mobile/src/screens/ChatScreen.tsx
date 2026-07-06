@@ -66,6 +66,7 @@ export function ChatScreen() {
   const updateTheme = useSettingsStore(s => s.update);
   const online = useOnlineStatus();
   const flatListRef = useRef<FlatList>(null);
+  const lastHeaderTap = useRef<number>(0);
   const [atBottom, setAtBottom] = useState(true);
   const [showDrawer, setShowDrawer] = useState(false);
   const [showSoulPicker, setShowSoulPicker] = useState(false);
@@ -80,6 +81,20 @@ export function ChatScreen() {
   useEffect(() => {
     refreshSessions();
   }, []);
+
+  // Keyboard shortcuts for external keyboards
+  useEffect(() => {
+    const {Keyboard} = require('react-native');
+    const sub = Keyboard.addListener('keyboardDidHide', () => {
+      // Escape behavior — dismiss any open modal
+      if (showDrawer) setShowDrawer(false);
+      else if (showSoulPicker) setShowSoulPicker(false);
+      else if (showSettings) setShowSettings(false);
+      else if (showSearch) setShowSearch(false);
+      else if (showInfo) setShowInfo(false);
+    });
+    return () => sub.remove();
+  }, [showDrawer, showSoulPicker, showSettings, showSearch, showInfo]);
 
   const onPullRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -215,7 +230,16 @@ export function ChatScreen() {
             <TouchableOpacity onPress={() => setShowSoulPicker(true)}>
               <Text style={styles.menuBtn}>⚙</Text>
             </TouchableOpacity>
-            <Text style={styles.title}>Chat</Text>
+            <TouchableOpacity
+              onPress={() => {
+                const now = Date.now();
+                if (now - lastHeaderTap.current < 300) {
+                  flatListRef.current?.scrollToOffset({offset: 0, animated: true});
+                }
+                lastHeaderTap.current = now;
+              }}>
+              <Text style={styles.title}>Chat</Text>
+            </TouchableOpacity>
             {currentSoul && (
               <TouchableOpacity
                 style={styles.soulPill}
