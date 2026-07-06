@@ -28,6 +28,8 @@ import {triggerHaptic} from '../services/haptics';
 import {pickImage, takePhoto, imageDataUrl} from '../services/image-upload';
 import {startRecording, transcribeAudio} from '../services/voice-input';
 import {toast} from '../services/toast';
+import {useTheme} from '../theme/ThemeContext';
+import {useSettingsStore} from '../stores/settings-store';
 import {colors, spacing, radii, typography} from '../theme';
 import type {Message, Session} from '../types';
 
@@ -58,6 +60,9 @@ export function ChatScreen() {
     retryPendingSends,
   } = useChatStore();
   const {health, currentSoul, souls, switchSoul} = useModelStore();
+  const {isDark} = useTheme();
+  const themeMode = useSettingsStore(s => s.theme);
+  const updateTheme = useSettingsStore(s => s.update);
   const online = useOnlineStatus();
   const flatListRef = useRef<FlatList>(null);
   const [atBottom, setAtBottom] = useState(true);
@@ -221,6 +226,14 @@ export function ChatScreen() {
           <View style={styles.headerRight}>
             <TouchableOpacity
               style={styles.menuBtn}
+              onPress={() => {
+                triggerHaptic('light');
+                updateTheme({theme: isDark ? 'light' : 'dark'});
+              }}>
+              <Text style={styles.menuBtn}>{isDark ? '☀️' : '🌙'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.menuBtn}
               onPress={() => { setShowSearch(!showSearch); setSearchQuery(''); }}>
               <Text style={styles.menuBtn}>🔍</Text>
             </TouchableOpacity>
@@ -375,6 +388,7 @@ export function ChatScreen() {
           disabled={streaming}
           onStop={cancelStream}
           isRecording={isRecording}
+          sessionId={activeSessionId}
         />
 
         {!atBottom && messages.length > 0 && (

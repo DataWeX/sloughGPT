@@ -1,4 +1,4 @@
-import React, {useState, useRef} from 'react';
+import React, {useState, useRef, useEffect} from 'react';
 import {
   View,
   TextInput,
@@ -11,6 +11,7 @@ import {colors, spacing, radii, typography} from '../theme';
 import {triggerHaptic} from '../services/haptics';
 import {QuickPromptPicker} from './QuickPromptPicker';
 import {pickDocument, isTextFile, formatFileSize} from '../services/file-upload';
+import {getDraft, saveDraft, clearDraft} from '../services/drafts';
 import {toast} from '../services/toast';
 
 interface Props {
@@ -21,12 +22,32 @@ interface Props {
   disabled?: boolean;
   onStop?: () => void;
   isRecording?: boolean;
+  sessionId?: string | null;
 }
 
-export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, isRecording}: Props) {
+export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, isRecording, sessionId}: Props) {
   const [text, setText] = useState('');
   const [showPrompts, setShowPrompts] = useState(false);
   const inputRef = useRef<TextInput>(null);
+  const draftTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Load draft when session changes
+  useEffect(() => {
+    if (sessionId) {
+      getDraft(sessionId).then(setText);
+    }
+  }, [sessionId]);
+
+  // Auto-save draft as user types (debounced 500ms)
+  const handleChangeText = (newText: string) => {
+    setText(newText);
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    if (sessionId) {
+      draftTimerRef.current = setTimeout(() => {
+        saveDraft(sessionId, newText);
+      }, 500);
+    }
+  };
 
   const handleSend = async () => {
     const trimmed = text.trim();
@@ -34,6 +55,7 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
     await triggerHaptic('medium');
     onSend(trimmed);
     setText('');
+    if (sessionId) clearDraft(sessionId);
     Keyboard.dismiss();
   };
 
@@ -89,7 +111,7 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
           ref={inputRef}
           style={styles.input}
           value={text}
-          onChangeText={setText}
+          onChangeText={handleChangeText}
           placeholder="Type a message..."
           placeholderTextColor={colors.textMuted}
           multiline
