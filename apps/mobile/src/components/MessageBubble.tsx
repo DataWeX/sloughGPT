@@ -17,6 +17,7 @@ import {copyToClipboard} from '../services/clipboard';
 import {triggerHaptic} from '../services/haptics';
 import {sounds} from '../services/sounds';
 import {addBookmark, removeBookmark, isBookmarked} from '../services/bookmarks';
+import {getMessageReactions, toggleReaction, REACTION_EMOJIS, type ReactionEmoji} from '../services/reactions';
 import {toast} from '../services/toast';
 import {colors, spacing, radii, typography} from '../theme';
 import type {Message} from '../types';
@@ -53,6 +54,8 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
   const isUser = message.role === 'user';
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
+  const [reactions, setReactions] = useState<ReactionEmoji[]>([]);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
   const translateX = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(8)).current;
@@ -62,8 +65,8 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
       Animated.timing(opacity, {toValue: 1, duration: 200, useNativeDriver: true}),
       Animated.timing(translateY, {toValue: 0, duration: 200, useNativeDriver: true}),
     ]).start();
-    // Check bookmark state
     isBookmarked(message.content, message.id).then(setBookmarked);
+    getMessageReactions(message.id).then(setReactions);
   }, []);
   const isSwipeOpen = useRef(false);
 
@@ -143,6 +146,13 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
     }
   };
 
+  const handleToggleReaction = async (emoji: ReactionEmoji) => {
+    const updated = await toggleReaction(message.id, emoji);
+    setReactions(updated);
+    setShowReactionPicker(false);
+    triggerHaptic('light');
+  };
+
   const contextActions: ContextAction[] = [
     {icon: '📋', label: 'Copy', onPress: handleCopy},
     {icon: '↗', label: 'Share', onPress: async () => {
@@ -150,6 +160,7 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
       await Share.share({message: message.content});
     }},
     {icon: bookmarked ? '★' : '☆', label: bookmarked ? 'Remove bookmark' : 'Bookmark', onPress: handleToggleBookmark},
+    {icon: '😊', label: 'React', onPress: () => { setShowContextMenu(false); setShowReactionPicker(true); }},
     ...(isUser ? [] : [
       {icon: '👍', label: 'Good response', onPress: () => { setShowContextMenu(false); onFeedback?.(true); }},
       {icon: '👎', label: 'Bad response', onPress: () => { setShowContextMenu(false); onFeedback?.(false); }},
@@ -215,6 +226,40 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
       <Text style={[styles.timestamp, isUser && styles.timestampUser]}>
         {formatTime(message.timestamp)}
       </Text>
+
+      {/* Reaction display */}
+      {reactions.length > 0 && (
+        <View style={[styles.reactionRow, isUser && styles.reactionRowUser]}>
+          {reactions.map((emoji, i) => (
+            <TouchableOpacity
+              key={i}
+              style={styles.reactionBadge}
+              onPress={() => handleToggleReaction(emoji)}
+              onLongPress={() => setShowReactionPicker(true)}>
+              <Text style={styles.reactionEmoji}>{emoji}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* Reaction picker */}
+      {showReactionPicker && (
+        <View style={[styles.reactionPicker, isUser && styles.reactionPickerUser]}>
+          {REACTION_EMOJIS.map(emoji => (
+            <TouchableOpacity
+              key={emoji}
+              style={[styles.reactionOption, reactions.includes(emoji) && styles.reactionOptionActive]}
+              onPress={() => handleToggleReaction(emoji)}>
+              <Text style={styles.reactionOptionText}>{emoji}</Text>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity
+            style={styles.reactionClose}
+            onPress={() => setShowReactionPicker(false)}>
+            <Text style={styles.reactionCloseText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Context Menu Modal */}
       <Modal
@@ -324,6 +369,66 @@ const styles = StyleSheet.create({
   },
   timestampUser: {
     textAlign: 'right',
+  },
+  reactionRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginTop: 4,
+    paddingHorizontal: spacing.md,
+    flexWrap: 'wrap',
+  },
+  reactionRowUser: {
+    justifyContent: 'flex-end',
+  },
+  reactionBadge: {
+    backgroundColor: colors.primary + '20',
+    borderRadius: radii.full,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  reactionEmoji: {
+    fontSize: 16,
+  },
+  reactionPicker: {
+    flexDirection: 'row',
+    gap: 4,
+    marginTop: 6,
+    paddingHorizontal: spacing.md,
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  reactionPickerUser: {
+    justifyContent: 'flex-end',
+  },
+  reactionOption: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  reactionOptionActive: {
+    backgroundColor: colors.primary + '20',
+    borderColor: colors.primary,
+  },
+  reactionOptionText: {
+    fontSize: 18,
+  },
+  reactionClose: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
+  },
+  reactionCloseText: {
+    fontSize: 14,
+    color: colors.textMuted,
   },
   // Context menu
   overlay: {

@@ -40,6 +40,7 @@ const SUGGESTIONS = [
 export function ChatScreen() {
   const {
     sessions,
+    activeSessionId,
     messages,
     streaming,
     error,
@@ -64,6 +65,7 @@ export function ChatScreen() {
   const [showSoulPicker, setShowSoulPicker] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -255,6 +257,13 @@ export function ChatScreen() {
               onPress={() => createSession()}>
               <Text style={styles.newChatText}>+ New</Text>
             </TouchableOpacity>
+            {messages.length > 0 && (
+              <TouchableOpacity
+                style={styles.infoBtn}
+                onPress={() => setShowInfo(true)}>
+                <Text style={styles.infoBtnText}>ℹ</Text>
+              </TouchableOpacity>
+            )}
             <View
               style={[
                 styles.dot,
@@ -378,6 +387,49 @@ export function ChatScreen() {
           </TouchableOpacity>
         )}
       </KeyboardAvoidingView>
+
+      {/* Conversation Info Modal */}
+      <Modal visible={showInfo} transparent animationType="fade" onRequestClose={() => setShowInfo(false)}>
+        <Pressable style={styles.infoOverlay} onPress={() => setShowInfo(false)}>
+          <View style={styles.infoCard}>
+            <Text style={styles.infoTitle}>Conversation Info</Text>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Messages</Text>
+              <Text style={styles.infoValue}>{messages.length}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Words</Text>
+              <Text style={styles.infoValue}>
+                {messages.reduce((sum, m) => sum + (m.content?.split(/\s+/).length || 0), 0)}
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Characters</Text>
+              <Text style={styles.infoValue}>
+                {messages.reduce((sum, m) => sum + (m.content?.length || 0), 0)}
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Session</Text>
+              <Text style={styles.infoValue} numberOfLines={1}>
+                {activeSessionId?.slice(0, 12) || 'None'}
+              </Text>
+            </View>
+            {currentSoul && (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Soul</Text>
+                <Text style={styles.infoValue}>{currentSoul.name}</Text>
+              </View>
+            )}
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Status</Text>
+              <Text style={[styles.infoValue, {color: isConnected ? colors.success : colors.error}]}>
+                {isConnected ? 'Connected' : 'Offline'}
+              </Text>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
 
       {/* Session drawer */}
       <Modal visible={showDrawer} animationType="slide" transparent>
@@ -571,6 +623,57 @@ const styles = StyleSheet.create({
     ...typography.small,
     color: colors.primary,
     fontWeight: '600',
+  },
+  infoBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  infoBtnText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  infoOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  infoCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    padding: spacing.lg,
+    width: '100%',
+    maxWidth: 300,
+  },
+  infoTitle: {
+    ...typography.h2,
+    color: colors.text,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  infoLabel: {
+    ...typography.body,
+    color: colors.textSecondary,
+  },
+  infoValue: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '500',
+    maxWidth: '60%',
   },
   dot: {
     width: 8,
