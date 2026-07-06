@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
 import { modelController } from '@/lib/controllers'
 import { useToastStore } from '@/lib/toast-store'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'

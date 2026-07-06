@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 
-import { Button } from '@/components/ui/button'
-import { IconX, IconEye } from '@/components/ui'
+import { Button } from '@sloughgpt/strui'
+import { IconX, IconEye } from '@sloughgpt/strui'
 import { cn } from '@/lib/cn'
 import { useChatContext } from '@/contexts/ChatContext'
 import { KnowledgeTab } from './KnowledgeTab'

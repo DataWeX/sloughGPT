@@ -4,8 +4,8 @@ Tests for Vector Store Integration - Pinecone
 
 import pytest
 import numpy as np
+from domains.inference.vector_stores.pinecone_store import PineconeVectorStore
 from domains.inference.vector_store import (
-    PineconeVectorStore,
     VectorEntry,
     QueryResult,
     simple_embed,

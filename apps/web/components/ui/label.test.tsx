@@ -2,7 +2,7 @@
  */
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
-import { Label } from './label'
+import { Label } from '@sloughgpt/strui'
 
 afterEach(cleanup)
 

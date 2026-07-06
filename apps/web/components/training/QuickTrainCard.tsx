@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
 import { DatasetImportModal } from '@/components/DatasetImportModal'
 import { trainingController } from '@/lib/controllers'
 import { datasetController } from '@/lib/controllers'

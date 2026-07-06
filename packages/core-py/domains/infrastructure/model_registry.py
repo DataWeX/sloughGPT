@@ -49,6 +49,7 @@ class ModelRegistry:
         max_concurrent: int = 1,
         generate_timeout: float = 120.0,
         enable_circuit_breaker: bool = True,
+        process_guard: Optional[Any] = None,
     ) -> ModelServer:
         """Register a model with the registry.
 
@@ -61,6 +62,9 @@ class ModelRegistry:
             max_concurrent: Maximum concurrent generation requests.
             generate_timeout: Per-generation timeout in seconds.
             enable_circuit_breaker: Whether to enable circuit breaker.
+            process_guard: Optional ``ProcessGuard`` for subprocess isolation.
+                When set, ``_generate_sync()`` delegates to the guard and
+                crash/restart callbacks are wired to the circuit breaker.
 
         Returns:
             The created ModelServer instance.
@@ -72,6 +76,7 @@ class ModelRegistry:
             max_concurrent=max_concurrent,
             generate_timeout=generate_timeout,
             enable_circuit_breaker=enable_circuit_breaker,
+            process_guard=process_guard,
         )
         with self._lock:
             old = self._servers.get(model_id)

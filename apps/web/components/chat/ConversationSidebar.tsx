@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { IconPlus, IconStar, IconPin, IconChat, IconChevronRight, IconX, IconSearch, IconFolder, IconSort, IconCheck } from '@/components/ui'
+import { Button } from '@sloughgpt/strui'
+import { IconPlus, IconStar, IconPin, IconChat, IconChevronRight, IconX, IconSearch, IconFolder, IconSort, IconCheck } from '@sloughgpt/strui'
 import { cn } from '@/lib/cn'
 import type { Conversation } from '@/lib/session-controller'
 

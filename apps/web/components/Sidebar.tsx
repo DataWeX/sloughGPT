@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Button } from '@/components/ui/button'
+import { Button } from '@sloughgpt/strui'
 import {
   IconChat,
   IconClose,
@@ -20,7 +20,7 @@ import {
   IconFile,
   IconAlert,
 } from '@/components/icons/NavIcons'
-import { IconChevronDown } from '@/components/ui'
+import { IconChevronDown } from '@sloughgpt/strui'
 import { cn } from '@/lib/cn'
 import { routeMatchesPath } from '@/lib/route-match'
 import { ThemeSwitcher } from './ThemeSwitcher'

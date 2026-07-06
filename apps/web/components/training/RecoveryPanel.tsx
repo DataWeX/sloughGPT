@@ -1,8 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Button } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 import { trainingJobsController, type TrainingJob } from '@/lib/training-controller'
 import { devDebug } from '@/lib/dev-log'
 import { useToastStore } from '@/lib/toast-store'

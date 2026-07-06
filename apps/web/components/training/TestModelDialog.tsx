@@ -1,7 +1,7 @@
 'use client'
 
-import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Button } from '@sloughgpt/strui'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@sloughgpt/strui'
 
 interface TestModelDialogProps {
   open: boolean

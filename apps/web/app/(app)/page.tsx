@@ -6,13 +6,13 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
 import {
   IconChat,
   IconModels,
 } from '@/components/icons/NavIcons'
-import { IconChevronRight, IconMessage, IconSearch } from '@/components/ui'
+import { IconChevronRight, IconMessage, IconSearch } from '@sloughgpt/strui'
 
 import { apiGet } from '@/lib/http-client'
 import { useApiHealth } from '@/hooks/useApiHealth'

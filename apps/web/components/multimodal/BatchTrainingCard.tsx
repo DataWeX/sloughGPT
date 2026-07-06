@@ -1,11 +1,11 @@
 'use client'
 
 import React, { useRef } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { ProgressBar } from '@/components/ui'
-import { IconUpload } from '@/components/ui'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
+import { Input } from '@sloughgpt/strui'
+import { ProgressBar } from '@sloughgpt/strui'
+import { IconUpload } from '@sloughgpt/strui'
 import type { TrainingStatus } from '@/lib/multimodal-controller'
 
 interface BatchTrainingCardProps {

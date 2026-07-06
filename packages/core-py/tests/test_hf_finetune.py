@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 pytest.importorskip("transformers", reason="transformers not installed")
+pytest.importorskip("torch", reason="torch not installed")
 
 from domains.training.hf_finetune import HFFineTuner
 

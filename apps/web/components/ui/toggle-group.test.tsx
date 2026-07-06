@@ -2,7 +2,7 @@
  */
 import { describe, expect, it, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
-import { ToggleGroup, ToggleGroupItem } from './toggle-group'
+import { ToggleGroup, ToggleGroupItem } from '@sloughgpt/strui'
 
 afterEach(cleanup)
 

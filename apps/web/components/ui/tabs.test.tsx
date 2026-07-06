@@ -2,7 +2,7 @@
  */
 import { describe, expect, it, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from './tabs'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@sloughgpt/strui'
 
 afterEach(cleanup)
 

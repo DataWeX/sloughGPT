@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Button } from '@/components/ui/button'
-import { IconChevronDown, IconCheck, IconHeart, IconChevronRight } from '@/components/ui'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
+import { IconChevronDown, IconCheck, IconHeart, IconChevronRight } from '@sloughgpt/strui'
 import type { Soul } from '@/lib/souls-controller'
 import { soulsController } from '@/lib/souls-controller'
 import { deriveArchetype } from '@/components/souls/PersonalitySummary'

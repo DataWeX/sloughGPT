@@ -6,7 +6,7 @@ import { ChatSearchBar } from './ChatSearchBar'
 import { ModelDropdown } from './ModelDropdown'
 import { SoulSelectorDropdown } from './SoulSelectorDropdown'
 import { ChatMoreMenu } from './ChatMoreMenu'
-import { IconSearch, IconMenu } from '@/components/ui'
+import { IconSearch, IconMenu } from '@sloughgpt/strui'
 import { useChatToolbarContext } from '@/contexts/ChatToolbarContext'
 
 export const ChatToolbar = memo(function ChatToolbar() {

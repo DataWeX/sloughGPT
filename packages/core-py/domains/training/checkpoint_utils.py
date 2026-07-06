@@ -16,6 +16,8 @@ from typing import Any, Dict, Optional, Tuple, Union
 import numpy as np
 
 from domains.training.slonet_compat import torch
+from domains.training.status import load_checkpoint_npz as _load_npz
+from domains.training.status import save_checkpoint_npz as _save_npz
 
 try:
     from domains.models import SloughGPTModel
@@ -25,6 +27,10 @@ except (ImportError, ModuleNotFoundError):
 KEY_MODEL_STATE = "model_state_dict"
 KEY_MODEL_LEGACY = "model"
 KEY_TRAINING_INFO = "training_info"
+
+# Re-export standalone NPZ helpers
+save_checkpoint_npz = _save_npz
+load_checkpoint_npz = _load_npz
 
 
 def torch_load_checkpoint(

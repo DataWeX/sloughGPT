@@ -44,7 +44,7 @@ class TrainingDB:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self._cache: Optional[List[Dict]] = None
-        print(f"[TrainingDB] Initialized at: {self.path}")
+        logger.debug("Initialized at: %s", self.path)
 
     def _load(self) -> List[Dict]:
         if not self.path.exists():
@@ -77,7 +77,7 @@ class TrainingDB:
         )
         data.append(asdict(pair))
         self._save(data)
-        print(f"[TrainingDB] Added pair to {self.path}: {pair.id}")
+        logger.debug("Added pair to %s: %s", self.path, pair.id)
         return pair
 
     def set_feedback(self, pair_id: str, feedback: str) -> bool:

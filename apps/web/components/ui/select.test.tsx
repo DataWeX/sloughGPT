@@ -2,7 +2,7 @@
  */
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './select'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 
 afterEach(cleanup)
 

@@ -34,8 +34,17 @@ except ImportError:
 logger = logging.getLogger("man.hf_finetune")
 
 
-class TextFileDataset(Dataset):
-    """Dataset from a text file, tokenized with a HuggingFace tokenizer."""
+_DatasetBase = Dataset if _HF_FINETUNE_AVAILABLE else object
+
+class TextFileDataset(_DatasetBase):  # type: ignore[valid-type]
+    """Dataset from a text file, tokenized with a HuggingFace tokenizer.
+
+    Args:
+        file_path: Path to the text file.
+        tokenizer: HuggingFace tokenizer.
+        max_length: Maximum sequence length.
+        stride: Stride for overlapping chunks.
+    """
 
     def __init__(
         self,
@@ -44,6 +53,8 @@ class TextFileDataset(Dataset):
         max_length: int = 512,
         stride: int = 256,
     ):
+        if not _HF_FINETUNE_AVAILABLE:
+            raise RuntimeError("torch and transformers are required for TextFileDataset")
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.pad_token_id = tokenizer.pad_token_id or tokenizer.eos_token_id or 0

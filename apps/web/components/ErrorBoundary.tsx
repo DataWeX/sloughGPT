@@ -1,8 +1,8 @@
 'use client'
 
 import { Component, ReactNode } from 'react'
-import { Button } from '@/components/ui/button'
-import { IconAlert } from '@/components/ui'
+import { Button } from '@sloughgpt/strui'
+import { IconAlert } from '@sloughgpt/strui'
 import { addGlobalError } from '@/lib/error-store'
 import { useToastStore } from '@/lib/toast-store'
 

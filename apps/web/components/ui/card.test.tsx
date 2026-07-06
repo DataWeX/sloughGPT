@@ -2,7 +2,7 @@
  */
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './card'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@sloughgpt/strui'
 
 afterEach(cleanup)
 

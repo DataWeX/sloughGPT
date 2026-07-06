@@ -1,10 +1,10 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { IconUpload } from '@/components/ui'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
+import { Input } from '@sloughgpt/strui'
+import { IconUpload } from '@sloughgpt/strui'
 
 interface AudioCardProps {
   transcribing: boolean

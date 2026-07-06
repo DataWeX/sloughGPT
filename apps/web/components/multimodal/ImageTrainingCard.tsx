@@ -1,9 +1,9 @@
 'use client'
 
 import { useRef } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { IconUpload } from '@/components/ui'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
+import { IconUpload } from '@sloughgpt/strui'
 
 interface ImageTrainingCardProps {
   uploading: boolean

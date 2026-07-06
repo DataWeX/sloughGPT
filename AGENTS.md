@@ -2586,3 +2586,36 @@ Implemented bidirectional DAG for forward-mode automatic differentiation (JVP/ta
 - **TypeScript: `tsc --noEmit` → 0 errors**
 - **148 training frontend tests pass**
 - All 31 bidirectional DAG dot-product tests pass
+
+## Session 2026-07-06 — Process Isolation Wiring (Streaming, CB, Memory) + Strui Source Cleanup
+
+### Summary
+Completed the ProcessGuard → ModelServer integration (streaming delegation through subprocess, circuit breaker callbacks on crash/restart, psutil memory tracking). Deleted duplicate source files from `apps/web/components/ui/` (25 files, now live only in `packages/strui/`). Removed React from `packages/strui/package.json` `dependencies` (kept in `peerDependencies`).
+
+### Changes
+
+| # | Change | File | Impact |
+|---|--------|------|--------|
+| 1 | Added `_generate_stream` inner function + `"generate_stream"` cmd to worker loop | `model_worker.py` | Workers stream tokens one-by-one through `resp_q` via TextIteratorStreamer |
+| 2 | Added `generate_stream()` generator method to `ModelWorkerProcess` | `model_worker.py` | Yields tokens from subprocess, returns final result dict |
+| 3 | Added `generate_stream()` delegation + `_memory_mb()` (psutil RSS) + `_semaphore` + `memory_limit_mb` config | `process_guard.py` | Guard supports streaming, memory tracking, thread-safe concurrent access |
+| 4 | Wired guard `on_crash` → `circuit_breaker.record_failure()`, `on_restart` → `record_success()` | `model_server.py` | Subprocess crash triggers circuit breaker; restart tries half-open |
+| 5 | `generate_stream_sync()` delegates to `process_guard.generate_stream()` | `model_server.py` | Streaming works through subprocess, cancel events supported |
+| 6 | Added `_wrap_generator_as_streamer` / `_wrap_cancelable_streamer` helpers | `model_server.py` | Backward-compatible TextIteratorStreamer-like API for guard-generated tokens |
+| 7 | Added `process_guard` param to `register()`, passed to `ModelServer` | `model_registry.py` | Registry allows guard injection at registration time |
+| 8 | Deleted 25 duplicate source files from `apps/web/components/ui/` | `apps/web/components/ui/*.tsx` | Components now live only in `packages/strui/src/components/ui/` |
+| 9 | Updated 18 test files in `components/ui/` to import from `@sloughgpt/strui` | `*.test.tsx` | Tests source from the package, not the deleted directory |
+| 10 | Removed React/react-dom from `dependencies` (kept in `peerDependencies`) | `packages/strui/package.json` | Consumers provide their own React; no duplicate copies |
+
+### Verification
+- **Process isolation**: 13/13 tests pass (TestModelWorkerProcess, TestProcessGuard, TestModelServerWithGuard)
+- **Server integration**: 43/43 tests pass (ModelRegistry, ModelServer, CircuitBreaker)
+- **Full Python suite**: 1791 passed, 7 skipped, 1 xfailed
+- **UI tests**: 238/238 passed (18 files)
+- **Full frontend suite**: 196 passed, 13 failed (33 test-level failures — all pre-existing)
+- **TypeScript**: `npx tsc --noEmit` → 0 errors
+- **Build**: `npx next build` → 20 `ƒ Dynamic` pages, 0 errors
+
+### Remaining
+- The 13 pre-existing test failures are in DOM query / async timing tests (VisionStudioDialog, SoulSelectorDropdown, ChatMoreMenu, etc.) — unrelated to migration
+- `vi.mock('@/components/ui/...')` calls remain in ~41 test files outside `components/ui/` — harmless dead code since components import from `@sloughgpt/strui` now

@@ -1,6 +1,6 @@
 'use client'
 
-import { IconCheck } from '@/components/ui'
+import { IconCheck } from '@sloughgpt/strui'
 import { ModelDropdown } from './ModelDropdown'
 import { cn } from '@/lib/cn'
 

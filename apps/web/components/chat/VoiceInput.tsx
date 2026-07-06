@@ -5,7 +5,7 @@ import { cn } from '@/lib/cn'
 import { multimodalController } from '@/lib/controllers'
 import { VoiceWaveform } from './VoiceWaveform'
 
-import { Button } from '@/components/ui/button'
+import { Button } from '@sloughgpt/strui'
 
 interface SpeechRecognitionEvent extends Event {
   results: SpeechRecognitionResultList

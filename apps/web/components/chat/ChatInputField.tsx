@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState, type KeyboardEvent, type ChangeEvent } from 'react'
-import { Textarea } from '@/components/ui/textarea'
+import { Textarea } from '@sloughgpt/strui'
 
 interface ChatInputFieldProps {
   value: string

@@ -9,7 +9,8 @@ callbacks.
 import time
 import logging
 import threading
-from typing import Any, Optional, Callable
+import os
+from typing import Any, Optional, Callable, Generator
 
 logger = logging.getLogger("man.infrastructure.process_guard")
 
@@ -41,6 +42,8 @@ class ProcessGuard:
         restart_delay: float = 1.0,
         health_check_interval: float = 1.0,
         extra_sys_paths: Optional[list] = None,
+        max_concurrent: int = 1,
+        memory_limit_mb: Optional[float] = None,
     ):
         self.model_cls_path = model_cls_path
         self.model_kwargs = model_kwargs
@@ -50,6 +53,7 @@ class ProcessGuard:
         self.restart_delay = restart_delay
         self.health_check_interval = health_check_interval
         self.extra_sys_paths = extra_sys_paths or []
+        self.memory_limit_mb = memory_limit_mb
 
         self._worker: Optional[Any] = None
         self._restart_count = 0
@@ -58,6 +62,7 @@ class ProcessGuard:
         self._restart_callbacks: list[Callable[[str], None]] = []
         self._monitor_thread: Optional[threading.Thread] = None
         self._stop_monitor = threading.Event()
+        self._semaphore = threading.Semaphore(max_concurrent)
 
     @property
     def alive(self) -> bool:
@@ -84,21 +89,59 @@ class ProcessGuard:
             self._monitor_thread = None
 
     def generate(self, prompt: str, **kwargs: Any) -> dict:
-        """Generate text via the worker process.
+        """Generate text via the worker process (thread-safe with semaphore).
 
         Raises RuntimeError if the worker is not alive.
         """
         if not self.alive:
             raise RuntimeError(f"Guard worker [{self.worker_id}] is not alive")
-        result = self._worker.generate(prompt, **kwargs)
+        with self._semaphore:
+            result = self._worker.generate(prompt, **kwargs)
         self._requests_served += 1
         return result
 
+    def generate_stream(
+        self,
+        prompt: str,
+        **kwargs: Any,
+    ) -> Generator[str, None, dict]:
+        """Stream generate via the worker process (thread-safe with semaphore).
+
+        Yields:
+            str: Each decoded token.
+
+        Returns:
+            dict: Final result with ``tokens_generated`` and ``elapsed_ms``.
+        """
+        if not self.alive:
+            raise RuntimeError(f"Guard worker [{self.worker_id}] is not alive")
+        with self._semaphore:
+            gen = self._worker.generate_stream(prompt, **kwargs)
+            try:
+                token = next(gen)
+                while True:
+                    yield token
+                    token = next(gen)
+            except StopIteration as e:
+                return e.value if hasattr(e, "value") else {}
+
+    def _memory_mb(self) -> Optional[float]:
+        """Return RSS memory usage of the worker process in MB, if available."""
+        if self._worker is None or self._worker._process is None:
+            return None
+        try:
+            import psutil
+            proc = psutil.Process(self._worker._process.pid)
+            return proc.memory_info().rss / (1024 * 1024)
+        except (ImportError, psutil.NoSuchProcess, psutil.AccessDenied):
+            return None
+
     def health(self) -> dict:
-        """Return a health snapshot dict."""
+        """Return a health snapshot dict with memory usage."""
         worker_requests = 0
         if self._worker is not None and hasattr(self._worker, "_health"):
             worker_requests = getattr(self._worker._health, "requests_served", 0)
+        mem = self._memory_mb()
         return {
             "alive": self.alive,
             "worker_id": self.worker_id,
@@ -106,6 +149,10 @@ class ProcessGuard:
             "restart_count": self._restart_count,
             "max_restarts": self.max_restarts,
             "exhausted": self._restart_count >= self.max_restarts,
+            "memory_mb": round(mem, 1) if mem is not None else None,
+            "memory_limit_mb": self.memory_limit_mb,
+            "over_limit": mem is not None and self.memory_limit_mb is not None
+                          and mem > self.memory_limit_mb,
         }
 
     def on_crash(self, cb: Callable[[str], None]) -> None:

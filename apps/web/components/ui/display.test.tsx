@@ -2,7 +2,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { StatCard, KpiGrid, EmptyCard, Skeleton, LoadingDots, ListRow, ListSection } from './display'
+import { StatCard, KpiGrid, EmptyCard, Skeleton, LoadingDots, ListRow, ListSection } from '@sloughgpt/strui'
 
 describe('StatCard', () => {
   it('renders label and value', () => {

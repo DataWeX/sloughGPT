@@ -1,47 +1,43 @@
-import * as React from 'react'
+'use client'
 
-import { cn } from '../../lib/cn'
+import { forwardRef, type HTMLAttributes } from 'react'
 
-const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+const Card = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={cn('rounded-lg border border-border bg-card text-card-foreground shadow-sm', className)}
-      {...props}
-    />
+    <div ref={ref} className={['rounded-lg border border-border bg-card text-card-foreground shadow-sm', className].filter(Boolean).join(' ')} {...props} />
   )
 )
 Card.displayName = 'Card'
 
-const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+const CardHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('flex flex-col gap-1.5 p-5', className)} {...props} />
+    <div ref={ref} className={['flex flex-col gap-1.5 p-5', className].filter(Boolean).join(' ')} {...props} />
   )
 )
 CardHeader.displayName = 'CardHeader'
 
-const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLHeadingElement>>(
+const CardTitle = forwardRef<HTMLParagraphElement, HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
-    <h2 ref={ref} className={cn('text-lg font-semibold leading-none tracking-tight', className)} {...props} />
+    <h2 ref={ref} className={['text-base font-semibold leading-none tracking-tight', className].filter(Boolean).join(' ')} {...props} />
   )
 )
 CardTitle.displayName = 'CardTitle'
 
-const CardDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
+const CardDescription = forwardRef<HTMLParagraphElement, HTMLAttributes<HTMLParagraphElement>>(
   ({ className, ...props }, ref) => (
-    <p ref={ref} className={cn('text-sm text-muted-foreground', className)} {...props} />
+    <p ref={ref} className={['text-sm text-muted-foreground', className].filter(Boolean).join(' ')} {...props} />
   )
 )
 CardDescription.displayName = 'CardDescription'
 
-const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => <div ref={ref} className={cn('p-5 pt-0', className)} {...props} />
+const CardContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => <div ref={ref} className={['p-5 pt-0', className].filter(Boolean).join(' ')} {...props} />
 )
 CardContent.displayName = 'CardContent'
 
-const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+const CardFooter = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('flex items-center p-5 pt-0', className)} {...props} />
+    <div ref={ref} className={['flex items-center p-5 pt-0', className].filter(Boolean).join(' ')} {...props} />
   )
 )
 CardFooter.displayName = 'CardFooter'

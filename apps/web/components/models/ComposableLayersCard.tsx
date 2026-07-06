@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import type { Soul, Checkpoint } from '@/lib/souls-controller'
 
 interface ComposableLayersCardProps {

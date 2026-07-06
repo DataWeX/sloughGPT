@@ -285,7 +285,7 @@ class Embedder:
                 model_name = model or "sentence-transformers/all-MiniLM-L6-v2"
                 self._impl = SentenceTransformerEmbedder(model_name, **kwargs)
             except ImportError:
-                print("Warning: sentence-transformers not available, using in-memory")
+                logger.warning("sentence-transformers not available, using in-memory")
                 self._impl = InMemoryEmbedder(dimension=dimension)
 
         elif provider == "openai":

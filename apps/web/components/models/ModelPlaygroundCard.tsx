@@ -1,10 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Slider } from '@/components/ui/slider'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
+import { Textarea } from '@sloughgpt/strui'
+import { Slider } from '@sloughgpt/strui'
 import { generateController } from '@/lib/generate-controller'
 
 interface ModelPlaygroundCardProps {

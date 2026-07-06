@@ -2,8 +2,8 @@
 
 import { useState, useCallback, useEffect } from 'react'
 
-import { Button } from '@/components/ui/button'
-import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash } from '@/components/ui'
+import { Button } from '@sloughgpt/strui'
+import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash } from '@sloughgpt/strui'
 import { cn } from '@/lib/cn'
 
 interface MessageActionsProps {

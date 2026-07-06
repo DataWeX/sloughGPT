@@ -1,7 +1,7 @@
 'use client'
 
-import { Button } from '@/components/ui/button'
-import { IconAlert, IconInfo } from '@/components/ui'
+import { Button } from '@sloughgpt/strui'
+import { IconAlert, IconInfo } from '@sloughgpt/strui'
 
 export type SystemBannerType = 'offline' | 'warning' | 'info'
 

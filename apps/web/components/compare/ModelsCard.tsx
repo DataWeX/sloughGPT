@@ -1,10 +1,10 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/tags'
-import { Skeleton } from '@/components/ui/display'
-import { IconCheck, IconTrash } from '@/components/ui'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
+import { Badge } from '@sloughgpt/strui'
+import { Skeleton } from '@sloughgpt/strui'
+import { IconCheck, IconTrash } from '@sloughgpt/strui'
 import { cn } from '@/lib/cn'
 import type { BenchmarkResult } from '@/lib/benchmark-controller'
 

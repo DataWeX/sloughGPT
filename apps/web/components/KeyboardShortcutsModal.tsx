@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@sloughgpt/strui'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from '@sloughgpt/strui'
 import { cn } from '@/lib/cn'
 
 interface Shortcut {

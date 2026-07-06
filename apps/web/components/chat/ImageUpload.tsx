@@ -2,8 +2,8 @@
 
 import { useCallback, useRef } from 'react'
 
-import { IconX } from '@/components/ui'
-import { Button } from '@/components/ui/button'
+import { IconX } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
 
 interface ImageUploadProps {
   onImage: (dataUrl: string) => void

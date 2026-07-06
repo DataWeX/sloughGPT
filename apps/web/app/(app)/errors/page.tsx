@@ -4,11 +4,11 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge, Chip, EmptyCard, KpiGrid, StatCard } from '@/components/ui'
-import { SearchInput } from '@/components/ui/input'
-import { IconRefresh, IconDownload } from '@/components/ui'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
+import { Badge, Chip, EmptyCard, KpiGrid, StatCard } from '@sloughgpt/strui'
+import { SearchInput } from '@sloughgpt/strui'
+import { IconRefresh, IconDownload } from '@sloughgpt/strui'
 import { apiGet, apiDelete } from '@/lib/http-client'
 
 interface ErrorEntry {

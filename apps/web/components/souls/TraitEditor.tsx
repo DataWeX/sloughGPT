@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useCallback } from 'react'
-import { Slider } from '@/components/ui/slider'
+import { Slider } from '@sloughgpt/strui'
 import { deriveArchetype } from './PersonalitySummary'
 
 interface TraitEditorProps {

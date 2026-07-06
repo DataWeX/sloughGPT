@@ -9,6 +9,7 @@ Tracks training completion status and enables:
 """
 
 import json
+import logging
 import os
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
@@ -16,8 +17,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import numpy as np
+
 from domains.training.slonet_compat import torch
-import logging
 
 logger = logging.getLogger("man.training.status")
 
@@ -345,6 +347,46 @@ class CheckpointManager:
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         self.tracker = TrainingStatusTracker()
 
+    @staticmethod
+    def _tensors_to_numpy(state_dict: Dict[str, Any]) -> Dict[str, np.ndarray]:
+        """Convert torch tensors in a state dict to numpy arrays."""
+        result = {}
+        for k, v in state_dict.items():
+            if hasattr(v, "cpu"):
+                result[k] = v.cpu().numpy()
+            elif isinstance(v, np.ndarray):
+                result[k] = v
+            elif isinstance(v, dict):
+                result[k] = CheckpointManager._tensors_to_numpy(v)
+            else:
+                result[k] = np.array(v)
+        return result
+
+    def _save_npz(
+        self,
+        checkpoint_path: Path,
+        state_dict: Dict[str, Any],
+        meta: Dict[str, Any],
+    ) -> None:
+        """Save checkpoint as ``.npz`` (numpy arrays + JSON metadata)."""
+        np_state = self._tensors_to_numpy(state_dict) if state_dict else {}
+        arrays = {k: np.asarray(v) for k, v in np_state.items()}
+        arrays["_meta_json"] = np.array(json.dumps(meta, default=str))
+        np.savez_compressed(str(checkpoint_path), **arrays)
+
+    def _load_npz(
+        self,
+        checkpoint_path: Path,
+    ) -> Dict[str, Any]:
+        """Load checkpoint from ``.npz``."""
+        data = np.load(str(checkpoint_path), allow_pickle=True)
+        meta = json.loads(str(data["_meta_json"]))
+        state_dict = {k: data[k] for k in data.files if k != "_meta_json"}
+        if state_dict:
+            meta["model_state_dict"] = state_dict
+        data.close()
+        return meta
+
     def save_checkpoint(
         self,
         model,
@@ -355,33 +397,37 @@ class CheckpointManager:
         val_loss: Optional[float] = None,
         stage: TrainingStage = TrainingStage.PRETRAINING,
         metadata: Optional[Dict[str, Any]] = None,
+        use_npz: bool = False,
     ) -> str:
-        """Save checkpoint with metadata."""
-        checkpoint_path = self.checkpoint_dir / f"checkpoint_step{step}.pt"
+        """Save checkpoint with metadata.
 
-        checkpoint = {
-            # Model state
-            "model_state_dict": model.state_dict() if hasattr(model, 'state_dict') else None,
+        Args:
+            use_npz: If True, save as ``.npz`` (torch-free). Defaults to ``.pt``.
+        """
+        ext = "npz" if use_npz else "pt"
+        checkpoint_path = self.checkpoint_dir / f"checkpoint_step{step}.{ext}"
 
-            # Optimizer state
-            "optimizer_state_dict": optimizer.state_dict() if optimizer and hasattr(optimizer, 'state_dict') else None,
-
-            # Training progress
+        meta = {
             "step": step,
             "epoch": epoch,
             "loss": loss,
             "val_loss": val_loss,
             "stage": stage.value,
-
-            # Metadata
             "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "metadata": metadata or {},
-
-            # Training status
             "training_status": asdict(self.tracker.report),
         }
 
-        torch.save(checkpoint, checkpoint_path)
+        if use_npz:
+            state_dict = model.state_dict() if hasattr(model, "state_dict") else {}
+            self._save_npz(checkpoint_path, state_dict, meta)
+        else:
+            checkpoint = {
+                "model_state_dict": model.state_dict() if hasattr(model, "state_dict") else None,
+                "optimizer_state_dict": optimizer.state_dict() if optimizer and hasattr(optimizer, "state_dict") else None,
+                **meta,
+            }
+            torch.save(checkpoint, checkpoint_path)
 
         # Update tracker
         self.tracker.record_checkpoint(str(checkpoint_path), step, loss)
@@ -397,14 +443,20 @@ class CheckpointManager:
         device: str = "cpu",
     ) -> Dict[str, Any]:
         """Load checkpoint with metadata."""
-        checkpoint = torch.load(checkpoint_path, map_location=device)
+        ckpt_path = Path(checkpoint_path)
 
-        # Load model
-        if "model_state_dict" in checkpoint and checkpoint["model_state_dict"] is not None:
-            model.load_state_dict(checkpoint["model_state_dict"])
+        if ckpt_path.suffix == ".npz":
+            checkpoint = self._load_npz(ckpt_path)
+        else:
+            checkpoint = torch.load(checkpoint_path, map_location=device)
 
-        # Load optimizer
-        if optimizer and "optimizer_state_dict" in checkpoint:
+        # Load model (npz state_dict is already numpy, pt may be torch tensors)
+        state_dict = checkpoint.get("model_state_dict")
+        if state_dict is not None:
+            model.load_state_dict(state_dict)
+
+        # Load optimizer (only from .pt — npz doesn't store optimizer state)
+        if optimizer and "optimizer_state_dict" in checkpoint and ckpt_path.suffix != ".npz":
             try:
                 optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
             except Exception as e:
@@ -423,16 +475,29 @@ class CheckpointManager:
             "timestamp": checkpoint.get("timestamp"),
         }
 
+    def _load_meta(self, path: Path) -> Optional[Dict[str, Any]]:
+        """Load metadata from a checkpoint file (``.pt`` or ``.npz``)."""
+        try:
+            if path.suffix == ".npz":
+                return self._load_npz(path)
+            return torch.load(path, map_location="cpu")
+        except Exception:
+            return None
+
     def get_latest_checkpoint(self) -> Optional[str]:
         """Get path to latest checkpoint."""
-        checkpoints = list(self.checkpoint_dir.glob("checkpoint_*.pt"))
+        checkpoints = sorted(
+            list(self.checkpoint_dir.glob("checkpoint_*.pt"))
+            + list(self.checkpoint_dir.glob("checkpoint_*.npz")),
+            key=lambda p: p.stat().st_mtime,
+        )
         if not checkpoints:
             return None
-        return str(max(checkpoints, key=lambda p: p.stat().st_mtime))
+        return str(checkpoints[-1])
 
     def get_best_checkpoint(self) -> Optional[str]:
         """Get path to best checkpoint (lowest loss)."""
-        checkpoints = list(self.checkpoint_dir.glob("checkpoint_*.pt"))
+        checkpoints = list(self.checkpoint_dir.glob("checkpoint_*"))
         if not checkpoints:
             return None
 
@@ -440,14 +505,13 @@ class CheckpointManager:
         best_loss = float('inf')
 
         for path in checkpoints:
-            try:
-                ckpt = torch.load(path, map_location="cpu")
-                loss = ckpt.get("loss", float('inf'))
-                if loss < best_loss:
-                    best_loss = loss
-                    best_path = path
-            except Exception:
+            ckpt = self._load_meta(path)
+            if ckpt is None:
                 continue
+            loss = ckpt.get("loss", float('inf'))
+            if loss < best_loss:
+                best_loss = loss
+                best_path = path
 
         return str(best_path) if best_path else None
 
@@ -455,22 +519,79 @@ class CheckpointManager:
         """List all checkpoints with metadata."""
         checkpoints = []
 
-        for path in self.checkpoint_dir.glob("checkpoint_*.pt"):
-            try:
-                ckpt = torch.load(path, map_location="cpu")
-                checkpoints.append({
-                    "path": str(path),
-                    "step": ckpt.get("step", 0),
-                    "epoch": ckpt.get("epoch", 0),
-                    "loss": ckpt.get("loss", 0),
-                    "val_loss": ckpt.get("val_loss"),
-                    "stage": ckpt.get("stage"),
-                    "timestamp": ckpt.get("timestamp"),
-                })
-            except Exception:
+        for path in sorted(
+            list(self.checkpoint_dir.glob("checkpoint_*.pt"))
+            + list(self.checkpoint_dir.glob("checkpoint_*.npz")),
+        ):
+            ckpt = self._load_meta(path)
+            if ckpt is None:
                 continue
+            checkpoints.append({
+                "path": str(path),
+                "step": ckpt.get("step", 0),
+                "epoch": ckpt.get("epoch", 0),
+                "loss": ckpt.get("loss", 0),
+                "val_loss": ckpt.get("val_loss"),
+                "stage": ckpt.get("stage"),
+                "timestamp": ckpt.get("timestamp"),
+            })
 
         return sorted(checkpoints, key=lambda x: x.get("step", 0), reverse=True)
+
+
+# =============================================================================
+# STANDALONE NPZ CHECKPOINT HELPERS (torch-free)
+# =============================================================================
+
+
+def _tensors_to_numpy(state_dict: Dict[str, Any]) -> Dict[str, np.ndarray]:
+    """Convert tensors in a state dict to numpy arrays."""
+    result = {}
+    for k, v in state_dict.items():
+        if hasattr(v, "cpu"):
+            result[k] = v.cpu().numpy()
+        elif isinstance(v, np.ndarray):
+            result[k] = v
+        elif isinstance(v, dict):
+            result[k] = _tensors_to_numpy(v)
+        else:
+            result[k] = np.array(v)
+    return result
+
+
+def save_checkpoint_npz(path: str, state_dict: Dict[str, Any], meta: Optional[Dict[str, Any]] = None) -> str:
+    """Save a model checkpoint as ``.npz`` (torch-free).
+
+    Args:
+        path: Output path (``.npz`` extension added if missing).
+        state_dict: Model weights (torch tensors or numpy arrays).
+        meta: Optional metadata dict (serialised to JSON inside the npz).
+
+    Returns:
+        The path the checkpoint was saved to.
+    """
+    p = Path(path)
+    if p.suffix != ".npz":
+        p = p.with_suffix(".npz")
+    np_state = _tensors_to_numpy(state_dict)
+    arrays = {k: np.asarray(v) for k, v in np_state.items()}
+    arrays["_meta_json"] = np.array(json.dumps(meta or {}, default=str))
+    np.savez_compressed(str(p), **arrays)
+    return str(p)
+
+
+def load_checkpoint_npz(path: str) -> Dict[str, Any]:
+    """Load a checkpoint saved by ``save_checkpoint_npz``.
+
+    Returns:
+        Dict with ``model_state_dict`` (numpy arrays) + metadata keys.
+    """
+    data = np.load(path, allow_pickle=True)
+    meta = json.loads(str(data["_meta_json"]))
+    state_dict = {k: data[k] for k in data.files if k != "_meta_json"}
+    meta["model_state_dict"] = state_dict
+    data.close()
+    return meta
 
 
 # =============================================================================

@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { IconRefresh, IconCheck, IconX } from '@/components/ui'
-import { Button } from '@/components/ui/button'
+import { IconRefresh, IconCheck, IconX } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
 import { cn } from '@/lib/cn'
 import { PUBLIC_API_URL } from '@/lib/config'
 

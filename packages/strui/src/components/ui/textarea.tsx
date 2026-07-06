@@ -1,15 +1,22 @@
-import * as React from 'react'
+'use client'
 
-import { cn } from '../../lib/cn'
+import { forwardRef, type TextareaHTMLAttributes } from 'react'
 
-import { inputFieldClassName } from './input'
+export type TextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement>
 
-export type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement>
-
-const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(({ className, ...props }, ref) => {
+const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(({ className, ...props }, ref) => {
   return (
     <textarea
-      className={cn(inputFieldClassName, 'min-h-20 resize-y', className)}
+      className={[
+        'flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm',
+        'transition-[border-color,box-shadow,background-color] duration-200',
+        'placeholder:text-muted-foreground selection:bg-primary/20 selection:text-foreground',
+        'hover:border-primary/50',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:border-primary/60',
+        'disabled:cursor-not-allowed disabled:opacity-50',
+        'min-h-20 resize-y',
+        className,
+      ].filter(Boolean).join(' ')}
       ref={ref}
       {...props}
     />

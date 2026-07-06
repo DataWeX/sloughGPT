@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogPortal, DialogOverlay } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { IconTrash, IconPlus } from '@/components/ui'
-import { Input } from '@/components/ui/input'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogPortal, DialogOverlay } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
+import { IconTrash, IconPlus } from '@sloughgpt/strui'
+import { Input } from '@sloughgpt/strui'
 
 interface SystemPromptDialogProps {
   open: boolean

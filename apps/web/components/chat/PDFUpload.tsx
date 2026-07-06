@@ -1,8 +1,8 @@
 'use client'
 
 import { useRef, useState, useCallback } from 'react'
-import { Button } from '@/components/ui/button'
-import { IconDocument } from '@/components/ui/icons'
+import { Button } from '@sloughgpt/strui'
+import { IconDocument } from '@sloughgpt/strui'
 import { PUBLIC_API_URL } from '@/lib/config'
 
 interface PDFUploadProps {

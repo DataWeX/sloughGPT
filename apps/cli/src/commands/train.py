@@ -870,7 +870,8 @@ def cmd_cloud_setup(args):
     sys.path.insert(0, ".")
 
     printer.header("Cloud Setup")
-    from domains.inference.vector_store import PineconeVectorStore, VectorEntry, simple_embed
+    from domains.inference.vector_stores.pinecone_store import PineconeVectorStore
+    from domains.inference.vector_store import VectorEntry, simple_embed
 
     api_key = args.api_key or os.getenv("PINECONE_API_KEY")
     if not api_key:

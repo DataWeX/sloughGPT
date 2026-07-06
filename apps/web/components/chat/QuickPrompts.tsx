@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Button } from '@sloughgpt/strui'
+import { Input } from '@sloughgpt/strui'
 import type { QuickPrompt } from '@/lib/quick-prompts'
 import { listPromptsByCategory, createPrompt, updatePrompt, deletePrompt, resetToDefaults, applyPrompt } from '@/lib/quick-prompts'
 

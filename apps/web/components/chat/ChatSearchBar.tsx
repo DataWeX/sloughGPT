@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { IconSearch, IconX } from '@/components/ui'
+import { IconSearch, IconX } from '@sloughgpt/strui'
 import { useChatToolbarContext } from '@/contexts/ChatToolbarContext'
 
 export function ChatSearchBar() {

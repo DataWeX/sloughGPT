@@ -1,7 +1,7 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { StatCard, KpiGrid, ProgressBar } from '@/components/ui'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { StatCard, KpiGrid, ProgressBar } from '@sloughgpt/strui'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import type { TrainingReport, TrainingStatus } from '@/lib/multimodal-controller'
 

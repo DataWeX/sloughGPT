@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@sloughgpt/strui'
 import { trainingJobsController } from '@/lib/training-controller'
 import type { Webhook } from '@/lib/training-controller'
 import { devDebug } from '@/lib/dev-log'

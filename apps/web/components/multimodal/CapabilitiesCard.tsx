@@ -1,8 +1,8 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/tags'
-import { StatCard, KpiGrid } from '@/components/ui'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Badge } from '@sloughgpt/strui'
+import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import type { MultimodalCapabilities } from '@/lib/multimodal-controller'
 
 interface CapabilitiesCardProps {

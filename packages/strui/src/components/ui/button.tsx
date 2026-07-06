@@ -1,24 +1,23 @@
-import * as React from 'react'
-import { Slot } from '@radix-ui/react-slot'
+'use client'
+
+import { forwardRef, type ButtonHTMLAttributes } from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 
-import { cn } from '../../lib/cn'
-
-const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-none text-sm font-medium transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 active:scale-[0.99]',
+export const buttonVariants = cva(
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]',
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground shadow-sm hover:opacity-90',
+        default: 'bg-primary text-primary-foreground shadow-sm hover:opacity-90 hover:shadow-md',
         secondary:
-          'border border-border bg-secondary text-secondary-foreground shadow-sm hover:bg-primary/10 hover:text-primary hover:border-primary/30',
-        ghost: 'hover:bg-primary/10 hover:text-primary',
+          'border border-border bg-secondary text-secondary-foreground shadow-sm hover:bg-primary/8 hover:text-primary hover:border-primary/25',
+        ghost: 'text-muted-foreground hover:text-foreground hover:bg-accent/8',
         outline:
-          'border border-border bg-transparent text-foreground shadow-sm hover:bg-primary/10 hover:text-primary hover:border-primary/30',
+          'border border-border bg-transparent text-foreground shadow-sm hover:bg-primary/8 hover:text-primary hover:border-primary/25',
         destructive: 'bg-destructive text-destructive-foreground shadow-sm hover:opacity-90',
-        menu: 'text-foreground hover:bg-primary/10 hover:text-primary focus-visible:ring-primary/50',
-        bare: 'text-foreground hover:text-primary focus-visible:ring-primary/50',
-        select: 'text-foreground hover:bg-primary/10 focus-visible:ring-primary/50 border border-border/50 px-2 py-1 rounded',
+        menu: 'text-foreground hover:bg-primary/8 hover:text-primary focus-visible:ring-primary/40',
+        bare: 'text-foreground hover:text-primary focus-visible:ring-primary/40',
+        select: 'text-foreground hover:bg-primary/8 focus-visible:ring-primary/40 border border-border/50 px-2 py-1 rounded-lg',
       },
       size: {
         default: 'h-10 px-4 py-2',
@@ -37,24 +36,17 @@ const buttonVariants = cva(
 )
 
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
-  asChild?: boolean
-}
+  extends ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {}
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, type, ...props }, ref) => {
-    const Comp = asChild ? Slot : 'button'
-    return (
-      <Comp
-        className={cn(buttonVariants({ variant, size }), className)}
-        ref={ref}
-        {...props}
-        {...(!asChild ? { type: type ?? 'button' } : {})}
-      />
-    )
-  }
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, type, ...props }, ref) => (
+    <button
+      ref={ref}
+      type={type ?? 'button'}
+      className={[buttonVariants({ variant, size }), className].filter(Boolean).join(' ')}
+      {...props}
+    />
+  )
 )
 Button.displayName = 'Button'
-
-export { Button, buttonVariants }

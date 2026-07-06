@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { IconX } from '@/components/ui'
+import { IconX } from '@sloughgpt/strui'
 import { cn } from '@/lib/cn'
 
 export type ToastType = 'success' | 'error' | 'info'
@@ -189,7 +189,7 @@ export function ToastContainer({ toasts, onDismiss, onClearAll }: ToastContainer
 import {
   ToastProvider, ToastViewport, Toast as RadixToast,
   ToastTitle, ToastDescription, ToastClose,
-} from '@/components/ui/toast'
+} from '@sloughgpt/strui'
 
 const TYPE_BORDER: Record<ToastType, string> = {
   success: 'border-l-success',

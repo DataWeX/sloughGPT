@@ -2,9 +2,9 @@
 
 import { memo, useEffect, useState, useRef } from 'react'
 import { cn } from '@/lib/cn'
-import { Button } from '@/components/ui/button'
+import { Button } from '@sloughgpt/strui'
 import { Markdown } from './Markdown'
-import { Textarea } from '@/components/ui/textarea'
+import { Textarea } from '@sloughgpt/strui'
 import { MessageActions } from './MessageActions'
 import { ImageLightbox } from './ImageLightbox'
 import type { ImageAttachment } from './ImageUpload'

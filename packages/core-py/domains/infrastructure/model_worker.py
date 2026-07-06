@@ -28,7 +28,8 @@ import queue
 import gc
 import traceback
 import sys
-from typing import Any, Optional, Callable
+import threading
+from typing import Any, Optional, Callable, Generator
 from dataclasses import dataclass, field
 
 logger = logging.getLogger("man.infrastructure.model_worker")
@@ -139,6 +140,71 @@ def _worker_main(
             "elapsed_ms": round(elapsed_ms, 1),
         }
 
+    def _generate_stream(
+        prompt: str,
+        max_new_tokens: int = 100,
+        temperature: float = 0.7,
+        top_p: float = 0.9,
+        top_k: int = 50,
+        repetition_penalty: float = 1.0,
+        **gen_kwargs: Any,
+    ) -> None:
+        """Generate tokens and stream each one through resp_q."""
+        from transformers import TextIteratorStreamer
+
+        inputs = tokenizer(prompt, return_tensors="pt")
+        input_ids = inputs["input_ids"]
+        attention_mask = inputs.get("attention_mask")
+
+        device = getattr(model, "device", None)
+        if device is not None and device != "cpu":
+            input_ids = input_ids.to(device)
+            if attention_mask is not None:
+                attention_mask = attention_mask.to(device)
+
+        streamer = TextIteratorStreamer(
+            tokenizer, skip_prompt=True, skip_special_tokens=True
+        )
+
+        gen_kwargs.update(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            max_new_tokens=max_new_tokens,
+            do_sample=True,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            repetition_penalty=repetition_penalty,
+            pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
+            eos_token_id=tokenizer.eos_token_id,
+            streamer=streamer,
+        )
+
+        # Launch generation in background thread
+        thread = threading.Thread(target=model.generate, kwargs=gen_kwargs, daemon=True)
+        thread.start()
+
+        tokens_generated = 0
+        start = time.time()
+        for text in streamer:
+            try:
+                resp_q.put_nowait(("token", text))
+            except Exception:
+                break
+            tokens_generated += 1
+
+        thread.join(timeout=10)
+        elapsed_ms = (time.time() - start) * 1000
+
+        try:
+            resp_q.put_nowait(("result", {
+                "text": "",
+                "tokens_generated": tokens_generated,
+                "elapsed_ms": round(elapsed_ms, 1),
+            }))
+        except Exception:
+            pass
+
     requests_served = 0
 
     while True:
@@ -165,6 +231,19 @@ def _worker_main(
             except Exception as e:
                 tb = traceback.format_exc()
                 logger.error("Worker[%s]: generate error: %s\n%s", worker_id, e, tb)
+                try:
+                    resp_q.put_nowait(("error", f"{type(e).__name__}: {e}"))
+                except Exception:
+                    logger.error("Worker[%s]: failed to send error response", worker_id)
+
+        if cmd == "generate_stream":
+            try:
+                prompt, kwargs = payload
+                _generate_stream(prompt, **kwargs)
+                requests_served += 1
+            except Exception as e:
+                tb = traceback.format_exc()
+                logger.error("Worker[%s]: generate_stream error: %s\n%s", worker_id, e, tb)
                 try:
                     resp_q.put_nowait(("error", f"{type(e).__name__}: {e}"))
                 except Exception:
@@ -419,6 +498,78 @@ class ModelWorkerProcess:
         raise TimeoutError(
             f"Worker[{self.worker_id}] generation timed out after {self._generate_timeout}s"
         )
+
+    # ── Generate (streaming) ────────────────────────────────────────────
+
+    def generate_stream(
+        self,
+        prompt: str,
+        max_new_tokens: int = 100,
+        temperature: float = 0.7,
+        top_p: float = 0.9,
+        top_k: int = 50,
+        repetition_penalty: float = 1.0,
+        **kwargs: Any,
+    ) -> Generator[str, None, dict]:
+        """Send streaming generate request to worker, yield tokens.
+
+        Yields:
+            str: Each decoded token as it is produced.
+
+        Returns:
+            dict: Final result with ``tokens_generated`` and ``elapsed_ms``.
+        """
+        if not self.alive:
+            raise RuntimeError(f"Worker[{self.worker_id}] is not alive")
+
+        payload = dict(
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            repetition_penalty=repetition_penalty,
+            **kwargs,
+        )
+
+        try:
+            self._req_q.put_nowait(("generate_stream", (prompt, payload)))
+        except Exception as e:
+            self._health.errors += 1
+            raise RuntimeError(f"Failed to send stream request to worker: {e}")
+
+        # Read tokens from response queue until result or error
+        deadline = time.time() + self._generate_timeout
+        final_result: dict = {}
+
+        while time.time() < deadline:
+            if not self.alive:
+                self._health.crashed = True
+                self._health.crash_count += 1
+                raise RuntimeError(
+                    f"Worker[{self.worker_id}] crashed during streaming generation"
+                )
+
+            try:
+                msg, data = self._resp_q.get(timeout=0.2)
+            except queue.Empty:
+                continue
+
+            if msg == "token":
+                yield data
+            elif msg == "result":
+                self._health.requests_served += 1
+                final_result = data
+                break
+            elif msg == "error":
+                self._health.errors += 1
+                raise RuntimeError(f"Worker generate_stream error: {data}")
+            else:
+                logger.warning(
+                    "Worker[%s]: unknown response type: %s", self.worker_id, msg
+                )
+                continue
+
+        return final_result
 
     # ── Context manager ────────────────────────────────────────────────
 

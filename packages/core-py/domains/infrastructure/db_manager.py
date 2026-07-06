@@ -99,7 +99,7 @@ class DatabaseManager:
             self._connected = True
             return True
         except Exception as e:
-            print(f"Database connection failed: {e}")
+            logger.error("Database connection failed: %s", e)
             self._connected = False
             return False
 

@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { whatsNewItems, type WhatsNewItem } from '@/lib/whats-new-data'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/tags'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
+import { Badge } from '@sloughgpt/strui'
 import { cn } from '@/lib/cn'
 
 const SEEN_KEY = 'whatsnew_seen'

@@ -1,170 +1,127 @@
+// UI Library — our custom components from apps/web/components/ui
+// Combined with @sloughgpt/strui composed + AI components
+
+// Core utilities
 export { cn } from './lib/cn'
+
+// Button
 export { Button, buttonVariants, type ButtonProps } from './components/ui/button'
-export {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-} from './components/ui/card'
+
+// Badge
 export { Badge, badgeVariants, type BadgeProps } from './components/ui/badge'
+
+// Card
+export { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from './components/ui/card'
+
+// Input
 export { Input, inputFieldClassName, type InputProps } from './components/ui/input'
+
+// SearchInput (from our input.tsx — overrides composed/search-input)
+export { SearchInput, type SearchInputProps } from './components/ui/input'
+
+// Textarea
 export { Textarea, type TextareaProps } from './components/ui/textarea'
-export {
-  Dialog,
-  DialogPortal,
-  DialogOverlay,
-  DialogClose,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogFooter,
-  DialogTitle,
-  DialogDescription,
-} from './components/ui/dialog'
-export {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuGroup,
-  DropdownMenuPortal,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuRadioGroup,
-} from './components/ui/dropdown-menu'
-export { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs'
+
+// Label
 export { Label } from './components/ui/label'
-export { Separator } from './components/ui/separator'
-export {
-  AlertDialog,
-  AlertDialogPortal,
-  AlertDialogOverlay,
-  AlertDialogTrigger,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogFooter,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogAction,
-  AlertDialogCancel,
-} from './components/ui/alert-dialog'
+
+// Switch
 export { Switch } from './components/ui/switch'
 
-export {
-  PageHeader,
-  AppShell,
-  NavRail,
-  NavRailLink,
-  FormField,
-  SettingsRow,
-  StatCard,
-  KpiGrid,
-  InlineBanner,
-  bannerVariants,
-  Skeleton,
-  SearchInput,
-  EmptyCard,
-  Toolbar,
-  CopyButton,
-  type PageHeaderProps,
-  type AppShellProps,
-  type NavRailProps,
-  type NavRailLinkProps,
-  type FormFieldProps,
-  type SettingsRowProps,
-  type StatCardProps,
-  type KpiGridProps,
-  type InlineBannerProps,
-  type SkeletonProps,
-  type SearchInputProps,
-  type EmptyCardProps,
-  type ToolbarProps,
-  type CopyButtonProps,
-  KeyValueList,
-  ProgressBar,
-  StepIndicator,
-  Chip,
-  chipVariants,
-  SectionHeader,
-  ScrollPanel,
-  ListRow,
-  type KeyValueListProps,
-  type KeyValueItem,
-  type ProgressBarProps,
-  type StepIndicatorProps,
-  type ChipProps,
-  type SectionHeaderProps,
-  type ScrollPanelProps,
-  type ListRowProps,
-  StatusDot,
-  STATUS_DOT_TONE_CLASSES,
-  type StatusDotProps,
-  type StatusDotTone,
-  ModelStatusPill,
-  type ModelStatusProps,
-  type ModelStatus,
-  FoldSection,
-  type FoldSectionProps,
-  Timeline,
-  type TimelineProps,
-  type TimelineItem,
-  Breadcrumbs,
-  type BreadcrumbsProps,
-  type BreadcrumbItem,
-  Kbd,
-  type KbdProps,
-} from './components/composed'
+// Separator
+export { Separator, type SeparatorProps } from './components/ui/separator'
 
-export { ChevronDownIcon, SearchIcon, XIcon } from './lib/icons'
+// Checkbox
+export { Checkbox, type CheckboxProps } from './components/ui/checkbox'
 
-export {
-  ThemeColorPicker,
-  ThemeSwatch,
-  ColorInput,
-  DEFAULT_THEME_SWATCHES,
-  type ThemeSwatch as ThemeSwatchType,
-  type ThemeColorPickerProps,
-} from './components/composed/theme-color-picker'
+// Progress
+export { Progress, type ProgressProps } from './components/ui/progress'
 
+// Select
+export { Select, SelectGroup, SelectValue, SelectTrigger, SelectContent, SelectItem, SelectSeparator } from './components/ui/select'
+
+// Tabs
+export { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs'
+
+// Toggle Group
+export { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group'
+
+// Slider
+export { Slider, RangeSlider } from './components/ui/slider'
+
+// Dialog
+export { Dialog, DialogPortal, DialogOverlay, DialogTrigger, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription, DialogClose } from './components/ui/dialog'
+
+// Alert Dialog
+export { AlertDialog, AlertDialogPortal, AlertDialogOverlay, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogFooter, AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel } from './components/ui/alert-dialog'
+
+// Dropdown Menu
+export { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuCheckboxItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuGroup } from './components/ui/dropdown-menu'
+
+// Collapsible
+export { Collapsible, CollapsibleTrigger, CollapsibleContent } from './components/ui/collapsible'
+
+// Toast
+export { ToastProvider, ToastViewport, Toast, ToastTitle, ToastDescription, ToastClose, ToastAction } from './components/ui/toast'
+
+// Display components
+export { StatCard, KpiGrid, ListRow, ListSection, EmptyCard, Skeleton, LoadingDots } from './components/ui/display'
+
+// Specialized components
+export { Avatar, AvatarGroup, ProgressBar, Spinner, Divider, CardDeck, Pagination, SearchField, EmptyState } from './components/ui/specialized'
+
+// Tags
+export { Chip, Chips, TagInput } from './components/ui/tags'
+
+// Icons (40+ from our components/ui/icons)
 export {
-  MessageBubble,
-  ChatThread,
-  PromptComposer,
-  TypingIndicator,
-  ToolCallCard,
-  EmptyState,
-  CodeSnippet,
-  TokenMeter,
-  type MessageBubbleProps,
-  type ChatThreadProps,
-  type PromptComposerProps,
-  type TypingIndicatorProps,
-  type ToolCallCardProps,
-  type ToolCallState,
-  type EmptyStateProps,
-  type CodeSnippetProps,
-  type TokenMeterProps,
-  ChatLayout,
-  ModelPicker,
-  Citation,
-  ReasoningPanel,
-  AttachmentChip,
-  SourceList,
-  type ChatLayoutProps,
-  type ModelPickerProps,
-  type ModelOption,
-  type CitationProps,
-  type ReasoningPanelProps,
-  type AttachmentChipProps,
-  type SourceListProps,
-  type SourceItem,
-  StreamingAssistantPlaceholder,
-  JobStatus,
-  type StreamingAssistantPlaceholderProps,
-  type JobStatusProps,
-  type JobStatusState,
-} from './components/ai'
+  IconSearch, IconPlus, IconChevronLeft, IconChevronDown, IconChevronRight,
+  IconMenu, IconX, IconCheck, IconChat, IconStar, IconPin, IconClock,
+  IconSettings, IconCopy, IconRefresh, IconTrash, IconEdit, IconMessage,
+  IconSend, IconUser, IconHome, IconCog, IconFolder, IconDocument,
+  IconDownload, IconUpload, IconExternalLink, IconModel, IconBrain,
+  IconHeart, IconThumbUp, IconThumbDown, IconInfo, IconAlert,
+  IconCheckCircle, IconError, IconEye, IconFilter, IconSort, IconMore,
+} from './components/ui/icons'
+
+// Error store + panel
+export { ErrorPanel } from './components/ui/error-panel'
+export { useErrorStore, type AppError, type ErrorSeverity } from './lib/error-store'
+
+// === Composed components (non-overlapping with our UI) ===
+export { PageHeader, type PageHeaderProps } from './components/composed/page-header'
+export { AppShell, type AppShellProps } from './components/composed/app-shell'
+export { NavRail, NavRailLink, type NavRailProps, type NavRailLinkProps } from './components/composed/nav-rail'
+export { FormField, type FormFieldProps } from './components/composed/form-field'
+export { SettingsRow, type SettingsRowProps } from './components/composed/settings-row'
+export { InlineBanner, bannerVariants, type InlineBannerProps } from './components/composed/inline-banner'
+export { Toolbar, type ToolbarProps } from './components/composed/toolbar'
+export { CopyButton, type CopyButtonProps } from './components/composed/copy-button'
+export { KeyValueList, type KeyValueListProps, type KeyValueItem } from './components/composed/key-value-list'
+export { StepIndicator, type StepIndicatorProps } from './components/composed/step-indicator'
+export { SectionHeader, type SectionHeaderProps } from './components/composed/section-header'
+export { ScrollPanel, type ScrollPanelProps } from './components/composed/scroll-panel'
+export { StatusDot, STATUS_DOT_TONE_CLASSES, type StatusDotProps, type StatusDotTone } from './components/composed/status-dot'
+export { ModelStatusPill, type ModelStatusProps, type ModelStatus } from './components/composed/model-status'
+export { FoldSection, type FoldSectionProps } from './components/composed/fold-section'
+export { Timeline, type TimelineProps, type TimelineItem } from './components/composed/timeline'
+export { Breadcrumbs, type BreadcrumbsProps, type BreadcrumbItem } from './components/composed/breadcrumbs'
+export { Kbd, type KbdProps } from './components/composed/kbd'
+export { ThemeColorPicker, ThemeSwatch, ColorInput, DEFAULT_THEME_SWATCHES, type ThemeSwatch as ThemeSwatchType, type ThemeColorPickerProps } from './components/composed/theme-color-picker'
+
+// === AI components (non-overlapping) ===
+export { MessageBubble, type MessageBubbleProps } from './components/ai/message-bubble'
+export { ChatThread, type ChatThreadProps } from './components/ai/chat-thread'
+export { PromptComposer, type PromptComposerProps } from './components/ai/prompt-composer'
+export { TypingIndicator, type TypingIndicatorProps } from './components/ai/typing-indicator'
+export { ToolCallCard, type ToolCallCardProps, type ToolCallState } from './components/ai/tool-call-card'
+export { CodeSnippet, type CodeSnippetProps } from './components/ai/code-snippet'
+export { TokenMeter, type TokenMeterProps } from './components/ai/token-meter'
+export { ChatLayout, type ChatLayoutProps } from './components/ai/chat-layout'
+export { ModelPicker, type ModelPickerProps, type ModelOption } from './components/ai/model-picker'
+export { Citation, type CitationProps } from './components/ai/citation'
+export { ReasoningPanel, type ReasoningPanelProps } from './components/ai/reasoning-panel'
+export { AttachmentChip, type AttachmentChipProps } from './components/ai/attachment-chip'
+export { SourceList, type SourceListProps, type SourceItem } from './components/ai/source-list'
+export { StreamingAssistantPlaceholder, type StreamingAssistantPlaceholderProps } from './components/ai/streaming-assistant-placeholder'
+export { JobStatus, type JobStatusProps, type JobStatusState } from './components/ai/job-status'

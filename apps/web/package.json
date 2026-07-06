@@ -40,6 +40,7 @@
     "ci:e2e": "npm run build:clean && npm run e2e:ci"
   },
   "dependencies": {
+    "@sloughgpt/strui": "file:../../packages/strui",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dexie": "^4.4.2",

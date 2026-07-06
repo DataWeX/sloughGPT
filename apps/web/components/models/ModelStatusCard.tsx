@@ -1,8 +1,8 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Chip } from '@/components/ui/tags'
-import { KpiGrid, StatCard } from '@/components/ui/display'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Chip } from '@sloughgpt/strui'
+import { KpiGrid, StatCard } from '@sloughgpt/strui'
 import { modelDisplayName } from '@/lib/inference-display'
 import { cn } from '@/lib/cn'
 

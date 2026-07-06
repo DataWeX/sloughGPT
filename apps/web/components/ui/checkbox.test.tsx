@@ -3,7 +3,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Checkbox } from './checkbox'
+import { Checkbox } from '@sloughgpt/strui'
 
 afterEach(cleanup)
 

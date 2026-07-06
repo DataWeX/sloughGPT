@@ -1,6 +1,6 @@
 'use client'
 
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@sloughgpt/strui'
 
 interface EvalData {
   baseline: Record<string, number | string>

@@ -1,9 +1,9 @@
 """Training API: schemas, corpus resolution, job store, and HTTP router."""
 
-from training.jobs import training_jobs
-from training.resolution import resolve_training_inputs
-from training.router import router
-from training.schemas import (
+from .jobs import training_jobs
+from .resolution import resolve_training_inputs
+from .router import router
+from .schemas import (
     TrainDatasetRef,
     TrainDataSourceBody,
     TrainingRequest,

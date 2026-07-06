@@ -93,6 +93,10 @@ export const api = {
   sync: <T>(body: {pending_messages: any[]; last_sync_timestamp?: number}) =>
     request<T>('POST', '/mobile/sync', body),
 
+  /** Rename a session. */
+  renameSession: (sessionId: string, title: string) =>
+    api.put(`/chat/sessions/${sessionId}`, {title}),
+
   /** Check server connectivity. */
   syncStatus: <T>() => request<T>('GET', '/mobile/sync/status'),
 };

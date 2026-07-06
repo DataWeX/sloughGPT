@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { cn } from '@/lib/cn'
-import { Button } from '@/components/ui/button'
-import { IconStar, IconTrash, IconX } from '@/components/ui'
+import { Button } from '@sloughgpt/strui'
+import { IconStar, IconTrash, IconX } from '@sloughgpt/strui'
 import type { BookmarkedMessage } from '@/hooks/useChatBookmarks'
 
 interface ChatBookmarksPanelProps {

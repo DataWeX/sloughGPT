@@ -4,8 +4,8 @@ import { useRef, useState } from 'react'
 import { VoiceInput } from './VoiceInput'
 import { ImageUpload } from './ImageUpload'
 import { PDFUpload } from './PDFUpload'
-import { Button } from '@/components/ui/button'
-import { IconUpload } from '@/components/ui'
+import { Button } from '@sloughgpt/strui'
+import { IconUpload } from '@sloughgpt/strui'
 import { multimodalController } from '@/lib/multimodal-controller'
 
 interface ChatInputAccessoriesProps {

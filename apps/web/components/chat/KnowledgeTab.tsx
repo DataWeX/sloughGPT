@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-import { IconX } from '@/components/ui'
+import { Button } from '@sloughgpt/strui'
+import { IconX } from '@sloughgpt/strui'
 import { KNOWLEDGE_STORAGE_KEY } from '@/lib/config'
 
 interface KnowledgeItem {

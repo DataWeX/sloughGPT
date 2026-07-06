@@ -3,7 +3,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Textarea } from './textarea'
+import { Textarea } from '@sloughgpt/strui'
 
 afterEach(cleanup)
 

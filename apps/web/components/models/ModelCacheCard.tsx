@@ -1,9 +1,9 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { IconRefresh } from '@/components/ui'
-import { KpiGrid, StatCard } from '@/components/ui'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
+import { IconRefresh } from '@sloughgpt/strui'
+import { KpiGrid, StatCard } from '@sloughgpt/strui'
 import { modelDisplayName } from '@/lib/inference-display'
 import { modelController } from '@/lib/model-controller'
 

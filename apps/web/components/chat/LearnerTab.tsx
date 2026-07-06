@@ -1,7 +1,7 @@
 'use client'
 
-import { Button } from '@/components/ui/button'
-import { IconBrain, IconRefresh } from '@/components/ui'
+import { Button } from '@sloughgpt/strui'
+import { IconBrain, IconRefresh } from '@sloughgpt/strui'
 import { LossCurve } from './LossCurve'
 
 interface LearnerInfo {

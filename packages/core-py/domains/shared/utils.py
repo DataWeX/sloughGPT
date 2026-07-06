@@ -89,7 +89,7 @@ def retry(max_attempts: int = 3, delay: float = 1.0):
                 except Exception as e:
                     if attempt == max_attempts - 1:
                         raise
-                    print(f"Attempt {attempt + 1} failed: {e}")
+                    logger.warning("Attempt %d failed: %s", attempt + 1, e)
                     import time
 
                     time.sleep(delay)

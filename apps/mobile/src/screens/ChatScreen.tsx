@@ -54,6 +54,7 @@ export function ChatScreen() {
     refreshSessions,
     loadSession,
     deleteSession,
+    renameSession,
     deleteMessage,
     createSession,
     offlineQueue,
@@ -475,9 +476,20 @@ export function ChatScreen() {
                     setShowDrawer(false);
                   }}>
                   <View style={styles.sessionInfo}>
-                    <Text style={styles.sessionTitle} numberOfLines={1}>
-                      {session.title || 'New conversation'}
-                    </Text>
+                    <TouchableOpacity
+                      onLongPress={() => {
+                        triggerHaptic('light');
+                        const currentTitle = session.title || 'New conversation';
+                        Alert.prompt('Rename', 'Enter a new title:', (newTitle: string) => {
+                          if (newTitle && newTitle.trim() && newTitle.trim() !== currentTitle) {
+                            renameSession(session.id, newTitle.trim());
+                          }
+                        }, 'plain-text', currentTitle);
+                      }}>
+                      <Text style={styles.sessionTitle} numberOfLines={1}>
+                        {session.title || 'New conversation'}
+                      </Text>
+                    </TouchableOpacity>
                     <Text style={styles.sessionMeta}>
                       {session.message_count || 0} messages
                     </Text>

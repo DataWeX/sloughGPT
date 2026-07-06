@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { IconSearch, IconX, IconMessage } from '@/components/ui'
+import { Input } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
+import { IconSearch, IconX, IconMessage } from '@sloughgpt/strui'
 import { chatDB, type ChatSession, type ChatMessage as DBChatMessage } from '@/lib/db'
 import { sessionController, type SearchResult as RemoteSearchResult } from '@/lib/session-controller'
 import { cn } from '@/lib/cn'

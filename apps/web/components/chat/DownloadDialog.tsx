@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from '@sloughgpt/strui'
+import { Checkbox } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
 import { sessionStore } from '@/lib/session-store'
 
 interface DownloadDialogProps {

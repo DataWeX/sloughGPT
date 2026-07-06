@@ -1,8 +1,16 @@
-.PHONY: api web tsc lint test-py test-web test dev install precommit
+.PHONY: api api-daemon api-stop web tsc lint test-py test-web test dev install precommit
 
 # ── Dev Servers ──────────────────────────────────────────
 api:
 	.venv/bin/python3 apps/api/server/main.py
+
+api-daemon:
+	.venv/bin/python3 apps/api/server/main.py --daemon --port 8000
+	@echo "Server daemon started on port 8000. Use 'make api-stop' to kill."
+
+api-stop:
+	@lsof -ti :8000 2>/dev/null | xargs kill 2>/dev/null || true
+	@echo "Server stopped on port 8000"
 
 web:
 	cd apps/web && npm run dev

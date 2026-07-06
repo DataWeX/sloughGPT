@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { IconAlert, IconRefresh, IconCopy, IconX } from '@/components/ui'
+import { Button } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { IconAlert, IconRefresh, IconCopy, IconX } from '@sloughgpt/strui'
 import { addGlobalError } from '@/lib/error-store'
 import { reportError } from '@/lib/error-reporter'
 

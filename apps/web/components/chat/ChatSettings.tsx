@@ -1,13 +1,13 @@
 'use client'
 
-import { Button } from '@/components/ui/button'
+import { Button } from '@sloughgpt/strui'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { IconChevronDown, IconCheck } from '@/components/ui'
+} from '@sloughgpt/strui'
+import { IconChevronDown, IconCheck } from '@sloughgpt/strui'
 import { cn } from '@/lib/cn'
 
 interface ChatSettingsProps {

@@ -2,8 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { IconMessage, IconStar, IconPin, IconChat, IconPlus, IconChevronRight } from '@/components/ui'
+import { Button } from '@sloughgpt/strui'
+import { IconMessage, IconStar, IconPin, IconChat, IconPlus, IconChevronRight } from '@sloughgpt/strui'
 import { cn } from '@/lib/cn'
 import { useChatToolbarContext } from '@/contexts/ChatToolbarContext'
 import type { Conversation } from '@/lib/session-controller'

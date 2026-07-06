@@ -3,9 +3,9 @@
 import { useEffect, useState, useRef } from 'react'
 import { useVoiceChat, VoiceExchange, VoiceSettings } from '@/hooks/useVoiceChat'
 import { VoiceWaveform, VoiceOrb, ListeningIndicator, ListeningBars } from '@/components/chat/VoiceWaveform'
-import { Slider } from '@/components/ui/slider'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
-import { IconX, IconRefresh, IconSettings } from '@/components/ui'
+import { Slider } from '@sloughgpt/strui'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
+import { IconX, IconRefresh, IconSettings } from '@sloughgpt/strui'
 
 interface VoiceChatModeProps {
   onMessage: (text: string) => void

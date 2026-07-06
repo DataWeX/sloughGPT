@@ -27,6 +27,7 @@ interface ChatState {
   loadSession: (id: string) => Promise<void>;
   createSession: () => Promise<string>;
   deleteSession: (id: string) => Promise<void>;
+  renameSession: (id: string, title: string) => Promise<void>;
   deleteMessage: (messageId: string) => void;
   sendMessage: (content: string, images?: string[]) => Promise<void>;
   regenerate: (messageId: string) => Promise<void>;
@@ -99,6 +100,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
         set({activeSessionId: null, messages: []});
         await cacheActiveSessionId(null);
       }
+      await get().refreshSessions();
+    } catch (err: any) {
+      set({error: err.message});
+    }
+  },
+
+  renameSession: async (id: string, title: string) => {
+    try {
+      await api.renameSession(id, title);
       await get().refreshSessions();
     } catch (err: any) {
       set({error: err.message});

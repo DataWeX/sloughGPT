@@ -1,19 +1,21 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["DOM", "DOM.Iterable", "ES2022"],
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
     "jsx": "react-jsx",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "strict": true,
     "skipLibCheck": true,
-    "noEmit": true,
-    "isolatedModules": true,
+    "esModuleInterop": true,
+    "module": "esnext",
     "resolveJsonModule": true,
+    "isolatedModules": true,
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", ".storybook"]
+  "include": ["src"]
 }

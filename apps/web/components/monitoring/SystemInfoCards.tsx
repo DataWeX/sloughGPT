@@ -1,7 +1,7 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ProgressBar } from '@/components/ui'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { ProgressBar } from '@sloughgpt/strui'
 import type { GPUInfo, DiskUsage, SystemInfo } from '@/lib/system-controller'
 
 export function GpuCard({ gpu }: { gpu?: GPUInfo }) {

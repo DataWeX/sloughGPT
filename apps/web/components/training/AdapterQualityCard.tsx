@@ -1,9 +1,9 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { userAdaptersController } from '@/lib/user-adapters-controller'
 import type { UserAdapterStats } from '@/lib/user-adapters-controller'

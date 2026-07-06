@@ -1,15 +1,15 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
 import { DatasetImportModal } from '@/components/DatasetImportModal'
 import dynamic from 'next/dynamic'
 
 const LossChart = dynamic(() => import('@/components/training/LossChart').then(m => m.LossChart), { ssr: false })
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
+import { Switch } from '@sloughgpt/strui'
+import { ToggleGroup, ToggleGroupItem } from '@sloughgpt/strui'
 import { modelController } from '@/lib/controllers'
 import { useToastStore } from '@/lib/toast-store'
 import { cn } from '@/lib/cn'

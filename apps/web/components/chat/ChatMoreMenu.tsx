@@ -1,8 +1,8 @@
 'use client'
 
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
-import { Button } from '@/components/ui/button'
-import { IconMore, IconSettings } from '@/components/ui'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
+import { IconMore, IconSettings } from '@sloughgpt/strui'
 import { cn } from '@/lib/cn'
 import { useChatToolbarContext } from '@/contexts/ChatToolbarContext'
 

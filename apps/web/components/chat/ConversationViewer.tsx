@@ -1,9 +1,9 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { IconX, IconTrash, IconThumbUp, IconThumbDown, IconChat, IconCopy, IconCheck, IconDownload } from '@/components/ui'
+import { IconX, IconTrash, IconThumbUp, IconThumbDown, IconChat, IconCopy, IconCheck, IconDownload } from '@sloughgpt/strui'
 import { cn } from '@/lib/cn'
-import { Button } from '@/components/ui/button'
+import { Button } from '@sloughgpt/strui'
 
 interface ViewerMessage {
   id: string

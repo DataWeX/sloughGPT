@@ -2,7 +2,7 @@
  */
 import { describe, expect, it, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
-import { ToastProvider, Toast, ToastTitle, ToastDescription, ToastClose, ToastAction } from './toast'
+import { ToastProvider, Toast, ToastTitle, ToastDescription, ToastClose, ToastAction } from '@sloughgpt/strui'
 
 afterEach(cleanup)
 

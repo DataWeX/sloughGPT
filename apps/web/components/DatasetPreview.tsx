@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { datasetController, type DatasetPreview as DatasetPreviewType } from '@/lib/dataset-controller'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Badge } from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@sloughgpt/strui'
 
 interface DatasetValidation {
   dataset_id: string

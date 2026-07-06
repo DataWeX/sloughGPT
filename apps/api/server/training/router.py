@@ -32,16 +32,16 @@ except ImportError:
     def sse_complete(stream, phase="COMPLETE", data=None, meta=None, message="Done"):
         return sse_event(stream, phase, "complete", data or {}, meta or {}, message)
 
-from training.jobs import training_jobs
-from training.resolution import resolve_training_inputs
-from training.schemas import TrainingRequest, TrainRequest, TrainResolveRequest, HFTrainingRequest, UnifiedStartRequest, QuickTrainRequest, ActivityTrainingRequest, DistillStartRequest
-from training.controller import get_training_controller, TrainingState
-from training.webhooks import (
+from .jobs import training_jobs
+from .resolution import resolve_training_inputs
+from .schemas import TrainingRequest, TrainRequest, TrainResolveRequest, HFTrainingRequest, UnifiedStartRequest, QuickTrainRequest, ActivityTrainingRequest, DistillStartRequest
+from .controller import get_training_controller, TrainingState
+from .webhooks import (
     get_webhook_store,
     TRAINING_EVENTS,
     notify_training_event,
 )
-from training.job_store import get_job_store
+from .job_store import get_job_store
 
 logger = logging.getLogger("man")
 

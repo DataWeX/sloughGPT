@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { Button } from '@sloughgpt/strui'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 import { trainingJobsController } from '@/lib/training-controller'
 import { useToastStore } from '@/lib/toast-store'
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@sloughgpt/strui'
 
 export function SelfTrainToggle() {
   const [status, setStatus] = useState<{running?: boolean; steps?: number} | null>(null)

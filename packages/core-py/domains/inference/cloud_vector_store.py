@@ -26,7 +26,8 @@ async def setup_pinecone(
     environment: str = "us-east-1"
 ):
     """Setup Pinecone vector store."""
-    from domains.inference.vector_store import PineconeVectorStore, VectorEntry
+    from domains.inference.vector_stores.pinecone_store import PineconeVectorStore
+    from domains.inference.vector_store import VectorEntry
 
     print(f"Connecting to Pinecone index: {index}")
     store = PineconeVectorStore(

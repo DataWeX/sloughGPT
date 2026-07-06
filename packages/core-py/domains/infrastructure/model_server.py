@@ -214,6 +214,15 @@ class ModelServer:
         self._lock = Lock()  # protects model reference swap
         self._process_guard = process_guard  # optional ProcessGuard for bulk gen
 
+        # Wire guard crash callbacks to circuit breaker
+        if self._process_guard is not None and self._circuit_breaker is not None:
+            self._process_guard.on_crash(
+                lambda wid: self._circuit_breaker.record_failure()
+            )
+            self._process_guard.on_restart(
+                lambda wid: self._circuit_breaker.record_success()
+            )
+
         # Warmup
         self._enable_warmup = enable_warmup
         self._warmup_prompt = warmup_prompt
@@ -590,11 +599,43 @@ class ModelServer:
         Runs in caller's thread. The caller is responsible for polling
         the streamer and for semaphore management.
 
+        When a ``_process_guard`` is configured, delegates to the guard's
+        ``generate_stream()`` which streams from a subprocess worker.
+
         Args:
             cancel_event: Optional ``threading.Event``. When set, a
                 ``StoppingCriteria`` tells ``model.generate()`` to stop
                 early (e.g. on client disconnect).
         """
+        # Delegate to process guard if available
+        if self._process_guard is not None:
+            safe_kwargs = {k: v for k, v in kwargs.items()
+                           if k not in ("input_ids", "attention_mask")}
+            if cancel_event is not None:
+                # Guard doesn't support cancel_event yet; wrap in a custom
+                # generator that stops yielding when cancel is set
+                gen = self._process_guard.generate_stream(
+                    prompt=prompt,
+                    max_new_tokens=max_new_tokens,
+                    temperature=temperature,
+                    top_p=top_p,
+                    top_k=top_k,
+                    repetition_penalty=repetition_penalty,
+                    **safe_kwargs,
+                )
+                return self._wrap_cancelable_streamer(gen, cancel_event)
+            from typing import Generator
+            gen = self._process_guard.generate_stream(
+                prompt=prompt,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                repetition_penalty=repetition_penalty,
+                **safe_kwargs,
+            )
+            return self._wrap_generator_as_streamer(gen)
+
         from transformers import TextIteratorStreamer, StoppingCriteria
 
         with self._lock:
@@ -825,6 +866,66 @@ class ModelServer:
                     logger.warning("Post-gen hook failed: %s", e)
             if aborted:
                 logger.info("generate_stream[%s]: cleaned up after abort", self.model_id)
+
+    @staticmethod
+    def _wrap_generator_as_streamer(gen):
+        """Wrap a generator as a TextIteratorStreamer-compatible object.
+
+        Returns an object with ``text_queue`` and ``stop_signal`` so callers
+        of ``generate_stream_sync`` can use the same polling pattern.
+        """
+        import queue
+        q = queue.Queue()
+        stop_signal = object()
+
+        def _pump():
+            try:
+                for token in gen:
+                    q.put(token)
+            except StopIteration:
+                pass
+            except Exception:
+                pass
+            finally:
+                q.put(stop_signal)
+
+        import threading
+        t = threading.Thread(target=_pump, daemon=True)
+        t.start()
+
+        streamer = type("_GenStreamer", (), {})()
+        streamer.text_queue = q
+        streamer.stop_signal = stop_signal
+        return streamer
+
+    @staticmethod
+    def _wrap_cancelable_streamer(gen, cancel_event):
+        """Wrap a generator as a cancelable TextIteratorStreamer."""
+        import queue
+        q = queue.Queue()
+        stop_signal = object()
+
+        def _pump():
+            try:
+                for token in gen:
+                    if cancel_event.is_set():
+                        break
+                    q.put(token)
+            except StopIteration:
+                pass
+            except Exception:
+                pass
+            finally:
+                q.put(stop_signal)
+
+        import threading
+        t = threading.Thread(target=_pump, daemon=True)
+        t.start()
+
+        streamer = type("_GenStreamer", (), {})()
+        streamer.text_queue = q
+        streamer.stop_signal = stop_signal
+        return streamer
 
     # --- Error handling ---
 

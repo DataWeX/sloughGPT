@@ -11,11 +11,11 @@ const mockErrors = [
 
 let currentState = { errors: mockErrors, dismissError: vi.fn(), clearErrors: vi.fn() }
 
-vi.mock('@/lib/error-store', () => ({
+vi.mock('@sloughgpt/strui/lib/error-store', () => ({
   useErrorStore: (selector: (s: Record<string, unknown>) => unknown) => selector(currentState as unknown as Record<string, unknown>),
 }))
 
-import { ErrorPanel } from './error-panel'
+import { ErrorPanel } from '@sloughgpt/strui'
 
 afterEach(cleanup)
 

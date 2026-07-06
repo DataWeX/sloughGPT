@@ -1,7 +1,7 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { StatCard, KpiGrid } from '@/components/ui/display'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import type { BenchmarkResult } from '@/lib/benchmark-controller'
 
 interface SummaryCardProps {

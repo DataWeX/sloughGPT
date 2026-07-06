@@ -225,6 +225,9 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
 
       <Text style={[styles.timestamp, isUser && styles.timestampUser]}>
         {formatTime(message.timestamp)}
+        {message.content && message.content.length > 200 && (
+          <Text style={styles.readTime}> · {Math.max(1, Math.ceil(message.content.split(/\s+/).length / 200))} min read</Text>
+        )}
       </Text>
 
       {/* Reaction display */}
@@ -366,6 +369,10 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 2,
     paddingHorizontal: spacing.md,
+  },
+  readTime: {
+    color: colors.textMuted,
+    opacity: 0.7,
   },
   timestampUser: {
     textAlign: 'right',

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useCallback } from 'react'
-import { IconX } from '@/components/ui'
+import { IconX } from '@sloughgpt/strui'
 
 interface ImageLightboxProps {
   src: string

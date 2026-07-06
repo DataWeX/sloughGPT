@@ -13,12 +13,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Textarea } from '@/components/ui/textarea'
-import { Slider } from '@/components/ui/slider'
-import { ToggleGroup as ToggleGroupRadix, ToggleGroupItem } from '@/components/ui/toggle-group'
+} from '@sloughgpt/strui'
+import { Button } from '@sloughgpt/strui'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Textarea } from '@sloughgpt/strui'
+import { Slider } from '@sloughgpt/strui'
+import { ToggleGroup as ToggleGroupRadix, ToggleGroupItem } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { useSettings, useUpdateSettings } from '@/lib/store'
 import { useApiHealth } from '@/hooks/useApiHealth'

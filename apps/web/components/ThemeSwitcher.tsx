@@ -2,7 +2,7 @@
 
 import { IconMoon, IconSun } from '@/components/icons/NavIcons'
 
-import { Button } from '@/components/ui/button'
+import { Button } from '@sloughgpt/strui'
 import { useTheme, THEMES } from './ThemeProvider'
 
 export function ThemeSwitcher() {

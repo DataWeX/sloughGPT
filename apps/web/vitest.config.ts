@@ -12,6 +12,7 @@ export default defineConfig({
       ['components/**/*.test.{ts,tsx}', 'jsdom'],
       ['hooks/**/*.test.{ts,tsx}', 'jsdom'],
       ['app/**/*.test.{ts,tsx}', 'jsdom'],
+      ['lib/sync-html-theme.test.ts', 'jsdom'],
     ],
     include: [
       'lib/**/*.test.ts',
@@ -35,6 +36,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
+      '@sloughgpt/strui': path.resolve(__dirname, '../../packages/strui/src'),
     },
   },
 })

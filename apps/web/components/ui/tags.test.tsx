@@ -3,7 +3,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Chip, Chips, Badge, TagInput } from './tags'
+import { Chip, Chips, Badge, TagInput } from '@sloughgpt/strui'
 
 afterEach(cleanup)
 
@@ -125,22 +125,22 @@ describe('Badge (tags)', () => {
 
   it('applies default variant', () => {
     const { container } = render(<Badge label="Default" />)
-    expect(container.firstChild).toHaveClass('bg-primary/10')
+    expect(container.firstChild).toHaveClass('bg-primary')
   })
 
   it('applies success variant', () => {
     const { container } = render(<Badge label="Done" variant="success" />)
-    expect(container.firstChild).toHaveClass('bg-success/10')
+    expect(container.firstChild).toHaveClass('bg-success/15')
   })
 
   it('applies warning variant', () => {
     const { container } = render(<Badge label="Caution" variant="warning" />)
-    expect(container.firstChild).toHaveClass('bg-warning/10')
+    expect(container.firstChild).toHaveClass('bg-warning/15')
   })
 
   it('applies error variant', () => {
     const { container } = render(<Badge label="Fail" variant="error" />)
-    expect(container.firstChild).toHaveClass('bg-destructive/10')
+    expect(container.firstChild).toHaveClass('bg-destructive/15')
   })
 
   it('applies outline variant', () => {

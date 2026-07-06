@@ -2,11 +2,11 @@
 
 import { useState } from 'react'
 import { datasetController, type ImportSource, type GitHubRepo, type BookResult, type ImportResponse } from '@/lib/dataset-controller'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Spinner, IconCheck } from '@/components/ui'
+import { Button } from '@sloughgpt/strui'
+import { Input } from '@sloughgpt/strui'
+import { Label } from '@sloughgpt/strui'
+import { Badge } from '@sloughgpt/strui'
+import { Spinner, IconCheck } from '@sloughgpt/strui'
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from '@sloughgpt/strui'
 
 interface DatasetImportModalProps {
   open: boolean

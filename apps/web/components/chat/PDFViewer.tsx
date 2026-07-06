@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { Button } from '@/components/ui/button'
-import { Chip } from '@/components/ui/tags'
-import { IconChevronLeft, IconChevronRight, IconX } from '@/components/ui/icons'
+import { Button } from '@sloughgpt/strui'
+import { Chip } from '@sloughgpt/strui'
+import { IconChevronLeft, IconChevronRight, IconX } from '@sloughgpt/strui'
 
 interface PDFViewerProps {
   pages: string[]

@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogPortal, DialogOverlay } from '@/components/ui/dialog'
-import { IconSearch, IconMessage, IconX } from '@/components/ui'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogPortal, DialogOverlay } from '@sloughgpt/strui'
+import { IconSearch, IconMessage, IconX } from '@sloughgpt/strui'
 import { chatDB } from '@/lib/db'
 import type { ChatMessage } from '@/lib/chat-utils'
 import { cn } from '@/lib/cn'

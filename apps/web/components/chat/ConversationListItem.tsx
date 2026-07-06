@@ -1,14 +1,14 @@
 'use client'
 
-import { Button } from '@/components/ui/button'
+import { Button } from '@sloughgpt/strui'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { IconStar, IconPin, IconChat, IconMore, IconEdit, IconCopy, IconDownload, IconTrash } from '@/components/ui'
+} from '@sloughgpt/strui'
+import { IconStar, IconPin, IconChat, IconMore, IconEdit, IconCopy, IconDownload, IconTrash } from '@sloughgpt/strui'
 import { cn } from '@/lib/cn'
 import type { Conversation as ApiConversation } from '@/lib/session-controller'
 
