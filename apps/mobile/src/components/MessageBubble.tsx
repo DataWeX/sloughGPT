@@ -43,10 +43,10 @@ interface Props {
   onRegenerate?: () => void;
   onFeedback?: (positive: boolean) => void;
   onDelete?: () => void;
-  onReply?: () => void;
+  onRetry?: () => void;
 }
 
-export function MessageBubble({message, highlight, onRegenerate, onFeedback, onDelete, onReply}: Props) {
+export function MessageBubble({message, highlight, onRegenerate, onFeedback, onDelete, onRetry}: Props) {
   const isUser = message.role === 'user';
   const [showContextMenu, setShowContextMenu] = useState(false);
   const translateX = useRef(new Animated.Value(0)).current;
@@ -121,6 +121,7 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
       {icon: '👎', label: 'Bad response', onPress: () => { setShowContextMenu(false); onFeedback?.(false); }},
       {icon: '↻', label: 'Regenerate', onPress: () => { setShowContextMenu(false); onRegenerate?.(); }},
     ]),
+    ...(!message.content && isUser ? [{icon: '↻', label: 'Retry', onPress: () => { setShowContextMenu(false); onRetry?.(); }}] : []),
     {icon: '🗑', label: 'Delete', destructive: true, onPress: handleDelete},
   ];
 

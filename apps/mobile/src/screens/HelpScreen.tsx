@@ -73,11 +73,23 @@ export function HelpScreen() {
           </View>
           <View style={styles.shortcutRow}>
             <Text style={styles.shortcutKey}>Long press</Text>
-            <Text style={styles.shortcutDesc}>Message actions (copy, feedback, regenerate)</Text>
+            <Text style={styles.shortcutDesc}>Message actions (copy, good/bad, regenerate, delete)</Text>
+          </View>
+          <View style={styles.shortcutRow}>
+            <Text style={styles.shortcutKey}>Swipe left</Text>
+            <Text style={styles.shortcutDesc}>Delete message</Text>
           </View>
           <View style={styles.shortcutRow}>
             <Text style={styles.shortcutKey}>Pull down</Text>
             <Text style={styles.shortcutDesc}>Refresh data</Text>
+          </View>
+          <View style={styles.shortcutRow}>
+            <Text style={styles.shortcutKey}>🎤 Button</Text>
+            <Text style={styles.shortcutDesc}>Voice input (tap to record, tap to stop & send)</Text>
+          </View>
+          <View style={styles.shortcutRow}>
+            <Text style={styles.shortcutKey}>+ Button</Text>
+            <Text style={styles.shortcutDesc}>Attach image from gallery</Text>
           </View>
         </View>
 
