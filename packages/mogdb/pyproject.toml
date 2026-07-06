@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mogdb"
+dynamic = ["version"]
+description = "Lightweight document-oriented embedded database engine — MongoDB-compatible query syntax, JSONL journal, compaction."
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "SloughGPT" }]
+requires-python = ">=3.9"
+keywords = ["database", "document", "embedded", "jsonl", "mongodb"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Database :: Database Engines/Servers",
+    "Programming Language :: Python :: 3",
+]
+dependencies = []
+
+[project.scripts]
+mogdb = "mogdb.server:main"
+mogdb-server = "mogdb.server:main"
+mogdb-client = "mogdb.client_cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools_scm]
+root = "../.."
+relative_to = "pyproject.toml"
+version_scheme = "no-guess-dev"
