@@ -228,11 +228,20 @@ export function ChatScreen() {
 
         {messages.length === 0 && !streaming ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyEmoji}>💬</Text>
-            <Text style={styles.emptyTitle}>Start a conversation</Text>
+            <View style={styles.emptyIllustration}>
+              <Text style={styles.emptyEmoji}>💬</Text>
+              <View style={styles.emptyDotRow}>
+                <View style={[styles.emptyDot, {opacity: 0.3}]} />
+                <View style={[styles.emptyDot, {opacity: 0.5}]} />
+                <View style={[styles.emptyDot, {opacity: 0.8}]} />
+              </View>
+            </View>
+            <Text style={styles.emptyTitle}>
+              {currentSoul ? `Chat with ${currentSoul.name}` : 'Start a conversation'}
+            </Text>
             <Text style={styles.emptySubtitle}>
               {currentSoul
-                ? `Chatting with ${currentSoul.name}`
+                ? `${currentSoul.description || 'Ask me anything'}`
                 : 'Type a message below to begin'}
             </Text>
             <View style={styles.suggestions}>
@@ -245,6 +254,7 @@ export function ChatScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+            <Text style={styles.emptyHint}>Swipe left on a message to delete it</Text>
           </View>
         ) : (
           <Pressable style={{flex: 1}} onPress={() => Keyboard.dismiss()}>
@@ -572,9 +582,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.xxxl,
   },
-  emptyEmoji: {
-    fontSize: 48,
+  emptyIllustration: {
+    alignItems: 'center',
     marginBottom: spacing.lg,
+  },
+  emptyEmoji: {
+    fontSize: 56,
+    marginBottom: spacing.sm,
+  },
+  emptyDotRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  emptyDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
   },
   emptyTitle: {
     ...typography.h2,
@@ -586,6 +610,12 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: spacing.xxl,
+  },
+  emptyHint: {
+    ...typography.small,
+    color: colors.textMuted,
+    marginTop: spacing.xxl,
+    textAlign: 'center',
   },
   suggestions: {
     gap: spacing.sm,

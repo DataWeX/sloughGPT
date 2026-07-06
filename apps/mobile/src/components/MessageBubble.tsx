@@ -7,10 +7,13 @@ import {
   Alert,
   Animated,
   PanResponder,
+  Modal,
+  Pressable,
 } from 'react-native';
 import {Markdown} from './Markdown';
 import {copyToClipboard} from '../services/clipboard';
 import {triggerHaptic} from '../services/haptics';
+import {sounds} from '../services/sounds';
 import {colors, spacing, radii, typography} from '../theme';
 import type {Message} from '../types';
 
@@ -26,17 +29,25 @@ function formatTime(ts: number): string {
 const SWIPE_THRESHOLD = -80;
 const DELETE_WIDTH = 72;
 
+interface ContextAction {
+  icon: string;
+  label: string;
+  destructive?: boolean;
+  onPress: () => void;
+}
+
 interface Props {
   message: Message;
   highlight?: boolean;
   onRegenerate?: () => void;
   onFeedback?: (positive: boolean) => void;
   onDelete?: () => void;
+  onReply?: () => void;
 }
 
-export function MessageBubble({message, highlight, onRegenerate, onFeedback, onDelete}: Props) {
+export function MessageBubble({message, highlight, onRegenerate, onFeedback, onDelete, onReply}: Props) {
   const isUser = message.role === 'user';
-  const [showActions, setShowActions] = useState(false);
+  const [showContextMenu, setShowContextMenu] = useState(false);
   const translateX = useRef(new Animated.Value(0)).current;
   const isSwipeOpen = useRef(false);
 
@@ -55,7 +66,6 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
       },
       onPanResponderRelease: (_, gestureState) => {
         if (gestureState.dx < SWIPE_THRESHOLD && !isSwipeOpen.current) {
-          // Swipe left → reveal delete
           Animated.spring(translateX, {
             toValue: -DELETE_WIDTH,
             useNativeDriver: true,
@@ -63,7 +73,6 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
           isSwipeOpen.current = true;
           triggerHaptic('light');
         } else {
-          // Snap back
           Animated.spring(translateX, {
             toValue: 0,
             useNativeDriver: true,
@@ -75,30 +84,27 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
   ).current;
 
   const handleLongPress = () => {
-    setShowActions(!showActions);
+    triggerHaptic('medium');
+    setShowContextMenu(true);
   };
 
   const handleCopy = async () => {
+    setShowContextMenu(false);
     const ok = await copyToClipboard(message.content);
-    setShowActions(false);
     if (ok) {
-      Alert.alert('Copied', 'Message copied to clipboard');
+      triggerHaptic('success');
     }
   };
 
   const handleDelete = () => {
-    triggerHaptic('medium');
+    setShowContextMenu(false);
     Alert.alert('Delete message', 'Remove this message from the conversation?', [
       {text: 'Cancel', style: 'cancel'},
       {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
-          Animated.timing(translateX, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          }).start(() => {
+          Animated.timing(translateX, {toValue: 0, duration: 200, useNativeDriver: true}).start(() => {
             isSwipeOpen.current = false;
             onDelete?.();
           });
@@ -106,6 +112,16 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
       },
     ]);
   };
+
+  const contextActions: ContextAction[] = [
+    {icon: '📋', label: 'Copy', onPress: handleCopy},
+    ...(isUser ? [] : [
+      {icon: '👍', label: 'Good response', onPress: () => { setShowContextMenu(false); onFeedback?.(true); }},
+      {icon: '👎', label: 'Bad response', onPress: () => { setShowContextMenu(false); onFeedback?.(false); }},
+      {icon: '↻', label: 'Regenerate', onPress: () => { setShowContextMenu(false); onRegenerate?.(); }},
+    ]),
+    {icon: '🗑', label: 'Delete', destructive: true, onPress: handleDelete},
+  ];
 
   return (
     <View style={[styles.row, isUser && styles.rowUser]}>
@@ -136,40 +152,37 @@ export function MessageBubble({message, highlight, onRegenerate, onFeedback, onD
         {formatTime(message.timestamp)}
       </Text>
 
-      {showActions && (
-        <View style={styles.actions}>
-          <TouchableOpacity style={styles.actionBtn} onPress={handleCopy}>
-            <View style={[styles.actionIcon, {backgroundColor: colors.surface}]}>
-              <Markdown content="📋" />
+      {/* Context Menu Modal */}
+      <Modal
+        visible={showContextMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowContextMenu(false)}>
+        <Pressable style={styles.overlay} onPress={() => setShowContextMenu(false)}>
+          <View style={[styles.contextMenu, isUser && styles.contextMenuUser]}>
+            {/* Preview */}
+            <View style={styles.contextPreview}>
+              <Text style={styles.contextPreviewText} numberOfLines={2}>
+                {message.content || 'Thinking...'}
+              </Text>
             </View>
-          </TouchableOpacity>
-          {!isUser && (
-            <>
+
+            {/* Actions */}
+            {contextActions.map((action, i) => (
               <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={() => { onFeedback?.(true); setShowActions(false); }}>
-                <View style={[styles.actionIcon, {backgroundColor: colors.success + '20'}]}>
-                  <Markdown content="👍" />
-                </View>
+                key={i}
+                style={[styles.contextAction, action.destructive && styles.contextActionDestructive]}
+                onPress={action.onPress}
+                activeOpacity={0.6}>
+                <Text style={styles.contextIcon}>{action.icon}</Text>
+                <Text style={[styles.contextLabel, action.destructive && styles.contextLabelDestructive]}>
+                  {action.label}
+                </Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={() => { onFeedback?.(false); setShowActions(false); }}>
-                <View style={[styles.actionIcon, {backgroundColor: colors.error + '20'}]}>
-                  <Markdown content="👎" />
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={() => { onRegenerate?.(); setShowActions(false); }}>
-                <View style={[styles.actionIcon, {backgroundColor: colors.primary + '20'}]}>
-                  <Markdown content="↻" />
-                </View>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      )}
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -230,19 +243,6 @@ const styles = StyleSheet.create({
   assistantText: {
     color: colors.text,
   },
-  actions: {
-    flexDirection: 'row',
-    marginTop: spacing.xs,
-    gap: spacing.xs,
-  },
-  actionBtn: {},
-  actionIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: radii.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   timestamp: {
     ...typography.small,
     color: colors.textMuted,
@@ -251,5 +251,64 @@ const styles = StyleSheet.create({
   },
   timestampUser: {
     textAlign: 'right',
+  },
+  // Context menu
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  contextMenu: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    width: '100%',
+    maxWidth: 280,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 8},
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  contextMenuUser: {
+    alignItems: 'flex-end',
+  },
+  contextPreview: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  contextPreviewText: {
+    ...typography.small,
+    color: colors.textMuted,
+    lineHeight: 18,
+  },
+  contextAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    gap: 12,
+  },
+  contextActionDestructive: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  contextIcon: {
+    fontSize: 18,
+    width: 28,
+    textAlign: 'center',
+  },
+  contextLabel: {
+    ...typography.body,
+    color: colors.text,
+    fontSize: 15,
+  },
+  contextLabelDestructive: {
+    color: colors.error,
   },
 });
