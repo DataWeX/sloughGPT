@@ -289,17 +289,6 @@ class DatasetsController:
             if src.exists():
                 shutil.copy2(src, path / fname)
         return True
-        """Append data rows to a dataset's corpus file"""
-        path = self.datasets_dir / dataset_id
-        if not path.exists():
-            return None
-        corpus_file = path / "corpus.jsonl"
-        count = 0
-        with open(corpus_file, "a") as f:
-            for line in data:
-                f.write(json.dumps({"text": line}) + "\n")
-                count += 1
-        return count
 
     def preview_dataset(self, dataset_id: str, limit: int = 10) -> Optional[dict]:
         """Return a preview of dataset contents (first N rows)."""
