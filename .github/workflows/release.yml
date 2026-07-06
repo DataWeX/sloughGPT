@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Create Release
+    needs: [ci]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV=$(git tag --sort=-v:refname | head -2 | tail -1 || echo "")
+          if [ -z "$PREV" ]; then
+            RANGE="HEAD"
+          else
+            RANGE="$PREV..HEAD"
+          fi
+          git log "$RANGE" --oneline --no-decorate > /tmp/changelog.txt
+          echo "Changelog written ($(wc -l < /tmp/changelog.txt) commits)"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: /tmp/changelog.txt
+          generate_release_notes: true
+          draft: false
+          prerelease: false
