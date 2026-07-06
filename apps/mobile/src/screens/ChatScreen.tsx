@@ -95,6 +95,14 @@ export function ChatScreen() {
     }
   }, [messages, atBottom]);
 
+  const handleFile = useCallback(
+    (content: string, name: string) => {
+      const truncated = content.length > 2000 ? content.slice(0, 2000) + '\n...(truncated)' : content;
+      sendMessage(`Here's the file "${name}":\n\n${truncated}`);
+    },
+    [sendMessage],
+  );
+
   const handleSend = useCallback(
     (text: string) => {
       sendMessage(text);
@@ -354,6 +362,7 @@ export function ChatScreen() {
           onSend={handleSend}
           onImage={handleImage}
           onVoice={handleVoice}
+          onFile={handleFile}
           disabled={streaming}
           onStop={cancelStream}
           isRecording={isRecording}

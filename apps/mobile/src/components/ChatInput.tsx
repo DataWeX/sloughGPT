@@ -10,17 +10,20 @@ import {
 import {colors, spacing, radii, typography} from '../theme';
 import {triggerHaptic} from '../services/haptics';
 import {QuickPromptPicker} from './QuickPromptPicker';
+import {pickDocument, isTextFile, formatFileSize} from '../services/file-upload';
+import {toast} from '../services/toast';
 
 interface Props {
   onSend: (text: string) => void;
   onImage?: () => void;
   onVoice?: () => void;
+  onFile?: (content: string, name: string) => void;
   disabled?: boolean;
   onStop?: () => void;
   isRecording?: boolean;
 }
 
-export function ChatInput({onSend, onImage, onVoice, disabled, onStop, isRecording}: Props) {
+export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, isRecording}: Props) {
   const [text, setText] = useState('');
   const [showPrompts, setShowPrompts] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -40,6 +43,26 @@ export function ChatInput({onSend, onImage, onVoice, disabled, onStop, isRecordi
     setTimeout(() => inputRef.current?.focus(), 100);
   };
 
+  const handlePlus = async () => {
+    await triggerHaptic('light');
+    try {
+      const file = await pickDocument();
+      if (file) {
+        if (isTextFile(file) && onFile) {
+          const FileSystem = require('expo-file-system');
+          const content = await FileSystem.readAsStringAsync(file.uri);
+          onFile(content, file.name);
+        } else if (file.mimeType.startsWith('image/') && onImage) {
+          onImage();
+        } else {
+          toast.warn(`${file.name} (${formatFileSize(file.size)}) — text files only for now`);
+        }
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to pick file');
+    }
+  };
+
   const hasText = text.trim().length > 0;
 
   return (
@@ -47,7 +70,7 @@ export function ChatInput({onSend, onImage, onVoice, disabled, onStop, isRecordi
       <View style={styles.inputRow}>
         <TouchableOpacity
           style={styles.iconBtn}
-          onPress={onImage}
+          onPress={handlePlus}
           disabled={disabled}>
           <Text style={styles.iconText}>+</Text>
         </TouchableOpacity>
