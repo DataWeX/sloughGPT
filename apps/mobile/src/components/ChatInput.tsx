@@ -6,14 +6,14 @@ import {
   Text,
   StyleSheet,
   Keyboard,
-  Alert,
 } from 'react-native';
 import {colors, spacing, radii, typography} from '../theme';
 import {triggerHaptic} from '../services/haptics';
+import {QuickPromptPicker} from './QuickPromptPicker';
 
 interface Props {
   onSend: (text: string) => void;
-  onImage?: (base64: string) => void;
+  onImage?: () => void;
   onVoice?: () => void;
   disabled?: boolean;
   onStop?: () => void;
@@ -22,6 +22,7 @@ interface Props {
 
 export function ChatInput({onSend, onImage, onVoice, disabled, onStop, isRecording}: Props) {
   const [text, setText] = useState('');
+  const [showPrompts, setShowPrompts] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
   const handleSend = async () => {
@@ -33,18 +34,10 @@ export function ChatInput({onSend, onImage, onVoice, disabled, onStop, isRecordi
     Keyboard.dismiss();
   };
 
-  const handleImage = async () => {
-    await triggerHaptic('light');
-    if (onImage) {
-      onImage('');
-    }
-  };
-
-  const handleVoice = async () => {
-    await triggerHaptic('light');
-    if (onVoice) {
-      onVoice();
-    }
+  const handlePromptSelect = (prompt: string) => {
+    setText(prompt);
+    // Focus input so user can fill in {placeholders}
+    setTimeout(() => inputRef.current?.focus(), 100);
   };
 
   const hasText = text.trim().length > 0;
@@ -54,9 +47,19 @@ export function ChatInput({onSend, onImage, onVoice, disabled, onStop, isRecordi
       <View style={styles.inputRow}>
         <TouchableOpacity
           style={styles.iconBtn}
-          onPress={handleImage}
+          onPress={onImage}
           disabled={disabled}>
           <Text style={styles.iconText}>+</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.iconBtn}
+          onPress={() => {
+            triggerHaptic('light');
+            setShowPrompts(true);
+          }}
+          disabled={disabled}>
+          <Text style={styles.iconText}>⚡</Text>
         </TouchableOpacity>
 
         <TextInput
@@ -87,7 +90,7 @@ export function ChatInput({onSend, onImage, onVoice, disabled, onStop, isRecordi
         ) : (
           <TouchableOpacity
             style={[styles.voiceBtn, isRecording && styles.voiceBtnActive]}
-            onPress={handleVoice}>
+            onPress={onVoice}>
             <Text style={styles.voiceIcon}>{isRecording ? '■' : '🎤'}</Text>
           </TouchableOpacity>
         )}
@@ -99,6 +102,12 @@ export function ChatInput({onSend, onImage, onVoice, disabled, onStop, isRecordi
           <Text style={styles.recordingText}>Recording...</Text>
         </View>
       )}
+
+      <QuickPromptPicker
+        visible={showPrompts}
+        onClose={() => setShowPrompts(false)}
+        onSelect={handlePromptSelect}
+      />
     </View>
   );
 }
@@ -127,9 +136,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   iconText: {
-    fontSize: 20,
+    fontSize: 18,
     color: colors.textSecondary,
-    fontWeight: '600',
   },
   input: {
     flex: 1,

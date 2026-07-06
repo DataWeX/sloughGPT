@@ -12,6 +12,7 @@ import {ActivityScreen} from './src/screens/ActivityScreen';
 import {SettingsScreen} from './src/screens/SettingsScreen';
 import {HealthScreen} from './src/screens/HealthScreen';
 import {AboutScreen} from './src/screens/AboutScreen';
+import {SearchScreen} from './src/screens/SearchScreen';
 import {useModelStore} from './src/stores/model-store';
 import {useSettingsStore} from './src/stores/settings-store';
 import {ThemeProvider, useTheme} from './src/theme/ThemeContext';
@@ -30,10 +31,10 @@ const Stack = createNativeStackNavigator();
 
 const TAB_ICONS: Record<string, string> = {
   Chat: '💬',
+  Search: '🔍',
   Models: '🧠',
   Train: '🏋️',
   Knowledge: '📚',
-  Activity: '📱',
   Settings: '⚙️',
 };
 
@@ -144,6 +145,7 @@ function AppInner() {
             },
           })}>
           <Tab.Screen name="Chat" component={ChatScreen} />
+          <Tab.Screen name="Search" component={SearchScreen} />
           <Tab.Screen name="Models" component={ModelsScreen} />
           <Tab.Screen name="Train" component={TrainingScreen} />
           <Tab.Screen name="Knowledge" component={KnowledgeScreen} />
