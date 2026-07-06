@@ -11,8 +11,10 @@ import { useToastStore } from '@/lib/toast-store'
 import ModelsCard from '@/components/compare/ModelsCard'
 import ComparisonTableCard from '@/components/compare/ComparisonTableCard'
 import SummaryCard from '@/components/compare/SummaryCard'
-import OutputComparisonCard from '@/components/compare/OutputComparisonCard'
 import dynamicNext from 'next/dynamic'
+
+const outputComparisonCardPath = '@/components/compare/OutputComparisonCard'
+const OutputComparisonCard = dynamicNext<{ models: ModelEntry[] }>(() => import(outputComparisonCardPath) as Promise<{ default: React.ComponentType<{ models: ModelEntry[] }> }>, { ssr: false })
 
 const VisualComparisonCard = dynamicNext(() => import('@/components/compare/VisualComparisonCard'), { ssr: false })
 

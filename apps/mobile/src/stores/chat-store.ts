@@ -434,7 +434,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (useHybridStore.getState().offlineOnly) {
       set({error: 'Offline mode: load a local engine in Settings', streaming: false});
       toast.warn('Enable offline mode only when a local engine is loaded');
-      await triggerHaptic('warning');
+      await triggerHaptic('medium');
       return;
     }
 
