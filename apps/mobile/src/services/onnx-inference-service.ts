@@ -20,6 +20,7 @@ import type {
   MobileExportResponse,
   MobileExportConfig,
   LocalGenerateResult,
+  OnTokenCallback,
 } from '../types/local-inference';
 
 const CACHE_KEY_PREFIX = '@sloughgpt/slonet_';
@@ -203,6 +204,7 @@ function _forwardSingle(
   topP: number,
   maxNewTokens: number,
   eosToken: number,
+  onToken?: OnTokenCallback,
 ): string {
   const cfg = cp.config;
   const w = cp.weights;
@@ -407,6 +409,7 @@ function _forwardSingle(
     }
 
     genTokens.push(nextToken);
+    if (onToken) onToken(_decodeTokens([nextToken]));
     if (nextToken === eosToken) break;
     prompt.push(nextToken);
   }
@@ -476,6 +479,7 @@ export async function generate(
   topK = 40,
   topP = 0.9,
   eosToken = 0,
+  onToken?: OnTokenCallback,
 ): Promise<LocalGenerateResult> {
   if (!_loaded) throw new Error('No checkpoint loaded');
 

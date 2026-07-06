@@ -25,12 +25,15 @@ export interface LocalModelState {
   description: string;
 }
 
-/** Result from an on-device SloNet generate call. */
+/** Result from an on-device generate call. */
 export interface LocalGenerateResult {
   text: string;
   tokens_generated: number;
   elapsed_ms: number;
 }
+
+/** Callback for streaming tokens during local inference. */
+export type OnTokenCallback = (token: string) => void;
 
 /** Which inference engine the user wants to use. */
 export type ActiveEngine = 'slonet' | 'qwen' | 'remote';
