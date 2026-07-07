@@ -26,6 +26,8 @@ jobs:
             packages/strui/package-lock.json
       - run: npm ci
         working-directory: apps/web
+      - run: npm ci
+        working-directory: packages/strui
       - run: npx tsc --noEmit
         working-directory: apps/web
 
@@ -43,6 +45,8 @@ jobs:
             packages/strui/package-lock.json
       - run: npm ci
         working-directory: apps/web
+      - run: npm ci
+        working-directory: packages/strui
       - run: npm run test:lib
         working-directory: apps/web
 
@@ -60,7 +64,7 @@ jobs:
             packages/strui/package-lock.json
       - run: npm ci
         working-directory: apps/web
-      - run: npm ci --omit=peer
+      - run: npm ci
         working-directory: packages/strui
       - name: Ensure @sloughgpt/strui symlink
         run: |
@@ -86,6 +90,15 @@ jobs:
             apps/web/package-lock.json
             packages/strui/package-lock.json
       - run: npm ci
+        working-directory: apps/web
+      - run: npm ci
+        working-directory: packages/strui
+      - name: Ensure @sloughgpt/strui symlink
+        run: |
+          if [ ! -L node_modules/@sloughgpt/strui ] && [ ! -d node_modules/@sloughgpt/strui ]; then
+            mkdir -p node_modules/@sloughgpt
+            ln -sfn ../../../../packages/strui node_modules/@sloughgpt/strui
+          fi
         working-directory: apps/web
       - run: npm run build
         working-directory: apps/web

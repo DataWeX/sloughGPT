@@ -16,7 +16,9 @@
     "plugins": [{ "name": "next" }],
     "types": ["@webgpu/types"],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@sloughgpt/strui": ["../../packages/strui/src"],
+      "@sloughgpt/strui/*": ["../../packages/strui/src/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

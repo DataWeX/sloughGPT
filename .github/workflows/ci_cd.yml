@@ -153,6 +153,8 @@ jobs:
 
       - run: npm ci
         working-directory: apps/web
+      - run: npm ci
+        working-directory: packages/strui
       - name: Ensure @sloughgpt/strui symlink
         run: |
           if [ ! -L node_modules/@sloughgpt/strui ] && [ ! -d node_modules/@sloughgpt/strui ]; then
