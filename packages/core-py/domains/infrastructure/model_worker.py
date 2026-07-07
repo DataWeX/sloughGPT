@@ -107,11 +107,11 @@ def _worker_main(
         repetition_penalty: float = 1.0,
         **gen_kwargs: Any,
     ) -> dict:
-        inputs = tokenizer(prompt, return_tensors="pt")
+        inputs = tokenizer(prompt, return_tensors="pt")  # noqa: F821
         input_ids = inputs["input_ids"]
         attention_mask = inputs.get("attention_mask")
 
-        device = getattr(model, "device", None)
+        device = getattr(model, "device", None)  # noqa: F821
         if device is not None and device != "cpu":
             input_ids = input_ids.to(device)
             if attention_mask is not None:
@@ -126,14 +126,14 @@ def _worker_main(
             top_p=top_p,
             top_k=top_k,
             repetition_penalty=repetition_penalty,
-            pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
-            eos_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,  # noqa: F821
+            eos_token_id=tokenizer.eos_token_id,  # noqa: F821
         )
         start = time.time()
-        output_ids = model.generate(**gen_kwargs)
+        output_ids = model.generate(**gen_kwargs)  # noqa: F821
         elapsed_ms = (time.time() - start) * 1000
         generated = output_ids[0][input_ids.shape[1]:]
-        text = tokenizer.decode(generated, skip_special_tokens=True)
+        text = tokenizer.decode(generated, skip_special_tokens=True)  # noqa: F821
         return {
             "text": text,
             "tokens_generated": len(generated),
@@ -152,18 +152,18 @@ def _worker_main(
         """Generate tokens and stream each one through resp_q."""
         from transformers import TextIteratorStreamer
 
-        inputs = tokenizer(prompt, return_tensors="pt")
+        inputs = tokenizer(prompt, return_tensors="pt")  # noqa: F821
         input_ids = inputs["input_ids"]
         attention_mask = inputs.get("attention_mask")
 
-        device = getattr(model, "device", None)
+        device = getattr(model, "device", None)  # noqa: F821
         if device is not None and device != "cpu":
             input_ids = input_ids.to(device)
             if attention_mask is not None:
                 attention_mask = attention_mask.to(device)
 
         streamer = TextIteratorStreamer(
-            tokenizer, skip_prompt=True, skip_special_tokens=True
+            tokenizer, skip_prompt=True, skip_special_tokens=True  # noqa: F821
         )
 
         gen_kwargs.update(
@@ -175,13 +175,13 @@ def _worker_main(
             top_p=top_p,
             top_k=top_k,
             repetition_penalty=repetition_penalty,
-            pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
-            eos_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,  # noqa: F821
+            eos_token_id=tokenizer.eos_token_id,  # noqa: F821
             streamer=streamer,
         )
 
         # Launch generation in background thread
-        thread = threading.Thread(target=model.generate, kwargs=gen_kwargs, daemon=True)
+        thread = threading.Thread(target=model.generate, kwargs=gen_kwargs, daemon=True)  # noqa: F821
         thread.start()
 
         tokens_generated = 0

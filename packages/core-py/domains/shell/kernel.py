@@ -208,9 +208,9 @@ class DaitRuntime:
         self._current_soul: str = ""
         self._boot_complete: bool = False
         self._boot_time: float = 0.0
-        self._init: "InitSystem" = None  # type: ignore  # lazy import below
-        self._devices: "DeviceManager" = None  # type: ignore  # lazy import below
-        self._vfs: "VFS" = None  # type: ignore  # lazy import below
+        self._init: "InitSystem" = None  # noqa: F821  # lazy import below
+        self._devices: "DeviceManager" = None  # noqa: F821  # lazy import below
+        self._vfs: "VFS" = None  # noqa: F821  # lazy import below
 
     def boot(self, shell_run: Callable[[str], str] | None = None) -> str:
         from .init import get_init_system

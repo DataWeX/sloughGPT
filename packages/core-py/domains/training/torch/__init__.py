@@ -1405,11 +1405,11 @@ class utils:
                     np.random.shuffle(indices)
                     for i in range(0, len(indices), self.batch_size):
                         batch = [self.dataset[indices[j]] for j in indices[i:i+self.batch_size]]
-                        yield _collate(batch)
+                        yield self._collate(batch)
                 else:
                     for i in range(0, len(self.dataset), self.batch_size):
                         batch = [self.dataset[j] for j in range(i, min(i+self.batch_size, len(self.dataset)))]
-                        yield _collate(batch)
+                        yield self._collate(batch)
             def _collate(self, batch):
                 if isinstance(batch[0], tuple):
                     return tuple(stack([b[i] for b in batch]) for i in range(len(batch[0])))
@@ -1420,7 +1420,7 @@ class utils:
         @staticmethod
         def pack_padded_sequence(sequences, lengths, batch_first=False): return sequences
         @staticmethod
-        def pad_packed_sequence(sequence, batch_first=False, padding_value=0.0): return sequence, lengths
+        def pad_packed_sequence(sequence, batch_first=False, padding_value=0.0): return sequence, sequence
     class tensorboard:
         class SummaryWriter:
             def __init__(self, log_dir=None, **kwargs): pass

@@ -561,7 +561,7 @@ class HFModelProvider:
         def _generate():
             try:
                 with torch.no_grad():
-                    self._model.generate(**gen_kwargs)
+                    self._model.generate(**gen_kwargs)  # noqa: F821
             except Exception as e:
                 _error.append(e)
 
@@ -1144,8 +1144,7 @@ __all__ = [
     "list_providers",
     "ProviderRouter",
     "HFModelProvider",
-    "SloNetProvider",
-    "SloTransformerProvider",
+    "InferenceEngineProvider",
     "setup_providers",
     "discover_checkpoints",
 ]

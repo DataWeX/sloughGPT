@@ -4,6 +4,7 @@ Knowledge Router - Knowledge base management backed by KnowledgeMemory.
 All operations use the vector-store-backed KnowledgeMemory (the same store
 used by entity_extractor, soul engine prompt injection, and chat enrichment).
 """
+import json
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
 from pydantic import BaseModel, Field
 from typing import Optional, List

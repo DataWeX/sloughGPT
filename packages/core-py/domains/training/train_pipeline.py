@@ -59,7 +59,6 @@ __all__ = [
     "prepare_data",
     "TrainerConfig",
     "SloughGPTTrainer",
-    "TrainerProtocol",
 ]
 
 

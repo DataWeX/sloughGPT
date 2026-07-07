@@ -136,4 +136,4 @@ class BenchmarkRunner:
         return result
 
 
-__all__ = ["TestFramework", "TestResult", "TestSuite", "test_decorator", "BenchmarkRunner"]
+__all__ = ["TestFramework", "TestResult", "TestSuite", "BenchmarkRunner"]

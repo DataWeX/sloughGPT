@@ -9,6 +9,7 @@ from pathlib import Path
 import json
 import logging
 import threading
+import torch
 logger = logging.getLogger("man.inference")
 
 try:

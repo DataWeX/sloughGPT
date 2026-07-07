@@ -46,9 +46,9 @@ class ActivityClassifier:
         self.conv1 = SloConv2D(6, conv_dim, kernel_size=(1, 7), padding=(0, 3))
         self.conv2 = SloConv2D(conv_dim, conv_dim, kernel_size=(1, 5), padding=(0, 2))
         self.fc = SloLinear(stats_dim + conv_dim, num_classes)
-        self._params: Optional[List["Tensor"]] = None
+        self._params: Optional[List["Tensor"]] = None  # noqa: F821
 
-    def parameters(self) -> List["Tensor"]:
+    def parameters(self) -> List["Tensor"]:  # noqa: F821
         if self._params is not None:
             return self._params
         self._params = (
@@ -84,7 +84,7 @@ class ActivityClassifier:
             p.data[:] = data[k]
         return model
 
-    def forward(self, x: "Tensor") -> "Tensor":
+    def forward(self, x: "Tensor") -> "Tensor":  # noqa: F821
         from domains.training.slonet import Tensor, relu
 
         # x: (batch, T, 6)
@@ -125,7 +125,7 @@ class ActivityClassifier:
         return self.fc.forward(joint)
 
 
-def _global_mean(t: "Tensor", axis: int) -> "Tensor":
+def _global_mean(t: "Tensor", axis: int) -> "Tensor":  # noqa: F821
     """Mean over one spatial axis with proper backward pass.
 
     For input (N, C, H, W) and axis=3, computes mean over W
@@ -321,7 +321,7 @@ def predict_activity(
     return pred, ACTIVITIES[pred], probs_np
 
 
-def _accuracy(logits: "Tensor", targets: np.ndarray) -> float:
+def _accuracy(logits: "Tensor", targets: np.ndarray) -> float:  # noqa: F821
     if len(targets) == 0:
         return 0.0
     preds = np.argmax(logits.data, axis=1)

@@ -738,7 +738,7 @@ async def stream(request: Request):
         try:
             while True:
                 if time.time() > deadline:
-                    logger.error("Auto-train SSE timed out after 1 hour — no completion event received")
+                    autotrain_logger.error("Auto-train SSE timed out after 1 hour — no completion event received")
                     yield sse_error("auto-train", "TIMEOUT", "Training SSE stream timed out")
                     return
                 # Check for disconnect before each queue wait
@@ -746,7 +746,7 @@ async def stream(request: Request):
                     if _auto_train_cancel_event is not None:
                         _auto_train_cancel_event.set()
                     worker_task.cancel()
-                    logger.info("Client disconnected from auto-train stream")
+                    autotrain_logger.info("Client disconnected from auto-train stream")
                     return
                 event = await _asyncio.wait_for(queue.get(), timeout=30.0)
                 yield event
@@ -768,7 +768,7 @@ async def stream(request: Request):
 
             await worker_task
         except TimeoutError:
-            logger.error("Auto-train SSE queue timed out — no event for 30s")
+            autotrain_logger.error("Auto-train SSE queue timed out — no event for 30s")
             yield sse_error("auto-train", "TIMEOUT", "No training progress for 30 seconds")
         except Exception:
             pass

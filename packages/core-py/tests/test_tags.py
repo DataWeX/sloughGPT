@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 
-def _make_tags(dimension: int = 8) -> "MeaningTags":
+def _make_tags(dimension: int = 8) -> "MeaningTags":  # noqa: F821
     """Create a MeaningTags instance with test vectors."""
     from domains.infrastructure.anchor_store import MeaningTags
     store = MeaningTags(dimension=dimension)

@@ -203,6 +203,7 @@ W = np.random.randn(768).astype(np.float32)
 B = np.random.randn(768).astype(np.float32)
 
 def sn_separate():
+    from domains.slolib.gpu import get_accelerator
     acc = get_accelerator()
     n = acc.layer_norm(X, W, B)
     acc.gelu(n)

@@ -1906,8 +1906,8 @@ class SloMultiHeadAttention(SloLayer):
         if self.use_rope:
             cos, sin = self.rope.forward(N, start_pos)
             cos_a, sin_a = cos.reshape(1, N, 1, E), sin.reshape(1, N, 1, E)
-            Q_r = Q_r * cos_a + _rotate_half_np(Q_r) * sin_a
-            K_r = K_r * cos_a + _rotate_half_np(K_r) * sin_a
+            Q_r = Q_r * cos_a + _rotate_half(Q_r) * sin_a
+            K_r = K_r * cos_a + _rotate_half(K_r) * sin_a
         if kv_cache is not None:
             k_cache, v_cache = kv_cache
             K_r = np.concatenate([k_cache, K_r], axis=1)

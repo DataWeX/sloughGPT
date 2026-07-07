@@ -144,6 +144,7 @@ class SloNetChatProvider:
                 except Exception as e:
                     # If numpy framework not supported, fall back to pt
                     try:
+                        import torch
                         from safetensors import safe_open
                         with safe_open(str(f), framework="pt", device="cpu") as sf:
                             for k in sf.keys():

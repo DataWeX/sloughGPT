@@ -18,6 +18,8 @@ from typing import List
 
 import numpy as np
 
+logger = logging.getLogger("man.training.train_text")
+
 from domains.training.slonet import (
     SloTransformer, SloAdam, cross_entropy, tensor, export_to_sou, no_grad,
 )

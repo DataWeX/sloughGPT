@@ -1431,6 +1431,5 @@ __all__ = [
     "MultiHopRAG",
     "EndicIndex",
     "RAGEngine",
-    "SpacedRepetitionScheduler",
     "SLOKnowledgeGraph",
 ]

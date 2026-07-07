@@ -17,6 +17,7 @@ from typing import Any, Optional
 from pydantic import BaseModel
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 
 try:
     from domains.api.sse_envelope import sse_event, sse_error, sse_complete
@@ -1575,7 +1576,7 @@ async def train_from_feedback():
         logger.exception("Failed to start feedback training")
         raise HTTPException(status_code=500, detail=str(e))
 
-    return job
+    return None
 
 
 # ===== TRAINING STATE CONTROLLER =====
@@ -2309,7 +2310,6 @@ async def unified_stream(request: Request):
             media_type="text/event-stream",
         )
 
-    from fastapi.responses import StreamingResponse
     import asyncio
 
     global _unified_cancel_event

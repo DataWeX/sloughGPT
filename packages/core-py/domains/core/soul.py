@@ -146,7 +146,7 @@ class SloEngine:
         self._inference_optimizer = None
         self._grounding: Optional[Any] = None
         self._hd_memory: Optional["HDMemoryStore"] = None
-        self._semantic_cache: Optional["SemanticCache"] = None
+        self._semantic_cache: Optional["SemanticCache"] = None  # noqa: F821
         self._cache_enabled: bool = False
         self._init_cognitive()
         self._init_hd_memory()
