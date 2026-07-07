@@ -9,8 +9,8 @@ describe('Multimodal page', () => {
 
   it('renders all cards, manages checkpoints', () => {
     cy.contains('h1', 'Multimodal', { timeout: 20000 }).should('be.visible')
-    cy.contains('Train vision model', { timeout: 20000 }).scrollIntoView().should('be.visible')
-    cy.contains('Load trained model', { timeout: 20000 }).scrollIntoView({ ensureScrollable: false }).should('be.visible')
+    cy.contains('Image Training', { timeout: 20000 }).scrollIntoView({ ensureScrollable: false }).should('be.visible')
+    cy.contains('Upload image', { timeout: 20000 }).scrollIntoView({ ensureScrollable: false }).should('be.visible')
     cy.contains('Capabilities').scrollIntoView({ ensureScrollable: false })
     cy.contains('Vision model').should('be.visible')
     cy.wait('@visualCheckpoints', { timeout: 20000 }).its('response.statusCode').should('eq', 200)
