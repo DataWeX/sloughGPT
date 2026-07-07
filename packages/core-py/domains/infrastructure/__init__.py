@@ -12,6 +12,10 @@ Provides:
   - EventBus — typed async pub/sub
   - TaskQueue, InProcessTaskQueue — async priority queue
   - LifecycleManager — ordered startup/shutdown with health gates
+  - DataRepository — domain-specific CRUD repos with pluggable backends
+    (SessionRepository, ConversationRepository, FeedbackRepository,
+     KnowledgeRepository, DatasetRepository, AgentRepository, TrainingJobRepository)
+  - DataModels — typed dataclasses for all persisted entities
 
 RAGEngine is at domains.cognitive.rag (deprecated here).
 """
@@ -27,6 +31,31 @@ from .lifecycle import (
     StartupHook,
     ShutdownHook,
     get_lifecycle_manager,
+)
+from .data_models import (
+    AgentData,
+    ConversationData,
+    DatasetData,
+    FeedbackData,
+    FeedbackStatsData,
+    KnowledgeFactData,
+    KnowledgeEntryData,
+    SessionContextData,
+    SessionData,
+    TrainingJobData,
+)
+from .data_repository import (
+    AgentRepository,
+    ConversationRepository,
+    DatasetRepository,
+    FeedbackRepository,
+    KnowledgeRepository,
+    RepositoryFactory,
+    SessionContextRepository,
+    SessionRepository,
+    SyncSQLiteRepository,
+    TrainingJobRepository,
+    get_repository_factory,
 )
 
 # Lazy import for deprecated rag module
@@ -47,4 +76,17 @@ __all__ = [
     "SpacedRepetitionScheduler",
     "IpcChannel", "IpcConfig", "is_rust_available",
     "RAGEngine", "SLOKnowledgeGraph",
+
+    # Data Models
+    "SessionData", "ConversationData", "FeedbackData", "FeedbackStatsData",
+    "KnowledgeFactData", "KnowledgeEntryData", "DatasetData", "AgentData",
+    "TrainingJobData", "SessionContextData",
+
+    # Data Repositories
+    "SessionRepository", "ConversationRepository", "FeedbackRepository",
+    "KnowledgeRepository", "DatasetRepository", "AgentRepository",
+    "TrainingJobRepository", "SessionContextRepository",
+
+    # Repository infrastructure
+    "RepositoryFactory", "SyncSQLiteRepository", "get_repository_factory",
 ]
