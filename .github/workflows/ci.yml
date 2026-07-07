@@ -57,9 +57,13 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: apps/web/package-lock.json
+          cache-dependency-path: |
+            apps/web/package-lock.json
+            packages/strui/package-lock.json
       - run: npm ci
         working-directory: apps/web
+      - run: npm ci --omit=peer
+        working-directory: packages/strui
       - run: npm run build
         working-directory: apps/web
 
@@ -73,9 +77,13 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: apps/web/package-lock.json
+          cache-dependency-path: |
+            apps/web/package-lock.json
+            packages/strui/package-lock.json
       - run: npm ci
         working-directory: apps/web
+      - run: npm ci --omit=peer
+        working-directory: packages/strui
       - run: npm run build
         working-directory: apps/web
       - run: npx start-server-and-test "npx next start -p 3010" http://localhost:3010 "npx cypress run --config baseUrl=http://localhost:3010"
