@@ -6,7 +6,7 @@ describe('Tokenizer page', () => {
     cy.contains('Tokenizer', { timeout: 30000 }).should('be.visible')
     cy.contains('50257', { timeout: 15000 }).should('be.visible')
     cy.contains('Samples', { timeout: 10000 }).should('be.visible')
-    cy.contains('div', 'the', { timeout: 10000 }).should('be.visible')
+    cy.get('[class*="sl-page"]').contains('the', { timeout: 10000 }).should('be.visible')
     cy.contains('button', 'Playground', { timeout: 5000 }).click()
     cy.contains('button', 'Tokenize', { timeout: 5000 }).should('be.visible')
   })
