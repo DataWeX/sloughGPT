@@ -297,6 +297,9 @@ class ModelServer:
             logger.warning("ModelServer[%s]: warmup failed: %s", self.model_id, e)
 
     def _check_device(self) -> None:
+        if self._model_ref is None:
+            self._device = "guard"
+            return
         if not _ensure_torch():
             self._device = "unknown"
             return
@@ -310,13 +313,26 @@ class ModelServer:
         except Exception:
             self._device = "unknown"
 
+    def drop_model_ref(self) -> None:
+        """Release the in-memory model reference.
+
+        When a ``ProcessGuard`` is active, the in-memory model is not needed
+        for inference. Calling this method sets ``_model_ref = None`` so the
+        model can be garbage collected, saving main-process memory.
+        """
+        with self._lock:
+            self._model_ref = None
+        self._device = "guard"
+        logger.info("ModelServer[%s]: dropped in-memory model ref (guard mode)", self.model_id)
+
     def _cleanup_kv_cache(self) -> None:
         """Clear any KV cache tensors the model may have accumulated."""
+        if self._model_ref is None:
+            return
         try:
             import torch
             if hasattr(self._model_ref, "past_key_values"):
                 self._model_ref.past_key_values = None
-            # Clear model's internal cache dict if it exists
             for attr in ("_past_key_values", "kv_cache", "_cache"):
                 if hasattr(self._model_ref, attr):
                     try:

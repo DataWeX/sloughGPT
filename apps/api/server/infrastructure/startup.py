@@ -1,19 +1,16 @@
 """
 Startup orchestrator — phased initialization of all server subsystems.
 
-Manages the 6-phase startup with proper error isolation so one
+Manages the multi-phase startup with proper error isolation so one
 subsystem's failure never crashes the entire server.
 
 Integrates with LifecycleManager for phase state machine, health gates,
-graceful drain, and EventBus integration.
+graceful drain, EventBus integration, and startup profiles.
 
-Phases:
-  1. Logging setup (async, sequential)
-  2. Model load (background)
-  3. W&B metrics server (background)
-  4. Multimodal engine (background)
-  5. Model registry (async, sequential)
-  6. Router registration (async, sequential)
+Hooks are scoped to startup profiles:
+* ``full`` — all components (AI model, W&B, multimodal, TaskQueue, Config)
+* ``quick`` — skip AI model load (for dev/testing)
+* ``minimal`` — core infrastructure only (logging, registry, routers)
 """
 
 from __future__ import annotations
@@ -31,6 +28,20 @@ from startup_progress import STARTUP_PHASE
 logger = logging.getLogger("man.startup")
 
 
+class StartupProfileSelector:
+    """Helper to resolve the active startup profile from config or env."""
+
+    @staticmethod
+    def resolve(config: ServerConfig) -> str:
+        """Return profile name: env var > config attribute > default."""
+        raw = os.environ.get("MAN_STARTUP_PROFILE", "")
+        if raw:
+            return raw.strip().lower()
+        if hasattr(config, "startup_profile"):
+            return config.startup_profile
+        return "full"
+
+
 class StartupOrchestrator:
     """Phased server initialization with LifecycleManager integration.
 
@@ -38,16 +49,25 @@ class StartupOrchestrator:
     Background phases (model load, W&B, multimodal) are non-critical —
     a failure there doesn't block the server from starting.
 
+    Supports startup profiles:
+    * ``full`` — all components including AI model, W&B, multimodal
+    * ``quick`` — skip AI model load (for dev/testing)
+    * ``minimal`` — core infrastructure only (logging, registry, routers)
+
     On shutdown, the lifecycle manager drains in-flight requests before
     running cleanup hooks.
     """
 
-    def __init__(self, app: FastAPI, config: ServerConfig):
+    def __init__(self, app: FastAPI, config: ServerConfig, profile: str | None = None):
         self._app = app
         self._config = config
+        self._profile = profile or StartupProfileSelector.resolve(config)
         self._wandb_task: Optional[asyncio.Task] = None
         self._registry: Any = None
+        self._task_queue: Any = None
         self._lifecycle = None
+        self._routers_registered = False
+        self._model_load_task: Optional[asyncio.Task] = None
 
     async def _init_lifecycle(self):
         """Lazy-init lifecycle manager with EventBus."""
@@ -56,24 +76,86 @@ class StartupOrchestrator:
         try:
             from domains.infrastructure.event_bus import EventBus, EventPriority
             from domains.infrastructure.lifecycle import (
+                ALL_PROFILES,
                 LifecycleManager,
                 StartupHook,
+                StartupProfile,
                 ShutdownHook,
                 get_lifecycle_manager,
             )
 
+            # Resolve profile enum
+            try:
+                profile_enum = StartupProfile(self._profile)
+            except ValueError:
+                profile_enum = StartupProfile.FULL
+
+            full_only: frozenset[StartupProfile] = frozenset({StartupProfile.FULL})
+            quick_plus: frozenset[StartupProfile] = frozenset(
+                {StartupProfile.FULL, StartupProfile.QUICK}
+            )
+            all_profiles: frozenset[StartupProfile] = ALL_PROFILES
+
             bus = EventBus(max_history=200)
             self._lifecycle = get_lifecycle_manager(event_bus=bus)
 
-            # Register startup hooks for sequential phases
+            # Register startup hooks with profile scoping
             self._lifecycle.register_startup_hook(
-                StartupHook("logging", self._phase1_logging, depends_on=[], timeout=5.0, critical=False),
+                StartupHook(
+                    "logging", self._phase1_logging,
+                    depends_on=[], timeout=5.0, critical=False,
+                    profiles=all_profiles,
+                ),
             )
             self._lifecycle.register_startup_hook(
-                StartupHook("model_registry", self._phase5_model_registry, depends_on=["logging"], timeout=10.0, critical=False),
+                StartupHook(
+                    "task_queue", self._phase_task_queue,
+                    depends_on=["logging"], timeout=10.0, critical=False,
+                    profiles=quick_plus,
+                ),
             )
             self._lifecycle.register_startup_hook(
-                StartupHook("routers", self._phase6_routers, depends_on=["model_registry"], timeout=30.0, critical=True),
+                StartupHook(
+                    "config", self._phase_config,
+                    depends_on=["logging"], timeout=5.0, critical=False,
+                    profiles=quick_plus,
+                ),
+            )
+            self._lifecycle.register_startup_hook(
+                StartupHook(
+                    "model_load", self._phase2_model_load,
+                    depends_on=["logging"], timeout=120.0, critical=False,
+                    profiles=full_only,
+                ),
+            )
+            self._lifecycle.register_startup_hook(
+                StartupHook(
+                    "wandb", self._phase3_wandb,
+                    depends_on=["logging"], timeout=30.0, critical=False,
+                    profiles=full_only,
+                ),
+            )
+            self._lifecycle.register_startup_hook(
+                StartupHook(
+                    "multimodal", self._phase4_multimodal,
+                    depends_on=["logging"], timeout=30.0, critical=False,
+                    profiles=full_only,
+                ),
+            )
+            self._lifecycle.register_startup_hook(
+                StartupHook(
+                    "model_registry", self._phase5_model_registry,
+                    depends_on=["logging", "task_queue", "config"],
+                    timeout=10.0, critical=False,
+                    profiles=quick_plus,
+                ),
+            )
+            self._lifecycle.register_startup_hook(
+                StartupHook(
+                    "routers", self._phase6_routers,
+                    depends_on=["model_registry"], timeout=30.0, critical=True,
+                    profiles=all_profiles,
+                ),
             )
 
             # Register shutdown hooks
@@ -87,6 +169,9 @@ class StartupOrchestrator:
                 ShutdownHook("registry_cleanup", self._shutdown_registry, depends_on=[], timeout=5.0),
             )
             self._lifecycle.register_shutdown_hook(
+                ShutdownHook("task_queue_shutdown", self._shutdown_task_queue, depends_on=[], timeout=10.0),
+            )
+            self._lifecycle.register_shutdown_hook(
                 ShutdownHook("pool_shutdown", self._shutdown_pool, depends_on=[], timeout=10.0),
             )
 
@@ -94,7 +179,12 @@ class StartupOrchestrator:
             self._lifecycle.register_gate("model_loaded", lambda: self._is_model_loaded())
             self._lifecycle.register_gate("routers_registered", lambda: self._routers_registered)
 
-            logger.info("LifecycleManager initialized with event bus")
+            logger.info(
+                "LifecycleManager initialized (profile=%s, %d startup hooks, %d shutdown hooks)",
+                profile_enum.value,
+                len(self._lifecycle._startup_hooks),
+                len(self._lifecycle._shutdown_hooks),
+            )
         except Exception as exc:
             logger.warning("LifecycleManager init skipped: %s", exc)
 
@@ -118,10 +208,12 @@ class StartupOrchestrator:
         # Initialize lifecycle manager
         await self._init_lifecycle()
 
-        # Start background phases (model load, W&B, multimodal)
-        self._phase2_model_load()
-        self._phase3_wandb()
-        self._phase4_multimodal()
+        from domains.infrastructure.lifecycle import StartupProfile
+
+        try:
+            profile_enum = StartupProfile(self._profile)
+        except ValueError:
+            profile_enum = StartupProfile.FULL
 
         # Register health gate for background model load
         import state as server_state
@@ -133,7 +225,7 @@ class StartupOrchestrator:
 
         # Run sequential phases via lifecycle manager
         if self._lifecycle is not None:
-            ok = await self._lifecycle.start(timeout=120.0)
+            ok = await self._lifecycle.start(timeout=120.0, profile=profile_enum)
             if not ok:
                 logger.warning("Lifecycle startup incomplete — continuing anyway")
         else:
@@ -145,8 +237,8 @@ class StartupOrchestrator:
         await self._phase_ready()
 
     async def _phase1_logging(self):
-        STARTUP_PHASE.update(phase="initializing", step=1, total=6, message="Starting up...")
-        logger.info("Startup phase 1/6: logging initialized")
+        STARTUP_PHASE.update(phase="initializing", step=1, total=8, message="Starting up...")
+        logger.info("Startup phase 1: logging initialized")
 
     def _phase2_model_load(self):
         """Start background model load."""
@@ -157,11 +249,11 @@ class StartupOrchestrator:
 
         raw = cfg.autoload_model
         if not raw or raw.lower() in ("false", "0", "none", "no", "off", "disable"):
-            logger.info("Phase 2/6: autoload disabled (%r)", raw)
+            logger.info("Phase: autoload disabled (%r)", raw)
             return
 
-        STARTUP_PHASE.update(phase="loading_model", step=2, message="Loading model weights...")
-        logger.info("Phase 2/6: loading model %s in background", raw)
+        STARTUP_PHASE.update(phase="loading_model", step=4, total=8, message="Loading model weights...")
+        logger.info("Phase 4: loading model %s in background", raw)
         self._model_load_task = asyncio.create_task(asyncio.to_thread(_autoload_model, cfg))
         self._model_load_task.add_done_callback(self._on_model_load_done)
 
@@ -173,7 +265,7 @@ class StartupOrchestrator:
 
     def _phase3_wandb(self):
         """Start W&B metrics server (if available)."""
-        STARTUP_PHASE.update(phase="wandb_server", step=3, message="Starting W&B metrics server...")
+        STARTUP_PHASE.update(phase="wandb_server", step=5, total=8, message="Starting W&B metrics server...")
         try:
             from domains.ops.wandb_server import start_wandb_server_background
 
@@ -200,17 +292,17 @@ class StartupOrchestrator:
                     self._wandb_task = await start_wandb_server_background(
                         _NoopMetrics(), extra_metrics=_extra_metrics,
                     )
-                    logger.info("Phase 3/6: W&B metrics server started")
+                    logger.info("Phase: W&B metrics server started")
                 except Exception as e:
-                    logger.warning("Phase 3/6: W&B server skipped: %s", e)
+                    logger.warning("Phase: W&B server skipped: %s", e)
 
             asyncio.create_task(_start())
         except Exception as e:
-            logger.warning("Phase 3/6: W&B unavailable: %s", e)
+            logger.warning("Phase: W&B unavailable: %s", e)
 
     def _phase4_multimodal(self):
         """Initialize multimodal engine (if available)."""
-        STARTUP_PHASE.update(phase="multimodal", step=4, message="Initializing multimodal engine...")
+        STARTUP_PHASE.update(phase="multimodal", step=6, total=8, message="Initializing multimodal engine...")
         try:
 
             def _init():
@@ -232,17 +324,17 @@ class StartupOrchestrator:
 
     async def _phase5_model_registry(self):
         """Initialize model registry."""
-        STARTUP_PHASE.update(phase="model_registry", step=5, message="Initializing model registry...")
+        STARTUP_PHASE.update(phase="model_registry", step=7, total=8, message="Initializing model registry...")
         try:
             from domains.infrastructure.model_registry import get_model_registry
             self._registry = get_model_registry()
-            logger.info("Phase 5/6: model registry initialized")
+            logger.info("Phase: model registry initialized")
         except Exception as e:
-            logger.warning("Phase 5/6: model registry failed: %s", e)
+            logger.warning("Phase: model registry failed: %s", e)
 
     async def _phase6_routers(self):
         """Register all feature routers."""
-        STARTUP_PHASE.update(phase="registering_routers", step=6, message="Registering routes...")
+        STARTUP_PHASE.update(phase="registering_routers", step=8, total=8, message="Registering routes...")
         try:
             from routers import get_all_routers
             for r in get_all_routers():
@@ -251,23 +343,53 @@ class StartupOrchestrator:
                 from training.router import router as training_router
                 self._app.include_router(training_router)
             except Exception as exc:
-                logger.warning("Phase 6/6: training router failed: %s", exc)
+                logger.warning("Phase: training router failed: %s", exc)
             logger.info(
-                "Phase 6/6: all routers registered (%d routes)",
+                "Phase: all routers registered (%d routes)",
                 len(self._app.routes),
             )
             self._routers_registered = True
         except Exception as e:
             self._routers_registered = False
-            logger.error("Phase 6/6: router registration failed: %s", e)
+            logger.error("Phase: router registration failed: %s", e)
             raise
+
+    async def _phase_task_queue(self):
+        """Initialize the background task queue."""
+        STARTUP_PHASE.update(phase="task_queue", step=2, total=8, message="Initializing task queue...")
+        try:
+            from domains.infrastructure.task_queue import TaskQueue, get_task_queue
+            self._task_queue = get_task_queue()
+            logger.info("Task queue initialized")
+        except Exception as e:
+            logger.warning("Task queue init failed: %s", e)
+
+    async def _phase_config(self):
+        """Validate and warm the config system."""
+        STARTUP_PHASE.update(phase="config", step=3, total=8, message="Validating config...")
+        try:
+            from domains.infrastructure.config import Config
+            cfg = Config.get_instance()
+            _ = cfg.get("app.name", "sloughgpt")
+            logger.info("Config system validated")
+        except Exception as e:
+            logger.warning("Config system init: %s", e)
 
     async def _phase_ready(self):
         """Mark server as ready — happens after all synchronous phases complete."""
-        STARTUP_PHASE.update(phase="ready", step=7, message="Server ready")
+        STARTUP_PHASE.update(phase="ready", step=9, total=8, message="Server ready")
         logger.info("Startup complete — server ready for requests")
 
     # ── Shutdown hooks ──
+
+    async def _shutdown_task_queue(self):
+        """Gracefully stop the background task queue."""
+        if self._task_queue is not None:
+            try:
+                self._task_queue.stop()
+                logger.info("Task queue stopped")
+            except Exception as e:
+                logger.warning("Task queue shutdown: %s", e)
 
     async def _shutdown_jobs(self):
         """Mark running training jobs as crashed on shutdown."""
@@ -316,6 +438,7 @@ class StartupOrchestrator:
                 logger.warning("Lifecycle shutdown error: %s", e)
 
         # Fallback: direct cleanup
+        await self._shutdown_task_queue()
         await self._shutdown_jobs()
         await self._shutdown_wandb()
         await self._shutdown_registry()
@@ -397,6 +520,19 @@ def _autoload_model(cfg: ServerConfig):
         register_provider("default", router)
         logger.info("Autoload: registered with ModelRegistry + provider + default router%s",
                      " (process guard enabled)" if process_guard else "")
+
+        # When ProcessGuard is active, drop the in-memory model ref to save memory.
+        # The guard handles all inference in a subprocess, so the main process
+        # doesn't need the model weights (~500MB+ for GPT-2).
+        if process_guard is not None:
+            model_server.drop_model_ref()
+            server_state.model = None
+            server_state.tokenizer = None
+            provider._model = None
+            import gc; gc.collect()
+            logger.info("Autoload: dropped in-memory model ref (guard mode) — saved ~%dMB",
+                        sum(p.numel() for p in model.parameters()) * 4 // (1024 * 1024)
+                        if hasattr(model, "parameters") else 500)
     except Exception as e:
         logger.warning("Autoload: registry registration failed: %s", e)
 
