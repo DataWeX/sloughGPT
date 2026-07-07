@@ -2,6 +2,7 @@
 torch.nn — numpy-backed neural network module.
 """
 
+import numpy as np
 from .. import Tensor, tensor, zeros, ones, randn, softmax, sigmoid, tanh, relu
 
 

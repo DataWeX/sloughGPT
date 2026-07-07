@@ -16,6 +16,7 @@ from ..__init__ import (
     IMetacognitiveMonitor,
     IReasoningEngine,
     Memory,
+    Thought,
     ThoughtType,
 )
 

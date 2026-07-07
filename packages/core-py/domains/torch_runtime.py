@@ -35,7 +35,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 _api_torch_env_applied = False
 

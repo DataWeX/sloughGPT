@@ -13,6 +13,7 @@ Architecture:
                               (tools never exposed via API)
 """
 
+import json
 import os
 import re
 import asyncio

@@ -633,7 +633,7 @@ class Resize(Module):
 
 class RNN(Module):
     def __init__(self, input_size, hidden_size, num_layers=1, nonlinearity="tanh", bias=True, dropout=0, batch_first=True):
-        import math
+        import math, sys
         super().__init__()
         T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
         self.weight_ih = T.Tensor(np.random.randn(num_layers, input_size, hidden_size).astype(np.float32) * 0.1) if T else np.random.randn(num_layers, input_size, hidden_size).astype(np.float32)
@@ -686,6 +686,7 @@ class LSTM(Module):
 
 class GRU(Module):
     def __init__(self, input_size, hidden_size, num_layers=1, bias=True, batch_first=True):
+        import sys
         super().__init__()
         T = sys.modules.get("torch", sys.modules.get("domains.training.torch"))
         self.weight_ih = T.Tensor(np.random.randn(3*hidden_size, input_size).astype(np.float32) * 0.1) if T else np.random.randn(3*hidden_size, input_size).astype(np.float32)

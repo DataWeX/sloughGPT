@@ -76,7 +76,7 @@ class Callback(ABC):
         self.order = order
         self.trainer = None
 
-    def set_trainer(self, trainer: "Trainer"):
+    def set_trainer(self, trainer: "Trainer"):  # noqa: F821
         """Set reference to trainer."""
         self.trainer = trainer
 
@@ -372,7 +372,7 @@ class CallbackList:
         self.callbacks.append(callback)
         self._sort_callbacks()
 
-    def set_trainer(self, trainer: "Trainer"):
+    def set_trainer(self, trainer: "Trainer"):  # noqa: F821
         """Set trainer for all callbacks."""
         for callback in self.callbacks:
             callback.set_trainer(trainer)

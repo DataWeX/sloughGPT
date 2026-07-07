@@ -422,11 +422,8 @@ __all__ = [
     "OptimizationConfig",
     "UnifiedConfig",
     "MemoryOptimizer",
-    "AdaptiveBatcher",
     "LoRAModelWrapper",
-    "PipelineParallelTrainer",
     "OptimizedFederatedTrainer",
-    "DistributedPipelineConfig",
 ]
 
 

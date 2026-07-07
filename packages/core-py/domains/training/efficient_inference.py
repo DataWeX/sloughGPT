@@ -17,6 +17,10 @@ Includes:
 
 from domains.training.slonet_compat import torch
 nn = torch.nn
+try:
+    from torch.nn import functional as F
+except ImportError:
+    F = nn.functional
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
