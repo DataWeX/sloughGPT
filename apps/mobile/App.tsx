@@ -39,19 +39,6 @@ function TabIcon({name, focused}: {name: string; focused: boolean}) {
   );
 }
 
-function TabScreen({name, component, stack}: {name: string; component: React.ComponentType<any>; stack?: boolean}) {
-  if (stack) {
-    return (
-      <Tab.Screen
-        name={name}
-        component={SettingsStack}
-        options={{headerShown: false}}
-      />
-    );
-  }
-  return <Tab.Screen name={name} component={component} />;
-}
-
 function SettingsStack() {
   return (
     <Stack.Navigator screenOptions={{headerShown: false}}>
@@ -152,9 +139,18 @@ function AppInner() {
               fontWeight: '500',
             },
           })}>
-          {ALL_TABS.map(tab => (
-            <TabScreen key={tab.name} name={tab.name} component={tab.component} stack={tab.stack} />
-          ))}
+          {ALL_TABS.map(tab =>
+            tab.stack ? (
+              <Tab.Screen
+                key={tab.name}
+                name={tab.name}
+                component={SettingsStack}
+                options={{headerShown: false}}
+              />
+            ) : (
+              <Tab.Screen key={tab.name} name={tab.name} component={tab.component} />
+            )
+          )}
         </Tab.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
