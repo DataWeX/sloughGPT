@@ -1,22 +1,21 @@
 import React, {useEffect, useState, useCallback, useRef} from 'react';
 import {
   FlatList,
-  TextInput,
-  TouchableOpacity,
+  TextInput as RNTextInput,
+  Pressable,
   RefreshControl,
   Modal,
   Keyboard,
   Share,
-  View,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {YStack, XStack, Text} from 'tamagui';
+import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {api} from '../services/api-client';
-import {StatusBadge} from '../components/StatusBadge';
 import {Icon} from '../components/Icon';
 import type {KnowledgeItem} from '../types';
 
 export function KnowledgeScreen() {
+  const theme = useTheme();
   const [items, setItems] = useState<KnowledgeItem[]>([]);
   const [topics, setTopics] = useState<string[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
@@ -176,28 +175,34 @@ export function KnowledgeScreen() {
     setImporting(false);
   };
 
+  const accent = theme.color9?.val || '#7C52C4';
+  const bgMuted = `rgba(124, 82, 196, 0.06)`;
+
   const renderItem = ({item}: {item: KnowledgeItem}) => {
     const isSelected = selectedIds.has(item.id);
     return (
       <YStack
-        backgroundColor={isSelected ? '#7C52C410' : 'white'}
-        borderRadius={8}
-        padding={12}
-        borderWidth={isSelected ? 1 : 0}
-        borderColor={isSelected ? '$color9' : 'transparent'}
+        backgroundColor={isSelected ? bgMuted : 'transparent'}
+        borderRadius={12}
+        padding={14}
+        borderWidth={isSelected ? 1 : 0.5}
+        borderColor={isSelected ? accent : '$borderColor'}
         onLongPress={() => { setSelectMode(true); setSelectedIds(new Set([item.id])); }}
         onPress={() => {
           if (selectMode) toggleSelect(item.id);
           else openEdit(item);
-        }}>
-        <XStack alignItems="flex-start" gap={8} marginBottom={8}>
+        }}
+        pressStyle={{opacity: 0.85}}>
+        <XStack alignItems="flex-start" gap={10} marginBottom={8}>
           {selectMode && (
             <YStack
-              width={20} height={20} borderRadius={4} borderWidth={2}
-              borderColor={isSelected ? '$color9' : '$borderColor'}
-              backgroundColor={isSelected ? '$color9' : 'transparent'}
-              alignItems="center" justifyContent="center" marginTop={2}>
-              {isSelected && <View style={{width: 10, height: 10, borderRadius: 2, backgroundColor: 'white'}} />}
+              width={22} height={22} borderRadius={6} borderWidth={2}
+              borderColor={isSelected ? accent : '$borderColor'}
+              backgroundColor={isSelected ? accent : 'transparent'}
+              alignItems="center" justifyContent="center" marginTop={1}>
+              {isSelected && (
+                <Icon name="check" size={12} color="white" />
+              )}
             </YStack>
           )}
           <Text fontSize={14} color="$color" flex={1} numberOfLines={3}>
@@ -206,27 +211,33 @@ export function KnowledgeScreen() {
         </XStack>
         <XStack alignItems="center" justifyContent="space-between">
           <XStack alignItems="center" gap={8} flex={1}>
-            {item.topic && <StatusBadge label={item.topic} variant="info" />}
+            {item.topic && (
+              <YStack backgroundColor={bgMuted} paddingHorizontal={8} paddingVertical={2} borderRadius={6}>
+                <Text fontSize={10} fontWeight="500" color="$color9">{item.topic}</Text>
+              </YStack>
+            )}
             <XStack gap={3}>
               {Array.from({length: 5}).map((_, i) => (
-                <View
+                <YStack
                   key={i}
-                  style={{
-                    width: 6, height: 6, borderRadius: 3,
-                    backgroundColor: i < item.importance ? '#F0935C' : '#E0DCE8',
-                  }}
+                  width={6} height={6} borderRadius={3}
+                  backgroundColor={i < item.importance ? accent : '$borderColor'}
                 />
               ))}
             </XStack>
           </XStack>
           {!selectMode && (
-            <XStack gap={4}>
-              <YStack onPress={() => openEdit(item)}>
-                <StatusBadge label="Edit" variant="info" />
-              </YStack>
-              <YStack onPress={() => handleDelete(item.id)}>
-                <StatusBadge label="Del" variant="error" />
-              </YStack>
+            <XStack gap={6}>
+              <Pressable onPress={() => openEdit(item)}>
+                <YStack width={28} height={28} borderRadius={8} backgroundColor={bgMuted} alignItems="center" justifyContent="center">
+                  <Icon name="edit-3" size={12} color={accent} />
+                </YStack>
+              </Pressable>
+              <Pressable onPress={() => handleDelete(item.id)}>
+                <YStack width={28} height={28} borderRadius={8} backgroundColor="rgba(239, 68, 68, 0.08)" alignItems="center" justifyContent="center">
+                  <Icon name="trash-2" size={12} color="#EF4444" />
+                </YStack>
+              </Pressable>
             </XStack>
           )}
         </XStack>
@@ -234,21 +245,50 @@ export function KnowledgeScreen() {
     );
   };
 
+  const renderBottomSheet = (
+    visible: boolean,
+    onClose: () => void,
+    title: string,
+    children: React.ReactNode,
+  ) => (
+    <Modal visible={visible} animationType="slide" transparent>
+      <YStack flex={1} justifyContent="flex-end">
+        <Pressable style={{flex: 1}} onPress={onClose} />
+        <YStack
+          backgroundColor="$background"
+          borderTopLeftRadius={24}
+          borderTopRightRadius={24}
+          padding={20}
+          gap={14}>
+          <XStack alignItems="center" justifyContent="space-between" marginBottom={4}>
+            <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">{title}</Text>
+            <Pressable onPress={onClose}>
+              <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
+                <Icon name="x" size={14} color={(theme.color11?.val || '#6B7280')} />
+              </YStack>
+            </Pressable>
+          </XStack>
+          {children}
+        </YStack>
+      </YStack>
+    </Modal>
+  );
+
   return (
     <SafeAreaView style={{flex: 1}} edges={['top']}>
       <YStack flex={1}>
         <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={16} paddingVertical={12}>
           {selectMode ? (
             <XStack alignItems="center" justifyContent="space-between" flex={1}>
-              <YStack onPress={() => { setSelectMode(false); setSelectedIds(new Set()); }}>
+              <Pressable onPress={() => { setSelectMode(false); setSelectedIds(new Set()); }}>
                 <Text fontSize={13} fontWeight="600" color="$color9">Cancel</Text>
-              </YStack>
+              </Pressable>
               <Text fontSize={14} fontWeight="600" color="$color">{selectedIds.size} selected</Text>
-              <YStack onPress={handleBatchDelete} opacity={selectedIds.size === 0 ? 0.4 : 1}>
-                <Text fontSize={13} fontWeight="600" color="#D44C56">
+              <Pressable onPress={handleBatchDelete} style={{opacity: selectedIds.size === 0 ? 0.4 : 1}}>
+                <Text fontSize={13} fontWeight="600" color="#EF4444">
                   Delete ({selectedIds.size})
                 </Text>
-              </YStack>
+              </Pressable>
             </XStack>
           ) : (
             <>
@@ -257,25 +297,39 @@ export function KnowledgeScreen() {
               </Text>
               <XStack gap={8}>
                 {items.length > 0 && (
-                  <YStack backgroundColor="white" borderRadius={8} paddingHorizontal={12} paddingVertical={6} borderWidth={1} borderColor="$borderColor" onPress={handleExport}>
-                    <Text fontSize={13} fontWeight="600" color="$color11">Export</Text>
-                  </YStack>
+                  <Pressable onPress={handleExport}>
+                    <YStack backgroundColor={bgMuted} borderRadius={8} paddingHorizontal={12} paddingVertical={8}>
+                      <Text fontSize={12} fontWeight="600" color="$color9">Export</Text>
+                    </YStack>
+                  </Pressable>
                 )}
-                <YStack backgroundColor="white" borderRadius={8} paddingHorizontal={12} paddingVertical={6} borderWidth={1} borderColor="$borderColor" onPress={() => { setImportText(''); setImportModalVisible(true); }}>
-                  <Text fontSize={13} fontWeight="600" color="$color11">Import</Text>
-                </YStack>
-                <YStack backgroundColor="$color9" borderRadius={8} paddingHorizontal={12} paddingVertical={6} onPress={() => { setFormContent(''); setFormTopic(''); setAddModalVisible(true); }}>
-                  <Text fontSize={13} fontWeight="600" color="white">+ Add</Text>
-                </YStack>
+                <Pressable onPress={() => { setImportText(''); setImportModalVisible(true); }}>
+                  <YStack backgroundColor={bgMuted} borderRadius={8} paddingHorizontal={12} paddingVertical={8}>
+                    <Text fontSize={12} fontWeight="600" color="$color9">Import</Text>
+                  </YStack>
+                </Pressable>
+                <Pressable onPress={() => { setFormContent(''); setFormTopic(''); setAddModalVisible(true); }}>
+                  <YStack backgroundColor={accent} borderRadius={8} paddingHorizontal={14} paddingVertical={8}>
+                    <Text fontSize={12} fontWeight="600" color="white">+ Add</Text>
+                  </YStack>
+                </Pressable>
               </XStack>
             </>
           )}
         </XStack>
 
         {!selectMode && (
-          <XStack paddingHorizontal={16} marginBottom={8}>
-            <TextInput
-              style={{flex: 1, fontSize: 14, color: '#1A1625', backgroundColor: 'white', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#E0DCE8'}}
+          <YStack paddingHorizontal={16} marginBottom={8}>
+            <RNTextInput
+              style={{
+                flex: 1, fontSize: 14, color: '#1A1625',
+                backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                borderRadius: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                borderWidth: 0.5,
+                borderColor: 'rgba(124, 82, 196, 0.12)',
+              }}
               value={search}
               onChangeText={debouncedSearch}
               placeholder="Search knowledge..."
@@ -283,7 +337,7 @@ export function KnowledgeScreen() {
               returnKeyType="search"
               onSubmitEditing={() => Keyboard.dismiss()}
             />
-          </XStack>
+          </YStack>
         )}
 
         {!selectMode && topics.length > 0 && (
@@ -292,10 +346,10 @@ export function KnowledgeScreen() {
             data={[null, ...topics]}
             renderItem={({item: topic}) => (
               <YStack
-                paddingHorizontal={12} paddingVertical={4} borderRadius={9999}
-                backgroundColor={selectedTopic === topic ? '$color9' : 'white'}
-                borderWidth={1}
-                borderColor={selectedTopic === topic ? '$color9' : '$borderColor'}
+                paddingHorizontal={12} paddingVertical={5} borderRadius={999}
+                backgroundColor={selectedTopic === topic ? accent : 'transparent'}
+                borderWidth={0.5}
+                borderColor={selectedTopic === topic ? accent : '$borderColor'}
                 onPress={() => setSelectedTopic(topic)}>
                 <Text fontSize={11} fontWeight="500" color={selectedTopic === topic ? 'white' : '$color11'}>
                   {topic || 'All'}
@@ -304,7 +358,7 @@ export function KnowledgeScreen() {
             )}
             keyExtractor={item => item || 'all'}
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{paddingHorizontal: 16, gap: 4, marginBottom: 8}}
+            contentContainerStyle={{paddingHorizontal: 16, gap: 6, marginBottom: 8, paddingVertical: 4}}
           />
         )}
 
@@ -314,118 +368,193 @@ export function KnowledgeScreen() {
           keyExtractor={item => item.id}
           contentContainerStyle={{padding: 16, gap: 8}}
           keyboardDismissMode="on-drag"
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={accent}
+            />
+          }
           ListEmptyComponent={
             <YStack alignItems="center" paddingVertical={64}>
-              <Icon name="book-open" size={48} color="#9B95A8" />
+              <Icon name="book-open" size={48} color={(theme.color10?.val || '#9B95A8')} />
               <Text fontSize={14} color="$color10">No knowledge items yet</Text>
             </YStack>
           }
         />
       </YStack>
 
-      <Modal visible={addModalVisible} animationType="slide" transparent>
-        <TouchableOpacity activeOpacity={1} onPress={() => setAddModalVisible(false)} style={{flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end'}}>
-          <TouchableOpacity activeOpacity={1} style={{backgroundColor: 'rgba(124, 82, 196, 0.04)', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, gap: 12}} onPress={() => {}}>
-            <Text fontSize={16} fontWeight="600" color="$color">Add Knowledge</Text>
-            <TextInput
-              style={{fontSize: 14, color: '#1A1625', backgroundColor: 'white', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12, minHeight: 100, textAlignVertical: 'top', borderWidth: 1, borderColor: '#E0DCE8'}}
-              value={formContent}
-              onChangeText={setFormContent}
-              placeholder="Content..."
-              placeholderTextColor="#9B95A8"
-              multiline
-              autoFocus
-            />
-            <TextInput
-              style={{fontSize: 14, color: '#1A1625', backgroundColor: 'white', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12, borderWidth: 1, borderColor: '#E0DCE8'}}
-              value={formTopic}
-              onChangeText={setFormTopic}
-              placeholder="Topic (optional)"
-              placeholderTextColor="#9B95A8"
-              returnKeyType="done"
-            />
-            <XStack gap={8} justifyContent="flex-end">
-              <YStack onPress={() => setAddModalVisible(false)} paddingHorizontal={20} paddingVertical={8} borderRadius={8}>
+      {renderBottomSheet(addModalVisible, () => setAddModalVisible(false), 'Add Knowledge', (
+        <>
+          <RNTextInput
+            style={{
+              fontSize: 14, color: '#1A1625',
+              backgroundColor: 'rgba(124, 82, 196, 0.04)',
+              borderRadius: 10,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              minHeight: 100,
+              textAlignVertical: 'top',
+              borderWidth: 0.5,
+              borderColor: 'rgba(124, 82, 196, 0.12)',
+            }}
+            value={formContent}
+            onChangeText={setFormContent}
+            placeholder="Content..."
+            placeholderTextColor="#9B95A8"
+            multiline
+            autoFocus
+          />
+          <RNTextInput
+            style={{
+              fontSize: 14, color: '#1A1625',
+              backgroundColor: 'rgba(124, 82, 196, 0.04)',
+              borderRadius: 10,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              borderWidth: 0.5,
+              borderColor: 'rgba(124, 82, 196, 0.12)',
+            }}
+            value={formTopic}
+            onChangeText={setFormTopic}
+            placeholder="Topic (optional)"
+            placeholderTextColor="#9B95A8"
+            returnKeyType="done"
+          />
+          <XStack gap={8} justifyContent="flex-end">
+            <Pressable onPress={() => setAddModalVisible(false)}>
+              <YStack paddingHorizontal={20} paddingVertical={10} borderRadius={8}>
                 <Text fontSize={13} fontWeight="600" color="$color11">Cancel</Text>
               </YStack>
-              <YStack onPress={handleAdd} opacity={!formContent.trim() ? 0.4 : 1} backgroundColor="$color9" paddingHorizontal={24} paddingVertical={8} borderRadius={8}>
+            </Pressable>
+            <Pressable onPress={handleAdd} disabled={!formContent.trim()}>
+              <YStack
+                backgroundColor={accent}
+                opacity={!formContent.trim() ? 0.4 : 1}
+                paddingHorizontal={24} paddingVertical={10} borderRadius={8}
+              >
                 <Text fontSize={13} fontWeight="600" color="white">Add</Text>
               </YStack>
-            </XStack>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+            </Pressable>
+          </XStack>
+        </>
+      ))}
 
-      <Modal visible={!!editItem} animationType="slide" transparent>
-        <TouchableOpacity activeOpacity={1} onPress={() => setEditItem(null)} style={{flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end'}}>
-          <TouchableOpacity activeOpacity={1} style={{backgroundColor: 'rgba(124, 82, 196, 0.04)', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, gap: 12}} onPress={() => {}}>
-            <Text fontSize={16} fontWeight="600" color="$color">Edit Knowledge</Text>
-            <TextInput
-              style={{fontSize: 14, color: '#1A1625', backgroundColor: 'white', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12, minHeight: 100, textAlignVertical: 'top', borderWidth: 1, borderColor: '#E0DCE8'}}
-              value={formContent}
-              onChangeText={setFormContent}
-              placeholder="Content..."
-              placeholderTextColor="#9B95A8"
-              multiline
-            />
-            <TextInput
-              style={{fontSize: 14, color: '#1A1625', backgroundColor: 'white', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12, borderWidth: 1, borderColor: '#E0DCE8'}}
-              value={formTopic}
-              onChangeText={setFormTopic}
-              placeholder="Topic (optional)"
-              placeholderTextColor="#9B95A8"
-              returnKeyType="done"
-            />
-            <XStack gap={8} justifyContent="flex-end">
-              <YStack onPress={() => setEditItem(null)} paddingHorizontal={20} paddingVertical={8} borderRadius={8}>
+      {renderBottomSheet(!!editItem, () => setEditItem(null), 'Edit Knowledge', (
+        <>
+          <RNTextInput
+            style={{
+              fontSize: 14, color: '#1A1625',
+              backgroundColor: 'rgba(124, 82, 196, 0.04)',
+              borderRadius: 10,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              minHeight: 100,
+              textAlignVertical: 'top',
+              borderWidth: 0.5,
+              borderColor: 'rgba(124, 82, 196, 0.12)',
+            }}
+            value={formContent}
+            onChangeText={setFormContent}
+            placeholder="Content..."
+            placeholderTextColor="#9B95A8"
+            multiline
+          />
+          <RNTextInput
+            style={{
+              fontSize: 14, color: '#1A1625',
+              backgroundColor: 'rgba(124, 82, 196, 0.04)',
+              borderRadius: 10,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              borderWidth: 0.5,
+              borderColor: 'rgba(124, 82, 196, 0.12)',
+            }}
+            value={formTopic}
+            onChangeText={setFormTopic}
+            placeholder="Topic (optional)"
+            placeholderTextColor="#9B95A8"
+            returnKeyType="done"
+          />
+          <XStack gap={8} justifyContent="flex-end">
+            <Pressable onPress={() => setEditItem(null)}>
+              <YStack paddingHorizontal={20} paddingVertical={10} borderRadius={8}>
                 <Text fontSize={13} fontWeight="600" color="$color11">Cancel</Text>
               </YStack>
-              <YStack onPress={handleEdit} opacity={!formContent.trim() ? 0.4 : 1} backgroundColor="$color9" paddingHorizontal={24} paddingVertical={8} borderRadius={8}>
+            </Pressable>
+            <Pressable onPress={handleEdit} disabled={!formContent.trim()}>
+              <YStack
+                backgroundColor={accent}
+                opacity={!formContent.trim() ? 0.4 : 1}
+                paddingHorizontal={24} paddingVertical={10} borderRadius={8}
+              >
                 <Text fontSize={13} fontWeight="600" color="white">Save</Text>
               </YStack>
-            </XStack>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+            </Pressable>
+          </XStack>
+        </>
+      ))}
 
-      <Modal visible={importModalVisible} animationType="slide" transparent>
-        <TouchableOpacity activeOpacity={1} onPress={() => setImportModalVisible(false)} style={{flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end'}}>
-          <TouchableOpacity activeOpacity={1} style={{backgroundColor: 'rgba(124, 82, 196, 0.04)', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, gap: 12}} onPress={() => {}}>
-            <Text fontSize={16} fontWeight="600" color="$color">Import Knowledge</Text>
-            <Text fontSize={13} color="$color10" marginBottom={4}>
-              Paste one item per line. Each line becomes a knowledge entry.
-            </Text>
-            <TextInput
-              style={{fontSize: 14, color: '#1A1625', backgroundColor: 'white', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12, minHeight: 100, textAlignVertical: 'top', borderWidth: 1, borderColor: '#E0DCE8'}}
-              value={importText}
-              onChangeText={setImportText}
-              placeholder="Line 1\nLine 2\nLine 3..."
-              placeholderTextColor="#9B95A8"
-              multiline
-              autoFocus
-            />
-            <TextInput
-              style={{fontSize: 14, color: '#1A1625', backgroundColor: 'white', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12, borderWidth: 1, borderColor: '#E0DCE8'}}
-              value={formTopic}
-              onChangeText={setFormTopic}
-              placeholder="Topic for all (optional)"
-              placeholderTextColor="#9B95A8"
-              returnKeyType="done"
-            />
-            <XStack gap={8} justifyContent="flex-end">
-              <YStack onPress={() => setImportModalVisible(false)} paddingHorizontal={20} paddingVertical={8} borderRadius={8}>
+      {renderBottomSheet(importModalVisible, () => setImportModalVisible(false), 'Import Knowledge', (
+        <>
+          <Text fontSize={13} color="$color10" marginBottom={4}>
+            Paste one item per line. Each line becomes a knowledge entry.
+          </Text>
+          <RNTextInput
+            style={{
+              fontSize: 14, color: '#1A1625',
+              backgroundColor: 'rgba(124, 82, 196, 0.04)',
+              borderRadius: 10,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              minHeight: 100,
+              textAlignVertical: 'top',
+              borderWidth: 0.5,
+              borderColor: 'rgba(124, 82, 196, 0.12)',
+            }}
+            value={importText}
+            onChangeText={setImportText}
+            placeholder="Line 1\nLine 2\nLine 3..."
+            placeholderTextColor="#9B95A8"
+            multiline
+            autoFocus
+          />
+          <RNTextInput
+            style={{
+              fontSize: 14, color: '#1A1625',
+              backgroundColor: 'rgba(124, 82, 196, 0.04)',
+              borderRadius: 10,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              borderWidth: 0.5,
+              borderColor: 'rgba(124, 82, 196, 0.12)',
+            }}
+            value={formTopic}
+            onChangeText={setFormTopic}
+            placeholder="Topic for all (optional)"
+            placeholderTextColor="#9B95A8"
+            returnKeyType="done"
+          />
+          <XStack gap={8} justifyContent="flex-end">
+            <Pressable onPress={() => setImportModalVisible(false)}>
+              <YStack paddingHorizontal={20} paddingVertical={10} borderRadius={8}>
                 <Text fontSize={13} fontWeight="600" color="$color11">Cancel</Text>
               </YStack>
-              <YStack onPress={handleImport} opacity={(!importText.trim() || importing) ? 0.4 : 1} backgroundColor="$color9" paddingHorizontal={24} paddingVertical={8} borderRadius={8}>
+            </Pressable>
+            <Pressable onPress={handleImport} disabled={!importText.trim() || importing}>
+              <YStack
+                backgroundColor={accent}
+                opacity={(!importText.trim() || importing) ? 0.4 : 1}
+                paddingHorizontal={24} paddingVertical={10} borderRadius={8}
+              >
                 <Text fontSize={13} fontWeight="600" color="white">
                   {importing ? 'Importing...' : `Import (${importText.split('\n').filter(l => l.trim().length > 2).length})`}
                 </Text>
               </YStack>
-            </XStack>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+            </Pressable>
+          </XStack>
+        </>
+      ))}
     </SafeAreaView>
   );
 }
