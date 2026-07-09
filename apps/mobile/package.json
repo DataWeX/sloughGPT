@@ -39,6 +39,7 @@
     "@react-native/babel-preset": "^0.86.0",
     "@react-native/jest-preset": "^0.86.0",
     "@react-native/metro-config": "^0.86.0",
+    "@tamagui/babel-plugin": "^2.4.2",
     "@testing-library/react-native": "^14.0.1",
     "@types/jest": "^29.5.14",
     "@types/react": "^19.0.14",
