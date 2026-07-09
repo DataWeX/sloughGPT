@@ -157,8 +157,14 @@ def convert_hf_to_slonet(
         # SwiGLU: has separate gate_proj + up_proj → w1 + w3
         arch_to_slonet.update(_ARCH_TO_SLONET_SWIGLU)
     else:
-        # GELU: only up + down → up maps to w1, w3 synthesized as identity
+        # GELU: up_proj → w1, w3 synthesized as identity
         arch_to_slonet.update(_ARCH_TO_SLONET_GELU)
+
+    # LayerNorm has bias — include norm bias mappings (RMSNorm drops them via None)
+    if arch.norm == "layer_norm":
+        arch_to_slonet["layers.{i}.attn_norm.bias"] = "blocks.{i}.attn_norm.bias"
+        arch_to_slonet["layers.{i}.ff_norm.bias"] = "blocks.{i}.ff_norm.bias"
+        arch_to_slonet["final_norm.bias"] = "norm.bias"
 
     for hf_key, arr in hf_state_dict.items():
         mapped = False
