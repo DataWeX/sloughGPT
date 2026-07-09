@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import React from 'react'
 
 vi.mock('@/lib/knowledge-controller', () => ({
@@ -18,10 +18,12 @@ vi.mock('@/lib/toast-store', () => ({
 import { EmbedderTrainingCard } from '../EmbedderTrainingCard'
 
 describe('EmbedderTrainingCard', () => {
-  it('renders untrained state with train button', () => {
+  it('renders untrained state with train button', async () => {
     render(<EmbedderTrainingCard />)
     expect(screen.getByText('Text Embedder')).toBeDefined()
     expect(screen.getByText('Train Embedder')).toBeDefined()
-    expect(screen.getByText(/Train a SloNet text embedder/)).toBeDefined()
+    await waitFor(() => {
+      expect(screen.getByText(/Train a SloNet text embedder/)).toBeDefined()
+    })
   })
 })
