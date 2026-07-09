@@ -404,3 +404,102 @@ class TestIntegration:
         assert lib.has("model_a.shared_w")
         assert lib.has("model_b.my_w")
         assert lib.stats()["total_points"] == 2
+
+
+# ── NumpyEngine + ModelTree integration ──
+
+class TestNumpyEngineModelTree:
+    """Integration tests: NumpyEngine with ModelTree (Point-based storage)."""
+
+    def test_numpy_engine_with_model_tree(self):
+        """NumpyEngine stores weights as Points via ModelTree."""
+        from domains.infrastructure.numpy_engine import NumpyEngine
+
+        config = {
+            "architectures": ["GPT2LMHeadModel"],
+            "vocab_size": 100,
+            "n_positions": 128,
+            "n_embd": 64,
+            "n_head": 4,
+            "n_layer": 2,
+            "n_ctx": 128,
+        }
+        rng = np.random.default_rng(42)
+        weights = {
+            "wte.weight": rng.standard_normal((100, 64)).astype(np.float32),
+            "wpe.weight": rng.standard_normal((128, 64)).astype(np.float32),
+            "h.0.ln_1.weight": rng.standard_normal(64).astype(np.float32),
+            "h.0.ln_1.bias": rng.standard_normal(64).astype(np.float32),
+        }
+
+        lib = PointLibrary(name="test_engine")
+        tree = ModelTree("gpt2_test", lib)
+        engine = NumpyEngine(
+            config=config, weights=weights, compress=True,
+            model_tree=tree,
+        )
+
+        # Weights stored as Points, not _CompressedWeight
+        assert engine._model_tree is not None
+        assert len(engine._compressed_weights) == 0
+
+        # Can still get weights
+        w = engine._get_weight("wte.weight")
+        assert w.shape == (100, 64)
+
+        # Stats
+        info = engine.info()
+        assert info["compressed"] is True
+
+    def test_numpy_engine_from_pretrained_with_points(self):
+        """NumpyEngine.from_pretrained with use_points=True."""
+        from domains.infrastructure.numpy_engine import NumpyEngine
+
+        engine = NumpyEngine.from_pretrained("gpt2", use_points=True, n_clusters=8)
+
+        # ModelTree created
+        assert engine._model_tree is not None
+        assert engine._model_tree.is_loaded
+
+        # Library has points
+        lib = engine._model_tree.library
+        assert lib.stats()["total_points"] > 0
+
+        # Can get weights
+        w = engine._get_weight("wte.weight")
+        assert w.shape[0] == 50257  # GPT-2 vocab
+
+    def test_numpy_engine_from_pretrained_with_shared_library(self):
+        """Two engines share the same PointLibrary via ModelTree."""
+        from domains.infrastructure.numpy_engine import NumpyEngine
+
+        lib = PointLibrary(name="shared")
+        e1 = NumpyEngine.from_pretrained("gpt2", use_points=True, library=lib)
+        e2 = NumpyEngine.from_pretrained("gpt2", use_points=True, library=lib)
+
+        # Both use the same library
+        assert e1._model_tree.library is e2._model_tree.library
+
+        # Library has points from both engines (with different model prefixes)
+        stats = lib.stats()
+        assert stats["total_points"] > 0
+
+    def test_points_persistence(self):
+        """Save PointLibrary from NumpyEngine, load and verify."""
+        from domains.infrastructure.numpy_engine import NumpyEngine
+
+        engine = NumpyEngine.from_pretrained("gpt2", use_points=True, n_clusters=8)
+        lib = engine._model_tree.library
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lib.save(Path(tmpdir) / "gpt2.points.json")
+
+            loaded_lib = PointLibrary.load(Path(tmpdir) / "gpt2.points.json")
+            assert loaded_lib.stats()["total_points"] == lib.stats()["total_points"]
+
+            # Verify a weight can be reconstructed
+            original = engine._get_weight("h.0.ln_1.weight")
+            tree2 = ModelTree("gpt2", loaded_lib)
+            recovered = tree2.get_weight("h.0.ln_1.weight")
+            assert recovered is not None
+            assert recovered.shape == original.shape

@@ -744,6 +744,7 @@ class NumpyEngine:
         compress: bool = True,
         n_clusters: int = 16,
         cache_size: int = 100,
+        model_tree: Optional["ModelTree"] = None,
     ):
         """Initialize engine with optional compression.
 
@@ -754,6 +755,9 @@ class NumpyEngine:
             compress: Whether to compress weights via vector quantization.
             n_clusters: Number of clusters for VQ compression (16 = 4x savings).
             cache_size: Max number of decompressed weights to cache.
+            model_tree: Optional ModelTree for Point-based storage. When provided,
+                weights are stored as Points in a shared PointLibrary instead of
+                _CompressedWeight. Enables multi-model sharing and persistence.
         """
         self.config = config
         self.tokenizer = tokenizer
@@ -772,6 +776,9 @@ class NumpyEngine:
         self._compressed_weights: Dict[str, _CompressedWeight] = {}
         self._cache = _LRUCache(max_size=cache_size)
 
+        # ModelTree (Point-based storage)
+        self._model_tree: Optional["ModelTree"] = model_tree
+
         # KV cache for incremental decoding
         self._kv_cache: Optional[KVCache] = None
 
@@ -780,7 +787,12 @@ class NumpyEngine:
         self._total_compressed_bytes = 0
 
         # Load weights
-        if compress:
+        if model_tree is not None:
+            # Store via ModelTree (Point-based compression)
+            model_tree.load_weights(weights, method="cluster" if compress else "function")
+            self._total_raw_bytes = sum(w.nbytes for w in weights.values())
+            self._total_compressed_bytes = model_tree.library.stats()["total_compressed_bytes"]
+        elif compress:
             self._compress_weights(weights)
         else:
             self._raw_weights = weights
@@ -852,6 +864,13 @@ class NumpyEngine:
         if cached is not None:
             return cached
 
+        # Try ModelTree (Point-based storage)
+        if self._model_tree is not None:
+            raw = self._model_tree.get_weight(name)
+            if raw is not None:
+                self._cache.put(name, raw)
+                return raw
+
         # Decompress from compressed storage
         if name in self._compressed_weights:
             raw = self._compressed_weights[name].decompress()
@@ -873,6 +892,8 @@ class NumpyEngine:
         tokenizer: Any = None,
         compress: bool = True,
         n_clusters: int = 16,
+        use_points: bool = False,
+        library: Optional["PointLibrary"] = None,
     ) -> "NumpyEngine":
         """Load model from HuggingFace cache.
 
@@ -881,17 +902,32 @@ class NumpyEngine:
             tokenizer: Optional tokenizer. If None, loads MorphTokenizer.
             compress: Whether to compress weights via VQ.
             n_clusters: Number of clusters for VQ (16 = 4x, 32 = 8x, 8 = 2x).
+            use_points: If True, store weights as Points in a ModelTree instead of
+                _CompressedWeight. Enables multi-model sharing and persistence.
+            library: PointLibrary to use for Point-based storage. Created if None
+                and use_points=True.
         """
         config, weights = _load_weights(model_id)
         if tokenizer is None:
             from domains.infrastructure.morph_tokenizer import MorphTokenizer
             tokenizer = MorphTokenizer.from_pretrained(model_id)
+
+        model_tree = None
+        if use_points:
+            from domains.infrastructure.point_compressor import ModelTree, PointLibrary
+            if library is None:
+                library = PointLibrary(
+                    name=model_id.replace("/", "_"),
+                )
+            model_tree = ModelTree(model_id, library, n_clusters=n_clusters)
+
         return cls(
             config=config,
             weights=weights,
             tokenizer=tokenizer,
             compress=compress,
             n_clusters=n_clusters,
+            model_tree=model_tree,
         )
 
     def _forward(self, token_ids: List[int], kv_cache: Optional[KVCache] = None, start_pos: int = 0) -> np.ndarray:
