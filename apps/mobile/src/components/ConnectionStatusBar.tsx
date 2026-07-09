@@ -7,7 +7,6 @@
 import React from 'react';
 import {View, Text, TouchableOpacity, StyleSheet, ActivityIndicator} from 'react-native';
 import {useConnectionStatus, type ConnectionState} from '../hooks/useConnectionStatus';
-import {colors, radii} from '../theme';
 
 interface Props {
   onRetry?: () => void;

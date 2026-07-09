@@ -71,6 +71,13 @@ _bridge.setLevel(getattr(logging, _log_level_name, logging.INFO))
 logging.root.addHandler(_bridge)
 logging.root.setLevel(getattr(logging, _log_level_name, logging.INFO))
 
+# Log bridge → output buffer (for SSE streaming via /system/stream)
+try:
+    from domains.infrastructure.output_buffer import install_log_bridge
+    install_log_bridge()
+except Exception:
+    pass
+
 logger = logging.getLogger("man")
 
 
@@ -102,9 +109,11 @@ except Exception as exc:
 async def lifespan(app_inst: FastAPI):
     """Delegate startup phases to ``StartupOrchestrator``."""
     try:
+        import os
         from infrastructure.startup import StartupOrchestrator
 
-        orch = StartupOrchestrator(app_inst, cfg)
+        profile = os.environ.get("MAN_STARTUP_PROFILE", "full")
+        orch = StartupOrchestrator(app_inst, cfg, profile=profile)
         await orch.run()
         yield
         await orch.shutdown()

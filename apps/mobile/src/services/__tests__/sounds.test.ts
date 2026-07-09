@@ -1,60 +1,45 @@
-import {sounds, setSoundsEnabled, areSoundsEnabled, playSound} from '../sounds';
+jest.mock('../haptics');
 
-jest.mock('../haptics', () => ({
-  triggerHaptic: jest.fn(),
-}));
+import {playSound, setSoundsEnabled, areSoundsEnabled, sounds} from '../sounds';
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  setSoundsEnabled(true);
-});
+describe('sounds', () => {
+  beforeEach(() => {
+    setSoundsEnabled(true);
+  });
 
-describe('sounds service', () => {
+  it('send() does not throw', async () => {
+    await expect(sounds.send()).resolves.toBeUndefined();
+  });
+
+  it('receive() does not throw', async () => {
+    await expect(sounds.receive()).resolves.toBeUndefined();
+  });
+
+  it('error() does not throw', async () => {
+    await expect(sounds.error()).resolves.toBeUndefined();
+  });
+
+  it('delete() does not throw', async () => {
+    await expect(sounds.delete()).resolves.toBeUndefined();
+  });
+
   it('areSoundsEnabled returns true by default', () => {
     expect(areSoundsEnabled()).toBe(true);
   });
 
-  it('setSoundsEnabled toggles state', () => {
+  it('setSoundsEnabled(false) disables sounds', async () => {
     setSoundsEnabled(false);
     expect(areSoundsEnabled()).toBe(false);
-    setSoundsEnabled(true);
-    expect(areSoundsEnabled()).toBe(true);
+    // Silent when disabled
+    await expect(sounds.send()).resolves.toBeUndefined();
   });
 
-  it('playSound does not throw', async () => {
-    await expect(playSound('send')).resolves.toBeUndefined();
-    await expect(playSound('receive')).resolves.toBeUndefined();
-    await expect(playSound('error')).resolves.toBeUndefined();
-    await expect(playSound('delete')).resolves.toBeUndefined();
-  });
-
-  it('playSound does nothing when disabled', async () => {
-    setSoundsEnabled(false);
-    await playSound('send');
-    // No error, no haptic called
-  });
-
-  it('sounds.send calls playSound', async () => {
-    await sounds.send();
-    // No throw
-  });
-
-  it('sounds.receive calls playSound', async () => {
-    await sounds.receive();
-  });
-
-  it('sounds.error calls playSound', async () => {
-    await sounds.error();
-  });
-
-  it('sounds.delete calls playSound', async () => {
-    await sounds.delete();
-  });
-
-  it('sounds.setEnabled delegates', () => {
+  it('setEnabled is an alias for setSoundsEnabled', () => {
     sounds.setEnabled(false);
-    expect(sounds.isEnabled()).toBe(false);
-    sounds.setEnabled(true);
+    expect(areSoundsEnabled()).toBe(false);
+  });
+
+  it('isEnabled is an alias for areSoundsEnabled', () => {
     expect(sounds.isEnabled()).toBe(true);
   });
 });

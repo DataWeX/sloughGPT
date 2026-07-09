@@ -1,7 +1,9 @@
 'use client'
 
-import { type ReactNode, useState } from 'react'
-import { cn } from '@/lib/cn'
+import { type ReactNode, useState, useRef, useCallback, KeyboardEvent } from 'react'
+import { cn } from '../../lib/cn'
+
+/* ── Chip ───────────────────────────────────────────────────── */
 
 interface ChipProps {
   label: string
@@ -10,8 +12,9 @@ interface ChipProps {
   icon?: ReactNode
   removable?: boolean
   onRemove?: () => void
-  variant?: 'default' | 'outline'
-  size?: 'sm' | 'default'
+  variant?: 'default' | 'outline' | 'solid'
+  size?: 'xs' | 'sm' | 'default'
+  disabled?: boolean
   className?: string
 }
 
@@ -24,60 +27,95 @@ export function Chip({
   onRemove,
   variant = 'default',
   size = 'default',
+  disabled,
   className,
 }: ChipProps) {
-  const Component = onClick ? 'button' : 'span'
+  const Tag = onClick ? 'button' : 'span'
+
+  const baseStyles = 'inline-flex items-center gap-1 rounded-full font-medium transition-all duration-150 select-none'
+
+  const variantStyles = {
+    default: selected
+      ? 'bg-primary text-primary-foreground shadow-sm'
+      : 'bg-primary/10 text-primary hover:bg-primary/20',
+    outline: selected
+      ? 'border border-primary bg-primary/10 text-primary'
+      : 'border border-border bg-transparent text-foreground hover:border-primary/40 hover:text-primary',
+    solid: selected
+      ? 'bg-primary text-primary-foreground'
+      : 'bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground',
+  }
+
+  const sizeStyles = {
+    xs: 'px-1.5 py-0.5 text-[10px]',
+    sm: 'px-2 py-0.5 text-[11px]',
+    default: 'px-2.5 py-1 text-xs',
+  }
 
   return (
-    <Component
-      onClick={onClick}
+    <Tag
+      type={onClick ? 'button' : undefined}
+      onClick={disabled ? undefined : onClick}
+      aria-pressed={onClick ? selected : undefined}
+      aria-disabled={disabled}
+      disabled={onClick && disabled ? true : undefined}
       className={cn(
-        "inline-flex items-center gap-1 rounded-full font-medium transition-colors",
-        selected && "bg-primary text-primary-foreground",
-        !selected && variant === 'default' && "bg-primary/10 text-primary",
-        !selected && variant === 'outline' && "border border-border bg-transparent",
-        size === 'sm' && "px-2 py-0.5 text-[10px]",
-        size === 'default' && "px-2.5 py-1 text-xs",
-        onClick && "cursor-pointer hover:opacity-80",
-        className
+        baseStyles,
+        variantStyles[variant],
+        sizeStyles[size],
+        onClick && !disabled && 'cursor-pointer',
+        disabled && 'opacity-50 cursor-not-allowed',
+        className,
       )}
     >
-      {icon}
+      {icon && <span className="shrink-0">{icon}</span>}
       {label}
       {removable && (
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); onRemove?.() }}
-          className="ml-0.5 hover:opacity-70"
+          aria-label={`Remove ${label}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            if (!disabled) onRemove?.()
+          }}
+          className={cn(
+            'ml-0.5 flex items-center justify-center rounded-full transition-opacity',
+            'hover:opacity-70 focus:outline-none focus:ring-1 focus:ring-primary/50',
+            disabled && 'pointer-events-none',
+          )}
         >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          <svg className="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       )}
-    </Component>
+    </Tag>
   )
 }
+
+/* ── Chips (multi-select) ───────────────────────────────────── */
 
 interface ChipsProps {
   value: string[]
   onChange: (value: string[]) => void
-  options: { value: string; label: string; icon?: ReactNode }[]
+  options: { value: string; label: string; icon?: ReactNode; disabled?: boolean }[]
   max?: number
+  variant?: ChipProps['variant']
+  size?: ChipProps['size']
   className?: string
 }
 
-export function Chips({ value, onChange, options, max, className }: ChipsProps) {
+export function Chips({ value, onChange, options, max, variant = 'default', size = 'default', className }: ChipsProps) {
   const toggle = (optValue: string) => {
     if (value.includes(optValue)) {
-      onChange(value.filter(v => v !== optValue))
+      onChange(value.filter((v) => v !== optValue))
     } else if (!max || value.length < max) {
       onChange([...value, optValue])
     }
   }
 
   return (
-    <div className={cn("flex flex-wrap gap-1.5", className)}>
+    <div className={cn('flex flex-wrap gap-1.5', className)} role="group">
       {options.map((opt) => (
         <Chip
           key={opt.value}
@@ -85,93 +123,102 @@ export function Chips({ value, onChange, options, max, className }: ChipsProps) 
           selected={value.includes(opt.value)}
           onClick={() => toggle(opt.value)}
           icon={opt.icon}
+          variant={variant}
+          size={size}
+          disabled={opt.disabled || (!value.includes(opt.value) && max !== undefined && value.length >= max)}
         />
       ))}
     </div>
   )
 }
 
-interface BadgeProps {
-  label: string
-  variant?: 'default' | 'success' | 'warning' | 'error' | 'outline'
-  size?: 'sm' | 'default'
-  className?: string
-}
-
-export function Badge({
-  label,
-  variant = 'default',
-  size = 'default',
-  className,
-}: BadgeProps) {
-  const variants = {
-    default: "bg-primary/10 text-primary",
-    success: "bg-success/10 text-success",
-    warning: "bg-warning/10 text-warning",
-    error: "bg-destructive/10 text-destructive",
-    outline: "border border-border bg-transparent",
-  }
-
-  return (
-    <span className={cn(
-      "inline-flex items-center rounded-full font-medium",
-      variants[variant],
-      size === 'sm' && "px-1.5 py-0.5 text-[10px]",
-      size === 'default' && "px-2 py-0.5 text-xs",
-      className
-    )}>
-      {label}
-    </span>
-  )
-}
+/* ── Tag Input ──────────────────────────────────────────────── */
 
 interface TagInputProps {
   value: string[]
   onChange: (value: string[]) => void
   placeholder?: string
+  /** Characters that trigger tag creation. Default: [',', 'Enter'] */
+  delimiters?: string[]
+  maxTags?: number
+  disabled?: boolean
   className?: string
 }
 
-export function TagInput({ value, onChange, placeholder = 'Add tag...', className }: TagInputProps) {
+export function TagInput({
+  value,
+  onChange,
+  placeholder = 'Add tag…',
+  delimiters = ['Enter', ','],
+  maxTags,
+  disabled,
+  className,
+}: TagInputProps) {
   const [input, setInput] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
 
-  const add = () => {
-    const trimmed = input.trim()
-    if (trimmed && !value.includes(trimmed)) {
+  const addTag = useCallback(
+    (raw: string) => {
+      const trimmed = raw.trim().replace(/,$/, '')
+      if (!trimmed) return
+      if (value.includes(trimmed)) { setInput(''); return }
+      if (maxTags !== undefined && value.length >= maxTags) return
       onChange([...value, trimmed])
       setInput('')
-    }
-  }
+    },
+    [value, onChange, maxTags],
+  )
 
-  const remove = (tag: string) => {
-    onChange(value.filter(t => t !== tag))
-  }
+  const remove = (tag: string) => onChange(value.filter((t) => t !== tag))
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (delimiters.includes(e.key)) {
       e.preventDefault()
-      add()
+      addTag(input)
+    }
+    // Remove last tag on Backspace when input is empty
+    if (e.key === 'Backspace' && !input && value.length > 0) {
+      remove(value[value.length - 1])
     }
   }
+
+  const atMax = maxTags !== undefined && value.length >= maxTags
 
   return (
-    <div className={cn("flex flex-wrap gap-1.5 p-2 border rounded-lg min-h-[40px]", className)}>
+    <div
+      className={cn(
+        'flex flex-wrap items-center gap-1.5 min-h-10 px-2 py-1.5 rounded-lg border border-input bg-background',
+        'transition-[border-color,box-shadow] duration-200',
+        'focus-within:ring-2 focus-within:ring-primary/40 focus-within:ring-offset-2 focus-within:border-primary/60',
+        disabled && 'cursor-not-allowed opacity-50',
+        className,
+      )}
+      onClick={() => inputRef.current?.focus()}
+    >
       {value.map((tag) => (
         <Chip
           key={tag}
           label={tag}
           removable
-          onRemove={() => remove(tag)}
+          onRemove={() => !disabled && remove(tag)}
+          size="sm"
+          variant="solid"
+          selected
         />
       ))}
-      <input
-        type="text"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={value.length === 0 ? placeholder : ''}
-        className="flex-1 min-w-[60px] bg-transparent outline-none text-sm placeholder:text-muted-foreground"
-      />
+      {!atMax && (
+        <input
+          ref={inputRef}
+          type="text"
+          value={input}
+          disabled={disabled}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={() => addTag(input)}
+          placeholder={value.length === 0 ? placeholder : ''}
+          className="flex-1 min-w-[80px] bg-transparent outline-none text-sm placeholder:text-muted-foreground disabled:cursor-not-allowed"
+        />
+      )}
     </div>
   )
 }

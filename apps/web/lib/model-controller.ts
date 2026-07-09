@@ -55,8 +55,8 @@ export interface HealthStatus {
 export const modelController = {
   async list(): Promise<ModelInfo[]> {
     try {
-      const data = await apiGet<{ models: (string | ModelInfo)[] }>('/models/hf')
-      const modelList = data.models ?? []
+      const data = await apiGet<ModelInfo[] | { models: (string | ModelInfo)[] }>('/models/hf')
+      const modelList = Array.isArray(data) ? data : (data.models ?? [])
       return modelList.map((m: string | ModelInfo) =>
         typeof m === 'string' ? { id: m, name: m, type: 'huggingface' } : m,
       )

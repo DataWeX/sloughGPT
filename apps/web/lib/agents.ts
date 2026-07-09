@@ -58,19 +58,3 @@ export const AGENTS: Record<string, AgentDef> = {
 } as const
 
 export type AgentId = keyof typeof AGENTS
-
-export function getAgentName(agentId: string): string {
-  return AGENTS[agentId as AgentId]?.name ?? 'General'
-}
-
-export function getAgentDescription(agentId: string): string {
-  return AGENTS[agentId as AgentId]?.description ?? ''
-}
-
-export function getAgentSystemPrompt(agentId: string): string {
-  return AGENTS[agentId as AgentId]?.instructions ?? AGENTS.general.instructions
-}
-
-export function getAgentCapabilities(agentId: string): string[] {
-  return AGENTS[agentId as AgentId]?.capabilities ?? []
-}

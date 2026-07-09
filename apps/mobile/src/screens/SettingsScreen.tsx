@@ -1,17 +1,16 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useState, useRef} from 'react';
 import {
-  View,
-  Text,
   ScrollView,
-  TouchableOpacity,
-  TextInput,
-  StyleSheet,
+  TextInput as RNTextInput,
   Alert,
   Switch,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useNavigation} from '@react-navigation/native';
+import {YStack, XStack, Text, Input, Button, useTheme} from 'tamagui';
 import {useSettingsStore} from '../stores/settings-store';
 import {useModelStore} from '../stores/model-store';
 import {StatusBadge} from '../components/StatusBadge';
@@ -24,15 +23,30 @@ import {
   onNotification,
 } from '../services/push-notifications';
 import {sounds} from '../services/sounds';
-import {colors, spacing, radii, typography} from '../theme';
 import type {HealthStatus} from '../types';
 import type {ThemeMode} from '../types';
+import type {FontFamilyOption, FontSizeScale} from '../stores/settings-store';
+
+const FONT_FAMILY_OPTIONS: {label: string; value: FontFamilyOption}[] = [
+  {label: 'System Default', value: 'system'},
+  {label: 'DM Sans', value: 'dm-sans'},
+];
+
+const FONT_SCALE_PRESETS: {label: string; value: FontSizeScale}[] = [
+  {label: 'XS', value: 0.85},
+  {label: 'SM', value: 0.925},
+  {label: 'MD', value: 1.0},
+  {label: 'LG', value: 1.1},
+  {label: 'XL', value: 1.2},
+];
 
 export function SettingsScreen() {
+  const theme = useTheme();
   const settings = useSettingsStore();
   const {health, refresh} = useModelStore();
   const navigation = useNavigation<any>();
   const [serverUrl, setServerUrl] = useState('');
+  const serverUrlEditedRef = useRef(false);
   const [healthData, setHealthData] = useState<HealthStatus | null>(null);
   const [notificationsOn, setNotificationsOn] = useState(false);
   const [lastNotification, setLastNotification] = useState<string | null>(null);
@@ -40,7 +54,11 @@ export function SettingsScreen() {
   const hybrid = useHybridStore();
 
   useEffect(() => {
-    getApiUrl().then(setServerUrl);
+    getApiUrl().then(url => {
+      if (!serverUrlEditedRef.current) {
+        setServerUrl(url);
+      }
+    });
     api.get<HealthStatus>('/health').then(setHealthData).catch(() => {});
     isNotificationsEnabled().then(setNotificationsOn);
   }, []);
@@ -77,670 +95,351 @@ export function SettingsScreen() {
   const themes: ThemeMode[] = ['light', 'dark', 'system'];
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Settings</Text>
+    <SafeAreaView style={{flex: 1, backgroundColor: 'var(--background)'}} edges={['top']}>
+      <KeyboardAvoidingView style={{flex: 1}} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={{padding: 16, gap: 12}}>
+          <Text fontSize={22} fontWeight="700" letterSpacing={-0.3} color="$color" marginBottom={4}>
+            Settings
+          </Text>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Server</Text>
-          <View style={styles.row}>
-            <Text style={styles.label}>Status</Text>
-            <StatusBadge
-              label={healthData?.status === 'healthy' ? 'Connected' : 'Offline'}
-              variant={
-                healthData?.status === 'healthy' ? 'success' : 'error'
-              }
-            />
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Model</Text>
-            <Text style={styles.value}>
-              {healthData?.model_name || 'None'}
-            </Text>
-          </View>
-          <View style={styles.urlRow}>
-            <TextInput
-              style={styles.urlInput}
-              value={serverUrl}
-              onChangeText={setServerUrl}
-              placeholder="http://localhost:8000"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <TouchableOpacity style={styles.urlSaveBtn} onPress={handleSaveUrl}>
-              <Text style={styles.urlSaveText}>Save</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+          {/* Server */}
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+            <Text fontSize={15} fontWeight="600" color="$color">Server</Text>
+            <XStack justifyContent="space-between" alignItems="center">
+              <Text fontSize={14} color="$color11">Status</Text>
+              <StatusBadge
+                label={healthData?.status === 'healthy' ? 'Connected' : 'Offline'}
+                variant={healthData?.status === 'healthy' ? 'success' : 'error'}
+              />
+            </XStack>
+            <XStack justifyContent="space-between" alignItems="center">
+              <Text fontSize={14} color="$color11">Model</Text>
+              <Text fontSize={14} fontWeight="500" color="$color">{healthData?.model_name || 'None'}</Text>
+            </XStack>
+            <XStack gap={8} marginTop={8}>
+              <Input
+                flex={1}
+                size="$3"
+                value={serverUrl}
+                onChangeText={val => { serverUrlEditedRef.current = true; setServerUrl(val); }}
+                placeholder="http://localhost:8000"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <Button size="$3" backgroundColor="$color9" color="white" fontWeight="600" onPress={handleSaveUrl}>Save</Button>
+            </XStack>
+          </YStack>
 
-        <TouchableOpacity
-          style={styles.card}
-          onPress={() => navigation.navigate('Health')}>
-          <View style={styles.navRow}>
-            <View>
-              <Text style={styles.cardTitle}>System Health</Text>
-              <Text style={styles.navDesc}>CPU, memory, disk, uptime</Text>
-            </View>
-            <Text style={styles.navArrow}>→</Text>
-          </View>
-        </TouchableOpacity>
+          {/* System Health nav */}
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} onPress={() => navigation.navigate('Health')}>
+            <XStack justifyContent="space-between" alignItems="center">
+              <YStack>
+                <Text fontSize={15} fontWeight="600" color="$color">System Health</Text>
+                <Text fontSize={12} color="$color11">CPU, memory, disk, uptime</Text>
+              </YStack>
+              <Text fontSize={18} color="$color11" fontWeight="300">→</Text>
+            </XStack>
+          </YStack>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Inference</Text>
+          {/* Inference */}
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+            <Text fontSize={15} fontWeight="600" color="$color">Inference</Text>
 
-          {/* Engine selector */}
-          <View style={styles.inferenceChips}>
-            {(['slonet', 'qwen', 'remote'] as const).map(engine => {
-              const active = hybrid.activeEngine === engine;
-              const label =
-                engine === 'slonet' ? 'SloNet' : engine === 'qwen' ? 'Qwen' : 'Server';
-              return (
-                <TouchableOpacity
-                  key={engine}
-                  style={[styles.inferenceChip, active && styles.inferenceChipActive]}
-                  onPress={() => hybrid.setActiveEngine(engine)}>
-                  <Text
-                    style={[
-                      styles.inferenceChipText,
-                      active && styles.inferenceChipTextActive,
-                    ]}>
-                    {label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+            {/* Engine chips */}
+            <XStack gap={8}>
+              {(['slonet', 'qwen', 'remote'] as const).map(engine => {
+                const active = hybrid.activeEngine === engine;
+                const label = engine === 'slonet' ? 'SloNet' : engine === 'qwen' ? 'Qwen' : 'Server';
+                return (
+                  <YStack
+                    key={engine}
+                    flex={1}
+                    paddingVertical={8}
+                    borderRadius={999}
+                    backgroundColor={active ? '$color9' : '$backgroundHover'}
+                    borderWidth={1}
+                    borderColor={active ? '$color9' : '$borderColor'}
+                    alignItems="center"
+                    onPress={() => hybrid.setActiveEngine(engine)}>
+                    <Text fontSize={11} fontWeight="600" color={active ? 'white' : '$color11'}>{label}</Text>
+                  </YStack>
+                );
+              })}
+            </XStack>
 
-          {/* SloNet status */}
-          <View style={styles.inferenceRow}>
-            <View style={{flex: 1}}>
-              <Text style={styles.inferenceName}>SloNet</Text>
-              <Text style={styles.inferenceMeta}>
-                {hybrid.slonet.loaded
-                  ? `Loaded — ${hybrid.slonet.modelName}`
-                  : 'Not loaded'}
-              </Text>
-            </View>
-            {hybrid.slonet.loaded ? (
-              <TouchableOpacity style={styles.inferenceUnloadBtn} onPress={hybrid.unloadSloNet}>
-                <Text style={styles.inferenceUnloadText}>Unload</Text>
-              </TouchableOpacity>
-            ) : hybrid.slonet.downloadProgress !== null && hybrid.slonet.downloadProgress < 1 ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : (
-              <TouchableOpacity style={styles.inferenceLoadBtn} onPress={() => hybrid.loadSloNet()}>
-                <Text style={styles.inferenceLoadText}>Load</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Qwen status */}
-          <View style={styles.inferenceRow}>
-            <View style={{flex: 1}}>
-              <Text style={styles.inferenceName}>Qwen 0.5B GGUF</Text>
-              <Text style={styles.inferenceMeta}>
-                {hybrid.qwen.loaded
-                  ? 'Loaded — 15-30 tok/s'
-                  : hybrid.qwen.downloadProgress !== null && hybrid.qwen.downloadProgress < 1
-                  ? `Downloading ${Math.round(hybrid.qwen.downloadProgress * 100)}%`
-                  : 'Not downloaded'}
-              </Text>
-            </View>
-            {hybrid.qwen.loaded ? (
-              <TouchableOpacity style={styles.inferenceUnloadBtn} onPress={() => hybrid.unloadQwen()}>
-                <Text style={styles.inferenceUnloadText}>Unload</Text>
-              </TouchableOpacity>
-            ) : hybrid.qwen.downloadProgress !== null && hybrid.qwen.downloadProgress < 1 ? (
-              <View style={styles.inferenceProgressWrap}>
-                <View style={[styles.inferenceProgressFill, {width: `${hybrid.qwen.downloadProgress * 100}%`}]} />
-              </View>
-            ) : (
-              <TouchableOpacity style={styles.inferenceLoadBtn} onPress={() => hybrid.loadQwen()}>
-                <Text style={styles.inferenceLoadText}>Download</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {hybrid.lastError && (
-            <Text style={styles.inferenceError}>{hybrid.lastError}</Text>
-          )}
-
-          <View style={styles.offlineRow}>
-            <View style={{flex: 1}}>
-              <Text style={styles.cardTitle}>Run Completely Offline</Text>
-              <Text style={styles.navDesc}>
-                {hybrid.offlineOnly
-                  ? 'Server disabled — conversations use local engines only'
-                  : 'Disables server fallback — load SloNet or Qwen first'}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[
-                styles.offlineToggle,
-                hybrid.offlineOnly && styles.offlineToggleActive,
-              ]}
-              onPress={() => hybrid.setOfflineOnly(!hybrid.offlineOnly)}>
-              <Text
-                style={[
-                  styles.offlineToggleText,
-                  hybrid.offlineOnly && styles.offlineToggleTextActive,
-                ]}>
-                {hybrid.offlineOnly ? 'ON' : 'OFF'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Appearance</Text>
-          <View style={styles.themeRow}>
-            {themes.map(t => (
-              <TouchableOpacity
-                key={t}
-                style={[
-                  styles.themeBtn,
-                  settings.theme === t && styles.themeBtnActive,
-                ]}
-                onPress={() => settings.setTheme(t)}>
-                <Text
-                  style={[
-                    styles.themeBtnText,
-                    settings.theme === t && styles.themeBtnTextActive,
-                  ]}>
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
+            {/* SloNet */}
+            <XStack justifyContent="space-between" alignItems="center" paddingVertical={4}>
+              <YStack>
+                <Text fontSize={14} fontWeight="500" color="$color">SloNet</Text>
+                <Text fontSize={12} color="$color11">
+                  {hybrid.slonet.loaded ? `Loaded — ${hybrid.slonet.modelName}` : 'Not loaded'}
                 </Text>
-              </TouchableOpacity>
+              </YStack>
+              {hybrid.slonet.loaded ? (
+                <Button size="$2" backgroundColor="$backgroundHover" color="$color11" fontWeight="600" borderRadius={999} onPress={hybrid.unloadSloNet}>Unload</Button>
+              ) : hybrid.slonet.downloadProgress !== null && hybrid.slonet.downloadProgress < 1 ? (
+                <ActivityIndicator size="small" color="$color9" />
+              ) : (
+                <Button size="$2" backgroundColor="$color9" color="white" fontWeight="600" borderRadius={999} onPress={() => hybrid.loadSloNet()}>Load</Button>
+              )}
+            </XStack>
+
+            {/* Qwen */}
+            <XStack justifyContent="space-between" alignItems="center" paddingVertical={4}>
+              <YStack>
+                <Text fontSize={14} fontWeight="500" color="$color">Qwen 0.5B GGUF</Text>
+                <Text fontSize={12} color="$color11">
+                  {hybrid.qwen.loaded
+                    ? 'Loaded — 15-30 tok/s'
+                    : hybrid.qwen.downloadProgress !== null && hybrid.qwen.downloadProgress < 1
+                    ? `Downloading ${Math.round(hybrid.qwen.downloadProgress * 100)}%`
+                    : 'Not downloaded'}
+                </Text>
+              </YStack>
+              {hybrid.qwen.loaded ? (
+                <Button size="$2" backgroundColor="$backgroundHover" color="$color11" fontWeight="600" borderRadius={999} onPress={() => hybrid.unloadQwen()}>Unload</Button>
+              ) : hybrid.qwen.downloadProgress !== null && hybrid.qwen.downloadProgress < 1 ? (
+                <YStack width={60} height={4} borderRadius={2} backgroundColor="$borderColor" overflow="hidden">
+                  <YStack height="100%" backgroundColor="$color9" borderRadius={2} width={`${hybrid.qwen.downloadProgress * 100}%`} />
+                </YStack>
+              ) : (
+                <Button size="$2" backgroundColor="$color9" color="white" fontWeight="600" borderRadius={999} onPress={() => hybrid.loadQwen()}>Download</Button>
+              )}
+            </XStack>
+
+            {hybrid.lastError && (
+              <Text fontSize={11} color="$color10">{hybrid.lastError}</Text>
+            )}
+
+            {/* Offline toggle */}
+            <XStack gap={12} marginTop={8} paddingTop={12} borderTopWidth={1} borderTopColor="$borderColor" alignItems="center">
+              <YStack flex={1}>
+                <Text fontSize={15} fontWeight="600" color="$color">Run Completely Offline</Text>
+                <Text fontSize={12} color="$color11">
+                  {hybrid.offlineOnly
+                    ? 'Server disabled — conversations use local engines only'
+                    : 'Disables server fallback — load SloNet or Qwen first'}
+                </Text>
+              </YStack>
+              <YStack
+                paddingHorizontal={12} paddingVertical={8} borderRadius={999}
+                backgroundColor={hybrid.offlineOnly ? '$background' : '$backgroundHover'}
+                borderWidth={1}
+                borderColor={hybrid.offlineOnly ? '$color9' : '$borderColor'}
+                minWidth={56} alignItems="center"
+                onPress={() => hybrid.setOfflineOnly(!hybrid.offlineOnly)}>
+                <Text fontSize={11} fontWeight="600" color={hybrid.offlineOnly ? '$color9' : '$color11'}>
+                  {hybrid.offlineOnly ? 'ON' : 'OFF'}
+                </Text>
+              </YStack>
+            </XStack>
+          </YStack>
+
+          {/* Appearance */}
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+            <Text fontSize={15} fontWeight="600" color="$color">Appearance</Text>
+            <XStack gap={8}>
+              {themes.map(t => {
+                const active = settings.theme === t;
+                return (
+                  <YStack
+                    key={t}
+                    flex={1}
+                    paddingVertical={10}
+                    borderRadius={999}
+                    backgroundColor={active ? '$color9' : '$backgroundHover'}
+                    borderWidth={1}
+                    borderColor={active ? '$color9' : '$borderColor'}
+                    alignItems="center"
+                    onPress={() => settings.setTheme(t)}>
+                    <Text fontSize={11} fontWeight="600" color={active ? 'white' : '$color11'}>
+                      {t.charAt(0).toUpperCase() + t.slice(1)}
+                    </Text>
+                  </YStack>
+                );
+              })}
+            </XStack>
+          </YStack>
+
+          {/* Font */}
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+            <Text fontSize={15} fontWeight="600" color="$color">Font</Text>
+            <Text fontSize={12} color="$color11">Typeface</Text>
+            <XStack gap={8}>
+              {FONT_FAMILY_OPTIONS.map(opt => {
+                const active = settings.fontFamily === opt.value;
+                return (
+                  <YStack
+                    key={opt.value}
+                    flex={1}
+                    paddingVertical={10}
+                    borderRadius={999}
+                    backgroundColor={active ? '$color9' : '$backgroundHover'}
+                    borderWidth={1}
+                    borderColor={active ? '$color9' : '$borderColor'}
+                    alignItems="center"
+                    onPress={() => settings.setFontFamily(opt.value)}>
+                    <Text fontSize={11} fontWeight="600" color={active ? 'white' : '$color11'}>{opt.label}</Text>
+                  </YStack>
+                );
+              })}
+            </XStack>
+            <Text fontSize={12} color="$color11" marginTop={4}>Size</Text>
+            <XStack gap={4} flexWrap="wrap">
+              {FONT_SCALE_PRESETS.map(p => {
+                const active = settings.fontSizeScale === p.value;
+                return (
+                  <YStack
+                    key={p.value}
+                    paddingHorizontal={12} paddingVertical={6}
+                    borderRadius={999}
+                    backgroundColor={active ? '$color9' : '$backgroundHover'}
+                    borderWidth={1}
+                    borderColor={active ? '$color9' : '$borderColor'}
+                    onPress={() => settings.setFontSizeScale(p.value)}>
+                    <Text fontSize={11} fontWeight="500" color={active ? 'white' : '$color11'}>{p.label}</Text>
+                  </YStack>
+                );
+              })}
+            </XStack>
+          </YStack>
+
+          {/* Push Notifications */}
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16}>
+            <XStack justifyContent="space-between" alignItems="center">
+              <YStack flex={1}>
+                <Text fontSize={15} fontWeight="600" color="$color">Push Notifications</Text>
+                <Text fontSize={12} color="$color11">Training updates and chat messages</Text>
+              </YStack>
+              <Switch
+                value={notificationsOn}
+                onValueChange={handleToggleNotifications}
+                trackColor={{false: theme.borderColor?.val || '#E5E7EB', true: (theme.color9?.val || '#6366F1') + '60'}}
+                thumbColor={notificationsOn ? (theme.color9?.val || '#6366F1') : (theme.color10?.val || '#9CA3AF')}
+              />
+            </XStack>
+            {lastNotification && (
+              <YStack backgroundColor="$background" marginTop={8} borderRadius={4} padding={8}>
+                <Text fontSize={11} color="$color11">{lastNotification}</Text>
+              </YStack>
+            )}
+          </YStack>
+
+          {/* Sound Effects */}
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16}>
+            <XStack justifyContent="space-between" alignItems="center">
+              <YStack flex={1}>
+                <Text fontSize={15} fontWeight="600" color="$color">Sound Effects</Text>
+                <Text fontSize={12} color="$color11">Audio feedback on send/receive</Text>
+              </YStack>
+              <Switch
+                value={soundsOn}
+                onValueChange={(val) => { setSoundsOn(val); sounds.setEnabled(val); }}
+                trackColor={{false: theme.borderColor?.val || '#E5E7EB', true: (theme.color9?.val || '#6366F1') + '60'}}
+                thumbColor={soundsOn ? (theme.color9?.val || '#6366F1') : (theme.color10?.val || '#9CA3AF')}
+              />
+            </XStack>
+          </YStack>
+
+          {/* Chat Defaults */}
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+            <Text fontSize={15} fontWeight="600" color="$color">Chat Defaults</Text>
+            {[
+              {label: 'Temperature', value: settings.temperature.toFixed(1), key: 'temperature', options: [0.2, 0.4, 0.6, 0.8, 1.0, 1.2]},
+              {label: 'Max Tokens', value: String(settings.maxTokens), key: 'maxTokens', options: [128, 256, 512, 1024], exact: true},
+              {label: 'Top-P', value: settings.topP.toFixed(1), key: 'topP', options: [0.7, 0.8, 0.9, 1.0]},
+              {label: 'Top-K', value: String(settings.topK), key: 'topK', options: [20, 50, 100, 200], exact: true},
+              {label: 'Repetition Penalty', value: settings.repetitionPenalty.toFixed(1), key: 'repetitionPenalty', options: [1.0, 1.1, 1.2, 1.5, 2.0]},
+            ].map(({label, value, key, options, exact}) => (
+              <YStack key={key} gap={4}>
+                <Text fontSize={13} color="$color11">{label}: {value}</Text>
+                <XStack gap={4} flexWrap="wrap">
+                  {options.map(v => {
+                    const match = exact
+                      ? (settings as any)[key] === v
+                      : Math.abs((settings as any)[key] - v) < 0.05;
+                    return (
+                      <YStack
+                        key={String(v)}
+                        paddingHorizontal={12} paddingVertical={6}
+                        borderRadius={999}
+                        backgroundColor={match ? '$color9' : '$backgroundHover'}
+                        borderWidth={1}
+                        borderColor={match ? '$color9' : '$borderColor'}
+                        onPress={() => settings.update({[key]: v})}>
+                        <Text fontSize={11} fontWeight="500" color={match ? 'white' : '$color11'}>
+                          {exact ? String(v) : v.toFixed(1)}
+                        </Text>
+                      </YStack>
+                    );
+                  })}
+                </XStack>
+              </YStack>
             ))}
-          </View>
-        </View>
+          </YStack>
 
-        <View style={styles.card}>
-          <View style={styles.row}>
-            <View style={{flex: 1}}>
-              <Text style={styles.cardTitle}>Push Notifications</Text>
-              <Text style={styles.navDesc}>Training updates and chat messages</Text>
-            </View>
-            <Switch
-              value={notificationsOn}
-              onValueChange={handleToggleNotifications}
-              trackColor={{false: colors.border, true: colors.primary + '60'}}
-              thumbColor={notificationsOn ? colors.primary : colors.textMuted}
-            />
-          </View>
-          {lastNotification && (
-            <View style={[styles.card, {backgroundColor: colors.surface, marginTop: 8, borderRadius: radii.sm}]}>
-              <Text style={[styles.navDesc, {fontSize: 11}]}>{lastNotification}</Text>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.card}>
-          <View style={styles.row}>
-            <View style={{flex: 1}}>
-              <Text style={styles.cardTitle}>Sound Effects</Text>
-              <Text style={styles.navDesc}>Audio feedback on send/receive</Text>
-            </View>
-            <Switch
-              value={soundsOn}
-              onValueChange={(val) => {
-                setSoundsOn(val);
-                sounds.setEnabled(val);
+          {/* Memory Context */}
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+            <Text fontSize={15} fontWeight="600" color="$color">Memory Context</Text>
+            <RNTextInput
+              style={{
+                fontSize: 14, color: theme.color?.val || '#111827', backgroundColor: theme.background?.val || '#FFFFFF',
+                borderRadius: 8, padding: 12, minHeight: 80,
+                borderWidth: 1, borderColor: theme.borderColor?.val || '#E5E7EB', textAlignVertical: 'top',
               }}
-              trackColor={{false: colors.border, true: colors.primary + '60'}}
-              thumbColor={soundsOn ? colors.primary : colors.textMuted}
+              value={settings.memoryContext}
+              onChangeText={v => settings.update({memoryContext: v})}
+              placeholder="Custom context the AI always remembers..."
+              placeholderTextColor={theme.color10?.val || '#9CA3AF'}
+              multiline
             />
-          </View>
-        </View>
+          </YStack>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Chat Defaults</Text>
-          <View style={styles.sliderRow}>
-            <Text style={styles.label}>
-              Temperature: {settings.temperature.toFixed(1)}
-            </Text>
-            <View style={styles.sliderBtns}>
-              {[0.2, 0.4, 0.6, 0.8, 1.0, 1.2].map(v => (
-                <TouchableOpacity
-                  key={v}
-                  style={[
-                    styles.tempBtn,
-                    Math.abs(settings.temperature - v) < 0.05 &&
-                      styles.tempBtnActive,
-                  ]}
-                  onPress={() => settings.update({temperature: v})}>
-                  <Text
-                    style={[
-                      styles.tempBtnText,
-                      Math.abs(settings.temperature - v) < 0.05 &&
-                        styles.tempBtnTextActive,
-                    ]}>
-                    {v.toFixed(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-          <View style={styles.sliderRow}>
-            <Text style={styles.label}>
-              Max Tokens: {settings.maxTokens}
-            </Text>
-            <View style={styles.sliderBtns}>
-              {[128, 256, 512, 1024].map(v => (
-                <TouchableOpacity
-                  key={v}
-                  style={[
-                    styles.tempBtn,
-                    settings.maxTokens === v && styles.tempBtnActive,
-                  ]}
-                  onPress={() => settings.update({maxTokens: v})}>
-                  <Text
-                    style={[
-                      styles.tempBtnText,
-                      settings.maxTokens === v && styles.tempBtnTextActive,
-                    ]}>
-                    {v}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-          <View style={styles.sliderRow}>
-            <Text style={styles.label}>
-              Top-P: {settings.topP.toFixed(1)}
-            </Text>
-            <View style={styles.sliderBtns}>
-              {[0.7, 0.8, 0.9, 1.0].map(v => (
-                <TouchableOpacity
-                  key={v}
-                  style={[
-                    styles.tempBtn,
-                    Math.abs(settings.topP - v) < 0.05 && styles.tempBtnActive,
-                  ]}
-                  onPress={() => settings.update({topP: v})}>
-                  <Text
-                    style={[
-                      styles.tempBtnText,
-                      Math.abs(settings.topP - v) < 0.05 &&
-                        styles.tempBtnTextActive,
-                    ]}>
-                    {v.toFixed(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-          <View style={styles.sliderRow}>
-            <Text style={styles.label}>
-              Top-K: {settings.topK}
-            </Text>
-            <View style={styles.sliderBtns}>
-              {[20, 50, 100, 200].map(v => (
-                <TouchableOpacity
-                  key={v}
-                  style={[
-                    styles.tempBtn,
-                    settings.topK === v && styles.tempBtnActive,
-                  ]}
-                  onPress={() => settings.update({topK: v})}>
-                  <Text
-                    style={[
-                      styles.tempBtnText,
-                      settings.topK === v && styles.tempBtnTextActive,
-                    ]}>
-                    {v}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-          <View style={styles.sliderRow}>
-            <Text style={styles.label}>
-              Repetition Penalty: {settings.repetitionPenalty.toFixed(1)}
-            </Text>
-            <View style={styles.sliderBtns}>
-              {[1.0, 1.1, 1.2, 1.5, 2.0].map(v => (
-                <TouchableOpacity
-                  key={v}
-                  style={[
-                    styles.tempBtn,
-                    Math.abs(settings.repetitionPenalty - v) < 0.05 &&
-                      styles.tempBtnActive,
-                  ]}
-                  onPress={() => settings.update({repetitionPenalty: v})}>
-                  <Text
-                    style={[
-                      styles.tempBtnText,
-                      Math.abs(settings.repetitionPenalty - v) < 0.05 &&
-                        styles.tempBtnTextActive,
-                    ]}>
-                    {v.toFixed(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </View>
+          {/* Nav cards */}
+          {[
+            {label: 'Bookmarks', desc: 'Saved messages for quick access', target: 'Bookmarks'},
+            {label: 'About SloughGPT', desc: 'Version, features, architecture', target: 'About'},
+            {label: 'Training', desc: 'Fine-tune models by chatting and interacting', target: 'Training'},
+            {label: 'What AI Knows About Me', desc: "View and manage the AI's knowledge about you", target: 'Knowledge'},
+            {label: 'Help', desc: 'FAQ, keyboard shortcuts, troubleshooting', target: 'Help'},
+            {label: 'Search Messages', desc: 'Find messages across conversations', target: 'Search'},
+          ].map(({label, desc, target}) => (
+            <YStack
+              key={target}
+              backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16}
+              onPress={() => navigation.navigate(target)}>
+              <XStack justifyContent="space-between" alignItems="center">
+                <YStack>
+                  <Text fontSize={15} fontWeight="600" color="$color">{label}</Text>
+                  <Text fontSize={12} color="$color11">{desc}</Text>
+                </YStack>
+                <Text fontSize={18} color="$color11" fontWeight="300">→</Text>
+              </XStack>
+            </YStack>
+          ))}
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Memory Context</Text>
-          <TextInput
-            style={styles.textArea}
-            value={settings.memoryContext}
-            onChangeText={v => settings.update({memoryContext: v})}
-            placeholder="Custom context the AI always remembers..."
-            placeholderTextColor={colors.textMuted}
-            multiline
-            textAlignVertical="top"
-          />
-        </View>
+          {/* Danger Zone */}
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+            <Text fontSize={15} fontWeight="600" color="$color">Danger Zone</Text>
+            <YStack
+              paddingVertical={10} paddingHorizontal={12} borderRadius={999}
+              backgroundColor="#FEF2F2" alignItems="center"
+              borderWidth={1} borderColor="#FEE2E2"
+              onPress={() =>
+                Alert.alert('Reset Settings', 'Reset all settings to defaults?', [
+                  {text: 'Cancel', style: 'cancel'},
+                  {text: 'Reset', style: 'destructive', onPress: settings.reset},
+                ])
+              }>
+              <Text fontSize={11} fontWeight="600" color="$color10">Reset all settings</Text>
+            </YStack>
+          </YStack>
 
-        <TouchableOpacity
-          style={styles.card}
-          onPress={() => navigation.navigate('Bookmarks')}>
-          <View style={styles.navRow}>
-            <View>
-              <Text style={styles.cardTitle}>Bookmarks</Text>
-              <Text style={styles.navDesc}>Saved messages for quick access</Text>
-            </View>
-            <Text style={styles.navArrow}>→</Text>
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.card}
-          onPress={() => navigation.navigate('About')}>
-          <View style={styles.navRow}>
-            <View>
-              <Text style={styles.cardTitle}>About SloughGPT</Text>
-              <Text style={styles.navDesc}>Version, features, architecture</Text>
-            </View>
-            <Text style={styles.navArrow}>→</Text>
-          </View>
-        </TouchableOpacity>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Danger Zone</Text>
-          <TouchableOpacity
-            style={styles.dangerBtn}
-            onPress={() =>
-              Alert.alert('Reset Settings', 'Reset all settings to defaults?', [
-                {text: 'Cancel', style: 'cancel'},
-                {text: 'Reset', style: 'destructive', onPress: settings.reset},
-              ])
-            }>
-            <Text style={styles.dangerText}>Reset all settings</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+          <YStack alignItems="center" paddingVertical={24}>
+            <Text fontSize={11} color="$color11" opacity={0.4}>SloughGPT v1.0.0</Text>
+          </YStack>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  title: {
-    ...typography.h1,
-    color: colors.text,
-  },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    padding: spacing.lg,
-  },
-  cardTitle: {
-    ...typography.h3,
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  label: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-  value: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  urlRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  urlInput: {
-    flex: 1,
-    ...typography.caption,
-    color: colors.text,
-    backgroundColor: colors.background,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  urlSaveBtn: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-    justifyContent: 'center',
-  },
-  urlSaveText: {
-    ...typography.caption,
-    color: colors.white,
-    fontWeight: '600',
-  },
-  inferenceChips: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginBottom: spacing.md,
-  },
-  inferenceChip: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-  },
-  inferenceChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  inferenceChipText: {
-    ...typography.small,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  inferenceChipTextActive: {
-    color: colors.white,
-  },
-  inferenceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  inferenceName: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  inferenceMeta: {
-    ...typography.small,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  inferenceLoadBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary,
-  },
-  inferenceLoadText: {
-    ...typography.caption,
-    color: colors.white,
-    fontWeight: '600',
-  },
-  inferenceUnloadBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: radii.md,
-    backgroundColor: colors.error + '15',
-  },
-  inferenceUnloadText: {
-    ...typography.caption,
-    color: colors.error,
-    fontWeight: '600',
-  },
-  inferenceProgressWrap: {
-    width: 60,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.border,
-    overflow: 'hidden',
-  },
-  inferenceProgressFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 3,
-  },
-  inferenceError: {
-    ...typography.small,
-    color: colors.error,
-    marginTop: spacing.sm,
-  },
-  offlineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  offlineToggle: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    minWidth: 56,
-    alignItems: 'center',
-  },
-  offlineToggleActive: {
-    backgroundColor: colors.success + '20',
-    borderColor: colors.success,
-  },
-  offlineToggleText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  offlineToggleTextActive: {
-    color: colors.success,
-  },
-  themeRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  themeBtn: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  themeBtnActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  themeBtnText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  themeBtnTextActive: {
-    color: colors.white,
-  },
-  sliderRow: {
-    marginBottom: spacing.md,
-  },
-  sliderBtns: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginTop: spacing.sm,
-    flexWrap: 'wrap',
-  },
-  tempBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.full,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  tempBtnActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  tempBtnText: {
-    ...typography.small,
-    color: colors.textSecondary,
-  },
-  tempBtnTextActive: {
-    color: colors.white,
-  },
-  textArea: {
-    ...typography.body,
-    color: colors.text,
-    backgroundColor: colors.background,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    minHeight: 80,
-  },
-  dangerBtn: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.error + '15',
-    borderRadius: radii.md,
-    alignItems: 'center',
-  },
-  dangerText: {
-    ...typography.caption,
-    color: colors.error,
-    fontWeight: '600',
-  },
-  navRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  navDesc: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  navArrow: {
-    fontSize: 20,
-    color: colors.textMuted,
-  },
-});

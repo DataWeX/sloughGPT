@@ -25,6 +25,22 @@ export class ApiError extends Error {
   }
 }
 
+/** Standard response envelope from backend. */
+interface StandardResponse<T> {
+  status: 'success' | 'error';
+  data: T;
+  message?: string;
+  meta?: Record<string, unknown>;
+}
+
+/** Unwrap StandardResponse — extracts `data` field if present. */
+function unwrap<T>(raw: unknown): T {
+  if (raw && typeof raw === 'object' && 'status' in raw && 'data' in raw) {
+    return (raw as StandardResponse<T>).data;
+  }
+  return raw as T;
+}
+
 async function request<T>(
   method: string,
   path: string,
@@ -52,7 +68,8 @@ async function request<T>(
       }
       const text = await res.text();
       if (!text) return undefined as T;
-      return JSON.parse(text) as T;
+      const raw = JSON.parse(text);
+      return unwrap<T>(raw);
     } catch (err) {
       if (err instanceof ApiError && err.status < 500) throw err;
       lastError = err as Error;
@@ -77,9 +94,6 @@ export const api = {
     const res = await fetch(`${baseUrl}${path}`, {
       method: 'POST',
       body: formData,
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
     });
     if (!res.ok) {
       const data = await res.json().catch(() => null);
@@ -87,7 +101,8 @@ export const api = {
     }
     const text = await res.text();
     if (!text) return undefined as T;
-    return JSON.parse(text) as T;
+    const raw = JSON.parse(text);
+    return unwrap<T>(raw);
   },
 
   /** Sync offline messages with the server. */
@@ -95,8 +110,8 @@ export const api = {
     request<T>('POST', '/mobile/sync', body),
 
   /** Rename a session. */
-  renameSession: (sessionId: string, title: string) =>
-    api.put(`/chat/sessions/${sessionId}`, {title}),
+  renameSession: (sessionId: string, name: string) =>
+    api.put(`/chat/sessions/${sessionId}`, {name}),
 
   /** Archive or unarchive a session. */
   archiveSession: (sessionId: string, archived: boolean) =>
@@ -104,7 +119,7 @@ export const api = {
 
   /** Search across all sessions. */
   searchSessions: (q: string, limit?: number) =>
-    api.get<{results: SearchResult[]}>(`/chat/sessions/search?q=${encodeURIComponent(q)}${limit ? `&limit=${limit}` : ''}`),
+    api.get<SearchResult[]>(`/chat/sessions/search?q=${encodeURIComponent(q)}${limit ? `&limit=${limit}` : ''}`),
 
   /** Send a voice message (audio upload) to a session. */
   sendVoiceMessage: (sessionId: string, audioUri: string, durationMs: number) => {
@@ -115,7 +130,7 @@ export const api = {
       name: 'voice.m4a',
     } as any);
     formData.append('duration_ms', String(durationMs));
-    return api.upload<{status: string; message_id: string; audio_path: string; session_id: string}>(
+    return api.upload<{message_id: string; audio_path: string; session_id: string}>(
       `/chat/voice/${sessionId}`,
       formData,
     );

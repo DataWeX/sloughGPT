@@ -31,3 +31,24 @@ def test_get_disk_structure():
     assert expected.issubset(data.keys())
     # disk percent should be between 0 and 100
     assert 0 <= data['percent'] <= 100
+
+
+def test_get_lifecycle_structure():
+    """Lifecycle endpoint returns expected fields even without full startup."""
+    resp = client.get('/system/lifecycle')
+    assert resp.status_code == 200
+    data = resp.json()
+    assert 'phase' in data
+    assert 'profile' in data
+    assert 'uptime' in data
+    assert 'in_flight' in data
+    assert 'hooks' in data
+    assert 'gates' in data
+    # Phase will be init since lifespan hasn't run
+    assert data['phase'] == 'init'
+    assert data['profile'] == 'full'
+    assert data['in_flight'] == 0
+    assert 'startup' in data['hooks']
+    assert 'shutdown' in data['hooks']
+    assert 'preview' in data['hooks']
+    assert 'total' in data['gates']

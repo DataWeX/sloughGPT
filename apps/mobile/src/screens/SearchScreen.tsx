@@ -1,26 +1,21 @@
 import React, {useState, useCallback} from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
-  Keyboard,
-} from 'react-native';
+import {FlatList, TextInput, Keyboard} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {YStack, XStack, Text} from 'tamagui';
 import {useChatStore} from '../stores/chat-store';
-import {colors, spacing, radii, typography} from '../theme';
-import type {Message} from '../types';
+import {api} from '../services/api-client';
+import {Icon} from '../components/Icon';
 
 interface SearchResult {
   sessionId: string;
   sessionTitle: string;
-  message: Message;
+  role: string;
+  content: string;
+  timestamp: string;
 }
 
 export function SearchScreen() {
-  const {sessions, loadSession} = useChatStore();
+  const {loadSession} = useChatStore();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -31,223 +26,134 @@ export function SearchScreen() {
       setResults([]);
       return;
     }
-
     setSearching(true);
-    const lower = text.toLowerCase();
-    const found: SearchResult[] = [];
-
-    // Search through cached sessions
-    for (const session of sessions) {
-      try {
-        const {api} = require('../services/api-client');
-        const data = await api.get(`/chat/sessions/${session.id}`) as {messages: Message[]};
-        for (const msg of data.messages) {
-          if (msg.content.toLowerCase().includes(lower)) {
-            found.push({
-              sessionId: session.id,
-              sessionTitle: session.title,
-              message: msg,
-            });
-          }
+    try {
+      const res = await api.get(`/chat/sessions/search?q=${encodeURIComponent(text)}&limit=20`) as {
+        results: Array<{
+          id: string;
+          name: string;
+          matches: Array<{role: string; content: string; timestamp: string}>;
+        }>;
+      };
+      const found: SearchResult[] = [];
+      for (const session of res.results) {
+        for (const match of session.matches) {
+          found.push({
+            sessionId: session.id,
+            sessionTitle: session.name,
+            role: match.role,
+            content: match.content,
+            timestamp: match.timestamp,
+          });
         }
-      } catch {
-        // skip failed sessions
       }
+      setResults(found);
+    } catch {
+      setResults([]);
     }
-
-    setResults(found);
     setSearching(false);
-  }, [sessions]);
+  }, []);
 
   const handleResultPress = async (result: SearchResult) => {
     Keyboard.dismiss();
     await loadSession(result.sessionId);
   };
 
-  const highlightMatch = (text: string, q: string) => {
-    if (!q.trim()) return text;
-    const parts = text.split(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
-    return parts;
-  };
-
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Search Messages</Text>
-        </View>
+    <SafeAreaView style={{flex: 1, backgroundColor: '#F5F0FF'}} edges={['top']}>
+      <YStack flex={1}>
+        <YStack paddingHorizontal={16} paddingTop={12} paddingBottom={8}>
+          <Text fontSize={20} fontWeight="600" letterSpacing={-0.2} color="$color">
+            Search Messages
+          </Text>
+        </YStack>
 
-        {/* Search bar */}
-        <View style={styles.searchBar}>
-          <Text style={styles.searchIcon}>🔍</Text>
+        <XStack
+          marginHorizontal={16}
+          backgroundColor="white"
+          borderRadius={8}
+          paddingHorizontal={12}
+          borderWidth={1}
+          borderColor="$borderColor"
+          alignItems="center">
+          <Icon name="search" size={16} color="#9B95A8" />
           <TextInput
-            style={styles.searchInput}
+            style={{flex: 1, fontSize: 14, color: '#1A1625', paddingVertical: 10, marginLeft: 8, }}
             value={query}
             onChangeText={handleSearch}
             placeholder="Search across all conversations..."
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor="#9B95A8"
             autoFocus
             returnKeyType="search"
           />
           {query.length > 0 && (
-            <TouchableOpacity onPress={() => handleSearch('')}>
-              <Text style={styles.clearBtn}>✕</Text>
-            </TouchableOpacity>
+            <YStack onPress={() => handleSearch('')}>
+              <Icon name="x" size={16} color="#9B95A8" />
+            </YStack>
           )}
-        </View>
+        </XStack>
 
-        {/* Results */}
         {searching && (
-          <Text style={styles.status}>Searching...</Text>
+          <Text fontSize={14} color="$color10" textAlign="center" paddingVertical={24}>
+            Searching...
+          </Text>
         )}
 
         {!searching && query.length >= 2 && results.length === 0 && (
-          <Text style={styles.status}>No results found</Text>
+          <Text fontSize={14} color="$color10" textAlign="center" paddingVertical={24}>
+            No results found
+          </Text>
         )}
 
         <FlatList
           data={results}
-          keyExtractor={(item, i) => `${item.sessionId}-${item.message.id}-${i}`}
+          keyExtractor={(item, i) => `${item.sessionId}-${item.role}-${i}`}
           keyboardDismissMode="on-drag"
-          contentContainerStyle={styles.list}
+          contentContainerStyle={{paddingHorizontal: 16, paddingTop: 12, gap: 8}}
           renderItem={({item}) => (
-            <TouchableOpacity
-              style={styles.resultItem}
-              onPress={() => handleResultPress(item)}
-              activeOpacity={0.7}>
-              <View style={styles.resultHeader}>
-                <Text style={styles.sessionTitle} numberOfLines={1}>
+            <YStack
+              backgroundColor="white"
+              borderRadius={8}
+              padding={12}
+              borderWidth={1}
+              borderColor="$borderColor"
+              onPress={() => handleResultPress(item)}>
+              <XStack justifyContent="space-between" alignItems="center" marginBottom={4}>
+                <Text fontSize={11} fontWeight="600" color="$color9" flex={1} numberOfLines={1}>
                   {item.sessionTitle || 'Untitled'}
                 </Text>
-                <Text style={styles.role}>
-                  {item.message.role === 'user' ? 'You' : 'AI'}
+                <Text fontSize={11} fontWeight="500" color="$color10" marginLeft={8}>
+                  {item.role === 'user' ? 'You' : 'AI'}
                 </Text>
-              </View>
-              <Text style={styles.preview} numberOfLines={3}>
-                {item.message.content}
+              </XStack>
+              <Text fontSize={14} color="$color" lineHeight={20} numberOfLines={3}>
+                {item.content}
               </Text>
-              <Text style={styles.timestamp}>
-                {new Date(item.message.timestamp).toLocaleDateString()}
+              <Text fontSize={11} fontWeight="500" color="$color10" marginTop={4}>
+                {item.timestamp ? new Date(item.timestamp).toLocaleDateString() : ''}
               </Text>
-            </TouchableOpacity>
+            </YStack>
           )}
+          ListEmptyComponent={
+            query.length < 2 ? (
+              <YStack paddingHorizontal={32} paddingTop={64}>
+                <Text fontSize={20} fontWeight="600" color="$color" marginBottom={12} textAlign="center">
+                  Search Tips
+                </Text>
+                <Text fontSize={14} color="$color11" marginBottom={8} textAlign="center">
+                  • Type at least 2 characters
+                </Text>
+                <Text fontSize={14} color="$color11" marginBottom={8} textAlign="center">
+                  • Searches across all your conversations
+                </Text>
+                <Text fontSize={14} color="$color11" textAlign="center">
+                  • Tap a result to jump to that conversation
+                </Text>
+              </YStack>
+            ) : null
+          }
         />
-
-        {query.length < 2 && (
-          <View style={styles.hints}>
-            <Text style={styles.hintTitle}>Search Tips</Text>
-            <Text style={styles.hint}>• Type at least 2 characters</Text>
-            <Text style={styles.hint}>• Searches across all your conversations</Text>
-            <Text style={styles.hint}>• Tap a result to jump to that conversation</Text>
-          </View>
-        )}
-      </View>
+      </YStack>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  container: {
-    flex: 1,
-  },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  title: {
-    ...typography.h2,
-    color: colors.text,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: spacing.lg,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  searchIcon: {
-    fontSize: 16,
-    marginRight: spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    ...typography.body,
-    color: colors.text,
-    paddingVertical: spacing.sm + 2,
-  },
-  clearBtn: {
-    fontSize: 16,
-    color: colors.textMuted,
-    padding: spacing.xs,
-  },
-  status: {
-    ...typography.body,
-    color: colors.textMuted,
-    textAlign: 'center',
-    paddingVertical: spacing.xxl,
-  },
-  list: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    gap: spacing.sm,
-  },
-  resultItem: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  resultHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  sessionTitle: {
-    ...typography.small,
-    color: colors.primary,
-    fontWeight: '600',
-    flex: 1,
-  },
-  role: {
-    ...typography.small,
-    color: colors.textMuted,
-    marginLeft: spacing.sm,
-  },
-  preview: {
-    ...typography.body,
-    color: colors.text,
-    lineHeight: 20,
-  },
-  timestamp: {
-    ...typography.small,
-    color: colors.textMuted,
-    marginTop: 4,
-  },
-  hints: {
-    paddingHorizontal: spacing.xxxl,
-    paddingTop: spacing.xxxl * 2,
-  },
-  hintTitle: {
-    ...typography.h2,
-    color: colors.text,
-    marginBottom: spacing.md,
-    textAlign: 'center',
-  },
-  hint: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-    textAlign: 'center',
-  },
-});

@@ -10,6 +10,9 @@ import json
 import logging
 import threading
 import torch
+
+from schemas.common import success_response, error_response
+
 logger = logging.getLogger("man.inference")
 
 try:
@@ -1023,12 +1026,11 @@ async def send_voice_message(
     })
     _save_session(session_id, session_data)
 
-    return {
-        "status": "ok",
+    return success_response(data={
         "message_id": msg_id,
         "audio_path": f"{session_id}/{msg_id}{ext}",
         "session_id": session_id,
-    }
+    })
 
 
 @router.get("/chat/audio/{session_id}/{message_id}")
@@ -1052,7 +1054,7 @@ async def list_sessions(archived: Optional[bool] = None):
     sessions = _build_session_cache()
     if archived is not None:
         sessions = [s for s in sessions if s.get("archived", False) == archived]
-    return {"sessions": sessions}
+    return success_response(data=sessions)
 
 
 @router.get("/chat/sessions/search")
@@ -1063,7 +1065,7 @@ async def search_sessions(q: str = "", limit: int = 20):
     summaries with matching message excerpts.
     """
     if not q.strip():
-        return {"results": []}
+        return success_response(data=[], meta={"query": q, "total": 0})
 
     q_lower = q.lower().strip()
     results = []
@@ -1118,7 +1120,7 @@ async def search_sessions(q: str = "", limit: int = 20):
             except (json.JSONDecodeError, OSError):
                 continue
 
-    return {"results": results, "query": q, "total": len(results)}
+    return success_response(data=results, meta={"query": q, "total": len(results)})
 
 
 @router.get("/chat/sessions/current")
@@ -1126,16 +1128,18 @@ async def get_current_session():
     """Return the most recently updated session, or null."""
     sessions = _build_session_cache()
     if not sessions:
-        return {"session": None}
-    return {"session": sessions[0]}
+        return success_response(data=None)
+    return success_response(data=sessions[0])
 
 
 @router.put("/chat/sessions/{session_id}")
 async def upsert_session(session_id: str, req: dict):
-    """Create or update a session."""
-    _save_session(session_id, req)
+    """Merge fields into existing session (preserves messages and metadata)."""
+    existing = _get_session(session_id)
+    existing.update(req)
+    _save_session(session_id, existing)
     await _flush_session_to_disk(session_id)
-    return {"status": "saved", "session_id": session_id}
+    return success_response(data={"session_id": session_id}, message="saved")
 
 
 @router.post("/chat/sessions")
@@ -1144,7 +1148,7 @@ async def create_session(req: dict):
     session_id = req.get("session_id") or str(uuid.uuid4())
     _save_session(session_id, req)
     await _flush_session_to_disk(session_id)
-    return {"status": "created", "session_id": session_id}
+    return success_response(data={"session_id": session_id}, message="created")
 
 
 @router.get("/chat/sessions/{session_id}")
@@ -1152,7 +1156,7 @@ async def get_session(session_id: str):
     data = _get_session(session_id)
     if not data.get("messages"):
         raise HTTPException(status_code=404, detail="Session not found")
-    return data
+    return success_response(data=data)
 
 
 @router.delete("/chat/sessions/{session_id}")
@@ -1160,7 +1164,7 @@ async def delete_session(session_id: str):
     if _session_repo.delete(session_id):
         _session_memory_cache.pop(session_id, None)
         _session_dirty.discard(session_id)
-        return {"status": "deleted", "session_id": session_id}
+        return success_response(data={"session_id": session_id}, message="deleted")
     raise HTTPException(status_code=404, detail="Session not found")
 
 
@@ -1168,14 +1172,14 @@ async def delete_session(session_id: str):
 @router.get("/chat/suggestions")
 async def chat_suggestions():
     """Return a set of contextual chat suggestions."""
-    return {"suggestions": [
+    return success_response(data=[
         {"text": "What can you help me with?", "icon": "💬"},
         {"text": "Tell me about yourself", "icon": "👤"},
         {"text": "Write a short poem", "icon": "✍️"},
         {"text": "Explain quantum computing simply", "icon": "🔬"},
         {"text": "Help me debug my code", "icon": "🐛"},
         {"text": "Summarize a topic for me", "icon": "📝"},
-    ]}
+    ])
 
 
 @router.get("/providers")
@@ -1203,4 +1207,4 @@ async def list_model_providers():
                 result[name] = {"model_id": str(provider)}
         else:
             result[name] = {"error": "provider not found"}
-    return {"providers": result}
+    return success_response(data=result)

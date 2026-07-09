@@ -178,16 +178,12 @@ class MemoryManager(BaseComponent, IMemoryManager):
 
             if memory_id in self.episodic_memory:
                 memory = self.episodic_memory[memory_id]
-                # mem_store = self.episodic_memory  # noqa: F841
             elif memory_id in self.semantic_memory:
                 memory = self.semantic_memory[memory_id]
-                # mem_store = self.semantic_memory  # noqa: F841
             elif memory_id in self.procedural_memory:
                 memory = self.procedural_memory[memory_id]
-                # mem_store = self.procedural_memory  # noqa: F841
             elif memory_id in self.working_memory:
                 memory = self.working_memory[memory_id]
-                # mem_store = self.working_memory  # noqa: F841
 
             if memory:
                 # Update access statistics

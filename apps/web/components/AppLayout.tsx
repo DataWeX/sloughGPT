@@ -11,6 +11,7 @@ import { Sidebar } from '@/components/Sidebar'
 import { ErrorPanel } from '@sloughgpt/strui'
 import { GlobalErrorHandler } from '@/components/GlobalErrorHandler'
 import { StatusBar } from '@/components/StatusBar'
+import { OutputPanel } from '@/components/OutputPanel'
 import { useApiMonitor } from '@/lib/api-monitor-store'
 import { ToastContainer, RadixToastContainer } from '@/components/chat/Toast'
 import { CommandPalette } from '@/components/CommandPalette'
@@ -28,6 +29,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [showDebug, setShowDebug] = useState(false)
   const [showWhatsNew, setShowWhatsNew] = useState(false)
+  const [showOutput, setShowOutput] = useState(false)
   const toasts = useToastStore(s => s.toasts)
   const dismissToast = useToastStore(s => s.dismissToast)
   const clearToasts = useToastStore(s => s.clearToasts)
@@ -45,6 +47,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const handler = () => setShowWhatsNew(true)
     window.addEventListener('toggle-whatsnew', handler)
     return () => window.removeEventListener('toggle-whatsnew', handler)
+  }, [])
+
+  useEffect(() => {
+    const handler = () => setShowOutput(v => !v)
+    window.addEventListener('toggle-output-panel', handler)
+    return () => window.removeEventListener('toggle-output-panel', handler)
   }, [])
 
   useEffect(() => {
@@ -150,6 +158,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <DebugOverlay open={showDebug} onOpenChange={setShowDebug} />
         <CommandPalette />
         <WhatsNewDialog open={showWhatsNew} onOpenChange={setShowWhatsNew} />
+        <OutputPanel open={showOutput} onClose={() => setShowOutput(false)} />
       </div>
   )
 }

@@ -7,6 +7,8 @@ from fastapi import APIRouter, HTTPException, Header, Request, Depends
 from pydantic import BaseModel
 from typing import Optional
 
+from schemas.common import success_response
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 USERS_FILE = "data/users.json"
 
@@ -173,7 +175,7 @@ async def verify_token(authorization: Optional[str] = Header(None)):
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-    return {"valid": True, "subject": payload.get("sub"), "expires": payload.get("exp")}
+    return success_response(data={"valid": True, "subject": payload.get("sub"), "expires": payload.get("exp")})
 
 
 @router.post("/refresh", response_model=TokenResponse)

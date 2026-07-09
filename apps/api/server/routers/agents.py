@@ -13,6 +13,8 @@ from typing import Optional, List
 
 from domains.api.sse_envelope import sse_event, sse_complete, sse_error
 
+from schemas.common import success_response
+
 logger = logging.getLogger("man.routers.agents")
 
 router = APIRouter(prefix="/agents", tags=["agents"])
@@ -110,7 +112,7 @@ async def delete_agent(agent_id: str):
     """Delete an agent."""
     if not _get_system().delete(agent_id):
         raise HTTPException(status_code=404, detail="Agent not found")
-    return {"status": "deleted"}
+    return success_response(data={"status": "deleted"})
 
 
 @router.post("/{agent_id}/execute")

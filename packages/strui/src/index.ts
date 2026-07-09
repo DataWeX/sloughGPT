@@ -61,8 +61,36 @@ export { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 // Collapsible
 export { Collapsible, CollapsibleTrigger, CollapsibleContent } from './components/ui/collapsible'
 
-// Toast
-export { ToastProvider, ToastViewport, Toast, ToastTitle, ToastDescription, ToastClose, ToastAction } from './components/ui/toast'
+// Toast + hook
+export {
+  ToastProvider,
+  ToastViewport,
+  Toast,
+  ToastTitle,
+  ToastDescription,
+  ToastClose,
+  ToastAction,
+  useToast,
+  type ToastOptions,
+  type ToastVariant,
+} from './components/ui/toast'
+
+// Tooltip
+export {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  SimpleTooltip,
+} from './components/ui/tooltip'
+
+// Popover
+export {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverClose,
+  PopoverAnchor,
+} from './components/ui/popover'
 
 // Display components
 export { StatCard, KpiGrid, ListRow, ListSection, EmptyCard, Skeleton, LoadingDots } from './components/ui/display'

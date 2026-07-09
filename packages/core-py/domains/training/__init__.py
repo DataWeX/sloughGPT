@@ -38,7 +38,6 @@ def detect_dataset_type(path: str) -> DatasetType:
         Detected DatasetType
     """
     from pathlib import Path
-    import json
 
     p = Path(path)
     if p.is_dir():
@@ -68,7 +67,6 @@ def detect_dataset_type(path: str) -> DatasetType:
                 continue
 
     # Check for code (contains common programming keywords)
-    import re
     code_patterns = ["def ", "class ", "import ", "function ", "const ", "fn "]
     code_lines = sum(1 for pat in code_patterns if pat in text)
     if code_lines >= 3:

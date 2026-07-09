@@ -1,6 +1,6 @@
 import React from 'react';
-import {View, Text, TouchableOpacity, StyleSheet} from 'react-native';
-import {colors, spacing, radii, typography} from '../theme';
+import {YStack, Text, Button} from 'tamagui';
+import {Icon} from './Icon';
 
 interface Props {
   children: React.ReactNode;
@@ -24,54 +24,29 @@ export class ErrorBoundary extends React.Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <View style={styles.container}>
-          <Text style={styles.emoji}>⚠️</Text>
-          <Text style={styles.title}>Something went wrong</Text>
-          <Text style={styles.message}>{this.state.error?.message}</Text>
-          <TouchableOpacity
-            style={styles.retryBtn}
-            onPress={() => this.setState({hasError: false, error: null})}>
-            <Text style={styles.retryText}>Try Again</Text>
-          </TouchableOpacity>
-        </View>
+        <YStack flex={1} backgroundColor="$background" alignItems="center" justifyContent="center" padding={32}>
+          <YStack marginBottom={16} alignItems="center">
+            <Icon name="triangle-alert" size={48} color="#E8A83C" />
+          </YStack>
+          <Text fontSize={20} fontWeight="600" color="$color" marginBottom={8}>
+            Something went wrong
+          </Text>
+          <Text fontSize={13} fontWeight="400" color="$color10" textAlign="center" lineHeight={18} marginBottom={24}>
+            {this.state.error?.message}
+          </Text>
+          <Button
+            onPress={() => this.setState({hasError: false, error: null})}
+            backgroundColor="$color9"
+            paddingHorizontal={20}
+            paddingVertical={12}
+            borderRadius={8}>
+            <Text fontSize={15} fontWeight="600" color="white">
+              Try Again
+            </Text>
+          </Button>
+        </YStack>
       );
     }
     return this.props.children;
   }
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xxxl,
-  },
-  emoji: {
-    fontSize: 48,
-    marginBottom: spacing.lg,
-  },
-  title: {
-    ...typography.h2,
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  message: {
-    ...typography.caption,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginBottom: spacing.xxl,
-  },
-  retryBtn: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-  },
-  retryText: {
-    ...typography.body,
-    color: colors.white,
-    fontWeight: '600',
-  },
-});

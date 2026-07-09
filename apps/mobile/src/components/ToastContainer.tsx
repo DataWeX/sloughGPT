@@ -7,7 +7,7 @@
 import React, {useEffect, useState} from 'react';
 import {View, Text, TouchableOpacity, StyleSheet, Animated} from 'react-native';
 import {toast, type Toast, type ToastType} from '../services/toast';
-import {radii} from '../theme';
+import {Icon, type IconName} from './Icon';
 
 const TYPE_COLORS: Record<ToastType, {bg: string; border: string; text: string}> = {
   success: {bg: '#f0fdf4', border: '#16a34a', text: '#15803d'},
@@ -16,11 +16,11 @@ const TYPE_COLORS: Record<ToastType, {bg: string; border: string; text: string}>
   warn: {bg: '#fffbeb', border: '#d97706', text: '#b45309'},
 };
 
-const ICONS: Record<ToastType, string> = {
-  success: '✓',
-  error: '✕',
-  info: 'i',
-  warn: '!',
+const ICON_NAMES: Record<ToastType, IconName> = {
+  success: 'check',
+  error: 'x',
+  info: 'info',
+  warn: 'triangle-alert',
 };
 
 function ToastItem({item}: {item: Toast}) {
@@ -46,13 +46,13 @@ function ToastItem({item}: {item: Toast}) {
   return (
     <Animated.View style={[styles.toast, {backgroundColor: colors.bg, borderLeftColor: colors.border, opacity}]}>
       <View style={[styles.icon, {backgroundColor: colors.border}]}>
-        <Text style={styles.iconText}>{ICONS[item.type]}</Text>
+        <Icon name={ICON_NAMES[item.type]} size={11} color="#fff" />
       </View>
       <Text style={[styles.message, {color: colors.text}]} numberOfLines={2}>
         {item.message}
       </Text>
       <TouchableOpacity onPress={() => toast.dismiss(item.id)} style={styles.closeBtn}>
-        <Text style={[styles.closeText, {color: colors.text}]}>×</Text>
+        <Icon name="x" size={16} color={colors.text} />
       </TouchableOpacity>
     </Animated.View>
   );
@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: radii.md,
+    borderRadius: 8,
     borderLeftWidth: 3,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 2},
@@ -107,11 +107,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 8,
   },
-  iconText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '700',
-  },
   message: {
     flex: 1,
     fontSize: 13,
@@ -121,9 +116,5 @@ const styles = StyleSheet.create({
     padding: 4,
     marginLeft: 8,
   },
-  closeText: {
-    fontSize: 16,
-    fontWeight: '600',
-    opacity: 0.6,
-  },
+
 });

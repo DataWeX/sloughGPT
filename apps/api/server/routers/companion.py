@@ -7,6 +7,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
 
+from schemas.common import success_response
+
 router = APIRouter(prefix="/companion", tags=["companion"])
 
 # Global companion instance
@@ -56,7 +58,7 @@ class ChatResponse(BaseModel):
 async def get_companion_info():
     """Get companion info."""
     comp = _get_companion()
-    return comp.to_dict()
+    return success_response(data=comp.to_dict())
 
 
 @router.post("/personality")
@@ -71,7 +73,7 @@ async def set_personality(req: SetPersonalityRequest):
         confidence=req.confidence,
         humor=req.humor,
     )
-    return {"status": "ok", "traits": comp.to_dict()["traits"]}
+    return success_response(data={"status": "ok", "traits": comp.to_dict()["traits"]})
 
 
 @router.post("/preset")
@@ -82,18 +84,18 @@ async def use_preset(req: PresetRequest):
     global _companion
     _companion = create_companion(name=req.name, personality=req.preset)
 
-    return {
+    return success_response(data={
         "status": "ok",
         "preset": req.preset,
         "traits": _companion.to_dict()["traits"],
-    }
+    })
 
 
 @router.get("/prompt")
 async def get_prompt():
     """Get current system prompt."""
     comp = _get_companion()
-    return {"system_prompt": comp.get_system_prompt()}
+    return success_response(data={"system_prompt": comp.get_system_prompt()})
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -136,14 +138,14 @@ async def chat(req: ChatRequest):
 @router.get("/presets")
 async def list_presets():
     """List available presets."""
-    return {
+    return success_response(data={
         "presets": [
             {"id": "warm", "name": "Warm Friend", "description": "Caring and supportive"},
             {"id": "curious", "name": "Curious Friend", "description": "Interested in everything"},
             {"id": "playful", "name": "Playful Friend", "description": "Fun and humorous"},
             {"id": "balanced", "name": "Balanced Friend", "description": "Well-rounded"},
         ]
-    }
+    })
 
 
 __all__ = ["router"]

@@ -70,7 +70,7 @@ class TestTokenizerStats:
 
         resp = client.get("/tokenizer/stats")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["vocab_size"] == 256
         assert data["special_tokens"] == 4
         assert data["trained"] is True
@@ -115,7 +115,7 @@ class TestTokenize:
 
         resp = client.post("/tokenizer/tokenize", json={"text": "hello"})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert "tokens" in data
         assert "ids" in data
         assert data["ids"] == [104, 101, 108, 108]
@@ -129,7 +129,7 @@ class TestTokenize:
 
         resp = client.post("/tokenizer/tokenize", json={"text": ""})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["ids"] == []
         assert data["tokens"] == []
 
@@ -149,7 +149,7 @@ class TestDetokenize:
 
         resp = client.post("/tokenizer/detokenize", json={"ids": [104, 101, 108, 108]})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["text"] == "hello"
 
     @patch(MGR_TARGET)
@@ -160,7 +160,7 @@ class TestDetokenize:
 
         resp = client.post("/tokenizer/detokenize", json={"ids": []})
         assert resp.status_code == 200
-        assert resp.json()["text"] == ""
+        assert resp.json()["data"]["text"] == ""
 
     def test_detokenize_missing_ids(self):
         resp = client.post("/tokenizer/detokenize", json={})
@@ -176,7 +176,7 @@ class TestVocab:
 
         resp = client.get("/tokenizer/vocab", params={"limit": 10, "offset": 0})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert "entries" in data
         assert data["total"] == 256
         assert len(data["entries"]) == 10
@@ -195,7 +195,7 @@ class TestVocab:
 
         resp = client.get("/tokenizer/vocab", params={"limit": 6})
         assert resp.status_code == 200
-        entries = resp.json()["entries"]
+        entries = resp.json()["data"]["entries"]
         special = [e for e in entries if e["is_special"]]
         assert len(special) == 4
 
@@ -205,7 +205,7 @@ class TestVocab:
 
         resp = client.get("/tokenizer/vocab", params={"limit": 5, "offset": 100})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["entries"][0]["id"] == 100
 
     @patch(MGR_TARGET)
@@ -214,7 +214,7 @@ class TestVocab:
 
         resp = client.get("/tokenizer/vocab", params={"limit": 500, "offset": 250})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert len(data["entries"]) == 6
 
 
@@ -227,7 +227,7 @@ class TestMerges:
 
         resp = client.get("/tokenizer/merges")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert "merges" in data
         assert data["total"] == 5
         first = data["merges"][0]
@@ -242,7 +242,7 @@ class TestMerges:
 
         resp = client.get("/tokenizer/merges", params={"limit": 2})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert len(data["merges"]) == 2
 
     @patch(MGR_TARGET)
@@ -253,7 +253,7 @@ class TestMerges:
 
         resp = client.get("/tokenizer/merges")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["merges"] == []
         assert data["total"] == 0
 
@@ -265,7 +265,7 @@ class TestMerges:
 
         resp = client.get("/tokenizer/merges")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["merges"][0]["left"] == "ab"
         assert data["merges"][0]["right"] == ""
 
@@ -279,7 +279,7 @@ class TestSample:
 
         resp = client.get("/tokenizer/sample")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert "samples" in data
         assert len(data["samples"]) > 0
         first = data["samples"][0]
@@ -303,7 +303,7 @@ class TestTrain:
             json={"vocab_size": 128, "texts": ["hello world", "foo bar"]},
         )
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "trained"
         assert data["corpus_size"] == 2
         mgr.train.assert_called_once_with(
@@ -321,7 +321,7 @@ class TestTrain:
 
         resp = client.post("/tokenizer/train", json={"vocab_size": 64, "texts": []})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "trained"
         assert data["corpus_size"] == 3
 
@@ -337,7 +337,13 @@ class TestTrain:
             min_frequency=3,
         )
 
-    def test_train_missing_body(self):
+    @patch("apps.api.server.routers.tokenizer.urllib.request.urlopen")
+    @patch(MGR_TARGET)
+    def test_train_missing_body(self, mock_get_mgr, mock_urlopen):
+        mgr = _mock_manager()
+        mgr.stats.return_value = {"vocab_size": 256}
+        mock_get_mgr.return_value = mgr
+        mock_urlopen.return_value.read.return_value = b"line1\nline2\n"
         resp = client.post("/tokenizer/train", json={})
         assert resp.status_code == 200
 
@@ -351,7 +357,7 @@ class TestPretokenize:
 
         resp = client.post("/tokenizer/pretokenize", json={"text": "hello world"})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert "pretokens" in data
 
 
@@ -364,7 +370,7 @@ class TestDecompose:
 
         resp = client.post("/tokenizer/decompose", json={"text": "the"})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["token"] == "the"
         assert "parts" in data or "merge_path" in data or "depth" in data
 
@@ -387,7 +393,7 @@ class TestAnalyzeCorpus:
 
         resp = client.post("/tokenizer/analyze", json={"texts": ["hello world", "foo bar"]})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert isinstance(data, dict)
         assert len(data) > 0
 

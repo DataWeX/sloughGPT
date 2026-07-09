@@ -1,7 +1,6 @@
 'use client'
 
 export const CURRENT_SESSION_KEY = 'man_current_conversation'
-export const USER_ID_KEY = 'man_user_id'
 
 export interface ChatMessage {
   id: string
@@ -65,6 +64,8 @@ export function stripAssistantPrefix(text: string): string {
   }
   return text
 }
+
+const USER_ID_KEY = 'man_user_id'
 
 export function getOrCreateUserId(): string {
   if (typeof window === 'undefined') return 'default'
@@ -130,13 +131,6 @@ export function computeSearchMatches(messages: ChatMessage[], query: string): { 
   return { matchIds, matchCount: matchIds.length }
 }
 
-export function formatSize(bytes: number): string {
-  if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(2)} GB`
-  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${bytes} B`
-}
-
 export function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400)
   const h = Math.floor((seconds % 86400) / 3600)
@@ -144,28 +138,4 @@ export function formatUptime(seconds: number): string {
   if (d > 0) return `${d}d ${h}h ${m}m`
   if (h > 0) return `${h}h ${m}m`
   return `${m}m`
-}
-
-export function getErrorInfo(err: unknown): { title: string; description: string; retryable: boolean } {
-  if (!err) return { title: 'Unknown Error', description: 'An unexpected error occurred.', retryable: false }
-  const msg = err instanceof Error ? err.message : String(err)
-  if (msg.includes('no model loaded') || msg.includes('model is not loaded')) {
-    return { title: 'Model Not Loaded', description: 'No model is currently loaded. Select a model from the dropdown.', retryable: true }
-  }
-  if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('ERR_CONNECTION_REFUSED')) {
-    return { title: 'Connection Error', description: 'Cannot reach the server. Make sure the API is running.', retryable: true }
-  }
-  if (msg.includes('timeout') || msg.includes('timed out')) {
-    return { title: 'Request Timeout', description: 'The request took too long. The model may be overloaded.', retryable: true }
-  }
-  if (msg.includes('rate limit') || msg.includes('too many requests')) {
-    return { title: 'Rate Limited', description: 'Too many requests. Please wait a moment.', retryable: true }
-  }
-  if (msg.includes('401') || msg.includes('unauthorized') || msg.includes('Unauthorized')) {
-    return { title: 'Unauthorized', description: 'Authentication failed. Please log in again.', retryable: false }
-  }
-  if (msg.includes('503') || msg.includes('Service Unavailable')) {
-    return { title: 'Service Unavailable', description: 'The server is temporarily unavailable. Please try again.', retryable: true }
-  }
-  return { title: 'Error', description: msg, retryable: true }
 }

@@ -15,9 +15,15 @@
 import {Platform, NativeModules} from 'react-native';
 import {getApiUrl} from './api-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import RNFS from 'react-native-fs';
 
 const {LlamaContext} = NativeModules;
+
+let RNFS: any;
+try {
+  RNFS = require('react-native-fs');
+} catch {
+  // react-native-fs not installed — file ops will error gracefully
+}
 
 const MODEL_CACHE_KEY = '@sloughgpt/qwen_model_path';
 const MODEL_URL_KEY = '@sloughgpt/qwen_model_url';

@@ -6,6 +6,7 @@ Import datasets from various sources: GitHub, HuggingFace, URLs, local files.
 import json
 import os
 import subprocess
+import urllib.request
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Set
@@ -420,8 +421,6 @@ class RepoImporter:
         # JSON patterns
         if sample.startswith("{") or sample.startswith("["):
             try:
-                import json
-
                 json.loads(sample)
                 return "json"
             except Exception:
@@ -593,9 +592,6 @@ class BooksSearch:
 
     def search(self, query: str, limit: int = 10) -> List[Dict]:
         """Search books by title or ISBN."""
-        import urllib.request
-        import json
-
         isbn_query = self._is_isbn(query)
         if isbn_query:
             q = isbn_query
@@ -818,9 +814,6 @@ class GitHubSearch:
             query: Natural language like "python code" or "machine learning examples"
         """
         try:
-            import urllib.request
-            import json
-
             q = self._sanitize_query(query)
             url = f"https://api.github.com/search/repositories?q={q}&per_page={limit}"
             req = urllib.request.Request(url)
@@ -866,9 +859,6 @@ class ISBNImporter:
         Returns:
             ImportResult with success status
         """
-        import urllib.request
-        import json
-
         output_dir = Path(self.output_dir) / name
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -953,9 +943,6 @@ class ISBNImporter:
         Returns:
             Full text content if found, None otherwise
         """
-        import urllib.request
-        import json
-
         import urllib.parse
         search_terms = f"{title} {author}".strip()
         if not search_terms:

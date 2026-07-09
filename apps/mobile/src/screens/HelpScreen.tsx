@@ -1,7 +1,7 @@
 import React, {useState} from 'react';
-import {View, Text, ScrollView, TouchableOpacity, StyleSheet} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import {colors, spacing, radii, typography} from '../theme';
+import {YStack, XStack, Text} from 'tamagui';
+import {ScreenShell} from '../components/ScreenShell';
+import {Icon} from '../components/Icon';
 
 const FAQ = [
   {
@@ -41,152 +41,106 @@ const FAQ = [
 function FAQItem({item}: {item: {q: string; a: string}}) {
   const [open, setOpen] = useState(false);
   return (
-    <TouchableOpacity style={styles.faqItem} onPress={() => setOpen(!open)}>
-      <View style={styles.faqHeader}>
-        <Text style={styles.faqQ}>{item.q}</Text>
-        <Text style={styles.faqArrow}>{open ? '−' : '+'}</Text>
-      </View>
-      {open && <Text style={styles.faqA}>{item.a}</Text>}
-    </TouchableOpacity>
+    <YStack
+      borderBottomWidth={1}
+      borderBottomColor="$borderColor"
+      paddingVertical={12}
+      onPress={() => setOpen(!open)}>
+      <XStack alignItems="center" justifyContent="space-between">
+        <Text flex={1} fontSize={14} color="$color" fontWeight="500">
+          {item.q}
+        </Text>
+        <Text fontSize={18} color="$color9" fontWeight="700">
+          {open ? '−' : '+'}
+        </Text>
+      </XStack>
+      {open && (
+        <Text fontSize={13} color="$color11" marginTop={8} lineHeight={20}>
+          {item.a}
+        </Text>
+      )}
+    </YStack>
   );
 }
 
 export function HelpScreen() {
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Help</Text>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Quick Start</Text>
-          <Text style={styles.step}>1. Connect to your server (Settings → Server)</Text>
-          <Text style={styles.step}>2. Load a model (Models tab → tap Load)</Text>
-          <Text style={styles.step}>3. Pick a personality (Models tab → tap a soul)</Text>
-          <Text style={styles.step}>4. Start chatting (Chat tab)</Text>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Keyboard Shortcuts</Text>
-          <View style={styles.shortcutRow}>
-            <Text style={styles.shortcutKey}>Enter</Text>
-            <Text style={styles.shortcutDesc}>Send message</Text>
-          </View>
-          <View style={styles.shortcutRow}>
-            <Text style={styles.shortcutKey}>Long press</Text>
-            <Text style={styles.shortcutDesc}>Message actions (copy, good/bad, regenerate, delete)</Text>
-          </View>
-          <View style={styles.shortcutRow}>
-            <Text style={styles.shortcutKey}>Swipe left</Text>
-            <Text style={styles.shortcutDesc}>Delete message</Text>
-          </View>
-          <View style={styles.shortcutRow}>
-            <Text style={styles.shortcutKey}>Pull down</Text>
-            <Text style={styles.shortcutDesc}>Refresh data</Text>
-          </View>
-          <View style={styles.shortcutRow}>
-            <Text style={styles.shortcutKey}>🎤 Button</Text>
-            <Text style={styles.shortcutDesc}>Voice input (tap to record, tap to stop & send)</Text>
-          </View>
-          <View style={styles.shortcutRow}>
-            <Text style={styles.shortcutKey}>+ Button</Text>
-            <Text style={styles.shortcutDesc}>Attach image from gallery</Text>
-          </View>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>FAQ</Text>
-          {FAQ.map((item, i) => (
-            <FAQItem key={i} item={item} />
-          ))}
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Troubleshooting</Text>
-          <Text style={styles.troubleshoot}>
-            • Connection refused — Make sure the server is running on the correct port.
+    <ScreenShell title="Help">
+      <YStack backgroundColor="white" borderRadius={12} padding={16} borderWidth={1} borderColor="$borderColor">
+        <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>
+          Quick Start
+        </Text>
+        {['Connect to your server (Settings → Server)', 'Load a model (Models tab → tap Load)', 'Pick a personality (Models tab → tap a soul)', 'Start chatting (Chat tab)'].map((s, i) => (
+          <Text key={i} fontSize={14} color="$color" paddingVertical={4}>
+            {i + 1}. {s}
           </Text>
-          <Text style={styles.troubleshoot}>
-            • Model won't load — Try a smaller model (GPT-2 or Qwen2.5-0.5B).
+        ))}
+      </YStack>
+
+      <YStack backgroundColor="white" borderRadius={12} padding={16} borderWidth={1} borderColor="$borderColor">
+        <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>
+          Keyboard Shortcuts
+        </Text>
+        {[
+          {key: 'Enter', desc: 'Send message'},
+          {key: 'Long press', desc: 'Message actions (copy, good/bad, regenerate, delete)'},
+          {key: 'Swipe left', desc: 'Delete message'},
+          {key: 'Pull down', desc: 'Refresh data'},
+        ].map((s, i) => (
+          <XStack key={i} alignItems="center" gap={12} paddingVertical={4}>
+            <Text minWidth={80} fontSize={13} fontWeight="600" color="$color9">
+              {s.key}
+            </Text>
+            <Text flex={1} fontSize={14} color="$color11">
+              {s.desc}
+            </Text>
+          </XStack>
+        ))}
+        <XStack alignItems="center" gap={12} paddingVertical={4}>
+          <XStack minWidth={80} gap={4} alignItems="center">
+            <Icon name="mic" size={14} color="#7C52C4" />
+            <Text fontSize={13} fontWeight="600" color="$color9">
+              {' '}Button
+            </Text>
+          </XStack>
+          <Text flex={1} fontSize={14} color="$color11">
+            Voice input (tap to record, tap to stop & send)
           </Text>
-          <Text style={styles.troubleshoot}>
-            • Training fails — Ensure you have at least 50 characters of training text.
+        </XStack>
+        <XStack alignItems="center" gap={12} paddingVertical={4}>
+          <Text minWidth={80} fontSize={13} fontWeight="600" color="$color9">
+            + Button
           </Text>
-          <Text style={styles.troubleshoot}>
-            • App crashes — Restart the app. Check the error boundary for details.
+          <Text flex={1} fontSize={14} color="$color11">
+            Attach image from gallery
           </Text>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+        </XStack>
+      </YStack>
+
+      <YStack backgroundColor="white" borderRadius={12} padding={16} borderWidth={1} borderColor="$borderColor">
+        <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>
+          FAQ
+        </Text>
+        {FAQ.map((item, i) => (
+          <FAQItem key={i} item={item} />
+        ))}
+      </YStack>
+
+      <YStack backgroundColor="white" borderRadius={12} padding={16} borderWidth={1} borderColor="$borderColor">
+        <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>
+          Troubleshooting
+        </Text>
+        {[
+          'Connection refused — Make sure the server is running on the correct port.',
+          "Model won't load — Try a smaller model (GPT-2 or Qwen2.5-0.5B).",
+          'Training fails — Ensure you have at least 50 characters of training text.',
+          'App crashes — Restart the app. Check the error boundary for details.',
+        ].map((s, i) => (
+          <Text key={i} fontSize={13} color="$color11" paddingVertical={4} lineHeight={20}>
+            • {s}
+          </Text>
+        ))}
+      </YStack>
+    </ScreenShell>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: {flex: 1, backgroundColor: colors.background},
-  content: {padding: spacing.lg, gap: spacing.md},
-  title: {...typography.h1, color: colors.text},
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    padding: spacing.lg,
-  },
-  cardTitle: {
-    ...typography.h3,
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  step: {
-    ...typography.body,
-    color: colors.text,
-    paddingVertical: spacing.xs,
-  },
-  shortcutRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  shortcutKey: {
-    ...typography.caption,
-    color: colors.primary,
-    fontWeight: '600',
-    minWidth: 80,
-  },
-  shortcutDesc: {
-    ...typography.body,
-    color: colors.textSecondary,
-    flex: 1,
-  },
-  faqItem: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingVertical: spacing.md,
-  },
-  faqHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  faqQ: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '500',
-    flex: 1,
-  },
-  faqArrow: {
-    fontSize: 20,
-    color: colors.primary,
-    fontWeight: '700',
-  },
-  faqA: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
-    lineHeight: 20,
-  },
-  troubleshoot: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    paddingVertical: spacing.xs,
-    lineHeight: 20,
-  },
-});

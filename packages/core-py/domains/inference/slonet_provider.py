@@ -60,6 +60,9 @@ def _silu_np(x: np.ndarray) -> np.ndarray:
 class SloNetChatProvider:
     """ModelProvider backed by SloTransformer (pure NumPy, no PyTorch).
 
+    .. deprecated::
+        Use ``NumpyEngine`` instead. This engine will be removed in a future version.
+
     Args:
         hf_model_id: HuggingFace model ID (e.g. 'Qwen/Qwen2.5-0.5B-Instruct')
         device: ignored (always CPU / NumPy)

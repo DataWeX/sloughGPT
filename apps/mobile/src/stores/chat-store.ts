@@ -56,8 +56,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   refreshSessions: async () => {
     try {
-      const sessions = await api.get<Session[]>('/chat/sessions');
-      set({sessions});
+      const data = await api.get<Session[]>('/chat/sessions');
+      set({sessions: data || []});
     } catch {
       // offline — sessions will be stale but functional
     }
@@ -84,12 +84,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   createSession: async () => {
     try {
-      const result = await api.post<{id: string}>('/chat/sessions');
-      const {id} = result;
-      set({activeSessionId: id, messages: []});
-      await cacheActiveSessionId(id);
+      const result = await api.post<{session_id: string}>('/chat/sessions', {});
+      const {session_id} = result;
+      set({activeSessionId: session_id, messages: []});
+      await cacheActiveSessionId(session_id);
       await get().refreshSessions();
-      return id;
+      return session_id;
     } catch (err: any) {
       set({error: err.message});
       return '';
@@ -118,9 +118,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  renameSession: async (id: string, title: string) => {
+  renameSession: async (id: string, name: string) => {
     try {
-      await api.renameSession(id, title);
+      await api.renameSession(id, name);
       await get().refreshSessions();
     } catch (err: any) {
       set({error: err.message});
@@ -138,23 +138,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
       content,
       timestamp: Date.now(),
     };
-    const assistantMsg = {
-      id: genId(),
-      role: 'assistant' as const,
-      content: '',
-      timestamp: Date.now(),
-    };
 
     try {
-      // Save to target session
-      await api.post('/chat/sessions/messages', {
-        session_id: targetSessionId,
-        messages: [userMsg],
-      });
+      // Fetch existing session, append message, save back
+      const session = await api.get<{id: string; messages: any[]}>(`/chat/sessions/${targetSessionId}`);
+      const updatedMessages = [...(session.messages || []), userMsg];
+      await api.put(`/chat/sessions/${targetSessionId}`, {messages: updatedMessages});
 
       // If forwarding to current session, also update local state
       if (get().activeSessionId === targetSessionId) {
-        set(s => ({messages: [...s.messages, userMsg, assistantMsg]}));
+        set(s => ({messages: [...s.messages, userMsg]}));
       }
 
       triggerHaptic('light');
@@ -267,12 +260,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
     abortController = new AbortController();
     let accumulated = '';
     const settings = useSettingsStore.getState();
+    const allMessages = [...state.messages, userMsg];
+    const allImages = allMessages.flatMap(m => m.images || []);
     const body = {
-      messages: [...state.messages, userMsg].map(m => ({
+      messages: allMessages.map(m => ({
         role: m.role,
         content: m.content,
-        images: m.images,
       })),
+      images: allImages.length > 0 ? allImages : undefined,
       temperature: settings.temperature,
       max_tokens: settings.maxTokens,
       top_p: settings.topP,
@@ -286,6 +281,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     const attemptStream = async (): Promise<boolean> => {
       try {
+        accumulated = '';
+        set(s => ({
+          messages: s.messages.map(m =>
+            m.id === assistantMsg.id ? {...m, content: ''} : m,
+          ),
+        }));
         for await (const event of streamSSE('/chat/stream', body, abortController!.signal)) {
           if (event.token) {
             accumulated += event.token;
@@ -312,6 +313,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
         return true;
       } catch (err: any) {
         if (err.name === 'AbortError') return true;
+
+        if (err.name === 'SSEHttpError') {
+          toast.error(err.message);
+          set({error: err.message, streaming: false});
+          await triggerHaptic('error');
+          return true;
+        }
 
         await addPendingSend({
           id: userMsg.id,
@@ -481,8 +489,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   recordFeedback: async (messageId: string, positive: boolean) => {
     try {
       await api.post('/feedback/workflow-record', {
-        message_id: messageId,
-        positive,
+        conversation_id: messageId,
+        rating: positive ? 'thumbs_up' : 'thumbs_down',
         session_id: get().activeSessionId,
       });
       await triggerHaptic(positive ? 'success' : 'light');

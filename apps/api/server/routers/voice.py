@@ -8,6 +8,8 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel
 
+from schemas.common import success_response
+
 logger = logging.getLogger("man.routers.voice")
 router = APIRouter(prefix="/voice", tags=["voice"])
 
@@ -135,8 +137,8 @@ async def text_to_speech(request: TTSRequest):
 async def voice_status():
     """Check if server-side TTS model is available."""
     available = _tts_backend.load()
-    return {
+    return success_response(data={
         "server_tts": available,
         "model": _tts_backend._model_id if available else None,
         "error": _tts_backend._error,
-    }
+    })

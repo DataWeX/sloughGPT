@@ -86,3 +86,26 @@ describe('systemController.getDetailedHealth', () => {
     expect(apiClient.apiGet).toHaveBeenCalledWith('/health/detailed', undefined, { silent: true })
   })
 })
+
+describe('systemController.getOutput', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('GETs /system/output with default n=100', async () => {
+    const mockOutput = {
+      lines: [{ text: 'test log', level: 'info', source: 'man', ts: 123 }],
+      size: 1,
+      seq: 1,
+    }
+    apiClient.apiGet.mockResolvedValue(mockOutput)
+    const result = await systemController.getOutput()
+    expect(result.lines).toHaveLength(1)
+    expect(result.lines[0].text).toBe('test log')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/system/output?n=100', undefined, { silent: true })
+  })
+
+  it('GETs /system/output with custom n', async () => {
+    apiClient.apiGet.mockResolvedValue({ lines: [], size: 0, seq: 0 })
+    await systemController.getOutput(50)
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/system/output?n=50', undefined, { silent: true })
+  })
+})

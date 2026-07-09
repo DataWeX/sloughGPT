@@ -18,7 +18,6 @@ interface ConnectionInfo {
 }
 
 const POLL_INTERVAL = 8000;
-const RECONNECT_BACKOFF = [1000, 2000, 4000, 8000, 16000];
 
 export function useConnectionStatus(): ConnectionInfo {
   const [info, setInfo] = useState<ConnectionInfo>({
@@ -28,15 +27,10 @@ export function useConnectionStatus(): ConnectionInfo {
     lastSeen: null,
     retryCount: 0,
   });
-  const retryRef = useRef(0);
   const mountedRef = useRef(true);
 
   const check = useCallback(async () => {
     if (!mountedRef.current) return;
-
-    const prevState = info.state;
-    const newState: ConnectionState =
-      prevState === 'connected' ? 'connected' : prevState === 'offline' ? 'reconnecting' : 'connecting';
 
     try {
       const url = await getApiUrl();
@@ -58,7 +52,6 @@ export function useConnectionStatus(): ConnectionInfo {
           lastSeen: Date.now(),
           retryCount: 0,
         });
-        retryRef.current = 0;
       } else {
         if (!mountedRef.current) return;
         setInfo(prev => ({
@@ -66,7 +59,6 @@ export function useConnectionStatus(): ConnectionInfo {
           state: 'reconnecting',
           retryCount: prev.retryCount + 1,
         }));
-        retryRef.current++;
       }
     } catch {
       if (!mountedRef.current) return;
@@ -76,7 +68,6 @@ export function useConnectionStatus(): ConnectionInfo {
         latencyMs: null,
         retryCount: prev.retryCount + 1,
       }));
-      retryRef.current++;
     }
   }, []);
 

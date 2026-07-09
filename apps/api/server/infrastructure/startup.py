@@ -102,50 +102,43 @@ class StartupOrchestrator:
             # Register startup hooks with profile scoping
             self._lifecycle.register_startup_hook(
                 StartupHook(
-                    "logging", self._phase1_logging,
-                    depends_on=[], timeout=5.0, critical=False,
-                    profiles=all_profiles,
-                ),
-            )
-            self._lifecycle.register_startup_hook(
-                StartupHook(
                     "task_queue", self._phase_task_queue,
-                    depends_on=["logging"], timeout=10.0, critical=False,
+                    depends_on=[], timeout=10.0, critical=False,
                     profiles=quick_plus,
                 ),
             )
             self._lifecycle.register_startup_hook(
                 StartupHook(
                     "config", self._phase_config,
-                    depends_on=["logging"], timeout=5.0, critical=False,
+                    depends_on=[], timeout=5.0, critical=False,
                     profiles=quick_plus,
                 ),
             )
             self._lifecycle.register_startup_hook(
                 StartupHook(
                     "model_load", self._phase2_model_load,
-                    depends_on=["logging"], timeout=120.0, critical=False,
+                    depends_on=[], timeout=120.0, critical=False,
                     profiles=full_only,
                 ),
             )
             self._lifecycle.register_startup_hook(
                 StartupHook(
                     "wandb", self._phase3_wandb,
-                    depends_on=["logging"], timeout=30.0, critical=False,
+                    depends_on=[], timeout=30.0, critical=False,
                     profiles=full_only,
                 ),
             )
             self._lifecycle.register_startup_hook(
                 StartupHook(
                     "multimodal", self._phase4_multimodal,
-                    depends_on=["logging"], timeout=30.0, critical=False,
+                    depends_on=[], timeout=30.0, critical=False,
                     profiles=full_only,
                 ),
             )
             self._lifecycle.register_startup_hook(
                 StartupHook(
                     "model_registry", self._phase5_model_registry,
-                    depends_on=["logging", "task_queue", "config"],
+                    depends_on=["task_queue", "config"],
                     timeout=10.0, critical=False,
                     profiles=quick_plus,
                 ),
@@ -230,17 +223,12 @@ class StartupOrchestrator:
                 logger.warning("Lifecycle startup incomplete — continuing anyway")
         else:
             # Fallback: run phases directly
-            await self._phase1_logging()
             self._phase5_model_registry()
             self._phase6_routers()
 
         await self._phase_ready()
 
-    async def _phase1_logging(self):
-        STARTUP_PHASE.update(phase="initializing", step=1, total=8, message="Starting up...")
-        logger.info("Startup phase 1: logging initialized")
-
-    def _phase2_model_load(self):
+    async def _phase2_model_load(self):
         """Start background model load."""
         import asyncio
         from config import ServerConfig
@@ -263,7 +251,7 @@ class StartupOrchestrator:
         except Exception as e:
             logger.error("Model load task failed: %s", e, exc_info=True)
 
-    def _phase3_wandb(self):
+    async def _phase3_wandb(self):
         """Start W&B metrics server (if available)."""
         STARTUP_PHASE.update(phase="wandb_server", step=5, total=8, message="Starting W&B metrics server...")
         try:
@@ -300,7 +288,7 @@ class StartupOrchestrator:
         except Exception as e:
             logger.warning("Phase: W&B unavailable: %s", e)
 
-    def _phase4_multimodal(self):
+    async def _phase4_multimodal(self):
         """Initialize multimodal engine (if available)."""
         STARTUP_PHASE.update(phase="multimodal", step=6, total=8, message="Initializing multimodal engine...")
         try:

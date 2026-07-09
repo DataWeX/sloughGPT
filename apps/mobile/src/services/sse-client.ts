@@ -8,6 +8,17 @@ export interface SSEEvent {
   raw?: Record<string, unknown>;
 }
 
+/** HTTP error from SSE (server is reachable but returned an error status). */
+export class SSEHttpError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'SSEHttpError';
+  }
+}
+
 export async function* streamSSE(
   path: string,
   body: unknown,
@@ -23,7 +34,7 @@ export async function* streamSSE(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`SSE error ${res.status}: ${text}`);
+    throw new SSEHttpError(res.status, `SSE error ${res.status}: ${text}`);
   }
 
   const reader = res.body?.getReader();

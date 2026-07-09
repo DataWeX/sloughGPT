@@ -1,6 +1,5 @@
 import React from 'react';
-import {View, Text, StyleSheet} from 'react-native';
-import {colors, radii, typography} from '../theme';
+import {Text} from 'tamagui';
 
 interface Props {
   label: string;
@@ -8,30 +7,28 @@ interface Props {
 }
 
 const variantColors: Record<string, {bg: string; fg: string}> = {
-  default: {bg: colors.surface, fg: colors.textSecondary},
-  success: {bg: '#E8F5EE', fg: colors.success},
-  warning: {bg: '#FFF3E0', fg: colors.warning},
-  error: {bg: '#FDE8E8', fg: colors.error},
-  info: {bg: '#EDE7F6', fg: colors.primary},
+  default: {bg: '$background', fg: '$color11'},
+  success: {bg: '#E8F5EE', fg: '#22C55E'},
+  warning: {bg: '#FFF3E0', fg: '#F59E0B'},
+  error: {bg: '#FDE8E8', fg: '#EF4444'},
+  info: {bg: '$background', fg: '$color9'},
 };
 
 export function StatusBadge({label, variant = 'default'}: Props) {
   const c = variantColors[variant] || variantColors.default;
   return (
-    <View style={[styles.badge, {backgroundColor: c.bg}]}>
-      <Text style={[styles.text, {color: c.fg}]}>{label}</Text>
-    </View>
+    <Text
+      fontSize={11}
+      fontWeight="500"
+      letterSpacing={0.2}
+      paddingHorizontal={8}
+      paddingVertical={3}
+      borderRadius={9999}
+      alignSelf="flex-start"
+      backgroundColor={c.bg}
+      color={c.fg}
+      overflow="hidden">
+      {label}
+    </Text>
   );
 }
-
-const styles = StyleSheet.create({
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radii.full,
-    alignSelf: 'flex-start',
-  },
-  text: {
-    ...typography.small,
-  },
-});

@@ -168,8 +168,8 @@ export const trainingJobsController = {
   },
 
   async listCheckpoints(): Promise<Checkpoint[]> {
-    const data = await apiGet<{ checkpoints: Checkpoint[] }>('/auto-train/checkpoints')
-    return data.checkpoints || []
+    const data = await apiGet<Checkpoint[] | { checkpoints: Checkpoint[] }>('/auto-train/checkpoints')
+    return Array.isArray(data) ? data : (data?.checkpoints ?? [])
   },
 
   async listBuilds(): Promise<TrainingBuild[]> {

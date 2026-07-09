@@ -1,29 +1,28 @@
 import React, {useEffect, useState, useCallback, useRef} from 'react';
 import {
-  View,
   FlatList,
-  Text,
-  StyleSheet,
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
   ActivityIndicator,
   Pressable,
   Modal,
-  TextInput,
+  TextInput as RNTextInput,
   Alert,
   Keyboard,
   Share,
   RefreshControl,
+  useColorScheme,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {useChatStore} from '../stores/chat-store';
 import {useModelStore} from '../stores/model-store';
 import {useOnlineStatus} from '../hooks/useOnlineStatus';
 import {useHybridStore} from '../stores/hybrid-inference-store';
 import {MessageBubble} from '../components/MessageBubble';
 import {ChatInput} from '../components/ChatInput';
-import {TypingIndicator} from '../components/TypingIndicator';
+import {ReasoningPanel} from '../components/ReasoningPanel';
 import {SearchSessionsModal} from '../components/SearchSessionsModal';
 import {StatusBadge} from '../components/StatusBadge';
 import {triggerHaptic} from '../services/haptics';
@@ -31,10 +30,13 @@ import {api} from '../services/api-client';
 import {pickImage, takePhoto, imageDataUrl} from '../services/image-upload';
 import {startRecording, transcribeAudio} from '../services/voice-input';
 import {toast} from '../services/toast';
-import {useTheme} from '../theme/ThemeContext';
 import {useSettingsStore} from '../stores/settings-store';
-import {colors, spacing, radii, typography} from '../theme';
+import * as pinsService from '../services/pins';
+import * as starsService from '../services/stars';
+import * as labelsService from '../services/labels';
+import {getCachedActiveSessionId} from '../services/offline-cache';
 import type {Message, Session} from '../types';
+import {Icon} from '../components/Icon';
 
 const SUGGESTIONS = [
   'Tell me something interesting',
@@ -56,6 +58,7 @@ const BG_PRESETS = [
 ];
 
 export function ChatScreen() {
+  const theme = useTheme();
   const {
     sessions,
     activeSessionId,
@@ -79,7 +82,7 @@ export function ChatScreen() {
     retryPendingSends,
   } = useChatStore();
   const {health, currentSoul, souls, switchSoul} = useModelStore();
-  const {isDark} = useTheme();
+  const isDark = useColorScheme() === 'dark';
   const themeMode = useSettingsStore(s => s.theme);
   const updateTheme = useSettingsStore(s => s.update);
   const chatBackground = useSettingsStore(s => s.chatBackground);
@@ -109,15 +112,16 @@ export function ChatScreen() {
   const [labelInput, setLabelInput] = useState('');
   const [starredIds, setStarredIds] = useState<string[]>([]);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
-  const activeSessions = sessions.filter(s => !s.archived);
-  const archivedSessions = sessions.filter(s => s.archived);
+  const safeSessions = sessions ?? [];
+  const activeSessions = safeSessions.filter(s => !s.archived);
+  const archivedSessions = safeSessions.filter(s => s.archived);
   const recordingStopRef = useRef<(() => Promise<{uri: string; duration: number} | null>) | null>(null);
   const [voiceMessageMode, setVoiceMessageMode] = useState(false);
   const voiceTimerRef = useRef<{start: number} | null>(null);
 
   useEffect(() => {
     if (activeSessionId) {
-      import('../services/pins').then(m => m.getPinnedIds(activeSessionId)).then(setPinnedIds);
+      pinsService.getPinnedIds(activeSessionId).then(setPinnedIds);
     } else {
       setPinnedIds([]);
     }
@@ -125,33 +129,35 @@ export function ChatScreen() {
 
   useEffect(() => {
     refreshSessions();
-    import('../services/stars').then(m => m.getStarredIds()).then(setStarredIds);
-    import('../services/labels').then(m => {
-      m.getAllDistinctLabels().then(setAllLabels);
-    });
+    starsService.getStarredIds().then(setStarredIds);
+    labelsService.getAllDistinctLabels().then(setAllLabels);
+    (async () => {
+      const cachedId = await getCachedActiveSessionId();
+      if (cachedId && !useChatStore.getState().activeSessionId) {
+        await loadSession(cachedId);
+      }
+    })();
   }, []);
 
   useEffect(() => {
     if (showInfo && activeSessionId) {
-      import('../services/labels').then(m => {
-        m.getLabels(activeSessionId).then(labels => {
-          setSessionLabels(prev => ({...prev, [activeSessionId]: labels}));
-        });
+      labelsService.getLabels(activeSessionId).then(labels => {
+        setSessionLabels(prev => ({...prev, [activeSessionId]: labels}));
       });
     }
   }, [showInfo, activeSessionId]);
 
   useEffect(() => {
     if (showDrawer) {
-      import('../services/labels').then(m => m.getLabels).then(async getLabels => {
+      (async () => {
         const all: Record<string, string[]> = {};
-        for (const s of sessions) {
-          all[s.id] = await getLabels(s.id);
+        for (const s of safeSessions) {
+          all[s.id] = await labelsService.getLabels(s.id);
         }
         setSessionLabels(prev => ({...prev, ...all}));
-        const distinct = await (await import('../services/labels')).getAllDistinctLabels();
+        const distinct = await labelsService.getAllDistinctLabels();
         setAllLabels(distinct);
-      });
+      })();
     }
   }, [showDrawer, sessions]);
 
@@ -270,7 +276,7 @@ export function ChatScreen() {
             if (sid) {
               try {
                 const result = await api.sendVoiceMessage(sid, recording.uri, recording.duration);
-                if (result.status === 'ok' || result.status === 'created') {
+                if (result.message_id) {
                   const voiceMsg: Message = {
                     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
                     role: 'user',
@@ -363,7 +369,7 @@ export function ChatScreen() {
         }}
       />
     ),
-    [regenerate, recordFeedback, searchQuery, deleteMessage, activeSessionId],
+    [regenerate, recordFeedback, searchQuery, deleteMessage, activeSessionId, selectMode, selectedIds, toggleSelectMessage],
   );
 
   const keyExtractor = useCallback((item: Message) => item.id, []);
@@ -378,20 +384,28 @@ export function ChatScreen() {
   const isConnected = online;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={{flex: 1, backgroundColor: 'var(--background)'}} edges={['top']}>
       <KeyboardAvoidingView
-        style={styles.flex}
+        style={{flex: 1}}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}>
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <TouchableOpacity onPress={() => setShowDrawer(true)}>
-              <Text style={styles.menuBtn}>☰</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowSoulPicker(true)}>
-              <Text style={styles.menuBtn}>⚙</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+        {/* Header */}
+        <XStack
+          paddingHorizontal={20}
+          paddingVertical={14}
+          borderBottomWidth={1}
+          borderBottomColor="$borderColor"
+          backgroundColor="$background"
+          alignItems="center"
+          justifyContent="space-between">
+          <XStack alignItems="center" gap={8}>
+            <YStack onPress={() => setShowDrawer(true)} pressStyle={{opacity: 0.6}}>
+              <Icon name="menu" size={20} color={(theme.color11?.val || '#6B7280')} />
+            </YStack>
+            <YStack onPress={() => setShowSoulPicker(true)} pressStyle={{opacity: 0.6}}>
+              <Icon name="settings" size={20} color={(theme.color11?.val || '#6B7280')} />
+            </YStack>
+            <YStack
               onPress={() => {
                 const now = Date.now();
                 if (now - lastHeaderTap.current < 300) {
@@ -399,51 +413,61 @@ export function ChatScreen() {
                 }
                 lastHeaderTap.current = now;
               }}>
-              <Text style={styles.title}>Chat</Text>
-            </TouchableOpacity>
+              <Text fontSize={16} fontWeight="600" color="$color">Chat</Text>
+            </YStack>
             {currentSoul && (
-              <TouchableOpacity
-                style={styles.soulPill}
-                onPress={() => setShowSoulPicker(true)}>
-                <Text style={styles.soulText}>{currentSoul.name}</Text>
-              </TouchableOpacity>
+              <YStack
+                backgroundColor="$color9"
+                opacity={0.88}
+                paddingHorizontal={8}
+                paddingVertical={3}
+                borderRadius={999}
+                onPress={() => setShowSoulPicker(true)}
+                pressStyle={{opacity: 0.6}}>
+                <Text fontSize={11} fontWeight="600" color="white">{currentSoul.name}</Text>
+              </YStack>
             )}
-            <View
-              style={[
-                styles.enginePill,
-                hybrid.activeEngine === 'slonet' && styles.enginePillLocal,
-                hybrid.activeEngine === 'qwen' && styles.enginePillAccent,
-                hybrid.activeEngine === 'remote' && styles.enginePillRemote,
-              ]}>
-              <Text style={styles.enginePillText}>
+            <XStack
+              paddingHorizontal={7}
+              paddingVertical={2}
+              borderRadius={999}
+              backgroundColor={hybrid.activeEngine === 'slonet' ? '#22C55E33' : hybrid.activeEngine === 'qwen' ? '#F0935C33' : '#6366F133'}>
+              <Text fontSize={10} fontWeight="600" letterSpacing={0.3} color="$color11">
                 {hybrid.activeEngine === 'slonet'
                   ? 'SloNet'
                   : hybrid.activeEngine === 'qwen'
                   ? 'Qwen'
                   : 'Server'}
               </Text>
-            </View>
-          </View>
-          <View style={styles.headerRight}>
-            <TouchableOpacity
-              style={styles.menuBtn}
+            </XStack>
+          </XStack>
+
+          <XStack alignItems="center" gap={8}>
+            <YStack
+              padding={4}
               onPress={() => {
                 triggerHaptic('light');
                 updateTheme({theme: isDark ? 'light' : 'dark'});
-              }}>
-              <Text style={styles.menuBtn}>{isDark ? '☀️' : '🌙'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.menuBtn}
-              onPress={() => setShowSearchSessions(true)}>
-              <Text style={styles.menuBtn}>🔍</Text>
-            </TouchableOpacity>
+              }}
+              pressStyle={{opacity: 0.6}}>
+              <Icon name={isDark ? 'sun' : 'moon'} size={20} color={(theme.color11?.val || '#6B7280')} />
+            </YStack>
+            <YStack
+              padding={4}
+              onPress={() => setShowSearchSessions(true)}
+              pressStyle={{opacity: 0.6}}>
+              <Icon name="search" size={20} color={(theme.color11?.val || '#6B7280')} />
+            </YStack>
             {messages.length > 0 && (
               <>
-                <TouchableOpacity
-                  style={styles.exportBtn}
+                <YStack
+                  paddingHorizontal={8}
+                  paddingVertical={5}
+                  borderRadius={8}
+                  backgroundColor="$background"
+                  borderWidth={1}
+                  borderColor="$borderColor"
                   onPress={async () => {
-                    // Generate summary via AI
                     const conversationText = messages
                       .filter(m => m.content)
                       .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
@@ -451,10 +475,15 @@ export function ChatScreen() {
                     const summaryPrompt = `Summarize this conversation in 3-5 bullet points:\n\n${conversationText.slice(0, 2000)}`;
                     sendMessage(summaryPrompt);
                   }}>
-                  <Text style={styles.exportBtnText}>Summary</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.exportBtn}
+                  <Text fontSize={11} fontWeight="500" color="$color11">Summary</Text>
+                </YStack>
+                <YStack
+                  paddingHorizontal={8}
+                  paddingVertical={5}
+                  borderRadius={8}
+                  backgroundColor="$background"
+                  borderWidth={1}
+                  borderColor="$borderColor"
                   onPress={async () => {
                     const md = messages.map(m => {
                       const role = m.role === 'user' ? 'You' : 'Assistant';
@@ -462,112 +491,150 @@ export function ChatScreen() {
                     }).join('\n\n---\n\n');
                     await Share.share({title: 'Chat Export', message: md});
                   }}>
-                  <Text style={styles.exportBtnText}>Export</Text>
-                </TouchableOpacity>
+                  <Text fontSize={11} fontWeight="500" color="$color11">Export</Text>
+                </YStack>
               </>
             )}
-            <TouchableOpacity
-              style={styles.newChatBtn}
+            <YStack
+              paddingHorizontal={12}
+              paddingVertical={5}
+              borderRadius={999}
+              backgroundColor="$color9"
               onPress={() => createSession()}>
-              <Text style={styles.newChatText}>+ New</Text>
-            </TouchableOpacity>
+              <Text fontSize={11} fontWeight="600" color="white">+ New</Text>
+            </YStack>
             {messages.length > 0 && (
-              <TouchableOpacity
-                style={styles.infoBtn}
+              <YStack
+                width={28} height={28} borderRadius={8}
+                backgroundColor="$background"
+                borderWidth={1} borderColor="$borderColor"
+                alignItems="center" justifyContent="center"
                 onPress={() => setShowInfo(true)}>
-                <Text style={styles.infoBtnText}>ℹ</Text>
-              </TouchableOpacity>
+                <Icon name="info" size={14} color={(theme.color11?.val || '#6B7280')} />
+              </YStack>
             )}
-            <View
-              style={[
-                styles.dot,
-                {backgroundColor: isConnected ? colors.success : colors.error},
-              ]}
-            />
-          </View>
-        </View>
+            <YStack width={8} height={8} borderRadius={999}
+              backgroundColor={isConnected ? '$color9' : '$color10'} />
+          </XStack>
+        </XStack>
 
         {error && (
-          <TouchableOpacity style={styles.errorBanner} onPress={clearError}>
-            <Text style={styles.errorText}>{error}</Text>
-            <Text style={styles.errorDismiss}>×</Text>
-          </TouchableOpacity>
+          <XStack
+            backgroundColor="$color10"
+            opacity={0.92}
+            paddingHorizontal={20} paddingVertical={10}
+            borderBottomWidth={1} borderBottomColor="$borderColor"
+            alignItems="center" justifyContent="space-between"
+            onPress={clearError}>
+            <Text fontSize={12} color="$color" flex={1}>{error}</Text>
+            <Icon name="x" size={18} color="#EF4444" />
+          </XStack>
         )}
 
         {!online && (
-          <View style={styles.offlineBanner}>
-            <Text style={styles.offlineText}>Offline</Text>
+          <XStack
+            paddingHorizontal={20} paddingVertical={10}
+            borderBottomWidth={1} borderBottomColor="$borderColor"
+            alignItems="center" justifyContent="space-between">
+            <Text fontSize={12} fontWeight="600" color="$color10">Offline</Text>
             {offlineQueue > 0 && (
-              <TouchableOpacity onPress={retryPendingSends}>
-                <Text style={styles.offlineRetry}>{offlineQueue} queued — tap to retry</Text>
-              </TouchableOpacity>
+              <YStack onPress={retryPendingSends}>
+                <Text fontSize={11} color="$color11" textDecorationLine="underline">{offlineQueue} queued — tap to retry</Text>
+              </YStack>
             )}
-          </View>
+          </XStack>
         )}
 
         {showSearch && (
-          <View style={styles.searchBar}>
-            <TextInput
-              style={styles.searchInput}
+          <XStack
+            paddingHorizontal={20} paddingVertical={8}
+            backgroundColor="$background"
+            borderBottomWidth={1} borderBottomColor="$borderColor"
+            gap={8} alignItems="center">
+            <RNTextInput
+              style={{
+                flex: 1, fontSize: 14, color: (theme.color?.val || '#111827'),
+                backgroundColor: (theme.background?.val || '#FFFFFF'), borderRadius: 8,
+                paddingHorizontal: 12, paddingVertical: 6,
+                borderWidth: 1, borderColor: (theme.borderColor?.val || '#E5E7EB'),
+              }}
               value={searchQuery}
               onChangeText={setSearchQuery}
               placeholder="Search messages..."
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={(theme.color10?.val || '#9CA3AF')}
               autoFocus
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Text style={styles.searchClear}>×</Text>
-              </TouchableOpacity>
+              <YStack onPress={() => setSearchQuery('')} pressStyle={{opacity: 0.6}}>
+                <Icon name="x" size={18} color={(theme.color10?.val || '#9CA3AF')} />
+              </YStack>
             )}
-          </View>
+          </XStack>
         )}
 
         {messages.length === 0 && !streaming ? (
-          <View style={[styles.emptyContainer, chatBackground ? {backgroundColor: chatBackground} : null]}>
-            <View style={styles.emptyIllustration}>
-              <Text style={styles.emptyEmoji}>💬</Text>
-              <View style={styles.emptyDotRow}>
-                <View style={[styles.emptyDot, {opacity: 0.3}]} />
-                <View style={[styles.emptyDot, {opacity: 0.5}]} />
-                <View style={[styles.emptyDot, {opacity: 0.8}]} />
-              </View>
-            </View>
-            <Text style={styles.emptyTitle}>
+          <YStack
+            flex={1} alignItems="center" justifyContent="center"
+            paddingHorizontal={36}
+            backgroundColor={chatBackground || 'var(--background)'}>
+            <YStack alignItems="center" marginBottom={16}>
+              <YStack
+                width={80} height={80} borderRadius={40}
+                backgroundColor="$color9"
+                opacity={0.12}
+                alignItems="center" justifyContent="center"
+                marginBottom={12}>
+                <Icon name="message-circle" size={40} color={(theme.color9?.val || '#6366F1')} />
+              </YStack>
+              <XStack gap={6}>
+                <YStack width={8} height={8} borderRadius={4} backgroundColor="$color9" />
+                <YStack width={8} height={8} borderRadius={4} backgroundColor="$color9" opacity={0.7} />
+                <YStack width={8} height={8} borderRadius={4} backgroundColor="$color9" opacity={0.5} />
+              </XStack>
+            </YStack>
+            <Text fontSize={18} fontWeight="600" color="$color" marginBottom={8} textAlign="center">
               {currentSoul ? `Chat with ${currentSoul.name}` : 'Start a conversation'}
             </Text>
-            <Text style={styles.emptySubtitle}>
+            <Text fontSize={14} color="$color11" textAlign="center" marginBottom={28} lineHeight={22}>
               {currentSoul
                 ? `${currentSoul.description || 'Ask me anything'}`
                 : 'Type a message below to begin'}
             </Text>
-            <View style={styles.suggestions}>
+            <YStack gap={8} alignItems="center">
               {SUGGESTIONS.map(s => (
-                <TouchableOpacity
+                <YStack
                   key={s}
-                  style={styles.suggestionChip}
-                  onPress={() => handleSuggestion(s)}>
-                  <Text style={styles.suggestionText}>{s}</Text>
-                </TouchableOpacity>
+                  paddingHorizontal={16} paddingVertical={10}
+                  borderRadius={12}
+                  borderWidth={1} borderColor="$borderColor"
+                  backgroundColor="$background"
+                  onPress={() => handleSuggestion(s)}
+                  pressStyle={{opacity: 0.7}}>
+                  <Text fontSize={12} fontWeight="600" color="$color9">{s}</Text>
+                </YStack>
               ))}
-            </View>
-            <Text style={styles.emptyHint}>Swipe left on a message to delete it</Text>
-          </View>
+            </YStack>
+            <Text fontSize={11} color="$color10" marginTop={20} textAlign="center">
+              Swipe left on a message to delete it
+            </Text>
+          </YStack>
         ) : (
-          <Pressable style={[styles.flatListContainer, chatBackground ? {backgroundColor: chatBackground} : null]} onPress={() => Keyboard.dismiss()}>
+          <Pressable
+            style={{flex: 1, backgroundColor: chatBackground || 'var(--background)'}}
+            onPress={() => Keyboard.dismiss()}>
             <FlatList
               ref={flatListRef}
               data={messages}
               renderItem={renderItem}
               keyExtractor={keyExtractor}
-              contentContainerStyle={styles.messageList}
+              contentContainerStyle={{paddingTop: 8, paddingBottom: 8}}
               onScroll={onScroll}
               scrollEventThrottle={16}
               refreshControl={
                 <RefreshControl
                   refreshing={refreshing}
                   onRefresh={onPullRefresh}
-                  tintColor={colors.primary}
+                  tintColor={(theme.color9?.val || '#6366F1')}
                 />
               }
               onContentSizeChange={() => {
@@ -581,26 +648,33 @@ export function ChatScreen() {
 
         {/* Pinned messages banner */}
         {pinnedIds.length > 0 && !selectMode && (
-          <TouchableOpacity
-            style={styles.pinnedBanner}
+          <XStack
+            paddingHorizontal={20} paddingVertical={8}
+            backgroundColor="$color9"
+            opacity={0.08}
+            borderTopWidth={1} borderTopColor="$borderColor"
+            gap={8} alignItems="center"
             onPress={() => {
               const firstPinnedIndex = messages.findIndex(m => pinnedIds.includes(m.id));
               if (firstPinnedIndex >= 0) {
                 flatListRef.current?.scrollToIndex({index: firstPinnedIndex, animated: true, viewPosition: 0});
               }
             }}>
-            <Text style={styles.pinnedBannerIcon}>📌</Text>
-            <Text style={styles.pinnedBannerText}>
+            <Icon name="pin" size={14} color={(theme.color9?.val || '#6366F1')} />
+            <Text fontSize={11} fontWeight="600" color="$color9">
               {pinnedIds.length} pinned {pinnedIds.length === 1 ? 'message' : 'messages'} — tap to jump
             </Text>
-          </TouchableOpacity>
+          </XStack>
         )}
 
         {/* Select mode toolbar */}
         {selectMode && (
-          <View style={styles.selectToolbar}>
-            <TouchableOpacity
-              style={styles.selectToolbarBtn}
+          <XStack
+            paddingHorizontal={12} paddingVertical={8}
+            backgroundColor="$background"
+            borderTopWidth={1} borderTopColor="$borderColor"
+            alignItems="center" justifyContent="space-between">
+            <YStack paddingHorizontal={12} paddingVertical={4}
               onPress={() => {
                 if (selectedIds.size === messages.length) {
                   setSelectedIds(new Set());
@@ -608,44 +682,51 @@ export function ChatScreen() {
                   setSelectedIds(new Set(messages.map(m => m.id)));
                 }
               }}>
-              <Text style={styles.selectToolbarText}>
+              <Text fontSize={14} fontWeight="600" color="$color9">
                 {selectedIds.size === messages.length ? 'Deselect all' : 'Select all'}
               </Text>
-            </TouchableOpacity>
-            <Text style={styles.selectToolbarCount}>
-              {selectedIds.size} selected
-            </Text>
-            <TouchableOpacity
-              style={[styles.selectToolbarBtn, styles.selectToolbarDelete]}
+            </YStack>
+            <Text fontSize={12} color="$color10">{selectedIds.size} selected</Text>
+            <YStack paddingHorizontal={12} paddingVertical={4}
+              opacity={selectedIds.size === 0 ? 0.4 : 1}
               onPress={deleteSelected}
               disabled={selectedIds.size === 0}>
-              <Text style={[styles.selectToolbarText, selectedIds.size > 0 && {color: colors.error}]}>
-                Delete
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.selectToolbarBtn} onPress={toggleSelectMode}>
-              <Text style={styles.selectToolbarText}>Done</Text>
-            </TouchableOpacity>
-          </View>
+              <Text fontSize={14} fontWeight="600"
+                color={selectedIds.size > 0 ? '$color10' : '$color9'}>Delete</Text>
+            </YStack>
+            <YStack paddingHorizontal={12} paddingVertical={4} onPress={toggleSelectMode}>
+              <Text fontSize={14} fontWeight="600" color="$color9">Done</Text>
+            </YStack>
+          </XStack>
         )}
 
-        <TypingIndicator visible={streaming && messages.length > 0 && !messages[messages.length - 1]?.content} />
+        <ReasoningPanel visible={streaming && messages.length > 0 && !messages[messages.length - 1]?.content} />
 
         {/* Reply quote bar */}
         {replyTo && (
-          <View style={styles.replyBar}>
-            <View style={styles.replyBarContent}>
-              <Text style={styles.replyBarLabel}>
+          <XStack
+            paddingHorizontal={12} paddingVertical={4}
+            backgroundColor="$background"
+            borderTopWidth={1} borderTopColor="$borderColor"
+            borderLeftWidth={3} borderLeftColor="$color9"
+            alignItems="center">
+            <YStack flex={1} marginRight={4}>
+              <Text fontSize={12} color="$color9" fontWeight="600" marginBottom={2}>
                 Replying to {replyTo.role === 'user' ? 'yourself' : 'assistant'}
               </Text>
-              <Text style={styles.replyBarText} numberOfLines={1}>
+              <Text fontSize={12} color="$color10" numberOfLines={1}>
                 {replyTo.content}
               </Text>
-            </View>
-            <TouchableOpacity onPress={() => setReplyTo(null)} style={styles.replyBarClose}>
-              <Text style={styles.replyBarCloseText}>✕</Text>
-            </TouchableOpacity>
-          </View>
+            </YStack>
+            <YStack
+              width={24} height={24} borderRadius={8}
+              backgroundColor="$background"
+              borderWidth={1} borderColor="$borderColor"
+              alignItems="center" justifyContent="center"
+              onPress={() => setReplyTo(null)}>
+              <Icon name="x" size={12} color={(theme.color10?.val || '#9CA3AF')} />
+            </YStack>
+          </XStack>
         )}
 
         {/* Forward to session modal */}
@@ -654,38 +735,48 @@ export function ChatScreen() {
           transparent
           animationType="slide"
           onRequestClose={() => setForwardTo(null)}>
-          <Pressable style={styles.overlay} onPress={() => setForwardTo(null)}>
-            <Pressable style={styles.forwardModal} onPress={e => e.stopPropagation()}>
-              <Text style={styles.forwardTitle}>Forward to...</Text>
-              <Text style={styles.forwardPreview} numberOfLines={1}>
+          <YStack flex={1} justifyContent="center" padding={24}
+            backgroundColor="rgba(0,0,0,0.35)"
+            onPress={() => setForwardTo(null)}>
+            <YStack
+              backgroundColor="$background"
+              borderRadius={12} maxHeight="60%" overflow="hidden"
+              borderWidth={1} borderColor="$borderColor"
+              onPress={(e: any) => e.stopPropagation()}>
+              <Text fontSize={14} fontWeight="700" padding={12} paddingBottom={4}>
+                Forward to...
+              </Text>
+              <Text fontSize={12} color="$color10" paddingHorizontal={12} paddingBottom={8} numberOfLines={1}>
                 {forwardTo?.content}
               </Text>
               <FlatList
-                data={sessions}
+                data={safeSessions}
                 keyExtractor={s => s.id}
                 renderItem={({item: session}) => (
-                  <TouchableOpacity
-                    style={styles.forwardSessionItem}
+                  <YStack
+                    paddingHorizontal={12} paddingVertical={8}
+                    borderBottomWidth={1} borderBottomColor="$borderColor"
                     onPress={async () => {
                       if (forwardTo) {
                         await forwardMessage(forwardTo.content, session.id);
                       }
                       setForwardTo(null);
                     }}>
-                    <Text style={styles.forwardSessionTitle} numberOfLines={1}>
-                      {session.title || 'New conversation'}
+                    <Text fontSize={14} fontWeight="500" numberOfLines={1}>
+                      {session.name || 'New conversation'}
                     </Text>
-                    <Text style={styles.forwardSessionMeta}>
+                    <Text fontSize={12} color="$color10">
                       {session.message_count || 0} messages
                     </Text>
-                  </TouchableOpacity>
+                  </YStack>
                 )}
               />
-              <TouchableOpacity style={styles.forwardCancel} onPress={() => setForwardTo(null)}>
-                <Text style={styles.forwardCancelText}>Cancel</Text>
-              </TouchableOpacity>
-            </Pressable>
-          </Pressable>
+              <YStack padding={12} alignItems="center" borderTopWidth={1} borderTopColor="$borderColor"
+                onPress={() => setForwardTo(null)}>
+                <Text fontSize={14} color="$color11">Cancel</Text>
+              </YStack>
+            </YStack>
+          </YStack>
         </Modal>
 
         <ChatInput
@@ -704,165 +795,210 @@ export function ChatScreen() {
         />
 
         {!atBottom && messages.length > 0 && (
-          <TouchableOpacity
-            style={styles.jumpBtn}
-            onPress={() =>
-              flatListRef.current?.scrollToEnd({animated: true})
-            }>
-            <Text style={styles.jumpText}>↓</Text>
-          </TouchableOpacity>
+          <YStack
+            position="absolute"
+            right={20}
+            bottom={80}
+            width={40}
+            height={40}
+            borderRadius={999}
+            backgroundColor="$color9"
+            alignItems="center"
+            justifyContent="center"
+            shadowColor="$color9"
+            shadowOffset={{width: 0, height: 4}}
+            shadowOpacity={0.3}
+            shadowRadius={8}
+            elevation={4}
+            onPress={() => flatListRef.current?.scrollToEnd({animated: true})}>
+            <Icon name="arrow-down" size={18} color="white" />
+          </YStack>
         )}
       </KeyboardAvoidingView>
 
       {/* Conversation Info Modal */}
       <Modal visible={showInfo} transparent animationType="fade" onRequestClose={() => setShowInfo(false)}>
-        <Pressable style={styles.infoOverlay} onPress={() => setShowInfo(false)}>
-          <View style={styles.infoCard}>
-            <Text style={styles.infoTitle}>Conversation Info</Text>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Messages</Text>
-              <Text style={styles.infoValue}>{messages.length}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Words</Text>
-              <Text style={styles.infoValue}>
+        <YStack flex={1} justifyContent="center" alignItems="center" padding={24}
+          backgroundColor="rgba(0,0,0,0.35)"
+          onPress={() => setShowInfo(false)}>
+          <YStack
+            backgroundColor="$background"
+            borderRadius={12} padding={20} width="100%" maxWidth={300}
+            borderWidth={1} borderColor="$borderColor">
+            <Text fontSize={18} fontWeight="600" color="$color" marginBottom={12} textAlign="center">
+              Conversation Info
+            </Text>
+            <XStack justifyContent="space-between" paddingVertical={8}
+              borderBottomWidth={1} borderBottomColor="$borderColor">
+              <Text fontSize={14} color="$color11">Messages</Text>
+              <Text fontSize={14} color="$color" fontWeight="500">{messages.length}</Text>
+            </XStack>
+            <XStack justifyContent="space-between" paddingVertical={8}
+              borderBottomWidth={1} borderBottomColor="$borderColor">
+              <Text fontSize={14} color="$color11">Words</Text>
+              <Text fontSize={14} color="$color" fontWeight="500">
                 {messages.reduce((sum, m) => sum + (m.content?.split(/\s+/).length || 0), 0)}
               </Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Characters</Text>
-              <Text style={styles.infoValue}>
+            </XStack>
+            <XStack justifyContent="space-between" paddingVertical={8}
+              borderBottomWidth={1} borderBottomColor="$borderColor">
+              <Text fontSize={14} color="$color11">Characters</Text>
+              <Text fontSize={14} color="$color" fontWeight="500">
                 {messages.reduce((sum, m) => sum + (m.content?.length || 0), 0)}
               </Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Session</Text>
-              <Text style={styles.infoValue} numberOfLines={1}>
+            </XStack>
+            <XStack justifyContent="space-between" paddingVertical={8}
+              borderBottomWidth={1} borderBottomColor="$borderColor">
+              <Text fontSize={14} color="$color11">Session</Text>
+              <Text fontSize={14} color="$color" fontWeight="500" numberOfLines={1}>
                 {activeSessionId?.slice(0, 12) || 'None'}
               </Text>
-            </View>
+            </XStack>
             {currentSoul && (
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Soul</Text>
-                <Text style={styles.infoValue}>{currentSoul.name}</Text>
-              </View>
+              <XStack justifyContent="space-between" paddingVertical={8}
+                borderBottomWidth={1} borderBottomColor="$borderColor">
+                <Text fontSize={14} color="$color11">Soul</Text>
+                <Text fontSize={14} color="$color" fontWeight="500">{currentSoul.name}</Text>
+              </XStack>
             )}
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Status</Text>
-              <Text style={[styles.infoValue, {color: isConnected ? colors.success : colors.error}]}>
+            <XStack justifyContent="space-between" paddingVertical={8}
+              borderBottomWidth={1} borderBottomColor="$borderColor">
+              <Text fontSize={14} color="$color11">Status</Text>
+              <Text fontSize={14} fontWeight="500"
+                color={isConnected ? '$color9' : '$color10'}>
                 {isConnected ? 'Connected' : 'Offline'}
               </Text>
-            </View>
-            <View style={styles.bgSection}>
-              <Text style={styles.bgSectionLabel}>Chat Background</Text>
-              <View style={styles.bgSwatchRow}>
+            </XStack>
+            <YStack paddingTop={12} borderTopWidth={1} borderTopColor="$borderColor">
+              <Text fontSize={12} color="$color11" fontWeight="600" marginBottom={8}>Chat Background</Text>
+              <XStack flexWrap="wrap" gap={8}>
                 {BG_PRESETS.map(p => {
                   const active = chatBackground === p.value;
                   return (
-                    <TouchableOpacity
+                    <YStack
                       key={p.value || 'none'}
-                      style={[
-                        styles.bgSwatch,
-                        p.value ? {backgroundColor: p.value} : styles.bgSwatchDefault,
-                        active && styles.bgSwatchActive,
-                      ]}
+                      width={36} height={36} borderRadius={8}
+                      justifyContent="center" alignItems="center"
+                      borderWidth={2}
+                      borderColor={active ? '$color9' : 'transparent'}
+                      backgroundColor={p.value ? p.value : (theme.background?.val || '#FFFFFF')}
+                      style={!p.value ? {borderColor: (theme.borderColor?.val || '#E5E7EB'), backgroundColor: (theme.background?.val || '#FFFFFF')} : {}}
                       accessible
                       accessibilityLabel={p.label}
                       onPress={() => updateTheme({chatBackground: p.value})}>
                       {active && (
-                        <Text style={[styles.bgSwatchCheck, p.value && !p.value.startsWith('#f') && styles.bgSwatchCheckLight]}>
-                          ✓
-                        </Text>
+                        <Text fontSize={14} fontWeight="700" color="white">✓</Text>
                       )}
-                    </TouchableOpacity>
+                    </YStack>
                   );
                 })}
-              </View>
-            </View>
-            <View style={styles.bgSection}>
-              <Text style={styles.bgSectionLabel}>Labels</Text>
+              </XStack>
+            </YStack>
+            <YStack paddingTop={12} borderTopWidth={1} borderTopColor="$borderColor">
+              <Text fontSize={12} color="$color11" fontWeight="600" marginBottom={8}>Labels</Text>
               {activeSessionId && (sessionLabels[activeSessionId] || []).length > 0 && (
-                <View style={styles.labelChipRow}>
+                <XStack flexWrap="wrap" gap={4} marginBottom={8}>
                   {(sessionLabels[activeSessionId] || []).map(label => (
-                    <TouchableOpacity
+                    <YStack
                       key={label}
-                      style={styles.labelChip}
+                      backgroundColor="$color9"
+                      opacity={0.12}
+                      paddingHorizontal={8} paddingVertical={3} borderRadius={8}
                       onPress={async () => {
-                        const {removeLabel} = await import('../services/labels');
-                        await removeLabel(activeSessionId, label);
-                        const labels = await (await import('../services/labels')).getLabels(activeSessionId);
+                        await labelsService.removeLabel(activeSessionId, label);
+                        const labels = await labelsService.getLabels(activeSessionId);
                         setSessionLabels(prev => ({...prev, [activeSessionId]: labels}));
-                        const distinct = await (await import('../services/labels')).getAllDistinctLabels();
+                        const distinct = await labelsService.getAllDistinctLabels();
                         setAllLabels(distinct);
                       }}>
-                      <Text style={styles.labelChipText}>{label} ×</Text>
-                    </TouchableOpacity>
+                      <Text fontSize={11} color="$color9">{label} ×</Text>
+                    </YStack>
                   ))}
-                </View>
+                </XStack>
               )}
-              <View style={styles.labelAddRow}>
-                <TextInput
-                  style={styles.labelInput}
+              <XStack gap={8}>
+                <RNTextInput
+                  style={{
+                    flex: 1, fontSize: 12, color: (theme.color?.val || '#111827'),
+                    backgroundColor: (theme.background?.val || '#FFFFFF'), borderRadius: 8,
+                    paddingHorizontal: 8, paddingVertical: 5,
+                    borderWidth: 1, borderColor: (theme.borderColor?.val || '#E5E7EB'),
+                  }}
                   value={labelInput}
                   onChangeText={setLabelInput}
                   placeholder="Add label..."
-                  placeholderTextColor={colors.textMuted}
+                  placeholderTextColor={(theme.color10?.val || '#9CA3AF')}
                   returnKeyType="done"
                   onSubmitEditing={async () => {
                     if (labelInput.trim() && activeSessionId) {
-                      const {addLabel} = await import('../services/labels');
-                      await addLabel(activeSessionId, labelInput.trim());
+                      await labelsService.addLabel(activeSessionId, labelInput.trim());
                       setLabelInput('');
-                      const labels = await (await import('../services/labels')).getLabels(activeSessionId);
+                      const labels = await labelsService.getLabels(activeSessionId);
                       setSessionLabels(prev => ({...prev, [activeSessionId]: labels}));
-                      const distinct = await (await import('../services/labels')).getAllDistinctLabels();
+                      const distinct = await labelsService.getAllDistinctLabels();
                       setAllLabels(distinct);
                     }
                   }}
                 />
-              </View>
-            </View>
-          </View>
-        </Pressable>
+              </XStack>
+            </YStack>
+          </YStack>
+        </YStack>
       </Modal>
 
       {/* Session drawer */}
       <Modal visible={showDrawer} animationType="slide" transparent>
-        <View style={styles.drawerOverlay}>
-          <View style={styles.drawer}>
-            <View style={styles.drawerHeader}>
-              <Text style={styles.drawerTitle}>Conversations</Text>
-              <View style={{flexDirection: 'row', alignItems: 'center', gap: 12}}>
-                <TouchableOpacity onPress={() => { createSession(); setShowDrawer(false); }}>
-                  <Text style={{fontSize: 20, color: colors.primary}}>+</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => setShowDrawer(false)}>
-                  <Text style={styles.drawerClose}>×</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+        <XStack flex={1} justifyContent="flex-start">
+          <YStack
+            width="80%" maxWidth={320} maxHeight="80%"
+            backgroundColor="$background"
+            borderRightWidth={1} borderRightColor="$borderColor">
+            <XStack
+              paddingHorizontal={20} paddingVertical={12}
+              borderBottomWidth={1} borderBottomColor="$borderColor"
+              alignItems="center" justifyContent="space-between">
+              <Text fontSize={16} fontWeight="600" color="$color">Conversations</Text>
+              <XStack alignItems="center" gap={12}>
+                <YStack onPress={() => { createSession(); setShowDrawer(false); }} pressStyle={{opacity: 0.6}}>
+                  <Icon name="plus" size={20} color={(theme.color9?.val || '#6366F1')} />
+                </YStack>
+                <YStack onPress={() => setShowDrawer(false)} pressStyle={{opacity: 0.6}}>
+                  <Icon name="x" size={20} color={(theme.color11?.val || '#6B7280')} />
+                </YStack>
+              </XStack>
+            </XStack>
 
             {/* Label filter chips */}
             {allLabels.length > 0 && (
-              <View style={styles.labelFilterRow}>
-                <TouchableOpacity
-                  style={[styles.labelFilterChip, labelFilter === null && styles.labelFilterChipActive]}
+              <XStack
+                flexWrap="wrap" gap={4}
+                paddingHorizontal={20} paddingVertical={8}
+                borderBottomWidth={1} borderBottomColor="$borderColor">
+                <YStack
+                  paddingHorizontal={8} paddingVertical={3} borderRadius={8}
+                  backgroundColor={labelFilter === null ? '$color9' : '$background'}
+                  opacity={labelFilter === null ? 1 : 0.08}
+                  borderWidth={1}
+                  borderColor={labelFilter === null ? '$color9' : '$borderColor'}
                   onPress={() => setLabelFilter(null)}>
-                  <Text style={[styles.labelFilterText, labelFilter === null && styles.labelFilterTextActive]}>
-                    All
-                  </Text>
-                </TouchableOpacity>
+                  <Text fontSize={11} color={labelFilter === null ? 'white' : '$color11'}
+                    fontWeight={labelFilter === null ? '600' : '400'}>All</Text>
+                </YStack>
                 {allLabels.map(label => (
-                  <TouchableOpacity
+                  <YStack
                     key={label}
-                    style={[styles.labelFilterChip, labelFilter === label && styles.labelFilterChipActive]}
+                    paddingHorizontal={8} paddingVertical={3} borderRadius={8}
+                    backgroundColor={labelFilter === label ? '$color9' : '$background'}
+                    opacity={labelFilter === label ? 1 : 0.08}
+                    borderWidth={1}
+                    borderColor={labelFilter === label ? '$color9' : '$borderColor'}
                     onPress={() => setLabelFilter(label === labelFilter ? null : label)}>
-                    <Text style={[styles.labelFilterText, labelFilter === label && styles.labelFilterTextActive]}>
-                      {label}
-                    </Text>
-                  </TouchableOpacity>
+                    <Text fontSize={11}
+                      color={labelFilter === label ? 'white' : '$color11'}
+                      fontWeight={labelFilter === label ? '600' : '400'}>{label}</Text>
+                  </YStack>
                 ))}
-              </View>
+              </XStack>
             )}
 
             {/* Filtered sessions */}
@@ -872,64 +1008,62 @@ export function ChatScreen() {
               renderItem={({item: session}) => {
                 const isStarred = starredIds.includes(session.id);
                 return (
-                <TouchableOpacity
-                  style={[
-                    styles.sessionItem,
-                    session.id === useChatStore.getState().activeSessionId &&
-                      styles.sessionItemActive,
-                  ]}
+                <XStack
+                  paddingHorizontal={20} paddingVertical={12}
+                  borderBottomWidth={1} borderBottomColor="$borderColor"
+                  alignItems="center" justifyContent="space-between"
+                  backgroundColor={session.id === useChatStore.getState().activeSessionId ? '$color9' : '$background'}
+                  opacity={session.id === useChatStore.getState().activeSessionId ? 0.08 : 1}
                   onPress={() => {
                     loadSession(session.id);
                     setShowDrawer(false);
                   }}>
-                  <View style={styles.sessionInfo}>
-                    <TouchableOpacity
+                  <YStack flex={1}>
+                    <YStack
                       onLongPress={() => {
                         triggerHaptic('light');
-                        const currentTitle = session.title || 'New conversation';
+                        const currentTitle = session.name || 'New conversation';
                         Alert.prompt('Rename', 'Enter a new title:', (newTitle: string) => {
                           if (newTitle && newTitle.trim() && newTitle.trim() !== currentTitle) {
                             renameSession(session.id, newTitle.trim());
                           }
                         }, 'plain-text', currentTitle);
                       }}>
-                      <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
-                        {isStarred && <Text style={styles.starIndicator}>★</Text>}
-                        <Text style={styles.sessionTitle} numberOfLines={1}>
-                          {session.title || 'New conversation'}
+                      <XStack alignItems="center" gap={4}>
+                        {isStarred && <Icon name="star" size={14} color={'#F59E0B'} />}
+                        <Text fontSize={14} fontWeight="500" color="$color" numberOfLines={1}>
+                          {session.name || 'New conversation'}
                         </Text>
-                      </View>
-                    </TouchableOpacity>
-                    <Text style={styles.sessionMeta}>
+                      </XStack>
+                    </YStack>
+                    <Text fontSize={12} color="$color10">
                       {session.message_count || 0} messages
                     </Text>
                     {(sessionLabels[session.id] || []).length > 0 && (
-                      <View style={styles.drawerLabelRow}>
+                      <XStack flexWrap="wrap" gap={3} marginTop={3}>
                         {(sessionLabels[session.id] || []).map(label => (
-                          <View key={label} style={styles.drawerLabelChip}>
-                            <Text style={styles.drawerLabelText}>{label}</Text>
-                          </View>
+                          <YStack key={label} backgroundColor="$color9" opacity={0.12} paddingHorizontal={6} paddingVertical={2} borderRadius={8}>
+                            <Text fontSize={10} color="$color9">{label}</Text>
+                          </YStack>
                         ))}
-                      </View>
+                      </XStack>
                     )}
-                  </View>
-                  <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
-                    <TouchableOpacity
+                  </YStack>
+                  <XStack alignItems="center" gap={4}>
+                    <YStack
                       onPress={async () => {
                         if (isStarred) {
-                          const {unstarSession} = await import('../services/stars');
-                          await unstarSession(session.id);
+                          await starsService.unstarSession(session.id);
                           setStarredIds(prev => prev.filter(id => id !== session.id));
                         } else {
-                          const {starSession} = await import('../services/stars');
-                          await starSession(session.id);
+                          await starsService.starSession(session.id);
                           setStarredIds(prev => [session.id, ...prev]);
                         }
                         triggerHaptic('light');
                       }}>
-                      <Text style={styles.starBtn}>{isStarred ? '★' : '☆'}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                      <Icon name={isStarred ? 'star' : 'star-outline'} size={18} color={'#F59E0B'} />
+                    </YStack>
+                    <YStack
                       onPress={() => {
                         Alert.alert('Archive', 'Archive this conversation?', [
                           {text: 'Cancel', style: 'cancel'},
@@ -939,9 +1073,9 @@ export function ChatScreen() {
                           },
                         ]);
                       }}>
-                      <Text style={styles.sessionArchive}>📦</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                      <Icon name="archive" size={18} color={(theme.color10?.val || '#9CA3AF')} />
+                    </YStack>
+                    <YStack
                       onPress={() => {
                         Alert.alert('Delete', 'Delete this conversation?', [
                           {text: 'Cancel', style: 'cancel'},
@@ -952,85 +1086,99 @@ export function ChatScreen() {
                           },
                         ]);
                       }}>
-                      <Text style={styles.sessionDelete}>×</Text>
-                    </TouchableOpacity>
-                  </View>
-                </TouchableOpacity>
+                      <Icon name="x" size={18} color="#EF4444" />
+                    </YStack>
+                  </XStack>
+                </XStack>
               )}}
               ListEmptyComponent={
-                <Text style={styles.drawerEmpty}>
+                <Text fontSize={11} color="$color10" textAlign="center" padding={36}>
                   No conversations yet
                 </Text>
               }
               ListFooterComponent={
                 archivedSessions.length > 0 ? (
-                  <TouchableOpacity
-                    style={styles.archivedToggle}
+                  <YStack
+                    paddingVertical={12} paddingHorizontal={20} alignItems="center"
+                    borderTopWidth={1} borderTopColor="$borderColor"
                     onPress={() => setShowArchived(s => !s)}>
-                    <Text style={styles.archivedToggleText}>
+                    <Text fontSize={12} color="$color9" fontWeight="600">
                       {showArchived ? 'Hide' : 'Show'} archived ({archivedSessions.length})
                     </Text>
-                  </TouchableOpacity>
+                  </YStack>
                 ) : null
               }
             />
             {showArchived && archivedSessions.length > 0 && (
-              <View style={{maxHeight: 200}}>
-                <Text style={styles.archivedHeader}>Archived</Text>
+              <YStack maxHeight={200}>
+                <Text fontSize={12} color="$color10" fontWeight="600"
+                  paddingHorizontal={20} paddingVertical={8}
+                  backgroundColor="$background" opacity={0.06}
+                  borderTopWidth={1} borderTopColor="$borderColor">
+                  Archived
+                </Text>
                 <FlatList
                   data={archivedSessions}
                   keyExtractor={item => item.id}
                   renderItem={({item: session}) => (
-                    <TouchableOpacity
-                      style={[
-                        styles.sessionItem,
-                        styles.archivedItem,
-                        session.id === useChatStore.getState().activeSessionId &&
-                          styles.sessionItemActive,
-                      ]}
+                    <XStack
+                      paddingHorizontal={20} paddingVertical={12}
+                      borderBottomWidth={1} borderBottomColor="$borderColor"
+                      alignItems="center" justifyContent="space-between"
+                      opacity={session.id === useChatStore.getState().activeSessionId ? 0.08 : 0.8}
+                      backgroundColor={session.id === useChatStore.getState().activeSessionId ? '$color9' : '$background'}
                       onPress={() => {
                         loadSession(session.id);
                         setShowDrawer(false);
                       }}>
-                      <View style={styles.sessionInfo}>
-                        <Text style={styles.sessionTitle} numberOfLines={1}>
-                          {session.title || 'New conversation'}
+                      <YStack flex={1}>
+                        <Text fontSize={14} fontWeight="500" color="$color" numberOfLines={1}>
+                          {session.name || 'New conversation'}
                         </Text>
-                        <Text style={styles.sessionMeta}>
+                        <Text fontSize={12} color="$color10">
                           {session.message_count || 0} messages
                         </Text>
-                      </View>
-                      <TouchableOpacity
-                        onPress={() => archiveSession(session.id, false)}>
-                        <Text style={styles.sessionUnarchive}>Unarchive</Text>
-                      </TouchableOpacity>
-                    </TouchableOpacity>
+                      </YStack>
+                      <YStack onPress={() => archiveSession(session.id, false)}>
+                        <Text fontSize={12} color="$color9" fontWeight="500">Unarchive</Text>
+                      </YStack>
+                    </XStack>
                   )}
                 />
-              </View>
+              </YStack>
             )}
-          </View>
-        </View>
+          </YStack>
+        </XStack>
       </Modal>
 
       {/* Soul picker */}
       <Modal visible={showSoulPicker} animationType="slide" transparent>
-        <View style={styles.drawerOverlay}>
-          <View style={styles.drawer}>
-            <View style={styles.drawerHeader}>
-              <Text style={styles.drawerTitle}>Personality</Text>
-              <TouchableOpacity onPress={() => setShowSoulPicker(false)}>
-                <Text style={styles.drawerClose}>×</Text>
-              </TouchableOpacity>
-            </View>
+        <XStack flex={1} justifyContent="flex-start">
+          <YStack
+            width="80%" maxWidth={320} maxHeight="80%"
+            backgroundColor="$background"
+            borderRightWidth={1} borderRightColor="$borderColor">
+            <XStack
+              paddingHorizontal={20} paddingVertical={12}
+              borderBottomWidth={1} borderBottomColor="$borderColor"
+              alignItems="center" justifyContent="space-between">
+              <Text fontSize={16} fontWeight="600" color="$color">Personality</Text>
+              <YStack onPress={() => setShowSoulPicker(false)} pressStyle={{opacity: 0.6}}>
+                <Icon name="x" size={20} color={(theme.color11?.val || '#6B7280')} />
+              </YStack>
+            </XStack>
             {currentSoul && (
-              <View style={styles.activeSoul}>
-                <Text style={styles.activeSoulLabel}>Active</Text>
-                <Text style={styles.activeSoulName}>{currentSoul.name}</Text>
+              <YStack
+                paddingHorizontal={20} paddingVertical={12}
+                borderBottomWidth={1} borderBottomColor="$borderColor"
+                backgroundColor="$color9"
+                opacity={0.06}>
+                <Text fontSize={12} color="$color9" fontWeight="600" marginBottom={2}>Active</Text>
+                <Text fontSize={16} fontWeight="600" color="$color">{currentSoul.name}</Text>
                 {currentSoul.description && (
-                  <Text style={styles.activeSoulDesc}>{currentSoul.description}</Text>
+                  <Text fontSize={11} color="$color10" marginTop={2}>{currentSoul.description}</Text>
                 )}
-              </View>
+              </YStack>
             )}
             <FlatList
               data={souls}
@@ -1038,37 +1186,41 @@ export function ChatScreen() {
               renderItem={({item: soul}) => {
                 const isActive = currentSoul?.name === soul.name;
                 return (
-                  <TouchableOpacity
-                    style={[styles.sessionItem, isActive && styles.sessionItemActive]}
+                  <XStack
+                    paddingHorizontal={20} paddingVertical={12}
+                    borderBottomWidth={1} borderBottomColor="$borderColor"
+                    alignItems="center" justifyContent="space-between"
+                    backgroundColor={isActive ? '$color9' : '$background'}
+                    opacity={isActive ? 0.08 : 1}
                     onPress={() => {
                       switchSoul(soul.name);
                       setShowSoulPicker(false);
                     }}>
-                    <View style={styles.sessionInfo}>
-                      <Text style={styles.sessionTitle}>{soul.name}</Text>
+                    <YStack flex={1}>
+                      <Text fontSize={14} fontWeight="500" color="$color">{soul.name}</Text>
                       {soul.description && (
-                        <Text style={styles.sessionMeta} numberOfLines={1}>
+                        <Text fontSize={12} color="$color10" numberOfLines={1}>
                           {soul.description}
                         </Text>
                       )}
                       {soul.traits && soul.traits.length > 0 && (
-                        <View style={styles.traitRow}>
+                        <XStack flexWrap="wrap" gap={4} marginTop={4}>
                           {soul.traits.map(trait => (
                             <StatusBadge key={trait} label={trait} variant="info" />
                           ))}
-                        </View>
+                        </XStack>
                       )}
-                    </View>
-                    {isActive && <Text style={styles.checkMark}>✓</Text>}
-                  </TouchableOpacity>
+                    </YStack>
+                    {isActive && <Icon name="check" size={16} color={'#22C55E'} />}
+                  </XStack>
                 );
               }}
               ListEmptyComponent={
-                <Text style={styles.drawerEmpty}>No personalities found</Text>
+                <Text fontSize={11} color="$color10" textAlign="center" padding={36}>No personalities found</Text>
               }
             />
-          </View>
-        </View>
+          </YStack>
+        </XStack>
       </Modal>
 
       <SearchSessionsModal
@@ -1079,701 +1231,3 @@ export function ChatScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  flex: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  menuBtn: {
-    fontSize: 20,
-    color: colors.textSecondary,
-    padding: spacing.xs,
-  },
-  title: {
-    ...typography.h3,
-    color: colors.text,
-  },
-  soulPill: {
-    backgroundColor: colors.primaryLight + '30',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radii.full,
-  },
-  soulText: {
-    ...typography.small,
-    color: colors.primary,
-  },
-  enginePill: {
-    paddingHorizontal: spacing.xs + 2,
-    paddingVertical: 1,
-    borderRadius: radii.sm,
-  },
-  enginePillLocal: {
-    backgroundColor: colors.success + '20',
-  },
-  enginePillAccent: {
-    backgroundColor: colors.accent + '20',
-  },
-  enginePillRemote: {
-    backgroundColor: colors.primary + '20',
-  },
-  enginePillText: {
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-    color: colors.textSecondary,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  exportBtn: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  exportBtnText: {
-    ...typography.small,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  newChatBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary + '15',
-  },
-  newChatText: {
-    ...typography.small,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  infoBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  infoBtnText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  infoOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  infoCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    padding: spacing.lg,
-    width: '100%',
-    maxWidth: 300,
-  },
-  infoTitle: {
-    ...typography.h2,
-    color: colors.text,
-    marginBottom: spacing.md,
-    textAlign: 'center',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  infoLabel: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-  infoValue: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '500',
-    maxWidth: '60%',
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: radii.full,
-  },
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FDE8E8',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-  },
-  errorText: {
-    ...typography.caption,
-    color: colors.error,
-    flex: 1,
-  },
-  errorDismiss: {
-    ...typography.body,
-    color: colors.error,
-    fontWeight: '600',
-    marginLeft: spacing.sm,
-  },
-  offlineBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFF3CD',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-  },
-  offlineText: {
-    ...typography.caption,
-    color: '#856404',
-    fontWeight: '600',
-  },
-  offlineRetry: {
-    ...typography.small,
-    color: '#856404',
-    textDecorationLine: 'underline',
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    gap: spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    ...typography.body,
-    color: colors.text,
-    backgroundColor: colors.background,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  searchClear: {
-    fontSize: 18,
-    color: colors.textMuted,
-    padding: spacing.xs,
-  },
-  messageList: {
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  thinkingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xs,
-    gap: spacing.xs,
-  },
-  thinkingText: {
-    ...typography.caption,
-    color: colors.textMuted,
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xxxl,
-  },
-  emptyIllustration: {
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  emptyEmoji: {
-    fontSize: 56,
-    marginBottom: spacing.sm,
-  },
-  emptyDotRow: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  emptyDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.primary,
-  },
-  emptyTitle: {
-    ...typography.h2,
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  emptySubtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: spacing.xxl,
-  },
-  emptyHint: {
-    ...typography.small,
-    color: colors.textMuted,
-    marginTop: spacing.xxl,
-    textAlign: 'center',
-  },
-  suggestions: {
-    gap: spacing.sm,
-    alignItems: 'center',
-  },
-  suggestionChip: {
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  suggestionText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-  },
-  selectToolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  selectToolbarBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  selectToolbarText: {
-    ...typography.body,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  selectToolbarCount: {
-    ...typography.small,
-    color: colors.textMuted,
-  },
-  selectToolbarDelete: {},
-  replyBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.primary,
-  },
-  replyBarContent: {
-    flex: 1,
-    marginRight: spacing.xs,
-  },
-  replyBarLabel: {
-    ...typography.small,
-    color: colors.primary,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  replyBarText: {
-    ...typography.small,
-    color: colors.textMuted,
-  },
-  replyBarClose: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  replyBarCloseText: {
-    color: colors.textMuted,
-    fontSize: 12,
-  },
-  forwardModal: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    margin: spacing.xl,
-    maxHeight: '60%',
-    overflow: 'hidden',
-  },
-  forwardTitle: {
-    ...typography.body,
-    fontWeight: '700',
-    padding: spacing.md,
-    paddingBottom: spacing.xs,
-  },
-  forwardPreview: {
-    ...typography.small,
-    color: colors.textMuted,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  forwardSessionItem: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  forwardSessionTitle: {
-    ...typography.body,
-    fontWeight: '500',
-  },
-  forwardSessionMeta: {
-    ...typography.small,
-    color: colors.textMuted,
-  },
-  forwardCancel: {
-    padding: spacing.md,
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  forwardCancelText: {
-    ...typography.body,
-    color: colors.textMuted,
-  },
-  jumpBtn: {
-    position: 'absolute',
-    right: spacing.lg,
-    bottom: 80,
-    width: 36,
-    height: 36,
-    borderRadius: radii.full,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  jumpText: {
-    color: colors.white,
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  // Drawer
-  drawerOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-start',
-  },
-  drawer: {
-    width: '80%',
-    maxWidth: 320,
-    maxHeight: '80%',
-    backgroundColor: colors.background,
-    borderBottomRightRadius: radii.lg,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 4},
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  drawerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  drawerTitle: {
-    ...typography.h3,
-    color: colors.text,
-  },
-  drawerClose: {
-    fontSize: 24,
-    color: colors.textMuted,
-    padding: spacing.xs,
-  },
-  sessionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  sessionItemActive: {
-    backgroundColor: colors.primary + '10',
-  },
-  sessionInfo: {flex: 1},
-  sessionTitle: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  sessionMeta: {
-    ...typography.small,
-    color: colors.textMuted,
-  },
-  sessionDelete: {
-    fontSize: 18,
-    color: colors.textMuted,
-    padding: spacing.xs,
-  },
-  checkMark: {
-    fontSize: 16,
-    color: colors.primary,
-    fontWeight: '700',
-    padding: spacing.xs,
-  },
-  drawerEmpty: {
-    ...typography.caption,
-    color: colors.textMuted,
-    textAlign: 'center',
-    padding: spacing.xxxl,
-  },
-  activeSoul: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.primary + '08',
-  },
-  activeSoulLabel: {
-    ...typography.small,
-    color: colors.primary,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  activeSoulName: {
-    ...typography.h3,
-    color: colors.text,
-  },
-  activeSoulDesc: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  traitRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 4,
-    marginTop: 4,
-  },
-  sessionArchive: {
-    fontSize: 16,
-    padding: spacing.xs,
-  },
-  sessionUnarchive: {
-    fontSize: 12,
-    color: colors.primary,
-    fontWeight: '500',
-    padding: spacing.xs,
-  },
-  archivedToggle: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  archivedToggleText: {
-    ...typography.small,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  archivedHeader: {
-    ...typography.small,
-    color: colors.textMuted,
-    fontWeight: '600',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  archivedItem: {
-    opacity: 0.8,
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  pinnedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.primary + '10',
-    borderTopWidth: 1,
-    borderTopColor: colors.primary + '30',
-  },
-  pinnedBannerIcon: {
-    fontSize: 14,
-  },
-  pinnedBannerText: {
-    ...typography.small,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  starBtn: {
-    fontSize: 18,
-    color: '#f5a623',
-    padding: spacing.xs,
-  },
-  starIndicator: {
-    fontSize: 14,
-    color: '#f5a623',
-  },
-  flatListContainer: {
-    flex: 1,
-  },
-  labelFilterRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  labelFilterChip: {
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radii.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  labelFilterChipActive: {
-    backgroundColor: colors.primary + '20',
-    borderColor: colors.primary,
-  },
-  labelFilterText: {
-    ...typography.small,
-    color: colors.textSecondary,
-    fontSize: 11,
-  },
-  labelFilterTextActive: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  labelChipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  labelChip: {
-    backgroundColor: colors.primary + '15',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radii.full,
-  },
-  labelChipText: {
-    ...typography.small,
-    color: colors.primary,
-    fontSize: 11,
-  },
-  labelAddRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  labelInput: {
-    flex: 1,
-    ...typography.small,
-    color: colors.text,
-    backgroundColor: colors.background,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  drawerLabelRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 3,
-    marginTop: 3,
-  },
-  drawerLabelChip: {
-    backgroundColor: colors.primary + '15',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: radii.full,
-  },
-  drawerLabelText: {
-    fontSize: 10,
-    color: colors.primary,
-  },
-  bgSection: {
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  bgSectionLabel: {
-    ...typography.small,
-    color: colors.textSecondary,
-    fontWeight: '600',
-    marginBottom: spacing.sm,
-  },
-  bgSwatchRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  bgSwatch: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  bgSwatchDefault: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-  },
-  bgSwatchActive: {
-    borderColor: colors.primary,
-  },
-  bgSwatchCheck: {
-    fontSize: 14,
-    color: '#fff',
-    fontWeight: '700',
-  },
-  bgSwatchCheckLight: {
-    color: '#fff',
-  },
-});

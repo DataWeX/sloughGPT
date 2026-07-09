@@ -40,7 +40,9 @@ class TestCompanionInfo:
         mock_get.return_value = _mock_companion()
         resp = client.get("/companion/")
         assert resp.status_code == 200
-        data = resp.json()
+        body = resp.json()
+        assert body["status"] == "success"
+        data = body["data"]
         assert "name" in data
         assert "traits" in data
         assert data["name"] == "Friend"
@@ -63,7 +65,9 @@ class TestSetPersonality:
             "humor": 0.5,
         })
         assert resp.status_code == 200
-        data = resp.json()
+        body = resp.json()
+        assert body["status"] == "success"
+        data = body["data"]
         assert data["status"] == "ok"
         assert "traits" in data
         comp.set_personality.assert_called_once_with(
@@ -96,7 +100,9 @@ class TestPreset:
 
         resp = client.post("/companion/preset", json={"name": "Buddy", "preset": "playful"})
         assert resp.status_code == 200
-        data = resp.json()
+        body = resp.json()
+        assert body["status"] == "success"
+        data = body["data"]
         assert data["status"] == "ok"
         assert data["preset"] == "playful"
         assert "traits" in data
@@ -113,7 +119,8 @@ class TestPrompt:
 
         resp = client.get("/companion/prompt")
         assert resp.status_code == 200
-        data = resp.json()
+        body = resp.json()
+        data = body["data"]
         assert "system_prompt" in data
         assert data["system_prompt"] == "You are a warm friend."
 
@@ -164,7 +171,8 @@ class TestListPresets:
     def test_list_presets(self):
         resp = client.get("/companion/presets")
         assert resp.status_code == 200
-        data = resp.json()
+        body = resp.json()
+        data = body["data"]
         assert "presets" in data
         assert len(data["presets"]) == 4
         ids = [p["id"] for p in data["presets"]]

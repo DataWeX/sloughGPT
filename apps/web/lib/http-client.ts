@@ -95,7 +95,17 @@ async function request<T>(
 
       const text = await res.text()
       if (!text) return undefined as T
-      return JSON.parse(text) as T
+      const json = JSON.parse(text)
+      // Unwrap StandardResponse envelope: {status, data, message, meta} → data
+      if (json && typeof json === 'object' && 'status' in json && 'data' in json) {
+        // Attach meta as non-enumerable so callers can access it if needed
+        const result = json.data as T
+        if (json.meta && typeof result === 'object' && result !== null) {
+          Object.defineProperty(result, '_meta', {value: json.meta, enumerable: false})
+        }
+        return result
+      }
+      return json as T
     } catch (e: any) {
       if (timer) clearTimeout(timer)
       if (e instanceof ApiError) throw e

@@ -4,6 +4,7 @@ Feedback Router - MVC View layer
 from fastapi import APIRouter, HTTPException, Request
 
 from schemas.feedback import FeedbackRequest, FeedbackResponse, FeedbackStats, ConversationCreate, ConversationUpdate, ConversationResponse
+from schemas.common import success_response, error_response
 from controllers.feedback import get_feedback_controller
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
@@ -23,11 +24,10 @@ async def record_feedback_workflow(req: Request):
         user_message=body.get("user_message"),
         assistant_response=body.get("assistant_response"),
     )
-    return {
-        "status": "recorded",
+    return success_response(data={
         "feedback_id": feedback.get("feedback_id", ""),
         "workflow_active": True,
-    }
+    }, message="recorded")
 
 
 @router.post("", response_model=FeedbackResponse)

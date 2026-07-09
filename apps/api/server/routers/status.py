@@ -4,6 +4,8 @@ Status Router - Overall service health and info
 from fastapi import APIRouter
 from datetime import datetime
 
+from schemas.common import success_response
+
 router = APIRouter(tags=["status"])
 
 _start_time = datetime.now()
@@ -16,20 +18,20 @@ async def get_status():
 
     uptime = (datetime.now() - _start_time).total_seconds()
 
-    return {
+    return success_response(data={
         "status": "healthy",
         "uptime_seconds": uptime,
         "timestamp": datetime.now().isoformat(),
-    }
+    })
 
 
 @router.get("/ready")
 async def ready():
     """Readiness check"""
-    return {"ready": True}
+    return success_response(data={"ready": True})
 
 
 @router.get("/live")
 async def live():
     """Liveness check"""
-    return {"alive": True}
+    return success_response(data={"alive": True})

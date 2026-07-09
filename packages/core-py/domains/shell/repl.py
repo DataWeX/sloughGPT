@@ -2175,8 +2175,7 @@ Examples:
                     self._last_exit_code = 1
                     continue
                 if recursive and os.path.isdir(path):
-                    import shutil as _sh
-                    _sh.rmtree(path)
+                    shutil.rmtree(path)
                 else:
                     os.remove(path)
             except FileNotFoundError:
@@ -2201,14 +2200,12 @@ Examples:
         try:
             if os.path.isdir(src):
                 if recursive:
-                    import shutil as _sh
-                    _sh.copytree(src, dst, dirs_exist_ok=True)
+                    shutil.copytree(src, dst, dirs_exist_ok=True)
                 else:
                     self._print(f"  cp: omitting directory '{targets[0]}'")
                     self._last_exit_code = 1
             else:
-                import shutil as _sh
-                _sh.copy2(src, dst)
+                shutil.copy2(src, dst)
         except FileNotFoundError:
             self._print(f"  cp: cannot stat '{targets[0]}': No such file or directory")
             self._last_exit_code = 1
@@ -2229,8 +2226,7 @@ Examples:
             return
         src, dst = os.path.expanduser(targets[0]), os.path.expanduser(targets[1])
         try:
-            import shutil as _sh
-            _sh.move(src, dst)
+            shutil.move(src, dst)
         except FileNotFoundError:
             self._print(f"  mv: cannot stat '{targets[0]}': No such file or directory")
             self._last_exit_code = 1
@@ -2373,7 +2369,6 @@ Examples:
             else:
                 path = parts[i]
                 i += 1
-        import fnmatch
         root = os.path.expanduser(path)
         if not os.path.isdir(root):
             self._print(f"  find: '{path}': No such directory")
@@ -2697,8 +2692,7 @@ Examples:
             self._last_exit_code = 1
             return
         try:
-            import subprocess as _sp
-            p = _sp.Popen(["pbcopy"], stdin=_sp.PIPE)
+            p = subprocess.Popen(["pbcopy"], stdin=subprocess.PIPE)
             p.communicate(data.encode("utf-8"))
             self._print(f"  Copied {len(data)} chars to clipboard")
         except Exception as e:
@@ -2708,8 +2702,7 @@ Examples:
     def _cmd_pbpaste(self, args: str = "") -> None:
         """Paste from macOS clipboard (like pbpaste)."""
         try:
-            import subprocess as _sp
-            p = _sp.run(["pbpaste"], capture_output=True)
+            p = subprocess.run(["pbpaste"], capture_output=True)
             self._print(p.stdout.decode("utf-8").rstrip())
         except Exception as e:
             self._print(f"  pbpaste: {e}")

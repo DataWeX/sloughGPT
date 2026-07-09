@@ -1,12 +1,12 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
-import { systemController, type DetailedHealth, type SystemMetrics, type SystemInfo, type DiskUsage, type GPUInfo } from '@/lib/system-controller'
+import { systemController, type DetailedHealth, type SystemMetrics, type SystemInfo, type DiskUsage, type GPUInfo, type OutputLine as OutputLineType } from '@/lib/system-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { benchmarkController } from '@/lib/benchmark-controller'
 import { multimodalController } from '@/lib/controllers'
@@ -46,7 +46,11 @@ export default function SystemHealthPage() {
   const [activityStatus, setActivityStatus] = useState<ActivityStatus | null>(null)
   const [activityTraining, setActivityTraining] = useState(false)
   const [activityTrainProgress, setActivityTrainProgress] = useState<string | null>(null)
+  const [outputLines, setOutputLines] = useState<OutputLineType[]>([])
+  const [outputStreaming, setOutputStreaming] = useState(false)
+  const outputRef = useRef<HTMLDivElement>(null)
   const MAX_HISTORY = 30
+  const MAX_OUTPUT_LINES = 200
   const recentErrors = useErrorStore(s => s.errors)
   const dismissError = useErrorStore(s => s.dismissError)
   const clearErrors = useErrorStore(s => s.clearErrors)

@@ -1,4 +1,4 @@
-import React, {useState, useRef, useEffect} from 'react';
+import React, {useState, useRef, useEffect, useMemo} from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Image,
   Share,
 } from 'react-native';
+import {useTheme} from 'tamagui';
 import {Markdown} from './Markdown';
 import {copyToClipboard} from '../services/clipboard';
 import {triggerHaptic} from '../services/haptics';
@@ -20,8 +21,8 @@ import {addBookmark, removeBookmark, isBookmarked} from '../services/bookmarks';
 import {pinMessage, unpinMessage, isPinned} from '../services/pins';
 import {getMessageReactions, toggleReaction, REACTION_EMOJIS, type ReactionEmoji} from '../services/reactions';
 import {toast} from '../services/toast';
-import {colors, spacing, radii, typography} from '../theme';
 import {AudioPlayer} from './AudioPlayer';
+import {Icon, type IconName} from './Icon';
 import type {Message} from '../types';
 
 function formatTime(ts: number): string {
@@ -36,8 +37,18 @@ function formatTime(ts: number): string {
 const SWIPE_THRESHOLD = -80;
 const DELETE_WIDTH = 72;
 
+// Spacing/radii/typography constants (previously from theme, now inline)
+const S = {xs: 4, sm: 8, md: 12, lg: 16, xl: 20};
+const R = {sm: 6, md: 8, lg: 12, xl: 16, full: 9999};
+const T = {body: {fontSize: 15, lineHeight: 22, letterSpacing: 0.2}, small: {fontSize: 11, lineHeight: 16, letterSpacing: 0.2}};
+const COL = {
+  white: '#FFFFFF',
+  error: '#EF4444',
+  overlay: 'rgba(0,0,0,0.4)',
+};
+
 interface ContextAction {
-  icon: string;
+  icon: IconName;
   label: string;
   destructive?: boolean;
   onPress: () => void;
@@ -61,6 +72,231 @@ interface Props {
 }
 
 export function MessageBubble({message, sessionId, highlight, onRegenerate, onFeedback, onDelete, onRetry, onEdit, onReply, onForward, selectMode, selected, onSelect, onLongPressSelect}: Props) {
+  const theme = useTheme();
+  const bg = theme.background?.val || '#FFFFFF';
+  const border = theme.borderColor?.val || '#E5E7EB';
+  const textColor = theme.color?.val || '#111827';
+  const textMuted = theme.color10?.val || '#9CA3AF';
+  const primary = theme.color9?.val || '#007AFF';
+
+  const styles = useMemo(() => StyleSheet.create({
+    row: {
+      paddingHorizontal: S.lg,
+      marginBottom: S.sm,
+      alignItems: 'flex-start',
+      overflow: 'visible',
+    },
+    rowUser: {
+      alignItems: 'flex-end',
+    },
+    deleteContainer: {
+      position: 'absolute',
+      right: S.lg,
+      top: 0,
+      bottom: 0,
+      justifyContent: 'center',
+      width: DELETE_WIDTH,
+      alignItems: 'center',
+    },
+    deleteBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: COL.error,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    selectCheckbox: {
+      width: 32,
+      height: 32,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: S.xs,
+    },
+    checkbox: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      borderWidth: 2,
+      borderColor: border,
+      backgroundColor: bg,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    checkboxSelected: {
+      backgroundColor: primary,
+      borderColor: primary,
+    },
+    swipeable: {
+      maxWidth: '80%',
+    },
+    bubble: {
+      paddingHorizontal: S.md,
+      paddingVertical: S.sm + 2,
+      borderRadius: R.lg,
+    },
+    highlight: {
+      borderWidth: 2,
+      borderColor: primary + '60',
+    },
+    userBubble: {
+      backgroundColor: primary,
+      borderBottomRightRadius: R.sm,
+    },
+    assistantBubble: {
+      backgroundColor: bg,
+      borderBottomLeftRadius: R.sm,
+    },
+    pinnedBubble: {
+      borderWidth: 1,
+      borderColor: primary + '40',
+    },
+    userText: {
+      color: COL.white,
+    },
+    assistantText: {
+      color: textColor,
+    },
+    imageContainer: {
+      marginBottom: S.xs,
+      gap: S.xs,
+    },
+    messageImage: {
+      width: 200,
+      height: 150,
+      borderRadius: R.md,
+    },
+    timestamp: {
+      ...T.small,
+      color: textMuted,
+      marginTop: 2,
+      paddingHorizontal: S.md,
+    },
+    readTime: {
+      color: textMuted,
+      opacity: 0.7,
+    },
+    timestampRow: {
+      marginTop: 2,
+      paddingHorizontal: S.md,
+    },
+    timestampUser: {
+      textAlign: 'right',
+    },
+    timestampRowUser: {
+      alignItems: 'flex-end',
+    },
+    reactionRow: {
+      flexDirection: 'row',
+      gap: 4,
+      marginTop: 4,
+      paddingHorizontal: S.md,
+      flexWrap: 'wrap',
+    },
+    reactionRowUser: {
+      justifyContent: 'flex-end',
+    },
+    reactionBadge: {
+      backgroundColor: primary + '20',
+      borderRadius: R.full,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+    },
+    reactionEmoji: {
+      fontSize: 16,
+    },
+    reactionPicker: {
+      flexDirection: 'row',
+      gap: 4,
+      marginTop: 6,
+      paddingHorizontal: S.md,
+      flexWrap: 'wrap',
+      alignItems: 'center',
+    },
+    reactionPickerUser: {
+      justifyContent: 'flex-end',
+    },
+    reactionOption: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: bg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: border,
+    },
+    reactionOptionActive: {
+      backgroundColor: primary + '20',
+      borderColor: primary,
+    },
+    reactionOptionText: {
+      fontSize: 18,
+    },
+    reactionClose: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: bg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginLeft: 4,
+    },
+    overlay: {
+      flex: 1,
+      backgroundColor: COL.overlay,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 24,
+    },
+    contextMenu: {
+      backgroundColor: bg,
+      borderRadius: R.lg,
+      width: '100%',
+      maxWidth: 280,
+      overflow: 'hidden',
+      shadowColor: '#000',
+      shadowOffset: {width: 0, height: 8},
+      shadowOpacity: 0.2,
+      shadowRadius: 16,
+      elevation: 8,
+    },
+    contextMenuUser: {
+      alignItems: 'flex-end',
+    },
+    contextPreview: {
+      paddingHorizontal: 16,
+      paddingTop: 14,
+      paddingBottom: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: border,
+    },
+    contextPreviewText: {
+      ...T.small,
+      color: textMuted,
+      lineHeight: 18,
+    },
+    contextAction: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 13,
+      gap: 12,
+    },
+    contextActionDestructive: {
+      borderTopWidth: 1,
+      borderTopColor: border,
+    },
+    contextLabel: {
+      ...T.body,
+      color: textColor,
+      fontSize: 15,
+    },
+    contextLabelDestructive: {
+      color: COL.error,
+    },
+  }), [bg, border, textColor, textMuted, primary]);
+
   const isUser = message.role === 'user';
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
@@ -182,32 +418,32 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
   };
 
   const contextActions: ContextAction[] = [
-    {icon: '📋', label: 'Copy', onPress: handleCopy},
-    {icon: '↗', label: 'Share', onPress: async () => {
+    {icon: 'copy', label: 'Copy', onPress: handleCopy},
+    {icon: 'external-link', label: 'Share', onPress: async () => {
       setShowContextMenu(false);
       await Share.share({message: message.content});
     }},
-    ...(onReply ? [{icon: '↩', label: 'Reply', onPress: () => {
+    ...(onReply ? [{icon: 'reply' as IconName, label: 'Reply', onPress: () => {
       setShowContextMenu(false);
       onReply();
     }}] : []),
-    ...(onForward ? [{icon: '↪', label: 'Forward', onPress: () => {
+    ...(onForward ? [{icon: 'forward' as IconName, label: 'Forward', onPress: () => {
       setShowContextMenu(false);
       onForward();
     }}] : []),
-    ...(isUser && onEdit ? [{icon: '✏️', label: 'Edit', onPress: () => {
+    ...(isUser && onEdit ? [{icon: 'edit' as IconName, label: 'Edit', onPress: () => {
       setShowContextMenu(false);
       onEdit(message.content);
     }}] : []),
-    {icon: pinned ? '📌' : '📍', label: pinned ? 'Unpin' : 'Pin', onPress: handleTogglePin},
-    {icon: bookmarked ? '★' : '☆', label: bookmarked ? 'Remove bookmark' : 'Bookmark', onPress: handleToggleBookmark},
-    {icon: '😊', label: 'React', onPress: () => { setShowContextMenu(false); setShowReactionPicker(true); }},
+    {icon: (pinned ? 'pin' as IconName : 'pin-off' as IconName), label: pinned ? 'Unpin' : 'Pin', onPress: handleTogglePin},
+    {icon: (bookmarked ? 'star' as IconName : 'star-outline' as IconName), label: bookmarked ? 'Remove bookmark' : 'Bookmark', onPress: handleToggleBookmark},
+    {icon: 'smile-plus' as IconName, label: 'React', onPress: () => { setShowContextMenu(false); setShowReactionPicker(true); }},
     ...(isUser ? [] : [
-      {icon: '👍', label: 'Good response', onPress: () => { setShowContextMenu(false); onFeedback?.(true); }},
-      {icon: '👎', label: 'Bad response', onPress: () => { setShowContextMenu(false); onFeedback?.(false); }},
-      {icon: '↻', label: 'Regenerate', onPress: () => { setShowContextMenu(false); onRegenerate?.(); }},
+      {icon: 'thumbs-up' as IconName, label: 'Good response', onPress: () => { setShowContextMenu(false); onFeedback?.(true); }},
+      {icon: 'thumbs-down' as IconName, label: 'Bad response', onPress: () => { setShowContextMenu(false); onFeedback?.(false); }},
+      {icon: 'refresh-cw' as IconName, label: 'Regenerate', onPress: () => { setShowContextMenu(false); onRegenerate?.(); }},
     ]),
-    {icon: '🗑', label: 'Delete', destructive: true, onPress: handleDelete},
+    {icon: 'trash-2' as IconName, label: 'Delete', destructive: true, onPress: handleDelete},
   ];
 
   const lastTap = useRef<number>(0);
@@ -215,7 +451,6 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
   const handleDoubleTap = () => {
     const now = Date.now();
     if (now - lastTap.current < 300) {
-      // Double tap — copy
       copyToClipboard(message.content).then(ok => {
         if (ok) {
           triggerHaptic('success');
@@ -228,26 +463,23 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
 
   return (
     <Animated.View style={[styles.row, isUser && styles.rowUser, {opacity, transform: [{translateY}]}]}>
-      {/* Selection checkbox */}
       {selectMode && (
         <TouchableOpacity
           style={styles.selectCheckbox}
           onPress={onSelect}
           activeOpacity={0.7}>
           <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
-            {selected && <Text style={styles.checkmark}>✓</Text>}
+            {selected && <Icon name="check" size={12} color="white" />}
           </View>
         </TouchableOpacity>
       )}
 
-      {/* Delete button behind the bubble */}
       <View style={styles.deleteContainer}>
         <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete} activeOpacity={0.7}>
-          <Text style={styles.deleteIcon}>🗑</Text>
+          <Icon name="trash-2" size={16} color="white" />
         </TouchableOpacity>
       </View>
 
-      {/* Swipeable bubble */}
       <Animated.View
         style={[styles.swipeable, {transform: [{translateX}]}]}
         {...panResponder.panHandlers}>
@@ -257,7 +489,7 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
           onLongPress={selectMode ? onSelect : (onLongPressSelect || handleLongPress)}
           activeOpacity={0.8}>
           {pinned && (
-            <Text style={styles.pinBadge}>📌</Text>
+            <Icon name="pin" size={12} color={primary} />
           )}
           {message.images && message.images.length > 0 && (
             <View style={styles.imageContainer}>
@@ -299,7 +531,6 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
         </Text>
       </TouchableOpacity>
 
-      {/* Reaction display */}
       {reactions.length > 0 && (
         <View style={[styles.reactionRow, isUser && styles.reactionRowUser]}>
           {reactions.map((emoji, i) => (
@@ -314,7 +545,6 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
         </View>
       )}
 
-      {/* Reaction picker */}
       {showReactionPicker && (
         <View style={[styles.reactionPicker, isUser && styles.reactionPickerUser]}>
           {REACTION_EMOJIS.map(emoji => (
@@ -328,12 +558,11 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
           <TouchableOpacity
             style={styles.reactionClose}
             onPress={() => setShowReactionPicker(false)}>
-            <Text style={styles.reactionCloseText}>✕</Text>
+            <Icon name="x" size={14} color={textMuted} />
           </TouchableOpacity>
         </View>
       )}
 
-      {/* Context Menu Modal */}
       <Modal
         visible={showContextMenu}
         transparent
@@ -341,21 +570,19 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
         onRequestClose={() => setShowContextMenu(false)}>
         <Pressable style={styles.overlay} onPress={() => setShowContextMenu(false)}>
           <View style={[styles.contextMenu, isUser && styles.contextMenuUser]}>
-            {/* Preview */}
             <View style={styles.contextPreview}>
               <Text style={styles.contextPreviewText} numberOfLines={2}>
                 {message.content || 'Thinking...'}
               </Text>
             </View>
 
-            {/* Actions */}
             {contextActions.map((action, i) => (
               <TouchableOpacity
                 key={i}
                 style={[styles.contextAction, action.destructive && styles.contextActionDestructive]}
                 onPress={action.onPress}
                 activeOpacity={0.6}>
-                <Text style={styles.contextIcon}>{action.icon}</Text>
+                <Icon name={action.icon} size={18} color={textColor} />
                 <Text style={[styles.contextLabel, action.destructive && styles.contextLabelDestructive]}>
                   {action.label}
                 </Text>
@@ -367,243 +594,3 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
     </Animated.View>
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-    alignItems: 'flex-start',
-    overflow: 'visible',
-  },
-  rowUser: {
-    alignItems: 'flex-end',
-  },
-  deleteContainer: {
-    position: 'absolute',
-    right: spacing.lg,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    width: DELETE_WIDTH,
-    alignItems: 'center',
-  },
-  deleteBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.error,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteIcon: {
-    fontSize: 16,
-  },
-  selectCheckbox: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.xs,
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkboxSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  checkmark: {
-    color: colors.white,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  swipeable: {
-    maxWidth: '80%',
-  },
-  bubble: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.lg,
-  },
-  highlight: {
-    borderWidth: 2,
-    borderColor: colors.primary + '60',
-  },
-  userBubble: {
-    backgroundColor: colors.primary,
-    borderBottomRightRadius: radii.sm,
-  },
-  assistantBubble: {
-    backgroundColor: colors.surface,
-    borderBottomLeftRadius: radii.sm,
-  },
-  pinnedBubble: {
-    borderWidth: 1,
-    borderColor: colors.primary + '40',
-  },
-  pinBadge: {
-    fontSize: 12,
-    marginBottom: spacing.xs,
-  },
-  userText: {
-    color: colors.white,
-  },
-  assistantText: {
-    color: colors.text,
-  },
-  imageContainer: {
-    marginBottom: spacing.xs,
-    gap: spacing.xs,
-  },
-  messageImage: {
-    width: 200,
-    height: 150,
-    borderRadius: radii.md,
-  },
-  timestamp: {
-    ...typography.small,
-    color: colors.textMuted,
-    marginTop: 2,
-    paddingHorizontal: spacing.md,
-  },
-  readTime: {
-    color: colors.textMuted,
-    opacity: 0.7,
-  },
-  timestampUser: {
-    textAlign: 'right',
-  },
-  timestampRow: {
-    marginTop: 2,
-    paddingHorizontal: spacing.md,
-  },
-  timestampRowUser: {
-    alignItems: 'flex-end',
-  },
-  reactionRow: {
-    flexDirection: 'row',
-    gap: 4,
-    marginTop: 4,
-    paddingHorizontal: spacing.md,
-    flexWrap: 'wrap',
-  },
-  reactionRowUser: {
-    justifyContent: 'flex-end',
-  },
-  reactionBadge: {
-    backgroundColor: colors.primary + '20',
-    borderRadius: radii.full,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  reactionEmoji: {
-    fontSize: 16,
-  },
-  reactionPicker: {
-    flexDirection: 'row',
-    gap: 4,
-    marginTop: 6,
-    paddingHorizontal: spacing.md,
-    flexWrap: 'wrap',
-    alignItems: 'center',
-  },
-  reactionPickerUser: {
-    justifyContent: 'flex-end',
-  },
-  reactionOption: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  reactionOptionActive: {
-    backgroundColor: colors.primary + '20',
-    borderColor: colors.primary,
-  },
-  reactionOptionText: {
-    fontSize: 18,
-  },
-  reactionClose: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 4,
-  },
-  reactionCloseText: {
-    fontSize: 14,
-    color: colors.textMuted,
-  },
-  // Context menu
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  contextMenu: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    width: '100%',
-    maxWidth: 280,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 8},
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  contextMenuUser: {
-    alignItems: 'flex-end',
-  },
-  contextPreview: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  contextPreviewText: {
-    ...typography.small,
-    color: colors.textMuted,
-    lineHeight: 18,
-  },
-  contextAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-    gap: 12,
-  },
-  contextActionDestructive: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  contextIcon: {
-    fontSize: 18,
-    width: 28,
-    textAlign: 'center',
-  },
-  contextLabel: {
-    ...typography.body,
-    color: colors.text,
-    fontSize: 15,
-  },
-  contextLabelDestructive: {
-    color: colors.error,
-  },
-});

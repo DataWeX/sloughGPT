@@ -64,7 +64,7 @@ describe('setActiveEngine', () => {
     expect(useHybridStore.getState().activeEngine).toBe('qwen');
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(
       '@sloughgpt/hybrid_config',
-      JSON.stringify({activeEngine: 'qwen'}),
+      JSON.stringify({activeEngine: 'qwen', offlineOnly: false}),
     );
   });
 });

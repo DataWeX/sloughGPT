@@ -5,33 +5,31 @@
 
 import React, {useState, useRef} from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
   Animated,
   PanResponder,
   Dimensions,
+  TouchableOpacity,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {YStack, XStack, Text} from 'tamagui';
 import {triggerHaptic} from '../services/haptics';
-import {colors, radii, typography} from '../theme';
+import {Icon, type IconName} from '../components/Icon';
 
 const {width: SCREEN_W} = Dimensions.get('window');
 
-const STEPS = [
+const STEPS: {icon: IconName; title: string; desc: string}[] = [
   {
-    icon: '💬',
+    icon: 'message-circle',
     title: 'Chat with AI',
     desc: 'Send messages and get streaming responses. Swipe left on any message to delete it.',
   },
   {
-    icon: '🧠',
+    icon: 'brain',
     title: 'Switch Personalities',
     desc: 'Choose different AI souls in Models — each has a unique personality and style.',
   },
   {
-    icon: '🏋️',
+    icon: 'zap',
     title: 'Train Your Own',
     desc: 'Auto-train custom models from text or datasets. Track progress with live loss charts.',
   },
@@ -101,124 +99,71 @@ export function OnboardingScreen({onComplete}: Props) {
   };
 
   return (
-    <View style={styles.container}>
-      {/* Skip */}
-      <TouchableOpacity style={styles.skipBtn} onPress={handleSkip}>
-        <Text style={styles.skipText}>Skip</Text>
+    <YStack flex={1} backgroundColor="#F5F0FF">
+      <TouchableOpacity
+        style={{position: 'absolute', top: 56, right: 20, zIndex: 10, padding: 8}}
+        onPress={handleSkip}>
+        <Text fontSize={14} color="$color10">Skip</Text>
       </TouchableOpacity>
 
-      {/* Cards */}
-      <View style={styles.cardsWrap}>
+      <YStack flex={1} overflow="hidden">
         <Animated.View
-          style={[styles.cardsRow, {transform: [{translateX}]}]}
+          style={{
+            flexDirection: 'row',
+            width: SCREEN_W * STEPS.length,
+            flex: 1,
+            transform: [{translateX}],
+          }}
           {...panResponder.panHandlers}>
           {STEPS.map((s, i) => (
-            <View key={i} style={styles.card}>
-              <Text style={styles.icon}>{s.icon}</Text>
-              <Text style={styles.title}>{s.title}</Text>
-              <Text style={styles.desc}>{s.desc}</Text>
-            </View>
+            <YStack
+              key={i}
+              width={SCREEN_W}
+              flex={1}
+              alignItems="center"
+              justifyContent="center"
+              paddingHorizontal={40}>
+              <YStack marginBottom={24}>
+                <Icon name={s.icon} size={48} color="#7C52C4" />
+              </YStack>
+              <Text fontSize={24} fontWeight="700" color="$color" marginBottom={12} textAlign="center">
+                {s.title}
+              </Text>
+              <Text fontSize={14} color="$color10" textAlign="center" lineHeight={22}>
+                {s.desc}
+              </Text>
+            </YStack>
           ))}
         </Animated.View>
-      </View>
+      </YStack>
 
-      {/* Dots */}
-      <View style={styles.dots}>
+      <XStack justifyContent="center" gap={8} paddingVertical={20}>
         {STEPS.map((_, i) => (
-          <View
+          <YStack
             key={i}
-            style={[styles.dot, i === step && styles.dotActive]}
+            width={i === step ? 24 : 8}
+            height={8}
+            borderRadius={4}
+            backgroundColor={i === step ? '$color9' : '$borderColor'}
           />
         ))}
-      </View>
+      </XStack>
 
-      {/* CTA */}
-      <TouchableOpacity style={styles.cta} onPress={handleNext} activeOpacity={0.8}>
-        <Text style={styles.ctaText}>
+      <TouchableOpacity
+        style={{
+          marginHorizontal: 32,
+          marginBottom: 48,
+          backgroundColor: '#7C52C4',
+          paddingVertical: 16,
+          borderRadius: 8,
+          alignItems: 'center',
+        }}
+        onPress={handleNext}
+        activeOpacity={0.8}>
+        <Text fontSize={16} fontWeight="600" color="white">
           {step < STEPS.length - 1 ? 'Next' : 'Get Started'}
         </Text>
       </TouchableOpacity>
-    </View>
+    </YStack>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  skipBtn: {
-    position: 'absolute',
-    top: 56,
-    right: 20,
-    zIndex: 10,
-    padding: 8,
-  },
-  skipText: {
-    ...typography.body,
-    color: colors.textMuted,
-  },
-  cardsWrap: {
-    flex: 1,
-    overflow: 'hidden',
-  },
-  cardsRow: {
-    flexDirection: 'row',
-    width: SCREEN_W * STEPS.length,
-    flex: 1,
-  },
-  card: {
-    width: SCREEN_W,
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-  },
-  icon: {
-    fontSize: 64,
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  desc: {
-    ...typography.body,
-    color: colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  dots: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 20,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.border,
-  },
-  dotActive: {
-    backgroundColor: colors.primary,
-    width: 24,
-  },
-  cta: {
-    marginHorizontal: 32,
-    marginBottom: 48,
-    backgroundColor: colors.primary,
-    paddingVertical: 16,
-    borderRadius: radii.md,
-    alignItems: 'center',
-  },
-  ctaText: {
-    ...typography.body,
-    color: colors.white,
-    fontWeight: '600',
-    fontSize: 16,
-  },
-});

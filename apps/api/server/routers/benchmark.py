@@ -10,6 +10,8 @@ from fastapi import APIRouter, HTTPException
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
+from schemas.common import success_response
+
 router = APIRouter(prefix="/benchmark", tags=["benchmark"])
 
 
@@ -59,13 +61,13 @@ import time
 @router.post("/run")
 async def run_benchmark(model: str = "gpt2"):
     """Run model benchmark - returns real metrics"""
-    return _get_model_metrics(model)
+    return success_response(data=_get_model_metrics(model))
 
 
 @router.get("/metrics")
 async def get_model_metrics(model: str = "gpt2"):
     """Get real-time model metrics"""
-    return _get_model_metrics(model)
+    return success_response(data=_get_model_metrics(model))
 
 
 @router.post("/perplexity")
@@ -90,12 +92,12 @@ async def calculate_perplexity(text: str = "Sample text for evaluation"):
             loss = outputs.loss.item()
             perplexity = torch.exp(torch.tensor(loss)).item()
 
-        return {
+        return success_response(data={
             "text": text[:30],
             "perplexity": round(perplexity, 2),
             "loss": round(loss, 4),
             "tokens": inputs["input_ids"].shape[1],
-        }
+        })
     except HTTPException:
         raise
     except Exception as e:
@@ -117,7 +119,7 @@ async def get_quality_metrics(
         from domains import get_benchmark_domain
 
         bench = get_benchmark_domain()
-        return bench.evaluate_latest(limit=limit)
+        return success_response(data=bench.evaluate_latest(limit=limit))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -134,7 +136,7 @@ async def get_logged_responses(
         tracker = get_response_tracker()
         responses = tracker.get_responses(limit=limit, model=model)
 
-        return {
+        return success_response(data={
             "responses": [
                 {
                     "timestamp": r.timestamp,
@@ -147,7 +149,7 @@ async def get_logged_responses(
                 for r in responses
             ],
             "count": len(responses),
-        }
+        })
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -158,7 +160,7 @@ async def get_tracker_stats() -> Dict[str, Any]:
         from domains import get_benchmark_domain
 
         bench = get_benchmark_domain()
-        return bench.get_stats()
+        return success_response(data=bench.get_stats())
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -171,7 +173,7 @@ async def clear_history() -> dict:
 
         bench = get_benchmark_domain()
         bench.clear_history()
-        return {"status": "ok", "cleared": True}
+        return success_response(data={"status": "ok", "cleared": True})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

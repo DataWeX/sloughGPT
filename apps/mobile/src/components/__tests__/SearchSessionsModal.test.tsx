@@ -1,5 +1,5 @@
 import React from 'react';
-import {render} from '@testing-library/react-native';
+import {render} from '../../test-utils';
 import {SearchSessionsModal} from '../SearchSessionsModal';
 
 jest.mock('../../services/api-client', () => ({

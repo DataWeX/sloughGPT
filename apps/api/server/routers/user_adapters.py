@@ -5,6 +5,8 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional
 
+from schemas.common import success_response
+
 router = APIRouter(prefix="/user-adapters", tags=["user-adapters"])
 
 
@@ -27,7 +29,7 @@ async def list_adapters():
         store = get_per_user_lora()
         adapters = store.get_all_adapters()
         stats = store.get_stats()
-        return {"adapters": adapters, "stats": stats}
+        return success_response(data={"adapters": adapters, "stats": stats})
     except ImportError:
         raise HTTPException(status_code=503, detail="Per-user LoRA not available")
 
@@ -40,8 +42,8 @@ async def get_adapter(user_id: str):
         store = get_per_user_lora()
         adapter = store.get_adapter(user_id)
         if adapter is None:
-            return {"user_id": user_id, "exists": False}
-        return {"user_id": user_id, "exists": True, "feedback_count": adapter.feedback_count}
+            return success_response(data={"user_id": user_id, "exists": False})
+        return success_response(data={"user_id": user_id, "exists": True, "feedback_count": adapter.feedback_count})
     except ImportError:
         raise HTTPException(status_code=503, detail="Not available")
 
@@ -53,7 +55,7 @@ async def update_adapter(user_id: str, req: AdapterUpdateRequest):
         from domains.feedback import get_per_user_lora
         store = get_per_user_lora()
         store.update_adapter(user_id, rating=req.rating)
-        return {"status": "updated", "user_id": user_id}
+        return success_response(data={"status": "updated", "user_id": user_id})
     except ImportError:
         raise HTTPException(status_code=503, detail="Not available")
 
@@ -65,7 +67,7 @@ async def reset_adapter(user_id: str):
         from domains.feedback import get_per_user_lora
         store = get_per_user_lora()
         store.reset_adapter(user_id)
-        return {"status": "reset", "user_id": user_id}
+        return success_response(data={"status": "reset", "user_id": user_id})
     except ImportError:
         raise HTTPException(status_code=503, detail="Not available")
 
@@ -77,7 +79,7 @@ async def merge_adapters():
         from domains.feedback import get_per_user_lora
         store = get_per_user_lora()
         store.merge_all()
-        return {"status": "merged"}
+        return success_response(data={"status": "merged"})
     except ImportError:
         raise HTTPException(status_code=503, detail="Not available")
 
@@ -95,7 +97,7 @@ async def aggregate_best(req: AggregateBestRequest):
         )
         eval_result = result.get("eval", {})
         if "error" not in eval_result:
-            return {
+            return success_response(data={
                 "status": "aggregated_with_eval",
                 "output_path": result.get("output_path", ""),
                 "user_count": result.get("user_count", 0),
@@ -107,8 +109,8 @@ async def aggregate_best(req: AggregateBestRequest):
                     "throughput_delta": eval_result.get("delta", {}).get("throughput_delta"),
                     "report": eval_result.get("report", ""),
                 },
-            }
-        return {"status": "aggregated", "count": result.get("user_count", 0)}
+            })
+        return success_response(data={"status": "aggregated", "count": result.get("user_count", 0)})
     except ImportError:
         raise HTTPException(status_code=503, detail="Per-user LoRA not available")
 
@@ -119,7 +121,7 @@ async def get_quality():
     try:
         from domains.feedback import get_per_user_lora
         store = get_per_user_lora()
-        return store.get_quality_report()
+        return success_response(data=store.get_quality_report())
     except ImportError:
         raise HTTPException(status_code=503, detail="Not available")
 
@@ -136,7 +138,7 @@ async def delete_user_adapter(user_id: str, req: Request):
         from domains.feedback import get_per_user_lora
         store = get_per_user_lora()
         store.delete_adapter(user_id)
-        return {"status": "deleted", "user_id": user_id}
+        return success_response(data={"status": "deleted", "user_id": user_id})
     except ImportError:
         raise HTTPException(status_code=503, detail="Per-user LoRA not available")
 
@@ -151,10 +153,10 @@ async def prune_low_quality_adapters(request: PruneAdaptersRequest, req: Request
             min_feedback_count=request.min_feedback_count,
             max_age_days=request.max_age_days,
         )
-        return {
+        return success_response(data={
             "status": "pruned",
             "deleted_count": len(deleted),
             "deleted_users": deleted,
-        }
+        })
     except ImportError:
         raise HTTPException(status_code=503, detail="Per-user LoRA not available")

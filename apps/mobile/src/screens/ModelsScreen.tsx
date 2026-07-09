@@ -1,20 +1,16 @@
 import React, {useEffect, useState, useMemo, useCallback} from 'react';
 import {
-  View,
-  Text,
   ScrollView,
   TextInput,
-  TouchableOpacity,
-  StyleSheet,
   RefreshControl,
   ActivityIndicator,
   Modal,
 } from 'react-native';
+import {YStack, XStack, Text} from 'tamagui';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useModelStore} from '../stores/model-store';
 import {useHybridStore} from '../stores/hybrid-inference-store';
 import {StatusBadge} from '../components/StatusBadge';
-import {colors, spacing, radii, typography} from '../theme';
 import type {ModelInfo} from '../types';
 import type {ActiveEngine} from '../types/local-inference';
 
@@ -64,66 +60,115 @@ export function ModelsScreen() {
   const isLoaded = health?.model_loaded;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={{flex: 1, backgroundColor: '#F5F0FF'}} edges={['top']}>
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
+        style={{flex: 1}}
+        contentContainerStyle={{padding: 16, gap: 12}}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }>
-        <Text style={styles.title}>Models</Text>
+        <Text fontSize={26} fontWeight="700" letterSpacing={-0.3} color="$color">
+          Models
+        </Text>
 
         {error && (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity onPress={clearError}>
-              <Text style={styles.dismiss}>×</Text>
-            </TouchableOpacity>
-          </View>
+          <XStack
+            backgroundColor="#FDE8E8"
+            padding={12}
+            borderRadius={8}
+            alignItems="center"
+            justifyContent="space-between">
+            <Text fontSize={13} color="#D44C56" flex={1}>
+              {error}
+            </Text>
+            <YStack onPress={clearError} pressStyle={{opacity: 0.7}}>
+              <Text fontSize={15} color="#D44C56" fontWeight="600" marginLeft={8}>
+                ×
+              </Text>
+            </YStack>
+          </XStack>
         )}
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Active Pipeline</Text>
-          <View style={styles.pipelineRow}>
-            <View style={styles.pipelineInfo}>
-              <Text style={styles.pipelineLabel}>Model</Text>
-              <Text style={styles.pipelineValue}>
+        <YStack
+          backgroundColor="$background"
+          borderRadius={12}
+          borderWidth={1}
+          borderColor="$borderColor"
+          padding={16}
+          gap={8}>
+          <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>
+            Active Pipeline
+          </Text>
+          <XStack alignItems="center" justifyContent="space-between" marginBottom={8}>
+            <YStack flex={1}>
+              <Text
+                fontSize={11}
+                color="$color10"
+                textTransform="uppercase"
+                letterSpacing={0.5}>
+                Model
+              </Text>
+              <Text fontSize={15} color="$color" fontWeight="500">
                 {currentModel || 'None loaded'}
               </Text>
-            </View>
+            </YStack>
             {isLoaded && <StatusBadge label="Loaded" variant="success" />}
-          </View>
-          <View style={styles.pipelineRow}>
-            <View style={styles.pipelineInfo}>
-              <Text style={styles.pipelineLabel}>Personality</Text>
-              <Text style={styles.pipelineValue}>
+          </XStack>
+          <XStack alignItems="center" justifyContent="space-between" marginBottom={8}>
+            <YStack flex={1}>
+              <Text
+                fontSize={11}
+                color="$color10"
+                textTransform="uppercase"
+                letterSpacing={0.5}>
+                Personality
+              </Text>
+              <Text fontSize={15} color="$color" fontWeight="500">
                 {currentSoul?.name || 'None'}
               </Text>
-            </View>
-          </View>
+            </YStack>
+          </XStack>
           {currentSoul && currentSoul.description && (
-            <Text style={styles.pipelineDesc}>{currentSoul.description}</Text>
+            <Text fontSize={13} color="$color11" marginTop={4}>
+              {currentSoul.description}
+            </Text>
           )}
           {currentSoul && currentSoul.traits && currentSoul.traits.length > 0 && (
-            <View style={styles.traitRow}>
+            <XStack gap={4} marginTop={8} flexWrap="wrap">
               {currentSoul.traits.map(trait => (
                 <StatusBadge key={trait} label={trait} variant="info" />
               ))}
-            </View>
+            </XStack>
           )}
           {isLoaded && (
-            <TouchableOpacity style={styles.unloadBtn} onPress={unloadModel}>
-              <Text style={styles.unloadText}>Unload model</Text>
-            </TouchableOpacity>
+            <YStack
+              marginTop={12}
+              paddingVertical={8}
+              paddingHorizontal={12}
+              backgroundColor="#D44C5615"
+              borderRadius={8}
+              alignItems="center"
+              onPress={unloadModel}
+              pressStyle={{opacity: 0.7}}>
+              <Text fontSize={13} color="#D44C56" fontWeight="600">
+                Unload model
+              </Text>
+            </YStack>
           )}
-        </View>
+        </YStack>
 
-        {/* ── Local Inference Card ─────────────────────────────── */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>On-Device Inference</Text>
+        <YStack
+          backgroundColor="$background"
+          borderRadius={12}
+          borderWidth={1}
+          borderColor="$borderColor"
+          padding={16}
+          gap={8}>
+          <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>
+            On-Device Inference
+          </Text>
 
-          {/* Engine selector */}
-          <View style={styles.routingRow}>
+          <XStack gap={4} marginBottom={12}>
             {(['slonet', 'qwen', 'remote'] as ActiveEngine[]).map(engine => {
               const active = hybrid.activeEngine === engine;
               const label =
@@ -133,55 +178,85 @@ export function ModelsScreen() {
                   ? 'Qwen'
                   : 'Server';
               return (
-                <TouchableOpacity
+                <YStack
                   key={engine}
-                  style={[styles.routingChip, active && styles.routingChipActive]}
-                  onPress={() => hybrid.setActiveEngine(engine)}>
+                  flex={1}
+                  paddingVertical={8}
+                  borderRadius={8}
+                  backgroundColor={active ? '$color9' : '$background'}
+                  borderWidth={1}
+                  borderColor={active ? '$color9' : '$borderColor'}
+                  alignItems="center"
+                  onPress={() => hybrid.setActiveEngine(engine)}
+                  pressStyle={{opacity: 0.7}}>
                   <Text
-                    style={[
-                      styles.routingChipText,
-                      active && styles.routingChipTextActive,
-                    ]}>
+                    fontSize={11}
+                    color={active ? 'white' : '$color11'}
+                    fontWeight="500">
                     {label}
                   </Text>
-                </TouchableOpacity>
+                </YStack>
               );
             })}
-          </View>
+          </XStack>
 
-          {/* SloNet engine */}
-          <View style={styles.engineRow}>
-            <View style={styles.engineInfo}>
-              <Text style={styles.engineName}>SloNet (Baby Transformer)</Text>
-              <Text style={styles.engineMeta}>
+          <XStack
+            alignItems="center"
+            justifyContent="space-between"
+            paddingVertical={8}
+            borderBottomWidth={1}
+            borderBottomColor="$borderColor">
+            <YStack flex={1} marginRight={8}>
+              <Text fontSize={15} color="$color" fontWeight="500">
+                SloNet (Baby Transformer)
+              </Text>
+              <Text fontSize={11} color="$color10" marginTop={2}>
                 {hybrid.slonet.loaded
                   ? `Loaded — ${hybrid.slonet.modelName}`
                   : 'Not loaded — fast local completions'}
               </Text>
-            </View>
+            </YStack>
             {hybrid.slonet.loaded ? (
-              <TouchableOpacity
-                style={styles.unloadMiniBtn}
-                onPress={hybrid.unloadSloNet}>
-                <Text style={styles.unloadMiniText}>Unload</Text>
-              </TouchableOpacity>
+              <YStack
+                paddingHorizontal={12}
+                paddingVertical={6}
+                borderRadius={8}
+                backgroundColor="#D44C5615"
+                onPress={hybrid.unloadSloNet}
+                pressStyle={{opacity: 0.7}}>
+                <Text fontSize={13} color="#D44C56" fontWeight="600">
+                  Unload
+                </Text>
+              </YStack>
             ) : hybrid.slonet.downloadProgress !== null &&
               hybrid.slonet.downloadProgress < 1 ? (
-              <ActivityIndicator size="small" color={colors.primary} />
+              <ActivityIndicator size="small" color="#7C52C4" />
             ) : (
-              <TouchableOpacity
-                style={styles.loadBtnMini}
-                onPress={() => hybrid.loadSloNet()}>
-                <Text style={styles.loadBtnMiniText}>Load</Text>
-              </TouchableOpacity>
+              <YStack
+                paddingHorizontal={12}
+                paddingVertical={6}
+                borderRadius={8}
+                backgroundColor="$color9"
+                onPress={() => hybrid.loadSloNet()}
+                pressStyle={{opacity: 0.7}}>
+                <Text fontSize={13} color="white" fontWeight="600">
+                  Load
+                </Text>
+              </YStack>
             )}
-          </View>
+          </XStack>
 
-          {/* Qwen GGUF engine */}
-          <View style={styles.engineRow}>
-            <View style={styles.engineInfo}>
-              <Text style={styles.engineName}>Qwen 0.5B (GGUF)</Text>
-              <Text style={styles.engineMeta}>
+          <XStack
+            alignItems="center"
+            justifyContent="space-between"
+            paddingVertical={8}
+            borderBottomWidth={1}
+            borderBottomColor="$borderColor">
+            <YStack flex={1} marginRight={8}>
+              <Text fontSize={15} color="$color" fontWeight="500">
+                Qwen 0.5B (GGUF)
+              </Text>
+              <Text fontSize={11} color="$color10" marginTop={2}>
                 {hybrid.qwen.loaded
                   ? 'Loaded — full chat via llama.rn'
                   : hybrid.qwen.downloadProgress !== null &&
@@ -191,565 +266,328 @@ export function ModelsScreen() {
                     )}%`
                   : 'Not loaded — complex chat, 15-30 tok/s'}
               </Text>
-            </View>
+            </YStack>
             {hybrid.qwen.loaded ? (
-              <TouchableOpacity
-                style={styles.unloadMiniBtn}
-                onPress={async () => hybrid.unloadQwen()}>
-                <Text style={styles.unloadMiniText}>Unload</Text>
-              </TouchableOpacity>
+              <YStack
+                paddingHorizontal={12}
+                paddingVertical={6}
+                borderRadius={8}
+                backgroundColor="#D44C5615"
+                onPress={async () => hybrid.unloadQwen()}
+                pressStyle={{opacity: 0.7}}>
+                <Text fontSize={13} color="#D44C56" fontWeight="600">
+                  Unload
+                </Text>
+              </YStack>
             ) : hybrid.qwen.downloadProgress !== null &&
               hybrid.qwen.downloadProgress < 1 ? (
-              <View style={styles.progressWrap}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    {width: `${hybrid.qwen.downloadProgress * 100}%`},
-                  ]}
+              <YStack
+                width={60}
+                height={6}
+                borderRadius={3}
+                backgroundColor="$borderColor"
+                overflow="hidden">
+                <YStack
+                  height="100%"
+                  backgroundColor="$color9"
+                  borderRadius={3}
+                  width={`${hybrid.qwen.downloadProgress * 100}%`}
                 />
-              </View>
+              </YStack>
             ) : (
-              <TouchableOpacity
-                style={styles.loadBtnMini}
-                onPress={() => hybrid.loadQwen()}>
-                <Text style={styles.loadBtnMiniText}>Download</Text>
-              </TouchableOpacity>
+              <YStack
+                paddingHorizontal={12}
+                paddingVertical={6}
+                borderRadius={8}
+                backgroundColor="$color9"
+                onPress={() => hybrid.loadQwen()}
+                pressStyle={{opacity: 0.7}}>
+                <Text fontSize={13} color="white" fontWeight="600">
+                  Download
+                </Text>
+              </YStack>
             )}
-          </View>
+          </XStack>
 
           {hybrid.lastError && (
-            <Text style={styles.errorHint}>{hybrid.lastError}</Text>
+            <Text fontSize={11} color="#D44C56" marginTop={8}>
+              {hybrid.lastError}
+            </Text>
           )}
-        </View>
+        </YStack>
 
         {souls.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Personalities</Text>
+          <YStack
+            backgroundColor="$background"
+            borderRadius={12}
+            borderWidth={1}
+            borderColor="$borderColor"
+            padding={16}
+            gap={8}>
+            <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>
+              Personalities
+            </Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.chipRow}>
+              contentContainerStyle={{gap: 8}}>
               {souls.map(soul => {
                 const isActive = currentSoul?.name === soul.name;
                 return (
-                  <TouchableOpacity
+                  <YStack
                     key={soul.name}
-                    style={[styles.chip, isActive && styles.chipActive]}
-                    onPress={() => switchSoul(soul.name)}>
+                    paddingHorizontal={12}
+                    paddingVertical={8}
+                    borderRadius={9999}
+                    backgroundColor={isActive ? '$color9' : '$background'}
+                    borderWidth={1}
+                    borderColor={isActive ? '$color9' : '$borderColor'}
+                    onPress={() => switchSoul(soul.name)}
+                    pressStyle={{opacity: 0.7}}>
                     <Text
-                      style={[styles.chipText, isActive && styles.chipTextActive]}>
+                      fontSize={13}
+                      color={isActive ? 'white' : '$color11'}
+                      fontWeight="500">
                       {soul.name}
                     </Text>
-                  </TouchableOpacity>
+                  </YStack>
                 );
               })}
             </ScrollView>
-          </View>
+          </YStack>
         )}
 
         {checkpoints.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Trained Versions</Text>
+          <YStack
+            backgroundColor="$background"
+            borderRadius={12}
+            borderWidth={1}
+            borderColor="$borderColor"
+            padding={16}
+            gap={8}>
+            <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>
+              Trained Versions
+            </Text>
             {checkpoints.map(cp => (
-              <TouchableOpacity
+              <XStack
                 key={cp.name}
-                style={styles.checkpointRow}
-                onPress={() => switchSoul(cp.soul, cp.name)}>
-                <View style={styles.checkpointInfo}>
-                  <Text style={styles.checkpointName}>{cp.name}</Text>
-                  <Text style={styles.checkpointMeta}>
+                alignItems="center"
+                justifyContent="space-between"
+                paddingVertical={8}
+                borderBottomWidth={1}
+                borderBottomColor="$borderColor"
+                onPress={() => switchSoul(cp.soul, cp.name)}
+                pressStyle={{opacity: 0.7}}>
+                <YStack flex={1}>
+                  <Text fontSize={15} color="$color" fontWeight="500">
+                    {cp.name}
+                  </Text>
+                  <Text fontSize={11} color="$color10">
                     {cp.loss !== null ? `Loss: ${cp.loss.toFixed(3)}` : ''}{' '}
                     {cp.steps > 0 ? `· ${cp.steps} steps` : ''}
                   </Text>
-                </View>
+                </YStack>
                 <StatusBadge label="Use" variant="info" />
-              </TouchableOpacity>
+              </XStack>
             ))}
-          </View>
+          </YStack>
         )}
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Available Models</Text>
+        <YStack
+          backgroundColor="$background"
+          borderRadius={12}
+          borderWidth={1}
+          borderColor="$borderColor"
+          padding={16}
+          gap={8}>
+          <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>
+            Available Models
+          </Text>
           {models.length > 3 && (
             <TextInput
-              style={styles.searchInput}
               value={search}
               onChangeText={setSearch}
               placeholder="Search models..."
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor="#9B95A8"
               returnKeyType="search"
+              style={{
+                fontSize: 15,
+                color: '#1A1625',
+                backgroundColor: '#F5F0FF',
+                borderRadius: 8,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                marginBottom: 12,
+              }}
             />
           )}
           {filteredModels.length === 0 && !loading && (
-            <Text style={styles.empty}>
+            <Text fontSize={13} color="$color10" textAlign="center" paddingVertical={16}>
               {search ? 'No models match your search' : 'No models found'}
             </Text>
           )}
           {filteredModels.map(model => {
             const isLoading = loadingModelId === model.id;
             return (
-              <TouchableOpacity
+              <XStack
                 key={model.id}
-                style={styles.modelRow}
+                alignItems="center"
+                justifyContent="space-between"
+                paddingVertical={8}
+                borderBottomWidth={1}
+                borderBottomColor="$borderColor"
                 onPress={() => setDetailModel(model)}
-                activeOpacity={0.7}>
-                <View style={styles.modelInfo}>
-                  <Text style={styles.modelName}>{model.name}</Text>
-                  <Text style={styles.modelMeta}>
+                pressStyle={{opacity: 0.7}}>
+                <YStack flex={1}>
+                  <Text fontSize={15} color="$color" fontWeight="500">
+                    {model.name}
+                  </Text>
+                  <Text fontSize={11} color="$color10">
                     {model.size_gb
                       ? `${model.size_gb.toFixed(1)} GB`
                       : model.size_mb
                       ? `${model.size_mb} MB`
                       : model.params || model.type}
                   </Text>
-                </View>
+                </YStack>
                 {isLoading ? (
-                  <ActivityIndicator size="small" color={colors.primary} />
+                  <ActivityIndicator size="small" color="#7C52C4" />
                 ) : model.loaded ? (
                   <StatusBadge label="Loaded" variant="success" />
                 ) : (
-                  <TouchableOpacity
-                    style={styles.loadBtn}
-                    onPress={() => loadModel(model.id)}>
-                    <Text style={styles.loadBtnText}>Load</Text>
-                  </TouchableOpacity>
+                  <YStack
+                    paddingHorizontal={12}
+                    paddingVertical={6}
+                    borderRadius={8}
+                    backgroundColor="$color9"
+                    onPress={(e: any) => {
+                      e.stopPropagation();
+                      loadModel(model.id);
+                    }}
+                    pressStyle={{opacity: 0.7}}>
+                    <Text fontSize={13} color="white" fontWeight="600">
+                      Load
+                    </Text>
+                  </YStack>
                 )}
-              </TouchableOpacity>
+              </XStack>
             );
           })}
-        </View>
+        </YStack>
       </ScrollView>
 
-      {/* Model detail modal */}
       <Modal visible={!!detailModel} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{detailModel?.name}</Text>
-              <TouchableOpacity onPress={() => setDetailModel(null)}>
-                <Text style={styles.modalClose}>×</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.modalBody}>
+        <YStack flex={1} backgroundColor="rgba(0,0,0,0.4)" justifyContent="flex-end">
+          <YStack
+            backgroundColor="$background"
+            borderTopLeftRadius={16}
+            borderTopRightRadius={16}
+            maxHeight="80%">
+            <XStack
+              alignItems="center"
+              justifyContent="space-between"
+              paddingHorizontal={20}
+              paddingVertical={16}
+              borderBottomWidth={1}
+              borderBottomColor="$borderColor">
+              <Text fontSize={20} fontWeight="600" color="$color" flex={1}>
+                {detailModel?.name}
+              </Text>
+              <YStack onPress={() => setDetailModel(null)} pressStyle={{opacity: 0.7}}>
+                <Text fontSize={24} color="$color10" padding={4}>
+                  ×
+                </Text>
+              </YStack>
+            </XStack>
+            <YStack paddingHorizontal={20} paddingVertical={16} gap={12}>
               {detailModel?.description && (
-                <Text style={styles.modalDesc}>{detailModel.description}</Text>
+                <Text fontSize={15} color="$color11">
+                  {detailModel.description}
+                </Text>
               )}
-              <View style={styles.modalRow}>
-                <Text style={styles.modalLabel}>Type</Text>
-                <Text style={styles.modalValue}>{detailModel?.type || '—'}</Text>
-              </View>
-              <View style={styles.modalRow}>
-                <Text style={styles.modalLabel}>Parameters</Text>
-                <Text style={styles.modalValue}>{detailModel?.params || '—'}</Text>
-              </View>
-              <View style={styles.modalRow}>
-                <Text style={styles.modalLabel}>Size</Text>
-                <Text style={styles.modalValue}>
+              <XStack alignItems="center" justifyContent="space-between">
+                <Text fontSize={13} color="$color10">Type</Text>
+                <Text fontSize={15} color="$color" fontWeight="500">
+                  {detailModel?.type || '—'}
+                </Text>
+              </XStack>
+              <XStack alignItems="center" justifyContent="space-between">
+                <Text fontSize={13} color="$color10">Parameters</Text>
+                <Text fontSize={15} color="$color" fontWeight="500">
+                  {detailModel?.params || '—'}
+                </Text>
+              </XStack>
+              <XStack alignItems="center" justifyContent="space-between">
+                <Text fontSize={13} color="$color10">Size</Text>
+                <Text fontSize={15} color="$color" fontWeight="500">
                   {detailModel?.size_gb
                     ? `${detailModel.size_gb.toFixed(1)} GB`
                     : detailModel?.size_mb
                     ? `${detailModel.size_mb} MB`
                     : '—'}
                 </Text>
-              </View>
-              <View style={styles.modalRow}>
-                <Text style={styles.modalLabel}>Source</Text>
-                <Text style={styles.modalValue}>{detailModel?.source || '—'}</Text>
-              </View>
-              <View style={styles.modalRow}>
-                <Text style={styles.modalLabel}>Status</Text>
+              </XStack>
+              <XStack alignItems="center" justifyContent="space-between">
+                <Text fontSize={13} color="$color10">Source</Text>
+                <Text fontSize={15} color="$color" fontWeight="500">
+                  {detailModel?.source || '—'}
+                </Text>
+              </XStack>
+              <XStack alignItems="center" justifyContent="space-between">
+                <Text fontSize={13} color="$color10">Status</Text>
                 <StatusBadge
                   label={detailModel?.loaded ? 'Loaded' : 'Available'}
                   variant={detailModel?.loaded ? 'success' : 'default'}
                 />
-              </View>
+              </XStack>
               {detailModel?.tags && detailModel.tags.length > 0 && (
-                <View style={styles.modalTags}>
+                <XStack gap={4} flexWrap="wrap">
                   {detailModel.tags.map(tag => (
                     <StatusBadge key={tag} label={tag} variant="info" />
                   ))}
-                </View>
+                </XStack>
               )}
-            </View>
-            <View style={styles.modalActions}>
+            </YStack>
+            <YStack
+              paddingHorizontal={20}
+              paddingVertical={16}
+              borderTopWidth={1}
+              borderTopColor="$borderColor">
               {detailModel?.loaded ? (
-                <TouchableOpacity
-                  style={styles.modalUnloadBtn}
+                <YStack
+                  backgroundColor="#D44C5615"
+                  paddingVertical={12}
+                  borderRadius={8}
+                  alignItems="center"
                   onPress={() => {
                     unloadModel();
                     setDetailModel(null);
-                  }}>
-                  <Text style={styles.modalUnloadText}>Unload Model</Text>
-                </TouchableOpacity>
+                  }}
+                  pressStyle={{opacity: 0.7}}>
+                  <Text fontSize={15} color="#D44C56" fontWeight="600">
+                    Unload Model
+                  </Text>
+                </YStack>
               ) : (
-                <TouchableOpacity
-                  style={styles.modalLoadBtn}
+                <YStack
+                  backgroundColor="$color9"
+                  paddingVertical={12}
+                  borderRadius={8}
+                  alignItems="center"
                   onPress={() => {
                     if (detailModel) loadModel(detailModel.id);
                     setDetailModel(null);
-                  }}>
-                  <Text style={styles.modalLoadText}>Load Model</Text>
-                </TouchableOpacity>
+                  }}
+                  pressStyle={{opacity: 0.7}}>
+                  <Text fontSize={15} color="white" fontWeight="600">
+                    Load Model
+                  </Text>
+                </YStack>
               )}
-            </View>
-          </View>
-        </View>
+            </YStack>
+          </YStack>
+        </YStack>
       </Modal>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  title: {
-    ...typography.h1,
-    color: colors.text,
-  },
-  errorCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FDE8E8',
-    padding: spacing.md,
-    borderRadius: radii.md,
-  },
-  errorText: {
-    ...typography.caption,
-    color: colors.error,
-    flex: 1,
-  },
-  dismiss: {
-    ...typography.body,
-    color: colors.error,
-    fontWeight: '600',
-    marginLeft: spacing.sm,
-  },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    padding: spacing.lg,
-  },
-  cardTitle: {
-    ...typography.h3,
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  pipelineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  pipelineInfo: {
-    flex: 1,
-  },
-  pipelineLabel: {
-    ...typography.small,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  pipelineValue: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  pipelineDesc: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  traitRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginTop: spacing.sm,
-    flexWrap: 'wrap',
-  },
-  unloadBtn: {
-    marginTop: spacing.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.error + '15',
-    borderRadius: radii.md,
-    alignItems: 'center',
-  },
-  unloadText: {
-    ...typography.caption,
-    color: colors.error,
-    fontWeight: '600',
-  },
-  chipRow: {
-    gap: spacing.sm,
-  },
-  chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.full,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  chipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  chipText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  chipTextActive: {
-    color: colors.white,
-  },
-  checkpointRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  checkpointInfo: {
-    flex: 1,
-  },
-  checkpointName: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  checkpointMeta: {
-    ...typography.small,
-    color: colors.textMuted,
-  },
-  modelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  modelInfo: {
-    flex: 1,
-  },
-  modelName: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  modelMeta: {
-    ...typography.small,
-    color: colors.textMuted,
-  },
-  loadBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary,
-  },
-  loadBtnText: {
-    ...typography.caption,
-    color: colors.white,
-    fontWeight: '600',
-  },
-  empty: {
-    ...typography.caption,
-    color: colors.textMuted,
-    textAlign: 'center',
-    paddingVertical: spacing.lg,
-  },
-  searchInput: {
-    ...typography.body,
-    color: colors.text,
-    backgroundColor: colors.background,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  modalTitle: {
-    ...typography.h2,
-    color: colors.text,
-    flex: 1,
-  },
-  modalClose: {
-    fontSize: 24,
-    color: colors.textMuted,
-    padding: spacing.xs,
-  },
-  modalBody: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
-    gap: spacing.md,
-  },
-  modalDesc: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-  modalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  modalLabel: {
-    ...typography.caption,
-    color: colors.textMuted,
-  },
-  modalValue: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  modalTags: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    flexWrap: 'wrap',
-  },
-  modalActions: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  modalLoadBtn: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    alignItems: 'center',
-  },
-  modalLoadText: {
-    ...typography.body,
-    color: colors.white,
-    fontWeight: '600',
-  },
-  modalUnloadBtn: {
-    backgroundColor: colors.error + '15',
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    alignItems: 'center',
-  },
-  modalUnloadText: {
-    ...typography.body,
-    color: colors.error,
-    fontWeight: '600',
-  },
-  // Local inference
-  routingRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginBottom: spacing.md,
-  },
-  routingChip: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-  },
-  routingChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  routingChipText: {
-    ...typography.small,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  routingChipTextActive: {
-    color: colors.white,
-  },
-  engineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  engineInfo: {
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  engineName: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  engineMeta: {
-    ...typography.small,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  loadBtnMini: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary,
-  },
-  loadBtnMiniText: {
-    ...typography.caption,
-    color: colors.white,
-    fontWeight: '600',
-  },
-  unloadMiniBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: radii.md,
-    backgroundColor: colors.error + '15',
-  },
-  unloadMiniText: {
-    ...typography.caption,
-    color: colors.error,
-    fontWeight: '600',
-  },
-  progressWrap: {
-    width: 60,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.border,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 3,
-  },
-  errorHint: {
-    ...typography.small,
-    color: colors.error,
-    marginTop: spacing.sm,
-  },
-});

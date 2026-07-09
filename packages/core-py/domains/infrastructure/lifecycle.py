@@ -27,12 +27,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
 from threading import Lock
 from typing import Any, Awaitable, Callable, Optional
+
+try:
+    from typing import Self
+except ImportError:
+    from typing_extensions import Self
 
 logger = logging.getLogger("man.lifecycle")
 
@@ -49,6 +55,35 @@ class LifecyclePhase(str, Enum):
     CRASHED = "crashed"
 
 
+class StartupProfile(str, Enum):
+    """Startup profile controlling which hooks run during startup.
+
+    Profiles allow the server to start with different sets of
+    components, trading capability for speed.
+
+    * ``full`` — all components: AI model, W&B, multimodal, TaskQueue, Config
+    * ``quick`` — everything except the AI model load (for dev/testing)
+    * ``minimal`` — only core infrastructure (logging, registry, routers)
+    """
+
+    FULL = "full"
+    QUICK = "quick"
+    MINIMAL = "minimal"
+
+    @classmethod
+    def from_env(cls) -> Self:
+        """Read profile from ``MAN_STARTUP_PROFILE`` env var (default ``full``)."""
+        raw = os.environ.get("MAN_STARTUP_PROFILE", "full").strip().lower()
+        try:
+            return cls(raw)
+        except ValueError:
+            logger.warning("Unknown startup profile %r — falling back to full", raw)
+            return cls.FULL
+
+
+ALL_PROFILES: frozenset[StartupProfile] = frozenset(StartupProfile)
+
+
 # ── Hook types ──
 
 
@@ -62,6 +97,7 @@ class StartupHook:
         depends_on: Names of hooks that must complete before this one.
         timeout: Maximum seconds to wait for the handler.
         critical: If True, a failure transitions the phase to CRASHED.
+        profiles: Set of profiles this hook belongs to. Empty means all profiles.
     """
 
     name: str
@@ -69,6 +105,7 @@ class StartupHook:
     depends_on: list[str] = field(default_factory=list)
     timeout: float = 30.0
     critical: bool = True
+    profiles: frozenset[StartupProfile] = field(default_factory=lambda: ALL_PROFILES)
 
 
 @dataclass
@@ -158,6 +195,9 @@ class LifecycleManager:
         self._drain_event.set()  # not draining by default
         self._in_flight_count: int = 0
         self._in_flight_lock = asyncio.Lock()
+        self._profile: StartupProfile = StartupProfile.FULL
+        self._last_startup_results: list[_HookResult] = []
+        self._last_shutdown_results: list[_HookResult] = []
 
     # ── Properties ──
 
@@ -182,6 +222,32 @@ class LifecycleManager:
     def is_draining(self) -> bool:
         """True during DRAINING or STOPPING — new work should be rejected."""
         return self._phase in (LifecyclePhase.DRAINING, LifecyclePhase.STOPPING)
+
+    def get_profile(self) -> StartupProfile:
+        """Return the active startup profile."""
+        return self._profile
+
+    def preview(self, profile: StartupProfile | None = None) -> list[dict[str, Any]]:
+        """Preview which hooks would run for a given profile.
+
+        Args:
+            profile: The profile to preview. Defaults to the active profile.
+
+        Returns:
+            List of hook dicts with name, critical, timeout, and depends_on fields.
+        """
+        target = profile if profile is not None else self._profile
+        filtered = self._filter_hooks_for_profile(self._startup_hooks, target)
+        ordered = _topological_sort(filtered)
+        return [
+            {
+                "name": h.name,
+                "critical": h.critical,
+                "timeout": h.timeout,
+                "depends_on": h.depends_on,
+            }
+            for h in ordered
+        ]
 
     # ── Phase transitions ──
 
@@ -280,6 +346,22 @@ class LifecycleManager:
     def in_flight_count(self) -> int:
         return self._in_flight_count
 
+    @property
+    def startup_results(self) -> list[dict[str, Any]]:
+        """Results from the most recent startup run."""
+        return [
+            {"name": r.name, "success": r.success, "elapsed": round(r.elapsed, 3), "error": r.error}
+            for r in self._last_startup_results
+        ]
+
+    @property
+    def shutdown_results(self) -> list[dict[str, Any]]:
+        """Results from the most recent shutdown run."""
+        return [
+            {"name": r.name, "success": r.success, "elapsed": round(r.elapsed, 3), "error": r.error}
+            for r in self._last_shutdown_results
+        ]
+
     async def _wait_for_drain(self, timeout: float = 30.0) -> bool:
         """Wait for all in-flight tasks to complete.
 
@@ -299,9 +381,27 @@ class LifecycleManager:
             )
             return False
 
+    def _filter_hooks_for_profile(
+        self,
+        hooks: list[StartupHook],
+        profile: StartupProfile,
+    ) -> list[StartupHook]:
+        """Return only hooks whose profiles include the given profile."""
+        result: list[StartupHook] = []
+        for h in hooks:
+            if profile in h.profiles:
+                result.append(h)
+            else:
+                logger.debug(
+                    "Skipping startup hook %s (not in profile %s)",
+                    h.name,
+                    profile.value,
+                )
+        return result
+
     # ── Startup ──
 
-    async def start(self, timeout: float = 60.0) -> bool:
+    async def start(self, timeout: float = 60.0, profile: StartupProfile | None = None) -> bool:
         """Run all startup hooks in dependency order and transition to RUNNING.
 
         Args:
@@ -318,11 +418,13 @@ class LifecycleManager:
                 )
                 return self._phase == LifecyclePhase.RUNNING
 
+            self._profile = profile or StartupProfile.from_env()
             await self._set_phase(LifecyclePhase.STARTING)
             self._started_at = time.time()
             self._drain_event = asyncio.Event()
 
-        ordered = _topological_sort(self._startup_hooks)
+        filtered = self._filter_hooks_for_profile(self._startup_hooks, self._profile)
+        ordered = _topological_sort(filtered)
         results: list[_HookResult] = []
         all_ok = True
 
@@ -354,6 +456,7 @@ class LifecycleManager:
                     all_ok = False
                     break
 
+        self._last_startup_results = results
         async with self._lock:
             if all_ok:
                 await self._set_phase(LifecyclePhase.RUNNING)
@@ -425,6 +528,7 @@ class LifecycleManager:
                 )
                 logger.exception("Shutdown hook %s failed", hook.name)
 
+        self._last_shutdown_results = results
         async with self._lock:
             await self._set_phase(LifecyclePhase.STOPPED)
             self._emit_sync(
@@ -458,14 +562,20 @@ class LifecycleManager:
 
     def get_results(self) -> dict[str, Any]:
         """Return a summary snapshot of the current lifecycle state."""
+        startup_results = self.startup_results
+        shutdown_results = self.shutdown_results
         return {
             "phase": self._phase.value,
+            "profile": self._profile.value,
             "uptime": round(self.uptime_seconds, 1),
             "started_at": self._started_at,
             "in_flight": self._in_flight_count,
             "hooks": {
                 "startup": len(self._startup_hooks),
                 "shutdown": len(self._shutdown_hooks),
+                "preview": self.preview(),
+                "startup_results": startup_results,
+                "shutdown_results": shutdown_results,
             },
             "gates": {
                 "total": len(self._health_gates),

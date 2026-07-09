@@ -1,18 +1,15 @@
 import React, {useState, useCallback, useRef, useEffect} from 'react';
 import {
-  View,
-  Text,
   TextInput,
   FlatList,
   TouchableOpacity,
   Modal,
-  StyleSheet,
   ActivityIndicator,
   Keyboard,
 } from 'react-native';
+import {YStack, XStack, Text} from 'tamagui';
 import {api} from '../services/api-client';
 import {triggerHaptic} from '../services/haptics';
-import {colors, spacing, radii, typography} from '../theme';
 import type {SearchResult, SearchMatch} from '../types';
 
 interface Props {
@@ -48,7 +45,7 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
     setSearched(true);
     try {
       const data = await api.searchSessions(q, 20);
-      setResults(data.results || []);
+      setResults(Array.isArray(data) ? data : []);
     } catch {
       setResults([]);
     } finally {
@@ -76,53 +73,76 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
   );
 
   const renderMatch = (match: SearchMatch, idx: number) => (
-    <View key={idx} style={styles.matchRow}>
-      <Text style={styles.matchRole}>
+    <XStack key={idx} gap={8} paddingVertical={2}>
+      <Text fontSize={11} fontWeight="600" letterSpacing={0.2} color="$color9" minWidth={60}>
         {match.role === 'user' ? 'You' : 'Assistant'}:
       </Text>
-      <Text style={styles.matchContent} numberOfLines={2}>
+      <Text fontSize={11} fontWeight="500" letterSpacing={0.2} color="$color11" flex={1} numberOfLines={2}>
         {match.content}
       </Text>
-    </View>
+    </XStack>
   );
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Search Conversations</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Text style={styles.closeBtn}>×</Text>
+      <YStack flex={1} backgroundColor="rgba(0,0,0,0.4)" justifyContent="flex-end">
+        <YStack
+          backgroundColor="$background"
+          borderTopLeftRadius={12}
+          borderTopRightRadius={12}
+          maxHeight="85%"
+          minHeight="40%">
+          {/* Header */}
+          <XStack
+            alignItems="center"
+            justifyContent="space-between"
+            paddingHorizontal={16}
+            paddingVertical={12}
+            borderBottomWidth={1}
+            borderBottomColor="$borderColor">
+            <Text fontSize={18} fontWeight="600" letterSpacing={-0.2} color="$color">
+              Search Conversations
+            </Text>
+            <TouchableOpacity onPress={onClose} style={{padding: 4}}>
+              <Text fontSize={24} color="$color10">
+                ×
+              </Text>
             </TouchableOpacity>
-          </View>
+          </XStack>
 
+          {/* Search Input */}
           <TextInput
             ref={inputRef}
-            style={styles.input}
             value={query}
             onChangeText={onChangeText}
             placeholder="Search all conversations..."
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor="$color10"
             returnKeyType="search"
             autoCapitalize="none"
             autoCorrect={false}
+            style={{
+              margin: 16,
+              backgroundColor: 'white',
+              borderRadius: 8,
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              fontSize: 15,
+              color: '$color',
+              borderWidth: 1,
+              borderColor: '$borderColor',
+            }}
           />
 
           {loading && (
-            <ActivityIndicator
-              style={styles.loader}
-              color={colors.primary}
-              size="small"
-            />
+            <ActivityIndicator style={{marginVertical: 12}} color="$color9" size="small" />
           )}
 
           {searched && !loading && results.length === 0 && (
-            <View style={styles.empty}>
-              <Text style={styles.emptyText}>
+            <YStack alignItems="center" paddingVertical={48}>
+              <Text fontSize={15} fontWeight="400" color="$color10">
                 {query.trim() ? 'No results found' : 'Type to search'}
               </Text>
-            </View>
+            </YStack>
           )}
 
           <FlatList
@@ -130,123 +150,30 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
             keyExtractor={item => item.id}
             renderItem={({item}) => (
               <TouchableOpacity
-                style={styles.resultItem}
                 onPress={() => handleSelect(item.id)}
-                activeOpacity={0.7}>
-                <View style={styles.resultHeader}>
-                  <Text style={styles.resultName} numberOfLines={1}>
+                activeOpacity={0.7}
+                style={{
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  borderBottomWidth: 1,
+                  borderBottomColor: '$borderColor',
+                }}>
+                <XStack alignItems="center" justifyContent="space-between" marginBottom={4}>
+                  <Text fontSize={15} fontWeight="600" color="$color" flex={1} marginRight={8} numberOfLines={1}>
                     {item.name || 'Untitled'}
                   </Text>
-                  <Text style={styles.resultCount}>
+                  <Text fontSize={11} fontWeight="500" letterSpacing={0.2} color="$color9">
                     {item.match_count} {item.match_count === 1 ? 'match' : 'matches'}
                   </Text>
-                </View>
+                </XStack>
                 {item.matches.map(renderMatch)}
               </TouchableOpacity>
             )}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={results.length === 0 ? styles.emptyList : undefined}
+            contentContainerStyle={results.length === 0 ? {flex: 1} : undefined}
           />
-        </View>
-      </View>
+        </YStack>
+      </YStack>
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: radii.lg,
-    borderTopRightRadius: radii.lg,
-    maxHeight: '85%',
-    minHeight: '40%',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  title: {
-    ...typography.h3,
-    color: colors.text,
-  },
-  closeBtn: {
-    fontSize: 24,
-    color: colors.textMuted,
-    padding: spacing.xs,
-  },
-  input: {
-    margin: spacing.lg,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    ...typography.body,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  loader: {
-    marginVertical: spacing.md,
-  },
-  empty: {
-    alignItems: 'center',
-    paddingVertical: spacing.xxxl,
-  },
-  emptyText: {
-    ...typography.body,
-    color: colors.textMuted,
-  },
-  emptyList: {
-    flex: 1,
-  },
-  resultItem: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  resultHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xs,
-  },
-  resultName: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  resultCount: {
-    ...typography.small,
-    color: colors.primary,
-    fontWeight: '500',
-  },
-  matchRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingVertical: 2,
-  },
-  matchRole: {
-    ...typography.small,
-    color: colors.primary,
-    fontWeight: '600',
-    minWidth: 60,
-  },
-  matchContent: {
-    ...typography.small,
-    color: colors.textSecondary,
-    flex: 1,
-  },
-});

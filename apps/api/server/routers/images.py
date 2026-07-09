@@ -10,6 +10,8 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
+from schemas.common import success_response
+
 logger = logging.getLogger("man.routers.images")
 router = APIRouter(prefix="/images", tags=["images"])
 
@@ -334,7 +336,7 @@ async def list_gallery():
     gallery_dir = Path(__file__).resolve().parents[4] / "data" / "gallery"
 
     if not gallery_dir.exists():
-        return {"images": []}
+        return success_response(data={"images": []})
 
     images = []
     for filepath in sorted(gallery_dir.glob("generated_*.png"), key=lambda x: x.stat().st_mtime, reverse=True):
@@ -344,10 +346,10 @@ async def list_gallery():
             "created": int(filepath.stat().st_mtime),
         })
 
-    return {"images": images[:50]}  # Last 50 images
+    return success_response(data={"images": images[:50]})  # Last 50 images
 
 
 @router.get("/styles")
 async def list_styles():
     """List available image generation styles."""
-    return {"styles": list(STYLES.items())}
+    return success_response(data={"styles": list(STYLES.items())})

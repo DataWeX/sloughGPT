@@ -6,6 +6,8 @@ from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 
+from schemas.common import success_response
+
 router = APIRouter(prefix="/meta-weights", tags=["meta-weights"])
 
 
@@ -26,7 +28,7 @@ class MetaWeightResponse(BaseModel):
 @router.get("/ping")
 async def ping():
     """Health check for meta-weights sub-system."""
-    return {"status": "ok"}
+    return success_response(data={"status": "ok"})
 
 
 @router.post("/get", response_model=MetaWeightResponse)
@@ -55,4 +57,4 @@ async def get_meta_weight_stats(req: Request):
     manager = _get_manager()
     if manager is None:
         raise HTTPException(status_code=503, detail="Meta-weight system not available")
-    return manager.get_stats()
+    return success_response(data=manager.get_stats())

@@ -10,6 +10,8 @@ from typing import Optional
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query
 from pydantic import BaseModel
 
+from schemas.common import success_response
+
 logger = logging.getLogger("man.routers.files")
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -233,7 +235,7 @@ async def delete_file(file_id: str):
     if file_path.exists():
         file_path.unlink()
     _save_metadata(meta)
-    return {"status": "deleted", "file_id": file_id}
+    return success_response(data={"status": "deleted", "file_id": file_id})
 
 
 @router.get("/search", response_model=FileListResponse)

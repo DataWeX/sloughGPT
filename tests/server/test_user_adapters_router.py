@@ -60,7 +60,7 @@ class TestListAdapters:
 
         resp = client.get("/user-adapters")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert "adapters" in data
         assert "stats" in data
         assert len(data["adapters"]) == 2
@@ -83,7 +83,7 @@ class TestGetAdapter:
 
         resp = client.get("/user-adapters/user1")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["user_id"] == "user1"
         assert data["exists"] is True
         assert data["feedback_count"] == 12
@@ -96,7 +96,7 @@ class TestGetAdapter:
 
         resp = client.get("/user-adapters/unknown_user")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["user_id"] == "unknown_user"
         assert data["exists"] is False
 
@@ -117,7 +117,7 @@ class TestUpdateAdapter:
 
         resp = client.post("/user-adapters/user1/update", json={"rating": "good"})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "updated"
         assert data["user_id"] == "user1"
         store.update_adapter.assert_called_once_with("user1", rating="good")
@@ -139,7 +139,7 @@ class TestResetAdapter:
 
         resp = client.post("/user-adapters/user1/reset")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "reset"
         assert data["user_id"] == "user1"
         store.reset_adapter.assert_called_once_with("user1")
@@ -161,7 +161,7 @@ class TestMergeAdapters:
 
         resp = client.post("/user-adapters/merge")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "merged"
         store.merge_all.assert_called_once()
 
@@ -182,7 +182,7 @@ class TestAggregateBest:
 
         resp = client.post("/user-adapters/aggregate-best", json={})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "aggregated_with_eval"
         assert data["eval"]["verdict"] == "improved"
         assert data["output_path"] == "data/user_adapters/best.npz"
@@ -200,7 +200,7 @@ class TestAggregateBest:
 
         resp = client.post("/user-adapters/aggregate-best", json={})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "aggregated"
 
     @patch(STORE_TARGET)
@@ -247,7 +247,7 @@ class TestGetQuality:
 
         resp = client.get("/user-adapters/quality")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert isinstance(data, dict)
 
     @patch(STORE_TARGET)
@@ -267,7 +267,7 @@ class TestDeleteAdapter:
 
         resp = client.delete("/user-adapters/user1")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "deleted"
         assert data["user_id"] == "user1"
         store.delete_adapter.assert_called_once_with("user1")
@@ -289,7 +289,7 @@ class TestPruneAdapters:
 
         resp = client.post("/user-adapters/prune", json={"min_feedback_count": 3, "max_age_days": 15})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "pruned"
         assert data["deleted_count"] == 2
         assert "user3" in data["deleted_users"]
@@ -303,7 +303,7 @@ class TestPruneAdapters:
 
         resp = client.post("/user-adapters/prune", json={})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["deleted_count"] == 0
 
     @patch(STORE_TARGET)

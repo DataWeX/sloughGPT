@@ -473,6 +473,10 @@ class SloTransformerProvider:
 class HFModelProvider:
     """Wraps a HuggingFace model+tokenizer as a ModelProvider.
 
+    .. deprecated::
+        Use ``NumpyEngine`` (no PyTorch) or ``InferenceEngine`` (full features)
+        instead. This engine will be removed in a future version.
+
     Args:
         model: HuggingFace PreTrainedModel
         tokenizer: HuggingFace PreTrainedTokenizer

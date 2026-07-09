@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import threading
 import time
 from dataclasses import dataclass, field
@@ -162,13 +163,39 @@ class AsyncRateLimiter(RateLimiter):
 DEFAULT_LIMITS: dict[str, tuple[float, int]] = {
     # key → (rate, burst)
     "endpoint:health": (10.0, 20),       # 10 req/s, burst 20
-    "endpoint:chat": (2.0, 5),           # 2 req/s, burst 5
-    "endpoint:generate": (1.0, 3),       # 1 req/s, burst 3
-    "endpoint:training": (2.0, 8),       # 2 req/s, burst 8 (supports page load + polling)
+    "endpoint:chat": (5.0, 20),          # 5 req/s, burst 20
+    "endpoint:generate": (3.0, 10),      # 3 req/s, burst 10
+    "endpoint:training": (5.0, 20),      # 5 req/s, burst 20
     "endpoint:login": (0.5, 3),          # 1 req/2s, burst 3
     "endpoint:register": (0.2, 2),       # 1 req/5s, burst 2
-    "model:inference": (1.0, 2),         # 1 inference/s, burst 2
+    "model:inference": (2.0, 8),         # 2 inference/s, burst 8
 }
+
+# Env-var overrides: MAN_RATE_LIMIT__<KEY>__RATE / MAN_RATE_LIMIT__<KEY>__BURST
+# Example: MAN_RATE_LIMIT__ENDPOINT:CHAT__RATE=10.0 MAN_RATE_LIMIT__ENDPOINT:CHAT__BURST=50
+def _apply_rate_limit_env_overrides():
+    prefix = "MAN_RATE_LIMIT__"
+    for env_key, raw in os.environ.items():
+        if not env_key.startswith(prefix):
+            continue
+        rest = env_key[len(prefix):]
+        parts = rest.rsplit("__", 1)
+        if len(parts) != 2:
+            continue
+        limit_key, field = parts[0].replace(":", ":"), parts[1].lower()
+        if limit_key not in DEFAULT_LIMITS or field not in ("rate", "burst"):
+            continue
+        try:
+            val = float(raw) if field == "rate" else int(raw)
+            rate, burst = DEFAULT_LIMITS[limit_key]
+            if field == "rate":
+                DEFAULT_LIMITS[limit_key] = (val, burst)
+            else:
+                DEFAULT_LIMITS[limit_key] = (rate, val)
+        except (ValueError, TypeError):
+            pass
+
+_apply_rate_limit_env_overrides()
 
 
 # ── Singleton ──

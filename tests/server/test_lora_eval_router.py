@@ -44,7 +44,7 @@ class TestRunEval:
 
         resp = client.get("/lora-eval/run", params={"soul": "assistant"})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "baseline_only"
         assert "baseline" in data
         assert data["baseline"]["perplexity"] == 12.5
@@ -70,7 +70,7 @@ class TestRunEval:
             params={"adapter_path": "data/user_adapters/best_aggregated.npz", "soul": "assistant"},
         )
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "compared"
         assert "baseline" in data
         assert "with_adapter" in data
@@ -113,7 +113,7 @@ class TestRunEval:
 
         resp = client.get("/lora-eval/run")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "baseline_only"
 
 
@@ -130,7 +130,7 @@ class TestEvalHistory:
 
         resp = client.get("/lora-eval/history")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert "results" in data
         assert len(data["results"]) == 2
 
@@ -142,7 +142,7 @@ class TestEvalHistory:
 
         resp = client.get("/lora-eval/history")
         assert resp.status_code == 200
-        assert resp.json()["results"] == []
+        assert resp.json()["data"]["results"] == []
 
     @patch("domains.feedback.lora_eval.get_lora_evaluator")
     def test_passes_limit_param(self, mock_get_eval):
@@ -186,7 +186,7 @@ class TestAggregate:
 
         resp = client.post("/lora-eval/aggregate", params={"top_k": 5, "run_eval": True})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "aggregated_with_eval"
         assert data["output_path"] == "data/user_adapters/best.npz"
         assert data["user_count"] == 3
@@ -203,7 +203,7 @@ class TestAggregate:
 
         resp = client.post("/lora-eval/aggregate")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "no_adapters"
 
     @patch("domains.feedback.per_user_lora.get_per_user_lora")
@@ -219,7 +219,7 @@ class TestAggregate:
 
         resp = client.post("/lora-eval/aggregate")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "aggregated_no_eval"
 
     @patch("domains.feedback.per_user_lora.get_per_user_lora")

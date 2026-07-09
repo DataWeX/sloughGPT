@@ -1,36 +1,25 @@
 import React from 'react';
-import {View, Text, StyleSheet, ActivityIndicator} from 'react-native';
-import {colors, spacing, typography} from '../theme';
+import {ActivityIndicator} from 'react-native';
+import {YStack, Text} from 'tamagui';
 
 export function LoadingScreen() {
   return (
-    <View style={styles.container}>
-      <Text style={styles.logo}>SG</Text>
-      <ActivityIndicator size="large" color={colors.primary} style={styles.spinner} />
-      <Text style={styles.text}>Loading SloughGPT...</Text>
-    </View>
+    <YStack flex={1} backgroundColor="$background" alignItems="center" justifyContent="center" gap={16}>
+      <Text
+        fontSize={48}
+        fontWeight="800"
+        color="$color9"
+        letterSpacing={-1}>
+        SG
+      </Text>
+      <ActivityIndicator size="large" color="$color9" style={{marginTop: 8}} />
+      <Text
+        fontSize={13}
+        fontWeight="400"
+        color="$color10"
+        lineHeight={18}>
+        Loading SloughGPT...
+      </Text>
+    </YStack>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.lg,
-  },
-  logo: {
-    fontSize: 48,
-    fontWeight: '800',
-    color: colors.primary,
-    letterSpacing: -1,
-  },
-  spinner: {
-    marginTop: spacing.sm,
-  },
-  text: {
-    ...typography.caption,
-    color: colors.textMuted,
-  },
-});

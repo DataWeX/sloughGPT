@@ -234,16 +234,6 @@ const commands: ChatCommand[] = [
   },
 ]
 
-export function getCommand(input: string): { command: ChatCommand; args: string[] } | null {
-  const trimmed = input.trim()
-  if (!trimmed.startsWith('/')) return null
-  const parts = trimmed.split(/\s+/)
-  const cmdName = parts[0].toLowerCase()
-  const cmd = commands.find(c => c.command === cmdName)
-  if (!cmd) return null
-  return { command: cmd, args: parts.slice(1) }
-}
-
 export function getAllCommands(): ChatCommand[] {
   return [...commands]
 }

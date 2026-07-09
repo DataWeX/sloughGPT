@@ -9,9 +9,11 @@ import time
 import pytest
 
 from domains.infrastructure.lifecycle import (
+    ALL_PROFILES,
     LifecycleManager,
     LifecyclePhase,
     StartupHook,
+    StartupProfile,
     ShutdownHook,
     _topological_sort,
     get_lifecycle_manager,
@@ -523,3 +525,426 @@ async def test_duplicate_shutdown_hook_logged(mgr, caplog):
     mgr.register_shutdown_hook(ShutdownHook("same", hook))
     mgr.register_shutdown_hook(ShutdownHook("same", hook))
     assert "Duplicate shutdown hook" in caplog.text
+
+
+# ── StartupProfile ──
+
+
+class TestStartupProfile:
+    def test_enum_values(self):
+        assert StartupProfile.FULL.value == "full"
+        assert StartupProfile.QUICK.value == "quick"
+        assert StartupProfile.MINIMAL.value == "minimal"
+
+    def test_from_env_default(self, monkeypatch):
+        monkeypatch.delenv("MAN_STARTUP_PROFILE", raising=False)
+        assert StartupProfile.from_env() == StartupProfile.FULL
+
+    def test_from_env_full(self, monkeypatch):
+        monkeypatch.setenv("MAN_STARTUP_PROFILE", "full")
+        assert StartupProfile.from_env() == StartupProfile.FULL
+
+    def test_from_env_quick(self, monkeypatch):
+        monkeypatch.setenv("MAN_STARTUP_PROFILE", "quick")
+        assert StartupProfile.from_env() == StartupProfile.QUICK
+
+    def test_from_env_minimal(self, monkeypatch):
+        monkeypatch.setenv("MAN_STARTUP_PROFILE", "minimal")
+        assert StartupProfile.from_env() == StartupProfile.MINIMAL
+
+    def test_from_env_case_insensitive(self, monkeypatch):
+        monkeypatch.setenv("MAN_STARTUP_PROFILE", "QUICK")
+        assert StartupProfile.from_env() == StartupProfile.QUICK
+
+    def test_from_env_unknown_falls_back(self, monkeypatch):
+        monkeypatch.setenv("MAN_STARTUP_PROFILE", "turbo")
+        assert StartupProfile.from_env() == StartupProfile.FULL
+
+    def test_all_profiles_includes_all(self):
+        assert ALL_PROFILES == frozenset(StartupProfile)
+        assert len(ALL_PROFILES) == 3
+
+
+# ── Profile filtering ──
+
+
+@pytest.mark.asyncio
+async def test_profile_filter_hooks():
+    """Only hooks matching the active profile run."""
+    mgr = LifecycleManager()
+    ran: list[str] = []
+
+    async def make(name: str):
+        async def _run():
+            ran.append(name)
+        return _run
+
+    core = frozenset({StartupProfile.FULL, StartupProfile.QUICK, StartupProfile.MINIMAL})
+    ai = frozenset({StartupProfile.FULL})
+
+    mgr.register_startup_hook(StartupHook("logging", await make("logging"), profiles=core))
+    mgr.register_startup_hook(StartupHook("model", await make("model"), profiles=ai, depends_on=["logging"]))
+
+    await mgr.start(profile=StartupProfile.QUICK)
+    assert ran == ["logging"]  # model skipped for quick
+
+
+@pytest.mark.asyncio
+async def test_profile_full_runs_all():
+    mgr = LifecycleManager()
+    ran: list[str] = []
+
+    async def make(name: str):
+        async def _run():
+            ran.append(name)
+        return _run
+
+    core = frozenset({StartupProfile.FULL, StartupProfile.QUICK, StartupProfile.MINIMAL})
+    ai = frozenset({StartupProfile.FULL})
+
+    mgr.register_startup_hook(StartupHook("logging", await make("logging"), profiles=core))
+    mgr.register_startup_hook(StartupHook("model", await make("model"), profiles=ai, depends_on=["logging"]))
+
+    await mgr.start(profile=StartupProfile.FULL)
+    assert ran == ["logging", "model"]
+
+
+@pytest.mark.asyncio
+async def test_profile_minimal_skips_ai():
+    mgr = LifecycleManager()
+    ran: list[str] = []
+
+    async def make(name: str):
+        async def _run():
+            ran.append(name)
+        return _run
+
+    core = frozenset({StartupProfile.FULL, StartupProfile.QUICK, StartupProfile.MINIMAL})
+    ai = frozenset({StartupProfile.FULL})
+
+    mgr.register_startup_hook(StartupHook("logging", await make("logging"), profiles=core))
+    mgr.register_startup_hook(StartupHook("model", await make("model"), profiles=ai, depends_on=["logging"]))
+
+    await mgr.start(profile=StartupProfile.MINIMAL)
+    assert ran == ["logging"]
+
+
+@pytest.mark.asyncio
+async def test_profile_defaults_to_env(mgr, monkeypatch):
+    monkeypatch.setenv("MAN_STARTUP_PROFILE", "quick")
+    ran: list[str] = []
+
+    async def make(name: str):
+        async def _run():
+            ran.append(name)
+        return _run
+
+    core = frozenset({StartupProfile.FULL, StartupProfile.QUICK, StartupProfile.MINIMAL})
+    ai = frozenset({StartupProfile.FULL})
+
+    mgr.register_startup_hook(StartupHook("logging", await make("logging"), profiles=core))
+    mgr.register_startup_hook(StartupHook("model", await make("model"), profiles=ai, depends_on=["logging"]))
+
+    await mgr.start()  # no profile arg — reads from env
+    assert ran == ["logging"]
+
+
+# ── Preview ──
+
+
+@pytest.mark.asyncio
+async def test_preview_full():
+    mgr = LifecycleManager()
+    core = ALL_PROFILES
+    ai = frozenset({StartupProfile.FULL})
+
+    async def noop():
+        pass
+
+    mgr.register_startup_hook(StartupHook("logging", noop, profiles=core))
+    mgr.register_startup_hook(StartupHook("model", noop, profiles=ai, depends_on=["logging"]))
+
+    prev = mgr.preview(StartupProfile.FULL)
+    names = [h["name"] for h in prev]
+    assert names == ["logging", "model"]
+
+
+@pytest.mark.asyncio
+async def test_preview_quick():
+    mgr = LifecycleManager()
+    core = ALL_PROFILES
+    ai = frozenset({StartupProfile.FULL})
+
+    async def noop():
+        pass
+
+    mgr.register_startup_hook(StartupHook("logging", noop, profiles=core))
+    mgr.register_startup_hook(StartupHook("model", noop, profiles=ai, depends_on=["logging"]))
+
+    prev = mgr.preview(StartupProfile.QUICK)
+    names = [h["name"] for h in prev]
+    assert names == ["logging"]
+
+
+@pytest.mark.asyncio
+async def test_preview_uses_active_profile():
+    mgr = LifecycleManager()
+    core = ALL_PROFILES
+    ai = frozenset({StartupProfile.FULL})
+
+    async def noop():
+        pass
+
+    mgr.register_startup_hook(StartupHook("logging", noop, profiles=core))
+    mgr.register_startup_hook(StartupHook("model", noop, profiles=ai, depends_on=["logging"]))
+
+    await mgr.start(profile=StartupProfile.QUICK)
+    prev = mgr.preview()  # no arg — uses active profile
+    names = [h["name"] for h in prev]
+    assert names == ["logging"]
+
+
+@pytest.mark.asyncio
+async def test_preview_returns_hook_details():
+    mgr = LifecycleManager()
+
+    async def noop():
+        pass
+
+    mgr.register_startup_hook(StartupHook("my_hook", noop, profiles=ALL_PROFILES, depends_on=[], timeout=15.0, critical=False))
+
+    prev = mgr.preview(StartupProfile.FULL)
+    assert len(prev) == 1
+    hook = prev[0]
+    assert hook["name"] == "my_hook"
+    assert hook["critical"] is False
+    assert hook["timeout"] == 15.0
+    assert hook["depends_on"] == []
+
+
+# ── get_results with profile info ──
+
+
+@pytest.mark.asyncio
+async def test_get_results_includes_profile():
+    mgr = LifecycleManager()
+    await mgr.start(profile=StartupProfile.QUICK)
+    results = mgr.get_results()
+    assert results["profile"] == "quick"
+    assert "preview" in results["hooks"]
+
+
+@pytest.mark.asyncio
+async def test_get_results_preview_list():
+    mgr = LifecycleManager()
+
+    async def noop():
+        pass
+
+    mgr.register_startup_hook(StartupHook("a", noop, profiles=ALL_PROFILES))
+    await mgr.start(profile=StartupProfile.MINIMAL)
+    results = mgr.get_results()
+    preview = results["hooks"]["preview"]
+    assert isinstance(preview, list)
+    assert preview[0]["name"] == "a"
+
+
+# ── Server-level endpoint test ──
+
+
+@pytest.mark.asyncio
+async def test_lifecycle_endpoint():
+    """Verify /system/lifecycle returns expected fields via TestClient."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    app = FastAPI()
+
+    @app.get("/system/lifecycle")
+    async def _lifecycle():
+        from domains.infrastructure.lifecycle import get_lifecycle_manager
+        mgr = get_lifecycle_manager()
+        return mgr.get_results()
+
+    client = TestClient(app)
+
+    # No lifecycle manager running — returns default state
+    resp = client.get("/system/lifecycle")
+    assert resp.status_code == 200
+    data = resp.json()
+    # INIT phase by default
+    assert "phase" in data
+    assert "profile" in data
+    assert "uptime" in data
+    assert "in_flight" in data
+    assert "hooks" in data
+    assert "gates" in data
+
+
+# ── Empty profiles field = all profiles ──
+
+
+@pytest.mark.asyncio
+async def test_empty_profiles_field_defaults_to_all():
+    """A StartupHook with no profiles set should run under all profiles."""
+    mgr = LifecycleManager()
+    ran: list[str] = []
+
+    async def my_hook():
+        ran.append("ran")
+
+    # No profiles field — defaults to ALL_PROFILES
+    mgr.register_startup_hook(StartupHook("always", my_hook))
+
+    await mgr.start(profile=StartupProfile.MINIMAL)
+    assert ran == ["ran"]
+
+
+# ── Hook result tracking ──
+
+
+@pytest.mark.asyncio
+async def test_startup_results_after_success():
+    mgr = LifecycleManager()
+    ran: list[str] = []
+
+    async def hook_a():
+        ran.append("a")
+
+    async def hook_b():
+        ran.append("b")
+
+    mgr.register_startup_hook(StartupHook("a", hook_a))
+    mgr.register_startup_hook(StartupHook("b", hook_b, depends_on=["a"]))
+
+    await mgr.start()
+    assert mgr.phase == LifecyclePhase.RUNNING
+
+    results = mgr.startup_results
+    assert len(results) == 2
+    assert results[0]["name"] == "a"
+    assert results[0]["success"] is True
+    assert results[0]["error"] == ""
+    assert results[1]["name"] == "b"
+    assert results[1]["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_startup_results_shows_failure():
+    mgr = LifecycleManager()
+
+    async def ok_hook():
+        pass
+
+    async def fail_hook():
+        raise RuntimeError("broken")
+
+    mgr.register_startup_hook(StartupHook("ok", ok_hook, critical=False))
+    mgr.register_startup_hook(StartupHook("fail", fail_hook, critical=True, depends_on=["ok"]))
+
+    await mgr.start()
+    assert mgr.phase == LifecyclePhase.CRASHED
+
+    results = mgr.startup_results
+    assert len(results) == 2
+    assert results[0]["name"] == "ok"
+    assert results[0]["success"] is True
+    assert results[1]["name"] == "fail"
+    assert results[1]["success"] is False
+    assert "broken" in results[1]["error"]
+
+
+@pytest.mark.asyncio
+async def test_startup_results_timeout_shown():
+    mgr = LifecycleManager()
+
+    async def slow_hook():
+        await asyncio.sleep(10)
+
+    mgr.register_startup_hook(StartupHook("slow", slow_hook, timeout=0.05, critical=True))
+
+    await mgr.start()
+
+    results = mgr.startup_results
+    assert len(results) == 1
+    assert results[0]["name"] == "slow"
+    assert results[0]["success"] is False
+    assert "timed out" in results[0]["error"]
+
+
+@pytest.mark.asyncio
+async def test_shutdown_results_after_success():
+    mgr = LifecycleManager()
+
+    async def noop():
+        pass
+
+    mgr.register_startup_hook(StartupHook("a", noop))
+    mgr.register_shutdown_hook(ShutdownHook("clean", noop))
+
+    await mgr.start()
+    await mgr.shutdown()
+
+    results = mgr.shutdown_results
+    assert len(results) == 1
+    assert results[0]["name"] == "clean"
+    assert results[0]["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_shutdown_results_with_failure():
+    mgr = LifecycleManager()
+
+    async def noop():
+        pass
+
+    async def fail_shutdown():
+        raise ValueError("shutdown fail")
+
+    mgr.register_startup_hook(StartupHook("a", noop))
+    mgr.register_shutdown_hook(ShutdownHook("good", noop))
+    mgr.register_shutdown_hook(ShutdownHook("bad", fail_shutdown))
+
+    await mgr.start()
+    await mgr.shutdown()
+
+    results = mgr.shutdown_results
+    assert len(results) == 2
+    # reverse topological order: "bad" inserted after "good" but runs first
+    bad_result = results[0] if results[0]["name"] == "bad" else results[1]
+    assert bad_result["name"] == "bad"
+    assert bad_result["success"] is False
+    assert "shutdown fail" in bad_result["error"]
+
+
+@pytest.mark.asyncio
+async def test_get_results_contains_hook_results():
+    mgr = LifecycleManager()
+
+    async def noop():
+        pass
+
+    mgr.register_startup_hook(StartupHook("a", noop))
+    mgr.register_shutdown_hook(ShutdownHook("z", noop))
+
+    await mgr.start()
+    info = mgr.get_results()
+    assert "startup_results" in info["hooks"]
+    assert "shutdown_results" in info["hooks"]
+    assert len(info["hooks"]["startup_results"]) == 1
+
+    await mgr.shutdown()
+    info = mgr.get_results()
+    assert len(info["hooks"]["shutdown_results"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_startup_results_empty_before_start():
+    mgr = LifecycleManager()
+    assert mgr.startup_results == []
+
+
+@pytest.mark.asyncio
+async def test_shutdown_results_empty_before_shutdown():
+    mgr = LifecycleManager()
+    assert mgr.shutdown_results == []

@@ -12,6 +12,7 @@ from typing import List, Optional, Dict, Any
 from pathlib import Path
 
 from schemas.models import ModelInfo, LoadModelRequest, LoadModelResponse, ModelStatus
+from schemas.common import success_response, error_response
 from controllers.models import get_models_controller
 
 logger = logging.getLogger(__name__)
@@ -61,7 +62,7 @@ async def list_models():
                 description=_describe_model(model_id, entry.get("parameters", 0), loaded=False),
             ))
 
-    return models
+    return success_response(data=[m.model_dump() for m in models])
 
 
 def _describe_model(model_id: str, parameters: int, loaded: bool) -> str:
@@ -172,7 +173,7 @@ async def load_model(req: LoadModelRequest):
             ss.record_model_event("error", req.model_id, result.get("error", "unknown"))
     except Exception as e:
         logger.debug("Failed to record model load event: %s", e)
-    return LoadModelResponse(**result)
+    return success_response(data=result)
 
 
 @router.post("/unload")
@@ -186,7 +187,7 @@ async def unload_model():
         ss.record_model_event("unload", ctrl._current_model or "unknown")
     except Exception as e:
         logger.debug("Failed to record model unload event: %s", e)
-    return result
+    return success_response(data=result)
 
 
 @router.get("/current")
@@ -196,7 +197,7 @@ async def current_model():
     model = ctrl.get_current_model()
     if not model:
         raise HTTPException(status_code=404, detail="No model loaded")
-    return model
+    return success_response(data=model)
 
 
 @router.get("/hf")
@@ -263,10 +264,7 @@ async def list_hf_models(q: Optional[str] = None):
         except Exception:
             pass
 
-    return {
-        "models": models_out,
-        "q": q,
-    }
+    return success_response(data=models_out, meta={"q": q})
 
 
 @router.get("/logs")
@@ -275,13 +273,10 @@ async def get_model_logs(limit: int = 50, model_filter: Optional[str] = None):
     try:
         from state import model_request_logger as _logger
         if _logger:
-            return {
-                "logs": _logger.get_logs(limit=limit, model=model_filter),
-                "stats": _logger.get_stats(),
-            }
-        return {"logs": [], "stats": {}}
+            return success_response(data=_logger.get_logs(limit=limit, model=model_filter), meta=_logger.get_stats())
+        return success_response(data=[], meta={})
     except ImportError:
-        return {"logs": [], "stats": {}}
+        return success_response(data=[], meta={})
 
 
 class ExportRequest(BaseModel):
@@ -296,7 +291,7 @@ async def export_model(request: ExportRequest):
     import state as server_state
     import time
     if server_state.model is None:
-        return {"error": "No model loaded"}
+        return error_response(message="No model loaded")
     try:
         from domains.training.export import export_model as do_export, ExportConfig
         config = ExportConfig(
@@ -310,16 +305,16 @@ async def export_model(request: ExportRequest):
             },
         )
         results = do_export(config, server_state.model, server_state.tokenizer)
-        return {"status": "exported", "format": request.format, "files": results}
+        return success_response(data={"format": request.format, "files": results}, message="exported")
     except Exception as e:
-        return {"error": str(e)}
+        return error_response(message=str(e))
 
 
 @router.get("/export/formats", tags=["models"])
 async def get_export_formats():
     """Get list of supported export formats."""
     from domains.training.export import list_export_formats
-    return {"formats": list_export_formats()}
+    return success_response(data=list_export_formats())
 
 
 class DownloadRequest(BaseModel):
@@ -340,13 +335,13 @@ async def start_download(req: DownloadRequest) -> Dict[str, Any]:
     mgr = get_download_manager()
 
     if mgr.is_cached(req.model_id):
-        return {"status": "already_cached", "model_id": req.model_id}
+        return success_response(data={"model_id": req.model_id}, message="already_cached")
 
     if mgr.is_downloading(req.model_id):
-        return {"status": "already_downloading", "model_id": req.model_id}
+        return success_response(data={"model_id": req.model_id}, message="already_downloading")
 
     asyncio.create_task(_run_download(req.model_id, req.total_bytes_hint))
-    return {"status": "started", "model_id": req.model_id}
+    return success_response(data={"model_id": req.model_id}, message="started")
 
 
 async def _run_download(model_id: str, total_bytes_hint: int):
@@ -374,8 +369,8 @@ async def get_download_status(model_id: str) -> Dict[str, Any]:
     progress = mgr.get_progress(model_id)
     if progress is None:
         cached = mgr.is_cached(model_id)
-        return {"model_id": model_id, "status": "not_found", "cached": cached}
-    return progress
+        return success_response(data={"model_id": model_id, "cached": cached}, message="not_found")
+    return success_response(data=progress)
 
 
 @router.get("/downloads")
@@ -385,7 +380,7 @@ async def list_downloads() -> Dict[str, Any]:
 
     mgr = get_download_manager()
     mgr.cleanup_stale()
-    return {"downloads": mgr.list_downloads()}
+    return success_response(data=mgr.list_downloads())
 
 
 @router.post("/download/{model_id:path}/cancel")
@@ -395,8 +390,8 @@ async def cancel_download(model_id: str) -> Dict[str, Any]:
 
     mgr = get_download_manager()
     if mgr.cancel(model_id):
-        return {"status": "cancelled", "model_id": model_id}
-    return {"status": "not_found", "model_id": model_id}
+        return success_response(data={"model_id": model_id}, message="cancelled")
+    return success_response(data={"model_id": model_id}, message="not_found")
 
 
 @router.post("/download/{model_id:path}/verify")
@@ -440,10 +435,10 @@ async def retry_download(model_id: str) -> Dict[str, Any]:
 
     mgr = get_download_manager()
     if mgr.is_downloading(model_id):
-        return {"status": "already_downloading", "model_id": model_id}
+        return success_response(data={"model_id": model_id}, message="already_downloading")
 
     asyncio.create_task(_run_download(model_id, 0))
-    return {"status": "started", "model_id": model_id}
+    return success_response(data={"model_id": model_id}, message="started")
 
 
 @router.get("/cache-usage")
@@ -451,7 +446,7 @@ async def cache_usage() -> Dict[str, Any]:
     """Total disk usage of the HuggingFace model cache (fast — walks blobs/ only)."""
     cache = _hf_cache_dir
     if not cache.exists():
-        return {"total_bytes": 0, "total_gb": 0, "model_count": 0, "cache_dir": str(cache)}
+        return success_response(data={"total_bytes": 0, "total_gb": 0, "model_count": 0, "cache_dir": str(cache)})
     total = 0
     count = 0
     for entry in cache.iterdir():
@@ -465,12 +460,12 @@ async def cache_usage() -> Dict[str, Any]:
                         except OSError:
                             pass
             count += 1
-    return {
+    return success_response(data={
         "total_bytes": total,
         "total_gb": round(total / (1024**3), 2),
         "model_count": count,
         "cache_dir": str(cache),
-    }
+    })
 
 
 @router.get("/download/qwen-gguf")
@@ -519,4 +514,4 @@ async def visual_model_load(model_dir: str = "", model_id: str = ""):
         result = ctrl.load_model(model_id)
     else:
         raise HTTPException(status_code=400, detail="Either model_dir or model_id required")
-    return {"status": result.get("status", "ok"), "message": str(result)}
+    return success_response(data=result, message=result.get("status", "ok"))

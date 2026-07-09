@@ -9,6 +9,8 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from fastapi import APIRouter
 
+from schemas.common import success_response
+
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
 _SIMPLE_METRICS = {
@@ -31,11 +33,11 @@ def record_latency(duration_ms: float):
 async def get_metrics():
     """Get internal request metrics."""
     total = _SIMPLE_METRICS["request_counter"]
-    return {
+    return success_response(data={
         "requests_total": total,
         "started_at": _SIMPLE_METRICS["started_at"],
         "latency_buckets": dict(_SIMPLE_METRICS["latency_buckets"]),
-    }
+    })
 
 
 @router.get("/prometheus")

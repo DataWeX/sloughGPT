@@ -7,6 +7,8 @@ from typing import Dict, Any
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException
 
+from schemas.common import success_response
+
 router = APIRouter(prefix="/workflow", tags=["workflow"])
 
 
@@ -29,7 +31,7 @@ def _get_workflow():
 @router.get("/status")
 async def get_workflow_status() -> Dict[str, Any]:
     """Get current workflow status and statistics."""
-    return _get_workflow().get_status()
+    return success_response(data=_get_workflow().get_status())
 
 
 @router.post("/start")
@@ -45,7 +47,7 @@ async def start_workflow(request: WorkflowStartRequest) -> Dict[str, Any]:
     workflow = _get_workflow()
     workflow.config = config
     workflow.start()
-    return {"status": "started", "config": request.model_dump()}
+    return success_response(data={"status": "started", "config": request.model_dump()})
 
 
 @router.post("/stop")
@@ -53,7 +55,7 @@ async def stop_workflow() -> Dict[str, Any]:
     """Stop the automated feedback workflow."""
     workflow = _get_workflow()
     workflow.stop()
-    return {"status": "stopped"}
+    return success_response(data={"status": "stopped"})
 
 
 @router.post("/trigger/{action}")

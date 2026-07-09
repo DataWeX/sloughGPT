@@ -4,8 +4,8 @@
  */
 
 import React, {useEffect, useRef} from 'react';
-import {View, Animated, StyleSheet} from 'react-native';
-import {colors, radii} from '../theme';
+import {Animated} from 'react-native';
+import {YStack, XStack} from 'tamagui';
 
 interface SkeletonProps {
   width?: number | string;
@@ -14,7 +14,7 @@ interface SkeletonProps {
   style?: object;
 }
 
-export function Skeleton({width, height = 16, borderRadius = radii.sm, style}: SkeletonProps) {
+export function Skeleton({width, height = 16, borderRadius = 4, style}: SkeletonProps) {
   const pulse = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
@@ -31,7 +31,7 @@ export function Skeleton({width, height = 16, borderRadius = radii.sm, style}: S
   return (
     <Animated.View
       style={[
-        {width, height, borderRadius, backgroundColor: colors.border, opacity: pulse},
+        {width, height, borderRadius, backgroundColor: '$borderColor', opacity: pulse},
         style,
       ]}
     />
@@ -42,9 +42,9 @@ export function Skeleton({width, height = 16, borderRadius = radii.sm, style}: S
 
 export function SkeletonCard({lines = 3}: {lines?: number}) {
   return (
-    <View style={cardStyles.card}>
+    <YStack backgroundColor="$background" borderRadius={8} padding={16} marginBottom={12}>
       <Skeleton width="40%" height={14} />
-      <View style={{gap: 8, marginTop: 12}}>
+      <YStack gap={8} marginTop={12}>
         {Array.from({length: lines}).map((_, i) => (
           <Skeleton
             key={i}
@@ -52,48 +52,25 @@ export function SkeletonCard({lines = 3}: {lines?: number}) {
             height={12}
           />
         ))}
-      </View>
-    </View>
+      </YStack>
+    </YStack>
   );
 }
 
 export function SkeletonChatBubble() {
   return (
-    <View style={chatStyles.row}>
+    <XStack paddingHorizontal={16} marginBottom={12} alignItems="flex-start">
       <Skeleton width="70%" height={40} borderRadius={16} />
-    </View>
+    </XStack>
   );
 }
 
 export function SkeletonList({count = 4, lines = 2}: {count?: number; lines?: number}) {
   return (
-    <View style={listStyles.container}>
+    <YStack padding={16}>
       {Array.from({length: count}).map((_, i) => (
         <SkeletonCard key={i} lines={lines} />
       ))}
-    </View>
+    </YStack>
   );
 }
-
-const cardStyles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    padding: 16,
-    marginBottom: 12,
-  },
-});
-
-const chatStyles = StyleSheet.create({
-  row: {
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    alignItems: 'flex-start',
-  },
-});
-
-const listStyles = StyleSheet.create({
-  container: {
-    padding: 16,
-  },
-});

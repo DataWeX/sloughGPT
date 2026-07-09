@@ -1,20 +1,19 @@
 import React, {useEffect, useState, useCallback, useRef} from 'react';
 import {
-  View,
-  Text,
   FlatList,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   RefreshControl,
   Modal,
   Keyboard,
   Share,
+  View,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {YStack, XStack, Text} from 'tamagui';
 import {api} from '../services/api-client';
 import {StatusBadge} from '../components/StatusBadge';
-import {colors, spacing, radii, typography} from '../theme';
+import {Icon} from '../components/Icon';
 import type {KnowledgeItem} from '../types';
 
 export function KnowledgeScreen() {
@@ -144,10 +143,7 @@ export function KnowledgeScreen() {
         importance: item.importance,
       }));
       const json = JSON.stringify(data, null, 2);
-      await Share.share({
-        title: 'Knowledge Export',
-        message: json,
-      });
+      await Share.share({title: 'Knowledge Export', message: json});
     } catch {}
   };
 
@@ -168,10 +164,7 @@ export function KnowledgeScreen() {
       const lines = importText.split('\n').filter(l => l.trim().length > 2);
       await Promise.all(
         lines.map(line =>
-          api.post('/knowledge', {
-            content: line.trim(),
-            topic: formTopic.trim() || undefined,
-          }),
+          api.post('/knowledge', {content: line.trim(), topic: formTopic.trim() || undefined}),
         ),
       );
       setImportModalVisible(false);
@@ -186,560 +179,253 @@ export function KnowledgeScreen() {
   const renderItem = ({item}: {item: KnowledgeItem}) => {
     const isSelected = selectedIds.has(item.id);
     return (
-      <TouchableOpacity
-        style={[styles.itemCard, isSelected && styles.itemCardSelected]}
-        onLongPress={() => {
-          setSelectMode(true);
-          setSelectedIds(new Set([item.id]));
-        }}
+      <YStack
+        backgroundColor={isSelected ? '#7C52C410' : 'white'}
+        borderRadius={8}
+        padding={12}
+        borderWidth={isSelected ? 1 : 0}
+        borderColor={isSelected ? '$color9' : 'transparent'}
+        onLongPress={() => { setSelectMode(true); setSelectedIds(new Set([item.id])); }}
         onPress={() => {
-          if (selectMode) {
-            toggleSelect(item.id);
-          } else {
-            openEdit(item);
-          }
-        }}
-        activeOpacity={0.7}>
-        <View style={styles.itemHeader}>
+          if (selectMode) toggleSelect(item.id);
+          else openEdit(item);
+        }}>
+        <XStack alignItems="flex-start" gap={8} marginBottom={8}>
           {selectMode && (
-            <View style={[styles.checkbox, isSelected && styles.checkboxActive]}>
-              {isSelected && <View style={styles.checkInner} />}
-            </View>
+            <YStack
+              width={20} height={20} borderRadius={4} borderWidth={2}
+              borderColor={isSelected ? '$color9' : '$borderColor'}
+              backgroundColor={isSelected ? '$color9' : 'transparent'}
+              alignItems="center" justifyContent="center" marginTop={2}>
+              {isSelected && <View style={{width: 10, height: 10, borderRadius: 2, backgroundColor: 'white'}} />}
+            </YStack>
           )}
-          <Text style={styles.itemContent} numberOfLines={3}>
+          <Text fontSize={14} color="$color" flex={1} numberOfLines={3}>
             {item.content}
           </Text>
-        </View>
-        <View style={styles.itemFooter}>
-          <View style={styles.itemMeta}>
+        </XStack>
+        <XStack alignItems="center" justifyContent="space-between">
+          <XStack alignItems="center" gap={8} flex={1}>
             {item.topic && <StatusBadge label={item.topic} variant="info" />}
-            <View style={styles.importanceDots}>
+            <XStack gap={3}>
               {Array.from({length: 5}).map((_, i) => (
                 <View
                   key={i}
-                  style={[styles.dot, i < item.importance && styles.dotFilled]}
+                  style={{
+                    width: 6, height: 6, borderRadius: 3,
+                    backgroundColor: i < item.importance ? '#F0935C' : '#E0DCE8',
+                  }}
                 />
               ))}
-            </View>
-          </View>
+            </XStack>
+          </XStack>
           {!selectMode && (
-            <View style={styles.itemActions}>
-              <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={() => openEdit(item)}>
+            <XStack gap={4}>
+              <YStack onPress={() => openEdit(item)}>
                 <StatusBadge label="Edit" variant="info" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={() => handleDelete(item.id)}>
+              </YStack>
+              <YStack onPress={() => handleDelete(item.id)}>
                 <StatusBadge label="Del" variant="error" />
-              </TouchableOpacity>
-            </View>
+              </YStack>
+            </XStack>
           )}
-        </View>
-      </TouchableOpacity>
+        </XStack>
+      </YStack>
     );
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        {selectMode ? (
-          <View style={styles.selectHeader}>
-            <TouchableOpacity onPress={() => { setSelectMode(false); setSelectedIds(new Set()); }}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={styles.selectCount}>{selectedIds.size} selected</Text>
-            <TouchableOpacity
-              onPress={handleBatchDelete}
-              disabled={selectedIds.size === 0}>
-              <Text style={[styles.deleteText, selectedIds.size === 0 && styles.disabledText]}>
-                Delete ({selectedIds.size})
+    <SafeAreaView style={{flex: 1, backgroundColor: '#F5F0FF'}} edges={['top']}>
+      <YStack flex={1}>
+        <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={16} paddingVertical={12}>
+          {selectMode ? (
+            <XStack alignItems="center" justifyContent="space-between" flex={1}>
+              <YStack onPress={() => { setSelectMode(false); setSelectedIds(new Set()); }}>
+                <Text fontSize={13} fontWeight="600" color="$color9">Cancel</Text>
+              </YStack>
+              <Text fontSize={14} fontWeight="600" color="$color">{selectedIds.size} selected</Text>
+              <YStack onPress={handleBatchDelete} opacity={selectedIds.size === 0 ? 0.4 : 1}>
+                <Text fontSize={13} fontWeight="600" color="#D44C56">
+                  Delete ({selectedIds.size})
+                </Text>
+              </YStack>
+            </XStack>
+          ) : (
+            <>
+              <Text fontSize={20} fontWeight="600" letterSpacing={-0.2} color="$color">
+                What AI Knows About Me
               </Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            <Text style={styles.title}>Knowledge</Text>
-            <View style={styles.headerActions}>
-              {items.length > 0 && (
-                <TouchableOpacity style={styles.exportBtn} onPress={handleExport}>
-                  <Text style={styles.exportBtnText}>Export</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={styles.importBtn}
-                onPress={() => { setImportText(''); setImportModalVisible(true); }}>
-                <Text style={styles.importBtnText}>Import</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.addBtn}
-                onPress={() => {
-                  setFormContent('');
-                  setFormTopic('');
-                  setAddModalVisible(true);
-                }}>
-                <Text style={styles.addBtnText}>+ Add</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
-      </View>
-
-      {!selectMode && (
-        <View style={styles.searchRow}>
-          <TextInput
-            style={styles.searchInput}
-            value={search}
-            onChangeText={debouncedSearch}
-            placeholder="Search knowledge..."
-            placeholderTextColor={colors.textMuted}
-            returnKeyType="search"
-            onSubmitEditing={() => Keyboard.dismiss()}
-          />
-        </View>
-      )}
-
-      {!selectMode && topics.length > 0 && (
-        <FlatList
-          horizontal
-          data={[null, ...topics]}
-          renderItem={({item: topic}) => (
-            <TouchableOpacity
-              style={[
-                styles.topicChip,
-                selectedTopic === topic && styles.topicChipActive,
-              ]}
-              onPress={() => setSelectedTopic(topic)}>
-              <Text
-                style={[
-                  styles.topicChipText,
-                  selectedTopic === topic && styles.topicChipTextActive,
-                ]}>
-                {topic || 'All'}
-              </Text>
-            </TouchableOpacity>
+              <XStack gap={8}>
+                {items.length > 0 && (
+                  <YStack backgroundColor="white" borderRadius={8} paddingHorizontal={12} paddingVertical={6} borderWidth={1} borderColor="$borderColor" onPress={handleExport}>
+                    <Text fontSize={13} fontWeight="600" color="$color11">Export</Text>
+                  </YStack>
+                )}
+                <YStack backgroundColor="white" borderRadius={8} paddingHorizontal={12} paddingVertical={6} borderWidth={1} borderColor="$borderColor" onPress={() => { setImportText(''); setImportModalVisible(true); }}>
+                  <Text fontSize={13} fontWeight="600" color="$color11">Import</Text>
+                </YStack>
+                <YStack backgroundColor="$color9" borderRadius={8} paddingHorizontal={12} paddingVertical={6} onPress={() => { setFormContent(''); setFormTopic(''); setAddModalVisible(true); }}>
+                  <Text fontSize={13} fontWeight="600" color="white">+ Add</Text>
+                </YStack>
+              </XStack>
+            </>
           )}
-          keyExtractor={item => item || 'all'}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.topicRow}
-        />
-      )}
+        </XStack>
 
-      <FlatList
-        data={items}
-        renderItem={renderItem}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.list}
-        keyboardDismissMode="on-drag"
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>📚</Text>
-            <Text style={styles.emptyText}>No knowledge items yet</Text>
-          </View>
-        }
-      />
+        {!selectMode && (
+          <XStack paddingHorizontal={16} marginBottom={8}>
+            <TextInput
+              style={{flex: 1, fontSize: 14, color: '#1A1625', backgroundColor: 'white', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#E0DCE8'}}
+              value={search}
+              onChangeText={debouncedSearch}
+              placeholder="Search knowledge..."
+              placeholderTextColor="#9B95A8"
+              returnKeyType="search"
+              onSubmitEditing={() => Keyboard.dismiss()}
+            />
+          </XStack>
+        )}
+
+        {!selectMode && topics.length > 0 && (
+          <FlatList
+            horizontal
+            data={[null, ...topics]}
+            renderItem={({item: topic}) => (
+              <YStack
+                paddingHorizontal={12} paddingVertical={4} borderRadius={9999}
+                backgroundColor={selectedTopic === topic ? '$color9' : 'white'}
+                borderWidth={1}
+                borderColor={selectedTopic === topic ? '$color9' : '$borderColor'}
+                onPress={() => setSelectedTopic(topic)}>
+                <Text fontSize={11} fontWeight="500" color={selectedTopic === topic ? 'white' : '$color11'}>
+                  {topic || 'All'}
+                </Text>
+              </YStack>
+            )}
+            keyExtractor={item => item || 'all'}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{paddingHorizontal: 16, gap: 4, marginBottom: 8}}
+          />
+        )}
+
+        <FlatList
+          data={items}
+          renderItem={renderItem}
+          keyExtractor={item => item.id}
+          contentContainerStyle={{padding: 16, gap: 8}}
+          keyboardDismissMode="on-drag"
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          ListEmptyComponent={
+            <YStack alignItems="center" paddingVertical={64}>
+              <Icon name="book-open" size={48} color="#9B95A8" />
+              <Text fontSize={14} color="$color10">No knowledge items yet</Text>
+            </YStack>
+          }
+        />
+      </YStack>
 
       <Modal visible={addModalVisible} animationType="slide" transparent>
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setAddModalVisible(false)}>
-          <TouchableOpacity activeOpacity={1} style={styles.modalContent} onPress={() => {}}>
-            <Text style={styles.modalTitle}>Add Knowledge</Text>
+        <TouchableOpacity activeOpacity={1} onPress={() => setAddModalVisible(false)} style={{flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end'}}>
+          <TouchableOpacity activeOpacity={1} style={{backgroundColor: '#F5F0FF', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, gap: 12}} onPress={() => {}}>
+            <Text fontSize={16} fontWeight="600" color="$color">Add Knowledge</Text>
             <TextInput
-              style={styles.modalInput}
+              style={{fontSize: 14, color: '#1A1625', backgroundColor: 'white', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12, minHeight: 100, textAlignVertical: 'top', borderWidth: 1, borderColor: '#E0DCE8'}}
               value={formContent}
               onChangeText={setFormContent}
               placeholder="Content..."
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor="#9B95A8"
               multiline
-              textAlignVertical="top"
               autoFocus
             />
             <TextInput
-              style={styles.modalInputShort}
+              style={{fontSize: 14, color: '#1A1625', backgroundColor: 'white', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12, borderWidth: 1, borderColor: '#E0DCE8'}}
               value={formTopic}
               onChangeText={setFormTopic}
               placeholder="Topic (optional)"
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor="#9B95A8"
               returnKeyType="done"
             />
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setAddModalVisible(false)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveBtn, !formContent.trim() && styles.saveBtnDisabled]}
-                onPress={handleAdd}
-                disabled={!formContent.trim()}>
-                <Text style={styles.saveText}>Add</Text>
-              </TouchableOpacity>
-            </View>
+            <XStack gap={8} justifyContent="flex-end">
+              <YStack onPress={() => setAddModalVisible(false)} paddingHorizontal={20} paddingVertical={8} borderRadius={8}>
+                <Text fontSize={13} fontWeight="600" color="$color11">Cancel</Text>
+              </YStack>
+              <YStack onPress={handleAdd} opacity={!formContent.trim() ? 0.4 : 1} backgroundColor="$color9" paddingHorizontal={24} paddingVertical={8} borderRadius={8}>
+                <Text fontSize={13} fontWeight="600" color="white">Add</Text>
+              </YStack>
+            </XStack>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
 
       <Modal visible={!!editItem} animationType="slide" transparent>
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setEditItem(null)}>
-          <TouchableOpacity activeOpacity={1} style={styles.modalContent} onPress={() => {}}>
-            <Text style={styles.modalTitle}>Edit Knowledge</Text>
+        <TouchableOpacity activeOpacity={1} onPress={() => setEditItem(null)} style={{flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end'}}>
+          <TouchableOpacity activeOpacity={1} style={{backgroundColor: '#F5F0FF', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, gap: 12}} onPress={() => {}}>
+            <Text fontSize={16} fontWeight="600" color="$color">Edit Knowledge</Text>
             <TextInput
-              style={styles.modalInput}
+              style={{fontSize: 14, color: '#1A1625', backgroundColor: 'white', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12, minHeight: 100, textAlignVertical: 'top', borderWidth: 1, borderColor: '#E0DCE8'}}
               value={formContent}
               onChangeText={setFormContent}
               placeholder="Content..."
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor="#9B95A8"
               multiline
-              textAlignVertical="top"
             />
             <TextInput
-              style={styles.modalInputShort}
+              style={{fontSize: 14, color: '#1A1625', backgroundColor: 'white', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12, borderWidth: 1, borderColor: '#E0DCE8'}}
               value={formTopic}
               onChangeText={setFormTopic}
               placeholder="Topic (optional)"
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor="#9B95A8"
               returnKeyType="done"
             />
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditItem(null)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveBtn, !formContent.trim() && styles.saveBtnDisabled]}
-                onPress={handleEdit}
-                disabled={!formContent.trim()}>
-                <Text style={styles.saveText}>Save</Text>
-              </TouchableOpacity>
-            </View>
+            <XStack gap={8} justifyContent="flex-end">
+              <YStack onPress={() => setEditItem(null)} paddingHorizontal={20} paddingVertical={8} borderRadius={8}>
+                <Text fontSize={13} fontWeight="600" color="$color11">Cancel</Text>
+              </YStack>
+              <YStack onPress={handleEdit} opacity={!formContent.trim() ? 0.4 : 1} backgroundColor="$color9" paddingHorizontal={24} paddingVertical={8} borderRadius={8}>
+                <Text fontSize={13} fontWeight="600" color="white">Save</Text>
+              </YStack>
+            </XStack>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
 
-      {/* Import modal */}
       <Modal visible={importModalVisible} animationType="slide" transparent>
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setImportModalVisible(false)}>
-          <TouchableOpacity activeOpacity={1} style={styles.modalContent} onPress={() => {}}>
-            <Text style={styles.modalTitle}>Import Knowledge</Text>
-            <Text style={styles.importHint}>
+        <TouchableOpacity activeOpacity={1} onPress={() => setImportModalVisible(false)} style={{flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end'}}>
+          <TouchableOpacity activeOpacity={1} style={{backgroundColor: '#F5F0FF', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, gap: 12}} onPress={() => {}}>
+            <Text fontSize={16} fontWeight="600" color="$color">Import Knowledge</Text>
+            <Text fontSize={13} color="$color10" marginBottom={4}>
               Paste one item per line. Each line becomes a knowledge entry.
             </Text>
             <TextInput
-              style={styles.modalInput}
+              style={{fontSize: 14, color: '#1A1625', backgroundColor: 'white', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12, minHeight: 100, textAlignVertical: 'top', borderWidth: 1, borderColor: '#E0DCE8'}}
               value={importText}
               onChangeText={setImportText}
               placeholder="Line 1\nLine 2\nLine 3..."
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor="#9B95A8"
               multiline
-              textAlignVertical="top"
               autoFocus
             />
             <TextInput
-              style={styles.modalInputShort}
+              style={{fontSize: 14, color: '#1A1625', backgroundColor: 'white', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12, borderWidth: 1, borderColor: '#E0DCE8'}}
               value={formTopic}
               onChangeText={setFormTopic}
               placeholder="Topic for all (optional)"
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor="#9B95A8"
               returnKeyType="done"
             />
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setImportModalVisible(false)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveBtn, (!importText.trim() || importing) && styles.saveBtnDisabled]}
-                onPress={handleImport}
-                disabled={!importText.trim() || importing}>
-                <Text style={styles.saveText}>
+            <XStack gap={8} justifyContent="flex-end">
+              <YStack onPress={() => setImportModalVisible(false)} paddingHorizontal={20} paddingVertical={8} borderRadius={8}>
+                <Text fontSize={13} fontWeight="600" color="$color11">Cancel</Text>
+              </YStack>
+              <YStack onPress={handleImport} opacity={(!importText.trim() || importing) ? 0.4 : 1} backgroundColor="$color9" paddingHorizontal={24} paddingVertical={8} borderRadius={8}>
+                <Text fontSize={13} fontWeight="600" color="white">
                   {importing ? 'Importing...' : `Import (${importText.split('\n').filter(l => l.trim().length > 2).length})`}
                 </Text>
-              </TouchableOpacity>
-            </View>
+              </YStack>
+            </XStack>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  title: {
-    ...typography.h1,
-    color: colors.text,
-  },
-  importBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  importBtnText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  exportBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  exportBtnText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  importHint: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginBottom: spacing.xs,
-  },
-  selectHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flex: 1,
-  },
-  selectCount: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  cancelText: {
-    ...typography.caption,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  deleteText: {
-    ...typography.caption,
-    color: colors.error,
-    fontWeight: '600',
-  },
-  disabledText: {
-    opacity: 0.4,
-  },
-  addBtn: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-  },
-  addBtnText: {
-    ...typography.caption,
-    color: colors.white,
-    fontWeight: '600',
-  },
-  searchRow: {
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-  },
-  searchInput: {
-    ...typography.body,
-    color: colors.text,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  topicRow: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  topicChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.full,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  topicChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  topicChipText: {
-    ...typography.small,
-    color: colors.textSecondary,
-  },
-  topicChipTextActive: {
-    color: colors.white,
-  },
-  list: {
-    padding: spacing.lg,
-    gap: spacing.sm,
-  },
-  itemCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    padding: spacing.md,
-  },
-  itemCardSelected: {
-    backgroundColor: colors.primary + '10',
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  itemHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: radii.sm,
-    borderWidth: 2,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  checkboxActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary,
-  },
-  checkInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 2,
-    backgroundColor: colors.white,
-  },
-  itemContent: {
-    ...typography.body,
-    color: colors.text,
-    flex: 1,
-  },
-  itemFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  itemMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flex: 1,
-  },
-  importanceDots: {
-    flexDirection: 'row',
-    gap: 3,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.border,
-  },
-  dotFilled: {
-    backgroundColor: colors.accent,
-  },
-  itemActions: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  actionBtn: {},
-  empty: {
-    alignItems: 'center',
-    paddingVertical: spacing.xxxl * 2,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: spacing.lg,
-  },
-  emptyText: {
-    ...typography.body,
-    color: colors.textMuted,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
-    padding: spacing.xl,
-    gap: spacing.md,
-  },
-  modalTitle: {
-    ...typography.h3,
-    color: colors.text,
-  },
-  modalInput: {
-    ...typography.body,
-    color: colors.text,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    minHeight: 100,
-  },
-  modalInputShort: {
-    ...typography.body,
-    color: colors.text,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    justifyContent: 'flex-end',
-  },
-  cancelBtn: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-  },
-  cancelBtnText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  saveBtn: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary,
-  },
-  saveBtnDisabled: {
-    opacity: 0.4,
-  },
-  saveText: {
-    ...typography.caption,
-    color: colors.white,
-    fontWeight: '600',
-  },
-});

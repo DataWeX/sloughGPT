@@ -19,7 +19,7 @@ describe('soulsController.list', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('GETs /souls and returns souls', async () => {
-    apiClient.apiGet.mockResolvedValue({ souls: [{ name: 'friendly', description: 'Friendly soul', traits: ['warm'] }] })
+    apiClient.apiGet.mockResolvedValue([{ name: 'friendly', description: 'Friendly soul', traits: ['warm'] }])
 
     const result = await soulsController.list()
     expect(result.souls).toHaveLength(1)
@@ -68,7 +68,7 @@ describe('soulsController.listCheckpoints', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('GETs /auto-train/checkpoints', async () => {
-    apiClient.apiGet.mockResolvedValue({ checkpoints: [{ name: 'v1', soul: 'friendly' }] })
+    apiClient.apiGet.mockResolvedValue([{ name: 'v1', soul: 'friendly' }])
 
     const result = await soulsController.listCheckpoints()
     expect(result.checkpoints).toHaveLength(1)

@@ -5,6 +5,8 @@ from fastapi import APIRouter, Request
 import time
 from collections import defaultdict
 
+from schemas.common import success_response
+
 router = APIRouter(prefix="/rate-limit", tags=["rate-limit"])
 
 
@@ -40,11 +42,11 @@ _rate_limiter = _RateLimiter()
 @router.get("/status")
 async def get_rate_limit_status():
     """Get current rate limit configuration"""
-    return {
+    return success_response(data={
         "requests_per_minute": _rate_limiter.requests_per_minute,
         "burst_size": _rate_limiter.burst_size,
         "enabled": True,
-    }
+    })
 
 
 @router.get("/check")
@@ -52,7 +54,7 @@ async def check_rate_limit(request: Request):
     """Check if request would be rate limited"""
     client_ip = request.client.host if request.client else "unknown"
     allowed = _rate_limiter.is_allowed(client_ip)
-    return {
+    return success_response(data={
         "allowed": allowed,
         "wait_time": 0 if allowed else _rate_limiter.get_wait_time(client_ip),
-    }
+    })

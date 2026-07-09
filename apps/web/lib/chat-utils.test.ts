@@ -4,9 +4,7 @@ import {
   cleanStreamedContent,
   stripAssistantPrefix,
   computeSearchMatches,
-  formatSize,
   formatUptime,
-  getErrorInfo,
   buildLocalPrompt,
 } from './chat-utils'
 
@@ -101,28 +99,6 @@ describe('computeSearchMatches', () => {
   })
 })
 
-describe('formatSize', () => {
-  it('formats bytes', () => {
-    expect(formatSize(500)).toBe('500 B')
-  })
-
-  it('formats KB', () => {
-    expect(formatSize(2048)).toBe('2.0 KB')
-  })
-
-  it('formats MB', () => {
-    expect(formatSize(1048576 * 3)).toBe('3.0 MB')
-  })
-
-  it('formats GB', () => {
-    expect(formatSize(1073741824 * 2)).toBe('2.00 GB')
-  })
-
-  it('handles zero', () => {
-    expect(formatSize(0)).toBe('0 B')
-  })
-})
-
 describe('formatUptime', () => {
   it('formats minutes', () => {
     expect(formatUptime(300)).toBe('5m')
@@ -138,58 +114,6 @@ describe('formatUptime', () => {
 
   it('handles zero', () => {
     expect(formatUptime(0)).toBe('0m')
-  })
-})
-
-describe('getErrorInfo', () => {
-  it('detects model not loaded', () => {
-    const r = getErrorInfo(new Error('no model loaded'))
-    expect(r.title).toBe('Model Not Loaded')
-    expect(r.retryable).toBe(true)
-  })
-
-  it('detects connection error from Failed to fetch', () => {
-    const r = getErrorInfo('Failed to fetch')
-    expect(r.title).toBe('Connection Error')
-    expect(r.retryable).toBe(true)
-  })
-
-  it('detects connection error from NetworkError', () => {
-    const r = getErrorInfo(new Error('NetworkError'))
-    expect(r.title).toBe('Connection Error')
-  })
-
-  it('detects timeout', () => {
-    const r = getErrorInfo('request timed out')
-    expect(r.title).toBe('Request Timeout')
-  })
-
-  it('detects rate limit', () => {
-    const r = getErrorInfo('rate limit exceeded')
-    expect(r.title).toBe('Rate Limited')
-  })
-
-  it('detects unauthorized', () => {
-    const r = getErrorInfo('401 Unauthorized')
-    expect(r.title).toBe('Unauthorized')
-    expect(r.retryable).toBe(false)
-  })
-
-  it('detects 503', () => {
-    const r = getErrorInfo('503 Service Unavailable')
-    expect(r.title).toBe('Service Unavailable')
-  })
-
-  it('falls through to generic error', () => {
-    const r = getErrorInfo('something weird happened')
-    expect(r.title).toBe('Error')
-    expect(r.retryable).toBe(true)
-  })
-
-  it('handles null gracefully', () => {
-    const r = getErrorInfo(null)
-    expect(r.title).toBe('Unknown Error')
-    expect(r.retryable).toBe(false)
   })
 })
 
