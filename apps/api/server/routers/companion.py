@@ -3,11 +3,14 @@ Companion Router - AI Companion endpoints
 
 Endpoints to manage and chat with the AI companion.
 """
+import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
 
 from schemas.common import success_response
+
+logger = logging.getLogger("man.routers.companion")
 
 router = APIRouter(prefix="/companion", tags=["companion"])
 
@@ -117,6 +120,7 @@ async def chat(req: ChatRequest):
     messages.append({"role": "user", "content": req.message})
 
     response_text = ""
+    error_msg = None
     try:
         from domains.models.provider import get_provider
         provider = get_provider("default")
@@ -126,8 +130,14 @@ async def chat(req: ChatRequest):
                 max_tokens=256,
                 temperature=0.7,
             )
-    except Exception:
-        pass  # Return empty response with system prompt on failure
+        else:
+            error_msg = "No model loaded"
+    except Exception as e:
+        error_msg = str(e)
+        logger.warning("Companion chat failed: %s", e, extra={"context": {"error": str(e)}})
+
+    if not response_text and error_msg:
+        response_text = f"[Error: {error_msg}]"
 
     return ChatResponse(
         response=response_text,

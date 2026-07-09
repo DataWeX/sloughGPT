@@ -1,16 +1,29 @@
 """
 Point compressor — stores weights as functions, not raw values.
 
-Two approaches:
-1. Function fitting: (a + bi) + w → a * cos(i) + b * sin(i) + w
-2. Cluster compression: quantize weights to centroids, compress centroids
+Architecture:
+  Queue = Tree (model instance)
+    └── Graph = PointLibrary (context — what the tree knows)
+          └── Point (meaning — generator function)
 
-The cluster approach works better for neural network weights (which are random-looking).
+Components:
+  - Point: weight-generating function with meaning (cluster, periodic, linear, polynomial)
+  - PointCompressor: compresses weight tensors into Points
+  - PointLibrary: stores, indexes, and retrieves Points (the Graph)
+  - ModelTree: model instance that uses Points for inference (the Tree)
 """
 
+import base64
+import json
+import logging
+import time
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
-from dataclasses import dataclass
-from typing import Optional, Tuple
+from dataclasses import dataclass, field
+
+logger = logging.getLogger("man.point_compressor")
 
 
 @dataclass
@@ -24,8 +37,11 @@ class Point:
 
     def generate(self, n: int) -> np.ndarray:
         """Generate n weights from this point's function."""
+        if self.function_type == "raw":
+            raw_bytes = base64.b64decode(self.params["data_b64"])
+            return np.frombuffer(raw_bytes, dtype=self.params["dtype"])
+
         if self.function_type == "cluster":
-            # Cluster: use centroids + assignments
             centroids = self.params["centroids"]
             assignments = self.params["assignments"]
             return centroids[assignments[:n]]
@@ -84,13 +100,73 @@ class Point:
             a, b, c = struct.unpack('fff', param_bytes[:12])
             params = {"a": a, "b": b, "c": c}
         elif function_type == "cluster":
-            # Need to know n_clusters and n_weights
-            # This is a limitation — need to store metadata
             raise NotImplementedError("Cluster deserialization needs metadata")
         else:
             raise ValueError(f"Unknown function type: {function_type}")
 
         return cls(identity=identity, function_type=function_type, params=params)
+
+    def to_dict(self) -> dict:
+        """Serialize point to JSON-compatible dict."""
+        d: dict[str, Any] = {
+            "identity": self.identity,
+            "function_type": self.function_type,
+            "accuracy": self.accuracy,
+        }
+        if self.function_type == "cluster":
+            centroids = self.params["centroids"]
+            assignments = self.params["assignments"]
+            d["params"] = {
+                "centroids_b64": base64.b64encode(centroids.tobytes()).decode(),
+                "centroids_shape": list(centroids.shape),
+                "centroids_dtype": str(centroids.dtype),
+                "assignments_b64": base64.b64encode(assignments.tobytes()).decode(),
+                "assignments_shape": list(assignments.shape),
+                "assignments_dtype": str(assignments.dtype),
+            }
+        else:
+            d["params"] = {k: float(v) for k, v in self.params.items()}
+
+        if self.residual is not None:
+            d["residual_b64"] = base64.b64encode(self.residual.tobytes()).decode()
+            d["residual_shape"] = list(self.residual.shape)
+            d["residual_dtype"] = str(self.residual.dtype)
+
+        return d
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Point":
+        """Deserialize point from dict."""
+        func_type = d["function_type"]
+
+        if func_type == "cluster":
+            pd = d["params"]
+            centroids = np.frombuffer(
+                base64.b64decode(pd["centroids_b64"]),
+                dtype=pd["centroids_dtype"],
+            ).reshape(pd["centroids_shape"])
+            assignments = np.frombuffer(
+                base64.b64decode(pd["assignments_b64"]),
+                dtype=pd["assignments_dtype"],
+            ).reshape(pd["assignments_shape"])
+            params = {"centroids": centroids, "assignments": assignments}
+        else:
+            params = {k: float(v) for k, v in d["params"].items()}
+
+        residual = None
+        if "residual_b64" in d:
+            residual = np.frombuffer(
+                base64.b64decode(d["residual_b64"]),
+                dtype=d["residual_dtype"],
+            ).reshape(d["residual_shape"])
+
+        return cls(
+            identity=d["identity"],
+            function_type=func_type,
+            params=params,
+            residual=residual,
+            accuracy=d.get("accuracy", 0.0),
+        )
 
 
 class PointCompressor:
@@ -191,6 +267,10 @@ class PointCompressor:
             centroids = point.params["centroids"]
             assignments = point.params["assignments"]
             compressed_bytes = centroids.nbytes + assignments.nbytes
+            if point.residual is not None:
+                compressed_bytes += point.residual.nbytes
+        elif point.function_type == "raw":
+            compressed_bytes = raw_size  # no compression for raw
         else:
             compressed_bytes = 4 + len(point.params) * 4  # type + params
             if point.residual is not None:
@@ -199,7 +279,7 @@ class PointCompressor:
         return {
             "raw_bytes": raw_size,
             "compressed_bytes": compressed_bytes,
-            "ratio": raw_size / compressed_bytes,
+            "ratio": raw_size / max(compressed_bytes, 1),
             "accuracy": point.accuracy,
             "function_type": point.function_type,
         }
@@ -236,3 +316,424 @@ class PointCompressor:
         fitted = a * i**2 + b * i + c
         mse = np.mean((flat - fitted) ** 2)
         return {"a": float(a), "b": float(b), "c": float(c)}, mse
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PointLibrary — Graph (context — what the tree knows)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class PointLibrary:
+    """Stores, indexes, and retrieves Points.
+
+    This is the "Graph" in the Point-Graph-Queue architecture:
+    - Points are organized by identity and function type
+    - Provides lookup, add, remove, and search
+    - Persists to disk as JSON with base64-encoded numpy arrays
+    """
+
+    def __init__(self, name: str = "default", storage_dir: Optional[Path] = None):
+        """Initialize the library.
+
+        Args:
+            name: Library name (used for file naming).
+            storage_dir: Directory for persistence. None = in-memory only.
+        """
+        self.name = name
+        self._storage_dir = storage_dir
+        self._points: Dict[str, Point] = {}
+        self._by_type: Dict[str, List[str]] = {}
+        self._created_at = time.time()
+        self._compressor = PointCompressor()
+
+    # ── CRUD ──
+
+    def add(self, point: Point) -> None:
+        """Add a point to the library. Replaces if identity already exists."""
+        self._points[point.identity] = point
+        by_type = self._by_type.setdefault(point.function_type, [])
+        if point.identity not in by_type:
+            by_type.append(point.identity)
+        logger.debug("PointLibrary[%s]: added %s (%s)", self.name, point.identity, point.function_type)
+
+    def get(self, identity: str) -> Optional[Point]:
+        """Get a point by identity."""
+        return self._points.get(identity)
+
+    def remove(self, identity: str) -> bool:
+        """Remove a point by identity. Returns True if found and removed."""
+        point = self._points.pop(identity, None)
+        if point is None:
+            return False
+        by_type = self._by_type.get(point.function_type, [])
+        if identity in by_type:
+            by_type.remove(identity)
+        return True
+
+    def list_all(self) -> List[Point]:
+        """List all points in the library."""
+        return list(self._points.values())
+
+    def list_by_type(self, function_type: str) -> List[Point]:
+        """List all points of a given function type."""
+        identities = self._by_type.get(function_type, [])
+        return [self._points[i] for i in identities if i in self._points]
+
+    def has(self, identity: str) -> bool:
+        """Check if a point exists."""
+        return identity in self._points
+
+    def clear(self) -> None:
+        """Remove all points."""
+        self._points.clear()
+        self._by_type.clear()
+
+    # ── Compress & store ──
+
+    def compress_and_store(self, weights: np.ndarray, identity: str,
+                           method: str = "cluster", n_clusters: int = 16) -> Point:
+        """Compress a weight tensor and store the resulting Point.
+
+        Args:
+            weights: Raw weight tensor.
+            identity: Unique identifier for this point.
+            method: "cluster" or "function".
+            n_clusters: Number of clusters for VQ compression.
+
+        Returns:
+            The compressed Point (also stored in the library).
+        """
+        if method == "cluster":
+            point = self._compressor.compress_cluster(weights, identity, n_clusters)
+        else:
+            point = self._compressor.compress_function(weights, identity)
+        self.add(point)
+        return point
+
+    def decompress_to(self, identity: str, shape: Optional[Tuple[int, ...]] = None) -> Optional[np.ndarray]:
+        """Decompress a point back to a weight tensor.
+
+        Args:
+            identity: Point identity.
+            shape: Optional shape to reshape to. If None, returns flat array.
+
+        Returns:
+            Reconstructed weight array, or None if point not found.
+        """
+        point = self.get(identity)
+        if point is None:
+            return None
+        if point.function_type == "cluster":
+            centroids = point.params["centroids"]
+            assignments = point.params["assignments"]
+            result = centroids[assignments]
+        else:
+            result = point.generate(len(point.params) * 100)  # estimate
+        if shape is not None:
+            result = result.reshape(shape)
+        return result
+
+    # ── Search ──
+
+    def search(self, query: str) -> List[Point]:
+        """Search points by identity substring."""
+        q = query.lower()
+        return [p for p in self._points.values() if q in p.identity.lower()]
+
+    def best_points(self, n: int = 10) -> List[Point]:
+        """Get the N points with highest accuracy."""
+        return sorted(self._points.values(), key=lambda p: p.accuracy, reverse=True)[:n]
+
+    # ── Statistics ──
+
+    def stats(self) -> dict:
+        """Return library statistics."""
+        points = list(self._points.values())
+        if not points:
+            return {
+                "name": self.name,
+                "total_points": 0,
+                "total_raw_bytes": 0,
+                "total_compressed_bytes": 0,
+                "avg_accuracy": 0.0,
+                "types": {},
+            }
+
+        total_raw = 0
+        total_compressed = 0
+        for p in points:
+            if p.function_type == "cluster":
+                centroids = p.params["centroids"]
+                assignments = p.params["assignments"]
+                total_compressed += centroids.nbytes + assignments.nbytes
+                total_raw += len(assignments) * 4  # float32 estimate
+            else:
+                total_compressed += 4 + len(p.params) * 4
+                total_raw += len(p.params) * 100  # estimate
+            if p.residual is not None:
+                total_compressed += p.residual.nbytes
+
+        return {
+            "name": self.name,
+            "total_points": len(points),
+            "total_raw_bytes": total_raw,
+            "total_compressed_bytes": total_compressed,
+            "ratio": total_raw / max(total_compressed, 1),
+            "avg_accuracy": sum(p.accuracy for p in points) / len(points),
+            "types": {ft: len(ids) for ft, ids in self._by_type.items()},
+        }
+
+    # ── Persistence ──
+
+    def save(self, path: Optional[Path] = None) -> Path:
+        """Save library to JSON file.
+
+        Args:
+            path: File path. If None, uses storage_dir / {name}.points.json.
+
+        Returns:
+            Path to saved file.
+        """
+        if path is None:
+            if self._storage_dir is None:
+                raise ValueError("No storage_dir set and no path provided")
+            self._storage_dir.mkdir(parents=True, exist_ok=True)
+            path = self._storage_dir / f"{self.name}.points.json"
+
+        data = {
+            "name": self.name,
+            "created_at": self._created_at,
+            "saved_at": time.time(),
+            "points": [p.to_dict() for p in self._points.values()],
+        }
+        path.write_text(json.dumps(data, indent=2))
+        logger.info("PointLibrary[%s]: saved %d points to %s", self.name, len(self._points), path)
+        return path
+
+    @classmethod
+    def load(cls, path: Path) -> "PointLibrary":
+        """Load library from JSON file.
+
+        Args:
+            path: Path to the .points.json file.
+
+        Returns:
+            Loaded PointLibrary.
+        """
+        data = json.loads(path.read_text())
+        lib = cls(
+            name=data.get("name", path.stem),
+            storage_dir=path.parent,
+        )
+        lib._created_at = data.get("created_at", 0)
+        for pd in data.get("points", []):
+            lib.add(Point.from_dict(pd))
+        logger.info("PointLibrary[%s]: loaded %d points from %s", lib.name, len(lib._points), path)
+        return lib
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ModelTree — Tree (model instance using Points)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ModelTree:
+    """Model instance that compresses weights into Points and runs inference.
+
+    This is the "Tree" in the Point-Graph-Queue architecture:
+    - Selects points from a PointLibrary
+    - Generates weights on demand from points
+    - Maintains its own isolated state
+    - No cross-talk with other trees unless the queue allows it
+
+    Usage:
+        tree = ModelTree("gpt2", library)
+        tree.load_weights(weight_dict)
+        tree.generate("Hello", max_tokens=50)
+    """
+
+    def __init__(self, name: str, library: Optional[PointLibrary] = None,
+                 n_clusters: int = 16):
+        """Initialize a model tree.
+
+        Args:
+            name: Model identifier (e.g., "gpt2", "qwen-0.5b").
+            library: PointLibrary to store/retrieve points. Created if None.
+            n_clusters: Number of VQ clusters per weight tensor.
+        """
+        self.name = name
+        self.library = library or PointLibrary(name=f"{name}_points")
+        self.n_clusters = n_clusters
+        self._compressor = PointCompressor()
+        self._weight_shapes: Dict[str, Tuple[int, ...]] = {}
+        self._weight_dtypes: Dict[str, np.dtype] = {}
+        self._loaded = False
+
+    def load_weights(self, weights: Dict[str, np.ndarray], method: str = "cluster") -> dict:
+        """Compress all weight tensors and store as Points in the library.
+
+        Args:
+            weights: Dict of weight_name → numpy array.
+            method: "cluster" or "function" compression.
+
+        Returns:
+            Compression statistics.
+        """
+        total_raw = 0
+        total_compressed = 0
+
+        for name, raw in weights.items():
+            point_id = f"{self.name}.{name}"
+            flat = raw.flatten()
+
+            if method == "cluster" and len(flat) < self.n_clusters * 2:
+                # Too small to compress — store raw as a special point
+                point = Point(
+                    identity=point_id,
+                    function_type="raw",
+                    params={"data_b64": base64.b64encode(raw.tobytes()).decode(),
+                            "shape": list(raw.shape),
+                            "dtype": str(raw.dtype)},
+                    accuracy=1.0,
+                )
+            elif method == "cluster":
+                point = self._compressor.compress_cluster(flat, point_id, self.n_clusters)
+            else:
+                point = self._compressor.compress_function(flat, point_id)
+
+            self.library.add(point)
+            self._weight_shapes[name] = raw.shape
+            self._weight_dtypes[name] = raw.dtype
+            total_raw += raw.nbytes
+
+            if point.function_type == "cluster":
+                centroids = point.params["centroids"]
+                assignments = point.params["assignments"]
+                total_compressed += centroids.nbytes + assignments.nbytes
+                if point.residual is not None:
+                    total_compressed += point.residual.nbytes
+            elif point.function_type == "raw":
+                total_compressed += raw.nbytes
+            else:
+                total_compressed += 4 + len(point.params) * 4
+
+        self._loaded = True
+        ratio = total_raw / max(total_compressed, 1)
+        logger.info(
+            "ModelTree[%s]: loaded %d weights, %.1fx compression (%d → %d bytes)",
+            self.name, len(weights), ratio, total_raw, total_compressed,
+        )
+        return {
+            "model": self.name,
+            "num_weights": len(weights),
+            "total_raw_bytes": total_raw,
+            "total_compressed_bytes": total_compressed,
+            "ratio": ratio,
+            "method": method,
+        }
+
+    def get_weight(self, name: str) -> Optional[np.ndarray]:
+        """Decompress and return a weight tensor by name.
+
+        Args:
+            name: Weight name (e.g., "h.0.attn.c_attn.weight").
+
+        Returns:
+            Reconstructed weight array, or None if not found.
+        """
+        point_id = f"{self.name}.{name}"
+        point = self.library.get(point_id)
+        if point is None:
+            return None
+
+        shape = self._weight_shapes.get(name)
+        dtype = self._weight_dtypes.get(name, np.float32)
+
+        if point.function_type == "raw":
+            raw_bytes = base64.b64decode(point.params["data_b64"])
+            arr = np.frombuffer(raw_bytes, dtype=point.params["dtype"])
+            return arr.reshape(point.params["shape"])
+
+        flat = point.generate(point.params.get("n", 0) if "n" in point.params
+                              else self._estimate_size(name))
+        if shape is not None:
+            flat = flat.reshape(shape)
+        return flat.astype(dtype)
+
+    def _estimate_size(self, name: str) -> int:
+        """Estimate weight size from shape."""
+        shape = self._weight_shapes.get(name)
+        if shape:
+            return int(np.prod(shape))
+        return 1000  # fallback
+
+    @property
+    def is_loaded(self) -> bool:
+        return self._loaded
+
+    def stats(self) -> dict:
+        """Return tree statistics."""
+        lib_stats = self.library.stats()
+        return {
+            "model": self.name,
+            "loaded": self._loaded,
+            "num_weights": len(self._weight_shapes),
+            "library": lib_stats,
+        }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Integration — wire PointLibrary + ModelTree into inference
+# ══════════════════════════════════════════════════════════════════════════════
+
+def load_model_to_points(
+    model_id: str,
+    library: Optional[PointLibrary] = None,
+    n_clusters: int = 16,
+    method: str = "cluster",
+    storage_dir: Optional[Path] = None,
+) -> ModelTree:
+    """Load a HuggingFace model and compress its weights into Points.
+
+    This is the main integration entry point — it:
+    1. Loads model weights from HuggingFace cache
+    2. Compresses each weight tensor into a Point
+    3. Stores Points in a PointLibrary
+    4. Returns a ModelTree for inference
+
+    Args:
+        model_id: HuggingFace model identifier (e.g., "gpt2").
+        library: PointLibrary to store points. Created if None.
+        n_clusters: Number of VQ clusters per weight tensor.
+        method: "cluster" or "function" compression.
+        storage_dir: Directory for library persistence.
+
+    Returns:
+        ModelTree ready for inference.
+    """
+    from domains.infrastructure.numpy_engine import _load_weights
+
+    config, weights = _load_weights(model_id)
+
+    if library is None:
+        library = PointLibrary(
+            name=model_id.replace("/", "_"),
+            storage_dir=storage_dir,
+        )
+
+    tree = ModelTree(model_id, library, n_clusters=n_clusters)
+    stats = tree.load_weights(weights, method=method)
+
+    logger.info(
+        "Loaded %s into PointLibrary: %d weights, %.1fx compression",
+        model_id, stats["num_weights"], stats["ratio"],
+    )
+    return tree
+
+
+def save_library(library: PointLibrary, path: Path) -> Path:
+    """Save a PointLibrary to disk."""
+    return library.save(path)
+
+
+def load_library(path: Path) -> PointLibrary:
+    """Load a PointLibrary from disk."""
+    return PointLibrary.load(path)

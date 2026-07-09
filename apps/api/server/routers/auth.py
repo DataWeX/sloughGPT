@@ -10,7 +10,8 @@ from typing import Optional
 from schemas.common import success_response
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-USERS_FILE = "data/users.json"
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+USERS_FILE = os.path.join(_REPO_ROOT, "data", "users.json")
 
 
 # ---------- in‑memory user store (persisted to JSON) ----------
