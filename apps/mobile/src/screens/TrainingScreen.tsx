@@ -6,9 +6,10 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  Pressable,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {YStack, XStack, Text} from 'tamagui';
+import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {useTrainingStore, type TrainPhase, type TrainingMethod} from '../stores/training-store';
 import {useModelStore} from '../stores/model-store';
 import {api} from '../services/api-client';
@@ -108,6 +109,7 @@ export function TrainingScreen() {
     deleteCheckpoint,
     clearError,
   } = useTrainingStore();
+  const theme = useTheme();
   const modelStore = useModelStore();
   const [sourceText, setSourceText] = useState('');
   const [selectedDataset, setSelectedDataset] = useState<string | null>(null);
@@ -184,6 +186,7 @@ export function TrainingScreen() {
     phase === 'EVALUATE' || phase === 'DEPLOY';
   const isDone = phase === 'COMPLETE';
   const isFailed = phase === 'FAILED';
+  const accent = theme.color9?.val || '#7C52C4';
   const progress =
     totalEpochs > 0 ? Math.round((epoch / totalEpochs) * 100) : 0;
   const phaseInfo = PHASE_LABELS[phase] || PHASE_LABELS.idle;
@@ -204,16 +207,16 @@ export function TrainingScreen() {
           </XStack>
 
           {error && (
-            <XStack alignItems="center" justifyContent="space-between" backgroundColor="#FDE8E8" padding={12} borderRadius={8}>
-              <Text fontSize={13} color="$red10" lineHeight={18} flex={1}>{error}</Text>
-              <YStack onPress={clearError} pressStyle={{opacity: 0.7}}>
-                <Icon name="x" size={16} color="#D44C56" />
-              </YStack>
+            <XStack alignItems="center" justifyContent="space-between" backgroundColor="rgba(239, 68, 68, 0.08)" padding={12} borderRadius={10}>
+              <Text fontSize={13} color="#EF4444" lineHeight={18} flex={1}>{error}</Text>
+              <Pressable onPress={clearError}>
+                <Icon name="x" size={16} color="#EF4444" />
+              </Pressable>
             </XStack>
           )}
 
           {!isTraining && !isDone && (
-            <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
               <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Method</Text>
               <XStack gap={8} marginBottom={12}>
                 <YStack
@@ -222,9 +225,9 @@ export function TrainingScreen() {
                   borderRadius={8}
                   backgroundColor={method === 'distill' ? '#7C52C4' : '$background'}
                   alignItems="center"
-                  borderWidth={1}
-                  borderColor={method === 'distill' ? '#7C52C4' : '$borderColor'}
-                  onPress={() => setMethod('distill')}
+borderWidth={0.5}
+            borderColor={method === 'distill' ? accent : '$borderColor'}
+            onPress={() => setMethod('distill')}
                   pressStyle={{opacity: 0.7}}>
                   <Text fontSize={13} color={method === 'distill' ? '#FFFFFF' : '$color10'} fontWeight="500">
                     Distill
@@ -234,9 +237,9 @@ export function TrainingScreen() {
                   flex={1}
                   paddingVertical={8}
                   borderRadius={8}
-                  backgroundColor={method === 'finetune' ? '#7C52C4' : '$background'}
+                  backgroundColor={method === 'finetune' ? accent : '$background'}
                   alignItems="center"
-                  borderWidth={1}
+                  borderWidth={0.5}
                   borderColor={method === 'finetune' ? '#7C52C4' : '$borderColor'}
                   onPress={() => setMethod('finetune')}
                   pressStyle={{opacity: 0.7}}>
@@ -249,7 +252,7 @@ export function TrainingScreen() {
           )}
 
           {!isTraining && !isDone && method === 'finetune' && (
-            <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
               <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Fine-tune Settings</Text>
               <YStack marginBottom={12}>
                 <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>Base Model</Text>
@@ -287,7 +290,7 @@ export function TrainingScreen() {
                         padding={12}
                         backgroundColor="$background"
                         borderRadius={8}
-                        borderWidth={1}
+                        borderWidth={0.5}
                         borderColor={hfOpts.dataset === ds.id ? '#7C52C4' : '$borderColor'}
                         style={hfOpts.dataset === ds.id ? {backgroundColor: 'rgba(124, 82, 196, 0.1)'} : undefined}
                         onPress={() => setHfOpts({dataset: ds.id})}
@@ -321,9 +324,9 @@ export function TrainingScreen() {
                       key={v}
                       paddingHorizontal={12}
                       paddingVertical={4}
-                      borderRadius={9999}
+                      borderRadius={999}
                       backgroundColor={hfOpts.epochs === v ? '#7C52C4' : '$background'}
-                      borderWidth={1}
+                      borderWidth={0.5}
                       borderColor={hfOpts.epochs === v ? '#7C52C4' : '$borderColor'}
                       onPress={() => setHfOpts({epochs: v})}
                       pressStyle={{opacity: 0.7}}>
@@ -340,9 +343,9 @@ export function TrainingScreen() {
                       key={v}
                       paddingHorizontal={12}
                       paddingVertical={4}
-                      borderRadius={9999}
+                      borderRadius={999}
                       backgroundColor={hfOpts.batch_size === v ? '#7C52C4' : '$background'}
-                      borderWidth={1}
+                      borderWidth={0.5}
                       borderColor={hfOpts.batch_size === v ? '#7C52C4' : '$borderColor'}
                       onPress={() => setHfOpts({batch_size: v})}
                       pressStyle={{opacity: 0.7}}>
@@ -359,9 +362,9 @@ export function TrainingScreen() {
                       key={v}
                       paddingHorizontal={12}
                       paddingVertical={4}
-                      borderRadius={9999}
+                      borderRadius={999}
                       backgroundColor={Math.abs(hfOpts.learning_rate - v) < 1e-6 ? '#7C52C4' : '$background'}
-                      borderWidth={1}
+                      borderWidth={0.5}
                       borderColor={Math.abs(hfOpts.learning_rate - v) < 1e-6 ? '#7C52C4' : '$borderColor'}
                       onPress={() => setHfOpts({learning_rate: v})}
                       pressStyle={{opacity: 0.7}}>
@@ -401,9 +404,9 @@ export function TrainingScreen() {
                         key={v}
                         paddingHorizontal={12}
                         paddingVertical={4}
-                        borderRadius={9999}
+                        borderRadius={999}
                         backgroundColor={hfOpts.lora_rank === v ? '#7C52C4' : '$background'}
-                        borderWidth={1}
+                        borderWidth={0.5}
                         borderColor={hfOpts.lora_rank === v ? '#7C52C4' : '$borderColor'}
                         onPress={() => setHfOpts({lora_rank: v})}
                         pressStyle={{opacity: 0.7}}>
@@ -417,7 +420,7 @@ export function TrainingScreen() {
           )}
 
           {!isTraining && !isDone && method === 'distill' && (
-            <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
               <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Training Data</Text>
               <XStack gap={8} marginBottom={12}>
                 <YStack
@@ -426,7 +429,7 @@ export function TrainingScreen() {
                   borderRadius={8}
                   backgroundColor={inputMode === 'text' ? '#7C52C4' : '$background'}
                   alignItems="center"
-                  borderWidth={1}
+                  borderWidth={0.5}
                   borderColor={inputMode === 'text' ? '#7C52C4' : '$borderColor'}
                   onPress={() => setInputMode('text')}
                   pressStyle={{opacity: 0.7}}>
@@ -440,7 +443,7 @@ export function TrainingScreen() {
                   borderRadius={8}
                   backgroundColor={inputMode === 'dataset' ? '#7C52C4' : '$background'}
                   alignItems="center"
-                  borderWidth={1}
+                  borderWidth={0.5}
                   borderColor={inputMode === 'dataset' ? '#7C52C4' : '$borderColor'}
                   onPress={() => setInputMode('dataset')}
                   pressStyle={{opacity: 0.7}}>
@@ -482,7 +485,7 @@ export function TrainingScreen() {
                         padding={12}
                         backgroundColor="$background"
                         borderRadius={8}
-                        borderWidth={1}
+                        borderWidth={0.5}
                         borderColor={selectedDataset === ds.id ? '#7C52C4' : '$borderColor'}
                         style={selectedDataset === ds.id ? {backgroundColor: 'rgba(124, 82, 196, 0.1)'} : undefined}
                         onPress={() => setSelectedDataset(ds.id)}
@@ -512,7 +515,7 @@ export function TrainingScreen() {
           )}
 
           {!isTraining && !isDone && method === 'distill' && (
-            <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
               <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Hyperparameters</Text>
               <YStack marginBottom={12}>
                 <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>Epochs</Text>
@@ -522,9 +525,9 @@ export function TrainingScreen() {
                       key={v}
                       paddingHorizontal={12}
                       paddingVertical={4}
-                      borderRadius={9999}
+                      borderRadius={999}
                       backgroundColor={config.epochs === v ? '#7C52C4' : '$background'}
-                      borderWidth={1}
+                      borderWidth={0.5}
                       borderColor={config.epochs === v ? '#7C52C4' : '$borderColor'}
                       onPress={() => setConfig({epochs: v})}
                       pressStyle={{opacity: 0.7}}>
@@ -541,9 +544,9 @@ export function TrainingScreen() {
                       key={v}
                       paddingHorizontal={12}
                       paddingVertical={4}
-                      borderRadius={9999}
+                      borderRadius={999}
                       backgroundColor={config.learning_rate === v ? '#7C52C4' : '$background'}
-                      borderWidth={1}
+                      borderWidth={0.5}
                       borderColor={config.learning_rate === v ? '#7C52C4' : '$borderColor'}
                       onPress={() => setConfig({learning_rate: v})}
                       pressStyle={{opacity: 0.7}}>
@@ -560,9 +563,9 @@ export function TrainingScreen() {
                       key={v}
                       paddingHorizontal={12}
                       paddingVertical={4}
-                      borderRadius={9999}
+                      borderRadius={999}
                       backgroundColor={config.soul_name === v ? '#7C52C4' : '$background'}
-                      borderWidth={1}
+                      borderWidth={0.5}
                       borderColor={config.soul_name === v ? '#7C52C4' : '$borderColor'}
                       onPress={() => setConfig({soul_name: v})}
                       pressStyle={{opacity: 0.7}}>
@@ -575,7 +578,7 @@ export function TrainingScreen() {
           )}
 
           {(isTraining || isDone || isFailed) && (
-            <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
               <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Progress</Text>
               <XStack justifyContent="space-between" marginBottom={8}>
                 <Text fontSize={15} color="$color" fontWeight="500" lineHeight={22}>Epoch {epoch}/{totalEpochs}</Text>
@@ -610,7 +613,7 @@ export function TrainingScreen() {
           )}
 
           {isDone && checkpoint && (
-            <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
               <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Training Complete</Text>
               <StatusBadge label="Success" variant="success" />
               <Text fontSize={15} color="$color" lineHeight={22} marginTop={12}>Checkpoint: {checkpoint}</Text>
@@ -665,7 +668,7 @@ export function TrainingScreen() {
           </YStack>
 
           {isDone && hfFinetunedPath && (
-            <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
               <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Fine-tune Complete</Text>
               <StatusBadge label="Success" variant="success" />
               <Text fontSize={15} color="$color" lineHeight={22} marginTop={12}>Model saved to: {hfFinetunedPath}</Text>
@@ -694,7 +697,7 @@ export function TrainingScreen() {
           )}
 
           {hfJobs.length > 0 && (
-            <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
               <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Job History</Text>
               {hfJobs.slice().reverse().map((job: any, i: number) => (
                 <XStack key={job.job_id || job.id || i} alignItems="center" justifyContent="space-between" paddingVertical={8} borderBottomWidth={1} borderBottomColor="$borderColor">
@@ -718,7 +721,7 @@ export function TrainingScreen() {
           )}
 
           {checkpoints.length > 0 && (
-            <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
               <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Checkpoints</Text>
               {checkpoints.map(cp => (
                 <XStack key={cp.name} alignItems="center" justifyContent="space-between" paddingVertical={8} borderBottomWidth={1} borderBottomColor="$borderColor">
@@ -759,7 +762,7 @@ export function TrainingScreen() {
                     <YStack
                       width={28}
                       height={28}
-                      borderRadius={9999}
+                      borderRadius={999}
                       style={{backgroundColor: 'rgba(212, 76, 86, 0.15)'}}
                       alignItems="center"
                       justifyContent="center"
@@ -782,12 +785,14 @@ export function TrainingScreen() {
 
       <Modal visible={previewVisible} animationType="slide" transparent>
         <YStack flex={1} backgroundColor="rgba(0,0,0,0.4)" justifyContent="flex-end">
-          <YStack backgroundColor="$background" borderTopLeftRadius={16} borderTopRightRadius={16} maxHeight="70%">
+          <YStack backgroundColor="$background" borderTopLeftRadius={24} borderTopRightRadius={24} maxHeight="70%">
             <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20} paddingVertical={16} borderBottomWidth={1} borderBottomColor="$borderColor">
               <Text fontSize={16} fontWeight="600" color="$color">Dataset Preview</Text>
-              <YStack onPress={() => setPreviewVisible(false)} pressStyle={{opacity: 0.7}}>
-                <Icon name="x" size={24} color="#9B95A8" />
-              </YStack>
+              <Pressable onPress={() => setPreviewVisible(false)}>
+                <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
+                  <Icon name="x" size={16} color={(theme.color11?.val || '#6B7280')} />
+                </YStack>
+              </Pressable>
             </XStack>
             <ScrollView style={{paddingHorizontal: 20, paddingVertical: 12}}>
               {previewData.map((line, i) => (

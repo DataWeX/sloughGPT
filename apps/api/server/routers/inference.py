@@ -9,7 +9,10 @@ from pathlib import Path
 import json
 import logging
 import threading
-import torch
+try:
+    import torch
+except ImportError:
+    torch = None
 
 from schemas.common import success_response, error_response
 

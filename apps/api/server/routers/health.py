@@ -16,28 +16,28 @@ from schemas.common import success_response
 router = APIRouter(prefix="/health", tags=["health"])
 
 
-@router.get("", response_model=HealthResponse)
+@router.get("")
 async def health():
     """Basic health check"""
     ctrl = get_health_controller()
     return success_response(data=ctrl.get_basic_health())
 
 
-@router.get("/live", response_model=LivenessResponse)
+@router.get("/live")
 async def liveness():
     """Kubernetes liveness probe"""
     ctrl = get_health_controller()
     return success_response(data=ctrl.get_liveness())
 
 
-@router.get("/ready", response_model=ReadinessResponse)
+@router.get("/ready")
 async def readiness():
     """Kubernetes readiness probe"""
     ctrl = get_health_controller()
     return success_response(data=ctrl.get_readiness())
 
 
-@router.get("/detailed", response_model=DetailedHealthResponse)
+@router.get("/detailed")
 async def detailed_health():
     """Detailed health with system metrics"""
     ctrl = get_health_controller()

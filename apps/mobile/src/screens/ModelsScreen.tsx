@@ -5,16 +5,19 @@ import {
   RefreshControl,
   ActivityIndicator,
   Modal,
+  Pressable,
 } from 'react-native';
-import {YStack, XStack, Text} from 'tamagui';
+import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useModelStore} from '../stores/model-store';
 import {useHybridStore} from '../stores/hybrid-inference-store';
 import {StatusBadge} from '../components/StatusBadge';
+import {Icon} from '../components/Icon';
 import type {ModelInfo} from '../types';
 import type {ActiveEngine} from '../types/local-inference';
 
 export function ModelsScreen() {
+  const theme = useTheme();
   const {
     models,
     currentModel,
@@ -34,6 +37,8 @@ export function ModelsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [detailModel, setDetailModel] = useState<ModelInfo | null>(null);
   const [search, setSearch] = useState('');
+
+  const accent = theme.color9?.val || '#7C52C4';
 
   const filteredModels = useMemo(() => {
     if (!search.trim()) return models;
@@ -60,12 +65,12 @@ export function ModelsScreen() {
   const isLoaded = health?.model_loaded;
 
   return (
-    <SafeAreaView style={{flex: 1, backgroundColor: '$background'}} edges={['top']}>
+    <SafeAreaView style={{flex: 1}} edges={['top']}>
       <ScrollView
         style={{flex: 1}}
         contentContainerStyle={{padding: 16, gap: 12}}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accent} />
         }>
         <Text fontSize={26} fontWeight="700" letterSpacing={-0.3} color="$color">
           Models
@@ -73,26 +78,24 @@ export function ModelsScreen() {
 
         {error && (
           <XStack
-            backgroundColor="#FDE8E8"
+            backgroundColor="rgba(239, 68, 68, 0.08)"
             padding={12}
-            borderRadius={8}
+            borderRadius={10}
             alignItems="center"
             justifyContent="space-between">
-            <Text fontSize={13} color="#D44C56" flex={1}>
+            <Text fontSize={13} color="#EF4444" flex={1}>
               {error}
             </Text>
-            <YStack onPress={clearError} pressStyle={{opacity: 0.7}}>
-              <Text fontSize={15} color="#D44C56" fontWeight="600" marginLeft={8}>
-                ×
-              </Text>
-            </YStack>
+            <Pressable onPress={clearError}>
+              <Icon name="x" size={14} color="#EF4444" />
+            </Pressable>
           </XStack>
         )}
 
         <YStack
           backgroundColor="$background"
           borderRadius={12}
-          borderWidth={1}
+          borderWidth={0.5}
           borderColor="$borderColor"
           padding={16}
           gap={8}>
@@ -141,26 +144,26 @@ export function ModelsScreen() {
             </XStack>
           )}
           {isLoaded && (
-            <YStack
-              marginTop={12}
-              paddingVertical={8}
-              paddingHorizontal={12}
-              backgroundColor="#D44C5615"
-              borderRadius={8}
-              alignItems="center"
-              onPress={unloadModel}
-              pressStyle={{opacity: 0.7}}>
-              <Text fontSize={13} color="#D44C56" fontWeight="600">
-                Unload model
-              </Text>
-            </YStack>
+            <Pressable onPress={unloadModel}>
+              <YStack
+                marginTop={12}
+                paddingVertical={8}
+                paddingHorizontal={12}
+                backgroundColor="rgba(239, 68, 68, 0.08)"
+                borderRadius={8}
+                alignItems="center">
+                <Text fontSize={13} color="#EF4444" fontWeight="600">
+                  Unload model
+                </Text>
+              </YStack>
+            </Pressable>
           )}
         </YStack>
 
         <YStack
           backgroundColor="$background"
           borderRadius={12}
-          borderWidth={1}
+          borderWidth={0.5}
           borderColor="$borderColor"
           padding={16}
           gap={8}>
@@ -172,30 +175,24 @@ export function ModelsScreen() {
             {(['slonet', 'qwen', 'remote'] as ActiveEngine[]).map(engine => {
               const active = hybrid.activeEngine === engine;
               const label =
-                engine === 'slonet'
-                  ? 'SloNet'
-                  : engine === 'qwen'
-                  ? 'Qwen'
-                  : 'Server';
+                engine === 'slonet' ? 'SloNet' : engine === 'qwen' ? 'Qwen' : 'Server';
               return (
-                <YStack
-                  key={engine}
-                  flex={1}
-                  paddingVertical={8}
-                  borderRadius={8}
-                  backgroundColor={active ? '$color9' : '$background'}
-                  borderWidth={1}
-                  borderColor={active ? '$color9' : '$borderColor'}
-                  alignItems="center"
-                  onPress={() => hybrid.setActiveEngine(engine)}
-                  pressStyle={{opacity: 0.7}}>
-                  <Text
-                    fontSize={11}
-                    color={active ? 'white' : '$color11'}
-                    fontWeight="500">
-                    {label}
-                  </Text>
-                </YStack>
+                <Pressable key={engine} style={{flex: 1}} onPress={() => hybrid.setActiveEngine(engine)}>
+                  <YStack
+                    paddingVertical={8}
+                    borderRadius={8}
+                    backgroundColor={active ? accent : '$background'}
+                    borderWidth={0.5}
+                    borderColor={active ? accent : '$borderColor'}
+                    alignItems="center">
+                    <Text
+                      fontSize={11}
+                      color={active ? 'white' : '$color11'}
+                      fontWeight="500">
+                      {label}
+                    </Text>
+                  </YStack>
+                </Pressable>
               );
             })}
           </XStack>
@@ -204,7 +201,7 @@ export function ModelsScreen() {
             alignItems="center"
             justifyContent="space-between"
             paddingVertical={8}
-            borderBottomWidth={1}
+            borderBottomWidth={0.5}
             borderBottomColor="$borderColor">
             <YStack flex={1} marginRight={8}>
               <Text fontSize={15} color="$color" fontWeight="500">
@@ -217,32 +214,19 @@ export function ModelsScreen() {
               </Text>
             </YStack>
             {hybrid.slonet.loaded ? (
-              <YStack
-                paddingHorizontal={12}
-                paddingVertical={6}
-                borderRadius={8}
-                backgroundColor="#D44C5615"
-                onPress={hybrid.unloadSloNet}
-                pressStyle={{opacity: 0.7}}>
-                <Text fontSize={13} color="#D44C56" fontWeight="600">
-                  Unload
-                </Text>
-              </YStack>
-            ) : hybrid.slonet.downloadProgress !== null &&
-              hybrid.slonet.downloadProgress < 1 ? (
-              <ActivityIndicator size="small" color="#7C52C4" />
+              <Pressable onPress={hybrid.unloadSloNet}>
+                <YStack paddingHorizontal={12} paddingVertical={6} borderRadius={8} backgroundColor="rgba(239, 68, 68, 0.08)">
+                  <Text fontSize={13} color="#EF4444" fontWeight="600">Unload</Text>
+                </YStack>
+              </Pressable>
+            ) : hybrid.slonet.downloadProgress !== null && hybrid.slonet.downloadProgress < 1 ? (
+              <ActivityIndicator size="small" color={accent} />
             ) : (
-              <YStack
-                paddingHorizontal={12}
-                paddingVertical={6}
-                borderRadius={8}
-                backgroundColor="$color9"
-                onPress={() => hybrid.loadSloNet()}
-                pressStyle={{opacity: 0.7}}>
-                <Text fontSize={13} color="white" fontWeight="600">
-                  Load
-                </Text>
-              </YStack>
+              <Pressable onPress={() => hybrid.loadSloNet()}>
+                <YStack paddingHorizontal={12} paddingVertical={6} borderRadius={8} backgroundColor={accent}>
+                  <Text fontSize={13} color="white" fontWeight="600">Load</Text>
+                </YStack>
+              </Pressable>
             )}
           </XStack>
 
@@ -250,7 +234,7 @@ export function ModelsScreen() {
             alignItems="center"
             justifyContent="space-between"
             paddingVertical={8}
-            borderBottomWidth={1}
+            borderBottomWidth={0.5}
             borderBottomColor="$borderColor">
             <YStack flex={1} marginRight={8}>
               <Text fontSize={15} color="$color" fontWeight="500">
@@ -259,58 +243,32 @@ export function ModelsScreen() {
               <Text fontSize={11} color="$color10" marginTop={2}>
                 {hybrid.qwen.loaded
                   ? 'Loaded — full chat via llama.rn'
-                  : hybrid.qwen.downloadProgress !== null &&
-                    hybrid.qwen.downloadProgress < 1
-                  ? `Downloading... ${Math.round(
-                      hybrid.qwen.downloadProgress * 100,
-                    )}%`
+                  : hybrid.qwen.downloadProgress !== null && hybrid.qwen.downloadProgress < 1
+                  ? `Downloading... ${Math.round(hybrid.qwen.downloadProgress * 100)}%`
                   : 'Not loaded — complex chat, 15-30 tok/s'}
               </Text>
             </YStack>
             {hybrid.qwen.loaded ? (
-              <YStack
-                paddingHorizontal={12}
-                paddingVertical={6}
-                borderRadius={8}
-                backgroundColor="#D44C5615"
-                onPress={async () => hybrid.unloadQwen()}
-                pressStyle={{opacity: 0.7}}>
-                <Text fontSize={13} color="#D44C56" fontWeight="600">
-                  Unload
-                </Text>
-              </YStack>
-            ) : hybrid.qwen.downloadProgress !== null &&
-              hybrid.qwen.downloadProgress < 1 ? (
-              <YStack
-                width={60}
-                height={6}
-                borderRadius={3}
-                backgroundColor="$borderColor"
-                overflow="hidden">
-                <YStack
-                  height="100%"
-                  backgroundColor="$color9"
-                  borderRadius={3}
-                  width={`${hybrid.qwen.downloadProgress * 100}%`}
-                />
+              <Pressable onPress={async () => hybrid.unloadQwen()}>
+                <YStack paddingHorizontal={12} paddingVertical={6} borderRadius={8} backgroundColor="rgba(239, 68, 68, 0.08)">
+                  <Text fontSize={13} color="#EF4444" fontWeight="600">Unload</Text>
+                </YStack>
+              </Pressable>
+            ) : hybrid.qwen.downloadProgress !== null && hybrid.qwen.downloadProgress < 1 ? (
+              <YStack width={60} height={6} borderRadius={3} backgroundColor="$borderColor" overflow="hidden">
+                <YStack height="100%" backgroundColor={accent} borderRadius={3} width={`${hybrid.qwen.downloadProgress * 100}%`} />
               </YStack>
             ) : (
-              <YStack
-                paddingHorizontal={12}
-                paddingVertical={6}
-                borderRadius={8}
-                backgroundColor="$color9"
-                onPress={() => hybrid.loadQwen()}
-                pressStyle={{opacity: 0.7}}>
-                <Text fontSize={13} color="white" fontWeight="600">
-                  Download
-                </Text>
-              </YStack>
+              <Pressable onPress={() => hybrid.loadQwen()}>
+                <YStack paddingHorizontal={12} paddingVertical={6} borderRadius={8} backgroundColor={accent}>
+                  <Text fontSize={13} color="white" fontWeight="600">Download</Text>
+                </YStack>
+              </Pressable>
             )}
           </XStack>
 
           {hybrid.lastError && (
-            <Text fontSize={11} color="#D44C56" marginTop={8}>
+            <Text fontSize={11} color="#EF4444" marginTop={8}>
               {hybrid.lastError}
             </Text>
           )}
@@ -320,7 +278,7 @@ export function ModelsScreen() {
           <YStack
             backgroundColor="$background"
             borderRadius={12}
-            borderWidth={1}
+            borderWidth={0.5}
             borderColor="$borderColor"
             padding={16}
             gap={8}>
@@ -334,23 +292,22 @@ export function ModelsScreen() {
               {souls.map(soul => {
                 const isActive = currentSoul?.name === soul.name;
                 return (
-                  <YStack
-                    key={soul.name}
-                    paddingHorizontal={12}
-                    paddingVertical={8}
-                    borderRadius={9999}
-                    backgroundColor={isActive ? '$color9' : '$background'}
-                    borderWidth={1}
-                    borderColor={isActive ? '$color9' : '$borderColor'}
-                    onPress={() => switchSoul(soul.name)}
-                    pressStyle={{opacity: 0.7}}>
-                    <Text
-                      fontSize={13}
-                      color={isActive ? 'white' : '$color11'}
-                      fontWeight="500">
-                      {soul.name}
-                    </Text>
-                  </YStack>
+                  <Pressable key={soul.name} onPress={() => switchSoul(soul.name)}>
+                    <YStack
+                      paddingHorizontal={12}
+                      paddingVertical={8}
+                      borderRadius={999}
+                      backgroundColor={isActive ? accent : '$background'}
+                      borderWidth={0.5}
+                      borderColor={isActive ? accent : '$borderColor'}>
+                      <Text
+                        fontSize={13}
+                        color={isActive ? 'white' : '$color11'}
+                        fontWeight="500">
+                        {soul.name}
+                      </Text>
+                    </YStack>
+                  </Pressable>
                 );
               })}
             </ScrollView>
@@ -361,7 +318,7 @@ export function ModelsScreen() {
           <YStack
             backgroundColor="$background"
             borderRadius={12}
-            borderWidth={1}
+            borderWidth={0.5}
             borderColor="$borderColor"
             padding={16}
             gap={8}>
@@ -369,26 +326,25 @@ export function ModelsScreen() {
               Trained Versions
             </Text>
             {checkpoints.map(cp => (
-              <XStack
-                key={cp.name}
-                alignItems="center"
-                justifyContent="space-between"
-                paddingVertical={8}
-                borderBottomWidth={1}
-                borderBottomColor="$borderColor"
-                onPress={() => switchSoul(cp.soul, cp.name)}
-                pressStyle={{opacity: 0.7}}>
-                <YStack flex={1}>
-                  <Text fontSize={15} color="$color" fontWeight="500">
-                    {cp.name}
-                  </Text>
-                  <Text fontSize={11} color="$color10">
-                    {cp.loss !== null ? `Loss: ${cp.loss.toFixed(3)}` : ''}{' '}
-                    {cp.steps > 0 ? `· ${cp.steps} steps` : ''}
-                  </Text>
-                </YStack>
-                <StatusBadge label="Use" variant="info" />
-              </XStack>
+              <Pressable key={cp.name} onPress={() => switchSoul(cp.soul, cp.name)}>
+                <XStack
+                  alignItems="center"
+                  justifyContent="space-between"
+                  paddingVertical={8}
+                  borderBottomWidth={0.5}
+                  borderBottomColor="$borderColor">
+                  <YStack flex={1}>
+                    <Text fontSize={15} color="$color" fontWeight="500">
+                      {cp.name}
+                    </Text>
+                    <Text fontSize={11} color="$color10">
+                      {cp.loss !== null ? `Loss: ${cp.loss.toFixed(3)}` : ''}{' '}
+                      {cp.steps > 0 ? `\u00B7 ${cp.steps} steps` : ''}
+                    </Text>
+                  </YStack>
+                  <StatusBadge label="Use" variant="info" />
+                </XStack>
+              </Pressable>
             ))}
           </YStack>
         )}
@@ -396,7 +352,7 @@ export function ModelsScreen() {
         <YStack
           backgroundColor="$background"
           borderRadius={12}
-          borderWidth={1}
+          borderWidth={0.5}
           borderColor="$borderColor"
           padding={16}
           gap={8}>
@@ -411,13 +367,15 @@ export function ModelsScreen() {
               placeholderTextColor="#9B95A8"
               returnKeyType="search"
               style={{
-                fontSize: 15,
+                fontSize: 14,
                 color: '#1A1625',
                 backgroundColor: 'rgba(124, 82, 196, 0.04)',
-                borderRadius: 8,
-                paddingHorizontal: 12,
-                paddingVertical: 8,
+                borderRadius: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
                 marginBottom: 12,
+                borderWidth: 0.5,
+                borderColor: 'rgba(124, 82, 196, 0.12)',
               }}
             />
           )}
@@ -429,75 +387,66 @@ export function ModelsScreen() {
           {filteredModels.map(model => {
             const isLoading = loadingModelId === model.id;
             return (
-              <XStack
-                key={model.id}
-                alignItems="center"
-                justifyContent="space-between"
-                paddingVertical={8}
-                borderBottomWidth={1}
-                borderBottomColor="$borderColor"
-                onPress={() => setDetailModel(model)}
-                pressStyle={{opacity: 0.7}}>
-                <YStack flex={1}>
-                  <Text fontSize={15} color="$color" fontWeight="500">
-                    {model.name}
-                  </Text>
-                  <Text fontSize={11} color="$color10">
-                    {model.size_gb
-                      ? `${model.size_gb.toFixed(1)} GB`
-                      : model.size_mb
-                      ? `${model.size_mb} MB`
-                      : model.params || model.type}
-                  </Text>
-                </YStack>
-                {isLoading ? (
-                  <ActivityIndicator size="small" color="#7C52C4" />
-                ) : model.loaded ? (
-                  <StatusBadge label="Loaded" variant="success" />
-                ) : (
-                  <YStack
-                    paddingHorizontal={12}
-                    paddingVertical={6}
-                    borderRadius={8}
-                    backgroundColor="$color9"
-                    onPress={(e: any) => {
-                      e.stopPropagation();
-                      loadModel(model.id);
-                    }}
-                    pressStyle={{opacity: 0.7}}>
-                    <Text fontSize={13} color="white" fontWeight="600">
-                      Load
+              <Pressable key={model.id} onPress={() => setDetailModel(model)}>
+                <XStack
+                  alignItems="center"
+                  justifyContent="space-between"
+                  paddingVertical={8}
+                  borderBottomWidth={0.5}
+                  borderBottomColor="$borderColor">
+                  <YStack flex={1}>
+                    <Text fontSize={15} color="$color" fontWeight="500">
+                      {model.name}
+                    </Text>
+                    <Text fontSize={11} color="$color10">
+                      {model.size_gb
+                        ? `${model.size_gb.toFixed(1)} GB`
+                        : model.size_mb
+                        ? `${model.size_mb} MB`
+                        : model.params || model.type}
                     </Text>
                   </YStack>
-                )}
-              </XStack>
+                  {isLoading ? (
+                    <ActivityIndicator size="small" color={accent} />
+                  ) : model.loaded ? (
+                    <StatusBadge label="Loaded" variant="success" />
+                  ) : (
+                    <Pressable onPress={(e) => { e.stopPropagation(); loadModel(model.id); }}>
+                      <YStack paddingHorizontal={12} paddingVertical={6} borderRadius={8} backgroundColor={accent}>
+                        <Text fontSize={13} color="white" fontWeight="600">Load</Text>
+                      </YStack>
+                    </Pressable>
+                  )}
+                </XStack>
+              </Pressable>
             );
           })}
         </YStack>
       </ScrollView>
 
+      {/* Model detail bottom sheet */}
       <Modal visible={!!detailModel} animationType="slide" transparent>
         <YStack flex={1} backgroundColor="rgba(0,0,0,0.4)" justifyContent="flex-end">
           <YStack
             backgroundColor="$background"
-            borderTopLeftRadius={16}
-            borderTopRightRadius={16}
+            borderTopLeftRadius={24}
+            borderTopRightRadius={24}
             maxHeight="80%">
             <XStack
               alignItems="center"
               justifyContent="space-between"
               paddingHorizontal={20}
               paddingVertical={16}
-              borderBottomWidth={1}
+              borderBottomWidth={0.5}
               borderBottomColor="$borderColor">
               <Text fontSize={20} fontWeight="600" color="$color" flex={1}>
                 {detailModel?.name}
               </Text>
-              <YStack onPress={() => setDetailModel(null)} pressStyle={{opacity: 0.7}}>
-                <Text fontSize={24} color="$color10" padding={4}>
-                  ×
-                </Text>
-              </YStack>
+              <Pressable onPress={() => setDetailModel(null)}>
+                <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
+                  <Icon name="x" size={16} color={(theme.color11?.val || '#6B7280')} />
+                </YStack>
+              </Pressable>
             </XStack>
             <YStack paddingHorizontal={20} paddingVertical={16} gap={12}>
               {detailModel?.description && (
@@ -508,13 +457,13 @@ export function ModelsScreen() {
               <XStack alignItems="center" justifyContent="space-between">
                 <Text fontSize={13} color="$color10">Type</Text>
                 <Text fontSize={15} color="$color" fontWeight="500">
-                  {detailModel?.type || '—'}
+                  {detailModel?.type || '\u2014'}
                 </Text>
               </XStack>
               <XStack alignItems="center" justifyContent="space-between">
                 <Text fontSize={13} color="$color10">Parameters</Text>
                 <Text fontSize={15} color="$color" fontWeight="500">
-                  {detailModel?.params || '—'}
+                  {detailModel?.params || '\u2014'}
                 </Text>
               </XStack>
               <XStack alignItems="center" justifyContent="space-between">
@@ -524,13 +473,13 @@ export function ModelsScreen() {
                     ? `${detailModel.size_gb.toFixed(1)} GB`
                     : detailModel?.size_mb
                     ? `${detailModel.size_mb} MB`
-                    : '—'}
+                    : '\u2014'}
                 </Text>
               </XStack>
               <XStack alignItems="center" justifyContent="space-between">
                 <Text fontSize={13} color="$color10">Source</Text>
                 <Text fontSize={15} color="$color" fontWeight="500">
-                  {detailModel?.source || '—'}
+                  {detailModel?.source || '\u2014'}
                 </Text>
               </XStack>
               <XStack alignItems="center" justifyContent="space-between">
@@ -551,38 +500,20 @@ export function ModelsScreen() {
             <YStack
               paddingHorizontal={20}
               paddingVertical={16}
-              borderTopWidth={1}
+              borderTopWidth={0.5}
               borderTopColor="$borderColor">
               {detailModel?.loaded ? (
-                <YStack
-                  backgroundColor="#D44C5615"
-                  paddingVertical={12}
-                  borderRadius={8}
-                  alignItems="center"
-                  onPress={() => {
-                    unloadModel();
-                    setDetailModel(null);
-                  }}
-                  pressStyle={{opacity: 0.7}}>
-                  <Text fontSize={15} color="#D44C56" fontWeight="600">
-                    Unload Model
-                  </Text>
-                </YStack>
+                <Pressable onPress={() => { unloadModel(); setDetailModel(null); }}>
+                  <YStack backgroundColor="rgba(239, 68, 68, 0.08)" paddingVertical={12} borderRadius={10} alignItems="center">
+                    <Text fontSize={15} color="#EF4444" fontWeight="600">Unload Model</Text>
+                  </YStack>
+                </Pressable>
               ) : (
-                <YStack
-                  backgroundColor="$color9"
-                  paddingVertical={12}
-                  borderRadius={8}
-                  alignItems="center"
-                  onPress={() => {
-                    if (detailModel) loadModel(detailModel.id);
-                    setDetailModel(null);
-                  }}
-                  pressStyle={{opacity: 0.7}}>
-                  <Text fontSize={15} color="white" fontWeight="600">
-                    Load Model
-                  </Text>
-                </YStack>
+                <Pressable onPress={() => { if (detailModel) loadModel(detailModel.id); setDetailModel(null); }}>
+                  <YStack backgroundColor={accent} paddingVertical={12} borderRadius={10} alignItems="center">
+                    <Text fontSize={15} color="white" fontWeight="600">Load Model</Text>
+                  </YStack>
+                </Pressable>
               )}
             </YStack>
           </YStack>

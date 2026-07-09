@@ -27,7 +27,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-import torch
+try:
+    import torch
+except ImportError:
+    torch = None
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
