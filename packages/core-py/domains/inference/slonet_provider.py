@@ -254,6 +254,8 @@ class SloNetChatProvider:
     Loads a HuggingFace model's weights into SloTransformer and runs inference
     entirely through NumPy ops. No PyTorch dependency at inference time.
 
+    Satisfies the ModelProvider protocol used by ProviderRouter.
+
     Args:
         hf_model_id: HuggingFace model ID or local path (e.g. 'gpt2', 'Qwen/Qwen2.5-0.5B-Instruct')
     """
@@ -265,6 +267,7 @@ class SloNetChatProvider:
         from domains.training.slonet import SloTransformer
 
         self._hf_model_id = hf_model_id
+        self._model_id = hf_model_id
         self._device = "cpu"
 
         # Resolve model directory
@@ -291,6 +294,9 @@ class SloNetChatProvider:
         n_layer = config.get("n_layer") or config.get("num_hidden_layers", 12)
         vocab_size = config.get("vocab_size", 50257)
         intermediate_size = config.get("n_inner") or config.get("intermediate_size")
+        if intermediate_size is None:
+            # GPT-2 and many models: FFN is 4× hidden size
+            intermediate_size = n_embed * 4
         max_pos = config.get("n_positions") or config.get("max_position_embeddings", 1024)
 
         # Detect architecture features from weight keys
@@ -338,6 +344,20 @@ class SloNetChatProvider:
         logger.info("SloNetChatProvider loaded: %s (embed=%d, layers=%d, heads=%d, rope=%s)",
                      hf_model_id, n_embed, n_layer, n_head, not use_abs_pos)
 
+    @property
+    def model_id(self) -> str:
+        """Unique identifier for this model."""
+        return self._model_id
+
+    @property
+    def capabilities(self):
+        """What this model supports."""
+        from domains.models.provider import ModelCapabilities
+        return ModelCapabilities(
+            chat=True, streaming=True, embedding=False,
+            vision=False, functions=False,
+        )
+
     def _load_tokenizer(self, model_dir, config):
         """Load tokenizer — MorphTokenizer.from_pretrained handles all parsing."""
         try:
@@ -350,11 +370,36 @@ class SloNetChatProvider:
         raise RuntimeError(f"No tokenizer found for {self._hf_model_id}")
 
     def generate(self, prompt: str, max_tokens: int = 50, temperature: float = 1.0) -> str:
-        """Generate text from a prompt."""
+        """Generate text using pure numpy inference (no Tensor overhead)."""
+        import numpy as _np
+        tokens = self._tokenizer.encode(prompt)
+        input_ids = _np.array([tokens], dtype=_np.int64)
+        result = self._model.generate_numpy(
+            input_ids,
+            max_new_tokens=max_tokens,
+            temperature=temperature,
+            eos_token=self._tokenizer.eos_token_id or 0,
+        )
+        return self._tokenizer.decode(result[0].tolist())
+
+    async def chat(self, messages, max_tokens=512, temperature=0.8, **kwargs):
+        """Blocking chat — returns complete response. Runs in thread to avoid blocking event loop."""
+        import asyncio
+        return await asyncio.to_thread(
+            self._generate_sync, messages, max_tokens, temperature
+        )
+
+    def _generate_sync(self, messages, max_tokens=512, temperature=0.8, **kwargs):
+        """Synchronous generate — called from chat() via to_thread."""
+        prompt = ""
+        if messages and isinstance(messages[-1], dict):
+            prompt = messages[-1].get("content", "")
+        elif messages and isinstance(messages[-1], str):
+            prompt = messages[-1]
         tokens = self._tokenizer.encode(prompt)
         generated = list(tokens)
+        import numpy as _np
         for _ in range(max_tokens):
-            import numpy as _np
             inp = _np.array([generated], dtype=_np.int64)
             result = self._model.forward(inp)
             logits = result[0].data
@@ -362,16 +407,37 @@ class SloNetChatProvider:
             generated.append(next_token)
         return self._tokenizer.decode(generated)
 
-    async def generate_stream(self, messages, **kwargs):
-        """Streaming generation — yields token strings."""
-        prompt = messages[-1].get("content", "") if messages else ""
+    async def chat_stream(self, messages, max_tokens=512, temperature=0.8, **kwargs):
+        """Streaming chat — yields token strings.
+
+        Runs forward pass in a thread to avoid blocking the event loop.
+
+        Args:
+            messages: List of {"role": "...", "content": "..."} dicts
+            max_tokens: Maximum tokens to generate
+            temperature: Sampling temperature (currently greedy — temp unused)
+
+        Yields:
+            Each token string as it's generated.
+        """
+        import asyncio
+        import numpy as _np
+
+        prompt = ""
+        if messages and isinstance(messages[-1], dict):
+            prompt = messages[-1].get("content", "")
+        elif messages and isinstance(messages[-1], str):
+            prompt = messages[-1]
         tokens = self._tokenizer.encode(prompt)
         generated = list(tokens)
-        for _ in range(kwargs.get("max_tokens", 200)):
-            import numpy as _np
-            inp = _np.array([generated], dtype=_np.int64)
+
+        def _step(generated_list):
+            inp = _np.array([generated_list], dtype=_np.int64)
             result = self._model.forward(inp)
             logits = result[0].data
-            next_token = int(_np.argmax(logits[0, -1]))
+            return int(_np.argmax(logits[0, -1]))
+
+        for _ in range(max_tokens):
+            next_token = await asyncio.to_thread(_step, generated)
             generated.append(next_token)
             yield self._tokenizer.decode([next_token])
