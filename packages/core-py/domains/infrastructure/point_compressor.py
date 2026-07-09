@@ -737,3 +737,227 @@ def save_library(library: PointLibrary, path: Path) -> Path:
 def load_library(path: Path) -> PointLibrary:
     """Load a PointLibrary from disk."""
     return PointLibrary.load(path)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PointDeduplicator — share identical points across models
+# ══════════════════════════════════════════════════════════════════════════════
+
+class PointDeduplicator:
+    """Identifies and merges identical points across multiple libraries.
+
+    When two models share identical weight tensors (e.g., common embeddings),
+    their Points will have the same centroids and assignments. The deduplicator
+    merges these into a single Point referenced by multiple identities.
+
+    Usage:
+        dedup = PointDeduplicator()
+        dedup.add_library(lib_a)
+        dedup.add_library(lib_b)
+        stats = dedup.deduplicate()
+        # stats["merged"] = number of duplicate points merged
+    """
+
+    def __init__(self, tolerance: float = 1e-6):
+        """Initialize deduplicator.
+
+        Args:
+            tolerance: Maximum difference for considering two centroids equal.
+        """
+        self._tolerance = tolerance
+        self._libraries: List[PointLibrary] = []
+        self._fingerprints: Dict[str, List[str]] = {}  # fingerprint → [identity, ...]
+
+    def add_library(self, library: PointLibrary) -> None:
+        """Add a library to the deduplication pool."""
+        self._libraries.append(library)
+        for point in library.list_all():
+            fp = self._fingerprint(point)
+            self._fingerprints.setdefault(fp, []).append(point.identity)
+
+    def find_duplicates(self) -> List[List[str]]:
+        """Find groups of identical points across all libraries.
+
+        Returns:
+            List of identity groups, where each group contains points
+            with identical centroids and assignments.
+        """
+        groups = []
+        for fp, identities in self._fingerprints.items():
+            if len(identities) > 1:
+                groups.append(identities)
+        return groups
+
+    def deduplicate(self) -> dict:
+        """Merge duplicate points, keeping the first occurrence.
+
+        Returns:
+            Statistics: {merged: int, bytes_saved: int, groups: int}
+        """
+        groups = self.find_duplicates()
+        merged = 0
+        bytes_saved = 0
+
+        for group in groups:
+            # Keep the first point, remove the rest
+            keep = group[0]
+            remove = group[1:]
+
+            # Find which library has the keep point
+            keep_point = None
+            keep_lib = None
+            for lib in self._libraries:
+                p = lib.get(keep)
+                if p is not None:
+                    keep_point = p
+                    keep_lib = lib
+                    break
+
+            if keep_point is None:
+                continue
+
+            # Remove duplicates from all libraries
+            for identity in remove:
+                for lib in self._libraries:
+                    point = lib.get(identity)
+                    if point is not None:
+                        # Calculate saved bytes
+                        if point.function_type == "cluster":
+                            cents = point.params["centroids"]
+                            assns = point.params["assignments"]
+                            bytes_saved += cents.nbytes + assns.nbytes
+                        lib.remove(identity)
+                        merged += 1
+
+        return {
+            "merged": merged,
+            "bytes_saved": bytes_saved,
+            "groups": len(groups),
+        }
+
+    def _fingerprint(self, point: Point) -> str:
+        """Create a fingerprint for a point (hash of its content)."""
+        import hashlib
+
+        if point.function_type == "cluster":
+            cents = point.params["centroids"]
+            assns = point.params["assignments"]
+            data = cents.tobytes() + assns.tobytes()
+        elif point.function_type == "raw":
+            data = base64.b64decode(point.params["data_b64"])
+        else:
+            # Function-based: hash the parameters
+            params = sorted(point.params.items())
+            data = str(params).encode()
+
+        return hashlib.sha256(data).hexdigest()[:16]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PointLibrarySync — share PointLibraries between instances
+# ══════════════════════════════════════════════════════════════════════════════
+
+class PointLibrarySync:
+    """Synchronize PointLibraries between instances.
+
+    Provides:
+    - export_bytes / import_bytes: serialize to/from bytes
+    - sync_to_directory / sync_from_directory: sync to/from shared filesystem
+    - merge: combine multiple libraries with dedup
+
+    Usage:
+        sync = PointLibrarySync()
+        data = sync.export_bytes(library)
+        # ... send data to another instance ...
+        remote_lib = sync.import_bytes(data)
+    """
+
+    def __init__(self):
+        self._dedup = PointDeduplicator()
+
+    def export_bytes(self, library: PointLibrary) -> bytes:
+        """Export a PointLibrary to bytes.
+
+        Args:
+            library: The library to export.
+
+        Returns:
+            JSON bytes containing all points.
+        """
+        data = {
+            "name": library.name,
+            "points": [p.to_dict() for p in library.list_all()],
+            "exported_at": time.time(),
+        }
+        return json.dumps(data, indent=2).encode()
+
+    def import_bytes(self, data: bytes) -> PointLibrary:
+        """Import a PointLibrary from bytes.
+
+        Args:
+            data: JSON bytes from export_bytes.
+
+        Returns:
+            Imported PointLibrary.
+        """
+        parsed = json.loads(data)
+        lib = PointLibrary(name=parsed.get("name", "imported"))
+        for pd in parsed.get("points", []):
+            lib.add(Point.from_dict(pd))
+        return lib
+
+    def sync_to_directory(self, library: PointLibrary, target_dir: Path) -> Path:
+        """Sync a library to a shared directory.
+
+        Args:
+            library: The library to sync.
+            target_dir: Target directory (e.g., NFS mount, S3 mount).
+
+        Returns:
+            Path to the synced file.
+        """
+        target_dir.mkdir(parents=True, exist_ok=True)
+        path = target_dir / f"{library.name}.points.json"
+        return library.save(path)
+
+    def sync_from_directory(self, source_dir: Path, name: Optional[str] = None) -> Optional[PointLibrary]:
+        """Load a library from a shared directory.
+
+        Args:
+            source_dir: Source directory.
+            name: Library name. If None, loads the first .points.json found.
+
+        Returns:
+            Loaded PointLibrary, or None if not found.
+        """
+        if name is not None:
+            path = source_dir / f"{name}.points.json"
+            if path.exists():
+                return PointLibrary.load(path)
+            return None
+
+        # Find first .points.json
+        for f in source_dir.glob("*.points.json"):
+            return PointLibrary.load(f)
+        return None
+
+    def merge(self, libraries: List[PointLibrary]) -> PointLibrary:
+        """Merge multiple libraries into one, deduplicating identical points.
+
+        Args:
+            libraries: List of libraries to merge.
+
+        Returns:
+            Merged library with deduplicated points.
+        """
+        merged = PointLibrary(name="merged")
+        for lib in libraries:
+            for point in lib.list_all():
+                merged.add(point)
+
+        # Dedup within the merged library
+        dedup = PointDeduplicator()
+        dedup.add_library(merged)
+        dedup.deduplicate()
+
+        return merged

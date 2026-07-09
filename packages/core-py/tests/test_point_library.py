@@ -503,3 +503,206 @@ class TestNumpyEngineModelTree:
             recovered = tree2.get_weight("h.0.ln_1.weight")
             assert recovered is not None
             assert recovered.shape == original.shape
+
+
+# ── PointDeduplicator tests ──
+
+class TestPointDeduplicator:
+    def test_find_duplicates(self):
+        from domains.infrastructure.point_compressor import PointDeduplicator
+
+        centroids = np.array([0.1, 0.5, 0.9], dtype=np.float32)
+        assignments = np.array([0, 1, 2, 0, 1], dtype=np.uint8)
+
+        lib1 = PointLibrary("lib1")
+        lib2 = PointLibrary("lib2")
+        lib1.add(Point("model_a.weight_0", "cluster",
+                       {"centroids": centroids.copy(), "assignments": assignments.copy()}))
+        lib2.add(Point("model_b.weight_0", "cluster",
+                       {"centroids": centroids.copy(), "assignments": assignments.copy()}))
+
+        dedup = PointDeduplicator()
+        dedup.add_library(lib1)
+        dedup.add_library(lib2)
+        groups = dedup.find_duplicates()
+        assert len(groups) == 1
+        assert len(groups[0]) == 2
+
+    def test_deduplicate_merges(self):
+        from domains.infrastructure.point_compressor import PointDeduplicator
+
+        centroids = np.array([0.1, 0.5, 0.9], dtype=np.float32)
+        assignments = np.array([0, 1, 2, 0, 1], dtype=np.uint8)
+
+        lib1 = PointLibrary("lib1")
+        lib2 = PointLibrary("lib2")
+        lib1.add(Point("a.w", "cluster",
+                       {"centroids": centroids.copy(), "assignments": assignments.copy()}))
+        lib2.add(Point("b.w", "cluster",
+                       {"centroids": centroids.copy(), "assignments": assignments.copy()}))
+
+        dedup = PointDeduplicator()
+        dedup.add_library(lib1)
+        dedup.add_library(lib2)
+        stats = dedup.deduplicate()
+        assert stats["merged"] >= 1
+        assert stats["bytes_saved"] > 0
+        assert stats["groups"] == 1
+
+    def test_no_duplicates(self):
+        from domains.infrastructure.point_compressor import PointDeduplicator
+
+        lib1 = PointLibrary("lib1")
+        lib2 = PointLibrary("lib2")
+        lib1.add(Point("a.w", "cluster",
+                       {"centroids": np.zeros(16), "assignments": np.zeros(100, dtype=np.uint8)}))
+        lib2.add(Point("b.w", "cluster",
+                       {"centroids": np.ones(16), "assignments": np.ones(100, dtype=np.uint8)}))
+
+        dedup = PointDeduplicator()
+        dedup.add_library(lib1)
+        dedup.add_library(lib2)
+        groups = dedup.find_duplicates()
+        assert len(groups) == 0
+
+    def test_keep_first_occurrence(self):
+        from domains.infrastructure.point_compressor import PointDeduplicator
+
+        cents = np.array([0.1, 0.5, 0.9], dtype=np.float32)
+        assns = np.array([0, 1, 2], dtype=np.uint8)
+
+        lib1 = PointLibrary("lib1")
+        lib2 = PointLibrary("lib2")
+        lib1.add(Point("keep_this", "cluster",
+                       {"centroids": cents.copy(), "assignments": assns.copy()}))
+        lib2.add(Point("remove_this", "cluster",
+                       {"centroids": cents.copy(), "assignments": assns.copy()}))
+
+        dedup = PointDeduplicator()
+        dedup.add_library(lib1)
+        dedup.add_library(lib2)
+        dedup.deduplicate()
+        assert lib1.has("keep_this")
+        assert not lib2.has("remove_this")
+
+    def test_different_types_not_duplicates(self):
+        from domains.infrastructure.point_compressor import PointDeduplicator
+
+        lib1 = PointLibrary("lib1")
+        lib2 = PointLibrary("lib2")
+        lib1.add(Point("a.w", "linear", {"a": 1.0, "b": 0.0}))
+        lib2.add(Point("b.w", "periodic", {"a": 1.0, "b": 0.0, "w": 0.0}))
+
+        dedup = PointDeduplicator()
+        dedup.add_library(lib1)
+        dedup.add_library(lib2)
+        groups = dedup.find_duplicates()
+        assert len(groups) == 0
+
+    def test_multi_model_sharing(self):
+        """Two models sharing a library — dedup should find cross-model duplicates."""
+        from domains.infrastructure.point_compressor import PointDeduplicator
+
+        shared_cents = np.linspace(-1, 1, 16).astype(np.float32)
+        shared_assns = np.random.randint(0, 16, size=512).astype(np.uint8)
+
+        lib = PointLibrary("shared")
+        tree_a = ModelTree("model_a", lib)
+        tree_b = ModelTree("model_b", lib)
+
+        # Both models have identical weights for one layer
+        tree_a.load_weights({"layer_0": shared_cents[shared_assns].reshape(512).astype(np.float32)})
+        tree_b.load_weights({"layer_0": shared_cents[shared_assns].reshape(512).astype(np.float32)})
+
+        dedup = PointDeduplicator()
+        dedup.add_library(lib)
+        groups = dedup.find_duplicates()
+        # Both trees store as model_a.layer_0 and model_b.layer_0
+        # They should be duplicates
+        assert len(groups) >= 1
+
+
+# ── PointLibrarySync tests ──
+
+class TestPointLibrarySync:
+    def test_export_import_bytes(self):
+        from domains.infrastructure.point_compressor import PointLibrarySync
+
+        lib = PointLibrary("sync_test")
+        lib.add(Point("p1", "linear", {"a": 1.0, "b": 0.0}, accuracy=0.9))
+        lib.add(Point("p2", "cluster", {
+            "centroids": np.array([0.1, 0.5, 0.9], dtype=np.float32),
+            "assignments": np.array([0, 1, 2], dtype=np.uint8),
+        }, accuracy=0.95))
+
+        sync = PointLibrarySync()
+        data = sync.export_bytes(lib)
+        assert isinstance(data, bytes)
+
+        restored = sync.import_bytes(data)
+        assert restored.name == "sync_test"
+        assert len(restored.list_all()) == 2
+        assert restored.get("p1").params["a"] == pytest.approx(1.0)
+
+    def test_sync_to_directory(self):
+        from domains.infrastructure.point_compressor import PointLibrarySync
+
+        lib = PointLibrary("dir_sync_test")
+        lib.add(Point("p1", "linear", {"a": 1.0, "b": 0.0}))
+
+        sync = PointLibrarySync()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = sync.sync_to_directory(lib, Path(tmpdir))
+            assert path.exists()
+            assert path.name == "dir_sync_test.points.json"
+
+    def test_sync_from_directory(self):
+        from domains.infrastructure.point_compressor import PointLibrarySync
+
+        lib = PointLibrary("dir_load_test")
+        lib.add(Point("p1", "linear", {"a": 1.0, "b": 0.0}))
+
+        sync = PointLibrarySync()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sync.sync_to_directory(lib, Path(tmpdir))
+            loaded = sync.sync_from_directory(Path(tmpdir), name="dir_load_test")
+            assert loaded is not None
+            assert loaded.stats()["total_points"] == 1
+
+    def test_sync_from_directory_not_found(self):
+        from domains.infrastructure.point_compressor import PointLibrarySync
+
+        sync = PointLibrarySync()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            loaded = sync.sync_from_directory(Path(tmpdir), name="nonexistent")
+            assert loaded is None
+
+    def test_merge_libraries(self):
+        from domains.infrastructure.point_compressor import PointLibrarySync
+
+        lib1 = PointLibrary("merge_1")
+        lib2 = PointLibrary("merge_2")
+        lib1.add(Point("shared", "linear", {"a": 1.0, "b": 0.0}))
+        lib1.add(Point("unique_1", "linear", {"a": 2.0, "b": 0.0}))
+        lib2.add(Point("shared", "linear", {"a": 1.0, "b": 0.0}))
+        lib2.add(Point("unique_2", "linear", {"a": 3.0, "b": 0.0}))
+
+        sync = PointLibrarySync()
+        merged = sync.merge([lib1, lib2])
+        # Should have 3 unique points (shared deduplicated)
+        assert merged.stats()["total_points"] == 3
+
+    def test_roundtrip_persistence(self):
+        from domains.infrastructure.point_compressor import PointLibrarySync
+
+        lib = PointLibrary("roundtrip")
+        for i in range(5):
+            lib.add(Point(f"p{i}", "linear", {"a": float(i), "b": 0.0}, accuracy=0.8 + i * 0.04))
+
+        sync = PointLibrarySync()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sync.sync_to_directory(lib, Path(tmpdir))
+            loaded = sync.sync_from_directory(Path(tmpdir), name="roundtrip")
+            assert loaded.stats()["total_points"] == 5
+            for i in range(5):
+                assert loaded.has(f"p{i}")

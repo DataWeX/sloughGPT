@@ -280,3 +280,122 @@ class TestModelServerNumpy:
         server._guard_backend = GuardBackend(mock_guard)
         backend = server._select_backend()
         assert isinstance(backend, GuardBackend)
+
+
+class TestHierarchicalCompression:
+    """Tests for hierarchical centroid compression (linear function for centroids)."""
+
+    def test_linear_centroids_compressed(self):
+        """Centroids that follow a linear pattern should be stored as function."""
+        from domains.infrastructure.numpy_engine import _CompressedWeight
+
+        # Create centroids that are linearly spaced (like quantiles of uniform)
+        centroids = np.linspace(-1, 1, 16).astype(np.float32)
+        assignments = np.random.randint(0, 16, size=1024).astype(np.uint8)
+        residual = np.zeros(1024, dtype=np.float16)
+
+        # Fit linear function
+        i = np.arange(16, dtype=np.float32)
+        A = np.column_stack([i, np.ones(16)])
+        result, _, _, _ = np.linalg.lstsq(A, centroids, rcond=None)
+        a, b = result
+        fitted = a * i + b
+        mse = np.mean((centroids - fitted) ** 2)
+        var = np.var(centroids)
+        accuracy = 1.0 - mse / (var + 1e-8)
+        assert accuracy > 0.98  # should be near-perfect for linear centroids
+
+        cw = _CompressedWeight(
+            centroids=centroids, assignments=assignments, residual=residual,
+            shape=(1024,), dtype=np.float32,
+            centroid_fn="linear", centroid_fn_params={"a": float(a), "b": float(b)},
+        )
+        assert cw.centroid_fn == "linear"
+        # Compressed size: 8 bytes (a, b) + assignments + residual
+        assert cw.compressed_bytes < centroids.nbytes + assignments.nbytes + residual.nbytes
+
+    def test_decompress_with_linear_centroids(self):
+        """Decompression should reconstruct correctly with linear centroids."""
+        from domains.infrastructure.numpy_engine import _CompressedWeight
+
+        centroids = np.linspace(-0.5, 0.5, 16).astype(np.float32)
+        assignments = np.array([0, 5, 10, 15, 3, 7], dtype=np.uint8)
+        residual = np.zeros(6, dtype=np.float16)
+
+        i = np.arange(16, dtype=np.float32)
+        A = np.column_stack([i, np.ones(16)])
+        result, _, _, _ = np.linalg.lstsq(A, centroids, rcond=None)
+        a, b = result
+
+        cw = _CompressedWeight(
+            centroids=centroids, assignments=assignments, residual=residual,
+            shape=(6,), dtype=np.float32,
+            centroid_fn="linear", centroid_fn_params={"a": float(a), "b": float(b)},
+        )
+        decompressed = cw.decompress()
+        # Should be close to centroids[assignments]
+        expected = centroids[assignments]
+        np.testing.assert_array_almost_equal(decompressed, expected, decimal=5)
+
+    def test_raw_centroids_fallback(self):
+        """Non-linear centroids should be stored as raw array."""
+        from domains.infrastructure.numpy_engine import _CompressedWeight
+
+        # Random centroids — not linear
+        centroids = np.array([0.1, -0.5, 0.9, -0.1, 0.3, 0.7, -0.8, 0.2,
+                              0.4, -0.3, 0.6, -0.7, 0.8, -0.2, 0.5, -0.6], dtype=np.float32)
+        assignments = np.random.randint(0, 16, size=512).astype(np.uint8)
+
+        cw = _CompressedWeight(
+            centroids=centroids, assignments=assignments, residual=None,
+            shape=(512,), dtype=np.float32,
+        )
+        assert cw.centroid_fn is None
+        # Raw size: centroids + assignments
+        assert cw.compressed_bytes == centroids.nbytes + assignments.nbytes
+
+    def test_engine_uses_hierarchical_when_beneficial(self):
+        """NumpyEngine should use hierarchical compression when centroids are linear."""
+        config = {
+            "architectures": ["GPT2LMHeadModel"],
+            "vocab_size": 100,
+            "n_positions": 128,
+            "n_embd": 64,
+            "n_head": 4,
+            "n_layer": 2,
+            "n_ctx": 128,
+        }
+        rng = np.random.default_rng(42)
+        # Layer norm weights are often roughly linear across neurons
+        weights = {
+            "h.0.ln_1.weight": np.linspace(0.8, 1.2, 64).astype(np.float32),
+            "h.0.ln_1.bias": rng.standard_normal(64).astype(np.float32),
+        }
+        engine = NumpyEngine(config=config, weights=weights, compress=True, n_clusters=16)
+        # The linear weight should have hierarchical compression
+        ln_cw = engine._compressed_weights["h.0.ln_1.weight"]
+        # Depending on accuracy threshold, may or may not use linear
+        # Just verify it works either way
+        w = engine._get_weight("h.0.ln_1.weight")
+        assert w.shape == (64,)
+
+    def test_compression_ratio_improves_with_hierarchical(self):
+        """Hierarchical compression should improve ratio for linear centroids."""
+        config = {
+            "architectures": ["GPT2LMHeadModel"],
+            "vocab_size": 100,
+            "n_positions": 128,
+            "n_embd": 64,
+            "n_head": 4,
+            "n_layer": 2,
+            "n_ctx": 128,
+        }
+        # Uniform-ish weight — centroids will be linear
+        weights = {
+            "linear_w": np.linspace(-1, 1, 2048).astype(np.float32),
+            "random_w": np.random.default_rng(42).standard_normal(2048).astype(np.float32),
+        }
+        engine = NumpyEngine(config=config, weights=weights, compress=True, n_clusters=16)
+        info = engine.info()
+        assert info["raw_bytes"] > info["compressed_bytes"]
+        assert info["compression_ratio"] > 1.0

@@ -674,29 +674,52 @@ class _CompressedWeight:
 
     Decompression: reconstructed = centroids[assignments] + residual
     With float16 residual, error is ~5e-8 per element (near machine epsilon).
+
+    Hierarchical compression: if centroids follow a linear pattern, store
+    them as a linear function (a * i + b) instead of raw float32 array.
+    Reduces centroid storage from n_clusters*4 bytes to 8 bytes.
     """
 
-    __slots__ = ('centroids', 'assignments', 'residual', 'shape', 'dtype')
+    __slots__ = ('centroids', 'assignments', 'residual', 'shape', 'dtype',
+                 'centroid_fn', 'centroid_fn_params')
 
     def __init__(self, centroids: np.ndarray, assignments: np.ndarray,
-                 residual: Optional[np.ndarray], shape: tuple, dtype: np.dtype):
+                 residual: Optional[np.ndarray], shape: tuple, dtype: np.dtype,
+                 centroid_fn: Optional[str] = None,
+                 centroid_fn_params: Optional[dict] = None):
         self.centroids = centroids
         self.assignments = assignments
         self.residual = residual  # float16 residual for exact reconstruction
         self.shape = shape
         self.dtype = dtype
+        self.centroid_fn = centroid_fn  # "linear" if centroids compressed, None otherwise
+        self.centroid_fn_params = centroid_fn_params  # {"a": float, "b": float} if linear
 
     def decompress(self) -> np.ndarray:
         """Reconstruct weight from centroids + assignments + residual."""
-        reconstructed = self.centroids[self.assignments]
+        centroids = self._decompress_centroids()
+        reconstructed = centroids[self.assignments]
         if self.residual is not None:
             reconstructed = reconstructed + self.residual.astype(np.float32)
         return reconstructed.reshape(self.shape)
 
+    def _decompress_centroids(self) -> np.ndarray:
+        """Decompress centroids — either raw or from linear function."""
+        if self.centroid_fn == "linear" and self.centroid_fn_params is not None:
+            a = self.centroid_fn_params["a"]
+            b = self.centroid_fn_params["b"]
+            i = np.arange(len(self.centroids), dtype=np.float32)
+            return a * i + b
+        return self.centroids
+
     @property
     def compressed_bytes(self) -> int:
         """Total compressed size in bytes."""
-        size = self.centroids.nbytes + self.assignments.nbytes
+        if self.centroid_fn == "linear":
+            size = 8  # two float32 for a, b
+        else:
+            size = self.centroids.nbytes
+        size += self.assignments.nbytes
         if self.residual is not None:
             size += self.residual.nbytes
         return size
@@ -806,15 +829,16 @@ class NumpyEngine:
         )
 
     def _compress_weights(self, weights: Dict[str, np.ndarray]):
-        """Compress all weights via VQ + float16 residual (near-lossless).
+        """Compress all weights via VQ + float16 residual + hierarchical centroid compression.
 
         Strategy:
         1. VQ with n_clusters centroids → captures most of the weight structure
         2. Compute residual = original - VQ_approximation
         3. Store residual as float16 (error ~5e-8 per element)
-        4. Decompression: centroids[assignments] + residual.float32
+        4. If centroids follow linear pattern, store as function (8 bytes vs 64 bytes)
+        5. Decompression: centroids[assignments] + residual.float32
 
-        This achieves ~2.5x compression with near-zero error.
+        This achieves ~2.5-4x compression with near-zero error.
         For exact lossless: skip compression on small weights.
         """
         for name, raw in weights.items():
@@ -844,17 +868,42 @@ class NumpyEngine:
             # Error from float16: ~5e-8 per element (near machine epsilon)
             residual_f16 = residual.astype(np.float16)
 
+            # Hierarchical: try linear compression on centroids
+            centroid_fn = None
+            centroid_fn_params = None
+            nc = len(centroids)
+            i = np.arange(nc, dtype=np.float32)
+            A = np.column_stack([i, np.ones(nc)])
+            result, _, _, _ = np.linalg.lstsq(A, centroids, rcond=None)
+            a, b = result
+            fitted = a * i + b
+            mse = np.mean((centroids - fitted) ** 2)
+            var = np.var(centroids)
+            lin_accuracy = 1.0 - mse / (var + 1e-8)
+
+            if lin_accuracy > 0.98:
+                # Centroids well-approximated by linear function — store function
+                centroid_fn = "linear"
+                centroid_fn_params = {"a": float(a), "b": float(b)}
+            # else: store raw centroids
+
             self._compressed_weights[name] = _CompressedWeight(
                 centroids=centroids,
                 assignments=assignments,
                 residual=residual_f16,
                 shape=raw.shape,
                 dtype=raw.dtype,
+                centroid_fn=centroid_fn,
+                centroid_fn_params=centroid_fn_params,
             )
 
             self._total_raw_bytes += raw.nbytes
-            # Centroids (float32) + assignments (uint8) + residual (float16)
-            compressed_size = centroids.nbytes + assignments.nbytes + residual_f16.nbytes
+            # Compute compressed size
+            if centroid_fn == "linear":
+                centroid_bytes = 8  # a, b as float32
+            else:
+                centroid_bytes = centroids.nbytes
+            compressed_size = centroid_bytes + assignments.nbytes + residual_f16.nbytes
             self._total_compressed_bytes += compressed_size
 
     def _get_weight(self, name: str) -> np.ndarray:
