@@ -1,17 +1,12 @@
-/**
- * First-launch onboarding flow — 3 swipeable cards explaining key features.
- * Shows once, then stored in AsyncStorage. Accessible from Settings.
- */
-
 import React, {useState, useRef} from 'react';
 import {
   Animated,
   PanResponder,
   Dimensions,
-  TouchableOpacity,
+  Pressable,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {YStack, XStack, Text} from 'tamagui';
+import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {triggerHaptic} from '../services/haptics';
 import {Icon, type IconName} from '../components/Icon';
 
@@ -51,9 +46,13 @@ interface Props {
 }
 
 export function OnboardingScreen({onComplete}: Props) {
+  const theme = useTheme();
   const [step, setStep] = useState(0);
   const translateX = useRef(new Animated.Value(0)).current;
   const panRef = useRef({startX: 0});
+
+  const accent = theme.color9?.val || '#7C52C4';
+  const bgBase = theme.background?.val || '#F5F0FF';
 
   const panResponder = useRef(
     PanResponder.create({
@@ -99,12 +98,12 @@ export function OnboardingScreen({onComplete}: Props) {
   };
 
   return (
-    <YStack flex={1} backgroundColor="#F5F0FF">
-      <TouchableOpacity
+    <YStack flex={1} backgroundColor={bgBase}>
+      <Pressable
         style={{position: 'absolute', top: 56, right: 20, zIndex: 10, padding: 8}}
         onPress={handleSkip}>
         <Text fontSize={14} color="$color10">Skip</Text>
-      </TouchableOpacity>
+      </Pressable>
 
       <YStack flex={1} overflow="hidden">
         <Animated.View
@@ -124,7 +123,7 @@ export function OnboardingScreen({onComplete}: Props) {
               justifyContent="center"
               paddingHorizontal={40}>
               <YStack marginBottom={24}>
-                <Icon name={s.icon} size={48} color="#7C52C4" />
+                <Icon name={s.icon} size={48} color={accent} />
               </YStack>
               <Text fontSize={24} fontWeight="700" color="$color" marginBottom={12} textAlign="center">
                 {s.title}
@@ -149,21 +148,20 @@ export function OnboardingScreen({onComplete}: Props) {
         ))}
       </XStack>
 
-      <TouchableOpacity
+      <Pressable
         style={{
           marginHorizontal: 32,
           marginBottom: 48,
-          backgroundColor: '#7C52C4',
+          backgroundColor: accent,
           paddingVertical: 16,
-          borderRadius: 8,
+          borderRadius: 12,
           alignItems: 'center',
         }}
-        onPress={handleNext}
-        activeOpacity={0.8}>
+        onPress={handleNext}>
         <Text fontSize={16} fontWeight="600" color="white">
           {step < STEPS.length - 1 ? 'Next' : 'Get Started'}
         </Text>
-      </TouchableOpacity>
+      </Pressable>
     </YStack>
   );
 }
