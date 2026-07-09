@@ -3,7 +3,6 @@ import {
   TextInput,
   Pressable,
   Keyboard,
-  Text,
 } from 'react-native';
 import {YStack, XStack, useTheme} from 'tamagui';
 import {triggerHaptic} from '../services/haptics';

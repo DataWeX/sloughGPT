@@ -5,7 +5,7 @@
  */
 
 import React, {useEffect, useState} from 'react';
-import {Pressable, Animated, StyleSheet} from 'react-native';
+import {Pressable, Animated} from 'react-native';
 import {YStack, Text} from 'tamagui';
 import {toast, type Toast, type ToastType} from '../services/toast';
 import {Icon, type IconName} from './Icon';
