@@ -235,7 +235,7 @@ export function KnowledgeScreen() {
   };
 
   return (
-    <SafeAreaView style={{flex: 1, backgroundColor: '#F5F0FF'}} edges={['top']}>
+    <SafeAreaView style={{flex: 1}} edges={['top']}>
       <YStack flex={1}>
         <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={16} paddingVertical={12}>
           {selectMode ? (
@@ -326,7 +326,7 @@ export function KnowledgeScreen() {
 
       <Modal visible={addModalVisible} animationType="slide" transparent>
         <TouchableOpacity activeOpacity={1} onPress={() => setAddModalVisible(false)} style={{flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end'}}>
-          <TouchableOpacity activeOpacity={1} style={{backgroundColor: '#F5F0FF', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, gap: 12}} onPress={() => {}}>
+          <TouchableOpacity activeOpacity={1} style={{backgroundColor: 'rgba(124, 82, 196, 0.04)', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, gap: 12}} onPress={() => {}}>
             <Text fontSize={16} fontWeight="600" color="$color">Add Knowledge</Text>
             <TextInput
               style={{fontSize: 14, color: '#1A1625', backgroundColor: 'white', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12, minHeight: 100, textAlignVertical: 'top', borderWidth: 1, borderColor: '#E0DCE8'}}
@@ -359,7 +359,7 @@ export function KnowledgeScreen() {
 
       <Modal visible={!!editItem} animationType="slide" transparent>
         <TouchableOpacity activeOpacity={1} onPress={() => setEditItem(null)} style={{flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end'}}>
-          <TouchableOpacity activeOpacity={1} style={{backgroundColor: '#F5F0FF', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, gap: 12}} onPress={() => {}}>
+          <TouchableOpacity activeOpacity={1} style={{backgroundColor: 'rgba(124, 82, 196, 0.04)', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, gap: 12}} onPress={() => {}}>
             <Text fontSize={16} fontWeight="600" color="$color">Edit Knowledge</Text>
             <TextInput
               style={{fontSize: 14, color: '#1A1625', backgroundColor: 'white', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12, minHeight: 100, textAlignVertical: 'top', borderWidth: 1, borderColor: '#E0DCE8'}}
@@ -391,7 +391,7 @@ export function KnowledgeScreen() {
 
       <Modal visible={importModalVisible} animationType="slide" transparent>
         <TouchableOpacity activeOpacity={1} onPress={() => setImportModalVisible(false)} style={{flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end'}}>
-          <TouchableOpacity activeOpacity={1} style={{backgroundColor: '#F5F0FF', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, gap: 12}} onPress={() => {}}>
+          <TouchableOpacity activeOpacity={1} style={{backgroundColor: 'rgba(124, 82, 196, 0.04)', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, gap: 12}} onPress={() => {}}>
             <Text fontSize={16} fontWeight="600" color="$color">Import Knowledge</Text>
             <Text fontSize={13} color="$color10" marginBottom={4}>
               Paste one item per line. Each line becomes a knowledge entry.

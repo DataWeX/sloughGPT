@@ -60,7 +60,7 @@ export function ModelsScreen() {
   const isLoaded = health?.model_loaded;
 
   return (
-    <SafeAreaView style={{flex: 1, backgroundColor: '#F5F0FF'}} edges={['top']}>
+    <SafeAreaView style={{flex: 1, backgroundColor: '$background'}} edges={['top']}>
       <ScrollView
         style={{flex: 1}}
         contentContainerStyle={{padding: 16, gap: 12}}
@@ -413,7 +413,7 @@ export function ModelsScreen() {
               style={{
                 fontSize: 15,
                 color: '#1A1625',
-                backgroundColor: '#F5F0FF',
+                backgroundColor: 'rgba(124, 82, 196, 0.04)',
                 borderRadius: 8,
                 paddingHorizontal: 12,
                 paddingVertical: 8,

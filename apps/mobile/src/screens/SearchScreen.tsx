@@ -60,7 +60,7 @@ export function SearchScreen() {
   };
 
   return (
-    <SafeAreaView style={{flex: 1, backgroundColor: '#F5F0FF'}} edges={['top']}>
+    <SafeAreaView style={{flex: 1}} edges={['top']}>
       <YStack flex={1}>
         <YStack paddingHorizontal={16} paddingTop={12} paddingBottom={8}>
           <Text fontSize={20} fontWeight="600" letterSpacing={-0.2} color="$color">

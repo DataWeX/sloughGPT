@@ -338,6 +338,22 @@ export function ChatScreen() {
     [loadSession],
   );
 
+  const handleExportChat = useCallback(async () => {
+    if (!activeSessionId || messages.length === 0) {
+      toast.info('Nothing to export');
+      return;
+    }
+    const lines = messages.map(m => {
+      const role = m.role === 'user' ? 'You' : 'Assistant';
+      return `**${role}:** ${m.content}`;
+    });
+    const md = `# Conversation\n\n${lines.join('\n\n')}`;
+    try {
+      await Share.share({message: md, title: 'Conversation'});
+      toast.success('Exported');
+    } catch {}
+  }, [activeSessionId, messages]);
+
   const renderItem = useCallback(
     ({item}: {item: Message}) => (
       <MessageBubble
@@ -389,23 +405,27 @@ export function ChatScreen() {
         style={{flex: 1}}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}>
-        {/* Header */}
+        {/* Header — sleek minimal */}
         <XStack
-          paddingHorizontal={20}
-          paddingVertical={14}
-          borderBottomWidth={1}
+          paddingHorizontal={16}
+          paddingVertical={12}
+          borderBottomWidth={0.5}
           borderBottomColor="$borderColor"
           backgroundColor="$background"
           alignItems="center"
-          justifyContent="space-between">
-          <XStack alignItems="center" gap={8}>
-            <YStack onPress={() => setShowDrawer(true)} pressStyle={{opacity: 0.6}}>
-              <Icon name="menu" size={20} color={(theme.color11?.val || '#6B7280')} />
-            </YStack>
-            <YStack onPress={() => setShowSoulPicker(true)} pressStyle={{opacity: 0.6}}>
-              <Icon name="settings" size={20} color={(theme.color11?.val || '#6B7280')} />
+          justifyContent="space-between"
+          opacity={0.98}>
+          {/* Left: menu + title */}
+          <XStack alignItems="center" gap={12}>
+            <YStack
+              width={36} height={36} borderRadius={12}
+              alignItems="center" justifyContent="center"
+              onPress={() => setShowDrawer(true)}
+              pressStyle={{opacity: 0.6, scale: 0.95}}>
+              <Icon name="menu" size={18} color={(theme.color11?.val || '#6B7280')} />
             </YStack>
             <YStack
+              alignItems="flex-start"
               onPress={() => {
                 const now = Date.now();
                 if (now - lastHeaderTap.current < 300) {
@@ -413,133 +433,58 @@ export function ChatScreen() {
                 }
                 lastHeaderTap.current = now;
               }}>
-              <Text fontSize={16} fontWeight="600" color="$color">Chat</Text>
+              <XStack alignItems="center" gap={6}>
+                <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Chat</Text>
+                {currentSoul && (
+                  <YStack
+                    backgroundColor="rgba(124, 82, 196, 0.1)"
+                    paddingHorizontal={10}
+                    paddingVertical={3}
+                    borderRadius={999}
+                    borderWidth={0.5}
+                    borderColor="rgba(124, 82, 196, 0.18)"
+                    onPress={() => setShowSoulPicker(true)}
+                    pressStyle={{opacity: 0.7, scale: 0.95}}>
+                    <Text fontSize={11} fontWeight="600" color="$color9">{currentSoul.name}</Text>
+                  </YStack>
+                )}
+              </XStack>
             </YStack>
-            {currentSoul && (
-              <YStack
-                backgroundColor="$color9"
-                opacity={0.88}
-                paddingHorizontal={8}
-                paddingVertical={3}
-                borderRadius={999}
-                onPress={() => setShowSoulPicker(true)}
-                pressStyle={{opacity: 0.6}}>
-                <Text fontSize={11} fontWeight="600" color="white">{currentSoul.name}</Text>
-              </YStack>
-            )}
-            <XStack
-              paddingHorizontal={7}
-              paddingVertical={2}
-              borderRadius={999}
-              backgroundColor={hybrid.activeEngine === 'slonet' ? '#22C55E33' : hybrid.activeEngine === 'qwen' ? '#F0935C33' : '#6366F133'}>
-              <Text fontSize={10} fontWeight="600" letterSpacing={0.3} color="$color11">
-                {hybrid.activeEngine === 'slonet'
-                  ? 'SloNet'
-                  : hybrid.activeEngine === 'qwen'
-                  ? 'Qwen'
-                  : 'Server'}
-              </Text>
-            </XStack>
           </XStack>
 
-          <XStack alignItems="center" gap={8}>
-            <YStack
-              padding={4}
-              onPress={() => {
-                triggerHaptic('light');
-                updateTheme({theme: isDark ? 'light' : 'dark'});
-              }}
-              pressStyle={{opacity: 0.6}}>
-              <Icon name={isDark ? 'sun' : 'moon'} size={20} color={(theme.color11?.val || '#6B7280')} />
-            </YStack>
-            <YStack
-              padding={4}
-              onPress={() => setShowSearchSessions(true)}
-              pressStyle={{opacity: 0.6}}>
-              <Icon name="search" size={20} color={(theme.color11?.val || '#6B7280')} />
-            </YStack>
-            {messages.length > 0 && (
-              <>
-                <YStack
-                  paddingHorizontal={8}
-                  paddingVertical={5}
-                  borderRadius={8}
-                  backgroundColor="$background"
-                  borderWidth={1}
-                  borderColor="$borderColor"
-                  onPress={async () => {
-                    const conversationText = messages
-                      .filter(m => m.content)
-                      .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
-                      .join('\n');
-                    const summaryPrompt = `Summarize this conversation in 3-5 bullet points:\n\n${conversationText.slice(0, 2000)}`;
-                    sendMessage(summaryPrompt);
-                  }}>
-                  <Text fontSize={11} fontWeight="500" color="$color11">Summary</Text>
-                </YStack>
-                <YStack
-                  paddingHorizontal={8}
-                  paddingVertical={5}
-                  borderRadius={8}
-                  backgroundColor="$background"
-                  borderWidth={1}
-                  borderColor="$borderColor"
-                  onPress={async () => {
-                    const md = messages.map(m => {
-                      const role = m.role === 'user' ? 'You' : 'Assistant';
-                      return `**${role}:**\n${m.content}`;
-                    }).join('\n\n---\n\n');
-                    await Share.share({title: 'Chat Export', message: md});
-                  }}>
-                  <Text fontSize={11} fontWeight="500" color="$color11">Export</Text>
-                </YStack>
-              </>
-            )}
-            <YStack
-              paddingHorizontal={12}
-              paddingVertical={5}
-              borderRadius={999}
-              backgroundColor="$color9"
-              onPress={() => createSession()}>
-              <Text fontSize={11} fontWeight="600" color="white">+ New</Text>
-            </YStack>
-            {messages.length > 0 && (
-              <YStack
-                width={28} height={28} borderRadius={8}
-                backgroundColor="$background"
-                borderWidth={1} borderColor="$borderColor"
-                alignItems="center" justifyContent="center"
-                onPress={() => setShowInfo(true)}>
-                <Icon name="info" size={14} color={(theme.color11?.val || '#6B7280')} />
-              </YStack>
-            )}
-            <YStack width={8} height={8} borderRadius={999}
-              backgroundColor={isConnected ? '$color9' : '$color10'} />
-          </XStack>
+          {/* Right: single overflow menu */}
+          <YStack
+            width={36} height={36} borderRadius={12}
+            alignItems="center" justifyContent="center"
+            onPress={() => setShowSettings(true)}
+            pressStyle={{opacity: 0.6, scale: 0.95}}>
+            <Icon name="more-vertical" size={18} color={(theme.color11?.val || '#6B7280')} />
+          </YStack>
         </XStack>
 
         {error && (
           <XStack
-            backgroundColor="$color10"
-            opacity={0.92}
-            paddingHorizontal={20} paddingVertical={10}
-            borderBottomWidth={1} borderBottomColor="$borderColor"
-            alignItems="center" justifyContent="space-between"
+            paddingHorizontal={16} paddingVertical={10}
+            backgroundColor="rgba(239, 68, 68, 0.06)"
+            borderBottomWidth={0.5} borderBottomColor="rgba(239, 68, 68, 0.12)"
+            alignItems="center" gap={8}
             onPress={clearError}>
-            <Text fontSize={12} color="$color" flex={1}>{error}</Text>
-            <Icon name="x" size={18} color="#EF4444" />
+            <YStack width={6} height={6} borderRadius={3} backgroundColor="#EF4444" />
+            <Text fontSize={12} color="#EF4444" flex={1} numberOfLines={2}>{error}</Text>
+            <Icon name="x" size={14} color="#EF4444" />
           </XStack>
         )}
 
         {!online && (
           <XStack
-            paddingHorizontal={20} paddingVertical={10}
-            borderBottomWidth={1} borderBottomColor="$borderColor"
-            alignItems="center" justifyContent="space-between">
-            <Text fontSize={12} fontWeight="600" color="$color10">Offline</Text>
+            paddingHorizontal={16} paddingVertical={8}
+            borderBottomWidth={0.5} borderBottomColor="$borderColor"
+            alignItems="center" gap={6}>
+            <YStack width={5} height={5} borderRadius={3} backgroundColor="#F59E0B" />
+            <Text fontSize={11} fontWeight="500" color="$color10">Offline</Text>
             {offlineQueue > 0 && (
               <YStack onPress={retryPendingSends}>
-                <Text fontSize={11} color="$color11" textDecorationLine="underline">{offlineQueue} queued — tap to retry</Text>
+                <Text fontSize={11} color="$color11" textDecorationLine="underline">{offlineQueue} queued</Text>
               </YStack>
             )}
           </XStack>
@@ -547,16 +492,16 @@ export function ChatScreen() {
 
         {showSearch && (
           <XStack
-            paddingHorizontal={20} paddingVertical={8}
-            backgroundColor="$background"
-            borderBottomWidth={1} borderBottomColor="$borderColor"
+            paddingHorizontal={16} paddingVertical={8}
             gap={8} alignItems="center">
             <RNTextInput
               style={{
-                flex: 1, fontSize: 14, color: (theme.color?.val || '#111827'),
-                backgroundColor: (theme.background?.val || '#FFFFFF'), borderRadius: 8,
-                paddingHorizontal: 12, paddingVertical: 6,
-                borderWidth: 1, borderColor: (theme.borderColor?.val || '#E5E7EB'),
+                flex: 1, fontSize: 13,
+                color: (theme.color?.val || '#111827'),
+                backgroundColor: 'rgba(124, 82, 196, 0.06)',
+                borderRadius: 10,
+                paddingHorizontal: 12, paddingVertical: 7,
+                borderWidth: 0.5, borderColor: (theme.borderColor?.val || '#E5E7EB'),
               }}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -566,7 +511,7 @@ export function ChatScreen() {
             />
             {searchQuery.length > 0 && (
               <YStack onPress={() => setSearchQuery('')} pressStyle={{opacity: 0.6}}>
-                <Icon name="x" size={18} color={(theme.color10?.val || '#9CA3AF')} />
+                <Icon name="x" size={16} color={(theme.color10?.val || '#9CA3AF')} />
               </YStack>
             )}
           </XStack>
@@ -575,46 +520,55 @@ export function ChatScreen() {
         {messages.length === 0 && !streaming ? (
           <YStack
             flex={1} alignItems="center" justifyContent="center"
-            paddingHorizontal={36}
+            paddingHorizontal={32}
             backgroundColor={chatBackground || 'var(--background)'}>
-            <YStack alignItems="center" marginBottom={16}>
+            {/* Gradient soul avatar — glass ring */}
+            <YStack
+              width={80} height={80} borderRadius={40}
+              backgroundColor="rgba(124, 82, 196, 0.08)"
+              alignItems="center" justifyContent="center"
+              marginBottom={24}
+              borderWidth={1}
+              borderColor="rgba(124, 82, 196, 0.15)">
               <YStack
-                width={80} height={80} borderRadius={40}
-                backgroundColor="$color9"
-                opacity={0.12}
-                alignItems="center" justifyContent="center"
-                marginBottom={12}>
-                <Icon name="message-circle" size={40} color={(theme.color9?.val || '#6366F1')} />
+                width={56} height={56} borderRadius={28}
+                backgroundColor="rgba(124, 82, 196, 0.1)"
+                alignItems="center" justifyContent="center">
+                <Icon name="message-circle" size={26} color={(theme.color9?.val || '#7C52C4')} />
               </YStack>
-              <XStack gap={6}>
-                <YStack width={8} height={8} borderRadius={4} backgroundColor="$color9" />
-                <YStack width={8} height={8} borderRadius={4} backgroundColor="$color9" opacity={0.7} />
-                <YStack width={8} height={8} borderRadius={4} backgroundColor="$color9" opacity={0.5} />
-              </XStack>
             </YStack>
-            <Text fontSize={18} fontWeight="600" color="$color" marginBottom={8} textAlign="center">
-              {currentSoul ? `Chat with ${currentSoul.name}` : 'Start a conversation'}
+
+            {/* Title */}
+            <Text fontSize={22} fontWeight="700" letterSpacing={-0.5} color="$color" marginBottom={8} textAlign="center">
+              {currentSoul ? currentSoul.name : 'Chat'}
             </Text>
-            <Text fontSize={14} color="$color11" textAlign="center" marginBottom={28} lineHeight={22}>
+
+            {/* Subtitle */}
+            <Text fontSize={14} color="$color11" textAlign="center" marginBottom={36} lineHeight={20} maxWidth={260}>
               {currentSoul
-                ? `${currentSoul.description || 'Ask me anything'}`
-                : 'Type a message below to begin'}
+                ? (currentSoul.description || 'Ask me anything')
+                : 'Start a conversation'}
             </Text>
-            <YStack gap={8} alignItems="center">
+
+            {/* Suggestion chips — horizontal, pill-style */}
+            <XStack gap={10} flexWrap="wrap" justifyContent="center">
               {SUGGESTIONS.map(s => (
                 <YStack
                   key={s}
-                  paddingHorizontal={16} paddingVertical={10}
-                  borderRadius={12}
-                  borderWidth={1} borderColor="$borderColor"
-                  backgroundColor="$background"
+                  paddingHorizontal={18} paddingVertical={10}
+                  borderRadius={999}
+                  backgroundColor="rgba(124, 82, 196, 0.06)"
+                  borderWidth={0.5}
+                  borderColor="rgba(124, 82, 196, 0.12)"
                   onPress={() => handleSuggestion(s)}
-                  pressStyle={{opacity: 0.7}}>
-                  <Text fontSize={12} fontWeight="600" color="$color9">{s}</Text>
+                  pressStyle={{opacity: 0.7, scale: 0.96}}>
+                  <Text fontSize={13} fontWeight="500" color="$color9">{s}</Text>
                 </YStack>
               ))}
-            </YStack>
-            <Text fontSize={11} color="$color10" marginTop={20} textAlign="center">
+            </XStack>
+
+            {/* Hint */}
+            <Text fontSize={11} color="$color10" marginTop={32} textAlign="center" letterSpacing={0.3}>
               Swipe left on a message to delete it
             </Text>
           </YStack>
@@ -649,20 +603,20 @@ export function ChatScreen() {
         {/* Pinned messages banner */}
         {pinnedIds.length > 0 && !selectMode && (
           <XStack
-            paddingHorizontal={20} paddingVertical={8}
-            backgroundColor="$color9"
-            opacity={0.08}
-            borderTopWidth={1} borderTopColor="$borderColor"
+            paddingHorizontal={16} paddingVertical={8}
             gap={8} alignItems="center"
             onPress={() => {
               const firstPinnedIndex = messages.findIndex(m => pinnedIds.includes(m.id));
               if (firstPinnedIndex >= 0) {
                 flatListRef.current?.scrollToIndex({index: firstPinnedIndex, animated: true, viewPosition: 0});
               }
-            }}>
-            <Icon name="pin" size={14} color={(theme.color9?.val || '#6366F1')} />
-            <Text fontSize={11} fontWeight="600" color="$color9">
-              {pinnedIds.length} pinned {pinnedIds.length === 1 ? 'message' : 'messages'} — tap to jump
+            }}
+            pressStyle={{opacity: 0.7}}>
+            <YStack width={24} height={24} borderRadius={8} backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+              <Icon name="pin" size={12} color="$color9" />
+            </YStack>
+            <Text fontSize={11} fontWeight="500" color="$color9">
+              {pinnedIds.length} pinned {pinnedIds.length === 1 ? 'message' : 'messages'}
             </Text>
           </XStack>
         )}
@@ -670,33 +624,36 @@ export function ChatScreen() {
         {/* Select mode toolbar */}
         {selectMode && (
           <XStack
-            paddingHorizontal={12} paddingVertical={8}
-            backgroundColor="$background"
-            borderTopWidth={1} borderTopColor="$borderColor"
-            alignItems="center" justifyContent="space-between">
-            <YStack paddingHorizontal={12} paddingVertical={4}
-              onPress={() => {
-                if (selectedIds.size === messages.length) {
-                  setSelectedIds(new Set());
-                } else {
-                  setSelectedIds(new Set(messages.map(m => m.id)));
-                }
-              }}>
-              <Text fontSize={14} fontWeight="600" color="$color9">
+            paddingHorizontal={16} paddingVertical={10}
+            borderTopWidth={0.5} borderTopColor="$borderColor"
+            alignItems="center" justifyContent="space-between"
+            backgroundColor="rgba(124, 82, 196, 0.04)">
+            <YStack onPress={() => {
+              if (selectedIds.size === messages.length) {
+                setSelectedIds(new Set());
+              } else {
+                setSelectedIds(new Set(messages.map(m => m.id)));
+              }
+            }} pressStyle={{opacity: 0.6}}>
+              <Text fontSize={13} fontWeight="600" color="$color9">
                 {selectedIds.size === messages.length ? 'Deselect all' : 'Select all'}
               </Text>
             </YStack>
-            <Text fontSize={12} color="$color10">{selectedIds.size} selected</Text>
-            <YStack paddingHorizontal={12} paddingVertical={4}
-              opacity={selectedIds.size === 0 ? 0.4 : 1}
-              onPress={deleteSelected}
-              disabled={selectedIds.size === 0}>
-              <Text fontSize={14} fontWeight="600"
-                color={selectedIds.size > 0 ? '$color10' : '$color9'}>Delete</Text>
-            </YStack>
-            <YStack paddingHorizontal={12} paddingVertical={4} onPress={toggleSelectMode}>
-              <Text fontSize={14} fontWeight="600" color="$color9">Done</Text>
-            </YStack>
+            <XStack gap={12} alignItems="center">
+              <Text fontSize={12} color="$color10">{selectedIds.size} selected</Text>
+              <YStack paddingHorizontal={10} paddingVertical={5} borderRadius={8}
+                backgroundColor={selectedIds.size > 0 ? 'rgba(239, 68, 68, 0.1)' : 'transparent'}
+                opacity={selectedIds.size === 0 ? 0.4 : 1}
+                onPress={deleteSelected}
+                disabled={selectedIds.size === 0}>
+                <Text fontSize={13} fontWeight="600"
+                  color={selectedIds.size > 0 ? '#EF4444' : '$color10'}>Delete</Text>
+              </YStack>
+              <YStack paddingHorizontal={10} paddingVertical={5} borderRadius={8}
+                backgroundColor="rgba(124, 82, 196, 0.08)" onPress={toggleSelectMode}>
+                <Text fontSize={13} fontWeight="600" color="$color9">Done</Text>
+              </YStack>
+            </XStack>
           </XStack>
         )}
 
@@ -705,13 +662,13 @@ export function ChatScreen() {
         {/* Reply quote bar */}
         {replyTo && (
           <XStack
-            paddingHorizontal={12} paddingVertical={4}
-            backgroundColor="$background"
-            borderTopWidth={1} borderTopColor="$borderColor"
-            borderLeftWidth={3} borderLeftColor="$color9"
-            alignItems="center">
-            <YStack flex={1} marginRight={4}>
-              <Text fontSize={12} color="$color9" fontWeight="600" marginBottom={2}>
+            paddingHorizontal={16} paddingVertical={8}
+            gap={10} alignItems="center"
+            backgroundColor="rgba(124, 82, 196, 0.04)"
+            borderTopWidth={0.5} borderTopColor="$borderColor">
+            <YStack width={3} height={32} borderRadius={2} backgroundColor="$color9" />
+            <YStack flex={1}>
+              <Text fontSize={11} fontWeight="600" color="$color9" marginBottom={1}>
                 Replying to {replyTo.role === 'user' ? 'yourself' : 'assistant'}
               </Text>
               <Text fontSize={12} color="$color10" numberOfLines={1}>
@@ -720,61 +677,94 @@ export function ChatScreen() {
             </YStack>
             <YStack
               width={24} height={24} borderRadius={8}
-              backgroundColor="$background"
-              borderWidth={1} borderColor="$borderColor"
+              backgroundColor="rgba(124, 82, 196, 0.06)"
               alignItems="center" justifyContent="center"
-              onPress={() => setReplyTo(null)}>
-              <Icon name="x" size={12} color={(theme.color10?.val || '#9CA3AF')} />
+              onPress={() => setReplyTo(null)}
+              pressStyle={{opacity: 0.6}}>
+              <Icon name="x" size={12} color="$color10" />
             </YStack>
           </XStack>
         )}
 
-        {/* Forward to session modal */}
+        {/* Forward to session — bottom sheet */}
         <Modal
           visible={forwardTo !== null}
           transparent
           animationType="slide"
           onRequestClose={() => setForwardTo(null)}>
-          <YStack flex={1} justifyContent="center" padding={24}
-            backgroundColor="rgba(0,0,0,0.35)"
-            onPress={() => setForwardTo(null)}>
+          <YStack flex={1} justifyContent="flex-end">
+            <YStack flex={1} backgroundColor="rgba(0,0,0,0.3)" onPress={() => setForwardTo(null)} />
             <YStack
               backgroundColor="$background"
-              borderRadius={12} maxHeight="60%" overflow="hidden"
-              borderWidth={1} borderColor="$borderColor"
-              onPress={(e: any) => e.stopPropagation()}>
-              <Text fontSize={14} fontWeight="700" padding={12} paddingBottom={4}>
-                Forward to...
-              </Text>
-              <Text fontSize={12} color="$color10" paddingHorizontal={12} paddingBottom={8} numberOfLines={1}>
-                {forwardTo?.content}
-              </Text>
+              borderTopLeftRadius={24}
+              borderTopRightRadius={24}
+              maxHeight="65%"
+              overflow="hidden">
+              <YStack alignItems="center" paddingTop={12} paddingBottom={2}>
+                <YStack width={40} height={5} borderRadius={3} backgroundColor="$borderColor" opacity={0.4} />
+              </YStack>
+
+              <XStack
+                paddingHorizontal={20} paddingVertical={14}
+                borderBottomWidth={0.5} borderBottomColor="$borderColor"
+                alignItems="center" justifyContent="space-between">
+                <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Forward to...</Text>
+                <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center"
+                  onPress={() => setForwardTo(null)} pressStyle={{opacity: 0.6}}>
+                  <Icon name="x" size={14} color={(theme.color11?.val || '#6B7280')} />
+                </YStack>
+              </XStack>
+
+              {forwardTo && (
+                <YStack
+                  marginHorizontal={16} marginTop={10} marginBottom={6}
+                  paddingHorizontal={14} paddingVertical={10}
+                  borderRadius={12}
+                  backgroundColor="rgba(124, 82, 196, 0.04)"
+                  borderWidth={0.5} borderColor="rgba(124, 82, 196, 0.12)">
+                  <Text fontSize={11} fontWeight="600" color="$color9" marginBottom={2}>MESSAGE</Text>
+                  <Text fontSize={13} color="$color10" numberOfLines={2}>{forwardTo.content}</Text>
+                </YStack>
+              )}
+
               <FlatList
                 data={safeSessions}
                 keyExtractor={s => s.id}
+                contentContainerStyle={{paddingHorizontal: 16, paddingVertical: 4}}
                 renderItem={({item: session}) => (
-                  <YStack
-                    paddingHorizontal={12} paddingVertical={8}
-                    borderBottomWidth={1} borderBottomColor="$borderColor"
+                  <XStack
+                    paddingVertical={12} paddingHorizontal={14}
+                    marginVertical={2}
+                    borderRadius={12}
+                    alignItems="center" gap={12}
                     onPress={async () => {
                       if (forwardTo) {
                         await forwardMessage(forwardTo.content, session.id);
                       }
                       setForwardTo(null);
-                    }}>
-                    <Text fontSize={14} fontWeight="500" numberOfLines={1}>
-                      {session.name || 'New conversation'}
-                    </Text>
-                    <Text fontSize={12} color="$color10">
-                      {session.message_count || 0} messages
-                    </Text>
-                  </YStack>
+                    }}
+                    pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.06)', scale: 0.98}}>
+                    <YStack width={36} height={36} borderRadius={12}
+                      backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+                      <Icon name="message-circle" size={16} color="$color9" />
+                    </YStack>
+                    <YStack flex={1}>
+                      <Text fontSize={14} fontWeight="500" numberOfLines={1} color="$color">
+                        {session.name || 'New conversation'}
+                      </Text>
+                      <Text fontSize={11} color="$color10" marginTop={1}>
+                        {session.message_count || 0} messages
+                      </Text>
+                    </YStack>
+                  </XStack>
                 )}
+                ListEmptyComponent={
+                  <YStack padding={40} alignItems="center">
+                    <Text fontSize={13} color="$color10">No conversations</Text>
+                  </YStack>
+                }
               />
-              <YStack padding={12} alignItems="center" borderTopWidth={1} borderTopColor="$borderColor"
-                onPress={() => setForwardTo(null)}>
-                <Text fontSize={14} color="$color11">Cancel</Text>
-              </YStack>
+              <YStack height={Platform.OS === 'ios' ? 34 : 16} />
             </YStack>
           </YStack>
         </Modal>
@@ -801,109 +791,138 @@ export function ChatScreen() {
             bottom={80}
             width={40}
             height={40}
-            borderRadius={999}
-            backgroundColor="$color9"
+            borderRadius={20}
+            backgroundColor="rgba(124, 82, 196, 0.15)"
+            borderWidth={0.5}
+            borderColor="rgba(124, 82, 196, 0.25)"
             alignItems="center"
             justifyContent="center"
             shadowColor="$color9"
             shadowOffset={{width: 0, height: 4}}
-            shadowOpacity={0.3}
-            shadowRadius={8}
-            elevation={4}
-            onPress={() => flatListRef.current?.scrollToEnd({animated: true})}>
-            <Icon name="arrow-down" size={18} color="white" />
+            shadowOpacity={0.25}
+            shadowRadius={12}
+            elevation={6}
+            onPress={() => flatListRef.current?.scrollToEnd({animated: true})}
+            pressStyle={{opacity: 0.7, scale: 0.9}}>
+            <Icon name="arrow-down" size={18} color="$color9" />
           </YStack>
         )}
       </KeyboardAvoidingView>
 
-      {/* Conversation Info Modal */}
-      <Modal visible={showInfo} transparent animationType="fade" onRequestClose={() => setShowInfo(false)}>
-        <YStack flex={1} justifyContent="center" alignItems="center" padding={24}
-          backgroundColor="rgba(0,0,0,0.35)"
-          onPress={() => setShowInfo(false)}>
+      {/* Conversation Info — bottom sheet */}
+      <Modal visible={showInfo} animationType="slide" transparent onRequestClose={() => setShowInfo(false)}>
+        <YStack flex={1} justifyContent="flex-end">
+          <YStack
+            flex={1}
+            backgroundColor="rgba(0,0,0,0.3)"
+            onPress={() => setShowInfo(false)}
+          />
           <YStack
             backgroundColor="$background"
-            borderRadius={12} padding={20} width="100%" maxWidth={300}
-            borderWidth={1} borderColor="$borderColor">
-            <Text fontSize={18} fontWeight="600" color="$color" marginBottom={12} textAlign="center">
-              Conversation Info
-            </Text>
-            <XStack justifyContent="space-between" paddingVertical={8}
-              borderBottomWidth={1} borderBottomColor="$borderColor">
-              <Text fontSize={14} color="$color11">Messages</Text>
-              <Text fontSize={14} color="$color" fontWeight="500">{messages.length}</Text>
+            borderTopLeftRadius={24}
+            borderTopRightRadius={24}
+            maxHeight="85%"
+            overflow="hidden">
+            {/* Handle bar */}
+            <YStack alignItems="center" paddingTop={12} paddingBottom={2}>
+              <YStack width={40} height={5} borderRadius={3} backgroundColor="$borderColor" opacity={0.4} />
+            </YStack>
+
+            <XStack
+              paddingHorizontal={20} paddingVertical={14}
+              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              alignItems="center" justifyContent="space-between">
+              <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Details</Text>
+              <YStack
+                width={28} height={28} borderRadius={9}
+                alignItems="center" justifyContent="center"
+                onPress={() => setShowInfo(false)}
+                pressStyle={{opacity: 0.6}}>
+                <Icon name="x" size={14} color={(theme.color11?.val || '#6B7280')} />
+              </YStack>
             </XStack>
-            <XStack justifyContent="space-between" paddingVertical={8}
-              borderBottomWidth={1} borderBottomColor="$borderColor">
-              <Text fontSize={14} color="$color11">Words</Text>
-              <Text fontSize={14} color="$color" fontWeight="500">
-                {messages.reduce((sum, m) => sum + (m.content?.split(/\s+/).length || 0), 0)}
-              </Text>
+
+            {/* Stats grid */}
+            <XStack paddingHorizontal={20} paddingVertical={16} gap={10}>
+              {[
+                {label: 'Messages', value: String(messages.length)},
+                {label: 'Words', value: String(messages.reduce((sum, m) => sum + (m.content?.split(/\s+/).length || 0), 0))},
+                {label: 'Characters', value: String(messages.reduce((sum, m) => sum + (m.content?.length || 0), 0))},
+              ].map(stat => (
+                <YStack key={stat.label} flex={1} paddingVertical={14} paddingHorizontal={10} borderRadius={14}
+                  backgroundColor="rgba(124, 82, 196, 0.04)" alignItems="center">
+                  <Text fontSize={20} fontWeight="700" color="$color9">{stat.value}</Text>
+                  <Text fontSize={10} fontWeight="500" color="$color10" marginTop={4}>{stat.label}</Text>
+                </YStack>
+              ))}
             </XStack>
-            <XStack justifyContent="space-between" paddingVertical={8}
-              borderBottomWidth={1} borderBottomColor="$borderColor">
-              <Text fontSize={14} color="$color11">Characters</Text>
-              <Text fontSize={14} color="$color" fontWeight="500">
-                {messages.reduce((sum, m) => sum + (m.content?.length || 0), 0)}
-              </Text>
-            </XStack>
-            <XStack justifyContent="space-between" paddingVertical={8}
-              borderBottomWidth={1} borderBottomColor="$borderColor">
-              <Text fontSize={14} color="$color11">Session</Text>
-              <Text fontSize={14} color="$color" fontWeight="500" numberOfLines={1}>
-                {activeSessionId?.slice(0, 12) || 'None'}
-              </Text>
-            </XStack>
-            {currentSoul && (
-              <XStack justifyContent="space-between" paddingVertical={8}
-                borderBottomWidth={1} borderBottomColor="$borderColor">
-                <Text fontSize={14} color="$color11">Soul</Text>
-                <Text fontSize={14} color="$color" fontWeight="500">{currentSoul.name}</Text>
+
+            {/* Meta rows */}
+            <YStack paddingHorizontal={20} paddingBottom={4}>
+              <XStack justifyContent="space-between" paddingVertical={12}
+                borderBottomWidth={0.5} borderBottomColor="$borderColor">
+                <Text fontSize={13} color="$color11">Session</Text>
+                <Text fontSize={13} color="$color" fontWeight="500" numberOfLines={1}>
+                  {activeSessionId?.slice(0, 12) || 'None'}
+                </Text>
               </XStack>
-            )}
-            <XStack justifyContent="space-between" paddingVertical={8}
-              borderBottomWidth={1} borderBottomColor="$borderColor">
-              <Text fontSize={14} color="$color11">Status</Text>
-              <Text fontSize={14} fontWeight="500"
-                color={isConnected ? '$color9' : '$color10'}>
-                {isConnected ? 'Connected' : 'Offline'}
-              </Text>
-            </XStack>
-            <YStack paddingTop={12} borderTopWidth={1} borderTopColor="$borderColor">
-              <Text fontSize={12} color="$color11" fontWeight="600" marginBottom={8}>Chat Background</Text>
-              <XStack flexWrap="wrap" gap={8}>
+              {currentSoul && (
+                <XStack justifyContent="space-between" paddingVertical={12}
+                  borderBottomWidth={0.5} borderBottomColor="$borderColor">
+                  <Text fontSize={13} color="$color11">Soul</Text>
+                  <Text fontSize={13} color="$color" fontWeight="500">{currentSoul.name}</Text>
+                </XStack>
+              )}
+              <XStack justifyContent="space-between" paddingVertical={12}
+                borderBottomWidth={0.5} borderBottomColor="$borderColor">
+                <Text fontSize={13} color="$color11">Status</Text>
+                <XStack alignItems="center" gap={6}>
+                  <YStack width={7} height={7} borderRadius={4}
+                    backgroundColor={isConnected ? '#22C55E' : '#EF4444'} />
+                  <Text fontSize={13} fontWeight="500" color="$color">
+                    {isConnected ? 'Connected' : 'Offline'}
+                  </Text>
+                </XStack>
+              </XStack>
+            </YStack>
+
+            {/* Chat Background */}
+            <YStack paddingHorizontal={20} paddingTop={12} paddingBottom={8}>
+              <Text fontSize={11} fontWeight="700" letterSpacing={0.6} color="$color10" marginBottom={12}>CHAT BACKGROUND</Text>
+              <XStack flexWrap="wrap" gap={10}>
                 {BG_PRESETS.map(p => {
                   const active = chatBackground === p.value;
                   return (
                     <YStack
                       key={p.value || 'none'}
-                      width={36} height={36} borderRadius={8}
+                      width={36} height={36} borderRadius={12}
                       justifyContent="center" alignItems="center"
                       borderWidth={2}
                       borderColor={active ? '$color9' : 'transparent'}
                       backgroundColor={p.value ? p.value : (theme.background?.val || '#FFFFFF')}
-                      style={!p.value ? {borderColor: (theme.borderColor?.val || '#E5E7EB'), backgroundColor: (theme.background?.val || '#FFFFFF')} : {}}
-                      accessible
-                      accessibilityLabel={p.label}
-                      onPress={() => updateTheme({chatBackground: p.value})}>
+                      style={!p.value ? {borderColor: (theme.borderColor?.val || '#E5E7EB')} : {}}
+                      onPress={() => updateTheme({chatBackground: p.value})}
+                      pressStyle={{scale: 0.88}}>
                       {active && (
-                        <Text fontSize={14} fontWeight="700" color="white">✓</Text>
+                        <Icon name="check" size={12} color="white" />
                       )}
                     </YStack>
                   );
                 })}
               </XStack>
             </YStack>
-            <YStack paddingTop={12} borderTopWidth={1} borderTopColor="$borderColor">
-              <Text fontSize={12} color="$color11" fontWeight="600" marginBottom={8}>Labels</Text>
+
+            {/* Labels */}
+            <YStack paddingHorizontal={20} paddingTop={16} paddingBottom={24}>
+              <Text fontSize={11} fontWeight="700" letterSpacing={0.6} color="$color10" marginBottom={12}>LABELS</Text>
               {activeSessionId && (sessionLabels[activeSessionId] || []).length > 0 && (
-                <XStack flexWrap="wrap" gap={4} marginBottom={8}>
+                <XStack flexWrap="wrap" gap={6} marginBottom={12}>
                   {(sessionLabels[activeSessionId] || []).map(label => (
                     <YStack
                       key={label}
-                      backgroundColor="$color9"
-                      opacity={0.12}
-                      paddingHorizontal={8} paddingVertical={3} borderRadius={8}
+                      flexDirection="row" alignItems="center" gap={4}
+                      backgroundColor="rgba(124, 82, 196, 0.08)"
+                      paddingHorizontal={10} paddingVertical={5} borderRadius={999}
                       onPress={async () => {
                         await labelsService.removeLabel(activeSessionId, label);
                         const labels = await labelsService.getLabels(activeSessionId);
@@ -911,22 +930,25 @@ export function ChatScreen() {
                         const distinct = await labelsService.getAllDistinctLabels();
                         setAllLabels(distinct);
                       }}>
-                      <Text fontSize={11} color="$color9">{label} ×</Text>
+                      <Text fontSize={12} fontWeight="500" color="$color9">{label}</Text>
+                      <Icon name="x" size={10} color="$color9" />
                     </YStack>
                   ))}
                 </XStack>
               )}
-              <XStack gap={8}>
+              <XStack gap={10}>
                 <RNTextInput
                   style={{
-                    flex: 1, fontSize: 12, color: (theme.color?.val || '#111827'),
-                    backgroundColor: (theme.background?.val || '#FFFFFF'), borderRadius: 8,
-                    paddingHorizontal: 8, paddingVertical: 5,
-                    borderWidth: 1, borderColor: (theme.borderColor?.val || '#E5E7EB'),
+                    flex: 1, fontSize: 13,
+                    color: (theme.color?.val || '#111827'),
+                    backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                    borderRadius: 12,
+                    paddingHorizontal: 12, paddingVertical: 9,
+                    borderWidth: 0.5, borderColor: (theme.borderColor?.val || '#E5E7EB'),
                   }}
                   value={labelInput}
                   onChangeText={setLabelInput}
-                  placeholder="Add label..."
+                  placeholder="Add a label..."
                   placeholderTextColor={(theme.color10?.val || '#9CA3AF')}
                   returnKeyType="done"
                   onSubmitEditing={async () => {
@@ -946,24 +968,46 @@ export function ChatScreen() {
         </YStack>
       </Modal>
 
-      {/* Session drawer */}
+      {/* Session drawer — bottom sheet */}
       <Modal visible={showDrawer} animationType="slide" transparent>
-        <XStack flex={1} justifyContent="flex-start">
+        <YStack flex={1} justifyContent="flex-end">
           <YStack
-            width="80%" maxWidth={320} maxHeight="80%"
+            flex={1}
+            backgroundColor="rgba(0,0,0,0.3)"
+            onPress={() => setShowDrawer(false)}
+          />
+          <YStack
             backgroundColor="$background"
-            borderRightWidth={1} borderRightColor="$borderColor">
+            borderTopLeftRadius={20}
+            borderTopRightRadius={20}
+            maxHeight="85%"
+            overflow="hidden">
+            {/* Handle bar */}
+            <YStack alignItems="center" paddingTop={10} paddingBottom={4}>
+              <YStack width={36} height={4} borderRadius={2} backgroundColor="$borderColor" opacity={0.5} />
+            </YStack>
+
             <XStack
-              paddingHorizontal={20} paddingVertical={12}
-              borderBottomWidth={1} borderBottomColor="$borderColor"
+              paddingHorizontal={20} paddingVertical={8}
+              paddingBottom={12}
+              borderBottomWidth={0.5} borderBottomColor="$borderColor"
               alignItems="center" justifyContent="space-between">
-              <Text fontSize={16} fontWeight="600" color="$color">Conversations</Text>
-              <XStack alignItems="center" gap={12}>
-                <YStack onPress={() => { createSession(); setShowDrawer(false); }} pressStyle={{opacity: 0.6}}>
-                  <Icon name="plus" size={20} color={(theme.color9?.val || '#6366F1')} />
+              <Text fontSize={16} fontWeight="700" letterSpacing={-0.3} color="$color">Conversations</Text>
+              <XStack alignItems="center" gap={8}>
+                <YStack
+                  width={32} height={32} borderRadius={10}
+                  alignItems="center" justifyContent="center"
+                  backgroundColor="$color9" opacity={0.12}
+                  onPress={() => { createSession(); setShowDrawer(false); }}
+                  pressStyle={{opacity: 0.8}}>
+                  <Icon name="plus" size={16} color="$color9" />
                 </YStack>
-                <YStack onPress={() => setShowDrawer(false)} pressStyle={{opacity: 0.6}}>
-                  <Icon name="x" size={20} color={(theme.color11?.val || '#6B7280')} />
+                <YStack
+                  width={32} height={32} borderRadius={10}
+                  alignItems="center" justifyContent="center"
+                  onPress={() => setShowDrawer(false)}
+                  pressStyle={{opacity: 0.6}}>
+                  <Icon name="x" size={16} color={(theme.color11?.val || '#6B7280')} />
                 </YStack>
               </XStack>
             </XStack>
@@ -1001,24 +1045,26 @@ export function ChatScreen() {
               </XStack>
             )}
 
-            {/* Filtered sessions */}
+            {/* Session list */}
             <FlatList
               data={labelFilter ? sortedActiveSessions.filter(s => (sessionLabels[s.id] || []).includes(labelFilter!)) : sortedActiveSessions}
               keyExtractor={item => item.id}
               renderItem={({item: session}) => {
                 const isStarred = starredIds.includes(session.id);
+                const isActive = session.id === useChatStore.getState().activeSessionId;
                 return (
                 <XStack
-                  paddingHorizontal={20} paddingVertical={12}
-                  borderBottomWidth={1} borderBottomColor="$borderColor"
+                  paddingHorizontal={16} paddingVertical={12}
+                  marginHorizontal={12} marginVertical={2}
+                  borderRadius={12}
                   alignItems="center" justifyContent="space-between"
-                  backgroundColor={session.id === useChatStore.getState().activeSessionId ? '$color9' : '$background'}
-                  opacity={session.id === useChatStore.getState().activeSessionId ? 0.08 : 1}
+                  backgroundColor={isActive ? 'rgba(124, 82, 196, 0.08)' : 'transparent'}
                   onPress={() => {
                     loadSession(session.id);
                     setShowDrawer(false);
-                  }}>
-                  <YStack flex={1}>
+                  }}
+                  pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.06)', scale: 0.98}}>
+                  <YStack flex={1} marginRight={8}>
                     <YStack
                       onLongPress={() => {
                         triggerHaptic('light');
@@ -1029,28 +1075,32 @@ export function ChatScreen() {
                           }
                         }, 'plain-text', currentTitle);
                       }}>
-                      <XStack alignItems="center" gap={4}>
-                        {isStarred && <Icon name="star" size={14} color={'#F59E0B'} />}
-                        <Text fontSize={14} fontWeight="500" color="$color" numberOfLines={1}>
+                      <XStack alignItems="center" gap={6}>
+                        {isStarred && <Icon name="star" size={12} color={'#F59E0B'} />}
+                        <Text fontSize={14} fontWeight={isActive ? '600' : '400'} color="$color" numberOfLines={1}>
                           {session.name || 'New conversation'}
                         </Text>
                       </XStack>
                     </YStack>
-                    <Text fontSize={12} color="$color10">
-                      {session.message_count || 0} messages
-                    </Text>
-                    {(sessionLabels[session.id] || []).length > 0 && (
-                      <XStack flexWrap="wrap" gap={3} marginTop={3}>
-                        {(sessionLabels[session.id] || []).map(label => (
-                          <YStack key={label} backgroundColor="$color9" opacity={0.12} paddingHorizontal={6} paddingVertical={2} borderRadius={8}>
-                            <Text fontSize={10} color="$color9">{label}</Text>
-                          </YStack>
-                        ))}
-                      </XStack>
-                    )}
+                    <XStack alignItems="center" gap={6} marginTop={3}>
+                      <Text fontSize={11} color="$color10">
+                        {session.message_count || 0} messages
+                      </Text>
+                      {(sessionLabels[session.id] || []).length > 0 && (
+                        <XStack flexWrap="wrap" gap={3}>
+                          {(sessionLabels[session.id] || []).slice(0, 2).map(label => (
+                            <YStack key={label} backgroundColor="$color9" opacity={0.12} paddingHorizontal={5} paddingVertical={1} borderRadius={4}>
+                              <Text fontSize={9} color="$color9">{label}</Text>
+                            </YStack>
+                          ))}
+                        </XStack>
+                      )}
+                    </XStack>
                   </YStack>
-                  <XStack alignItems="center" gap={4}>
+                  <XStack alignItems="center" gap={2}>
                     <YStack
+                      width={28} height={28} borderRadius={8}
+                      alignItems="center" justifyContent="center"
                       onPress={async () => {
                         if (isStarred) {
                           await starsService.unstarSession(session.id);
@@ -1060,22 +1110,13 @@ export function ChatScreen() {
                           setStarredIds(prev => [session.id, ...prev]);
                         }
                         triggerHaptic('light');
-                      }}>
-                      <Icon name={isStarred ? 'star' : 'star-outline'} size={18} color={'#F59E0B'} />
+                      }}
+                      pressStyle={{opacity: 0.6}}>
+                      <Icon name={isStarred ? 'star' : 'star-outline'} size={14} color={'#F59E0B'} />
                     </YStack>
                     <YStack
-                      onPress={() => {
-                        Alert.alert('Archive', 'Archive this conversation?', [
-                          {text: 'Cancel', style: 'cancel'},
-                          {
-                            text: 'Archive',
-                            onPress: () => archiveSession(session.id, true),
-                          },
-                        ]);
-                      }}>
-                      <Icon name="archive" size={18} color={(theme.color10?.val || '#9CA3AF')} />
-                    </YStack>
-                    <YStack
+                      width={28} height={28} borderRadius={8}
+                      alignItems="center" justifyContent="center"
                       onPress={() => {
                         Alert.alert('Delete', 'Delete this conversation?', [
                           {text: 'Cancel', style: 'cancel'},
@@ -1085,142 +1126,207 @@ export function ChatScreen() {
                             onPress: () => deleteSession(session.id),
                           },
                         ]);
-                      }}>
-                      <Icon name="x" size={18} color="#EF4444" />
+                      }}
+                      pressStyle={{opacity: 0.6}}>
+                      <Icon name="trash-2" size={14} color="#EF4444" />
                     </YStack>
                   </XStack>
                 </XStack>
               )}}
               ListEmptyComponent={
-                <Text fontSize={11} color="$color10" textAlign="center" padding={36}>
-                  No conversations yet
-                </Text>
-              }
-              ListFooterComponent={
-                archivedSessions.length > 0 ? (
-                  <YStack
-                    paddingVertical={12} paddingHorizontal={20} alignItems="center"
-                    borderTopWidth={1} borderTopColor="$borderColor"
-                    onPress={() => setShowArchived(s => !s)}>
-                    <Text fontSize={12} color="$color9" fontWeight="600">
-                      {showArchived ? 'Hide' : 'Show'} archived ({archivedSessions.length})
-                    </Text>
-                  </YStack>
-                ) : null
+                <YStack padding={40} alignItems="center">
+                  <Icon name="message-circle" size={24} color={(theme.color10?.val || '#9CA3AF')} />
+                  <Text fontSize={13} color="$color10" marginTop={8}>No conversations yet</Text>
+                </YStack>
               }
             />
             {showArchived && archivedSessions.length > 0 && (
               <YStack maxHeight={200}>
-                <Text fontSize={12} color="$color10" fontWeight="600"
-                  paddingHorizontal={20} paddingVertical={8}
-                  backgroundColor="$background" opacity={0.06}
-                  borderTopWidth={1} borderTopColor="$borderColor">
-                  Archived
+                <Text fontSize={11} color="$color10" fontWeight="600" letterSpacing={0.5}
+                  paddingHorizontal={16} paddingVertical={8}>
+                  ARCHIVED
                 </Text>
                 <FlatList
                   data={archivedSessions}
                   keyExtractor={item => item.id}
                   renderItem={({item: session}) => (
                     <XStack
-                      paddingHorizontal={20} paddingVertical={12}
-                      borderBottomWidth={1} borderBottomColor="$borderColor"
+                      paddingHorizontal={16} paddingVertical={10}
+                      marginHorizontal={12} marginVertical={1}
+                      borderRadius={10}
                       alignItems="center" justifyContent="space-between"
-                      opacity={session.id === useChatStore.getState().activeSessionId ? 0.08 : 0.8}
-                      backgroundColor={session.id === useChatStore.getState().activeSessionId ? '$color9' : '$background'}
+                      backgroundColor={session.id === useChatStore.getState().activeSessionId ? 'rgba(124, 82, 196, 0.08)' : 'transparent'}
                       onPress={() => {
                         loadSession(session.id);
                         setShowDrawer(false);
                       }}>
                       <YStack flex={1}>
-                        <Text fontSize={14} fontWeight="500" color="$color" numberOfLines={1}>
+                        <Text fontSize={13} fontWeight="400" color="$color" numberOfLines={1}>
                           {session.name || 'New conversation'}
                         </Text>
-                        <Text fontSize={12} color="$color10">
+                        <Text fontSize={11} color="$color10">
                           {session.message_count || 0} messages
                         </Text>
                       </YStack>
-                      <YStack onPress={() => archiveSession(session.id, false)}>
-                        <Text fontSize={12} color="$color9" fontWeight="500">Unarchive</Text>
+                      <YStack
+                        paddingHorizontal={10} paddingVertical={4} borderRadius={8}
+                        backgroundColor="$color9" opacity={0.1}
+                        onPress={() => archiveSession(session.id, false)}>
+                        <Text fontSize={11} fontWeight="500" color="$color9">Restore</Text>
                       </YStack>
                     </XStack>
                   )}
                 />
               </YStack>
             )}
+            {/* Label filter chips — below list */}
+            {allLabels.length > 0 && (
+              <XStack
+                flexWrap="wrap" gap={4}
+                paddingHorizontal={16} paddingVertical={8}
+                paddingBottom={12}
+                borderTopWidth={0.5} borderTopColor="$borderColor">
+                <YStack
+                  paddingHorizontal={10} paddingVertical={4} borderRadius={999}
+                  backgroundColor={labelFilter === null ? '$color9' : 'transparent'}
+                  borderWidth={0.5}
+                  borderColor={labelFilter === null ? '$color9' : '$borderColor'}
+                  onPress={() => setLabelFilter(null)}>
+                  <Text fontSize={11} color={labelFilter === null ? 'white' : '$color11'}
+                    fontWeight={labelFilter === null ? '600' : '400'}>All</Text>
+                </YStack>
+                {allLabels.map(label => (
+                  <YStack
+                    key={label}
+                    paddingHorizontal={10} paddingVertical={4} borderRadius={999}
+                    backgroundColor={labelFilter === label ? '$color9' : 'transparent'}
+                    borderWidth={0.5}
+                    borderColor={labelFilter === label ? '$color9' : '$borderColor'}
+                    onPress={() => setLabelFilter(label === labelFilter ? null : label)}>
+                    <Text fontSize={11}
+                      color={labelFilter === label ? 'white' : '$color11'}
+                      fontWeight={labelFilter === label ? '600' : '400'}>{label}</Text>
+                  </YStack>
+                ))}
+              </XStack>
+            )}
+            {/* Safe area padding */}
+            <YStack height={20} />
           </YStack>
-        </XStack>
+        </YStack>
       </Modal>
 
-      {/* Soul picker */}
+      {/* Soul picker — bottom sheet */}
       <Modal visible={showSoulPicker} animationType="slide" transparent>
-        <XStack flex={1} justifyContent="flex-start">
+        <YStack flex={1} justifyContent="flex-end">
           <YStack
-            width="80%" maxWidth={320} maxHeight="80%"
+            flex={1}
+            backgroundColor="rgba(0,0,0,0.3)"
+            onPress={() => setShowSoulPicker(false)}
+          />
+          <YStack
             backgroundColor="$background"
-            borderRightWidth={1} borderRightColor="$borderColor">
+            borderTopLeftRadius={24}
+            borderTopRightRadius={24}
+            maxHeight="75%"
+            overflow="hidden">
+            {/* Handle bar */}
+            <YStack alignItems="center" paddingTop={12} paddingBottom={2}>
+              <YStack width={40} height={5} borderRadius={3} backgroundColor="$borderColor" opacity={0.4} />
+            </YStack>
+
             <XStack
-              paddingHorizontal={20} paddingVertical={12}
-              borderBottomWidth={1} borderBottomColor="$borderColor"
+              paddingHorizontal={20} paddingVertical={14}
+              borderBottomWidth={0.5} borderBottomColor="$borderColor"
               alignItems="center" justifyContent="space-between">
-              <Text fontSize={16} fontWeight="600" color="$color">Personality</Text>
-              <YStack onPress={() => setShowSoulPicker(false)} pressStyle={{opacity: 0.6}}>
-                <Icon name="x" size={20} color={(theme.color11?.val || '#6B7280')} />
+              <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Personalities</Text>
+              <YStack
+                width={28} height={28} borderRadius={9}
+                alignItems="center" justifyContent="center"
+                onPress={() => setShowSoulPicker(false)}
+                pressStyle={{opacity: 0.6}}>
+                <Icon name="x" size={14} color={(theme.color11?.val || '#6B7280')} />
               </YStack>
             </XStack>
+
             {currentSoul && (
               <YStack
-                paddingHorizontal={20} paddingVertical={12}
-                borderBottomWidth={1} borderBottomColor="$borderColor"
-                backgroundColor="$color9"
-                opacity={0.06}>
-                <Text fontSize={12} color="$color9" fontWeight="600" marginBottom={2}>Active</Text>
-                <Text fontSize={16} fontWeight="600" color="$color">{currentSoul.name}</Text>
-                {currentSoul.description && (
-                  <Text fontSize={11} color="$color10" marginTop={2}>{currentSoul.description}</Text>
-                )}
+                marginHorizontal={16} marginTop={12} marginBottom={4}
+                paddingHorizontal={16} paddingVertical={14}
+                borderRadius={14}
+                backgroundColor="rgba(124, 82, 196, 0.06)"
+                borderWidth={0.5} borderColor="rgba(124, 82, 196, 0.15)">
+                <Text fontSize={10} fontWeight="700" letterSpacing={0.6} color="$color9" marginBottom={6}>ACTIVE</Text>
+                <XStack alignItems="center" gap={10}>
+                  <YStack width={32} height={32} borderRadius={16} backgroundColor="rgba(124, 82, 196, 0.12)" alignItems="center" justifyContent="center">
+                    <Icon name="check" size={14} color="$color9" />
+                  </YStack>
+                  <YStack flex={1}>
+                    <Text fontSize={15} fontWeight="600" color="$color">{currentSoul.name}</Text>
+                    {currentSoul.description && (
+                      <Text fontSize={12} color="$color10" marginTop={1}>{currentSoul.description}</Text>
+                    )}
+                  </YStack>
+                </XStack>
               </YStack>
             )}
+
             <FlatList
               data={souls}
               keyExtractor={item => item.name}
+              contentContainerStyle={{paddingVertical: 6, paddingHorizontal: 16}}
               renderItem={({item: soul}) => {
                 const isActive = currentSoul?.name === soul.name;
                 return (
                   <XStack
-                    paddingHorizontal={20} paddingVertical={12}
-                    borderBottomWidth={1} borderBottomColor="$borderColor"
-                    alignItems="center" justifyContent="space-between"
-                    backgroundColor={isActive ? '$color9' : '$background'}
-                    opacity={isActive ? 0.08 : 1}
+                    paddingVertical={12} paddingHorizontal={14}
+                    marginVertical={2}
+                    borderRadius={12}
+                    alignItems="center" gap={12}
+                    backgroundColor={isActive ? 'rgba(124, 82, 196, 0.08)' : 'transparent'}
                     onPress={() => {
                       switchSoul(soul.name);
                       setShowSoulPicker(false);
-                    }}>
+                    }}
+                    pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.06)', scale: 0.98}}>
+                    <YStack
+                      width={36} height={36} borderRadius={18}
+                      backgroundColor={isActive ? '$color9' : 'rgba(124, 82, 196, 0.08)'}
+                      alignItems="center" justifyContent="center">
+                      <Icon name="user" size={16} color={isActive ? 'white' : (theme.color9?.val || '#7C52C4')} />
+                    </YStack>
                     <YStack flex={1}>
-                      <Text fontSize={14} fontWeight="500" color="$color">{soul.name}</Text>
+                      <Text fontSize={14} fontWeight={isActive ? '600' : '400'} color="$color">{soul.name}</Text>
                       {soul.description && (
-                        <Text fontSize={12} color="$color10" numberOfLines={1}>
+                        <Text fontSize={11} color="$color10" numberOfLines={1} marginTop={1}>
                           {soul.description}
                         </Text>
                       )}
                       {soul.traits && soul.traits.length > 0 && (
-                        <XStack flexWrap="wrap" gap={4} marginTop={4}>
+                        <XStack flexWrap="wrap" gap={3} marginTop={4}>
                           {soul.traits.map(trait => (
                             <StatusBadge key={trait} label={trait} variant="info" />
                           ))}
                         </XStack>
                       )}
                     </YStack>
-                    {isActive && <Icon name="check" size={16} color={'#22C55E'} />}
+                    {isActive && (
+                      <YStack width={20} height={20} borderRadius={10} backgroundColor="$color9" alignItems="center" justifyContent="center">
+                        <Icon name="check" size={12} color="white" />
+                      </YStack>
+                    )}
                   </XStack>
                 );
               }}
               ListEmptyComponent={
-                <Text fontSize={11} color="$color10" textAlign="center" padding={36}>No personalities found</Text>
+                <YStack padding={40} alignItems="center">
+                  <Text fontSize={13} color="$color10">No personalities found</Text>
+                </YStack>
               }
             />
+            <YStack height={Platform.OS === 'ios' ? 34 : 16} />
           </YStack>
-        </XStack>
+        </YStack>
       </Modal>
 
       <SearchSessionsModal
@@ -1228,6 +1334,134 @@ export function ChatScreen() {
         onClose={() => setShowSearchSessions(false)}
         onSelectSession={handleSelectSearchSession}
       />
+
+      {/* Overflow menu — bottom sheet */}
+      <Modal visible={showSettings} animationType="slide" transparent onRequestClose={() => setShowSettings(false)}>
+        <YStack flex={1} justifyContent="flex-end">
+          <YStack
+            flex={1}
+            backgroundColor="rgba(0,0,0,0.3)"
+            onPress={() => setShowSettings(false)}
+          />
+          <YStack
+            backgroundColor="$background"
+            borderTopLeftRadius={24}
+            borderTopRightRadius={24}
+            overflow="hidden">
+            {/* Handle bar */}
+            <YStack alignItems="center" paddingTop={12} paddingBottom={2}>
+              <YStack width={40} height={5} borderRadius={3} backgroundColor="$borderColor" opacity={0.4} />
+            </YStack>
+
+            {/* Section: Actions */}
+            <XStack
+              paddingHorizontal={20} paddingVertical={16}
+              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              alignItems="center" justifyContent="space-between">
+              <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Menu</Text>
+              <YStack
+                width={28} height={28} borderRadius={9}
+                alignItems="center" justifyContent="center"
+                onPress={() => setShowSettings(false)}
+                pressStyle={{opacity: 0.6}}>
+                <Icon name="x" size={14} color={(theme.color11?.val || '#6B7280')} />
+              </YStack>
+            </XStack>
+
+            {/* New Chat */}
+            <YStack
+              paddingVertical={14} paddingHorizontal={20}
+              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              onPress={() => { createSession(); setShowSettings(false); }}
+              pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.04)'}}>
+              <XStack alignItems="center" gap={14}>
+                <YStack width={36} height={36} borderRadius={12} backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+                  <Icon name="plus" size={18} color="$color9" />
+                </YStack>
+                <YStack>
+                  <Text fontSize={15} fontWeight="600" color="$color">New Chat</Text>
+                  <Text fontSize={12} color="$color10">Start a fresh conversation</Text>
+                </YStack>
+              </XStack>
+            </YStack>
+
+            {/* Search in conversation */}
+            <YStack
+              paddingVertical={14} paddingHorizontal={20}
+              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              onPress={() => { setShowSettings(false); setShowSearch(true); }}
+              pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.04)'}}>
+              <XStack alignItems="center" gap={14}>
+                <YStack width={36} height={36} borderRadius={12} backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+                  <Icon name="search" size={18} color="$color9" />
+                </YStack>
+                <YStack>
+                  <Text fontSize={15} fontWeight="600" color="$color">Search</Text>
+                  <Text fontSize={12} color="$color10">Find messages in this conversation</Text>
+                </YStack>
+              </XStack>
+            </YStack>
+
+            {/* Theme toggle */}
+            <YStack
+              paddingVertical={14} paddingHorizontal={20}
+              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              onPress={() => {
+                setShowSettings(false);
+                updateTheme({theme: themeMode === 'dark' ? 'light' : 'dark'});
+              }}
+              pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.04)'}}>
+              <XStack alignItems="center" gap={14}>
+                <YStack width={36} height={36} borderRadius={12} backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+                  <Icon name={themeMode === 'dark' ? 'sun' : 'moon'} size={18} color="$color9" />
+                </YStack>
+                <YStack>
+                  <Text fontSize={15} fontWeight="600" color="$color">
+                    {themeMode === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                  </Text>
+                  <Text fontSize={12} color="$color10">Currently: {themeMode === 'dark' ? 'Dark' : themeMode === 'light' ? 'Light' : 'System'}</Text>
+                </YStack>
+              </XStack>
+            </YStack>
+
+            {/* Conversation Summary */}
+            <YStack
+              paddingVertical={14} paddingHorizontal={20}
+              borderBottomWidth={0.5} borderBottomColor="$borderColor"
+              onPress={() => { setShowSettings(false); setShowInfo(true); }}
+              pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.04)'}}>
+              <XStack alignItems="center" gap={14}>
+                <YStack width={36} height={36} borderRadius={12} backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+                  <Icon name="info" size={18} color="$color9" />
+                </YStack>
+                <YStack>
+                  <Text fontSize={15} fontWeight="600" color="$color">Details</Text>
+                  <Text fontSize={12} color="$color10">Stats, labels, and background</Text>
+                </YStack>
+              </XStack>
+            </YStack>
+
+            {/* Export Chat */}
+            <YStack
+              paddingVertical={14} paddingHorizontal={20}
+              onPress={() => { setShowSettings(false); handleExportChat(); }}
+              pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.04)'}}>
+              <XStack alignItems="center" gap={14}>
+                <YStack width={36} height={36} borderRadius={12} backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+                  <Icon name="download" size={18} color="$color9" />
+                </YStack>
+                <YStack>
+                  <Text fontSize={15} fontWeight="600" color="$color">Export</Text>
+                  <Text fontSize={12} color="$color10">Save conversation as markdown</Text>
+                </YStack>
+              </XStack>
+            </YStack>
+
+            {/* Bottom safe area */}
+            <YStack height={Platform.OS === 'ios' ? 34 : 16} />
+          </YStack>
+        </YStack>
+      </Modal>
     </SafeAreaView>
   );
 }

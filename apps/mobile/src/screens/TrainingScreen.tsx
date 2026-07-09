@@ -189,7 +189,7 @@ export function TrainingScreen() {
   const phaseInfo = PHASE_LABELS[phase] || PHASE_LABELS.idle;
 
   return (
-    <SafeAreaView style={{flex: 1, backgroundColor: '#F5F0FF'}} edges={['top']}>
+    <SafeAreaView style={{flex: 1}} edges={['top']}>
       <ScrollView
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -263,7 +263,7 @@ export function TrainingScreen() {
                   style={{
                     fontSize: 15,
                     color: '#1A1625',
-                    backgroundColor: '#F5F0FF',
+                    backgroundColor: 'rgba(124, 82, 196, 0.04)',
                     borderRadius: 8,
                     paddingHorizontal: 12,
                     paddingVertical: 8,
@@ -386,7 +386,7 @@ export function TrainingScreen() {
                       width={20}
                       height={20}
                       borderRadius={10}
-                      backgroundColor="#FFFFFF"
+                      backgroundColor="transparent"
                       alignSelf={hfOpts.use_lora ? 'flex-end' : 'flex-start'}
                     />
                   </YStack>
@@ -461,7 +461,7 @@ export function TrainingScreen() {
                   style={{
                     fontSize: 15,
                     color: '#1A1625',
-                    backgroundColor: '#F5F0FF',
+                    backgroundColor: 'rgba(124, 82, 196, 0.04)',
                     borderRadius: 8,
                     paddingHorizontal: 12,
                     paddingVertical: 12,

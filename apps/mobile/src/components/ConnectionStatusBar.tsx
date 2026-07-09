@@ -6,6 +6,7 @@
 
 import React from 'react';
 import {View, Text, TouchableOpacity, StyleSheet, ActivityIndicator} from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useConnectionStatus, type ConnectionState} from '../hooks/useConnectionStatus';
 
 interface Props {
@@ -21,12 +22,13 @@ const STATE_CONFIG: Record<ConnectionState, {bg: string; text: string; label: st
 
 export function ConnectionStatusBar({onRetry}: Props) {
   const {state, latencyMs, retryCount} = useConnectionStatus();
+  const insets = useSafeAreaInsets();
   const config = STATE_CONFIG[state];
 
   // Don't show when connected and healthy
   if (state === 'connected') {
     return (
-      <View style={[styles.bar, {backgroundColor: config.bg}]}>
+      <View style={[styles.bar, {backgroundColor: config.bg, paddingTop: insets.top || 6}]}>
         <View style={styles.row}>
           <View style={styles.dot} />
           <Text style={[styles.label, {color: config.text}]}>
@@ -39,7 +41,7 @@ export function ConnectionStatusBar({onRetry}: Props) {
 
   return (
     <TouchableOpacity
-      style={[styles.bar, {backgroundColor: config.bg}]}
+      style={[styles.bar, {backgroundColor: config.bg, paddingTop: insets.top || 6}]}
       onPress={onRetry}
       activeOpacity={0.7}>
       <View style={styles.row}>
