@@ -241,9 +241,12 @@ class StartupOrchestrator:
             return
 
         STARTUP_PHASE.update(phase="loading_model", step=4, total=8, message="Loading model weights...")
-        logger.info("Phase 4: loading model %s in background", raw)
-        self._model_load_task = asyncio.create_task(asyncio.to_thread(_autoload_model, cfg))
-        self._model_load_task.add_done_callback(self._on_model_load_done)
+        logger.info("Phase 4: loading model %s", raw)
+        # Run model load synchronously so provider is registered before serving requests
+        try:
+            await asyncio.to_thread(_autoload_model, cfg)
+        except Exception as e:
+            logger.error("Model load failed: %s", e, exc_info=True)
 
     def _on_model_load_done(self, task: asyncio.Task):
         try:
