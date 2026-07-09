@@ -13,6 +13,9 @@ ios/build/
 .env
 .env.local
 
+# Tamagui build cache
+.tamagui/
+
 # OS
 .DS_Store
 Thumbs.db
