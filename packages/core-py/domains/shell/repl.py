@@ -1167,6 +1167,7 @@ class ShellREPL:
                 "procs": "  procs | ps  — List running training jobs",
                 "ps": "  procs | ps  — List running training jobs",
                 "kill": "  kill <id>  — Stop a training job by ID",
+                "train": "  train [dataset]  — Start training or list datasets",
                 "bg": "  bg | jobs  — List background shell processes",
                 "jobs": "  bg | jobs  — List background shell processes",
                 "fg": "  fg <id>  — Bring a background process to foreground (wait for completion)",
@@ -1186,6 +1187,8 @@ class ShellREPL:
                 "remember": "  remember <fact>  — Store a fact in the knowledge base",
                 "recall": "  recall <query>  — Search the knowledge base",
                 "checkpoints": "  checkpoints  — List training checkpoints (tab-completes names)",
+                "finetuned": "  finetuned  — List fine-tuned models",
+                "train": "  train [dataset] | train status | train stop <id>  — Training operations",
                 "finetuned": "  finetuned  — List fine-tuned model paths (tab-completes names)",
                 "gen": "  gen <prompt>  — Generate text via inference",
                 "tokenizer": "  tokenizer  — Show tokenizer vocabulary stats",
@@ -1301,6 +1304,14 @@ Unix scripting:
 Process management:
   procs / ps              List running training jobs
   kill <id>               Stop a training job
+  train [dataset]         Start training (or list datasets)
+  train status            Show training job status
+  train stop <id>         Stop a training job
+  train distill <ds>      Distill teacher into student
+  train hf <model> <ds>   HuggingFace fine-tuning
+  train auto [soul]       Auto-train with SloNet
+  train load <cp>         Load a checkpoint
+  train del <cp>          Delete a checkpoint
   bg / jobs               List background shell processes
   fg <id>                 Bring a background process to foreground
 
@@ -1709,6 +1720,117 @@ Examples:
             sz_str = f"{sz_bytes / 1048576:.0f}M"
             rows.append([name, f"{loss}", f"{ep}ep", sz_str])
         self._print(self._format_table(rows, ["Model", "Loss", "Epochs", "Size"]))
+
+    def _cmd_train(self, args: str = "") -> None:
+        """Train: train [dataset] | train status | train stop <id> | train distill <dataset>"""
+        parts = args.strip().split()
+        sub = parts[0] if parts else ""
+
+        if sub == "status":
+            jobs = self.cmds.train_status()
+            if not jobs:
+                self._print("  No training jobs")
+                return
+            rows = []
+            for j in jobs:
+                jid = j.get("id", "")[:8]
+                status = j.get("status", "?")
+                model = j.get("model", j.get("data_source", ""))
+                prog = j.get("progress", 0)
+                rows.append([jid, status, model, f"{prog}%"])
+            self._print(self._format_table(rows, ["ID", "Status", "Model", "Progress"]))
+            return
+
+        if sub == "stop":
+            if len(parts) < 2:
+                self._print("  Usage: train stop <job_id>")
+                return
+            r = self.cmds.train_stop(parts[1])
+            self._print(f"  Stopped: {r}")
+            return
+
+        if sub == "distill":
+            dataset = parts[1] if len(parts) > 1 else ""
+            if not dataset:
+                self._print("  Usage: train distill <dataset> [teacher] [epochs]")
+                return
+            teacher = parts[2] if len(parts) > 2 else "gpt2"
+            epochs = int(parts[3]) if len(parts) > 3 else 5
+            r = self.cmds.train_distill(dataset, teacher=teacher, epochs=epochs)
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                self._print(f"  Training started: {r.get('status', r)}")
+            return
+
+        if sub == "hf":
+            model = parts[1] if len(parts) > 1 else ""
+            dataset = parts[2] if len(parts) > 2 else ""
+            if not model or not dataset:
+                self._print("  Usage: train hf <model> <dataset> [epochs]")
+                return
+            epochs = int(parts[3]) if len(parts) > 3 else 3
+            r = self.cmds.train_hf(model, dataset, epochs=epochs)
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                self._print(f"  Training started: {r.get('status', r)}")
+            return
+
+        if sub == "auto":
+            soul = parts[1] if len(parts) > 1 else ""
+            teacher = parts[2] if len(parts) > 2 else "gpt2"
+            epochs = int(parts[3]) if len(parts) > 3 else 10
+            r = self.cmds.train_auto(soul_name=soul, teacher=teacher, epochs=epochs)
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                self._print(f"  Auto-train started: {r.get('status', r)}")
+            return
+
+        if sub == "load":
+            name = parts[1] if len(parts) > 1 else ""
+            if not name:
+                self._print("  Usage: train load <checkpoint_name>")
+                return
+            r = self.cmds.load_checkpoint(name)
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                self._print(f"  Loaded: {name}")
+            return
+
+        if sub == "del":
+            name = parts[1] if len(parts) > 1 else ""
+            if not name:
+                self._print("  Usage: train del <checkpoint_name>")
+                return
+            r = self.cmds.delete_checkpoint(name)
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                self._print(f"  Deleted: {name}")
+            return
+
+        # Default: quick train on dataset (or list datasets if none specified)
+        dataset = sub
+        if not dataset:
+            datasets = self.cmds.datasets()
+            if not datasets:
+                self._print("  No datasets available. Import data first.")
+                return
+            self._print("  Available datasets:")
+            for d in datasets:
+                self._print(f"    {d.get('name', d.get('id', '?'))}")
+            self._print("\n  Usage: train <dataset>")
+            return
+
+        name = parts[1] if len(parts) > 1 else ""
+        r = self.cmds.train_quick(dataset, name=name)
+        if "error" in r:
+            self._print(f"  Error: {r['error']}")
+        else:
+            self._print(f"  Training started: {r.get('status', r)}")
 
     def _cmd_gen(self, args: str = "") -> None:
         if not args:
@@ -2909,6 +3031,7 @@ Examples:
         "knowledge": _cmd_knowledge,
         "checkpoints": _cmd_checkpoints,
         "finetuned": _cmd_finetuned,
+        "train": _cmd_train,
         "gen": _cmd_gen,
         "chat": _cmd_chat,
         "tokenizer": _cmd_tokenizer,
