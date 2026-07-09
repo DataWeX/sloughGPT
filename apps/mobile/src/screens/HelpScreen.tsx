@@ -42,7 +42,7 @@ function FAQItem({item}: {item: {q: string; a: string}}) {
   const [open, setOpen] = useState(false);
   return (
     <YStack
-      borderBottomWidth={1}
+      borderBottomWidth={0.5}
       borderBottomColor="$borderColor"
       paddingVertical={12}
       onPress={() => setOpen(!open)}>
@@ -51,7 +51,7 @@ function FAQItem({item}: {item: {q: string; a: string}}) {
           {item.q}
         </Text>
         <Text fontSize={18} color="$color9" fontWeight="700">
-          {open ? '−' : '+'}
+          {open ? '\u2212' : '+'}
         </Text>
       </XStack>
       {open && (
@@ -66,18 +66,18 @@ function FAQItem({item}: {item: {q: string; a: string}}) {
 export function HelpScreen() {
   return (
     <ScreenShell title="Help">
-      <YStack backgroundColor="white" borderRadius={12} padding={16} borderWidth={1} borderColor="$borderColor">
+      <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
         <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>
           Quick Start
         </Text>
-        {['Connect to your server (Settings → Server)', 'Load a model (Models tab → tap Load)', 'Pick a personality (Models tab → tap a soul)', 'Start chatting (Chat tab)'].map((s, i) => (
+        {['Connect to your server (Settings \u2192 Server)', 'Load a model (Models tab \u2192 tap Load)', 'Pick a personality (Models tab \u2192 tap a soul)', 'Start chatting (Chat tab)'].map((s, i) => (
           <Text key={i} fontSize={14} color="$color" paddingVertical={4}>
             {i + 1}. {s}
           </Text>
         ))}
       </YStack>
 
-      <YStack backgroundColor="white" borderRadius={12} padding={16} borderWidth={1} borderColor="$borderColor">
+      <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
         <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>
           Keyboard Shortcuts
         </Text>
@@ -117,7 +117,7 @@ export function HelpScreen() {
         </XStack>
       </YStack>
 
-      <YStack backgroundColor="white" borderRadius={12} padding={16} borderWidth={1} borderColor="$borderColor">
+      <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
         <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>
           FAQ
         </Text>
@@ -126,18 +126,18 @@ export function HelpScreen() {
         ))}
       </YStack>
 
-      <YStack backgroundColor="white" borderRadius={12} padding={16} borderWidth={1} borderColor="$borderColor">
+      <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
         <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>
           Troubleshooting
         </Text>
         {[
-          'Connection refused — Make sure the server is running on the correct port.',
-          "Model won't load — Try a smaller model (GPT-2 or Qwen2.5-0.5B).",
-          'Training fails — Ensure you have at least 50 characters of training text.',
-          'App crashes — Restart the app. Check the error boundary for details.',
+          'Connection refused \u2014 Make sure the server is running on the correct port.',
+          "Model won't load \u2014 Try a smaller model (GPT-2 or Qwen2.5-0.5B).",
+          'Training fails \u2014 Ensure you have at least 50 characters of training text.',
+          'App crashes \u2014 Restart the app. Check the error boundary for details.',
         ].map((s, i) => (
           <Text key={i} fontSize={13} color="$color11" paddingVertical={4} lineHeight={20}>
-            • {s}
+            {'\u2022'} {s}
           </Text>
         ))}
       </YStack>

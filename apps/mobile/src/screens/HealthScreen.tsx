@@ -70,13 +70,13 @@ export function HealthScreen() {
   return (
     <ScreenShell title="System Health" refreshing={refreshing} onRefresh={onRefresh}>
       <XStack gap={12}>
-        <YStack flex={1} backgroundColor="white" borderRadius={12} padding={12} alignItems="center" gap={8} borderWidth={1} borderColor="$borderColor">
+        <YStack flex={1} backgroundColor="$background" borderRadius={12} padding={14} alignItems="center" gap={8} borderWidth={0.5} borderColor="$borderColor">
           <Text fontSize={11} fontWeight="500" letterSpacing={0.5} color="$color10" textTransform="uppercase">
             API
           </Text>
           <StatusBadge label={api_?.status === 'healthy' ? 'Healthy' : 'Offline'} variant={api_?.status === 'healthy' ? 'success' : 'error'} />
         </YStack>
-        <YStack flex={1} backgroundColor="white" borderRadius={12} padding={12} alignItems="center" gap={8} borderWidth={1} borderColor="$borderColor">
+        <YStack flex={1} backgroundColor="$background" borderRadius={12} padding={14} alignItems="center" gap={8} borderWidth={0.5} borderColor="$borderColor">
           <Text fontSize={11} fontWeight="500" letterSpacing={0.5} color="$color10" textTransform="uppercase">
             Model
           </Text>
@@ -85,7 +85,7 @@ export function HealthScreen() {
       </XStack>
 
       {api_?.model_name && (
-        <YStack backgroundColor="white" borderRadius={12} padding={16} borderWidth={1} borderColor="$borderColor">
+        <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
           <Text fontSize={11} fontWeight="500" letterSpacing={0.5} color="$color10" textTransform="uppercase" marginBottom={4}>
             Active Model
           </Text>
@@ -97,7 +97,7 @@ export function HealthScreen() {
 
       {sys && (
         <>
-          <YStack backgroundColor="white" borderRadius={12} padding={16} borderWidth={1} borderColor="$borderColor">
+          <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
             <Text fontSize={11} fontWeight="500" letterSpacing={0.5} color="$color10" textTransform="uppercase" marginBottom={4}>
               CPU
             </Text>
@@ -107,7 +107,7 @@ export function HealthScreen() {
             <ProgressBar value={sys.cpu_percent} color="#7C52C4" />
           </YStack>
 
-          <YStack backgroundColor="white" borderRadius={12} padding={16} borderWidth={1} borderColor="$borderColor">
+          <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
             <Text fontSize={11} fontWeight="500" letterSpacing={0.5} color="$color10" textTransform="uppercase" marginBottom={4}>
               Memory
             </Text>
@@ -118,7 +118,7 @@ export function HealthScreen() {
           </YStack>
 
           {sys.disk_total_gb > 0 && (
-            <YStack backgroundColor="white" borderRadius={12} padding={16} borderWidth={1} borderColor="$borderColor">
+            <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
               <Text fontSize={11} fontWeight="500" letterSpacing={0.5} color="$color10" textTransform="uppercase" marginBottom={4}>
                 Disk
               </Text>
@@ -129,7 +129,7 @@ export function HealthScreen() {
             </YStack>
           )}
 
-          <YStack backgroundColor="white" borderRadius={12} padding={16} borderWidth={1} borderColor="$borderColor">
+          <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
             <Text fontSize={11} fontWeight="500" letterSpacing={0.5} color="$color10" textTransform="uppercase" marginBottom={4}>
               Uptime
             </Text>

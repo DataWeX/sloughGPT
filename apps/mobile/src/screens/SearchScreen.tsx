@@ -1,7 +1,7 @@
 import React, {useState, useCallback} from 'react';
-import {FlatList, TextInput, Keyboard} from 'react-native';
+import {FlatList, TextInput, Keyboard, Pressable} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {YStack, XStack, Text} from 'tamagui';
+import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {useChatStore} from '../stores/chat-store';
 import {api} from '../services/api-client';
 import {Icon} from '../components/Icon';
@@ -15,10 +15,12 @@ interface SearchResult {
 }
 
 export function SearchScreen() {
+  const theme = useTheme();
   const {loadSession} = useChatStore();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const accent = theme.color9?.val || '#7C52C4';
 
   const handleSearch = useCallback(async (text: string) => {
     setQuery(text);
@@ -68,17 +70,17 @@ export function SearchScreen() {
           </Text>
         </YStack>
 
-        <XStack
+        <YStack
           marginHorizontal={16}
-          backgroundColor="white"
-          borderRadius={8}
-          paddingHorizontal={12}
-          borderWidth={1}
-          borderColor="$borderColor"
+          backgroundColor="rgba(124, 82, 196, 0.04)"
+          borderRadius={10}
+          paddingHorizontal={14}
+          borderWidth={0.5}
+          borderColor="rgba(124, 82, 196, 0.12)"
           alignItems="center">
-          <Icon name="search" size={16} color="#9B95A8" />
+          <Icon name="search" size={16} color={(theme.color10?.val || '#9B95A8')} />
           <TextInput
-            style={{flex: 1, fontSize: 14, color: '#1A1625', paddingVertical: 10, marginLeft: 8, }}
+            style={{flex: 1, fontSize: 14, color: '#1A1625', paddingVertical: 10, marginLeft: 8}}
             value={query}
             onChangeText={handleSearch}
             placeholder="Search across all conversations..."
@@ -87,11 +89,11 @@ export function SearchScreen() {
             returnKeyType="search"
           />
           {query.length > 0 && (
-            <YStack onPress={() => handleSearch('')}>
-              <Icon name="x" size={16} color="#9B95A8" />
-            </YStack>
+            <Pressable onPress={() => handleSearch('')}>
+              <Icon name="x" size={16} color={(theme.color10?.val || '#9B95A8')} />
+            </Pressable>
           )}
-        </XStack>
+        </YStack>
 
         {searching && (
           <Text fontSize={14} color="$color10" textAlign="center" paddingVertical={24}>
@@ -112,10 +114,10 @@ export function SearchScreen() {
           contentContainerStyle={{paddingHorizontal: 16, paddingTop: 12, gap: 8}}
           renderItem={({item}) => (
             <YStack
-              backgroundColor="white"
-              borderRadius={8}
-              padding={12}
-              borderWidth={1}
+              backgroundColor="$background"
+              borderRadius={12}
+              padding={14}
+              borderWidth={0.5}
               borderColor="$borderColor"
               onPress={() => handleResultPress(item)}>
               <XStack justifyContent="space-between" alignItems="center" marginBottom={4}>
@@ -141,13 +143,13 @@ export function SearchScreen() {
                   Search Tips
                 </Text>
                 <Text fontSize={14} color="$color11" marginBottom={8} textAlign="center">
-                  • Type at least 2 characters
+                  {'\u2022'} Type at least 2 characters
                 </Text>
                 <Text fontSize={14} color="$color11" marginBottom={8} textAlign="center">
-                  • Searches across all your conversations
+                  {'\u2022'} Searches across all your conversations
                 </Text>
                 <Text fontSize={14} color="$color11" textAlign="center">
-                  • Tap a result to jump to that conversation
+                  {'\u2022'} Tap a result to jump to that conversation
                 </Text>
               </YStack>
             ) : null

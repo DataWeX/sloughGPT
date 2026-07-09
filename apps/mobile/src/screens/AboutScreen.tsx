@@ -1,5 +1,5 @@
 import React from 'react';
-import {YStack, XStack, Text} from 'tamagui';
+import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {ScreenShell} from '../components/ScreenShell';
 import {Icon} from '../components/Icon';
 
@@ -13,12 +13,15 @@ const FEATURES = [
 ] as const;
 
 const SHORTCUTS = [
-  'Enter — Send message',
-  'Long press — Message actions',
-  'Pull down — Refresh data',
+  'Enter \u2014 Send message',
+  'Long press \u2014 Message actions',
+  'Pull down \u2014 Refresh data',
 ];
 
 export function AboutScreen() {
+  const theme = useTheme();
+  const accent = theme.color9?.val || '#7C52C4';
+
   return (
     <ScreenShell title="About">
       <YStack alignItems="center" paddingVertical={32}>
@@ -33,7 +36,7 @@ export function AboutScreen() {
         </Text>
       </YStack>
 
-      <YStack backgroundColor="white" borderRadius={12} padding={16} borderWidth={1} borderColor="$borderColor">
+      <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
         <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>
           About
         </Text>
@@ -44,14 +47,14 @@ export function AboutScreen() {
         </Text>
       </YStack>
 
-      <YStack backgroundColor="white" borderRadius={12} padding={16} borderWidth={1} borderColor="$borderColor">
+      <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
         <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>
           Features
         </Text>
         <YStack gap={8}>
           {FEATURES.map((f, i) => (
             <XStack key={i} gap={8} alignItems="center">
-              <Icon name={f.icon} size={16} color="#1A1625" />
+              <Icon name={f.icon} size={16} color={accent} />
               <Text fontSize={14} color="$color">
                 {f.label}
               </Text>
@@ -60,7 +63,7 @@ export function AboutScreen() {
         </YStack>
       </YStack>
 
-      <YStack backgroundColor="white" borderRadius={12} padding={16} borderWidth={1} borderColor="$borderColor">
+      <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
         <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>
           Architecture
         </Text>
@@ -71,7 +74,7 @@ export function AboutScreen() {
         </Text>
       </YStack>
 
-      <YStack backgroundColor="white" borderRadius={12} padding={16} borderWidth={1} borderColor="$borderColor">
+      <YStack backgroundColor="$background" borderRadius={12} padding={16} borderWidth={0.5} borderColor="$borderColor">
         <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>
           Keyboard Shortcuts
         </Text>
