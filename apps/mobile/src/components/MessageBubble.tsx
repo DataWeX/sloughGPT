@@ -37,14 +37,17 @@ function formatTime(ts: number): string {
 const SWIPE_THRESHOLD = -80;
 const DELETE_WIDTH = 72;
 
-// Spacing/radii/typography constants (previously from theme, now inline)
+// Spacing/radii/typography constants
 const S = {xs: 4, sm: 8, md: 12, lg: 16, xl: 20};
-const R = {sm: 6, md: 8, lg: 12, xl: 16, full: 9999};
-const T = {body: {fontSize: 15, lineHeight: 22, letterSpacing: 0.2}, small: {fontSize: 11, lineHeight: 16, letterSpacing: 0.2}};
+const R = {sm: 6, md: 10, lg: 16, xl: 20, full: 9999};
+const T = {body: {fontSize: 15, lineHeight: 22, letterSpacing: 0.1}, small: {fontSize: 11, lineHeight: 15, letterSpacing: 0.2}};
 const COL = {
   white: '#FFFFFF',
   error: '#EF4444',
   overlay: 'rgba(0,0,0,0.4)',
+  userBubble: '#7C52C4',
+  assistantBubble: 'rgba(124, 82, 196, 0.06)',
+  assistantBubbleBorder: 'rgba(124, 82, 196, 0.1)',
 };
 
 interface ContextAction {
@@ -82,7 +85,7 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
   const styles = useMemo(() => StyleSheet.create({
     row: {
       paddingHorizontal: S.lg,
-      marginBottom: S.sm,
+      marginBottom: 6,
       alignItems: 'flex-start',
       overflow: 'visible',
     },
@@ -131,8 +134,8 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
       maxWidth: '80%',
     },
     bubble: {
-      paddingHorizontal: S.md,
-      paddingVertical: S.sm + 2,
+      paddingHorizontal: S.md + 2,
+      paddingVertical: 10,
       borderRadius: R.lg,
     },
     highlight: {
@@ -140,11 +143,13 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
       borderColor: primary + '60',
     },
     userBubble: {
-      backgroundColor: primary,
+      backgroundColor: COL.userBubble,
       borderBottomRightRadius: R.sm,
     },
     assistantBubble: {
-      backgroundColor: bg,
+      backgroundColor: COL.assistantBubble,
+      borderWidth: 0.5,
+      borderColor: COL.assistantBubbleBorder,
       borderBottomLeftRadius: R.sm,
     },
     pinnedBubble: {
@@ -156,6 +161,9 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
     },
     assistantText: {
       color: textColor,
+    },
+    pinIcon: {
+      marginBottom: 4,
     },
     imageContainer: {
       marginBottom: S.xs,
@@ -169,16 +177,15 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
     timestamp: {
       ...T.small,
       color: textMuted,
-      marginTop: 2,
-      paddingHorizontal: S.md,
+      marginTop: 3,
     },
     readTime: {
       color: textMuted,
       opacity: 0.7,
     },
     timestampRow: {
-      marginTop: 2,
-      paddingHorizontal: S.md,
+      marginTop: 3,
+      paddingHorizontal: 0,
     },
     timestampUser: {
       textAlign: 'right',
@@ -190,7 +197,7 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
       flexDirection: 'row',
       gap: 4,
       marginTop: 4,
-      paddingHorizontal: S.md,
+      paddingHorizontal: 0,
       flexWrap: 'wrap',
     },
     reactionRowUser: {
@@ -209,7 +216,7 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
       flexDirection: 'row',
       gap: 4,
       marginTop: 6,
-      paddingHorizontal: S.md,
+      paddingHorizontal: 0,
       flexWrap: 'wrap',
       alignItems: 'center',
     },
@@ -489,7 +496,9 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
           onLongPress={selectMode ? onSelect : (onLongPressSelect || handleLongPress)}
           activeOpacity={0.8}>
           {pinned && (
-            <Icon name="pin" size={12} color={primary} />
+            <View style={styles.pinIcon}>
+              <Icon name="pin" size={12} color={primary} />
+            </View>
           )}
           {message.images && message.images.length > 0 && (
             <View style={styles.imageContainer}>

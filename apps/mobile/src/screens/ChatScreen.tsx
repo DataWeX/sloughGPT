@@ -3,8 +3,6 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  TouchableOpacity,
-  ActivityIndicator,
   Pressable,
   Modal,
   TextInput as RNTextInput,
@@ -27,7 +25,7 @@ import {SearchSessionsModal} from '../components/SearchSessionsModal';
 import {StatusBadge} from '../components/StatusBadge';
 import {triggerHaptic} from '../services/haptics';
 import {api} from '../services/api-client';
-import {pickImage, takePhoto, imageDataUrl} from '../services/image-upload';
+import {pickImage, imageDataUrl} from '../services/image-upload';
 import {startRecording, transcribeAudio} from '../services/voice-input';
 import {toast} from '../services/toast';
 import {useSettingsStore} from '../stores/settings-store';
@@ -509,11 +507,14 @@ export function ChatScreen() {
               placeholderTextColor={(theme.color10?.val || '#9CA3AF')}
               autoFocus
             />
-            {searchQuery.length > 0 && (
-              <YStack onPress={() => setSearchQuery('')} pressStyle={{opacity: 0.6}}>
-                <Icon name="x" size={16} color={(theme.color10?.val || '#9CA3AF')} />
-              </YStack>
-            )}
+            <YStack
+              width={28} height={28} borderRadius={9}
+              alignItems="center" justifyContent="center"
+              backgroundColor="rgba(124, 82, 196, 0.06)"
+              onPress={() => { setShowSearch(false); setSearchQuery(''); }}
+              pressStyle={{opacity: 0.6}}>
+              <Icon name="x" size={14} color={(theme.color10?.val || '#9CA3AF')} />
+            </YStack>
           </XStack>
         )}
 
@@ -588,7 +589,7 @@ export function ChatScreen() {
                 <RefreshControl
                   refreshing={refreshing}
                   onRefresh={onPullRefresh}
-                  tintColor={(theme.color9?.val || '#6366F1')}
+                  tintColor={(theme.color9?.val || '#7C52C4')}
                 />
               }
               onContentSizeChange={() => {
@@ -978,72 +979,29 @@ export function ChatScreen() {
           />
           <YStack
             backgroundColor="$background"
-            borderTopLeftRadius={20}
-            borderTopRightRadius={20}
+            borderTopLeftRadius={24}
+            borderTopRightRadius={24}
             maxHeight="85%"
             overflow="hidden">
             {/* Handle bar */}
             <YStack alignItems="center" paddingTop={10} paddingBottom={4}>
-              <YStack width={36} height={4} borderRadius={2} backgroundColor="$borderColor" opacity={0.5} />
+              <YStack width={40} height={5} borderRadius={3} backgroundColor="$borderColor" opacity={0.5} />
             </YStack>
 
             <XStack
-              paddingHorizontal={20} paddingVertical={8}
+              paddingHorizontal={20} paddingVertical={14}
               paddingBottom={12}
               borderBottomWidth={0.5} borderBottomColor="$borderColor"
               alignItems="center" justifyContent="space-between">
-              <Text fontSize={16} fontWeight="700" letterSpacing={-0.3} color="$color">Conversations</Text>
-              <XStack alignItems="center" gap={8}>
-                <YStack
-                  width={32} height={32} borderRadius={10}
-                  alignItems="center" justifyContent="center"
-                  backgroundColor="$color9" opacity={0.12}
-                  onPress={() => { createSession(); setShowDrawer(false); }}
-                  pressStyle={{opacity: 0.8}}>
-                  <Icon name="plus" size={16} color="$color9" />
-                </YStack>
-                <YStack
-                  width={32} height={32} borderRadius={10}
-                  alignItems="center" justifyContent="center"
-                  onPress={() => setShowDrawer(false)}
-                  pressStyle={{opacity: 0.6}}>
-                  <Icon name="x" size={16} color={(theme.color11?.val || '#6B7280')} />
-                </YStack>
-              </XStack>
+              <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Conversations</Text>
+              <YStack
+                width={32} height={32} borderRadius={10}
+                alignItems="center" justifyContent="center"
+                onPress={() => setShowDrawer(false)}
+                pressStyle={{opacity: 0.6}}>
+                <Icon name="x" size={16} color={(theme.color11?.val || '#6B7280')} />
+              </YStack>
             </XStack>
-
-            {/* Label filter chips */}
-            {allLabels.length > 0 && (
-              <XStack
-                flexWrap="wrap" gap={4}
-                paddingHorizontal={20} paddingVertical={8}
-                borderBottomWidth={1} borderBottomColor="$borderColor">
-                <YStack
-                  paddingHorizontal={8} paddingVertical={3} borderRadius={8}
-                  backgroundColor={labelFilter === null ? '$color9' : '$background'}
-                  opacity={labelFilter === null ? 1 : 0.08}
-                  borderWidth={1}
-                  borderColor={labelFilter === null ? '$color9' : '$borderColor'}
-                  onPress={() => setLabelFilter(null)}>
-                  <Text fontSize={11} color={labelFilter === null ? 'white' : '$color11'}
-                    fontWeight={labelFilter === null ? '600' : '400'}>All</Text>
-                </YStack>
-                {allLabels.map(label => (
-                  <YStack
-                    key={label}
-                    paddingHorizontal={8} paddingVertical={3} borderRadius={8}
-                    backgroundColor={labelFilter === label ? '$color9' : '$background'}
-                    opacity={labelFilter === label ? 1 : 0.08}
-                    borderWidth={1}
-                    borderColor={labelFilter === label ? '$color9' : '$borderColor'}
-                    onPress={() => setLabelFilter(label === labelFilter ? null : label)}>
-                    <Text fontSize={11}
-                      color={labelFilter === label ? 'white' : '$color11'}
-                      fontWeight={labelFilter === label ? '600' : '400'}>{label}</Text>
-                  </YStack>
-                ))}
-              </XStack>
-            )}
 
             {/* Session list */}
             <FlatList
@@ -1140,12 +1098,27 @@ export function ChatScreen() {
                 </YStack>
               }
             />
+            {archivedSessions.length > 0 && (
+              <XStack
+                paddingHorizontal={16} paddingVertical={10}
+                borderTopWidth={0.5} borderTopColor="$borderColor"
+                alignItems="center" justifyContent="space-between"
+                onPress={() => setShowArchived(s => !s)}
+                pressStyle={{backgroundColor: 'rgba(124, 82, 196, 0.04)'}}>
+                <XStack alignItems="center" gap={8}>
+                  <YStack width={24} height={24} borderRadius={8} backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+                    <Icon name="archive" size={12} color="$color9" />
+                  </YStack>
+                  <Text fontSize={13} fontWeight="500" color="$color">Archived</Text>
+                  <YStack paddingHorizontal={6} paddingVertical={2} borderRadius={6} backgroundColor="rgba(124, 82, 196, 0.08)">
+                    <Text fontSize={10} fontWeight="600" color="$color9">{archivedSessions.length}</Text>
+                  </YStack>
+                </XStack>
+                <Text fontSize={12} color="$color10">{showArchived ? 'Hide' : 'Show'}</Text>
+              </XStack>
+            )}
             {showArchived && archivedSessions.length > 0 && (
               <YStack maxHeight={200}>
-                <Text fontSize={11} color="$color10" fontWeight="600" letterSpacing={0.5}
-                  paddingHorizontal={16} paddingVertical={8}>
-                  ARCHIVED
-                </Text>
                 <FlatList
                   data={archivedSessions}
                   keyExtractor={item => item.id}
@@ -1170,7 +1143,7 @@ export function ChatScreen() {
                       </YStack>
                       <YStack
                         paddingHorizontal={10} paddingVertical={4} borderRadius={8}
-                        backgroundColor="$color9" opacity={0.1}
+                        backgroundColor="rgba(124, 82, 196, 0.08)"
                         onPress={() => archiveSession(session.id, false)}>
                         <Text fontSize={11} fontWeight="500" color="$color9">Restore</Text>
                       </YStack>

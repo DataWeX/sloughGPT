@@ -3,6 +3,7 @@ import {
   TextInput,
   TouchableOpacity,
   Keyboard,
+  Text,
 } from 'react-native';
 import {YStack, XStack, useTheme} from 'tamagui';
 import {triggerHaptic} from '../services/haptics';
@@ -103,17 +104,17 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
   const textColor = theme.color?.val || '#111827';
   const textSecondary = theme.color11?.val || '#6B7280';
   const textMuted = theme.color10?.val || '#9CA3AF';
-  const primary = theme.color9?.val || '#007AFF';
+  const primary = theme.color9?.val || '#7C52C4';
 
   const iconBtnStyle = {
     width: 36,
     height: 36,
-    borderRadius: 9999,
-    backgroundColor: bg,
+    borderRadius: 12,
+    backgroundColor: 'rgba(124, 82, 196, 0.06)',
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
-    borderWidth: 1,
-    borderColor: border,
+    borderWidth: 0.5,
+    borderColor: 'rgba(124, 82, 196, 0.12)',
   };
 
   const inputStyle = {
@@ -121,12 +122,14 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
     fontSize: 15,
     fontWeight: '400' as const,
     color: textColor,
-    backgroundColor: bg,
-    borderRadius: 16,
+    backgroundColor: 'rgba(124, 82, 196, 0.04)',
+    borderRadius: 14,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     maxHeight: 120,
-    minHeight: 44,
+    minHeight: 42,
+    borderWidth: 0.5,
+    borderColor: 'rgba(124, 82, 196, 0.1)',
   };
 
   const circleBtn = (size: number, color: string) => ({
@@ -136,6 +139,11 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
     backgroundColor: color,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
+    shadowColor: '#7C52C4',
+    shadowOffset: {width: 0, height: 2} as const,
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
   });
 
   return (
