@@ -59,10 +59,10 @@ describe('Input', () => {
 })
 
 describe('SearchInput', () => {
-  it('renders an input with type text', () => {
+  it('renders an input with type search', () => {
     render(<SearchInput />)
-    const el = screen.getByRole('textbox') as HTMLInputElement
-    expect(el.type).toBe('text')
+    const el = screen.getByRole('searchbox') as HTMLInputElement
+    expect(el.type).toBe('search')
   })
 
   it('renders search icon', () => {
@@ -73,7 +73,7 @@ describe('SearchInput', () => {
 
   it('displays value', () => {
     render(<SearchInput value="search term" onChange={() => {}} />)
-    const el = screen.getByRole('textbox') as HTMLInputElement
+    const el = screen.getByRole('searchbox') as HTMLInputElement
     expect(el.value).toBe('search term')
   })
 
@@ -81,7 +81,7 @@ describe('SearchInput', () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
     render(<SearchInput value="" onChange={onChange} />)
-    await user.type(screen.getByRole('textbox'), 'a')
+    await user.type(screen.getByRole('searchbox'), 'a')
     expect(onChange).toHaveBeenCalledWith('a')
   })
 

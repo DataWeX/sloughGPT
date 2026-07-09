@@ -91,13 +91,13 @@ describe('ProgressBar', () => {
 
   it('applies success variant', () => {
     const { container } = render(<ProgressBar value={50} variant="success" />)
-    const fill = container.querySelector('.bg-green-500')
+    const fill = container.querySelector('.bg-success')
     expect(fill).toBeInTheDocument()
   })
 
   it('applies error variant', () => {
     const { container } = render(<ProgressBar value={50} variant="error" />)
-    const fill = container.querySelector('.bg-red-500')
+    const fill = container.querySelector('.bg-destructive')
     expect(fill).toBeInTheDocument()
   })
 })
@@ -194,12 +194,12 @@ describe('EmptyState (specialized)', () => {
 describe('SearchField', () => {
   it('renders input with placeholder', () => {
     render(<SearchField value="" onChange={() => {}} />)
-    expect(screen.getByPlaceholderText('Search...')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Search…')).toBeInTheDocument()
   })
 
   it('displays current value', () => {
     render(<SearchField value="query" onChange={() => {}} />)
-    const input = screen.getByRole('textbox') as HTMLInputElement
+    const input = screen.getByRole('searchbox') as HTMLInputElement
     expect(input.value).toBe('query')
   })
 
@@ -207,7 +207,7 @@ describe('SearchField', () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
     render(<SearchField value="" onChange={onChange} />)
-    await user.type(screen.getByRole('textbox'), 'x')
+    await user.type(screen.getByRole('searchbox'), 'x')
     expect(onChange).toHaveBeenCalledWith('x')
   })
 
@@ -220,7 +220,7 @@ describe('SearchField', () => {
 describe('Pagination', () => {
   it('renders page info', () => {
     render(<Pagination page={2} total={50} pageSize={10} onChange={() => {}} />)
-    expect(screen.getByText('Page 2 of 5')).toBeInTheDocument()
+    expect(screen.getByText(/Page 2 of 5/)).toBeInTheDocument()
   })
 
   it('renders Prev and Next buttons', () => {

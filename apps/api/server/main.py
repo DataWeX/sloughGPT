@@ -375,12 +375,20 @@ def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> 
             register_provider("hf-default", provider)
             logger.info("hf-default provider re-registered with ModelServer: %s", request.model_id)
 
-            # Wire default provider router with VisionProcessor for image captioning
-            router = ProviderRouter()
-            router.add_processor(VisionProcessor("multimodal"))
-            router.set_text_provider("hf-default")
-            register_provider("default", router)
-            logger.info("Default provider router registered with VisionProcessor")
+            # Wire default provider router — but don't override SloNet if already active.
+            # SloNet is registered by auto_train as "default"; replacing it would
+            # cause chat to silently fall back to HF and produce empty responses.
+            from domains.models.provider import get_provider as _gp
+            existing = _gp("default")
+            _is_slonet = existing is not None and type(existing).__name__ in ("SloTransformerProvider", "SloNetChatProvider")
+            if not _is_slonet:
+                router = ProviderRouter()
+                router.add_processor(VisionProcessor("multimodal"))
+                router.set_text_provider("hf-default")
+                register_provider("default", router)
+                logger.info("Default provider router registered with VisionProcessor")
+            else:
+                logger.info("SloNet provider active — keeping as default (skipping HF override)")
         except Exception as e:
             logger.warning("Failed to register with ModelRegistry: %s", e)
 

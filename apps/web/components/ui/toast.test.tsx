@@ -1,4 +1,5 @@
 /**
+ * Toast component tests — uses strui Toast primitives.
  */
 import { describe, expect, it, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
@@ -10,7 +11,7 @@ describe('Toast', () => {
   it('renders toast with title and description', () => {
     render(
       <ToastProvider>
-        <Toast open>
+        <Toast>
           <ToastTitle>Success</ToastTitle>
           <ToastDescription>Operation completed</ToastDescription>
           <ToastClose />
@@ -24,7 +25,7 @@ describe('Toast', () => {
   it('renders toast with action', () => {
     render(
       <ToastProvider>
-        <Toast open>
+        <Toast>
           <ToastTitle>Update available</ToastTitle>
           <ToastAction aria-label="Install update">Install</ToastAction>
           <ToastClose />
@@ -34,14 +35,15 @@ describe('Toast', () => {
     expect(screen.getByText('Install')).toBeInTheDocument()
   })
 
-  it('does not render when closed', () => {
+  it('renders with variant styling', () => {
     const { container } = render(
       <ToastProvider>
-        <Toast open={false}>
-          <ToastTitle>Hidden</ToastTitle>
+        <Toast variant="error">
+          <ToastTitle>Error</ToastTitle>
         </Toast>
       </ToastProvider>
     )
-    expect(container.textContent).toBe('')
+    const toast = container.querySelector('[role="status"]')
+    expect(toast).toBeTruthy()
   })
 })

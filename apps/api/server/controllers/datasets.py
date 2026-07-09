@@ -251,12 +251,12 @@ class DatasetsController:
 
         Returns the version name (timestamp) or None if the dataset does not exist.
         """
-        from datetime import datetime
+        from datetime import datetime, timezone
         path = self.datasets_dir / dataset_id
         if not path.exists():
             return None
         versions_dir = self._ensure_versions_dir(dataset_id)
-        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
         version_path = versions_dir / timestamp
         version_path.mkdir(parents=True, exist_ok=True)
         # Copy relevant files (corpus.jsonl or input.txt) into the version folder

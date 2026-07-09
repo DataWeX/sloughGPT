@@ -41,7 +41,7 @@ describe('Chip', () => {
   it('applies sm size', () => {
     const { container } = render(<Chip label="Small" size="sm" />)
     const el = container.querySelector('span')!
-    expect(el.className).toContain('text-[10px]')
+    expect(el.className).toContain('text-[11px]')
   })
 
   it('renders icon when provided', () => {
@@ -175,7 +175,7 @@ describe('TagInput', () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
     render(<TagInput value={[]} onChange={onChange} />)
-    const input = screen.getByPlaceholderText('Add tag...')
+    const input = screen.getByPlaceholderText('Add tag…')
     await user.type(input, 'newtag{Enter}')
     expect(onChange).toHaveBeenCalledWith(['newtag'])
   })
@@ -184,7 +184,7 @@ describe('TagInput', () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
     render(<TagInput value={[]} onChange={onChange} />)
-    const input = screen.getByPlaceholderText('Add tag...')
+    const input = screen.getByPlaceholderText('Add tag…')
     await user.type(input, '   {Enter}')
     expect(onChange).not.toHaveBeenCalled()
   })
@@ -193,7 +193,7 @@ describe('TagInput', () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
     render(<TagInput value={['existing']} onChange={onChange} />)
-    const input = screen.getByDisplayValue('')
+    const input = screen.getByPlaceholderText('')
     await user.type(input, 'existing{Enter}')
     expect(onChange).not.toHaveBeenCalled()
   })
@@ -202,7 +202,7 @@ describe('TagInput', () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
     render(<TagInput value={[]} onChange={onChange} />)
-    const input = screen.getByPlaceholderText('Add tag...') as HTMLInputElement
+    const input = screen.getByPlaceholderText('Add tag…') as HTMLInputElement
     await user.type(input, 'tag{Enter}')
     expect(input.value).toBe('')
   })

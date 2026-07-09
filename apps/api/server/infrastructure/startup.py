@@ -497,17 +497,23 @@ def _autoload_model(cfg: ServerConfig):
             generate_timeout=120.0,
             process_guard=process_guard,
         )
-        from domains.models.provider import register_provider, HFModelProvider, ProviderRouter, VisionProcessor
+        from domains.models.provider import register_provider, HFModelProvider, ProviderRouter, VisionProcessor, get_provider as _gp
         model_server = registry.get(cfg.autoload_model)
         provider = HFModelProvider(model, tokenizer, model_id_str=cfg.autoload_model, model_server=model_server)
         register_provider("hf-default", provider)
 
-        router = ProviderRouter()
-        router.add_processor(VisionProcessor("multimodal"))
-        router.set_text_provider("hf-default")
-        register_provider("default", router)
-        logger.info("Autoload: registered with ModelRegistry + provider + default router%s",
-                     " (process guard enabled)" if process_guard else "")
+        # Don't override SloNet if already active (e.g. reloaded checkpoint)
+        existing = _gp("default")
+        _is_slonet = existing is not None and type(existing).__name__ in ("SloTransformerProvider", "SloNetChatProvider")
+        if not _is_slonet:
+            router = ProviderRouter()
+            router.add_processor(VisionProcessor("multimodal"))
+            router.set_text_provider("hf-default")
+            register_provider("default", router)
+            logger.info("Autoload: registered with ModelRegistry + provider + default router%s",
+                         " (process guard enabled)" if process_guard else "")
+        else:
+            logger.info("Autoload: SloNet provider active — keeping as default")
 
         # When ProcessGuard is active, drop the in-memory model ref to save memory.
         # The guard handles all inference in a subprocess, so the main process

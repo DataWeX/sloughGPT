@@ -28,8 +28,7 @@ describe('Switch', () => {
 
   it('applies custom className', () => {
     const { container } = render(<Switch className="custom-class" />)
-    const btn = container.querySelector('button')
-    expect(btn).toHaveClass('custom-class')
+    expect(container.firstChild).toHaveClass('custom-class')
   })
 
   it('renders thumb element', () => {

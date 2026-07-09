@@ -2,7 +2,7 @@
 Auth Router - JWT token management + login/register/me/logout endpoints
 """
 import uuid, json, os, hashlib, secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Header, Request, Depends
 from pydantic import BaseModel
 from typing import Optional
@@ -125,7 +125,7 @@ async def register(req: RegisterRequest):
         "username": req.username,
         "email": req.email,
         "password_hash": _hash_password(req.password),
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
     _save_users(users)
     _, exp_hours, jwt_auth, _ = _get_auth_deps()

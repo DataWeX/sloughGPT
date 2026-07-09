@@ -44,8 +44,8 @@ describe('Textarea', () => {
 
   it('has min-h-20 and resize-y classes', () => {
     const { container } = render(<Textarea />)
-    expect(container.firstChild).toHaveClass('min-h-20')
     expect(container.firstChild).toHaveClass('resize-y')
+    expect(container.firstChild).toHaveStyle({ minHeight: '80px' })
   })
 
   it('forwards ref', () => {

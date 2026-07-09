@@ -1,12 +1,12 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
-import { systemController, type DetailedHealth, type SystemMetrics, type SystemInfo, type DiskUsage, type GPUInfo, type OutputLine as OutputLineType } from '@/lib/system-controller'
+import { systemController, type DetailedHealth, type SystemMetrics, type SystemInfo, type DiskUsage, type GPUInfo } from '@/lib/system-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { benchmarkController } from '@/lib/benchmark-controller'
 import { multimodalController } from '@/lib/controllers'
@@ -17,12 +17,12 @@ const SystemChart = dynamicNext(() => import('@/components/monitoring/SystemChar
   loading: () => <div className="h-40 w-full animate-pulse bg-muted rounded-lg" />,
 })
 import { formatUptime } from '@/lib/chat-utils'
-import { PUBLIC_API_URL } from '@/lib/config'
 import { GpuCard, DiskCard, ServerInfoCard } from '@/components/monitoring/SystemInfoCards'
 import { Skeleton } from '@sloughgpt/strui'
 import { apiPost } from '@/lib/http-client'
 import { useErrorStore } from '@/lib/error-store'
 import { activityController, type ActivityStatus } from '@/lib/activity-controller'
+import { OutputCard } from '@/components/OutputCard'
 
 export default function SystemHealthPage() {
   const [detailed, setDetailed] = useState<DetailedHealth | null>(null)
@@ -46,11 +46,7 @@ export default function SystemHealthPage() {
   const [activityStatus, setActivityStatus] = useState<ActivityStatus | null>(null)
   const [activityTraining, setActivityTraining] = useState(false)
   const [activityTrainProgress, setActivityTrainProgress] = useState<string | null>(null)
-  const [outputLines, setOutputLines] = useState<OutputLineType[]>([])
-  const [outputStreaming, setOutputStreaming] = useState(false)
-  const outputRef = useRef<HTMLDivElement>(null)
   const MAX_HISTORY = 30
-  const MAX_OUTPUT_LINES = 200
   const recentErrors = useErrorStore(s => s.errors)
   const dismissError = useErrorStore(s => s.dismissError)
   const clearErrors = useErrorStore(s => s.clearErrors)
@@ -347,6 +343,9 @@ export default function SystemHealthPage() {
           <DiskCard disk={disk ?? undefined} />
           <ServerInfoCard info={info ?? undefined} />
         </div>
+
+        {/* Server Output */}
+        <OutputCard />
 
         {recentErrors.length > 0 && (
           <Card>

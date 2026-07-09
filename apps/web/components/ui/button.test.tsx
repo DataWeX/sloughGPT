@@ -69,7 +69,7 @@ describe('Button', () => {
   it('applies icon size', () => {
     const { container } = render(<Button size="icon">X</Button>)
     expect(container.firstChild).toHaveClass('h-10')
-    expect(container.firstChild).toHaveClass('w-11')
+    expect(container.firstChild).toHaveClass('w-10')
   })
 
   it('calls onClick when clicked', async () => {

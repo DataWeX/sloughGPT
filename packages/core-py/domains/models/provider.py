@@ -332,6 +332,7 @@ class SloTransformerProvider:
         messages: list,
         max_tokens: int = 512,
         temperature: float = 0.8,
+        cancel_event=None,
         **kwargs,
     ) -> AsyncIterator[str]:
         """Stream tokens from the SloTransformer, chunked for responsiveness.
@@ -350,6 +351,8 @@ class SloTransformerProvider:
         chunk_size = min(8, max_tokens)
         generated = 0
         while generated < max_tokens:
+            if cancel_event is not None and cancel_event.is_set():
+                break
             to_gen = min(chunk_size, max_tokens - generated)
 
             def _gen():
@@ -874,10 +877,19 @@ def setup_providers(hf_model=None, hf_tokenizer=None, hf_model_id: str = "gpt2",
     router.add_processor(VisionProcessor("multimodal"))
     if text_provider_name:
         router.set_text_provider(text_provider_name)
-    register_provider("default", router)
-    logger.info("Registered default provider router (processors=%s, text=%s)",
-                [type(p).__name__ for p in router._processors],
-                text_provider_name)
+
+    # Don't override SloNet if already active as "default" — auto_train registers
+    # SloTransformerProvider directly as "default"; replacing it would cause
+    # chat to silently fall back to HF and produce empty responses.
+    existing = _providers.get("default")
+    _is_slonet = existing is not None and type(existing).__name__ in ("SloTransformerProvider", "SloNetChatProvider")
+    if not _is_slonet:
+        register_provider("default", router)
+        logger.info("Registered default provider router (processors=%s, text=%s)",
+                    [type(p).__name__ for p in router._processors],
+                    text_provider_name)
+    else:
+        logger.info("SloNet provider active as default — skipping ProviderRouter override")
 
 
 # =============================================================================

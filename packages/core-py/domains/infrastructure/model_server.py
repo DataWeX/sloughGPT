@@ -352,31 +352,31 @@ class NumpyBackend(GenerateBackend):
 
         import asyncio
 
-        # Run async generator in a new event loop
-        token_count = 0
+        # Collect tokens from async generator via a coroutine
+        collected_tokens = []
+
+        async def _collect():
+            async for token in self._engine.generate_stream(
+                prompt,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                top_k=top_k,
+            ):
+                if cancel_event is not None and cancel_event.is_set():
+                    break
+                collected_tokens.append(token)
+
         loop = asyncio.new_event_loop()
         try:
-            async def _stream():
-                nonlocal token_count
-                async for token in self._engine.generate_stream(
-                    prompt,
-                    max_new_tokens=max_new_tokens,
-                    temperature=temperature,
-                    top_k=top_k,
-                ):
-                    if cancel_event is not None and cancel_event.is_set():
-                        break
-                    token_count += 1
-                    yield token
-
-            # Consume the async generator
-            async def _consume():
-                async for token in _stream():
-                    yield token
-
-            loop.run_until_complete(_consume())
+            loop.run_until_complete(_collect())
         finally:
             loop.close()
+
+        # Yield collected tokens synchronously
+        token_count = 0
+        for token in collected_tokens:
+            token_count += 1
+            yield token
 
         return {"text": "", "tokens_generated": token_count}
     """Direct in-process model.generate() with MPS CPU fallback.

@@ -71,7 +71,7 @@ async def log_metric(experiment_id: str, metric_name: str, value: float, step: i
     import json, os, datetime
     log_dir = os.path.join(os.path.dirname(__file__), "..", "data", "experiments")
     os.makedirs(log_dir, exist_ok=True)
-    entry = {"experiment_id": experiment_id, "metric": metric_name, "value": value, "step": step, "timestamp": datetime.datetime.utcnow().isoformat()}
+    entry = {"experiment_id": experiment_id, "metric": metric_name, "value": value, "step": step, "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()}
     with open(os.path.join(log_dir, f"{experiment_id}_metrics.jsonl"), "a") as f:
         f.write(json.dumps(entry) + "\n")
     return success_response(data={"status": "logged", "experiment_id": experiment_id, "metric": metric_name})
@@ -83,7 +83,7 @@ async def log_param(experiment_id: str, param_name: str, value: Any):
     import json, os, datetime
     log_dir = os.path.join(os.path.dirname(__file__), "..", "data", "experiments")
     os.makedirs(log_dir, exist_ok=True)
-    entry = {"experiment_id": experiment_id, "param": param_name, "value": value, "timestamp": datetime.datetime.utcnow().isoformat()}
+    entry = {"experiment_id": experiment_id, "param": param_name, "value": value, "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()}
     with open(os.path.join(log_dir, f"{experiment_id}_params.jsonl"), "a") as f:
         f.write(json.dumps(entry) + "\n")
     return success_response(data={"status": "logged", "experiment_id": experiment_id, "param": param_name})

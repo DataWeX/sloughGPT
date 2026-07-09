@@ -11,7 +11,7 @@ import { Tabs } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { datasetController } from '@/lib/controllers'
 import { useTrainingForm } from '@/hooks/useTrainingForm'
-import { useServerOutput } from '@/hooks/useServerOutput'
+import { OutputCard } from '@/components/OutputCard'
 import { TestModelDialog } from '@/components/training/TestModelDialog'
 import { WebhookManager } from '@/components/training/WebhookManager'
 import { useTrainingSession } from '@/hooks/useTrainingSession'
@@ -37,7 +37,7 @@ export default function TrainingPage() {
   const datasets = useTrainingDatasets(addToast)
   const checkpoints = useTrainingCheckpoints()
   const test = useTestDialog()
-  const { lines: outputLines, streaming: outputStreaming, clear: clearOutput, scrollRef: outputRef } = useServerOutput()
+
 
   const form = useTrainingForm(datasets, session, checkpoints, addToast)
 
@@ -200,52 +200,9 @@ export default function TrainingPage() {
       </div>
 
       {/* Server Output */}
-      <Card className="mt-4">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Server Output</CardTitle>
-            <div className="flex items-center gap-2">
-              <span className={`inline-block w-2 h-2 rounded-full ${outputStreaming ? 'bg-success animate-pulse' : 'bg-muted-foreground/50'}`} />
-              <span className="text-xs text-muted-foreground">{outputStreaming ? 'Live' : 'Off'}</span>
-              {outputLines.length > 0 && (
-                <Button variant="ghost" size="sm" onClick={clearOutput} aria-label="Clear output">
-                  Clear
-                </Button>
-              )}
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div
-            ref={outputRef}
-            className="h-[180px] overflow-y-auto font-mono text-xs bg-background border rounded-lg p-2 space-y-0.5"
-            role="log"
-            aria-label="Training server output"
-          >
-            {outputLines.length === 0 ? (
-              <div className="text-muted-foreground py-4 text-center text-xs">
-                {outputStreaming ? 'Waiting for output...' : 'Output will appear here during training'}
-              </div>
-            ) : (
-              outputLines.map((line, i) => (
-                <div key={`${line.ts}-${i}`} className="flex gap-2 leading-tight">
-                  <span className="text-muted-foreground shrink-0 w-14">
-                    {new Date(line.ts * 1000).toLocaleTimeString()}
-                  </span>
-                  <span className={`shrink-0 w-10 ${
-                    line.level === 'error' ? 'text-destructive' :
-                    line.level === 'warning' ? 'text-warning' :
-                    'text-muted-foreground'
-                  }`}>
-                    {line.level}
-                  </span>
-                  <span className="flex-1 min-w-0 break-all">{line.text}</span>
-                </div>
-              ))
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="mt-4">
+        <OutputCard />
+      </div>
 
       <TestModelDialog
         open={test.testDialogOpen}

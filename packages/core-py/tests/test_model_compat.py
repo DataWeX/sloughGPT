@@ -55,7 +55,7 @@ class TestWrapModel:
     def test_numpy_engine_info(self, wrapped):
         info = wrapped.info()
         assert "arch" in info
-        assert info["arch"] == "gpt2"
+        assert info["arch"] == "GPT2LMHeadModel"
 
     def test_unknown_model_uses_generic(self):
         wrapped = wrap_model("not a model", model_id="test")

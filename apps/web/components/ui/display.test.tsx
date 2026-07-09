@@ -11,14 +11,16 @@ describe('StatCard', () => {
     expect(screen.getByText('42')).toBeInTheDocument()
   })
 
-  it('renders trend with positive sign', () => {
+  it('renders trend with positive arrow', () => {
     render(<StatCard label="Revenue" value="$1k" trend={{ value: 12, positive: true }} />)
-    expect(screen.getByText('+12%')).toBeInTheDocument()
+    expect(screen.getByText('↑', { exact: false })).toBeInTheDocument()
+    expect(screen.getByText('12%', { exact: false })).toBeInTheDocument()
   })
 
-  it('renders trend without positive sign when negative', () => {
-    render(<StatCard label="Errors" value="5" trend={{ value: 8 }} />)
-    expect(screen.getByText('8%')).toBeInTheDocument()
+  it('renders trend with negative arrow when negative', () => {
+    render(<StatCard label="Errors" value="5" trend={{ value: 8, positive: false }} />)
+    expect(screen.getByText('↓', { exact: false })).toBeInTheDocument()
+    expect(screen.getByText('8%', { exact: false })).toBeInTheDocument()
   })
 
   it('renders icon when provided', () => {
@@ -47,7 +49,8 @@ describe('KpiGrid', () => {
 
   it('applies column class for 2 columns', () => {
     const { container } = render(<KpiGrid columns={2}><div /></KpiGrid>)
-    expect(container.firstChild).toHaveClass('grid-cols-2')
+    expect(container.firstChild).toHaveClass('grid-cols-1')
+    expect(container.firstChild).toHaveClass('sm:grid-cols-2')
   })
 
   it('defaults to 4 columns', () => {
