@@ -307,7 +307,7 @@ class Tensor:
         def build(v):
             if v.id in visited: return
             visited.add(v.id)
-            for c in getattr(v, '_children', ()): build(c)
+            for c in (getattr(v, '_children', None) or ()): build(c)
             topo.append(v)
         build(self)
         for node in reversed(topo):
@@ -332,7 +332,7 @@ class Tensor:
         def topo(v):
             if v.id in visited: return
             visited.add(v.id)
-            for c in getattr(v, '_children', ()):
+            for c in (getattr(v, '_children', None) or ()):
                 if isinstance(c, Tensor): topo(c)
             order.append(v)
         topo(self)
