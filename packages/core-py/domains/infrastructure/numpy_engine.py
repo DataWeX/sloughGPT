@@ -502,11 +502,6 @@ def _forward_cached(
     # ── Embeddings ────────────────────────────────────────────────────────
     x = w("embed.token")[token_ids]
     if arch.positional == "absolute":
-        x = x + w("embed.pos")[:seq_len]
-
-    # ── Embeddings ────────────────────────────────────────────────────────
-    x = w("embed.token")[token_ids]
-    if arch.positional == "absolute":
         x = x + w("embed.pos")[start_pos:start_pos + seq_len]
 
     # ── Causal mask ──────────────────────────────────────────────────────

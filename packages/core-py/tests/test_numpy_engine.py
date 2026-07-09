@@ -98,7 +98,7 @@ class TestNumpyEngineCompression:
     def test_compressed_weight_decompress(self):
         centroids = np.array([0.0, 1.0, 2.0, 3.0], dtype=np.float32)
         assignments = np.array([0, 1, 2, 3, 0, 1, 2, 3], dtype=np.uint8)
-        compressed = _CompressedWeight(centroids, assignments, (8,), np.float32)
+        compressed = _CompressedWeight(centroids, assignments, None, (8,), np.float32)
         decompressed = compressed.decompress()
         assert np.array_equal(decompressed, centroids[assignments])
 
