@@ -10,6 +10,10 @@ jest.mock('../../hooks/useConnectionStatus', () => ({
   })),
 }));
 
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: jest.fn(() => ({top: 44, bottom: 34, left: 0, right: 0})),
+}));
+
 describe('ConnectionStatusBar', () => {
   it('renders in connected state', () => {
     expect(() => render(<ConnectionStatusBar />)).not.toThrow();
