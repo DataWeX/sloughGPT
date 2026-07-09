@@ -1,7 +1,7 @@
 import React, {useState, useRef, useEffect} from 'react';
 import {
   TextInput,
-  TouchableOpacity,
+  Pressable,
   Keyboard,
   Text,
 } from 'react-native';
@@ -149,11 +149,11 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
   return (
     <YStack paddingHorizontal={16} paddingVertical={8} backgroundColor={bg} borderTopWidth={1} borderTopColor={border}>
       <XStack alignItems="flex-end" gap={8}>
-        <TouchableOpacity onPress={handlePlus} disabled={disabled} style={iconBtnStyle}>
+        <Pressable onPress={handlePlus} disabled={disabled} style={iconBtnStyle}>
           <Icon name="plus" size={18} color={textSecondary} />
-        </TouchableOpacity>
+        </Pressable>
 
-        <TouchableOpacity
+        <Pressable
           onPress={() => {
             triggerHaptic('light');
             setShowPrompts(true);
@@ -161,7 +161,7 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
           disabled={disabled}
           style={iconBtnStyle}>
           <Icon name="zap" size={18} color={textSecondary} />
-        </TouchableOpacity>
+        </Pressable>
 
         <TextInput
           ref={inputRef}
@@ -179,7 +179,7 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
         />
 
         {editText && onCancelEdit && (
-          <TouchableOpacity
+          <Pressable
             onPress={() => {
               setText('');
               onCancelEdit();
@@ -191,27 +191,26 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
               backgroundColor: bg,
               alignItems: 'center',
               justifyContent: 'center',
-              borderWidth: 1,
+              borderWidth: 0.5,
               borderColor: border,
             }}>
             <Icon name="x" size={14} color={textMuted} />
-          </TouchableOpacity>
+          </Pressable>
         )}
 
         {disabled ? (
-          <TouchableOpacity onPress={onStop} style={circleBtn(40, '#EF4444')}>
+          <Pressable onPress={onStop} style={circleBtn(40, '#EF4444')}>
             <Icon name="stop-circle" size={16} color="white" />
-          </TouchableOpacity>
+          </Pressable>
         ) : hasText ? (
-          <TouchableOpacity onPress={handleSend} style={circleBtn(40, primary)}>
+          <Pressable onPress={handleSend} style={circleBtn(40, primary)}>
             <Icon name="arrow-up" size={20} color="white" />
-          </TouchableOpacity>
+          </Pressable>
         ) : (
           <XStack alignItems="center" gap={4}>
             {onVoiceMessageToggle && !isRecording && (
-              <TouchableOpacity
+              <Pressable
                 onPress={onVoiceMessageToggle}
-                activeOpacity={0.7}
                 style={{
                   width: 28,
                   height: 28,
@@ -219,13 +218,13 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
                   backgroundColor: bg,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  borderWidth: 1,
+                  borderWidth: 0.5,
                   borderColor: border,
                 }}>
                 <Icon name="mic" size={12} color={textSecondary} />
-              </TouchableOpacity>
+              </Pressable>
             )}
-            <TouchableOpacity
+            <Pressable
               onPress={onVoice}
               style={[
                 {
@@ -235,7 +234,7 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
                   backgroundColor: bg,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  borderWidth: 1,
+                  borderWidth: 0.5,
                   borderColor: border,
                 },
                 isRecording && {
@@ -244,7 +243,7 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
                 },
               ]}>
               <Icon name={isRecording ? 'stop-circle' : voiceMessageMode ? 'music' : 'mic'} size={18} color={textSecondary} />
-            </TouchableOpacity>
+            </Pressable>
           </XStack>
         )}
       </XStack>

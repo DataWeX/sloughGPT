@@ -7,16 +7,14 @@ interface ScreenShellProps {
   title: string;
   children: React.ReactNode;
   scroll?: boolean;
-  backgroundColor?: string;
   refreshing?: boolean;
-  onRefresh?: () => void;
+  onRefresh?: void;
 }
 
 export function ScreenShell({
   title,
   children,
   scroll = true,
-  backgroundColor = '#F5F0FF',
   refreshing,
   onRefresh,
 }: ScreenShellProps) {
@@ -29,7 +27,7 @@ export function ScreenShell({
     : {};
 
   return (
-    <SafeAreaView style={{flex: 1, backgroundColor}} edges={['top']}>
+    <SafeAreaView style={{flex: 1}} edges={['top']}>
       <KeyboardAvoidingView
         style={{flex: 1}}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

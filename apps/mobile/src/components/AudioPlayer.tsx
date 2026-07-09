@@ -1,5 +1,5 @@
 import React, {useState, useRef, useEffect, useCallback} from 'react';
-import {TouchableOpacity, Animated} from 'react-native';
+import {Pressable, Animated} from 'react-native';
 import {YStack, XStack, Text} from 'tamagui';
 import {getApiUrl} from '../services/api-client';
 
@@ -127,22 +127,20 @@ export function AudioPlayer({audioUrl, audioPath, durationMs = 0}: Props) {
       alignItems="center"
       minWidth={180}
       marginTop={4}>
-      <TouchableOpacity
-        onPress={togglePlay}
-        activeOpacity={0.7}
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 16,
-          backgroundColor: '$color9',
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginRight: 8,
-        }}>
-        <Text fontSize={14} color="white">
-          {playing ? '⏸' : '▶'}
-        </Text>
-      </TouchableOpacity>
+      <Pressable onPress={togglePlay}>
+        <YStack
+          width={32}
+          height={32}
+          borderRadius={16}
+          backgroundColor="$color9"
+          alignItems="center"
+          justifyContent="center"
+          marginRight={8}>
+          <Text fontSize={14} color="white">
+            {playing ? '\u23F8' : '\u25B6'}
+          </Text>
+        </YStack>
+      </Pressable>
       <XStack flex={1} alignItems="center">
         <YStack flex={1} height={4} backgroundColor="$borderColor" borderRadius={2} overflow="hidden">
           <Animated.View

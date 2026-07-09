@@ -103,7 +103,7 @@ export function SettingsScreen() {
           </Text>
 
           {/* Server */}
-          <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
             <Text fontSize={15} fontWeight="600" color="$color">Server</Text>
             <XStack justifyContent="space-between" alignItems="center">
               <Text fontSize={14} color="$color11">Status</Text>
@@ -131,7 +131,7 @@ export function SettingsScreen() {
           </YStack>
 
           {/* System Health nav */}
-          <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} onPress={() => navigation.navigate('Health')}>
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} onPress={() => navigation.navigate('Health')}>
             <XStack justifyContent="space-between" alignItems="center">
               <YStack>
                 <Text fontSize={15} fontWeight="600" color="$color">System Health</Text>
@@ -142,7 +142,7 @@ export function SettingsScreen() {
           </YStack>
 
           {/* Inference */}
-          <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
             <Text fontSize={15} fontWeight="600" color="$color">Inference</Text>
 
             {/* Engine chips */}
@@ -157,7 +157,7 @@ export function SettingsScreen() {
                     paddingVertical={8}
                     borderRadius={999}
                     backgroundColor={active ? '$color9' : '$backgroundHover'}
-                    borderWidth={1}
+                    borderWidth={0.5}
                     borderColor={active ? '$color9' : '$borderColor'}
                     alignItems="center"
                     onPress={() => hybrid.setActiveEngine(engine)}>
@@ -224,7 +224,7 @@ export function SettingsScreen() {
               <YStack
                 paddingHorizontal={12} paddingVertical={8} borderRadius={999}
                 backgroundColor={hybrid.offlineOnly ? '$background' : '$backgroundHover'}
-                borderWidth={1}
+                borderWidth={0.5}
                 borderColor={hybrid.offlineOnly ? '$color9' : '$borderColor'}
                 minWidth={56} alignItems="center"
                 onPress={() => hybrid.setOfflineOnly(!hybrid.offlineOnly)}>
@@ -236,7 +236,7 @@ export function SettingsScreen() {
           </YStack>
 
           {/* Appearance */}
-          <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
             <Text fontSize={15} fontWeight="600" color="$color">Appearance</Text>
             <XStack gap={8}>
               {themes.map(t => {
@@ -248,7 +248,7 @@ export function SettingsScreen() {
                     paddingVertical={10}
                     borderRadius={999}
                     backgroundColor={active ? '$color9' : '$backgroundHover'}
-                    borderWidth={1}
+                    borderWidth={0.5}
                     borderColor={active ? '$color9' : '$borderColor'}
                     alignItems="center"
                     onPress={() => settings.setTheme(t)}>
@@ -262,7 +262,7 @@ export function SettingsScreen() {
           </YStack>
 
           {/* Font */}
-          <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
             <Text fontSize={15} fontWeight="600" color="$color">Font</Text>
             <Text fontSize={12} color="$color11">Typeface</Text>
             <XStack gap={8}>
@@ -275,7 +275,7 @@ export function SettingsScreen() {
                     paddingVertical={10}
                     borderRadius={999}
                     backgroundColor={active ? '$color9' : '$backgroundHover'}
-                    borderWidth={1}
+                    borderWidth={0.5}
                     borderColor={active ? '$color9' : '$borderColor'}
                     alignItems="center"
                     onPress={() => settings.setFontFamily(opt.value)}>
@@ -294,7 +294,7 @@ export function SettingsScreen() {
                     paddingHorizontal={12} paddingVertical={6}
                     borderRadius={999}
                     backgroundColor={active ? '$color9' : '$backgroundHover'}
-                    borderWidth={1}
+                    borderWidth={0.5}
                     borderColor={active ? '$color9' : '$borderColor'}
                     onPress={() => settings.setFontSizeScale(p.value)}>
                     <Text fontSize={11} fontWeight="500" color={active ? 'white' : '$color11'}>{p.label}</Text>
@@ -305,7 +305,7 @@ export function SettingsScreen() {
           </YStack>
 
           {/* Push Notifications */}
-          <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16}>
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16}>
             <XStack justifyContent="space-between" alignItems="center">
               <YStack flex={1}>
                 <Text fontSize={15} fontWeight="600" color="$color">Push Notifications</Text>
@@ -326,7 +326,7 @@ export function SettingsScreen() {
           </YStack>
 
           {/* Sound Effects */}
-          <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16}>
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16}>
             <XStack justifyContent="space-between" alignItems="center">
               <YStack flex={1}>
                 <Text fontSize={15} fontWeight="600" color="$color">Sound Effects</Text>
@@ -342,7 +342,7 @@ export function SettingsScreen() {
           </YStack>
 
           {/* Chat Defaults */}
-          <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
             <Text fontSize={15} fontWeight="600" color="$color">Chat Defaults</Text>
             {[
               {label: 'Temperature', value: settings.temperature.toFixed(1), key: 'temperature', options: [0.2, 0.4, 0.6, 0.8, 1.0, 1.2]},
@@ -364,7 +364,7 @@ export function SettingsScreen() {
                         paddingHorizontal={12} paddingVertical={6}
                         borderRadius={999}
                         backgroundColor={match ? '$color9' : '$backgroundHover'}
-                        borderWidth={1}
+                        borderWidth={0.5}
                         borderColor={match ? '$color9' : '$borderColor'}
                         onPress={() => settings.update({[key]: v})}>
                         <Text fontSize={11} fontWeight="500" color={match ? 'white' : '$color11'}>
@@ -379,7 +379,7 @@ export function SettingsScreen() {
           </YStack>
 
           {/* Memory Context */}
-          <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
             <Text fontSize={15} fontWeight="600" color="$color">Memory Context</Text>
             <RNTextInput
               style={{
@@ -406,7 +406,7 @@ export function SettingsScreen() {
           ].map(({label, desc, target}) => (
             <YStack
               key={target}
-              backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16}
+              backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16}
               onPress={() => navigation.navigate(target)}>
               <XStack justifyContent="space-between" alignItems="center">
                 <YStack>
@@ -419,12 +419,12 @@ export function SettingsScreen() {
           ))}
 
           {/* Danger Zone */}
-          <YStack backgroundColor="$background" borderRadius={12} borderWidth={1} borderColor="$borderColor" padding={16} gap={8}>
+          <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
             <Text fontSize={15} fontWeight="600" color="$color">Danger Zone</Text>
             <YStack
               paddingVertical={10} paddingHorizontal={12} borderRadius={999}
               backgroundColor="#FEF2F2" alignItems="center"
-              borderWidth={1} borderColor="#FEE2E2"
+              borderWidth={0.5} borderColor="#FEE2E2"
               onPress={() =>
                 Alert.alert('Reset Settings', 'Reset all settings to defaults?', [
                   {text: 'Cancel', style: 'cancel'},

@@ -2,7 +2,6 @@ import React, {useState, useRef, useEffect, useMemo} from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   Alert,
   Animated,
@@ -471,30 +470,28 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
   return (
     <Animated.View style={[styles.row, isUser && styles.rowUser, {opacity, transform: [{translateY}]}]}>
       {selectMode && (
-        <TouchableOpacity
+        <Pressable
           style={styles.selectCheckbox}
-          onPress={onSelect}
-          activeOpacity={0.7}>
+          onPress={onSelect}>
           <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
             {selected && <Icon name="check" size={12} color="white" />}
           </View>
-        </TouchableOpacity>
+        </Pressable>
       )}
 
       <View style={styles.deleteContainer}>
-        <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete} activeOpacity={0.7}>
+        <Pressable style={styles.deleteBtn} onPress={handleDelete}>
           <Icon name="trash-2" size={16} color="white" />
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
       <Animated.View
         style={[styles.swipeable, {transform: [{translateX}]}]}
         {...panResponder.panHandlers}>
-        <TouchableOpacity
+        <Pressable
           style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble, highlight && styles.highlight, pinned && styles.pinnedBubble]}
           onPress={selectMode ? onSelect : handleDoubleTap}
-          onLongPress={selectMode ? onSelect : (onLongPressSelect || handleLongPress)}
-          activeOpacity={0.8}>
+          onLongPress={selectMode ? onSelect : (onLongPressSelect || handleLongPress)}>
           {pinned && (
             <View style={styles.pinIcon}>
               <Icon name="pin" size={12} color={primary} />
@@ -524,10 +521,10 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
           ) : (
             <Markdown content={message.content || 'Thinking...'} style={styles.assistantText} />
           )}
-        </TouchableOpacity>
+        </Pressable>
       </Animated.View>
 
-      <TouchableOpacity
+      <Pressable
         onPress={() => setShowFullDate(d => !d)}
         style={[styles.timestampRow, isUser && styles.timestampRowUser]}>
         <Text style={[styles.timestamp, isUser && styles.timestampUser]}>
@@ -538,18 +535,18 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
             <Text style={styles.readTime}> · {Math.max(1, Math.ceil(message.content.split(/\s+/).length / 200))} min read</Text>
           )}
         </Text>
-      </TouchableOpacity>
+      </Pressable>
 
       {reactions.length > 0 && (
         <View style={[styles.reactionRow, isUser && styles.reactionRowUser]}>
           {reactions.map((emoji, i) => (
-            <TouchableOpacity
+            <Pressable
               key={i}
               style={styles.reactionBadge}
               onPress={() => handleToggleReaction(emoji)}
               onLongPress={() => setShowReactionPicker(true)}>
               <Text style={styles.reactionEmoji}>{emoji}</Text>
-            </TouchableOpacity>
+            </Pressable>
           ))}
         </View>
       )}
@@ -557,18 +554,18 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
       {showReactionPicker && (
         <View style={[styles.reactionPicker, isUser && styles.reactionPickerUser]}>
           {REACTION_EMOJIS.map(emoji => (
-            <TouchableOpacity
+            <Pressable
               key={emoji}
               style={[styles.reactionOption, reactions.includes(emoji) && styles.reactionOptionActive]}
               onPress={() => handleToggleReaction(emoji)}>
               <Text style={styles.reactionOptionText}>{emoji}</Text>
-            </TouchableOpacity>
+            </Pressable>
           ))}
-          <TouchableOpacity
+          <Pressable
             style={styles.reactionClose}
             onPress={() => setShowReactionPicker(false)}>
             <Icon name="x" size={14} color={textMuted} />
-          </TouchableOpacity>
+          </Pressable>
         </View>
       )}
 
@@ -586,16 +583,15 @@ export function MessageBubble({message, sessionId, highlight, onRegenerate, onFe
             </View>
 
             {contextActions.map((action, i) => (
-              <TouchableOpacity
+              <Pressable
                 key={i}
                 style={[styles.contextAction, action.destructive && styles.contextActionDestructive]}
-                onPress={action.onPress}
-                activeOpacity={0.6}>
+                onPress={action.onPress}>
                 <Icon name={action.icon} size={18} color={textColor} />
                 <Text style={[styles.contextLabel, action.destructive && styles.contextLabelDestructive]}>
                   {action.label}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             ))}
           </View>
         </Pressable>

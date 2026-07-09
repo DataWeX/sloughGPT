@@ -5,7 +5,8 @@
  */
 
 import React, {useEffect, useState} from 'react';
-import {View, Text, TouchableOpacity, StyleSheet, Animated} from 'react-native';
+import {Pressable, Animated, StyleSheet} from 'react-native';
+import {YStack, Text} from 'tamagui';
 import {toast, type Toast, type ToastType} from '../services/toast';
 import {Icon, type IconName} from './Icon';
 
@@ -44,16 +45,29 @@ function ToastItem({item}: {item: Toast}) {
   }, []);
 
   return (
-    <Animated.View style={[styles.toast, {backgroundColor: colors.bg, borderLeftColor: colors.border, opacity}]}>
-      <View style={[styles.icon, {backgroundColor: colors.border}]}>
+    <Animated.View
+      style={[
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 12,
+          paddingVertical: 10,
+          borderRadius: 10,
+          borderLeftWidth: 3,
+          backgroundColor: colors.bg,
+          borderLeftColor: colors.border,
+          opacity,
+        },
+      ]}>
+      <YStack width={20} height={20} borderRadius={10} backgroundColor={colors.border} alignItems="center" justifyContent="center" marginRight={8}>
         <Icon name={ICON_NAMES[item.type]} size={11} color="#fff" />
-      </View>
-      <Text style={[styles.message, {color: colors.text}]} numberOfLines={2}>
+      </YStack>
+      <Text fontSize={13} lineHeight={18} color={colors.text} flex={1} numberOfLines={2}>
         {item.message}
       </Text>
-      <TouchableOpacity onPress={() => toast.dismiss(item.id)} style={styles.closeBtn}>
+      <Pressable onPress={() => toast.dismiss(item.id)} style={{padding: 4, marginLeft: 8}}>
         <Icon name="x" size={16} color={colors.text} />
-      </TouchableOpacity>
+      </Pressable>
     </Animated.View>
   );
 }
@@ -69,52 +83,10 @@ export function ToastContainer() {
   if (items.length === 0) return null;
 
   return (
-    <View style={styles.container} pointerEvents="box-none">
+    <YStack position="absolute" top={44} left={12} right={12} zIndex={99999} gap={6} pointerEvents="box-none">
       {items.map(item => (
         <ToastItem key={item.id} item={item} />
       ))}
-    </View>
+    </YStack>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    top: 44,
-    left: 12,
-    right: 12,
-    zIndex: 9999,
-    gap: 6,
-  },
-  toast: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  icon: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  message: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  closeBtn: {
-    padding: 4,
-    marginLeft: 8,
-  },
-
-});

@@ -529,7 +529,7 @@ export function ChatScreen() {
               backgroundColor="rgba(124, 82, 196, 0.08)"
               alignItems="center" justifyContent="center"
               marginBottom={24}
-              borderWidth={1}
+              borderWidth={0.5}
               borderColor="rgba(124, 82, 196, 0.15)">
               <YStack
                 width={56} height={56} borderRadius={28}

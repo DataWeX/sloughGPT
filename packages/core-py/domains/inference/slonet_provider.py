@@ -29,13 +29,45 @@ QWEN_KEYS = {
     "lm_head.weight": "lm_head.weight",
 }
 
+# GPT-2 weight key mapping
+GPT2_KEYS = {
+    "wte.weight": "tok_emb.weight",
+    "wpe.weight": "pos_emb.weight",
+    "h.{i}.ln_1.weight": "blocks.{i}.attn_norm.weight",
+    "h.{i}.ln_1.bias": "blocks.{i}.attn_norm.bias",
+    "h.{i}.attn.c_attn.weight": "blocks.{i}.attn.cat.weight",
+    "h.{i}.attn.c_attn.bias": "blocks.{i}.attn.cat.bias",
+    "h.{i}.attn.c_proj.weight": "blocks.{i}.attn.o_proj.weight",
+    "h.{i}.attn.c_proj.bias": "blocks.{i}.attn.o_proj.bias",
+    "h.{i}.ln_2.weight": "blocks.{i}.ff_norm.weight",
+    "h.{i}.ln_2.bias": "blocks.{i}.ff_norm.bias",
+    "h.{i}.mlp.c_fc.weight": "blocks.{i}.ff.w1.weight",
+    "h.{i}.mlp.c_fc.bias": "blocks.{i}.ff.w1.bias",
+    "h.{i}.mlp.c_proj.weight": "blocks.{i}.ff.w2.weight",
+    "h.{i}.mlp.c_proj.bias": "blocks.{i}.ff.w2.bias",
+    "ln_f.weight": "norm.weight",
+    "ln_f.bias": "norm.bias",
+}
+
 
 def convert_hf_to_slonet(hf_state_dict: Dict[str, np.ndarray], n_layer: int) -> Dict[str, np.ndarray]:
-    """Map HuggingFace Qwen2.5 state dict keys to SloTransformer keys."""
+    """Map HuggingFace state dict keys to SloTransformer keys.
+
+    Auto-detects model type (Qwen2.5 vs GPT-2) based on weight key patterns.
+    """
+    # Auto-detect which key mapping to use
+    sample_keys = list(hf_state_dict.keys())[:5]
+    if any(k.startswith("model.layers.") for k in sample_keys):
+        key_map = QWEN_KEYS
+    elif any(k.startswith("h.") for k in sample_keys):
+        key_map = GPT2_KEYS
+    else:
+        key_map = QWEN_KEYS  # default
+
     result = {}
     for hf_key, arr in hf_state_dict.items():
         mapped = False
-        for pattern, target in QWEN_KEYS.items():
+        for pattern, target in key_map.items():
             if "{i}" in pattern:
                 for i in range(n_layer):
                     concrete = pattern.replace("{i}", str(i))
@@ -84,14 +116,17 @@ class SloNetChatProvider:
         snapshot = snapshots[0]
         config = json.loads((snapshot / "config.json").read_text())
 
-        n_layer = config["num_hidden_layers"]
-        n_embed = config["hidden_size"]
-        n_head = config["num_attention_heads"]
+        # Support both Qwen2.5 and GPT-2 config key conventions
+        n_layer = config.get("num_hidden_layers") or config.get("n_layer")
+        n_embed = config.get("hidden_size") or config.get("n_embd")
+        n_head = config.get("num_attention_heads") or config.get("n_head")
         n_kv_head = config.get("num_key_value_heads", n_head)
         vocab_size = config["vocab_size"]
-        intermediate_size = config["intermediate_size"]
+        intermediate_size = config.get("intermediate_size", n_embed * 4)
         rope_base = config.get("rope_theta", 10000.0)
-        rms_norm_eps = config.get("rms_norm_eps", 1e-6)
+        rms_norm_eps = config.get("rms_norm_eps") or config.get("layer_norm_epsilon", 1e-6)
+        # GPT-2 uses gelu, not rope — detect and disable rope for non-RoPE models
+        use_rope = config.get("rope_theta") is not None or config.get("position_embedding_type", "") == "rope"
 
         logger.info("Building SloTransformer from %s config (n_embed=%d, n_layer=%d, n_head=%d, n_kv_head=%d, vocab=%d)",
                      hf_model_id, n_embed, n_layer, n_head, n_kv_head, vocab_size)
@@ -102,11 +137,11 @@ class SloNetChatProvider:
             n_layer=n_layer,
             n_head=n_head,
             n_kv_head=n_kv_head,
-            block_size=2048,
-            max_seq_len=2048,
+            block_size=config.get("n_ctx") or config.get("max_position_embeddings", 2048),
+            max_seq_len=config.get("n_ctx") or config.get("max_position_embeddings", 2048),
             dropout=0.0,
             eps=rms_norm_eps,
-            use_rope=True,
+            use_rope=use_rope,
             rope_base=float(rope_base),
             tie_weights=True,
             intermediate_size=intermediate_size,
@@ -115,10 +150,21 @@ class SloNetChatProvider:
 
         self._load_weights(snapshot, n_layer)
 
-        from transformers import AutoTokenizer
-        self._tokenizer = AutoTokenizer.from_pretrained(hf_model_id)
-        if self._tokenizer.pad_token_id is None:
-            self._tokenizer.pad_token_id = self._tokenizer.eos_token_id or 0
+        # Try MorphTokenizer (pure numpy) first, fall back to transformers
+        try:
+            from domains.infrastructure.morph_tokenizer import MorphTokenizer
+            self._tokenizer = MorphTokenizer.from_pretrained(hf_model_id)
+            logger.info("Using MorphTokenizer for %s", hf_model_id)
+        except Exception:
+            try:
+                from transformers import AutoTokenizer
+                self._tokenizer = AutoTokenizer.from_pretrained(hf_model_id)
+                logger.info("Using transformers AutoTokenizer for %s", hf_model_id)
+            except Exception as e:
+                logger.warning("No tokenizer available for %s: %s", hf_model_id, e)
+                self._tokenizer = None
+        if self._tokenizer is not None and hasattr(self._tokenizer, "pad_token_id") and self._tokenizer.pad_token_id is None:
+            self._tokenizer.pad_token_id = getattr(self._tokenizer, "eos_token_id", None) or 0
 
         logger.info("SloNetChatProvider ready: %s (NumPy weights loaded)", hf_model_id)
 
@@ -143,7 +189,15 @@ class SloNetChatProvider:
                     from safetensors import safe_open
                     with safe_open(str(f), framework="np") as sf:
                         for k in sf.keys():
-                            hf_dict[k] = sf.get_tensor(k).astype(np.float32)
+                            arr = sf.get_tensor(k)
+                            # Convert bfloat16/float16 to float32
+                            if arr.dtype.name in ("bfloat16", "float16"):
+                                if arr.dtype.name == "bfloat16":
+                                    raw = arr.view(np.uint16).astype(np.uint32) << 16
+                                    arr = raw.view(np.float32)
+                                else:
+                                    arr = arr.astype(np.float32)
+                            hf_dict[k] = arr
                 except Exception as e:
                     # If numpy framework not supported, fall back to pt
                     try:
@@ -221,11 +275,20 @@ class SloNetChatProvider:
 
     async def chat_stream(self, messages: List[Dict], max_tokens: int = 512, temperature: float = 0.8, **kwargs) -> AsyncIterator[str]:
         prompt = self._messages_to_prompt(messages)
-        input_ids = self._tokenizer(prompt, return_tensors="np")["input_ids"]
-        eos_id = self._tokenizer.eos_token_id or 0
+
+        # Handle both HF tokenizer (callable) and MorphTokenizer (encode method)
+        if callable(self._tokenizer) and not hasattr(self._tokenizer, 'encode'):
+            input_ids_arr = self._tokenizer(prompt, return_tensors="np")["input_ids"]
+            eos_id = self._tokenizer.eos_token_id or 0
+            decode_fn = self._tokenizer.decode
+        else:
+            ids = self._tokenizer.encode(prompt)
+            input_ids_arr = np.array([ids], dtype=np.int64)
+            eos_id = getattr(self._tokenizer, 'eos_token_id', None) or 0
+            decode_fn = self._tokenizer.decode
 
         tokens = self._model.generate(
-            input_ids,
+            input_ids_arr,
             max_new_tokens=max_tokens,
             temperature=temperature,
             top_k=kwargs.get("top_k", 40),
@@ -233,8 +296,12 @@ class SloNetChatProvider:
             eos_token=eos_id,
         )
 
-        new_ids = tokens.data[0, input_ids.shape[1]:]
-        decoded = self._tokenizer.decode(new_ids, skip_special_tokens=True)
+        new_ids = tokens.data[0, input_ids_arr.shape[1]:]
+        id_list = new_ids.tolist()
+        try:
+            decoded = decode_fn(id_list, skip_special_tokens=True)
+        except TypeError:
+            decoded = decode_fn(id_list)
         yield decoded
 
     def embed(self, text: str) -> List[float]:
