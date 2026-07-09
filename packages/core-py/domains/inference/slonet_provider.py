@@ -3,6 +3,10 @@ SloNet Chat Provider — pure NumPy inference via SloTransformer.
 
 Loads a HuggingFace model's weights into SloTransformer and runs inference
 entirely through NumPy ops. No PyTorch dependency at inference time.
+
+Universal weight import: uses ArchConfig to auto-detect any HuggingFace
+architecture and convert weights to SloTransformer format. No per-model
+hardcoding — new arch = new ArchConfig instance.
 """
 import logging
 from pathlib import Path
@@ -11,298 +15,357 @@ import numpy as np
 
 logger = logging.getLogger("man.inference.slonet_provider")
 
-QWEN_KEYS = {
-    "model.embed_tokens.weight": "tok_emb.weight",
-    "model.layers.{i}.input_layernorm.weight": "blocks.{i}.attn_norm.weight",
-    "model.layers.{i}.self_attn.q_proj.weight": "blocks.{i}.attn.q_proj.weight",
-    "model.layers.{i}.self_attn.q_proj.bias": "blocks.{i}.attn.q_proj.bias",
-    "model.layers.{i}.self_attn.k_proj.weight": "blocks.{i}.attn.k_proj.weight",
-    "model.layers.{i}.self_attn.k_proj.bias": "blocks.{i}.attn.k_proj.bias",
-    "model.layers.{i}.self_attn.v_proj.weight": "blocks.{i}.attn.v_proj.weight",
-    "model.layers.{i}.self_attn.v_proj.bias": "blocks.{i}.attn.v_proj.bias",
-    "model.layers.{i}.self_attn.o_proj.weight": "blocks.{i}.attn.o_proj.weight",
-    "model.layers.{i}.post_attention_layernorm.weight": "blocks.{i}.ff_norm.weight",
-    "model.layers.{i}.mlp.gate_proj.weight": "blocks.{i}.ff.w1.weight",
-    "model.layers.{i}.mlp.down_proj.weight": "blocks.{i}.ff.w2.weight",
-    "model.layers.{i}.mlp.up_proj.weight": "blocks.{i}.ff.w3.weight",
-    "model.norm.weight": "norm.weight",
-    "lm_head.weight": "lm_head.weight",
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Universal HF → SloTransformer converter
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ArchConfig canonical → SloTransformer canonical (shared for all architectures)
+_ARCH_TO_SLONET_SHARED = {
+    "embed.token": "tok_emb.weight",
+    "embed.pos": "pos_emb.weight",
+    "layers.{i}.attn_norm.weight": "blocks.{i}.attn_norm.weight",
+    "layers.{i}.attn_norm.bias": None,  # RMSNorm has no bias — drop
+    "layers.{i}.q.weight": "blocks.{i}.attn.q_proj.weight",
+    "layers.{i}.q.bias": "blocks.{i}.attn.q_proj.bias",
+    "layers.{i}.k.weight": "blocks.{i}.attn.k_proj.weight",
+    "layers.{i}.k.bias": "blocks.{i}.attn.k_proj.bias",
+    "layers.{i}.v.weight": "blocks.{i}.attn.v_proj.weight",
+    "layers.{i}.v.bias": "blocks.{i}.attn.v_proj.bias",
+    "layers.{i}.qkv.weight": None,  # fused — handled by _split_fused_qkv
+    "layers.{i}.qkv.bias": None,    # fused — handled by _split_fused_qkv
+    "layers.{i}.o_proj.weight": "blocks.{i}.attn.o_proj.weight",
+    "layers.{i}.o_proj.bias": "blocks.{i}.attn.o_proj.bias",
+    "layers.{i}.ff_norm.weight": "blocks.{i}.ff_norm.weight",
+    "layers.{i}.ff_norm.bias": None,  # RMSNorm has no bias — drop
+    "layers.{i}.ffn.down.weight": "blocks.{i}.ff.w2.weight",
+    "layers.{i}.ffn.down.bias": "blocks.{i}.ff.w2.bias",
+    "final_norm.weight": "norm.weight",
+    "final_norm.bias": None,  # RMSNorm has no bias — drop
 }
 
-# GPT-2 weight key mapping
-GPT2_KEYS = {
-    "wte.weight": "tok_emb.weight",
-    "wpe.weight": "pos_emb.weight",
-    "h.{i}.ln_1.weight": "blocks.{i}.attn_norm.weight",
-    "h.{i}.ln_1.bias": "blocks.{i}.attn_norm.bias",
-    "h.{i}.attn.c_attn.weight": "blocks.{i}.attn.cat.weight",
-    "h.{i}.attn.c_attn.bias": "blocks.{i}.attn.cat.bias",
-    "h.{i}.attn.c_proj.weight": "blocks.{i}.attn.o_proj.weight",
-    "h.{i}.attn.c_proj.bias": "blocks.{i}.attn.o_proj.bias",
-    "h.{i}.ln_2.weight": "blocks.{i}.ff_norm.weight",
-    "h.{i}.ln_2.bias": "blocks.{i}.ff_norm.bias",
-    "h.{i}.mlp.c_fc.weight": "blocks.{i}.ff.w1.weight",
-    "h.{i}.mlp.c_fc.bias": "blocks.{i}.ff.w1.bias",
-    "h.{i}.mlp.c_proj.weight": "blocks.{i}.ff.w2.weight",
-    "h.{i}.mlp.c_proj.bias": "blocks.{i}.ff.w2.bias",
-    "ln_f.weight": "norm.weight",
-    "ln_f.bias": "norm.bias",
+# SwiGLU: has separate gate_proj + up_proj
+_ARCH_TO_SLONET_SWIGLU = {
+    "layers.{i}.ffn.gate.weight": "blocks.{i}.ff.w1.weight",
+    "layers.{i}.ffn.gate.bias": "blocks.{i}.ff.w1.bias",
+    "layers.{i}.ffn.up.weight": "blocks.{i}.ff.w3.weight",
+    "layers.{i}.ffn.up.bias": "blocks.{i}.ff.w3.bias",
+}
+
+# GELU: only up + down (no gate), up maps to w1, w3 synthesized as identity
+_ARCH_TO_SLONET_GELU = {
+    "layers.{i}.ffn.up.weight": "blocks.{i}.ff.w1.weight",
+    "layers.{i}.ffn.up.bias": "blocks.{i}.ff.w1.bias",
 }
 
 
-def convert_hf_to_slonet(hf_state_dict: Dict[str, np.ndarray], n_layer: int) -> Dict[str, np.ndarray]:
-    """Map HuggingFace state dict keys to SloTransformer keys.
+def _split_fused_qkv(
+    hf_key: str, arr: np.ndarray, n_embed: int, n_layer: int,
+    hf_state_dict: Dict[str, np.ndarray]
+) -> Dict[str, np.ndarray]:
+    """Split fused QKV weight/bias into separate Q, K, V.
 
-    Auto-detects model type (Qwen2.5 vs GPT-2) based on weight key patterns.
+    GPT-2 stores QKV as a single (n_embed, 3*n_embed) tensor.
+    SloTransformer expects separate Q, K, V projections.
+    Also handles transpose: GPT-2 stores (in, out), SloTransformer expects (out, in).
     """
-    # Auto-detect which key mapping to use
-    sample_keys = list(hf_state_dict.keys())[:5]
-    if any(k.startswith("model.layers.") for k in sample_keys):
-        key_map = QWEN_KEYS
-    elif any(k.startswith("h.") for k in sample_keys):
-        key_map = GPT2_KEYS
-    else:
-        key_map = QWEN_KEYS  # default
-
     result = {}
-    for hf_key, arr in hf_state_dict.items():
-        mapped = False
-        for pattern, target in key_map.items():
-            if "{i}" in pattern:
-                for i in range(n_layer):
-                    concrete = pattern.replace("{i}", str(i))
-                    if hf_key == concrete:
-                        result[target.replace("{i}", str(i))] = arr
-                        mapped = True
-                        break
-            else:
-                if hf_key == pattern:
-                    result[target] = arr
-                    mapped = True
-                    break
-        if not mapped and "weight" in hf_key:
-            pass
+    # Extract layer index from key like "h.0.attn.c_attn.weight"
+    parts = hf_key.split(".")
+    layer_idx = None
+    for j, p in enumerate(parts):
+        if p == "h" and j + 1 < len(parts):
+            try:
+                layer_idx = int(parts[j + 1])
+                break
+            except ValueError:
+                continue
+    if layer_idx is None:
+        return result
+
+    is_bias = arr.ndim == 1
+    if is_bias:
+        # bias: (3*n_embed,) → split into 3 × (n_embed,)
+        q_b, k_b, v_b = np.split(arr, 3, axis=0)
+        result[f"blocks.{layer_idx}.attn.q_proj.bias"] = q_b
+        result[f"blocks.{layer_idx}.attn.k_proj.bias"] = k_b
+        result[f"blocks.{layer_idx}.attn.v_proj.bias"] = v_b
+    else:
+        # weight: (n_embed, 3*n_embed) → transpose → (3*n_embed, n_embed) → split
+        wt = arr.T  # (3*n_embed, n_embed)
+        q_w, k_w, v_w = np.split(wt, 3, axis=0)
+        result[f"blocks.{layer_idx}.attn.q_proj.weight"] = q_w
+        result[f"blocks.{layer_idx}.attn.k_proj.weight"] = k_w
+        result[f"blocks.{layer_idx}.attn.v_proj.weight"] = v_w
+
     return result
 
 
-def _silu_np(x: np.ndarray) -> np.ndarray:
-    return x * (1 / (1 + np.exp(-x)))
+def convert_hf_to_slonet(
+    hf_state_dict: Dict[str, np.ndarray],
+    n_layer: int,
+    config: Optional[dict] = None,
+) -> Dict[str, np.ndarray]:
+    """Universal HF → SloTransformer weight converter.
+
+    Auto-detects any HuggingFace architecture via ArchConfig.build_arch(),
+    resolves canonical names, and maps to SloTransformer format.
+
+    Handles:
+    - Separate Q/K/V projections (LLaMA, Qwen, Mistral, Gemma, Phi, ...)
+    - Fused QKV projections (GPT-2, GPT-Neo, ...)
+    - SwiGLU (LLaMA-family) and GELU (GPT-2) feed-forward
+    - Weight transposition where needed
+    - LayerNorm → RMSNorm (bias dropped)
+    - Positional embeddings skipped (RoPE)
+
+    Args:
+        hf_state_dict: HuggingFace model weights.
+        n_layer: Number of transformer layers.
+        config: Optional HuggingFace config.json dict. If None, auto-detected
+            from weight keys via ArchConfig.
+
+    Returns:
+        Dict mapping SloTransformer canonical names → weight arrays.
+    """
+    from domains.infrastructure.arch_config import build_arch, ArchConfig
+
+    # Auto-detect architecture
+    if config is None:
+        config = {}
+    arch = build_arch(
+        name=config.get("architectures", ["unknown"])[0],
+        config=config,
+        weight_keys=set(hf_state_dict.keys()),
+    )
+
+    logger.info("convert_hf_to_slonet: arch=%s (norm=%s, pos=%s, act=%s, attn=%s, transpose=%s)",
+                arch.name, arch.norm, arch.positional, arch.activation, arch.attention, arch.transpose_weights)
+
+    result = {}
+    W = arch.weight_map
+
+    # Embeddings and lm_head are NOT weight matrices — never transpose them
+    NO_TRANSPOSE_KEYS = {"embed.token", "embed.pos", "lm_head"}
+
+    # Track whether this arch uses fused QKV (GPT-2) or split (LLaMA-family)
+    has_fused_qkv = "layers.{i}.qkv.weight" in W
+
+    # Build the full mapping: shared + FFN-specific
+    arch_to_slonet = dict(_ARCH_TO_SLONET_SHARED)
+    if arch.activation == "swiglu":
+        # SwiGLU: has separate gate_proj + up_proj → w1 + w3
+        arch_to_slonet.update(_ARCH_TO_SLONET_SWIGLU)
+    else:
+        # GELU: only up + down → up maps to w1, w3 synthesized as identity
+        arch_to_slonet.update(_ARCH_TO_SLONET_GELU)
+
+    for hf_key, arr in hf_state_dict.items():
+        mapped = False
+
+        for canonical, slo_target in arch_to_slonet.items():
+            if slo_target is None:
+                # Skip dropped keys (bias, fused QKV, positional)
+                if has_fused_qkv and "qkv" in canonical:
+                    # Handle fused QKV separately
+                    if hf_key == W.get(canonical, "").replace("{i}", "") or \
+                       any(hf_key == W.get(canonical, "").replace("{i}", str(i)) for i in range(n_layer)):
+                        result.update(_split_fused_qkv(hf_key, arr, arch.n_embed, n_layer, hf_state_dict))
+                        mapped = True
+                        break
+                continue
+
+            # Resolve canonical → actual HF key via weight map
+            mapped_hf_key = W.get(canonical)
+            if mapped_hf_key is None:
+                continue
+
+            if "{i}" in mapped_hf_key:
+                # Per-layer key
+                for i in range(n_layer):
+                    concrete = mapped_hf_key.replace("{i}", str(i))
+                    if hf_key == concrete:
+                        slo_key = slo_target.replace("{i}", str(i))
+                        w = arr
+                        # Transpose if arch stores (in, out) but SloTransformer expects (out, in)
+                        # Embeddings and lm_head are NOT linear weights — skip transposition
+                        if arch.transpose_weights and w.ndim == 2 and canonical not in NO_TRANSPOSE_KEYS:
+                            w = w.T
+                        result[slo_key] = w
+                        mapped = True
+                        break
+            else:
+                # Global key (embed, final norm, lm_head)
+                if hf_key == mapped_hf_key:
+                    w = arr
+                    if arch.transpose_weights and w.ndim == 2 and canonical not in NO_TRANSPOSE_KEYS:
+                        w = w.T
+                    result[slo_target] = w
+                    mapped = True
+                    break
+
+        # Handle fused QKV for GPT-2 style
+        if not mapped and has_fused_qkv:
+            fused_key = W.get("layers.{i}.qkv.weight")
+            if fused_key:
+                for i in range(n_layer):
+                    concrete = fused_key.replace("{i}", str(i))
+                    if hf_key == concrete:
+                        result.update(_split_fused_qkv(hf_key, arr, arch.n_embed, n_layer, hf_state_dict))
+                        mapped = True
+                        break
+
+            fused_bias = W.get("layers.{i}.qkv.bias")
+            if fused_bias and not mapped:
+                for i in range(n_layer):
+                    concrete = fused_bias.replace("{i}", str(i))
+                    if hf_key == concrete:
+                        result.update(_split_fused_qkv(hf_key, arr, arch.n_embed, n_layer, hf_state_dict))
+                        mapped = True
+                        break
+
+    # GELU: synthesize SwiGLU gate (w3) as identity — w3=identity means
+    # w2(act(w1(x)) * w3(x)) = w2(act(w1(x)) * 1) = w2(act(w1(x)))
+    if arch.activation != "swiglu":
+        for i in range(n_layer):
+            w1_key = f"blocks.{i}.ff.w1.weight"
+            if w1_key in result and f"blocks.{i}.ff.w3.weight" not in result:
+                w1 = result[w1_key]
+                result[f"blocks.{i}.ff.w3.weight"] = np.zeros_like(w1)
+                result[f"blocks.{i}.ff.w3.bias"] = np.ones(w1.shape[0], dtype=np.float32)
+
+    # Tie lm_head to token embedding if not separate
+    if "lm_head.weight" not in result and "tok_emb.weight" in result:
+        result["lm_head.weight"] = result["tok_emb.weight"]
+
+    logger.info("convert_hf_to_slonet: mapped %d keys (arch=%s)", len(result), arch.name)
+    return result
 
 
 class SloNetChatProvider:
-    """ModelProvider backed by SloTransformer (pure NumPy, no PyTorch).
+    """Pure NumPy inference via SloTransformer.
 
-    .. deprecated::
-        Use ``NumpyEngine`` instead. This engine will be removed in a future version.
+    Loads a HuggingFace model's weights into SloTransformer and runs inference
+    entirely through NumPy ops. No PyTorch dependency at inference time.
 
     Args:
-        hf_model_id: HuggingFace model ID (e.g. 'Qwen/Qwen2.5-0.5B-Instruct')
-        device: ignored (always CPU / NumPy)
+        hf_model_id: HuggingFace model ID or local path (e.g. 'gpt2', 'Qwen/Qwen2.5-0.5B-Instruct')
     """
 
-    def __init__(self, hf_model_id: str = "Qwen/Qwen2.5-0.5B-Instruct", device: str = "cpu"):
+    def __init__(self, hf_model_id: str = "gpt2"):
+        import json as _json
+        from pathlib import Path as _Path
+        from safetensors.numpy import load_file as _load_file
         from domains.training.slonet import SloTransformer
-        import json
 
-        self._model_id = hf_model_id
-        self._tokenizer = None
-        self._model = None
+        self._hf_model_id = hf_model_id
+        self._device = "cpu"
 
-        cache_dir = Path.home() / ".cache" / "huggingface" / "hub" / f"models--{hf_model_id.replace('/', '--')}"
-        snapshots = list(cache_dir.glob("snapshots/*")) if cache_dir.exists() else []
-        if not snapshots:
-            raise RuntimeError(f"Model {hf_model_id} not found in HF cache. Run the server with PyTorch once to download it.")
+        # Resolve model directory
+        model_dir = _Path(hf_model_id)
+        if not model_dir.exists():
+            cache_dir = _Path.home() / ".cache/huggingface/hub"
+            model_dir = cache_dir / f"models--{hf_model_id.replace('/', '--')}"
+            if model_dir.exists():
+                snapshots = model_dir / "snapshots"
+                if snapshots.exists():
+                    snaps = sorted(snapshots.iterdir())
+                    if snaps:
+                        model_dir = snaps[-1]
 
-        snapshot = snapshots[0]
-        config = json.loads((snapshot / "config.json").read_text())
+        # Load config
+        config_path = model_dir / "config.json"
+        config = {}
+        if config_path.exists():
+            with open(config_path) as f:
+                config = _json.load(f)
 
-        # Support both Qwen2.5 and GPT-2 config key conventions
-        n_layer = config.get("num_hidden_layers") or config.get("n_layer")
-        n_embed = config.get("hidden_size") or config.get("n_embd")
-        n_head = config.get("num_attention_heads") or config.get("n_head")
-        n_kv_head = config.get("num_key_value_heads", n_head)
-        vocab_size = config["vocab_size"]
-        intermediate_size = config.get("intermediate_size", n_embed * 4)
-        rope_base = config.get("rope_theta", 10000.0)
-        rms_norm_eps = config.get("rms_norm_eps") or config.get("layer_norm_epsilon", 1e-6)
-        # GPT-2 uses gelu, not rope — detect and disable rope for non-RoPE models
-        use_rope = config.get("rope_theta") is not None or config.get("position_embedding_type", "") == "rope"
+        n_embed = config.get("n_embd") or config.get("hidden_size", 768)
+        n_head = config.get("n_head") or config.get("num_attention_heads", 12)
+        n_layer = config.get("n_layer") or config.get("num_hidden_layers", 12)
+        vocab_size = config.get("vocab_size", 50257)
+        intermediate_size = config.get("n_inner") or config.get("intermediate_size")
+        max_pos = config.get("n_positions") or config.get("max_position_embeddings", 1024)
 
-        logger.info("Building SloTransformer from %s config (n_embed=%d, n_layer=%d, n_head=%d, n_kv_head=%d, vocab=%d)",
-                     hf_model_id, n_embed, n_layer, n_head, n_kv_head, vocab_size)
+        # Detect architecture features from weight keys
+        from domains.infrastructure.arch_config import build_arch
+        safetensors_path = model_dir / "model.safetensors"
+        if not safetensors_path.exists():
+            # Try finding any .safetensors file
+            for f in model_dir.glob("*.safetensors"):
+                safetensors_path = f
+                break
+
+        sd = _load_file(str(safetensors_path)) if safetensors_path.exists() else {}
+        arch = build_arch(
+            name=config.get("architectures", ["unknown"])[0],
+            config=config,
+            weight_keys=set(sd.keys()),
+        )
+
+        # GPT-2 uses absolute positional embeddings, not RoPE
+        use_abs_pos = arch.positional == "absolute"
 
         self._model = SloTransformer(
             vocab_size=vocab_size,
             n_embed=n_embed,
             n_layer=n_layer,
             n_head=n_head,
-            n_kv_head=n_kv_head,
-            block_size=config.get("n_ctx") or config.get("max_position_embeddings", 2048),
-            max_seq_len=config.get("n_ctx") or config.get("max_position_embeddings", 2048),
-            dropout=0.0,
-            eps=rms_norm_eps,
-            use_rope=use_rope,
-            rope_base=float(rope_base),
-            tie_weights=True,
             intermediate_size=intermediate_size,
-            soul_name=hf_model_id,
+            block_size=max_pos,
+            max_seq_len=max_pos,
+            use_rope=not use_abs_pos,
+            dropout=0.0,
+            tie_weights=True,
+            use_abs_pos_emb=use_abs_pos,
+            norm_type=arch.norm,
         )
 
-        self._load_weights(snapshot, n_layer)
+        # Load weights
+        if sd:
+            mapped = convert_hf_to_slonet(sd, n_layer=n_layer, config=config)
+            self._model.load_state_dict(mapped)
 
-        # Try MorphTokenizer (pure numpy) first, fall back to transformers
+        # Load tokenizer
+        self._tokenizer = self._load_tokenizer(model_dir, config)
+
+        logger.info("SloNetChatProvider loaded: %s (embed=%d, layers=%d, heads=%d, rope=%s)",
+                     hf_model_id, n_embed, n_layer, n_head, not use_abs_pos)
+
+    def _load_tokenizer(self, model_dir, config):
+        """Load tokenizer — MorphTokenizer.from_pretrained handles all parsing."""
         try:
             from domains.infrastructure.morph_tokenizer import MorphTokenizer
-            self._tokenizer = MorphTokenizer.from_pretrained(hf_model_id)
-            logger.info("Using MorphTokenizer for %s", hf_model_id)
-        except Exception:
-            try:
-                from transformers import AutoTokenizer
-                self._tokenizer = AutoTokenizer.from_pretrained(hf_model_id)
-                logger.info("Using transformers AutoTokenizer for %s", hf_model_id)
-            except Exception as e:
-                logger.warning("No tokenizer available for %s: %s", hf_model_id, e)
-                self._tokenizer = None
-        if self._tokenizer is not None and hasattr(self._tokenizer, "pad_token_id") and self._tokenizer.pad_token_id is None:
-            self._tokenizer.pad_token_id = getattr(self._tokenizer, "eos_token_id", None) or 0
+            # from_pretrained reads tokenizer.json and parses vocab+merges correctly
+            return MorphTokenizer.from_pretrained(self._hf_model_id)
+        except Exception as e:
+            logger.warning("MorphTokenizer load failed: %s", e)
 
-        logger.info("SloNetChatProvider ready: %s (NumPy weights loaded)", hf_model_id)
+        raise RuntimeError(f"No tokenizer found for {self._hf_model_id}")
 
-    def _load_weights(self, snapshot: Path, n_layer: int):
-        """Load HF weights from safetensors (numpy) into SloTransformer.
+    def generate(self, prompt: str, max_tokens: int = 50, temperature: float = 1.0) -> str:
+        """Generate text from a prompt."""
+        tokens = self._tokenizer.encode(prompt)
+        generated = list(tokens)
+        for _ in range(max_tokens):
+            import numpy as _np
+            inp = _np.array([generated], dtype=_np.int64)
+            result = self._model.forward(inp)
+            logits = result[0].data
+            next_token = int(_np.argmax(logits[0, -1]))
+            generated.append(next_token)
+        return self._tokenizer.decode(generated)
 
-        Prefers safetensors with numpy backend — no PyTorch required.
-        Falls back to PyTorch ``torch.load`` only for legacy ``.bin`` files.
-        """
-        weight_files = sorted(snapshot.glob("*.safetensors"))
-        if not weight_files:
-            weight_files = sorted(snapshot.glob("model*.safetensors"))
-        if not weight_files:
-            weight_files = sorted(snapshot.glob("pytorch_model*.bin"))
-
-        logger.info("Loading weights from %d file(s) in %s", len(weight_files), snapshot)
-
-        hf_dict = {}
-        for f in weight_files:
-            if f.suffix == ".safetensors":
-                try:
-                    from safetensors import safe_open
-                    with safe_open(str(f), framework="np") as sf:
-                        for k in sf.keys():
-                            arr = sf.get_tensor(k)
-                            # Convert bfloat16/float16 to float32
-                            if arr.dtype.name in ("bfloat16", "float16"):
-                                if arr.dtype.name == "bfloat16":
-                                    raw = arr.view(np.uint16).astype(np.uint32) << 16
-                                    arr = raw.view(np.float32)
-                                else:
-                                    arr = arr.astype(np.float32)
-                            hf_dict[k] = arr
-                except Exception as e:
-                    # If numpy framework not supported, fall back to pt
-                    try:
-                        import torch
-                        from safetensors import safe_open
-                        with safe_open(str(f), framework="pt", device="cpu") as sf:
-                            for k in sf.keys():
-                                t = sf.get_tensor(k)
-                                hf_dict[k] = t.to(dtype=torch.float32)
-                    except Exception as e2:
-                        raise RuntimeError(f"Failed to load safetensors {f}: {e2}")
-            else:
-                try:
-                    from domains.training.slonet_compat import torch
-                    w = torch.load(f, map_location="cpu", weights_only=True, mmap=True)
-                    for k, v in w.items():
-                        hf_dict[k] = v.to(dtype=torch.float32)
-                except Exception as e:
-                    raise RuntimeError(f"Failed to load bin file {f}: {e}")
-
-        mapped = convert_hf_to_slonet(hf_dict, n_layer)
-        logger.info("Mapped %d / %d HF weights to SloTransformer keys", len(mapped), len(hf_dict))
-
-        missing = self._model.load_state_dict(mapped, strict=False)
-        if missing:
-            logger.warning("SloTransformer.load_state_dict had %d unmatched keys", len(missing))
-
-    @property
-    def model_id(self) -> str:
-        return self._model_id
-
-    @property
-    def capabilities(self):
-        from domains.models.provider import ModelCapabilities
-        return ModelCapabilities(chat=True, streaming=True, embedding=False, vision=False)
-
-    @property
-    def metadata(self) -> Dict[str, Any]:
-        return {
-            "model_id": self._model_id,
-            "type": "slonet",
-            "n_embed": self._model.n_embed if self._model else 0,
-            "n_layer": self._model.n_layer if self._model else 0,
-            "n_head": self._model.n_head if self._model else 0,
-            "vocab_size": self._model.vocab_size if self._model else 0,
-        }
-
-    def _messages_to_prompt(self, messages: List[Dict]) -> str:
-        """Apply Qwen's chat template."""
-        if self._tokenizer is not None and hasattr(self._tokenizer, "apply_chat_template"):
-            try:
-                return self._tokenizer.apply_chat_template(
-                    messages, tokenize=False, add_generation_prompt=True
-                )
-            except Exception:
-                pass
-        parts = []
-        for msg in messages:
-            role = msg.get("role", "user")
-            content = msg.get("content", "")
-            if role == "system":
-                parts.append(f"System: {content}")
-            elif role == "user":
-                parts.append(f"User: {content}")
-            elif role == "assistant":
-                parts.append(f"Assistant: {content}")
-        parts.append("Assistant:")
-        return "\n".join(parts)
-
-    async def chat(self, messages: List[Dict], max_tokens: int = 512, temperature: float = 0.8, **kwargs) -> str:
-        chunks = []
-        async for chunk in self.chat_stream(messages, max_tokens, temperature, **kwargs):
-            chunks.append(chunk)
-        return "".join(chunks)
-
-    async def chat_stream(self, messages: List[Dict], max_tokens: int = 512, temperature: float = 0.8, **kwargs) -> AsyncIterator[str]:
-        prompt = self._messages_to_prompt(messages)
-
-        # Handle both HF tokenizer (callable) and MorphTokenizer (encode method)
-        if callable(self._tokenizer) and not hasattr(self._tokenizer, 'encode'):
-            input_ids_arr = self._tokenizer(prompt, return_tensors="np")["input_ids"]
-            eos_id = self._tokenizer.eos_token_id or 0
-            decode_fn = self._tokenizer.decode
-        else:
-            ids = self._tokenizer.encode(prompt)
-            input_ids_arr = np.array([ids], dtype=np.int64)
-            eos_id = getattr(self._tokenizer, 'eos_token_id', None) or 0
-            decode_fn = self._tokenizer.decode
-
-        tokens = self._model.generate(
-            input_ids_arr,
-            max_new_tokens=max_tokens,
-            temperature=temperature,
-            top_k=kwargs.get("top_k", 40),
-            top_p=kwargs.get("top_p", 0.9),
-            eos_token=eos_id,
-        )
-
-        new_ids = tokens.data[0, input_ids_arr.shape[1]:]
-        id_list = new_ids.tolist()
-        try:
-            decoded = decode_fn(id_list, skip_special_tokens=True)
-        except TypeError:
-            decoded = decode_fn(id_list)
-        yield decoded
-
-    def embed(self, text: str) -> List[float]:
-        return []
+    async def generate_stream(self, messages, **kwargs):
+        """Streaming generation — yields token strings."""
+        prompt = messages[-1].get("content", "") if messages else ""
+        tokens = self._tokenizer.encode(prompt)
+        generated = list(tokens)
+        for _ in range(kwargs.get("max_tokens", 200)):
+            import numpy as _np
+            inp = _np.array([generated], dtype=_np.int64)
+            result = self._model.forward(inp)
+            logits = result[0].data
+            next_token = int(_np.argmax(logits[0, -1]))
+            generated.append(next_token)
+            yield self._tokenizer.decode([next_token])

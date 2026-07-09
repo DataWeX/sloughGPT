@@ -1660,20 +1660,43 @@ class SloRMSNorm(SloLayer):
         return [self.weight]
 
 
+class SloLayerNorm(SloLayer):
+    """Layer normalization with weight and bias (GPT-2 style)."""
+
+    def __init__(self, dim: int, eps: float = 1e-5, name=""):
+        super().__init__(name or f"LayerNorm{dim}")
+        self.eps = eps
+        self.weight = ones((dim,), requires_grad=True)
+        self.bias = zeros((dim,), requires_grad=True)
+
+    def forward(self, x: Tensor) -> Tensor:
+        mean = x.data.mean(axis=-1, keepdims=True)
+        var = x.data.var(axis=-1, keepdims=True)
+        x_norm = (x.data - mean) / np.sqrt(var + self.eps)
+        out = x_norm * self.weight.data + self.bias.data
+        return Tensor(out, requires_grad=x.requires_grad,
+                      _children=(x,) if x.requires_grad else None)
+
+    def parameters(self) -> List[Tensor]:
+        return [self.weight, self.bias]
+
+
 class SloTransformerBlock(SloLayer):
     def __init__(self, d_model: int, n_heads: int, n_kv_head: Optional[int] = None,
                  dim_ff: int = None, use_rope: bool = False, max_seq_len: int = 2048,
-                 rope_base: float = 10000.0, dropout: float = 0.1, eps: float = 1e-5, name=""):
+                 rope_base: float = 10000.0, dropout: float = 0.1, eps: float = 1e-5,
+                 norm_type: str = "rms_norm", name=""):
         super().__init__(name or f"Transformer{d_model}")
         dim_ff = dim_ff or d_model * 4
         self.d_model = d_model
         self.n_heads = n_heads
         self.head_dim = d_model // n_heads
-        self.attn_norm = SloRMSNorm(d_model, eps, name + "_attn_norm")
+        NormCls = SloLayerNorm if norm_type == "layer_norm" else SloRMSNorm
+        self.attn_norm = NormCls(d_model, eps, name + "_attn_norm")
         self.attn = SloMultiHeadAttention(d_model, n_heads, n_kv_head=n_kv_head,
                                            use_rope=use_rope, max_seq_len=max_seq_len,
                                            rope_base=rope_base, name=name + "_attn")
-        self.ff_norm = SloRMSNorm(d_model, eps, name + "_ff_norm")
+        self.ff_norm = NormCls(d_model, eps, name + "_ff_norm")
         self.ff = SloFeedForward(d_model, dim_ff, name=name + "_ff")
         self.drop = SloDropout(dropout) if dropout > 0 else None
         self.use_checkpoint = False
@@ -3133,6 +3156,8 @@ class SloTransformer(SloNet):
         rope_base: float = 10000.0,
         tie_weights: bool = True,
         intermediate_size: Optional[int] = None,
+        use_abs_pos_emb: bool = False,
+        norm_type: str = "rms_norm",
         soul_name: str = "SloTransformer",
         soul_traits: Optional[Dict[str, float]] = None,
     ):
@@ -3146,10 +3171,11 @@ class SloTransformer(SloNet):
             layers.append(SloTransformerBlock(
                 n_embed, n_head, n_kv_head=n_kv_head,
                 dim_ff=dim_ff, use_rope=use_rope, max_seq_len=max_seq_len,
-                rope_base=rope_base, dropout=0, eps=eps,
+                rope_base=rope_base, dropout=0, eps=eps, norm_type=norm_type,
                 name=f"blocks.{i}",
             ))
-        layers.append(SloRMSNorm(n_embed, eps, "norm"))
+        NormCls = SloLayerNorm if norm_type == "layer_norm" else SloRMSNorm
+        layers.append(NormCls(n_embed, eps, "norm"))
         layers.append(SloLinear(n_embed, vocab_size, "lm_head"))
         super().__init__(
             layers=layers,
@@ -3177,6 +3203,12 @@ class SloTransformer(SloNet):
         self.max_seq_len = max_seq_len
         self.tie_weights = tie_weights
         self._kv_caches: List[Optional[Tuple[np.ndarray, np.ndarray]]] = [None] * n_layer
+
+        # Absolute positional embedding (GPT-2 style, optional)
+        self.pos_emb: Optional[SloEmbedding] = None
+        if use_abs_pos_emb:
+            self.pos_emb = SloEmbedding(max_seq_len, n_embed, "pos_emb")
+
         if tie_weights:
             self.layers[-1].weight.data[:] = self.layers[0].weight.data.copy()
 
@@ -3234,6 +3266,10 @@ class SloTransformer(SloNet):
                 input_ids = input_ids.cpu().detach().numpy()
             x = Tensor(np.array(input_ids, dtype=np.int64))
         x = self.layers[0].forward(x)
+        if self.pos_emb is not None:
+            seq_len = x.data.shape[1]
+            pos = Tensor(np.arange(seq_len, dtype=np.int64).reshape(1, -1))
+            x = x + self.pos_emb.forward(pos)
         seq_len = x.data.shape[1]
         if mask is None:
             causal = np.triu(np.full((seq_len, seq_len), -1e9, dtype=np.float32), k=1)
@@ -3350,13 +3386,22 @@ class SloTransformer(SloNet):
                 continue
             elif isinstance(layer, SloTransformerBlock):
                 named.append((f"{prefix}{lname}.attn_norm.weight", layer.attn_norm.weight))
+                if isinstance(layer.attn_norm, SloLayerNorm):
+                    named.append((f"{prefix}{lname}.attn_norm.bias", layer.attn_norm.bias))
                 named.extend(_named_mha(f"{prefix}{lname}.attn", layer.attn))
                 named.append((f"{prefix}{lname}.ff_norm.weight", layer.ff_norm.weight))
+                if isinstance(layer.ff_norm, SloLayerNorm):
+                    named.append((f"{prefix}{lname}.ff_norm.bias", layer.ff_norm.bias))
                 named.extend(_named_ff(f"{prefix}{lname}.ff", layer.ff))
             elif isinstance(layer, SloRMSNorm):
                 named.append((f"{prefix}{lname}.weight", layer.weight))
+            elif isinstance(layer, SloLayerNorm):
+                named.append((f"{prefix}{lname}.weight", layer.weight))
+                named.append((f"{prefix}{lname}.bias", layer.bias))
             elif isinstance(layer, SloLinear):
                 named.append((f"{prefix}{lname}.weight", layer.weight))
+        if self.pos_emb is not None:
+            named.append((f"{prefix}pos_emb.weight", self.pos_emb.weight))
         return named
 
     def load_state_dict(self, state_dict: Dict[str, np.ndarray], strict: bool = True):

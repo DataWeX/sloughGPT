@@ -1,0 +1,96 @@
+"""Tests for the universal HF→SloNet weight converter."""
+
+import numpy as np
+import pytest
+
+from domains.inference.slonet_provider import convert_hf_to_slonet
+
+
+def _fake_gpt2_state_dict():
+    """Create a minimal GPT-2 style state dict (fused QKV, GELU MLP)."""
+    n_embed, n_layer = 64, 2
+    sd = {}
+    sd["wte.weight"] = np.random.randn(1000, n_embed).astype(np.float32)
+    sd["wpe.weight"] = np.random.randn(512, n_embed).astype(np.float32)
+    sd["ln_f.weight"] = np.ones(n_embed, dtype=np.float32)
+    sd["ln_f.bias"] = np.zeros(n_embed, dtype=np.float32)
+    for i in range(n_layer):
+        sd[f"h.{i}.ln_1.weight"] = np.ones(n_embed, dtype=np.float32)
+        sd[f"h.{i}.ln_1.bias"] = np.zeros(n_embed, dtype=np.float32)
+        sd[f"h.{i}.attn.c_attn.weight"] = np.random.randn(n_embed, 3 * n_embed).astype(np.float32)
+        sd[f"h.{i}.attn.c_attn.bias"] = np.random.randn(3 * n_embed).astype(np.float32)
+        sd[f"h.{i}.attn.c_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
+        sd[f"h.{i}.attn.c_proj.bias"] = np.zeros(n_embed, dtype=np.float32)
+        sd[f"h.{i}.ln_2.weight"] = np.ones(n_embed, dtype=np.float32)
+        sd[f"h.{i}.ln_2.bias"] = np.zeros(n_embed, dtype=np.float32)
+        sd[f"h.{i}.mlp.c_fc.weight"] = np.random.randn(n_embed, 4 * n_embed).astype(np.float32)
+        sd[f"h.{i}.mlp.c_fc.bias"] = np.zeros(4 * n_embed, dtype=np.float32)
+        sd[f"h.{i}.mlp.c_proj.weight"] = np.random.randn(4 * n_embed, n_embed).astype(np.float32)
+        sd[f"h.{i}.mlp.c_proj.bias"] = np.zeros(n_embed, dtype=np.float32)
+    return sd
+
+
+def test_universal_converter_gpt2():
+    """GPT-2 style: fused QKV, GELU MLP, no positional embeddings in SloNet."""
+    sd = _fake_gpt2_state_dict()
+    result = convert_hf_to_slonet(sd, n_layer=2)
+
+    # Should have: tok_emb, lm_head, 2x (attn_norm, q/k/v, o_proj, ff_norm, w1/w2/w3), final norm
+    # Check key groups exist
+    assert "tok_emb.weight" in result
+    assert "lm_head.weight" in result
+    for i in range(2):
+        assert f"blocks.{i}.attn_norm.weight" in result
+        assert f"blocks.{i}.attn.q_proj.weight" in result
+        assert f"blocks.{i}.attn.k_proj.weight" in result
+        assert f"blocks.{i}.attn.v_proj.weight" in result
+        assert f"blocks.{i}.attn.o_proj.weight" in result
+        assert f"blocks.{i}.ff_norm.weight" in result
+        assert f"blocks.{i}.ff.w1.weight" in result
+        assert f"blocks.{i}.ff.w2.weight" in result
+        assert f"blocks.{i}.ff.w3.weight" in result  # synthesized identity
+
+    # QKV split: fused is (64, 192) → transpose → (192, 64) → split into 3 × (64, 64)
+    q = result["blocks.0.attn.q_proj.weight"]
+    k = result["blocks.0.attn.k_proj.weight"]
+    v = result["blocks.0.attn.v_proj.weight"]
+    assert q.shape == (64, 64)
+    assert k.shape == q.shape
+    assert v.shape == q.shape
+
+    # FF: w1 is the first linear (from c_fc), w2 is the second (from c_proj), w3 is identity
+    w1 = result["blocks.0.ff.w1.weight"]
+    w3 = result["blocks.0.ff.w3.weight"]
+    assert w1.shape == (4 * 64, 64)  # transposed from (64, 256)
+    assert w3.shape == w1.shape
+    # w3 should be zeros (identity when multiplied with sigmoid-like activation)
+    assert np.allclose(w3, 0.0)
+
+
+def test_universal_converter_llama_style():
+    """LLaMA-style: split QKV, SwiGLU MLP."""
+    n_embed, n_layer = 64, 2
+    sd = {}
+    sd["model.embed_tokens.weight"] = np.random.randn(1000, n_embed).astype(np.float32)
+    sd["model.norm.weight"] = np.ones(n_embed, dtype=np.float32)
+    for i in range(n_layer):
+        sd[f"model.layers.{i}.input_layernorm.weight"] = np.ones(n_embed, dtype=np.float32)
+        sd[f"model.layers.{i}.self_attn.q_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
+        sd[f"model.layers.{i}.self_attn.k_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
+        sd[f"model.layers.{i}.self_attn.v_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
+        sd[f"model.layers.{i}.self_attn.o_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
+        sd[f"model.layers.{i}.post_attention_layernorm.weight"] = np.ones(n_embed, dtype=np.float32)
+        sd[f"model.layers.{i}.mlp.gate_proj.weight"] = np.random.randn(4 * n_embed, n_embed).astype(np.float32)
+        sd[f"model.layers.{i}.mlp.up_proj.weight"] = np.random.randn(4 * n_embed, n_embed).astype(np.float32)
+        sd[f"model.layers.{i}.mlp.down_proj.weight"] = np.random.randn(n_embed, 4 * n_embed).astype(np.float32)
+
+    result = convert_hf_to_slonet(sd, n_layer=2)
+
+    assert "tok_emb.weight" in result
+    assert "lm_head.weight" in result
+    for i in range(2):
+        assert f"blocks.{i}.ff.w1.weight" in result  # gate
+        assert f"blocks.{i}.ff.w2.weight" in result  # down
+        assert f"blocks.{i}.ff.w3.weight" in result  # up
+        # No synthesized zeros — these should be real weights
+        assert not np.allclose(result[f"blocks.{i}.ff.w3.weight"], 0.0)
