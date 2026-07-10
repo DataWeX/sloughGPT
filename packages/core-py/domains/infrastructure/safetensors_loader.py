@@ -78,7 +78,19 @@ def load_model_weights(
     weights = {}
     with safe_open(str(safetensors_path), framework="numpy") as f:
         for key in f.keys():
-            weights[key] = f.get_tensor(key).astype(dtype)
+            try:
+                tensor = f.get_tensor(key)
+                weights[key] = tensor.astype(dtype)
+            except TypeError:
+                # bfloat16 not supported by numpy — load as uint16 and convert
+                tensor = f.get_slice(key)
+                arr = tensor.get_all()
+                if hasattr(arr, 'dtype') and arr.dtype.name == 'bfloat16':
+                    # bfloat16 → float32: shift uint16 left by 16
+                    raw = np.asarray(arr).view(np.uint16).astype(np.uint32) << 16
+                    weights[key] = raw.view(np.float32)
+                else:
+                    weights[key] = np.asarray(arr).astype(dtype)
 
     logger.info("Loaded %d parameters from %s", len(weights), model_id)
     return weights

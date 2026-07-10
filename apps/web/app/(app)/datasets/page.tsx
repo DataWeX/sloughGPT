@@ -11,22 +11,8 @@ import { Skeleton } from '@sloughgpt/strui'
 import { IconRefresh, IconPlus, IconTrash } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { datasetController, type Dataset } from '@/lib/dataset-controller'
-
-function formatBytes(bytes: number): string {
-  if (!bytes) return '—'
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function formatDate(dateStr: string): string {
-  try {
-    const d = new Date(dateStr)
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-  } catch {
-    return dateStr
-  }
-}
+import { formatBytes } from '@/lib/format-bytes'
+import { formatDate } from '@/lib/conversations-utils'
 
 export default function DatasetsPage() {
   const router = useRouter()

@@ -356,15 +356,27 @@ class SloNetChatProvider:
                      hf_model_id, n_embed, n_layer, n_head, not use_abs_pos)
 
     @classmethod
-    def from_slnc(cls, slnc_path: str, model_id: str = "gpt2") -> "SloNetChatProvider":
+    def from_slnc(
+        cls,
+        slnc_path: str,
+        model_id: str = "gpt2",
+        quantize: bool = False,
+        quant_bits: int = 8,
+        quant_mode: str = "symmetric",
+        quant_clip: float = 0.999,
+    ) -> "SloNetChatProvider":
         """Create provider from .slnc file (mmap, zero-copy).
 
         Args:
             slnc_path: Path to .slnc file
             model_id: HuggingFace model ID for tokenizer (e.g. "gpt2")
+            quantize: If True, apply per-tensor quantization to weights
+            quant_bits: Bits for quantization (8 or 4)
+            quant_mode: "symmetric" or "asymmetric"
+            quant_clip: Outlier clipping percentile (e.g., 0.999)
 
         Returns:
-            SloNetChatProvider using mmap-backed weights
+            SloNetChatProvider using mmap-backed (optionally quantized) weights
         """
         from domains.infrastructure.slnc.parser import SLNCParser
         from domains.training.slonet import SloTransformer
@@ -410,6 +422,46 @@ class SloNetChatProvider:
         instance._device = "cpu"
         instance._model = model
         instance._parser = parser  # keep mmap alive
+        instance._quant_engine = None
+
+        # Apply quantization if requested
+        if quantize:
+            from domains.infrastructure.quantization import QuantEngine
+
+            engine = QuantEngine(
+                bits=quant_bits,
+                mode=quant_mode,
+                clip_percentile=quant_clip,
+            )
+
+            # Quantize each named parameter and store TensorInfo on SloLinear layers
+            quantized_count = 0
+            # Build name → module map for SloLinear layers
+            linear_map = {}
+            for module_name, module in model.named_modules():
+                if hasattr(module, 'weight') and hasattr(module, 'forward_numpy'):
+                    linear_map[module_name] = module
+
+            for name, param in model.named_parameters():
+                arr = param.data.copy()
+                info = engine.quantize(name, arr)
+                if info.is_quantized:
+                    # Find the owning SloLinear and attach quantized weight
+                    parts = name.split('.')
+                    for i in range(len(parts), 0, -1):
+                        prefix = '.'.join(parts[:i])
+                        if prefix in linear_map:
+                            linear_map[prefix].set_quantized_weight(info)
+                            quantized_count += 1
+                            break
+
+            instance._quant_engine = engine
+            summary = engine.summary()
+            logger.info(
+                "SloNetChatProvider.from_slnc: quantized %d/%d tensors (bits=%d, mode=%s, avg_cosine=%.4f)",
+                quantized_count, len(list(model.named_parameters())), quant_bits, quant_mode,
+                summary.get("avg_cosine_sim", 0.0),
+            )
 
         # Load tokenizer
         instance._tokenizer = instance._load_tokenizer(
@@ -420,6 +472,21 @@ class SloNetChatProvider:
                      slnc_path, n_layer)
 
         return instance
+
+    def quantization_report(self) -> dict:
+        """Get quantization error report (if quantized).
+
+        Returns:
+            Dict with per-tensor error metrics and aggregate summary.
+            Empty dict if model was not quantized.
+        """
+        if self._quant_engine is None:
+            return {"quantized": False}
+        return {
+            "quantized": True,
+            "summary": self._quant_engine.summary(),
+            "per_tensor": self._quant_engine.error_report(),
+        }
 
     @property
     def model_id(self) -> str:

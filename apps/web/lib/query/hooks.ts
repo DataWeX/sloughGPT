@@ -212,30 +212,3 @@ export function useIsFetching(): number {
   )
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
-
-// ─── Prefab hooks ───────────────────────────────────────────────────────────
-// These compose useQuery for common API patterns.
-// Import from '@/lib/query' or redefine in your own components.
-
-export function createQueryHook<T>(
-  keyPrefix: string,
-  fetcher: (params?: Record<string, string>) => Promise<T>,
-) {
-  return (params?: Record<string, string>, options?: QueryOptions<T>) =>
-    useQuery<T>(
-      params ? [keyPrefix, params] : keyPrefix,
-      () => fetcher(params),
-      options,
-    )
-}
-
-export function createMutationHook<T, V>(
-  fn: (vars: V) => Promise<T>,
-  defaultInvalidate?: QueryKey[],
-) {
-  return (options?: MutationOptions<T, V>) =>
-    useMutation<T, V>(fn, {
-      invalidateKeys: defaultInvalidate,
-      ...options,
-    })
-}

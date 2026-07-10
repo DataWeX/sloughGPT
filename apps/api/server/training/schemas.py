@@ -193,17 +193,6 @@ class DistillStartRequest(BaseModel):
     block_size: int = 64
 
 
-class ActivityTrainingRequest(BaseModel):
-    """Train or retrain the activity classifier on collected sensor data.
-
-    Sensor data is loaded from ``data/activity_records/*.npz`` on the
-    server — no need to re-send raw data for training.
-    """
-    epochs: int = 30
-    lr: float = 0.001
-    batch_size: int = 16
-    name: str = "activity-training"
-
 
 class UnifiedStartRequest(BaseModel):
     """Request body for /training/unified-start.

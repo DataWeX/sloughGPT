@@ -16,12 +16,24 @@ Compression:
   - ZSTD: good balance (~3 GB/s, ~3x ratio), lossless
   - Quantize: int8/int4 for extreme compression (lossy, not for GPT-2)
 
+Quantization:
+  - TensorInfo wraps every weight with optional quantization metadata
+  - Per-tensor scale/zero_point (symmetric or asymmetric)
+  - Calibration support: collect min/max from representative data
+  - Error metrics: MSE, max_abs_error, cosine similarity per tensor
+
 Usage:
     from domains.infrastructure.memory_manager import WeightManager
+    from domains.infrastructure.quantization import TensorInfo
 
     manager = WeightManager.from_slnc("models/gpt2.slnc", ram_budget_mb=512)
     q_weight = manager.get("blocks.0.attn.q_proj.weight")  # transparent decompress
     manager.prefetch_block(1)  # prefetch next block
+
+    # Quantization-aware loading:
+    manager.quantize_all(bits=8, mode="asymmetric", clip_percentile=0.999)
+    info = manager.get_info("blocks.0.q_proj.weight")
+    weight = info.as_float()  # dequantized on the fly
 """
 
 import logging
@@ -32,6 +44,8 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+
+from domains.infrastructure.quantization import TensorInfo, QuantEngine, QuantMeta
 
 logger = logging.getLogger("man.infrastructure.memory_manager")
 
@@ -62,6 +76,7 @@ class WeightEntry:
     last_access: float = 0.0
     access_count: int = 0
     pinned: bool = False     # if True, never evict (e.g., embedding table)
+    quant_info: Optional[TensorInfo] = None  # quantization wrapper
 
 
 @dataclass
@@ -82,7 +97,8 @@ class WeightManager:
     """Tiered memory manager for neural network weights.
 
     Manages hot/warm/cold tiers with automatic promotion/demotion
-    based on access patterns.
+    based on access patterns. Supports per-tensor quantization with
+    calibration metadata.
     """
 
     def __init__(
@@ -112,10 +128,14 @@ class WeightManager:
         self._hot: Dict[str, np.ndarray] = {}        # name → uncompressed array
         self._warm: Dict[str, bytes] = {}            # name → compressed bytes
         self._metadata: Dict[str, WeightEntry] = {}  # name → metadata
+        self._tensor_infos: Dict[str, TensorInfo] = {}  # name → quantized wrapper
 
         # LRU eviction tracking
         self._hot_lru: OrderedDict[str, None] = OrderedDict()
         self._warm_lru: OrderedDict[str, None] = OrderedDict()
+
+        # Quantization engine (lazy init)
+        self._quant_engine: Optional[QuantEngine] = None
 
         # Stats
         self._stats = {
@@ -165,11 +185,110 @@ class WeightManager:
             sum(e.nbytes for e in self._metadata.values()) / 1e6,
         )
 
-    def get(self, name: str) -> np.ndarray:
-        """Get weight tensor (transparent tier access).
+    # ══════════════════════════════════════════════════════════════════════════════
+    # Quantization
+    # ══════════════════════════════════════════════════════════════════════════════
 
-        Returns uncompressed numpy array regardless of tier.
-        Promotes to hot tier if accessed frequently.
+    def quantize_all(
+        self,
+        bits: int = 8,
+        mode: str = "symmetric",
+        clip_percentile: Optional[float] = None,
+    ):
+        """Quantize all registered weights in-place.
+
+        Args:
+            bits: 8 or 4
+            mode: "symmetric" or "asymmetric"
+            clip_percentile: outlier clipping (e.g., 0.999)
+        """
+        self._quant_engine = QuantEngine(
+            bits=bits,
+            mode=mode,
+            clip_percentile=clip_percentile,
+        )
+
+        quantized_count = 0
+        skipped_count = 0
+
+        for name in list(self._metadata.keys()):
+            # Load the raw array
+            raw = self._get_raw(name)
+
+            # Quantize
+            info = self._quant_engine.quantize(name, raw)
+
+            if info.is_quantized:
+                self._tensor_infos[name] = info
+                self._metadata[name].quant_info = info
+                quantized_count += 1
+            else:
+                skipped_count += 1
+
+        summary = self._quant_engine.summary()
+        logger.info(
+            "WeightManager.quantize_all: %d quantized, %d skipped (bits=%d, mode=%s)",
+            quantized_count, skipped_count, bits, mode,
+        )
+        if summary.get("tensors", 0) > 0:
+            logger.info(
+                "  avg_mse=%.6f, avg_cosine=%.4f, worst=%s",
+                summary["avg_mse"], summary["avg_cosine_sim"], summary["worst_tensor"],
+            )
+
+    def quantize_tensor(self, name: str, bits: int = 8, mode: str = "symmetric") -> TensorInfo:
+        """Quantize a single tensor and return its TensorInfo.
+
+        Useful for selective quantization (e.g., quantize all but sensitive layers).
+        """
+        if self._quant_engine is None:
+            self._quant_engine = QuantEngine(bits=bits, mode=mode)
+
+        raw = self._get_raw(name)
+        info = self._quant_engine.quantize(name, raw)
+
+        if info.is_quantized:
+            self._tensor_infos[name] = info
+            self._metadata[name].quant_info = info
+
+        return info
+
+    def get_quant_error_report(self) -> Dict[str, Dict[str, Any]]:
+        """Get per-tensor quantization error metrics."""
+        if self._quant_engine is None:
+            return {}
+        return self._quant_engine.error_report()
+
+    def get_quant_summary(self) -> Dict[str, Any]:
+        """Get aggregate quantization summary."""
+        if self._quant_engine is None:
+            return {"tensors": 0}
+        return self._quant_engine.summary()
+
+    def save_quant_metadata(self, path: str):
+        """Save quantization metadata to JSON."""
+        if self._quant_engine is not None:
+            self._quant_engine.save_metadata(path)
+
+    def load_quant_metadata(self, path: str):
+        """Load quantization metadata from JSON."""
+        if self._quant_engine is None:
+            self._quant_engine = QuantEngine()
+        self._quant_engine.load_metadata(path)
+
+    def get(self, name: str) -> np.ndarray:
+        """Get weight tensor as float32 (transparent tier access).
+
+        If quantized, returns dequantized float32. Otherwise returns
+        the original array (possibly cast to float32).
+        """
+        info = self.get_info(name)
+        return info.as_float()
+
+    def get_info(self, name: str) -> TensorInfo:
+        """Get weight as TensorInfo (may be quantized).
+
+        Returns TensorInfo with .as_float() for dequantized access.
         """
         if name not in self._metadata:
             raise KeyError(f"Unknown weight: {name}")
@@ -177,6 +296,22 @@ class WeightManager:
         entry = self._metadata[name]
         entry.last_access = time.monotonic()
         entry.access_count += 1
+
+        # If we have a cached TensorInfo, return it
+        if name in self._tensor_infos:
+            return self._tensor_infos[name]
+
+        # Get raw array from appropriate tier
+        raw = self._get_raw(name)
+
+        # Wrap in TensorInfo
+        info = TensorInfo(name=name, array=raw)
+        self._tensor_infos[name] = info
+        return info
+
+    def _get_raw(self, name: str) -> np.ndarray:
+        """Get raw numpy array from tier storage."""
+        entry = self._metadata[name]
 
         # Hot tier — fastest path
         if name in self._hot:

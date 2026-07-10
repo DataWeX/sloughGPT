@@ -327,12 +327,6 @@ export const trainingJobsController = {
     return apiPost(`/auto-train/checkpoints/${encodeURIComponent(name)}/load`)
   },
 
-  async startActivityTraining(params: {
-    name?: string; epochs?: number; batch_size?: number; learning_rate?: number
-  }): Promise<{ job_id: string; status: string }> {
-    return apiPost('/training/activity-start', params ?? {})
-  },
-
   async deleteCheckpoint(name: string): Promise<{ success: boolean }> {
     return apiDelete(`/auto-train/checkpoints/${encodeURIComponent(name)}`)
   },
