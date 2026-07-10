@@ -450,6 +450,13 @@ def _autoload_model(cfg: ServerConfig):
 
     from controllers.models import get_models_controller
     ctrl = get_models_controller()
+
+    # Auto-convert to .slnc if not already converted
+    if cfg.use_slonet:
+        slnc_result = _try_load_slnc(cfg, ctrl)
+        if slnc_result is not None:
+            return slnc_result
+
     result = ctrl.load_model(cfg.autoload_model, cfg.autoload_device, use_slonet=cfg.use_slonet)
 
     if result.get("status") == "error":
@@ -534,3 +541,108 @@ def _autoload_model(cfg: ServerConfig):
         logger.warning("Autoload: registry registration failed: %s", e)
 
     logger.info("Autoload ok: %s", cfg.autoload_model)
+
+
+def _try_load_slnc(cfg: ServerConfig, ctrl) -> Optional[dict]:
+    """Try to load model from .slnc file. Auto-convert if needed.
+
+    Returns:
+        dict with status/result if loaded, None if should fallback to safetensors
+    """
+    import state as server_state
+    from pathlib import Path
+
+    model_id = cfg.autoload_model
+
+    # Resolve cache dir and .slnc path
+    try:
+        from domains.infrastructure.safetensors_loader import _get_model_dir
+        cache_dir = _get_model_dir(model_id)
+    except Exception:
+        logger.debug("Cannot resolve cache dir for %s", model_id)
+        return None
+
+    slnc_path = cache_dir / "model.slnc"
+
+    # If .slnc exists, load directly
+    if slnc_path.exists():
+        logger.info("Autoload: found .slnc at %s — loading via mmap", slnc_path)
+        try:
+            from domains.inference.slonet_provider import SloNetChatProvider
+            provider = SloNetChatProvider.from_slnc(str(slnc_path), model_id=model_id)
+
+            # Register with provider system
+            from domains.models.provider import (
+                register_provider,
+                ProviderRouter,
+                VisionProcessor,
+                get_provider as _gp,
+            )
+            from domains.infrastructure.model_registry import get_model_registry
+
+            server_state.model = provider._model
+            server_state.model_type = model_id
+            register_provider("slonet", provider)
+
+            existing = _gp("default")
+            _is_slonet = existing is not None and type(existing).__name__ in (
+                "SloNetChatProvider", "SloTransformerProvider",
+            )
+            if not _is_slonet:
+                router = ProviderRouter()
+                router.add_processor(VisionProcessor("multimodal"))
+                router.set_text_provider("slonet")
+                register_provider("default", router)
+
+            logger.info("Autoload: .slnc loaded successfully")
+            return {"status": "success"}
+        except Exception as e:
+            logger.warning("Autoload: .slnc load failed (%s) — falling back to safetensors", e)
+            return None
+
+    # No .slnc yet — check if safetensors is available for conversion
+    try:
+        from domains.infrastructure.safetensors_loader import _find_safetensors
+        st_path = _find_safetensors(cache_dir)
+        if st_path is None:
+            logger.debug("No safetensors found for %s — will download first", model_id)
+            return None
+
+        logger.info("Autoload: converting safetensors → .slnc (%s)", st_path.name)
+        from domains.infrastructure.slnc.compiler import SLNCCompiler
+
+        slnc_result = SLNCCompiler.compile(st_path, slnc_path)
+        logger.info("Autoload: .slnc compiled — %d blocks, %.0f MB",
+                     slnc_result["total_blocks"], slnc_result["file_size_mb"])
+
+        # Now load the .slnc
+        from domains.inference.slonet_provider import SloNetChatProvider
+        provider = SloNetChatProvider.from_slnc(str(slnc_path), model_id=model_id)
+
+        from domains.models.provider import (
+            register_provider,
+            ProviderRouter,
+            VisionProcessor,
+            get_provider as _gp,
+        )
+        from domains.infrastructure.model_registry import get_model_registry
+
+        server_state.model = provider._model
+        server_state.model_type = model_id
+        register_provider("slonet", provider)
+
+        existing = _gp("default")
+        _is_slonet = existing is not None and type(existing).__name__ in (
+            "SloNetChatProvider", "SloTransformerProvider",
+        )
+        if not _is_slonet:
+            router = ProviderRouter()
+            router.add_processor(VisionProcessor("multimodal"))
+            router.set_text_provider("slonet")
+            register_provider("default", router)
+
+        logger.info("Autoload: .slnc converted and loaded")
+        return {"status": "success"}
+    except Exception as e:
+        logger.warning("Autoload: .slnc conversion failed (%s) — falling back to safetensors", e)
+        return None

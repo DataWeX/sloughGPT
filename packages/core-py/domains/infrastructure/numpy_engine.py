@@ -271,20 +271,37 @@ class NumpyEngine:
             flat = raw.flatten().astype(np.float32)
             n = len(flat)
 
-            if n < self._n_clusters * 2:
+            # Skip compression on embeddings and biases (discrete/small, don't VQ well)
+            if n < self._n_clusters * 2 or "wte" in name or "wpe" in name or "bias" in name:
                 # Too small to compress — store raw
                 self._raw_weights[name] = raw
                 self._total_raw_bytes += raw.nbytes
                 self._total_compressed_bytes += raw.nbytes
                 continue
 
-            # VQ: initialize centroids from quantiles
+            # VQ: quantile init → Lloyd's refinement
+            # For large weights (>100K elements), skip gap-filling (percentile is O(n))
             quantiles = np.linspace(0, 100, self._n_clusters + 2)[1:-1]
             centroids = np.percentile(flat, quantiles)
+            centroids.sort()
 
-            # Assign each weight to nearest centroid
-            distances = np.abs(flat[:, np.newaxis] - centroids[np.newaxis, :])
-            assignments = np.argmin(distances, axis=1).astype(np.uint8)
+            # Gap-filling for smaller weights only (large ones: quantile init is sufficient)
+            if len(flat) < 100000:
+                for _ in range(4):
+                    gaps = np.diff(centroids)
+                    biggest = np.argmax(gaps)
+                    new_c = (centroids[biggest] + centroids[biggest + 1]) / 2
+                    centroids = np.sort(np.append(centroids, new_c))
+
+            nc = len(centroids)
+
+            # Lloyd's refinement
+            for _ in range(5):
+                assignments = np.clip(np.searchsorted(centroids, flat), 0, nc - 1).astype(np.uint8)
+                sums = np.bincount(assignments, weights=flat, minlength=nc)
+                counts = np.bincount(assignments, minlength=nc).astype(np.float64)
+                alive = counts > 0
+                centroids[alive] = (sums[alive] / counts[alive]).astype(np.float32)
 
             # Compute VQ approximation and residual
             vq_approx = centroids[assignments]
@@ -403,6 +420,49 @@ class NumpyEngine:
             n_clusters=n_clusters,
             model_tree=model_tree,
         )
+
+    @classmethod
+    def from_slnc(
+        cls,
+        slnc_path: str,
+        tokenizer: Any = None,
+    ) -> "NumpyEngine":
+        """Load model from .slnc file (mmap, zero-copy).
+
+        Args:
+            slnc_path: Path to .slnc file
+            tokenizer: Optional tokenizer. If None, loads MorphTokenizer
+
+        Returns:
+            NumpyEngine instance using mmap-backed weights
+        """
+        from domains.infrastructure.slnc.parser import SLNCParser
+
+        parser = SLNCParser(slnc_path)
+        config = parser.config
+
+        if tokenizer is None:
+            from domains.infrastructure.morph_tokenizer import MorphTokenizer
+            model_id = config.get("_name_or_path", "unknown")
+            tokenizer = MorphTokenizer.from_pretrained(model_id)
+
+        # Load weights from mmap (zero copy)
+        weights = parser.get_weights_dict()
+
+        engine = cls(
+            config=config,
+            weights=weights,
+            tokenizer=tokenizer,
+            compress=False,
+        )
+
+        # Keep parser alive to maintain mmap
+        engine._parser = parser
+
+        logger.info("NumpyEngine.from_slnc: %s, %d layers",
+                     slnc_path, config.get("n_layer", 0))
+
+        return engine
 
     def _forward(self, token_ids: List[int], kv_cache: Optional[KVCache] = None, start_pos: int = 0) -> np.ndarray:
         """Forward pass with optional KV cache for incremental decoding.

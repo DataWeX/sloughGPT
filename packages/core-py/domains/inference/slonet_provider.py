@@ -355,6 +355,72 @@ class SloNetChatProvider:
         logger.info("SloNetChatProvider loaded: %s (embed=%d, layers=%d, heads=%d, rope=%s)",
                      hf_model_id, n_embed, n_layer, n_head, not use_abs_pos)
 
+    @classmethod
+    def from_slnc(cls, slnc_path: str, model_id: str = "gpt2") -> "SloNetChatProvider":
+        """Create provider from .slnc file (mmap, zero-copy).
+
+        Args:
+            slnc_path: Path to .slnc file
+            model_id: HuggingFace model ID for tokenizer (e.g. "gpt2")
+
+        Returns:
+            SloNetChatProvider using mmap-backed weights
+        """
+        from domains.infrastructure.slnc.parser import SLNCParser
+        from domains.training.slonet import SloTransformer
+
+        parser = SLNCParser(slnc_path)
+        config = parser.config
+
+        n_embed = config.get("n_embd", 768)
+        n_head = config.get("n_head", 12)
+        n_layer = config.get("n_layer", 12)
+        vocab_size = config.get("vocab_size", 50257)
+        intermediate_size = config.get("n_inner") or config.get("intermediate_size", n_embed * 4)
+        max_pos = config.get("n_positions", 1024)
+        use_abs_pos = True  # GPT-2 default
+
+        # Create SloTransformer
+        model = SloTransformer(
+            vocab_size=vocab_size,
+            n_embed=n_embed,
+            n_layer=n_layer,
+            n_head=n_head,
+            intermediate_size=intermediate_size,
+            block_size=max_pos,
+            max_seq_len=max_pos,
+            use_rope=not use_abs_pos,
+            dropout=0.0,
+            tie_weights=True,
+            use_abs_pos_emb=use_abs_pos,
+            norm_type=config.get("layer_norm_type", "layer_norm"),
+        )
+
+        # Load weights directly from mmap (zero copy)
+        weights_dict = parser.get_weights_dict()
+
+        # Convert and load into model
+        mapped = convert_hf_to_slonet(weights_dict, n_layer=n_layer, config=config)
+        model.load_state_dict(mapped)
+
+        # Create instance (bypass __init__)
+        instance = cls.__new__(cls)
+        instance._hf_model_id = model_id
+        instance._model_id = model_id
+        instance._device = "cpu"
+        instance._model = model
+        instance._parser = parser  # keep mmap alive
+
+        # Load tokenizer
+        instance._tokenizer = instance._load_tokenizer(
+            Path(slnc_path).parent, config
+        )
+
+        logger.info("SloNetChatProvider.from_slnc: %s, %d layers",
+                     slnc_path, n_layer)
+
+        return instance
+
     @property
     def model_id(self) -> str:
         """Unique identifier for this model."""
