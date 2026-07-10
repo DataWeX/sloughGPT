@@ -3389,12 +3389,16 @@ class SloTransformer(SloNet):
         input_ids: np.ndarray,
         max_new_tokens: int = 50,
         temperature: float = 1.0,
+        top_k: Optional[int] = None,
+        top_p: Optional[float] = None,
+        repetition_penalty: float = 1.0,
         eos_token: int = 0,
     ) -> np.ndarray:
         """Fully inlined numpy generation — minimal Python overhead.
 
         Bypasses the entire layer system for maximum inference speed.
         Accesses weight data directly, no method dispatch overhead.
+        Supports temperature, top_k, top_p, and repetition penalty.
         """
         if input_ids.ndim == 1:
             input_ids = input_ids.reshape(1, -1)
@@ -3573,10 +3577,15 @@ class SloTransformer(SloNet):
             # LM head
             logits = x[:, -1, :] @ lm_w.T
 
-            # Sample
-            if temperature > 0 and temperature != 1.0:
-                logits = logits / temperature
-            next_id = int(np.argmax(logits[0]))
+            # Sample with full pipeline (temperature, top_k, top_p, repetition penalty)
+            generated_so_far = tokens[:, prompt_len:].flatten()
+            next_id = _sample_from_logits(
+                logits, temperature=temperature,
+                top_k=top_k, top_p=top_p,
+                repetition_penalty=repetition_penalty,
+                generated_ids=generated_so_far,
+                eos_token=eos_token if step < max_gen - 1 else None,
+            )
             tokens = np.concatenate([tokens, np.array([[next_id]], dtype=np.int64)], axis=1)
             if next_id == eos_token:
                 break

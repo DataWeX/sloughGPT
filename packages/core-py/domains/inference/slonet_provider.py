@@ -379,7 +379,8 @@ class SloNetChatProvider:
 
         raise RuntimeError(f"No tokenizer found for {self._hf_model_id}")
 
-    def generate(self, prompt: str, max_tokens: int = 50, temperature: float = 1.0) -> str:
+    def generate(self, prompt: str, max_tokens: int = 50, temperature: float = 1.0,
+                 top_k: int = None, top_p: float = None, repetition_penalty: float = 1.0) -> str:
         """Generate text using pure numpy inference (KV cache + inlined ops)."""
         import numpy as _np
         tokens = self._tokenizer.encode(prompt)
@@ -388,6 +389,8 @@ class SloNetChatProvider:
             input_ids,
             max_new_tokens=max_tokens,
             temperature=temperature,
+            top_k=top_k, top_p=top_p,
+            repetition_penalty=repetition_penalty,
             eos_token=self._tokenizer.eos_token_id or 0,
         )
         return self._tokenizer.decode(result[0].tolist())
@@ -396,10 +399,13 @@ class SloNetChatProvider:
         """Blocking chat — returns complete response. Runs in thread to avoid blocking event loop."""
         import asyncio
         return await asyncio.to_thread(
-            self._generate_sync, messages, max_tokens, temperature
+            self._generate_sync, messages, max_tokens, temperature,
+            kwargs.get('top_k'), kwargs.get('top_p'),
+            kwargs.get('repetition_penalty', 1.0),
         )
 
-    def _generate_sync(self, messages, max_tokens=512, temperature=0.8, **kwargs):
+    def _generate_sync(self, messages, max_tokens=512, temperature=0.8,
+                       top_k=None, top_p=None, repetition_penalty=1.0):
         """Synchronous generate with KV cache — called from chat() via to_thread."""
         import numpy as _np
         prompt = ""
@@ -413,6 +419,8 @@ class SloNetChatProvider:
             input_ids,
             max_new_tokens=max_tokens,
             temperature=temperature,
+            top_k=top_k, top_p=top_p,
+            repetition_penalty=repetition_penalty,
             eos_token=self._tokenizer.eos_token_id or 0,
         )
         return self._tokenizer.decode(result[0].tolist())
@@ -427,6 +435,9 @@ class SloNetChatProvider:
             messages: List of {"role": "...", "content": "..."} dicts
             max_tokens: Maximum tokens to generate
             temperature: Sampling temperature
+            top_k: Keep only top-k logits before sampling
+            top_p: Nucleus threshold — keep tokens with cumulative prob <= p
+            repetition_penalty: Scale factor for repeated tokens (>1 = penalize)
 
         Yields:
             Each token string as it's generated.
@@ -442,9 +453,13 @@ class SloNetChatProvider:
             prompt = messages[-1]
         token_ids = self._tokenizer.encode(prompt)
         eos_id = self._tokenizer.eos_token_id or 0
+        top_k = kwargs.get('top_k')
+        top_p = kwargs.get('top_p')
+        repetition_penalty = kwargs.get('repetition_penalty', 1.0)
 
         def _stream_generate():
             """KV-cache streaming generation — runs in a thread."""
+            from domains.training.slonet import _sample_from_logits
             m = self._model
             tokens = _np.array([token_ids], dtype=_np.int64)
             prompt_len = tokens.shape[1]
@@ -583,13 +598,20 @@ class SloNetChatProvider:
                 x = (x - mean) / _np.sqrt(var + norm_eps) * norm_w
                 if norm_has_bias: x = x + norm_b
                 logits = x[:, -1, :] @ lm_w.T
-                if temperature > 0 and temperature != 1.0:
-                    logits = logits / temperature
-                return int(_np.argmax(logits[0]))
+                return logits
 
             # Step 0: pre-fill full prompt
-            next_id = _forward_step(tokens[:, -m.block_size:], 0, step=0)
+            logits = _forward_step(tokens[:, -m.block_size:], 0, step=0)
+            generated_so_far = _np.array([], dtype=_np.int64)
+            next_id = _sample_from_logits(
+                logits, temperature=temperature,
+                top_k=top_k, top_p=top_p,
+                repetition_penalty=repetition_penalty,
+                generated_ids=generated_so_far,
+                eos_token=eos_id,
+            )
             tokens = _np.concatenate([tokens, _np.array([[next_id]], dtype=_np.int64)], axis=1)
+            generated_so_far = _np.append(generated_so_far, next_id)
             yield self._tokenizer.decode([next_id])
 
             # Steps 1..max_tokens: single-token forward with KV cache
@@ -597,8 +619,16 @@ class SloNetChatProvider:
                 if next_id == eos_id:
                     break
                 pos = tokens.shape[1] - 1
-                next_id = _forward_step(tokens[:, -1:], pos, step=step)
+                logits = _forward_step(tokens[:, -1:], pos, step=step)
+                next_id = _sample_from_logits(
+                    logits, temperature=temperature,
+                    top_k=top_k, top_p=top_p,
+                    repetition_penalty=repetition_penalty,
+                    generated_ids=generated_so_far,
+                    eos_token=eos_id if step < max_tokens - 1 else None,
+                )
                 tokens = _np.concatenate([tokens, _np.array([[next_id]], dtype=_np.int64)], axis=1)
+                generated_so_far = _np.append(generated_so_far, next_id)
                 yield self._tokenizer.decode([next_id])
 
         # Run the generation loop in a thread, yielding tokens via a queue
