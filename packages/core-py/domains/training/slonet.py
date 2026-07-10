@@ -1201,7 +1201,8 @@ class SloLinear(SloLayer):
         self.out_features = out_f; self.in_features = in_f
         self._weight_T = None
         self.soul_traits = {"creativity": 0.5, "confidence": 0.5, "warmth": 0.5}
-        self._quant_info = None  # TensorInfo for int8 quantized weight
+        self._quant_info = None  # TensorInfo for quantized weight
+        self._quant_unpacked = None  # lazy int4→int8 unpack cache
 
     def _get_weight_T(self) -> Tensor:
         if self._weight_T is None:
@@ -1209,19 +1210,41 @@ class SloLinear(SloLayer):
         return self._weight_T
 
     def set_quantized_weight(self, quant_info):
-        """Set an int8 quantized weight for this layer.
+        """Set a quantized weight for this layer.
 
         When set, forward() uses int8 GEMM instead of float32 matmul.
         The float32 weight is kept for gradient computation (training).
+
+        For int4 (bits=4), the packed 1D array stays packed for memory
+        efficiency. On first forward() call, it is lazily unpacked into
+        a cached 2D int8 matrix.
         """
         self._quant_info = quant_info
+        self._quant_unpacked = None  # lazy unpack cache for int4
+
+    def _get_quant_array(self) -> np.ndarray:
+        """Return the quantized weight array as 2D int8 matrix.
+
+        For int4, lazily unpacks the packed array and caches it.
+        """
+        if self._quant_info is None or not self._quant_info.is_quantized:
+            return None
+        if self._quant_info.meta.bits == 4:
+            if self._quant_unpacked is None:
+                from domains.infrastructure.quantization import _unpack_int4
+                signed = self._quant_info.meta.mode == "symmetric"
+                n_total = int(np.prod(self._quant_info.meta.original_shape))
+                unpacked_1d = _unpack_int4(self._quant_info.array, n_total, signed=signed)
+                self._quant_unpacked = unpacked_1d.reshape(self._quant_info.meta.original_shape).astype(np.int8)
+            return self._quant_unpacked
+        return self._quant_info.array
 
     def forward_numpy(self, x: np.ndarray) -> np.ndarray:
         if self._quant_info is not None and self._quant_info.is_quantized:
             from domains.infrastructure.quantization import quantized_linear
             bias_arr = self.bias.data if self.use_bias else None
             return quantized_linear(
-                x, self._quant_info.array, self._quant_info.meta.scale,
+                x, self._get_quant_array(), self._quant_info.meta.scale,
                 self._quant_info.meta.zero_point, bias_arr,
             )
         return x @ self.weight.data.T + self.bias.data
@@ -1231,7 +1254,7 @@ class SloLinear(SloLayer):
             from domains.infrastructure.quantization import quantized_linear
             bias_arr = self.bias.data if self.use_bias else None
             result = quantized_linear(
-                x.data, self._quant_info.array, self._quant_info.meta.scale,
+                x.data, self._get_quant_array(), self._quant_info.meta.scale,
                 self._quant_info.meta.zero_point, bias_arr,
             )
             return Tensor(result, requires_grad=x.requires_grad, _children=(x,))
