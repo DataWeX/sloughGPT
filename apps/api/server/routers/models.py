@@ -515,3 +515,94 @@ async def visual_model_load(model_dir: str = "", model_id: str = ""):
     else:
         raise HTTPException(status_code=400, detail="Either model_dir or model_id required")
     return success_response(data=result, message=result.get("status", "ok"))
+
+
+class QuantizeRequest(BaseModel):
+    """Request body for POST /models/quantize."""
+    bits: int = 8
+    mode: str = "symmetric"
+
+
+@router.post("/quantize")
+async def quantize_model(req: QuantizeRequest):
+    """Apply int8/int4 quantization to the currently loaded SloNet model.
+
+    Quantizes all SloLinear layers in-place — no model reload required.
+    The quantization state is reflected in the health endpoint's
+    ``quantization`` field.
+
+    Args:
+        bits: 4 or 8 (default 8)
+        mode: ``symmetric`` (default) or ``asymmetric``
+
+    Returns:
+        Quantization report with per-tensor error metrics and aggregate summary.
+    """
+    from domains.infrastructure.quantization import QuantEngine
+    from domains.infrastructure.quant_core.wrapper import HAS_AVX2
+
+    bits = req.bits
+    mode = req.mode
+
+    if bits not in (4, 8):
+        raise HTTPException(status_code=400, detail=f"bits must be 4 or 8, got {bits}")
+    if mode not in ("symmetric", "asymmetric"):
+        raise HTTPException(status_code=400, detail=f"mode must be symmetric or asymmetric, got {mode}")
+
+    # Find the SloNet provider
+    from domains.models.provider import get_provider
+    provider = get_provider("slonet")
+    if provider is None:
+        raise HTTPException(status_code=400, detail="No SloNet model loaded")
+
+    model = getattr(provider, "_model", None)
+    if model is None:
+        raise HTTPException(status_code=400, detail="SloNet provider has no model")
+
+    # Walk SloLinear layers
+    from domains.training.slonet import SloLinear
+
+    layers = {}
+    if hasattr(model, 'blocks'):
+        for i, block in enumerate(model.blocks):
+            if hasattr(block, 'attn'):
+                for proj in ('W_q', 'W_k', 'W_v', 'W_o'):
+                    p = getattr(block.attn, proj, None)
+                    if isinstance(p, SloLinear):
+                        layers[f'blocks.{i}.attn.{proj}'] = p
+            if hasattr(block, 'ff'):
+                for proj in ('w1', 'w2', 'w3'):
+                    p = getattr(block.ff, proj, None)
+                    if isinstance(p, SloLinear):
+                        layers[f'blocks.{i}.ff.{proj}'] = p
+
+    engine = QuantEngine(bits=bits, mode=mode)
+    quantized_count = 0
+    for name, module in layers.items():
+        info = engine.quantize(f"{name}.weight", module.weight.data.copy())
+        if info.is_quantized:
+            module.set_quantized_weight(info)
+            quantized_count += 1
+
+    # Store the engine on the provider for health endpoint access
+    provider._quant_engine = engine
+
+    report = {
+        "quantized": True,
+        "bits": bits,
+        "mode": mode,
+        "layers_quantized": quantized_count,
+        "total_layers": len(layers),
+        "summary": engine.summary(),
+        "per_tensor": engine.error_report(),
+        "avx2_enabled": False,
+    }
+
+    # Check if AVX2 extension is available
+    try:
+        from domains.infrastructure.quant_core.wrapper import HAS_AVX2
+        report["avx2_enabled"] = bool(HAS_AVX2)
+    except Exception:
+        pass
+
+    return success_response(data=report)
