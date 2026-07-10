@@ -15,7 +15,7 @@ export function formatDate(dateStr: string | undefined): string {
 }
 
 export function truncateMessage(content: string, maxLen = 60): string {
-  if (!content) return ''
+  if (!content) return 'Empty conversation'
   const firstLine = content.split('\n')[0]
   return firstLine.length > maxLen ? firstLine.slice(0, maxLen) + '…' : firstLine
 }

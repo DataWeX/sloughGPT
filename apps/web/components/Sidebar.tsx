@@ -6,18 +6,13 @@ import { Button } from '@sloughgpt/strui'
 import {
   IconChat,
   IconClose,
-  IconMenu,
   IconModels,
   IconSearch,
   IconSettings,
   IconActivity,
   IconCompare,
   IconTraining,
-  IconTokenizer,
-  IconAgents,
   IconExport,
-  IconVision,
-  IconFile,
   IconAlert,
   IconBrain,
 } from '@/components/icons/NavIcons'

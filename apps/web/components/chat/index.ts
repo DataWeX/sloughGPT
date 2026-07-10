@@ -1,7 +1,7 @@
 export { ChatSettings } from './ChatSettings'
 export type { ChatMessage } from './types'
 export { ChatScreen } from './ChatScreen'
-export type { Conversation } from './ConversationListItem'
+export type { Conversation } from '@/lib/session-controller'
 export { MessageBubble } from './MessageBubble'
 export type { MessageBubbleProps } from './MessageBubble'
 export { MessageActions } from './MessageActions'
