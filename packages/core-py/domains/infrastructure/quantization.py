@@ -35,6 +35,20 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+# Try to load AVX2-accelerated int8 GEMM
+def _numpy_fallback(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Pure-numpy int8 GEMM fallback."""
+    return np.matmul(a.astype(np.int32), b.astype(np.int32).T)
+
+_c_matmul = _numpy_fallback
+try:
+    from domains.infrastructure.quant_core.wrapper import matmul_int8_c, HAS_AVX2
+    if HAS_AVX2:
+        _c_matmul = matmul_int8_c
+        logger.info("Using AVX2 int8 GEMM (quant_core)")
+except Exception:
+    pass
+
 logger = logging.getLogger("man.infrastructure.quantization")
 
 
@@ -634,14 +648,15 @@ def int8_matmul(
     # Int32 accumulation (avoids overflow for typical sizes)
     if a_zero_point == 0 and b_zero_point == 0:
         # Pure symmetric: result = a @ b.T
-        accum = np.matmul(a.astype(np.int32), b.astype(np.int32).T)
+        # Use AVX2 C extension if available, else numpy
+        accum = _c_matmul(a, b)
         return accum.astype(np.float32) * (a_scale * b_scale)
     else:
         # Asymmetric: need to account for zero points
         a_sum = a.astype(np.int32).sum(axis=-1, keepdims=True)
         b_sum = b.astype(np.int32).sum(axis=-1, keepdims=True)
 
-        accum = np.matmul(a.astype(np.int32), b.astype(np.int32).T)
+        accum = _c_matmul(a, b)
         accum = accum - a_zero_point * b_sum.T - b_zero_point * a_sum + a.shape[-1] * a_zero_point * b_zero_point
         return accum.astype(np.float32) * (a_scale * b_scale)
 
