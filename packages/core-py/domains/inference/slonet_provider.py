@@ -427,33 +427,67 @@ class SloNetChatProvider:
         # Apply quantization if requested
         if quantize:
             from domains.infrastructure.quantization import QuantEngine
+            from pathlib import Path as PathlibPath
 
-            engine = QuantEngine(
-                bits=quant_bits,
-                mode=quant_mode,
-                clip_percentile=quant_clip,
-            )
+            slnc_path_obj = PathlibPath(slnc_path)
+            quant_meta_path = slnc_path_obj.with_suffix(slnc_path_obj.suffix + ".quant.json")
 
-            # Quantize each named parameter and store TensorInfo on SloLinear layers
-            quantized_count = 0
             # Build name → module map for SloLinear layers
             linear_map = {}
             for module_name, module in model.named_modules():
                 if hasattr(module, 'weight') and hasattr(module, 'forward_numpy'):
                     linear_map[module_name] = module
 
-            for name, param in model.named_parameters():
-                arr = param.data.copy()
-                info = engine.quantize(name, arr)
-                if info.is_quantized:
-                    # Find the owning SloLinear and attach quantized weight
-                    parts = name.split('.')
-                    for i in range(len(parts), 0, -1):
-                        prefix = '.'.join(parts[:i])
-                        if prefix in linear_map:
-                            linear_map[prefix].set_quantized_weight(info)
-                            quantized_count += 1
-                            break
+            # Try loading existing quant metadata sidecar
+            if quant_meta_path.exists():
+                engine = QuantEngine(
+                    bits=quant_bits,
+                    mode=quant_mode,
+                    clip_percentile=quant_clip,
+                )
+                engine.load_metadata(str(quant_meta_path))
+                logger.info(
+                    "SloNetChatProvider.from_slnc: loaded quant metadata (%d tensors) from %s",
+                    len(list(model.named_parameters())), quant_meta_path,
+                )
+
+                quantized_count = 0
+                for name, param in model.named_parameters():
+                    meta = engine._error_report.get(name)
+                    if meta is not None:
+                        arr = param.data.copy()
+                        info = engine.quantize_with_scale(
+                            name, arr, meta.scale, meta.zero_point,
+                        )
+                        if info.is_quantized:
+                            parts = name.split('.')
+                            for i in range(len(parts), 0, -1):
+                                prefix = '.'.join(parts[:i])
+                                if prefix in linear_map:
+                                    linear_map[prefix].set_quantized_weight(info)
+                                    quantized_count += 1
+                                    break
+            else:
+                engine = QuantEngine(
+                    bits=quant_bits,
+                    mode=quant_mode,
+                    clip_percentile=quant_clip,
+                )
+
+                quantized_count = 0
+                for name, param in model.named_parameters():
+                    arr = param.data.copy()
+                    info = engine.quantize(name, arr)
+                    if info.is_quantized:
+                        parts = name.split('.')
+                        for i in range(len(parts), 0, -1):
+                            prefix = '.'.join(parts[:i])
+                            if prefix in linear_map:
+                                linear_map[prefix].set_quantized_weight(info)
+                                quantized_count += 1
+                                break
+
+                engine.save_metadata(str(quant_meta_path))
 
             instance._quant_engine = engine
             summary = engine.summary()

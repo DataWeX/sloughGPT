@@ -286,6 +286,50 @@ class QuantEngine:
         """Dequantize a TensorInfo to float32. Convenience method."""
         return info.as_float()
 
+    def quantize_with_scale(
+        self, name: str, arr: np.ndarray, scale: float, zero_point: int = 0,
+    ) -> TensorInfo:
+        """Quantize using a pre-computed scale (skip calibration).
+
+        Useful for re-applying the same quantization from saved metadata
+        without re-analyzing the weight distribution.
+
+        Args:
+            name: tensor name
+            arr: float32 weight array
+            scale: pre-computed quantization scale
+            zero_point: pre-computed zero point
+
+        Returns:
+            TensorInfo with quantized array and metadata (no error metrics)
+        """
+        if self.should_skip(name):
+            return TensorInfo(name=name, array=arr)
+
+        flat = arr.flatten().astype(np.float32)
+        quantized = self._encode(flat, scale, zero_point)
+
+        dequantized = _dequantize(quantized, scale, zero_point, self._bits, arr.shape)
+        mse = float(np.mean((flat - dequantized.flatten()) ** 2))
+        max_err = float(np.max(np.abs(flat - dequantized.flatten())))
+        cos_sim = float(_cosine_similarity(flat, dequantized.flatten()))
+
+        meta = QuantMeta(
+            scale=scale,
+            zero_point=zero_point,
+            bits=self._bits,
+            mode=self._mode.value,
+            dtype_code=5,
+            original_shape=arr.shape,
+            original_dtype=str(arr.dtype),
+            mse=mse,
+            max_abs_error=max_err,
+            cosine_sim=cos_sim,
+        )
+        quantized_reshaped = quantized.reshape(arr.shape)
+        self._error_report[name] = meta
+        return TensorInfo(name=name, array=quantized_reshaped, meta=meta)
+
     def error_report(self) -> Dict[str, Dict[str, Any]]:
         """Get per-tensor quantization error metrics."""
         return {name: meta.to_dict() for name, meta in self._error_report.items()}

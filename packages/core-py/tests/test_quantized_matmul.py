@@ -267,3 +267,78 @@ class TestSloLinearQuantized:
         # forward_numpy should match
         y_np = layer.forward_numpy(x.data)
         np.testing.assert_allclose(y.data, y_np, atol=1e-5)
+
+
+@pytest.mark.benchmark
+class TestQuantizedSloLinearBenchmark:
+    """Benchmark comparing quantized vs float32 SloLinear.
+
+    Note: numpy's BLAS is optimized for float32, so int8 won't be faster
+    in numpy. This benchmark exists to measure the gap and serve as a
+    baseline if we add optimized int8 kernels later.
+    """
+
+    def test_accuracy_gpt2_scale(self):
+        """Quantized accuracy at GPT-2 scale (768-dim)."""
+        from domains.training.slonet import SloLinear, Tensor
+        import time
+
+        rng = np.random.RandomState(42)
+
+        # GPT-2 dimensions
+        layer = SloLinear(768, 768, bias=True)
+        layer.weight.data = rng.randn(768, 768).astype(np.float32) * 0.02
+        if layer.use_bias:
+            layer.bias.data = rng.randn(768).astype(np.float32) * 0.01
+
+        x = rng.randn(4, 128, 768).astype(np.float32) * 0.5
+
+        # Quantize
+        engine = QuantEngine(bits=8, mode="symmetric")
+        info = engine.quantize("gpt2.test", layer.weight.data.copy())
+        layer.set_quantized_weight(info)
+
+        # Float32 reference
+        t0 = time.perf_counter()
+        y_fp32 = x @ layer.weight.data.T
+        if layer.use_bias:
+            y_fp32 = y_fp32 + layer.bias.data
+        t_fp32 = time.perf_counter() - t0
+
+        # Quantized
+        t0 = time.perf_counter()
+        y_quant = layer.forward_numpy(x)
+        t_quant = time.perf_counter() - t0
+
+        # Accuracy
+        cosine = np.dot(y_fp32.flatten(), y_quant.flatten()) / (
+            np.linalg.norm(y_fp32) * np.linalg.norm(y_quant)
+        )
+        assert cosine > 0.95, f"Cosine similarity too low: {cosine}"
+        assert y_fp32.shape == y_quant.shape
+
+        print(f"\n[Benchmark] GPT-2 768x768: fp32={t_fp32*1000:.1f}ms, quant={t_quant*1000:.1f}ms, cosine={cosine:.4f}")
+
+    def test_accuracy_medium_scale(self):
+        """Quantized accuracy at medium scale (4096-dim)."""
+        from domains.training.slonet import SloLinear
+        import time
+
+        rng = np.random.RandomState(42)
+
+        layer = SloLinear(4096, 4096, bias=False)
+        layer.weight.data = rng.randn(4096, 4096).astype(np.float32) * 0.01
+        x = rng.randn(1, 4096).astype(np.float32) * 0.5
+
+        engine = QuantEngine(bits=8, mode="symmetric")
+        info = engine.quantize("med.test", layer.weight.data.copy())
+        layer.set_quantized_weight(info)
+
+        y_fp32 = x @ layer.weight.data.T
+        y_quant = layer.forward_numpy(x)
+
+        cosine = np.dot(y_fp32.flatten(), y_quant.flatten()) / (
+            np.linalg.norm(y_fp32) * np.linalg.norm(y_quant)
+        )
+        assert cosine > 0.95, f"Cosine similarity too low: {cosine}"
+        print(f"  Medium 4096x4096: cosine={cosine:.4f}")
