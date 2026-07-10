@@ -11,6 +11,7 @@ Tests the full pipeline:
 
 import numpy as np
 import pytest
+import time
 
 from domains.infrastructure.quantization import QuantEngine
 from domains.training.slonet import SloTransformer
@@ -263,3 +264,77 @@ class TestQuantizationIntegration:
         )
 
         assert cos_int8 > cos_int4, f"int8 ({cos_int8:.4f}) should beat int4 ({cos_int4:.4f})"
+
+    def test_quantized_stability(self, sample_input):
+        """Gold-standard stability: 30 sequential quantized inferences.
+
+        Gold thresholds (from benchmark_stability.py):
+          - Crash rate: 0%
+          - Latency degradation: ≤1.20x (p95 last 5 / p95 first 5)
+          - Empty response rate: 0%
+          - Length CV: ≤0.30
+          - Response rate: 100%
+        """
+        model = SloTransformer(
+            vocab_size=100, n_embed=64, n_layer=2, n_head=4,
+            intermediate_size=128, block_size=32, max_seq_len=32,
+            use_rope=False, dropout=0.0, tie_weights=True,
+            use_abs_pos_emb=True, norm_type="layer_norm",
+        )
+
+        # Quantize all SloLinear layers int8
+        engine = QuantEngine(bits=8, mode="symmetric")
+        layers = _walk_linear_layers(model)
+        for name, module in layers.items():
+            if 'norm' in name:
+                continue
+            info = engine.quantize(f"{name}.weight", module.weight.data.copy())
+            if info.is_quantized:
+                module.set_quantized_weight(info)
+
+        N = 30
+        latencies = []
+        response_lengths = []
+        crashes = 0
+        empties = 0
+
+        for i in range(N):
+            inp = np.array([[i + 1]], dtype=np.int64)  # different token each call
+            t0 = time.perf_counter()
+            try:
+                logits = _run_model(model, inp)
+                elapsed = time.perf_counter() - t0
+                latencies.append(elapsed)
+                resp_len = logits.shape[-1]  # vocab size
+                response_lengths.append(resp_len)
+                if np.all(logits == 0):
+                    empties += 1
+            except Exception:
+                crashes += 1
+
+        crash_rate = crashes / N
+        assert crash_rate == 0.0, f"Crash rate {crash_rate:.1%} — gold requires 0%"
+
+        response_rate = (N - crashes) / N
+        assert response_rate == 1.0, f"Response rate {response_rate:.1%} — gold requires 100%"
+
+        empty_rate = empties / N
+        assert empty_rate == 0.0, f"Empty rate {empty_rate:.1%} — gold requires 0%"
+
+        # Latency degradation: p95 last 5 / p95 first 5 ≤ 1.20
+        if len(latencies) >= 10:
+            first5 = sorted(latencies[:5])
+            last5 = sorted(latencies[-5:])
+            p95_first = first5[int(len(first5) * 0.95)] if len(first5) > 0 else 0
+            p95_last = last5[int(len(last5) * 0.95)] if len(last5) > 0 else 0
+            if p95_first > 0:
+                degradation = p95_last / p95_first
+                assert degradation <= 1.20, (
+                    f"Latency degradation {degradation:.2f}x — gold requires ≤1.20x"
+                )
+
+        # Length CV ≤ 0.30
+        if len(response_lengths) > 1:
+            lengths = np.array(response_lengths, dtype=np.float32)
+            cv = np.std(lengths) / np.mean(lengths)
+            assert cv <= 0.30, f"Length CV {cv:.3f} — gold requires ≤0.30"
