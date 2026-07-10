@@ -324,3 +324,56 @@ class TestPGQ:
         assert sys2.name == "test"
         assert sys2.get("w") is not None
         assert len(sys2.list_tasks()) == 1
+
+    def test_eviction_lru(self):
+        """LRU eviction when memory tier overflows."""
+        from domains.infrastructure.pugqeep.cache import TieredCache, Tier, EvictionPolicy
+        import numpy as np
+        # 1KB max = very small, forces eviction
+        cache = TieredCache(memory_max_mb=0, hot_max_mb=0, eviction_policy=EvictionPolicy.LRU)
+        # Override to 1KB
+        cache._memory._max_size = 1024
+        cache._hot._inner._max_size = 1024
+
+        for i in range(20):
+            data = np.ones(64, dtype=np.float32)  # 256 bytes each
+            cache.put(f"k{i}", data, tier=Tier.MEMORY, size_bytes=256)
+
+        s = cache.stats()
+        assert s["evictions"] > 0, "Should have evicted some entries"
+        assert s["memory_size"] <= 1024
+
+    def test_eviction_lfu(self):
+        """LFU eviction prefers least-frequent entries."""
+        from domains.infrastructure.pugqeep.cache import TieredCache, Tier, EvictionPolicy
+        import numpy as np
+        cache = TieredCache(memory_max_mb=0, hot_max_mb=0, eviction_policy=EvictionPolicy.LFU)
+        cache._memory._max_size = 1024
+        cache._hot._inner._max_size = 1024
+
+        # Fill cache
+        for i in range(4):
+            data = np.ones(64, dtype=np.float32)
+            cache.put(f"k{i}", data, tier=Tier.MEMORY, size_bytes=256)
+
+        # Access k0 multiple times to make it "hot"
+        for _ in range(5):
+            cache.get("k0")
+        cache.get("k1")
+
+        # Add more items to trigger eviction — k2/k3 (least freq) should go first
+        for i in range(4, 8):
+            data = np.ones(64, dtype=np.float32)
+            cache.put(f"k{i}", data, tier=Tier.MEMORY, size_bytes=256)
+
+        assert cache.get("k0") is not None, "Most-accessed should survive"
+        s = cache.stats()
+        assert s["evictions"] > 0
+
+    def test_stats_includes_policy(self):
+        from domains.infrastructure.pugqeep.cache import TieredCache, EvictionPolicy
+        cache = TieredCache(eviction_policy=EvictionPolicy.LFU)
+        s = cache.stats()
+        assert s["eviction_policy"] == "lfu"
+        assert "memory_max" in s
+        assert "hot_max" in s

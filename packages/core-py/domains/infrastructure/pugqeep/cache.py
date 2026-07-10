@@ -23,6 +23,12 @@ import numpy as np
 logger = logging.getLogger("man.pugqeep")
 
 
+class EvictionPolicy(Enum):
+    """Cache eviction strategies."""
+    LRU = "lru"  # Least Recently Used
+    LFU = "lfu"  # Least Frequently Used
+
+
 class Tier(Enum):
     """Storage tiers from coldest to hottest."""
     DISK = "disk"
@@ -125,6 +131,26 @@ class MemoryStore:
             self._sizes.pop(key, None)
         return evicted
 
+    def evict_lfu(self, target_bytes: int, access_counts: Dict[str, int]) -> List[str]:
+        """Evict least-frequently-used entries to free space.
+
+        Args:
+            target_bytes: Target bytes to free.
+            access_counts: Dict of key → access_count from CacheEntry.
+        """
+        if self.size_bytes() <= self._max_size - target_bytes:
+            return []
+        # Sort keys by access count (ascending), evict lowest first
+        keys_by_freq = sorted(self._data.keys(), key=lambda k: access_counts.get(k, 0))
+        evicted = []
+        for key in keys_by_freq:
+            if self.size_bytes() <= self._max_size - target_bytes:
+                break
+            self._data.pop(key, None)
+            self._sizes.pop(key, None)
+            evicted.append(key)
+        return evicted
+
 
 class DiskStore:
     """Disk-backed store using JSON + numpy arrays."""
@@ -210,6 +236,7 @@ class TieredCache:
     """Three-tier cache: Disk → Hot → Memory.
 
     Manages promotion/demotion of data across tiers based on access patterns.
+    Enforces size limits per tier with configurable eviction (LRU or LFU).
     """
 
     def __init__(self,
@@ -217,7 +244,8 @@ class TieredCache:
                  hot_max_mb: int = 128,
                  disk_dir: Optional[Path] = None,
                  promote_threshold: int = 3,
-                 auto_promote: bool = True):
+                 auto_promote: bool = True,
+                 eviction_policy: EvictionPolicy = EvictionPolicy.LRU):
         """Initialize tiered cache.
 
         Args:
@@ -226,6 +254,7 @@ class TieredCache:
             disk_dir: Directory for disk storage. None = disk disabled.
             promote_threshold: Access count before promoting to hotter tier.
             auto_promote: Automatically promote frequently accessed data.
+            eviction_policy: LRU or LFU eviction strategy.
         """
         self._memory = MemoryStore(memory_max_mb * 1024 * 1024)
         self._hot = HotStore(hot_max_mb * 1024 * 1024)
@@ -233,6 +262,7 @@ class TieredCache:
         self._entries: Dict[str, CacheEntry] = {}
         self._promote_threshold = promote_threshold
         self._auto_promote = auto_promote
+        self._eviction_policy = eviction_policy
         self._stats = CacheStats()
 
     def get(self, key: str) -> Optional[Any]:
@@ -309,8 +339,10 @@ class TieredCache:
 
         if tier == Tier.MEMORY:
             self._memory.put(key, value, size_bytes)
+            self._maybe_evict_memory()
         elif tier == Tier.HOT:
             self._hot.put(key, value, size_bytes)
+            self._maybe_evict_hot()
         elif tier == Tier.DISK and self._disk:
             self._disk.put(key, value)
 
@@ -350,10 +382,13 @@ class TieredCache:
         return {
             "total_entries": len(self._entries),
             "expired_entries": expired,
+            "eviction_policy": self._eviction_policy.value,
             "tier_counts": tier_counts,
             "tier_sizes": tier_sizes,
             "memory_size": self._memory.size_bytes(),
+            "memory_max": self._memory._max_size,
             "hot_size": self._hot.size_bytes(),
+            "hot_max": self._hot._inner._max_size,
             "disk_size": self._disk.size_bytes() if self._disk else 0,
             "hits": self._stats.hits,
             "misses": self._stats.misses,
@@ -404,3 +439,52 @@ class TieredCache:
                     self._stats.evictions += 1
 
         return freed
+
+    def _maybe_evict_memory(self) -> None:
+        """Auto-evict from memory when over capacity."""
+        max_bytes = self._memory._max_size
+        current = self._memory.size_bytes()
+        if current <= max_bytes:
+            return
+        # Need to free ~10% headroom
+        target = max_bytes // 10
+        if self._eviction_policy == EvictionPolicy.LFU:
+            counts = {k: e.access_count for k, e in self._entries.items()
+                      if e.tier == Tier.MEMORY and not e.pinned}
+            evicted = self._memory.evict_lfu(target, counts)
+        else:
+            evicted = self._memory.evict_lru(target)
+        for key in evicted:
+            entry = self._entries.get(key)
+            if entry and not entry.pinned:
+                data = None  # data was removed from MemoryStore
+                if self._disk:
+                    self._disk.put(key, data, meta={"demoted_from": "memory"})
+                    entry.tier = Tier.DISK
+                else:
+                    self._hot.put(key, data, entry.size_bytes)
+                    entry.tier = Tier.HOT
+                self._stats.demotions += 1
+                self._stats.evictions += 1
+
+    def _maybe_evict_hot(self) -> None:
+        """Auto-evict from hot when over capacity."""
+        max_bytes = self._hot._inner._max_size
+        current = self._hot.size_bytes()
+        if current <= max_bytes:
+            return
+        target = max_bytes // 10
+        if self._eviction_policy == EvictionPolicy.LFU:
+            counts = {k: e.access_count for k, e in self._entries.items()
+                      if e.tier == Tier.HOT and not e.pinned}
+            evicted = self._hot._inner.evict_lfu(target, counts)
+        else:
+            evicted = self._hot._inner.evict_lru(target)
+        for key in evicted:
+            entry = self._entries.get(key)
+            if entry and not entry.pinned:
+                if self._disk:
+                    self._disk.put(key, None, meta={"demoted_from": "hot"})
+                    entry.tier = Tier.DISK
+                self._stats.demotions += 1
+                self._stats.evictions += 1
