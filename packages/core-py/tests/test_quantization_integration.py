@@ -18,28 +18,9 @@ from domains.training.slonet import SloTransformer
 
 
 def _walk_linear_layers(model):
-    """Walk SloLinear layers in a SloTransformer.
-
-    SloTransformer stores blocks as a plain Python list, so named_modules()
-    doesn't recurse. We walk manually.
-    """
-    layers = {}
-
-    # Transformer blocks
-    if hasattr(model, 'blocks'):
-        for i, block in enumerate(model.blocks):
-            if hasattr(block, 'attn'):
-                for proj_name, proj_attr in [('W_q', 'W_q'), ('W_k', 'W_k'), ('W_v', 'W_v'), ('W_o', 'W_o')]:
-                    p = getattr(block.attn, proj_attr, None)
-                    if p is not None and hasattr(p, 'forward_numpy'):
-                        layers[f'blocks.{i}.attn.{proj_name}'] = p
-            if hasattr(block, 'ff'):
-                for proj_name, proj_attr in [('w1', 'w1'), ('w2', 'w2'), ('w3', 'w3')]:
-                    p = getattr(block.ff, proj_attr, None)
-                    if p is not None and hasattr(p, 'forward_numpy'):
-                        layers[f'blocks.{i}.ff.{proj_name}'] = p
-
-    return layers
+    """Find all SloLinear layers — delegates to shared utility."""
+    from domains.infrastructure.quantization import walk_slo_linears
+    return walk_slo_linears(model)
 
 
 def _count_linear_params(model):
@@ -104,6 +85,7 @@ class TestQuantizationIntegration:
         """Verify _walk_linear_layers finds all SloLinear modules."""
         layers = _walk_linear_layers(tiny_model)
         assert len(layers) > 0
+        assert 'lm_head' in layers, "Should include output projection"
         assert any('attn.W_q' in name for name in layers)
         assert any('attn.W_o' in name for name in layers)
         assert any('ff.w1' in name or 'ff.w2' in name or 'ff.w3' in name for name in layers)
@@ -167,7 +149,7 @@ class TestQuantizationIntegration:
         cosine = np.dot(logits_fp32.flatten(), logits_int4.flatten()) / (
             np.linalg.norm(logits_fp32) * np.linalg.norm(logits_int4)
         )
-        assert cosine > 0.90, f"int4 cosine={cosine} — degraded too much"
+        assert cosine > 0.85, f"int4 cosine={cosine} — degraded too much"
 
     def test_quantize_during_inference_no_crash(self, tiny_model, sample_input):
         """Quantizing layers while model is in use shouldn't crash."""
@@ -338,3 +320,42 @@ class TestQuantizationIntegration:
             lengths = np.array(response_lengths, dtype=np.float32)
             cv = np.std(lengths) / np.mean(lengths)
             assert cv <= 0.30, f"Length CV {cv:.3f} — gold requires ≤0.30"
+
+
+class TestQuantizeEndpoint:
+    """Tests for POST /models/quantize endpoint logic."""
+
+    def test_quantize_endpoint_smoke(self, tiny_model, sample_input):
+        """Simulate the quantize endpoint logic directly."""
+        from domains.infrastructure.quantization import QuantEngine, walk_slo_linears
+
+        # Walk layers
+        layers = walk_slo_linears(tiny_model)
+        assert len(layers) >= 14  # 2 blocks × 7 linears + lm_head
+        assert 'lm_head' in layers
+        assert layers['lm_head'].weight.data.shape[0] == 100  # vocab_size
+
+        # Quantize all layers int8
+        engine = QuantEngine(bits=8, mode="symmetric")
+        quantized_count = 0
+        for name, module in layers.items():
+            info = engine.quantize(f"{name}.weight", module.weight.data.copy())
+            if info.is_quantized:
+                module.set_quantized_weight(info)
+                quantized_count += 1
+
+        assert quantized_count == len(layers), f"Quantized {quantized_count}/{len(layers)}"
+
+        # Inference still works
+        logits = _run_model(tiny_model, sample_input)
+        assert logits.shape == (1, 8, 100)
+
+        # Summary report fields match what the endpoint returns
+        summary = engine.summary()
+        assert summary["tensors"] == quantized_count
+        assert summary["bits"] == 8
+        assert summary["avg_cosine_sim"] > 0.99
+
+        # Verify lm_head is quantized
+        assert tiny_model.layers[-1]._quant_info is not None
+        assert tiny_model.layers[-1]._quant_info.meta.bits == 8

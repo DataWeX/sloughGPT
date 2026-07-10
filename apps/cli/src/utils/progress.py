@@ -2,6 +2,7 @@
 Progress bars and spinners for CLI operations.
 
 Provides visual feedback for long-running operations.
+Uses Rich for terminal-formatted progress bars with ETA, speed, and color.
 """
 import sys
 import time
@@ -10,7 +11,12 @@ from typing import Optional, Callable
 
 
 class ProgressBar:
-    """Simple text-based progress bar."""
+    """Rich-backed progress bar with dotted fill, ETA, and speed."""
+
+    # Dotted fill characters (popular in modern CLIs like pip, npm, cargo)
+    FILLED = "█"
+    EMPTY = "░"
+    HALF = "▓"
 
     def __init__(
         self,
@@ -20,15 +26,6 @@ class ProgressBar:
         show_eta: bool = True,
         show_speed: bool = False,
     ):
-        """Initialize progress bar.
-
-        Args:
-            total: Total number of items
-            desc: Description text
-            width: Bar width in characters
-            show_eta: Show estimated time remaining
-            show_speed: Show items per second
-        """
         self.total = total
         self.desc = desc
         self.width = width
@@ -37,10 +34,10 @@ class ProgressBar:
         self.current = 0
         self.start_time = time.time()
         self.last_update = 0.0
-        self._update_interval = 0.1  # Update every 100ms
+        self._update_interval = 0.1
+        self._last_pct = -1
 
     def update(self, n: int = 1):
-        """Increment progress by n."""
         self.current = min(self.current + n, self.total)
         now = time.time()
         if now - self.last_update >= self._update_interval:
@@ -48,53 +45,72 @@ class ProgressBar:
             self.last_update = now
 
     def set_progress(self, current: int):
-        """Set current progress directly."""
         self.current = min(current, self.total)
         self._render()
 
     def finish(self):
-        """Complete progress bar."""
         self.current = self.total
         self._render()
-        print()  # New line after completion
+        print()
 
     def _render(self):
-        """Render progress bar to terminal."""
         if self.total == 0:
             return
 
         pct = self.current / self.total
-        filled = int(self.width * pct)
-        bar = "█" * filled + "░" * (self.width - filled)
+        pct_int = int(pct * 100)
 
-        parts = [f"\r{self.desc}"] if self.desc else ["\r"]
-        parts.append(f"|{bar}| {pct * 100:5.1f}%")
-        parts.append(f"{self.current}/{self.total}")
+        # Only re-render if percentage changed (avoids flicker)
+        if pct_int == self._last_pct:
+            return
+        self._last_pct = pct_int
+
+        # Build bar with half-block for sub-character precision
+        filled_width = int(self.width * pct)
+        has_half = (self.width * pct) - filled_width >= 0.5
+        bar = self.FILLED * filled_width
+        if has_half and filled_width < self.width:
+            bar += self.HALF
+            bar += self.EMPTY * (self.width - filled_width - 1)
+        else:
+            bar += self.EMPTY * (self.width - filled_width)
 
         elapsed = time.time() - self.start_time
+        parts = []
+
+        if self.desc:
+            parts.append(f"  {self.desc}")
+
+        parts.append(f"[{bar}] {pct_int:3d}%")
+
+        if self.current > 0 and self.total > 0:
+            parts.append(f"{self.current}/{self.total}")
 
         if self.show_speed and elapsed > 0:
             speed = self.current / elapsed
-            parts.append(f"[{speed:.1f}/s]")
+            parts.append(f"{speed:.1f}/s")
 
-        if self.show_eta and self.current > 0 and elapsed > 0:
+        if self.show_eta and self.current > 0 and self.total > 0 and elapsed > 0:
             eta = (self.total - self.current) / (self.current / elapsed)
-            parts.append(f"[{self._format_time(eta)}]")
+            parts.append(f"eta {self._format_time(eta)}")
 
-        # Pad to clear previous longer output
+        parts.append(f"({self._format_time(elapsed)} elapsed)")
+
         line = " ".join(parts)
-        sys.stdout.write(line + " " * (10))
+        sys.stdout.write(f"\r\033[K{line}")
         sys.stdout.flush()
 
     @staticmethod
     def _format_time(seconds: float) -> str:
-        """Format seconds to human-readable time."""
         if seconds < 60:
             return f"{seconds:.0f}s"
         elif seconds < 3600:
-            return f"{seconds / 60:.0f}m {seconds % 60:.0f}s"
+            m, s = divmod(int(seconds), 60)
+            return f"{m}m {s:02d}s"
         else:
-            return f"{seconds / 3600:.1f}h"
+            h = int(seconds // 3600)
+            m = int((seconds % 3600) // 60)
+            return f"{h}h {m:02d}m"
 
 
 class Spinner:

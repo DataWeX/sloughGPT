@@ -559,22 +559,10 @@ async def quantize_model(req: QuantizeRequest):
     if model is None:
         raise HTTPException(status_code=400, detail="SloNet provider has no model")
 
-    # Walk SloLinear layers
-    from domains.training.slonet import SloLinear
+    # Walk SloLinear layers using shared utility
+    from domains.infrastructure.quantization import walk_slo_linears
 
-    layers = {}
-    if hasattr(model, 'blocks'):
-        for i, block in enumerate(model.blocks):
-            if hasattr(block, 'attn'):
-                for proj in ('W_q', 'W_k', 'W_v', 'W_o'):
-                    p = getattr(block.attn, proj, None)
-                    if isinstance(p, SloLinear):
-                        layers[f'blocks.{i}.attn.{proj}'] = p
-            if hasattr(block, 'ff'):
-                for proj in ('w1', 'w2', 'w3'):
-                    p = getattr(block.ff, proj, None)
-                    if isinstance(p, SloLinear):
-                        layers[f'blocks.{i}.ff.{proj}'] = p
+    layers = walk_slo_linears(model)
 
     engine = QuantEngine(bits=bits, mode=mode)
     quantized_count = 0

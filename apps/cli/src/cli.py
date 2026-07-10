@@ -658,6 +658,147 @@ def train_embed(corpus, epochs, lr, batch_size, embed_dim, vocab_size, output, t
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# distill — knowledge distillation from teacher → student
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@train.command("distill", help="Distill a teacher model into a smaller student")
+@click.argument("text_source", required=False, default=None)
+@click.option("--file", "-f", default=None, help="Text file to train on")
+@click.option("--epochs", default=10, type=int, help="Training epochs")
+@click.option("--lr", default=3e-4, type=float, help="Learning rate")
+@click.option("--batch-size", default=8, type=int, help="Batch size")
+@click.option("--n-embed", default=128, type=int, help="Student embedding size")
+@click.option("--n-layer", default=4, type=int, help="Student layers")
+@click.option("--n-head", default=4, type=int, help="Student attention heads")
+@click.option("--block-size", default=128, type=int, help="Context length")
+@click.option("--temperature", default=4.0, type=float, help="Distillation temperature")
+@click.option("--dropout", default=0.1, type=float, help="Dropout rate")
+@click.option("--checkpoint-dir", default="models/auto-training", help="Save directory")
+@click.option("--log-interval", default=10, type=int, help="Log every N steps")
+@click.option("--preset", type=click.Choice(["tiny", "small", "medium"]), help="Architecture preset")
+@click.option("--api", is_flag=True, help="Use server API instead of local")
+@click.option("--json", "json_output", is_flag=True, help="JSON output")
+@click.pass_context
+def train_distill(ctx, text_source, file, epochs, lr, batch_size, n_embed, n_layer,
+                  n_head, block_size, temperature, dropout, checkpoint_dir,
+                  log_interval, preset, api, json_output):
+    """Distill GPT-2 into a smaller, faster student model.
+
+    \b
+    Examples:
+      sloughgpt train distill datasets/shakespeare/input.txt
+      sloughgpt train distill -f my_book.txt --epochs 20 --preset small
+      sloughgpt train distill datasets/shakespeare/input.txt --api
+      sloughgpt train distill datasets/shakespeare/input.txt --n-embed 64 --n-layer 2
+    """
+    from commands.train import cmd_distill
+    args = _ns(
+        text_source=text_source, file=file, epochs=epochs, lr=lr,
+        batch_size=batch_size, n_embed=n_embed, n_layer=n_layer,
+        n_head=n_head, block_size=block_size, temperature=temperature,
+        dropout=dropout, checkpoint_dir=checkpoint_dir,
+        log_interval=log_interval, preset=preset, api=api,
+        json_output=json_output, host=ctx.obj["host"], port=ctx.obj["port"],
+    )
+    cmd_distill(args)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# checkpoint — list, load, delete training checkpoints
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="List, load, and delete training checkpoints")
+def checkpoint():
+    pass
+
+
+@checkpoint.command("list", help="List all training checkpoints")
+@click.option("--sort", type=click.Choice(["date", "size", "name"]), default="date", help="Sort order")
+@click.option("--json", "json_output", is_flag=True, help="JSON output")
+@click.pass_context
+def checkpoint_list(ctx, sort, json_output):
+    """List all saved training checkpoints.
+
+    \b
+    Examples:
+      sloughgpt checkpoint list
+      sloughgpt checkpoint list --sort size
+      sloughgpt checkpoint list --json
+    """
+    import requests
+    base_url = f"http://{ctx.obj['host']}:{ctx.obj['port']}"
+    resp = requests.get(f"{base_url}/auto-train/checkpoints", timeout=10)
+    if resp.status_code != 200:
+        printer.error(f"Failed to list checkpoints: {resp.text}")
+        return
+    checkpoints = resp.json()
+    if not checkpoints:
+        printer.info("No checkpoints found")
+        return
+
+    if json_output:
+        printer.print_json(checkpoints)
+        return
+
+    printer.header(f"Training Checkpoints ({len(checkpoints)})")
+    rows = []
+    for cp in checkpoints:
+        name = cp.get("name", "unknown")
+        size = cp.get("size_mb", 0)
+        traits = cp.get("traits", {})
+        trait_str = ", ".join(f"{k}={v:.2f}" for k, v in traits.items() if v != 0.5) if traits else ""
+        rows.append([name, f"{size:.1f} MB", trait_str or "-"])
+    printer.table(["Name", "Size", "Traits"], rows)
+
+
+@checkpoint.command("load", help="Load a checkpoint into the model")
+@click.argument("name")
+@click.pass_context
+def checkpoint_load(ctx, name):
+    """Load a training checkpoint into the active model.
+
+    \b
+    Example:
+      sloughgpt checkpoint load my-checkpoint.soul
+    """
+    import requests
+    base_url = f"http://{ctx.obj['host']}:{ctx.obj['port']}"
+    resp = requests.post(f"{base_url}/auto-train/checkpoints/{name}/load", timeout=30)
+    if resp.status_code == 200:
+        data = resp.json()
+        printer.success(f"Loaded checkpoint: {name}")
+        for k, v in data.items():
+            if k not in ("status",):
+                printer.key_value(k, str(v))
+    else:
+        printer.error(f"Failed to load: {resp.text}")
+
+
+@checkpoint.command("delete", help="Delete a training checkpoint")
+@click.argument("name")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+@click.pass_context
+def checkpoint_delete(ctx, name, yes):
+    """Delete a training checkpoint.
+
+    \b
+    Example:
+      sloughgpt checkpoint delete my-checkpoint.soul
+    """
+    if not yes:
+        click.confirm(f"Delete checkpoint '{name}'?", abort=True)
+    import requests
+    base_url = f"http://{ctx.obj['host']}:{ctx.obj['port']}"
+    resp = requests.delete(f"{base_url}/auto-train/checkpoints/{name}", timeout=10)
+    if resp.status_code == 200:
+        printer.success(f"Deleted: {name}")
+    else:
+        printer.error(f"Failed to delete: {resp.text}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # personality  — list, load, info, create, export
 # ═══════════════════════════════════════════════════════════════════════
 

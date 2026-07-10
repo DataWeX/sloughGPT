@@ -117,7 +117,7 @@ def load_hf_model(model_id: str, device: Optional[str] = None):
 
     Returns (model, tokenizer, resolved_device).
 
-    On MPS, always forces float32 (BFloat16 not supported).
+    Uses float32 on CPU, float16 on MPS/CUDA (BFloat16 not supported on MPS).
 
     Raises RuntimeError if the model fails integrity checks (partial download).
     """
@@ -138,7 +138,9 @@ def load_hf_model(model_id: str, device: Optional[str] = None):
     else:
         logger.info("%s not cached — downloading from HuggingFace", model_id)
 
-    logger.info("Loading %s → %s (float32)", model_id, resolved)
+    use_fp16 = resolved in ("mps", "cuda")
+    dtype_str = "float16" if use_fp16 else "float32"
+    logger.info("Loading %s → %s (%s)", model_id, resolved, dtype_str)
 
     # Try torch first (for full HF model support)
     try:
@@ -152,11 +154,13 @@ def load_hf_model(model_id: str, device: Optional[str] = None):
         except Exception:
             pass
 
+        dtype = torch.float16 if use_fp16 else torch.float32
+
         try:
             tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
             model = AutoModelForCausalLM.from_pretrained(
                 model_id,
-                dtype=torch.float32,
+                dtype=dtype,
                 local_files_only=True,
                 device_map="cpu" if resolved == "cpu" else None,
             )
@@ -166,7 +170,7 @@ def load_hf_model(model_id: str, device: Optional[str] = None):
             tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=False)
             model = AutoModelForCausalLM.from_pretrained(
                 model_id,
-                dtype=torch.float32,
+                dtype=dtype,
                 local_files_only=False,
                 device_map="cpu" if resolved == "cpu" else None,
             )

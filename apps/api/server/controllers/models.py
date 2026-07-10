@@ -29,13 +29,7 @@ class ModelsController:
         self._is_inferencing: bool = False
 
     def _resolve_device(self, device: str) -> str:
-        """Resolve device string for PyTorch model placement.
-
-        Forces CPU on 8GB Macs — MPS hits the 6.8GB limit after a few
-        generations due to KV cache accumulation in float32. The MPS
-        monitor is kept for reference but device resolution always
-        prefers CPU for stability.
-        """
+        """Resolve device string for PyTorch model placement: mps > cuda > cpu."""
         if device is None or device == "auto":
             try:
                 from domains.infrastructure.ml_types import auto_device

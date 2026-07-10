@@ -147,10 +147,27 @@ def cmd_train(args):
             printer.step(f"Resuming from: {args.resume}")
             resume_path = args.resume
 
+        pbar = ProgressBar(total=100, desc="Training", width=36, show_eta=True, show_speed=False)
+
+        def _on_progress(info):
+            pct = info.get("progress_percent", 0)
+            step = info.get("global_step", 0)
+            epoch = info.get("epoch", 0)
+            epochs = info.get("epochs", 0)
+            loss = info.get("train_loss", 0)
+            lr = info.get("learning_rate", 0)
+            pbar.desc = f"step {step} epoch {epoch}/{epochs} loss={loss:.4f} lr={lr:.2e}"
+            pbar.set_progress(pct)
+
         start_time = time.time()
-        trainer.train(resume=bool(args.resume or getattr(args, "resume_latest", False)), resume_path=resume_path)
+        trainer.train(
+            resume=bool(args.resume or getattr(args, "resume_latest", False)),
+            resume_path=resume_path,
+            on_progress=_on_progress,
+        )
         elapsed = time.time() - start_time
 
+        pbar.finish()
         printer.blank()
         printer.success(f"Training complete ({format_time(elapsed)})")
 
@@ -227,8 +244,9 @@ def cmd_train(args):
             data = response.json()
             job_id = data.get("id")
             printer.success(f"Training started: {job_id}")
-            printer.info(f"Status: {data.get('status')}")
-            printer.info(f"Poll: GET {base_url}/training/jobs/{job_id}")
+
+            # Stream progress via SSE
+            _stream_api_progress(base_url, job_id)
         else:
             printer.error(f"Failed ({response.status_code}): {response.text}")
     except Exception as e:
@@ -317,8 +335,20 @@ def cmd_quick(args):
     printer.info(f"Model: {trainer.model.num_parameters():,} params")
     printer.blank()
 
+    pbar = ProgressBar(total=100, desc="Training", width=36, show_eta=True, show_speed=False)
+
+    def _on_progress(info):
+        pct = info.get("progress_percent", 0)
+        step = info.get("global_step", 0)
+        epoch = info.get("epoch", 0)
+        epochs = info.get("epochs", 0)
+        loss = info.get("train_loss", 0)
+        pbar.desc = f"step {step} epoch {epoch}/{epochs} loss={loss:.4f}"
+        pbar.set_progress(pct)
+
     printer.step("Training...")
-    trainer.train()
+    trainer.train(on_progress=_on_progress)
+    pbar.finish()
 
     printer.blank()
     printer.step("Generating...")
@@ -1124,12 +1154,14 @@ def cmd_train_embed(args):
     # ── Train ─────────────────────────────────────────────────────────
     from domains.inference.slo_embedder import train_embedder
 
+    total_epochs = getattr(args, "epochs", 20)
+    pbar = ProgressBar(total=total_epochs, desc="Training embedder", width=36, show_eta=True, show_speed=False)
+
     def progress(epoch, loss, total):
-        bar = "=" * int(epoch / total * 30)
-        bar += "." * (30 - len(bar))
-        print(f"\r  [{bar}] Epoch {epoch}/{total} — loss: {loss:.4f}", end="", flush=True)
+        pbar.desc = f"epoch {epoch}/{total} loss={loss:.4f}"
+        pbar.set_progress(epoch)
         if epoch == total:
-            print()
+            pbar.finish()
 
     result = train_embedder(
         texts=texts,
@@ -1151,3 +1183,233 @@ def cmd_train_embed(args):
     printer.blank()
     printer.info("The embedder is now used automatically by KnowledgeMemory and vector search.")
     printer.info("No sentence-transformers download needed.")
+
+
+def cmd_distill(args):
+    """Distill GPT-2 teacher into a smaller SloTransformer student."""
+    import threading
+    import json
+
+    api_mode = getattr(args, "api", False)
+    text_source = getattr(args, "text_source", None)
+    file_path = getattr(args, "file", None)
+
+    # Resolve text source
+    text = None
+    if file_path:
+        from pathlib import Path
+        p = Path(file_path)
+        if not p.exists():
+            printer.error(f"File not found: {file_path}")
+            return
+        text = p.read_text(encoding="utf-8")
+        printer.info(f"Loaded {len(text):,} chars from {file_path}")
+    elif text_source:
+        from pathlib import Path
+        p = Path(text_source)
+        if p.is_dir():
+            # Try standard dataset files
+            for name in ("input.txt", "corpus.jsonl", "train.txt"):
+                candidate = p / name
+                if candidate.exists():
+                    text = candidate.read_text(encoding="utf-8")
+                    printer.info(f"Loaded {len(text):,} chars from {candidate}")
+                    break
+            if text is None:
+                printer.error(f"No training data found in {text_source}")
+                return
+        elif p.is_file():
+            text = p.read_text(encoding="utf-8")
+            printer.info(f"Loaded {len(text):,} chars from {text_source}")
+        else:
+            printer.error(f"Not found: {text_source}")
+            return
+
+    if not text or not text.strip():
+        printer.error("No training text provided")
+        return
+
+    # Apply preset
+    preset = getattr(args, "preset", None)
+    n_embed = getattr(args, "n_embed", 128)
+    n_layer = getattr(args, "n_layer", 4)
+    n_head = getattr(args, "n_head", 4)
+    block_size = getattr(args, "block_size", 128)
+
+    if preset == "tiny":
+        n_embed, n_layer, n_head, block_size = 64, 2, 4, 64
+    elif preset == "small":
+        n_embed, n_layer, n_head, block_size = 128, 4, 4, 128
+    elif preset == "medium":
+        n_embed, n_layer, n_head, block_size = 256, 6, 8, 256
+
+    printer.header("Knowledge Distillation (GPT-2 → Student)")
+    printer.key_value("Teacher", "gpt2")
+    printer.key_value("Student", f"{n_embed}d {n_layer}L {n_head}H")
+    printer.key_value("Context", str(block_size))
+    printer.key_value("Temperature", str(getattr(args, "temperature", 4.0)))
+    printer.key_value("Text", f"{len(text):,} chars")
+    printer.blank()
+
+    # ── API mode ──────────────────────────────────────────────────────
+    if api_mode:
+        import requests
+        base_url = f"http://{args.host}:{args.port}"
+
+        # For API mode, resolve the dataset name the server can find
+        dataset_name = text_source or file_path
+        if dataset_name:
+            from pathlib import Path
+            p = Path(dataset_name)
+            if p.is_dir():
+                dataset_name = p.name
+            elif p.is_file():
+                # Check if it's inside a known dataset dir
+                parts = p.parts
+                if "datasets" in parts:
+                    idx = parts.index("datasets")
+                    if idx + 1 < len(parts):
+                        dataset_name = parts[idx + 1]
+                else:
+                    dataset_name = p.stem
+        else:
+            dataset_name = "custom"
+
+        payload = {
+            "teacher_model": "gpt2",
+            "dataset": dataset_name,
+            "epochs": getattr(args, "epochs", 10),
+            "temperature": getattr(args, "temperature", 4.0),
+            "name": f"distill-{int(time.time())}",
+        }
+        try:
+            resp = requests.post(f"{base_url}/training/distill", json=payload, timeout=30)
+            if resp.status_code == 200:
+                data = resp.json()
+                job_id = data.get("id")
+                printer.success(f"Distillation started: {job_id}")
+                _stream_api_progress(base_url, job_id)
+            else:
+                printer.error(f"Failed ({resp.status_code}): {resp.text}")
+        except Exception as e:
+            printer.error(f"API error: {e}")
+        return
+
+    # ── Local mode ────────────────────────────────────────────────────
+    from domains.training.distill_gpt2 import DistillConfig, distill_gpt2_to_slo
+
+    config = DistillConfig(
+        n_embed=n_embed,
+        n_layer=n_layer,
+        n_head=n_head,
+        block_size=block_size,
+        dropout=getattr(args, "dropout", 0.1),
+        epochs=getattr(args, "epochs", 10),
+        lr=getattr(args, "lr", 3e-4),
+        batch_size=getattr(args, "batch_size", 8),
+        temperature=getattr(args, "temperature", 4.0),
+        checkpoint_dir=getattr(args, "checkpoint_dir", "models/auto-training"),
+        log_interval=getattr(args, "log_interval", 10),
+    )
+
+    # Progress bar — compute total steps from config
+    samples_per_epoch = len(text) // config.block_size
+    total_steps = config.epochs * (samples_per_epoch // config.batch_size)
+    pbar = ProgressBar(total=total_steps, desc="Distilling", width=36, show_eta=True, show_speed=True)
+
+    def on_step(step, loss, epoch):
+        pbar.desc = f"epoch {epoch+1}/{config.epochs} loss={loss:.4f}"
+        pbar.set_progress(step)
+
+    cancel_event = threading.Event()
+
+    def on_sigint(sig, frame):
+        printer.blank()
+        printer.warning("Cancelling distillation...")
+        cancel_event.set()
+
+    import signal
+    old_handler = signal.signal(signal.SIGINT, on_sigint)
+
+    try:
+        start_time = time.time()
+        student, metadata = distill_gpt2_to_slo(
+            text, config,
+            on_step=on_step,
+            cancel_event=cancel_event,
+        )
+        elapsed = time.time() - start_time
+
+        pbar.finish()
+        printer.blank()
+        printer.success(f"Distillation complete ({format_time(elapsed)})")
+        printer.key_value("Checkpoint", metadata.get("checkpoint", "?"))
+        printer.key_value("Final loss", metadata.get("final_loss", "?"))
+        printer.key_value("Best loss", metadata.get("best_loss", "?"))
+        printer.key_value("Epochs", metadata.get("epochs", "?"))
+        printer.key_value("Steps", metadata.get("steps", "?"))
+        printer.key_value("Student params", f"{sum(p.data.size for p in student.parameters()):,}")
+
+    except Exception as e:
+        printer.blank()
+        printer.error(f"Distillation failed: {e}")
+        raise
+    finally:
+        signal.signal(signal.SIGINT, old_handler)
+
+
+def _stream_api_progress(base_url, job_id):
+    """Stream training progress from API via polling `/training/jobs/{job_id}`."""
+    import time
+
+    printer.info("Streaming progress... (Ctrl+C to detach)")
+
+    bar = ProgressBar(total=100, desc="Training", width=36, show_eta=True, show_speed=False)
+
+    try:
+        import requests
+        while True:
+            try:
+                resp = requests.get(f"{base_url}/training/jobs/{job_id}", timeout=5)
+                if resp.status_code != 200:
+                    printer.error(f"Poll failed: {resp.status_code}")
+                    return
+
+                job = resp.json()
+                status = job.get("status", "unknown")
+                progress = job.get("progress", 0)
+                epoch = job.get("current_epoch", job.get("epoch", 0))
+                epochs = job.get("epochs", 0)
+                loss = job.get("train_loss", job.get("loss", 0))
+                checkpoint = job.get("checkpoint", "")
+
+                # Update bar with extra info
+                bar.desc = f"Epoch {epoch}/{epochs} loss={loss or 0:.4f}"
+                bar.set_progress(progress)
+
+                if status in ("completed", "failed", "error"):
+                    bar.finish()
+                    if status == "completed":
+                        printer.success("Training completed")
+                        if checkpoint:
+                            printer.key_value("Checkpoint", checkpoint)
+                        fl = job.get("train_loss") or job.get("loss")
+                        if fl:
+                            printer.key_value("Final loss", str(fl))
+                    else:
+                        printer.error(f"Training {status}: {job.get('error', 'unknown')}")
+                    return
+
+            except KeyboardInterrupt:
+                bar.finish()
+                printer.info("Detached from training (job continues on server)")
+                return
+            except Exception as e:
+                bar.finish()
+                printer.error(f"Poll error: {e}")
+                return
+
+            time.sleep(3)
+
+    except Exception as e:
+        printer.error(f"Progress stream error: {e}")

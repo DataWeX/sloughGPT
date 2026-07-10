@@ -35,6 +35,48 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+
+def walk_slo_linears(model) -> dict:
+    """Find all SloLinear layers in a SloTransformer model.
+
+    SloTransformer stores sub-modules in a plain list (``model.layers``)
+    rather than via ``nn.ModuleList`` or ``named_modules()``, so standard
+    PyTorch module walking does not work. This function manually walks
+    the known structure:
+
+    - ``layers[-1]`` — lm_head (output projection, SloLinear)
+    - ``blocks[i].attn.W_q/W_k/W_v/W_o`` — attention projections
+    - ``blocks[i].ff.w1/w2/w3`` — feed-forward projections
+
+    Returns:
+        dict of ``{name: SloLinear_layer}``.
+    """
+    from domains.training.slonet import SloLinear
+
+    layers = {}
+
+    # Output projection (lm_head)
+    if hasattr(model, "layers") and len(model.layers) >= 1:
+        lm_head = model.layers[-1]
+        if isinstance(lm_head, SloLinear):
+            layers["lm_head"] = lm_head
+
+    # Transformer blocks
+    if hasattr(model, "blocks"):
+        for i, block in enumerate(model.blocks):
+            if hasattr(block, "attn"):
+                for proj in ("W_q", "W_k", "W_v", "W_o"):
+                    p = getattr(block.attn, proj, None)
+                    if isinstance(p, SloLinear):
+                        layers[f"blocks.{i}.attn.{proj}"] = p
+            if hasattr(block, "ff"):
+                for proj in ("w1", "w2", "w3"):
+                    p = getattr(block.ff, proj, None)
+                    if isinstance(p, SloLinear):
+                        layers[f"blocks.{i}.ff.{proj}"] = p
+
+    return layers
+
 # Try to load AVX2-accelerated int8 GEMM
 def _numpy_fallback(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """Pure-numpy int8 GEMM fallback."""
@@ -188,7 +230,7 @@ class QuantEngine:
     """
 
     # Tensors that should NEVER be quantized (embeddings, final norm)
-    SKIP_PREFIXES = ("tok_emb.", "pos_emb.", "norm.", "lm_head.")
+    SKIP_PREFIXES = ("tok_emb.", "pos_emb.", "norm.")
 
     # Tensors that are sensitive and should use higher precision
     SENSITIVE_PREFIXES = ("attn_norm.", "ff_norm.")
