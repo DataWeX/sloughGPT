@@ -2655,3 +2655,55 @@ Extracted `PineconeVectorStore` and `ChromaDBVectorStore` from `vector_store.py`
 | 4 | Removed stale `Next Steps (Current)` section from AGENTS.md | AGENTS.md | No outdated todos |
 | 5 | Full frontend: 0 failing tests across 210 files, 2114 tests | — | All pass |
 | 6 | Full Python: 1785 passed, 13 skipped, 1 xfailed, **0 warnings** | — | Clean run |
+
+---
+
+## .slnc Memory-Mapped Inference Format
+
+### Format
+Binary format for zero-copy weight loading via mmap. Layout follows computation order (not alphabetical):
+```
+[Magic "SLNC"] [Version 1] [64-byte Metadata] [Config JSON] [Tensor Table] [Tensor Data]
+```
+
+### Files
+| File | Purpose |
+|------|---------|
+| `domains/infrastructure/slnc/spec.py` | Format definition, magic bytes, dtype codes |
+| `domains/infrastructure/slnc/compiler.py` | `SLNCCompiler.compile()` — safetensors → .slnc |
+| `domains/infrastructure/slnc/parser.py` | `SLNCParser` — mmap-based zero-copy loader |
+
+### Usage
+```python
+# Compile (automatic on first server start)
+from domains.infrastructure.slnc.compiler import SLNCCompiler
+SLNCCompiler.compile("model.safetensors", "model.slnc")
+
+# Load
+from domains.inference.slonet_provider import SloNetChatProvider
+provider = SloNetChatProvider.from_slnc("model.slnc", model_id="gpt2")
+
+# Generate
+response = provider.generate("Hello", max_tokens=50)
+```
+
+### Server Integration
+`startup.py` auto-converts on first load:
+1. Check for `.slnc` in model cache dir
+2. If exists: load via mmap (2.2x faster)
+3. If not: compile from safetensors, then load from .slnc
+4. Falls back to safetensors on any error
+
+### Benchmark (GPT-2)
+| Metric | safetensors | .slnc | Improvement |
+|--------|------------|-------|-------------|
+| Load time | 32s | 14s | 2.2x |
+| Generate | 3.1s | 2.7s | 1.2x |
+| Throughput | 11 tok/s | 13 tok/s | +19% |
+| File size | 548 MB | 498 MB | 0.91x |
+
+### Design
+- **Computation order**: Block 0 → ... → norm → lm_head (sequential cache access)
+- **Excludes causal masks**: 12 non-learnable HF artifacts (~48MB) omitted
+- **Zero-copy**: `SLNCLoader.get_tensor()` returns numpy view into mmap'd pages
+- **Demand loading**: only accessed pages fault into RAM
