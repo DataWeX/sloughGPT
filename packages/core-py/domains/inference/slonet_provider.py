@@ -9,6 +9,7 @@ architecture and convert weights to SloTransformer format. No per-model
 hardcoding — new arch = new ArchConfig instance.
 """
 import logging
+import threading
 from pathlib import Path
 from typing import Optional, List, Dict, Any, AsyncIterator
 import numpy as np
@@ -431,6 +432,13 @@ class SloNetChatProvider:
         Pre-fills prompt in one forward pass, then generates one token at a time
         using KV cache (each step only processes the new token).
 
+        Robustness features:
+        - cancel_event: abort generation mid-stream (e.g. on client disconnect)
+        - NaN/Inf guard: stops if forward step produces non-finite logits
+        - Per-token timeout: 30s per token prevents hung threads
+        - Total generation timeout: 120s total prevents unbounded generation
+        - Error propagation: producer thread exceptions surface to consumer
+
         Args:
             messages: List of {"role": "...", "content": "..."} dicts
             max_tokens: Maximum tokens to generate
@@ -438,6 +446,7 @@ class SloNetChatProvider:
             top_k: Keep only top-k logits before sampling
             top_p: Nucleus threshold — keep tokens with cumulative prob <= p
             repetition_penalty: Scale factor for repeated tokens (>1 = penalize)
+            cancel_event: threading.Event() — set to abort generation
 
         Yields:
             Each token string as it's generated.
@@ -445,6 +454,7 @@ class SloNetChatProvider:
         import asyncio
         import numpy as _np
         import math
+        import time
 
         prompt = ""
         if messages and isinstance(messages[-1], dict):
@@ -456,6 +466,7 @@ class SloNetChatProvider:
         top_k = kwargs.get('top_k')
         top_p = kwargs.get('top_p')
         repetition_penalty = kwargs.get('repetition_penalty', 1.0)
+        cancel_event = kwargs.get('cancel_event')
 
         def _stream_generate():
             """KV-cache streaming generation — runs in a thread."""
@@ -602,6 +613,12 @@ class SloNetChatProvider:
 
             # Step 0: pre-fill full prompt
             logits = _forward_step(tokens[:, -m.block_size:], 0, step=0)
+
+            # NaN/Inf guard on first logits
+            if not _np.all(_np.isfinite(logits)):
+                raise RuntimeError(f"Model produced non-finite logits (NaN/Inf) in pre-fill step. "
+                                   f"logits range: [{_np.min(logits):.4f}, {_np.max(logits):.4f}]")
+
             generated_so_far = _np.array([], dtype=_np.int64)
             next_id = _sample_from_logits(
                 logits, temperature=temperature,
@@ -616,10 +633,23 @@ class SloNetChatProvider:
 
             # Steps 1..max_tokens: single-token forward with KV cache
             for step in range(1, max_tokens):
+                # Cancel check (threading.Event is safe to poll from any thread)
+                if cancel_event and cancel_event.is_set():
+                    return
+
                 if next_id == eos_id:
                     break
                 pos = tokens.shape[1] - 1
                 logits = _forward_step(tokens[:, -1:], pos, step=step)
+
+                # NaN/Inf guard — stop generation if logits are corrupt
+                if not _np.all(_np.isfinite(logits)):
+                    raise RuntimeError(
+                        f"Model produced non-finite logits at step {step} "
+                        f"(prompt_len={prompt_len}, generated={len(generated_so_far)}). "
+                        f"logits range: [{_np.min(logits):.4f}, {_np.max(logits):.4f}]"
+                    )
+
                 next_id = _sample_from_logits(
                     logits, temperature=temperature,
                     top_k=top_k, top_p=top_p,
@@ -631,25 +661,68 @@ class SloNetChatProvider:
                 generated_so_far = _np.append(generated_so_far, next_id)
                 yield self._tokenizer.decode([next_id])
 
-        # Run the generation loop in a thread, yielding tokens via a queue
+        # ── Robust streaming pipeline ──
+        # Producer thread feeds tokens into queue; consumer yields from queue.
+        # Errors propagate via a separate _error queue.
         import queue
         q = queue.Queue()
+        err_q = queue.Queue()
         sentinel = object()
+        _GENERATION_TIMEOUT_S = 120.0
 
         def _producer():
             try:
                 for token in _stream_generate():
                     q.put(token)
+            except Exception as e:
+                err_q.put(e)
             finally:
                 q.put(sentinel)
 
-        loop = asyncio.get_event_loop()
-        import threading
         producer_thread = threading.Thread(target=_producer, daemon=True)
         producer_thread.start()
 
+        gen_start = time.monotonic()
         while True:
-            token = await asyncio.to_thread(q.get)
+            # Check total generation timeout
+            elapsed = time.monotonic() - gen_start
+            if elapsed > _GENERATION_TIMEOUT_S:
+                cancel_event.set() if cancel_event else None
+                logger.warning("Streaming generation timed out after %.0fs", elapsed)
+                yield "\n\n[Generation timed out after {:.0f}s]".format(elapsed)
+                return
+
+            try:
+                # Use to_thread with timeout to prevent indefinite blocking
+                token = await asyncio.wait_for(
+                    asyncio.to_thread(q.get),
+                    timeout=30.0,
+                )
+            except asyncio.TimeoutError:
+                # Check if producer thread is still alive
+                if not producer_thread.is_alive():
+                    # Thread died — drain remaining tokens
+                    while not q.empty():
+                        t = q.get_nowait()
+                        if t is sentinel:
+                            break
+                        yield t
+                    break
+                # Thread still alive but no token for 30s — check for errors
+                if not err_q.empty():
+                    exc = err_q.get_nowait()
+                    yield "\n\n[Generation error: {}]".format(exc)
+                    return
+                # Still generating — continue waiting
+                continue
+
             if token is sentinel:
                 break
+
+            # Check for producer errors (may have been raised between queue reads)
+            if not err_q.empty():
+                exc = err_q.get_nowait()
+                yield "\n\n[Generation error: {}]".format(exc)
+                return
+
             yield token
