@@ -3451,7 +3451,11 @@ class SloTransformer(SloNet):
         K_H = blocks[0]['n_kv_heads']
         scale = 1.0 / math.sqrt(E)
 
+        # Pre-allocate KV cache buffers for all layers
         kv_caches = [None] * len(blocks)
+        kv_buf_k = [None] * len(blocks)
+        kv_buf_v = [None] * len(blocks)
+        kv_len = [0] * len(blocks)
 
         for step in range(max_gen):
             if step == 0:
@@ -3495,11 +3499,24 @@ class SloTransformer(SloNet):
                 k = k.reshape(B, seq_len, K_H, E)
                 v = v.reshape(B, seq_len, K_H, E)
 
-                # KV cache
-                if kv_caches[bi] is not None:
-                    k = np.concatenate([kv_caches[bi][0], k], axis=1)
-                    v = np.concatenate([kv_caches[bi][1], v], axis=1)
-                kv_caches[bi] = (k, v)
+                # KV cache: pre-allocated buffer, slice-assign
+                new_len = kv_len[bi] + seq_len
+                if kv_buf_k[bi] is None or new_len > kv_buf_k[bi].shape[1]:
+                    # Grow buffer (2x current + new)
+                    cap = max(64, new_len * 2)
+                    new_buf_k = np.zeros((B, cap, K_H, E), dtype=k.dtype)
+                    new_buf_v = np.zeros((B, cap, K_H, E), dtype=v.dtype)
+                    if kv_buf_k[bi] is not None:
+                        old_len = kv_len[bi]
+                        new_buf_k[:, :old_len] = kv_buf_k[bi][:, :old_len]
+                        new_buf_v[:, :old_len] = kv_buf_v[bi][:, :old_len]
+                    kv_buf_k[bi] = new_buf_k
+                    kv_buf_v[bi] = new_buf_v
+                kv_buf_k[bi][:, kv_len[bi]:kv_len[bi]+seq_len] = k
+                kv_buf_v[bi][:, kv_len[bi]:kv_len[bi]+seq_len] = v
+                kv_len[bi] = new_len
+                k = kv_buf_k[bi][:, :new_len]
+                v = kv_buf_v[bi][:, :new_len]
 
                 # GQA: expand K/V heads if n_kv_heads < n_heads
                 if K_H < H:

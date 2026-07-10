@@ -15,6 +15,16 @@ import numpy as np
 
 logger = logging.getLogger("man.inference.slonet_provider")
 
+# Lazy import to avoid circular dependency
+_SloLayerNorm = None
+
+def _get_slo_layernorm():
+    global _SloLayerNorm
+    if _SloLayerNorm is None:
+        from domains.training.slonet import SloLayerNorm
+        _SloLayerNorm = SloLayerNorm
+    return _SloLayerNorm
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Universal HF → SloTransformer converter
@@ -370,7 +380,7 @@ class SloNetChatProvider:
         raise RuntimeError(f"No tokenizer found for {self._hf_model_id}")
 
     def generate(self, prompt: str, max_tokens: int = 50, temperature: float = 1.0) -> str:
-        """Generate text using pure numpy inference (no Tensor overhead)."""
+        """Generate text using pure numpy inference (KV cache + inlined ops)."""
         import numpy as _np
         tokens = self._tokenizer.encode(prompt)
         input_ids = _np.array([tokens], dtype=_np.int64)
@@ -390,54 +400,226 @@ class SloNetChatProvider:
         )
 
     def _generate_sync(self, messages, max_tokens=512, temperature=0.8, **kwargs):
-        """Synchronous generate — called from chat() via to_thread."""
+        """Synchronous generate with KV cache — called from chat() via to_thread."""
+        import numpy as _np
         prompt = ""
         if messages and isinstance(messages[-1], dict):
             prompt = messages[-1].get("content", "")
         elif messages and isinstance(messages[-1], str):
             prompt = messages[-1]
         tokens = self._tokenizer.encode(prompt)
-        generated = list(tokens)
-        import numpy as _np
-        for _ in range(max_tokens):
-            inp = _np.array([generated], dtype=_np.int64)
-            result = self._model.forward(inp)
-            logits = result[0].data
-            next_token = int(_np.argmax(logits[0, -1]))
-            generated.append(next_token)
-        return self._tokenizer.decode(generated)
+        input_ids = _np.array([tokens], dtype=_np.int64)
+        result = self._model.generate_numpy(
+            input_ids,
+            max_new_tokens=max_tokens,
+            temperature=temperature,
+            eos_token=self._tokenizer.eos_token_id or 0,
+        )
+        return self._tokenizer.decode(result[0].tolist())
 
     async def chat_stream(self, messages, max_tokens=512, temperature=0.8, **kwargs):
-        """Streaming chat — yields token strings.
+        """Streaming chat — yields token strings with KV cache.
 
-        Runs forward pass in a thread to avoid blocking the event loop.
+        Pre-fills prompt in one forward pass, then generates one token at a time
+        using KV cache (each step only processes the new token).
 
         Args:
             messages: List of {"role": "...", "content": "..."} dicts
             max_tokens: Maximum tokens to generate
-            temperature: Sampling temperature (currently greedy — temp unused)
+            temperature: Sampling temperature
 
         Yields:
             Each token string as it's generated.
         """
         import asyncio
         import numpy as _np
+        import math
 
         prompt = ""
         if messages and isinstance(messages[-1], dict):
             prompt = messages[-1].get("content", "")
         elif messages and isinstance(messages[-1], str):
             prompt = messages[-1]
-        tokens = self._tokenizer.encode(prompt)
-        generated = list(tokens)
+        token_ids = self._tokenizer.encode(prompt)
+        eos_id = self._tokenizer.eos_token_id or 0
 
-        def _step(generated_list):
-            inp = _np.array([generated_list], dtype=_np.int64)
-            result = self._model.forward(inp)
-            logits = result[0].data
-            return int(_np.argmax(logits[0, -1]))
+        def _stream_generate():
+            """KV-cache streaming generation — runs in a thread."""
+            m = self._model
+            tokens = _np.array([token_ids], dtype=_np.int64)
+            prompt_len = tokens.shape[1]
 
-        for _ in range(max_tokens):
-            next_token = await asyncio.to_thread(_step, generated)
-            generated.append(next_token)
-            yield self._tokenizer.decode([next_token])
+            # Extract weights once (same as generate_numpy)
+            blocks = []
+            for l in m.layers[1:-2]:
+                if hasattr(l, 'attn_norm') and hasattr(l, 'ff'):
+                    b = l
+                    SloLN = _get_slo_layernorm()
+                    has_ln = isinstance(b.attn_norm, SloLN)
+                    blocks.append({
+                        'an_w': b.attn_norm.weight.data,
+                        'an_b': b.attn_norm.bias.data if has_ln else None,
+                        'an_eps': b.attn_norm.eps,
+                        'fn_w': b.ff_norm.weight.data,
+                        'fn_b': b.ff_norm.bias.data if has_ln else None,
+                        'fn_eps': b.ff_norm.eps,
+                        'wq': b.attn.W_q.weight.data,
+                        'bq': b.attn.W_q.bias.data if b.attn.W_q.use_bias else None,
+                        'wk': b.attn.W_k.weight.data,
+                        'bk': b.attn.W_k.bias.data if b.attn.W_k.use_bias else None,
+                        'wv': b.attn.W_v.weight.data,
+                        'bv': b.attn.W_v.bias.data if b.attn.W_v.use_bias else None,
+                        'wo': b.attn.W_o.weight.data,
+                        'bo': b.attn.W_o.bias.data if b.attn.W_o.use_bias else None,
+                        'w1': b.ff.w1.weight.data,
+                        'b1': b.ff.w1.bias.data if b.ff.w1.use_bias else None,
+                        'w2': b.ff.w2.weight.data,
+                        'b2': b.ff.w2.bias.data if b.ff.w2.use_bias else None,
+                        'w3': b.ff.w3.weight.data,
+                        'b3': b.ff.w3.bias.data if b.ff.w3.use_bias else None,
+                        'n_heads': b.attn.n_heads,
+                        'n_kv_heads': b.attn.n_kv_head,
+                        'head_dim': b.attn.head_dim,
+                    })
+
+            tok_emb_w = m.layers[0].weight.data
+            pos_emb_w = m.pos_emb.weight.data if m.pos_emb is not None else None
+            pos_emb_n = m.pos_emb.num_embeddings if m.pos_emb is not None else 0
+            norm_layer = m.layers[-2]
+            SloLN = _get_slo_layernorm()
+            norm_has_bias = isinstance(norm_layer, SloLN)
+            norm_w = norm_layer.weight.data
+            norm_b = norm_layer.bias.data if norm_has_bias else None
+            norm_eps = norm_layer.eps
+            lm_w = m.layers[-1].weight.data
+
+            E = blocks[0]['head_dim']
+            H = blocks[0]['n_heads']
+            K_H = blocks[0]['n_kv_heads']
+            scale = 1.0 / math.sqrt(E)
+
+            # Pre-allocate KV cache
+            kv_buf_k = [None] * len(blocks)
+            kv_buf_v = [None] * len(blocks)
+            kv_len = [0] * len(blocks)
+
+            def _forward_step(idx, pos, step):
+                nonlocal kv_buf_k, kv_buf_v, kv_len
+                B = 1
+                seq_len = idx.shape[1]
+                clipped = _np.clip(idx.astype(_np.int64), 0, tok_emb_w.shape[0] - 1)
+                x = _np.take(tok_emb_w, clipped, axis=0)
+                if pos_emb_w is not None:
+                    p = _np.arange(pos, pos + seq_len, dtype=_np.int64).reshape(1, -1)
+                    x = x + _np.take(pos_emb_w, _np.clip(p, 0, pos_emb_n - 1), axis=0)
+
+                for bi, bw in enumerate(blocks):
+                    mean = x.mean(axis=-1, keepdims=True)
+                    var = x.var(axis=-1, keepdims=True)
+                    h = (x - mean) / _np.sqrt(var + bw['an_eps']) * bw['an_w']
+                    if bw['an_b'] is not None: h = h + bw['an_b']
+
+                    q = h @ bw['wq'].T
+                    if bw['bq'] is not None: q = q + bw['bq']
+                    k = h @ bw['wk'].T
+                    if bw['bk'] is not None: k = k + bw['bk']
+                    v = h @ bw['wv'].T
+                    if bw['bv'] is not None: v = v + bw['bv']
+
+                    q = q.reshape(B, seq_len, H, E)
+                    k = k.reshape(B, seq_len, K_H, E)
+                    v = v.reshape(B, seq_len, K_H, E)
+
+                    new_len = kv_len[bi] + seq_len
+                    if kv_buf_k[bi] is None or new_len > kv_buf_k[bi].shape[1]:
+                        cap = max(64, new_len * 2)
+                        new_buf_k = _np.zeros((B, cap, K_H, E), dtype=k.dtype)
+                        new_buf_v = _np.zeros((B, cap, K_H, E), dtype=v.dtype)
+                        if kv_buf_k[bi] is not None:
+                            old_len = kv_len[bi]
+                            new_buf_k[:, :old_len] = kv_buf_k[bi][:, :old_len]
+                            new_buf_v[:, :old_len] = kv_buf_v[bi][:, :old_len]
+                        kv_buf_k[bi] = new_buf_k
+                        kv_buf_v[bi] = new_buf_v
+                    kv_buf_k[bi][:, kv_len[bi]:kv_len[bi]+seq_len] = k
+                    kv_buf_v[bi][:, kv_len[bi]:kv_len[bi]+seq_len] = v
+                    kv_len[bi] = new_len
+                    k = kv_buf_k[bi][:, :new_len]
+                    v = kv_buf_v[bi][:, :new_len]
+
+                    if K_H < H:
+                        reps = H // K_H
+                        k = _np.repeat(k, reps, axis=2)
+                        v = _np.repeat(v, reps, axis=2)
+
+                    scores = _np.einsum('bnhd,bmhd->bhnm', q, k) * scale
+                    if step == 0 and seq_len > 1:
+                        causal = _np.triu(_np.full((seq_len, seq_len), -1e9, dtype=_np.float32), k=1)
+                        scores = scores + causal
+                    attn = _np.exp(scores - scores.max(axis=-1, keepdims=True))
+                    attn = attn / attn.sum(axis=-1, keepdims=True)
+                    ao = _np.einsum('bhnm,bmhd->bnhd', attn, v).reshape(B, seq_len, H * E)
+
+                    ao = ao @ bw['wo'].T
+                    if bw['bo'] is not None: ao = ao + bw['bo']
+                    x = x + ao
+
+                    mean = x.mean(axis=-1, keepdims=True)
+                    var = x.var(axis=-1, keepdims=True)
+                    h = (x - mean) / _np.sqrt(var + bw['fn_eps']) * bw['fn_w']
+                    if bw['fn_b'] is not None: h = h + bw['fn_b']
+                    h1 = h @ bw['w1'].T
+                    if bw['b1'] is not None: h1 = h1 + bw['b1']
+                    h3 = h @ bw['w3'].T
+                    if bw['b3'] is not None: h3 = h3 + bw['b3']
+                    h1 = 0.5 * h1 * (1.0 + _np.tanh(0.7978845608 * (h1 + 0.044715 * h1**3)))
+                    h = h1 * h3
+                    h = h @ bw['w2'].T
+                    if bw['b2'] is not None: h = h + bw['b2']
+                    x = x + h
+
+                mean = x.mean(axis=-1, keepdims=True)
+                var = x.var(axis=-1, keepdims=True)
+                x = (x - mean) / _np.sqrt(var + norm_eps) * norm_w
+                if norm_has_bias: x = x + norm_b
+                logits = x[:, -1, :] @ lm_w.T
+                if temperature > 0 and temperature != 1.0:
+                    logits = logits / temperature
+                return int(_np.argmax(logits[0]))
+
+            # Step 0: pre-fill full prompt
+            next_id = _forward_step(tokens[:, -m.block_size:], 0, step=0)
+            tokens = _np.concatenate([tokens, _np.array([[next_id]], dtype=_np.int64)], axis=1)
+            yield self._tokenizer.decode([next_id])
+
+            # Steps 1..max_tokens: single-token forward with KV cache
+            for step in range(1, max_tokens):
+                if next_id == eos_id:
+                    break
+                pos = tokens.shape[1] - 1
+                next_id = _forward_step(tokens[:, -1:], pos, step=step)
+                tokens = _np.concatenate([tokens, _np.array([[next_id]], dtype=_np.int64)], axis=1)
+                yield self._tokenizer.decode([next_id])
+
+        # Run the generation loop in a thread, yielding tokens via a queue
+        import queue
+        q = queue.Queue()
+        sentinel = object()
+
+        def _producer():
+            try:
+                for token in _stream_generate():
+                    q.put(token)
+            finally:
+                q.put(sentinel)
+
+        loop = asyncio.get_event_loop()
+        import threading
+        producer_thread = threading.Thread(target=_producer, daemon=True)
+        producer_thread.start()
+
+        while True:
+            token = await asyncio.to_thread(q.get)
+            if token is sentinel:
+                break
+            yield token
