@@ -74,6 +74,25 @@ def _get_inference_stats() -> Dict[str, Any]:
         return {}
 
 
+def _get_quantization_info() -> Dict[str, Any]:
+    """Get quantization status from the active provider."""
+    try:
+        import state as server_state
+        model = getattr(server_state, 'model', None)
+        if model is None:
+            return {}
+        provider = getattr(server_state, '_provider', None)
+        if provider is None:
+            # Try to get provider from provider system
+            from domains.models.provider import get_provider
+            provider = get_provider("slonet")
+        if provider is not None and hasattr(provider, 'quantization_report'):
+            return provider.quantization_report()
+        return {}
+    except Exception:
+        return {}
+
+
 def _build_status_message(
     model_loaded: bool,
     model_type: Optional[str],
@@ -254,6 +273,7 @@ class HealthController:
             "soul": current_soul,
             "inference": inference_stats,
             "registry": registry_health,
+            "quantization": _get_quantization_info(),
             "lifecycle": lifecycle,
             "status_message": _build_status_message(
                 model_loaded, model_type, current_soul,

@@ -569,7 +569,13 @@ def _try_load_slnc(cfg: ServerConfig, ctrl) -> Optional[dict]:
         logger.info("Autoload: found .slnc at %s — loading via mmap", slnc_path)
         try:
             from domains.inference.slonet_provider import SloNetChatProvider
-            provider = SloNetChatProvider.from_slnc(str(slnc_path), model_id=model_id)
+            provider = SloNetChatProvider.from_slnc(
+                str(slnc_path), model_id=model_id,
+                quantize=cfg.quantize_slonet,
+                quant_bits=cfg.quant_bits,
+                quant_mode=cfg.quant_mode,
+                quant_clip=cfg.quant_clip,
+            )
 
             # Register with provider system
             from domains.models.provider import (
@@ -614,10 +620,16 @@ def _try_load_slnc(cfg: ServerConfig, ctrl) -> Optional[dict]:
         slnc_result = SLNCCompiler.compile(st_path, slnc_path)
         logger.info("Autoload: .slnc compiled — %d blocks, %.0f MB",
                      slnc_result["total_blocks"], slnc_result["file_size_mb"])
-
         # Now load the .slnc
         from domains.inference.slonet_provider import SloNetChatProvider
-        provider = SloNetChatProvider.from_slnc(str(slnc_path), model_id=model_id)
+        provider = SloNetChatProvider.from_slnc(
+            str(slnc_path), model_id=model_id,
+            quantize=cfg.quantize_slonet,
+            quant_bits=cfg.quant_bits,
+            quant_mode=cfg.quant_mode,
+            quant_clip=cfg.quant_clip,
+        )
+
 
         from domains.models.provider import (
             register_provider,
