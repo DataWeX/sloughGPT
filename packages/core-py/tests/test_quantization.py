@@ -21,6 +21,8 @@ from domains.infrastructure.quantization import (
     QuantMeta,
     TensorInfo,
     _cosine_similarity,
+    _pack_int4,
+    _unpack_int4,
     quantize_state_dict,
 )
 
@@ -354,3 +356,95 @@ class TestCosineSimFunction:
         a = np.array([0.0, 0.0])
         b = np.array([1.0, 2.0])
         assert _cosine_similarity(a, b) == 0.0
+
+
+class TestInt4PackUnpack:
+    """Test int4 packing and unpacking helpers."""
+
+    def test_pack_roundtrip(self):
+        arr = np.array([1, -3, 7, -8, 0, 5, -5, 3], dtype=np.int8)
+        packed = _pack_int4(arr)
+        assert len(packed) == 4
+        unpacked = _unpack_int4(packed, 8)
+        np.testing.assert_array_equal(unpacked, arr)
+
+    def test_pack_odd_length(self):
+        arr = np.array([1, -3, 7], dtype=np.int8)
+        packed = _pack_int4(arr)
+        assert len(packed) == 2  # padded to 4, packed to 2
+        unpacked = _unpack_int4(packed, 3)
+        np.testing.assert_array_equal(unpacked, arr)
+
+    def test_unpack_single_byte(self):
+        """Each nibble separately identifiable."""
+        packed = np.array([0x12], dtype=np.int8)  # low=2, high=1
+        unpacked = _unpack_int4(packed, 2)
+        assert unpacked[0] == 2
+        assert unpacked[1] == 1
+
+
+class TestInt4Quantization:
+    """Test int4 per-tensor quantization."""
+
+    def test_symmetric_quantize_dequantize(self):
+        engine = QuantEngine(bits=4, mode="symmetric")
+        arr = np.random.randn(8, 8).astype(np.float32)
+        info = engine.quantize("test", arr)
+        assert info.is_quantized
+        assert info.meta.bits == 4
+        assert info.meta.zero_point == 0
+        # Packed: 64 elements → 32 bytes
+        assert info.array.nbytes == 32
+        # 8x compression (64*4 / 32)
+        assert info.compression_ratio() == pytest.approx(8.0, rel=0.01)
+
+    def test_asymmetric_quantize_dequantize(self):
+        """Asymmetric int4 works well for non-negative data."""
+        engine = QuantEngine(bits=4, mode="asymmetric")
+        # Non-negative data where asymmetric quantization shines
+        arr = np.random.rand(8, 8).astype(np.float32) * 10.0
+        info = engine.quantize("test", arr)
+        assert info.is_quantized
+        assert info.meta.bits == 4
+
+    def test_as_float_restores_shape(self):
+        engine = QuantEngine(bits=4, mode="symmetric")
+        arr = np.random.randn(16, 32).astype(np.float32)
+        info = engine.quantize("test", arr)
+        deq = info.as_float()
+        assert deq.shape == (16, 32)
+        assert deq.dtype == np.float32
+
+    def test_cosine_gpt2_scale(self):
+        """At GPT-2 scale, int4 should have reasonable accuracy."""
+        rng = np.random.RandomState(42)
+        w = rng.randn(768, 768).astype(np.float32) * 0.02
+        engine = QuantEngine(bits=4, mode="symmetric")
+        info = engine.quantize("test", w)
+        assert info.meta.cosine_sim > 0.95, f"cosine={info.meta.cosine_sim}"
+
+    def test_skip_prefixes_respected(self):
+        """Tensors matching skip prefixes should not be quantized."""
+        engine = QuantEngine(bits=4, mode="symmetric")
+        arr = np.random.randn(10, 10).astype(np.float32)
+        info = engine.quantize("tok_emb.test", arr)
+        assert not info.is_quantized
+
+    def test_compression_ratio(self):
+        """int4 should give ~8x compression."""
+        engine = QuantEngine(bits=4, mode="symmetric")
+        arr = np.random.randn(100, 100).astype(np.float32)
+        info = engine.quantize("test", arr)
+        ratio = info.compression_ratio()
+        assert 7.5 < ratio < 8.5, f"compression_ratio={ratio}"
+
+    def test_dequantize_preserves_values(self):
+        """Dequantized int4 should be close to original."""
+        engine = QuantEngine(bits=4, mode="symmetric")
+        arr = np.array([[1.0, -2.0], [3.0, -4.0]], dtype=np.float32)
+        info = engine.quantize("test", arr)
+        deq = info.as_float()
+        cosine = np.dot(arr.flatten(), deq.flatten()) / (
+            np.linalg.norm(arr) * np.linalg.norm(deq)
+        )
+        assert cosine > 0.90

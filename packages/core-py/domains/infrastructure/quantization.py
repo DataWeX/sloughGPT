@@ -132,12 +132,14 @@ class TensorInfo:
                 return self.array.astype(np.float32)
             return self.array
 
+        signed = (self.meta.mode == "symmetric") if self.is_quantized and self.meta.bits == 4 else True
         return _dequantize(
             self.array,
             scale=self.meta.scale,
             zero_point=self.meta.zero_point,
             bits=self.meta.bits,
             original_shape=self.meta.original_shape,
+            signed=signed,
         )
 
     def quantized_bytes(self) -> int:
@@ -148,7 +150,12 @@ class TensorInfo:
 
     def compression_ratio(self) -> float:
         """Original size / quantized size."""
+        if not self.is_quantized:
+            return 1.0
         original = int(np.prod(self.meta.original_shape)) * 4  # float32 = 4 bytes
+        if self.meta.bits == 4:
+            # Packed int4: each byte stores 2 values, so quantized_bytes reflects packed size
+            return original / max(self.quantized_bytes(), 1)
         return original / max(self.quantized_bytes(), 1)
 
 
@@ -246,7 +253,8 @@ class QuantEngine:
         quantized = self._encode(flat_clipped, scale, zero_point)
 
         # Compute error metrics
-        dequantized = _dequantize(quantized, scale, zero_point, self._bits, arr.shape)
+        _signed = (self._mode == QuantMode.SYMMETRIC)
+        dequantized = _dequantize(quantized, scale, zero_point, self._bits, arr.shape, signed=_signed)
         mse = float(np.mean((flat - dequantized.flatten()) ** 2))
         max_err = float(np.max(np.abs(flat - dequantized.flatten())))
         cos_sim = float(_cosine_similarity(flat, dequantized.flatten()))
@@ -275,8 +283,9 @@ class QuantEngine:
             cosine_sim=cos_sim,
         )
 
-        # Reshape quantized to original shape (for int8 storage)
-        quantized_reshaped = quantized.reshape(arr.shape)
+        # Reshape to original shape for matmul compatibility (int8)
+        # For int4 (packed), keep flat since packed size differs from original shape
+        quantized_reshaped = quantized if self._bits == 4 else quantized.reshape(arr.shape)
 
         self._error_report[name] = meta
 
@@ -309,7 +318,8 @@ class QuantEngine:
         flat = arr.flatten().astype(np.float32)
         quantized = self._encode(flat, scale, zero_point)
 
-        dequantized = _dequantize(quantized, scale, zero_point, self._bits, arr.shape)
+        _signed = (self._mode == QuantMode.SYMMETRIC)
+        dequantized = _dequantize(quantized, scale, zero_point, self._bits, arr.shape, signed=_signed)
         mse = float(np.mean((flat - dequantized.flatten()) ** 2))
         max_err = float(np.max(np.abs(flat - dequantized.flatten())))
         cos_sim = float(_cosine_similarity(flat, dequantized.flatten()))
@@ -326,7 +336,7 @@ class QuantEngine:
             max_abs_error=max_err,
             cosine_sim=cos_sim,
         )
-        quantized_reshaped = quantized.reshape(arr.shape)
+        quantized_reshaped = quantized if self._bits == 4 else quantized.reshape(arr.shape)
         self._error_report[name] = meta
         return TensorInfo(name=name, array=quantized_reshaped, meta=meta)
 
@@ -358,7 +368,7 @@ class QuantEngine:
     def _compute_symmetric(self, flat: np.ndarray) -> Tuple[float, int]:
         """Symmetric quantization: scale = max_abs / (2^(bits-1) - 1), zero_point = 0."""
         max_abs = max(np.max(np.abs(flat)), 1e-10)
-        qmax = (2 ** (self._bits - 1)) - 1  # 127 for int8
+        qmax = (2 ** (self._bits - 1)) - 1  # 127 for int8, 7 for int4
         scale = max_abs / qmax
         return float(scale), 0
 
@@ -370,7 +380,7 @@ class QuantEngine:
         """
         lo = float(np.min(flat))
         hi = float(np.max(flat))
-        qmax = (2 ** self._bits) - 1  # 255 for uint8
+        qmax = (2 ** self._bits) - 1  # 255 for uint8, 15 for int4
 
         # Avoid division by zero
         range_val = hi - lo
@@ -379,8 +389,6 @@ class QuantEngine:
 
         scale = range_val / qmax
         zero_point = int(np.round(-lo / scale))
-        # Allow negative zero_point for shifted distributions
-        # For int8: range is [-128, 127], for uint8 storage we shift by +128
         if self._bits == 8:
             zero_point = max(-128, min(127, zero_point))
         else:
@@ -389,15 +397,27 @@ class QuantEngine:
         return float(scale), zero_point
 
     def _encode(self, flat: np.ndarray, scale: float, zero_point: int) -> np.ndarray:
-        """Encode float32 array to quantized integer array."""
+        """Encode float32 array to quantized integer array.
+
+        For int8: returns int8 array of same length.
+        For int4: returns packed int8 array with two values per byte (half the length).
+        """
         if self._mode == QuantMode.SYMMETRIC:
-            quantized = np.clip(np.round(flat / scale), -128, 127).astype(np.int8)
+            if self._bits == 8:
+                return np.clip(np.round(flat / scale), -128, 127).astype(np.int8)
+            else:
+                # int4 symmetric: range [-8, 7]
+                q = np.clip(np.round(flat / scale), -8, 7).astype(np.int8)
+                return _pack_int4(q)
         else:
-            # Asymmetric: store as int8 with shifted zero_point
-            # quantized = round(x / scale) + zero_point
-            # Stored as int8: subtract 128 to fit uint8 range, but we use int8 directly
-            quantized = np.clip(np.round(flat / scale) + zero_point, -128, 127).astype(np.int8)
-        return quantized
+            # Asymmetric
+            if self._bits == 8:
+                quantized = np.clip(np.round(flat / scale) + zero_point, -128, 127).astype(np.int8)
+                return quantized
+            else:
+                # int4 asymmetric: range [0, 15]
+                q = np.clip(np.round(flat / scale) + zero_point, 0, 15).astype(np.int8)
+                return _pack_int4(q)
 
     def save_metadata(self, path: str):
         """Save quantization metadata to JSON file."""
@@ -412,19 +432,82 @@ class QuantEngine:
         logger.info("QuantEngine: loaded metadata for %d tensors from %s", len(self._error_report), path)
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# int4 packing / unpacking
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _pack_int4(arr: np.ndarray) -> np.ndarray:
+    """Pack two int4 values into each int8 byte.
+
+    Args:
+        arr: 1D int8 array where each element is in range [-8, 7] or [0, 15]
+
+    Returns:
+        Packed int8 array with half the length.
+        Each byte: low_nibble = arr[2*i] & 0x0F, high_nibble = arr[2*i+1] & 0x0F
+    """
+    assert arr.ndim == 1, f"_pack_int4 expects 1D, got {arr.ndim}D"
+    # Pad to even length
+    if len(arr) % 2 != 0:
+        arr = np.append(arr, np.int8(0))
+    packed = (arr[1::2].astype(np.uint8) << 4) | (arr[::2].astype(np.uint8) & 0x0F)
+    return packed.astype(np.int8)
+
+
+def _unpack_int4(packed: np.ndarray, original_length: int, signed: bool = True) -> np.ndarray:
+    """Unpack int4 values from packed int8 bytes.
+
+    Args:
+        packed: int8 array where each byte contains two int4 values
+        original_length: number of elements before packing
+        signed: if True, interpret as signed int4 (range [-8, 7], symmetric)
+                if False, interpret as unsigned int4 (range [0, 15], asymmetric)
+
+    Returns:
+        int8 array of original_length
+    """
+    assert packed.ndim == 1, f"_unpack_int4 expects 1D, got {packed.ndim}D"
+    packed_u8 = packed.astype(np.uint8)
+    low = (packed_u8 & 0x0F).astype(np.int8)
+    high = ((packed_u8 >> 4) & 0x0F).astype(np.int8)
+    result = np.empty(len(packed) * 2, dtype=np.int8)
+    result[0::2] = low
+    result[1::2] = high
+    if signed:
+        # Sign extension for symmetric int4 (values 8-15 → negative)
+        result[result > 7] = result[result > 7] - 16
+    return result[:original_length]
+
+
 def _dequantize(
     quantized: np.ndarray,
     scale: float,
     zero_point: int,
     bits: int,
     original_shape: Tuple[int, ...],
+    signed: bool = True,
 ) -> np.ndarray:
     """Dequantize integer array to float32.
 
     For symmetric mode (zero_point=0): result = quantized * scale
     For asymmetric mode: result = (quantized - zero_point) * scale
+
+    Handles both int8 (one value per byte) and packed int4 (two values per byte).
+
+    Args:
+        quantized: quantized integer array (int8 or packed int4)
+        scale: quantization scale
+        zero_point: quantization zero point
+        bits: 8 or 4
+        original_shape: shape to reshape result to
+        signed: for int4 unpacking, True for symmetric ([-8,7]), False for asymmetric ([0,15])
     """
     flat = quantized.flatten()
+
+    if bits == 4:
+        # Unpack int4 first
+        n_original = int(np.prod(original_shape))
+        flat = _unpack_int4(flat, n_original, signed=signed)
 
     if zero_point == 0:
         # Symmetric

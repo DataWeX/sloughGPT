@@ -158,3 +158,19 @@ class TestQuantizationBenchmark:
         assert len(cos8_list) > 0
         # Int8 should have higher average cosine similarity
         assert np.mean(cos8_list) > np.mean(cos4_list)
+
+    def test_int4_memory_savings(self, gpt2_weights):
+        """Int4 should achieve ~8x compression across the model."""
+        engine = QuantEngine(bits=4, mode="symmetric")
+
+        total_original = 0
+        total_quantized = 0
+        for name, arr in gpt2_weights.items():
+            info = engine.quantize(name, arr)
+            if info.is_quantized:
+                total_original += int(np.prod(arr.shape)) * 4
+                total_quantized += info.array.nbytes
+
+        assert total_original > 0
+        compression = total_original / max(total_quantized, 1)
+        assert 6.0 < compression < 10.0, f"Compression {compression:.1f}x should be ~8x"
