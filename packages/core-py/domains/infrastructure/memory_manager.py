@@ -13,10 +13,8 @@ Design principles:
   - Configurable tier sizes based on available RAM
 
 Compression:
-  - LZ4: fastest decompression (~5 GB/s), moderate ratio (~2x)
-  - ZSTD: good balance (~3 GB/s, ~3x ratio)
-  - VQ: best ratio (~4-8x), slower decompress
-  - Quantize: int8/int4 for extreme compression (lossy)
+  - ZSTD: good balance (~3 GB/s, ~3x ratio), lossless
+  - Quantize: int8/int4 for extreme compression (lossy, not for GPT-2)
 
 Usage:
     from domains.infrastructure.memory_manager import WeightManager
@@ -46,10 +44,9 @@ class Tier(Enum):
 
 class Compression(Enum):
     NONE = "none"
-    LZ4 = "lz4"
-    ZSTD = "zstd"
-    QUANTIZE_INT8 = "quantize_int8"
-    QUANTIZE_INT4 = "quantize_int4"
+    ZSTD = "zstd"  # lossless, ~3x ratio, ~3 GB/s decompress
+    QUANTIZE_INT8 = "quantize_int8"  # lossy, ~4x ratio, slower
+    QUANTIZE_INT4 = "quantize_int4"  # lossy, ~8x ratio, slowest
 
 
 @dataclass
@@ -93,7 +90,7 @@ class WeightManager:
         ram_budget_mb: float = 512,
         hot_ratio: float = 0.2,      # 20% of RAM for hot tier
         warm_ratio: float = 0.5,     # 50% of RAM for warm tier
-        compression: Compression = Compression.LZ4,
+        compression: Compression = Compression.ZSTD,
         page_size: int = 1024 * 1024,  # 1MB pages
     ):
         """Initialize memory manager.
@@ -304,9 +301,6 @@ class WeightManager:
 
         if self._compression == Compression.NONE:
             return raw
-        elif self._compression == Compression.LZ4:
-            import lz4.frame
-            return lz4.frame.compress(raw)
         elif self._compression == Compression.ZSTD:
             import zstandard as zstd
             ctx = zstd.ZstdCompressor()
@@ -322,10 +316,6 @@ class WeightManager:
         """Decompress bytes to numpy array."""
         if self._compression == Compression.NONE:
             return np.frombuffer(data, dtype=dtype).reshape(shape)
-        elif self._compression == Compression.LZ4:
-            import lz4.frame
-            raw = lz4.frame.decompress(data)
-            return np.frombuffer(raw, dtype=dtype).reshape(shape)
         elif self._compression == Compression.ZSTD:
             import zstandard as zstd
             ctx = zstd.ZstdDecompressor()
