@@ -426,17 +426,27 @@ class SloNetChatProvider:
 
         # Apply quantization if requested
         if quantize:
-            from domains.infrastructure.quantization import QuantEngine
+            from domains.infrastructure.quantization import QuantEngine, walk_slo_linears
             from pathlib import Path as PathlibPath
 
             slnc_path_obj = PathlibPath(slnc_path)
             quant_meta_path = slnc_path_obj.with_suffix(slnc_path_obj.suffix + ".quant.json")
 
-            # Build name → module map for SloLinear layers
-            linear_map = {}
-            for module_name, module in model.named_modules():
-                if hasattr(module, 'weight') and hasattr(module, 'forward_numpy'):
-                    linear_map[module_name] = module
+            # Get SloLinear layers via walk_slo_linears (not named_modules,
+            # which misses layers stored in plain Python list attributes)
+            linear_map = walk_slo_linears(model)
+            param_names = dict(model.named_parameters())
+
+            # Build a reverse lookup: parameter name → linear module name
+            # named_parameters() uses HuggingFace naming (q_proj), while
+            # walk_slo_linears uses SloNet naming (W_q). Match via the
+            # actual module objects.
+            param_to_module = {}
+            for mod_name, module in linear_map.items():
+                for pname, param in param_names.items():
+                    if param is module.weight:
+                        param_to_module[pname] = mod_name
+                        break
 
             # Try loading existing quant metadata sidecar
             if quant_meta_path.exists():
@@ -448,25 +458,22 @@ class SloNetChatProvider:
                 engine.load_metadata(str(quant_meta_path))
                 logger.info(
                     "SloNetChatProvider.from_slnc: loaded quant metadata (%d tensors) from %s",
-                    len(list(model.named_parameters())), quant_meta_path,
+                    len(param_names), quant_meta_path,
                 )
 
                 quantized_count = 0
-                for name, param in model.named_parameters():
-                    meta = engine._error_report.get(name)
+                for pname, param in param_names.items():
+                    if pname not in param_to_module:
+                        continue
+                    meta = engine._error_report.get(pname)
                     if meta is not None:
                         arr = param.data.copy()
                         info = engine.quantize_with_scale(
-                            name, arr, meta.scale, meta.zero_point,
+                            pname, arr, meta.scale, meta.zero_point,
                         )
                         if info.is_quantized:
-                            parts = name.split('.')
-                            for i in range(len(parts), 0, -1):
-                                prefix = '.'.join(parts[:i])
-                                if prefix in linear_map:
-                                    linear_map[prefix].set_quantized_weight(info)
-                                    quantized_count += 1
-                                    break
+                            linear_map[param_to_module[pname]].set_quantized_weight(info)
+                            quantized_count += 1
             else:
                 engine = QuantEngine(
                     bits=quant_bits,
@@ -475,17 +482,14 @@ class SloNetChatProvider:
                 )
 
                 quantized_count = 0
-                for name, param in model.named_parameters():
+                for pname, param in param_names.items():
+                    if pname not in param_to_module:
+                        continue
                     arr = param.data.copy()
-                    info = engine.quantize(name, arr)
+                    info = engine.quantize(pname, arr)
                     if info.is_quantized:
-                        parts = name.split('.')
-                        for i in range(len(parts), 0, -1):
-                            prefix = '.'.join(parts[:i])
-                            if prefix in linear_map:
-                                linear_map[prefix].set_quantized_weight(info)
-                                quantized_count += 1
-                                break
+                        linear_map[param_to_module[pname]].set_quantized_weight(info)
+                        quantized_count += 1
 
                 engine.save_metadata(str(quant_meta_path))
 
@@ -493,7 +497,7 @@ class SloNetChatProvider:
             summary = engine.summary()
             logger.info(
                 "SloNetChatProvider.from_slnc: quantized %d/%d tensors (bits=%d, mode=%s, avg_cosine=%.4f)",
-                quantized_count, len(list(model.named_parameters())), quant_bits, quant_mode,
+                quantized_count, len(linear_map), quant_bits, quant_mode,
                 summary.get("avg_cosine_sim", 0.0),
             )
 
