@@ -4,16 +4,25 @@ Progress bars and spinners for CLI operations.
 Provides visual feedback for long-running operations.
 Uses Rich for terminal-formatted progress bars with ETA, speed, and color.
 """
+import os
 import sys
 import time
 import threading
 from typing import Optional, Callable
 
 
-class ProgressBar:
-    """Rich-backed progress bar with dotted fill, ETA, and speed."""
+def _is_terminal() -> bool:
+    """Check if stdout is a real terminal (not piped/redirected)."""
+    return hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
 
-    # Dotted fill characters (popular in modern CLIs like pip, npm, cargo)
+
+class ProgressBar:
+    """Terminal progress bar with dotted fill, ETA, and speed.
+
+    Uses space-padding to overwrite previous output instead of ANSI escape
+    sequences, which avoids scroll/flicker in shells and captured output.
+    """
+
     FILLED = "█"
     EMPTY = "░"
     HALF = "▓"
@@ -35,7 +44,9 @@ class ProgressBar:
         self.start_time = time.time()
         self.last_update = 0.0
         self._update_interval = 0.1
+        self._last_rendered = ""
         self._last_pct = -1
+        self._is_tty = _is_terminal()
 
     def update(self, n: int = 1):
         self.current = min(self.current + n, self.total)
@@ -51,7 +62,10 @@ class ProgressBar:
     def finish(self):
         self.current = self.total
         self._render()
-        print()
+        if self._is_tty:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+        self._last_rendered = ""
 
     def _render(self):
         if self.total == 0:
@@ -60,12 +74,13 @@ class ProgressBar:
         pct = self.current / self.total
         pct_int = int(pct * 100)
 
-        # Only re-render if percentage changed (avoids flicker)
-        if pct_int == self._last_pct:
+        # Dedup: skip if nothing changed (same pct + same desc)
+        if pct_int == self._last_pct and self.desc == self._last_desc:
             return
         self._last_pct = pct_int
+        self._last_desc = self.desc
 
-        # Build bar with half-block for sub-character precision
+        # Build bar
         filled_width = int(self.width * pct)
         has_half = (self.width * pct) - filled_width >= 0.5
         bar = self.FILLED * filled_width
@@ -79,7 +94,7 @@ class ProgressBar:
         parts = []
 
         if self.desc:
-            parts.append(f"  {self.desc}")
+            parts.append(self.desc)
 
         parts.append(f"[{bar}] {pct_int:3d}%")
 
@@ -94,11 +109,20 @@ class ProgressBar:
             eta = (self.total - self.current) / (self.current / elapsed)
             parts.append(f"eta {self._format_time(eta)}")
 
-        parts.append(f"({self._format_time(elapsed)} elapsed)")
+        parts.append(f"({self._format_time(elapsed)})")
 
         line = " ".join(parts)
-        sys.stdout.write(f"\r\033[K{line}")
-        sys.stdout.flush()
+
+        if self._is_tty:
+            # TTY: overwrite in-place using \r + space padding
+            pad_len = max(0, len(self._last_rendered) - len(line))
+            sys.stdout.write(f"\r{line}{' ' * pad_len}\r")
+            sys.stdout.flush()
+        else:
+            # Non-TTY (piped/redirected): just print the line
+            print(line)
+
+        self._last_rendered = line
 
     @staticmethod
     def _format_time(seconds: float) -> str:
@@ -119,44 +143,39 @@ class Spinner:
     FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
     def __init__(self, text: str = "", interval: float = 0.08):
-        """Initialize spinner.
-
-        Args:
-            text: Text to display alongside spinner
-            interval: Update interval in seconds
-        """
         self.text = text
         self.interval = interval
         self._running = False
         self._thread = None
+        self._last_rendered = ""
 
     def start(self):
-        """Start spinner animation."""
         self._running = True
         self._thread = threading.Thread(target=self._animate, daemon=True)
         self._thread.start()
 
     def stop(self, message: str = "Done"):
-        """Stop spinner and print final message."""
         self._running = False
         if self._thread:
             self._thread.join(timeout=1.0)
-        # Clear line and print message
-        sys.stdout.write("\r" + " " * 50 + "\r")
-        sys.stdout.flush()
+        # Clear spinner line with space padding
+        if self._last_rendered:
+            pad = " " * len(self._last_rendered)
+            sys.stdout.write(f"\r{pad}\r")
+            sys.stdout.flush()
         if message:
             print(message)
 
     def _animate(self):
-        """Animate spinner frames."""
         i = 0
         while self._running:
             frame = self.FRAMES[i % len(self.FRAMES)]
-            if self.text:
-                sys.stdout.write(f"\r{frame} {self.text}")
-            else:
-                sys.stdout.write(f"\r{frame}")
+            line = f"{frame} {self.text}" if self.text else frame
+            # Pad to overwrite previous longer line
+            pad_len = max(0, len(self._last_rendered) - len(line))
+            sys.stdout.write(f"\r{line}{' ' * pad_len}\r")
             sys.stdout.flush()
+            self._last_rendered = line
             time.sleep(self.interval)
             i += 1
 

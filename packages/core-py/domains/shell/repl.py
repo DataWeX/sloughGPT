@@ -253,6 +253,9 @@ class ShellREPL:
             if cmd in ("finetuned",):
                 ft = self.cmds.finetuned_models()
                 return [m.get("model_name", "") for m in ft]
+            if cmd == "train":
+                # Subcommand completion: status, follow, stop, distill, hf, auto, load, del
+                return ["status", "follow", "stop", "distill", "hf", "auto", "load", "del"]
         except Exception:
             pass
         # Fallback: file/directory path completion
@@ -1188,7 +1191,7 @@ class ShellREPL:
                 "recall": "  recall <query>  — Search the knowledge base",
                 "checkpoints": "  checkpoints  — List training checkpoints (tab-completes names)",
                 "finetuned": "  finetuned  — List fine-tuned models",
-                "train": "  train [dataset] | train status | train stop <id>  — Training operations",
+                "train": "  train [dataset] | train status | train follow <id> | train stop <id>  — Training operations",
                 "finetuned": "  finetuned  — List fine-tuned model paths (tab-completes names)",
                 "gen": "  gen <prompt>  — Generate text via inference",
                 "tokenizer": "  tokenizer  — Show tokenizer vocabulary stats",
@@ -1306,6 +1309,7 @@ Process management:
   kill <id>               Stop a training job
   train [dataset]         Start training (or list datasets)
   train status            Show training job status
+  train follow <id>       Stream live training progress
   train stop <id>         Stop a training job
   train distill <ds>      Distill teacher into student
   train hf <model> <ds>   HuggingFace fine-tuning
@@ -1722,7 +1726,7 @@ Examples:
         self._print(self._format_table(rows, ["Model", "Loss", "Epochs", "Size"]))
 
     def _cmd_train(self, args: str = "") -> None:
-        """Train: train [dataset] | train status | train stop <id> | train distill <dataset>"""
+        """Train: train [dataset] | train status | train follow <id> | train stop <id> | train distill <dataset>"""
         parts = args.strip().split()
         sub = parts[0] if parts else ""
 
@@ -1739,6 +1743,14 @@ Examples:
                 prog = j.get("progress", 0)
                 rows.append([jid, status, model, f"{prog}%"])
             self._print(self._format_table(rows, ["ID", "Status", "Model", "Progress"]))
+            return
+
+        if sub == "follow":
+            job_id = parts[1] if len(parts) > 1 else ""
+            if not job_id:
+                self._print("  Usage: train follow <job_id>")
+                return
+            self._stream_train_progress(job_id)
             return
 
         if sub == "stop":
@@ -1760,7 +1772,10 @@ Examples:
             if "error" in r:
                 self._print(f"  Error: {r['error']}")
             else:
-                self._print(f"  Training started: {r.get('status', r)}")
+                job_id = r.get("id", "")
+                self._print(f"  Distillation started: {r.get('status', r)}")
+                if job_id:
+                    self._stream_train_progress(job_id)
             return
 
         if sub == "hf":
@@ -1774,7 +1789,10 @@ Examples:
             if "error" in r:
                 self._print(f"  Error: {r['error']}")
             else:
-                self._print(f"  Training started: {r.get('status', r)}")
+                job_id = r.get("id", "")
+                self._print(f"  Fine-tuning started: {r.get('status', r)}")
+                if job_id:
+                    self._stream_train_progress(job_id)
             return
 
         if sub == "auto":
@@ -1830,7 +1848,77 @@ Examples:
         if "error" in r:
             self._print(f"  Error: {r['error']}")
         else:
+            job_id = r.get("id", "")
             self._print(f"  Training started: {r.get('status', r)}")
+            if job_id:
+                self._stream_train_progress(job_id)
+
+    def _stream_train_progress(self, job_id: str) -> None:
+        """Stream training progress for a job with live progress bar."""
+        import time
+        from .commands import _api_get
+
+        FILLED = "█"
+        HALF = "▓"
+        EMPTY = "░"
+        bar_width = 32
+        last_rendered = ""
+
+        self._print(f"  Following job {job_id} (Ctrl+C to detach)")
+
+        while True:
+            try:
+                result = _api_get(f"/training/jobs/{job_id}")
+                if not result:
+                    self._print(f"  Job {job_id} not found")
+                    return
+
+                status = result.get("status", "unknown")
+                progress = result.get("progress", 0)
+                epoch = result.get("current_epoch", result.get("epoch", 0))
+                epochs = result.get("epochs", 0)
+                loss = result.get("train_loss", result.get("loss", 0))
+
+                # Build bar
+                pct = progress / 100 if progress > 0 else 0
+                filled = int(bar_width * pct)
+                has_half = (bar_width * pct) - filled >= 0.5
+                bar = FILLED * filled
+                if has_half and filled < bar_width:
+                    bar += HALF
+                    bar += EMPTY * (bar_width - filled - 1)
+                else:
+                    bar += EMPTY * (bar_width - filled)
+
+                line = f"  [{bar}] {progress:3d}%  epoch {epoch}/{epochs}  loss={loss or 0:.4f}  [{status}]"
+
+                # In-place update using stdio
+                if hasattr(self, '_stdio') and self._stdio:
+                    self._stdio.progress(line, done=(status in ("completed", "failed", "error")))
+                else:
+                    # Fallback: manual in-place update with space-padding
+                    pad = max(0, len(last_rendered) - len(line))
+                    sys.stdout.write(f"\r{line}{' ' * pad}\r")
+                    sys.stdout.flush()
+                    last_rendered = line
+
+                if status in ("completed", "failed", "error"):
+                    if status == "completed":
+                        ckpt = result.get("checkpoint", "")
+                        self._print(f"\n  Training complete" + (f" — {ckpt}" if ckpt else ""))
+                    else:
+                        err = result.get("error", "unknown error")
+                        self._print(f"\n  Training {status}: {err}")
+                    return
+
+            except KeyboardInterrupt:
+                self._print("\n  Detached (job continues on server)")
+                return
+            except Exception as e:
+                self._print(f"\n  Error: {e}")
+                return
+
+            time.sleep(3)
 
     def _cmd_gen(self, args: str = "") -> None:
         if not args:
