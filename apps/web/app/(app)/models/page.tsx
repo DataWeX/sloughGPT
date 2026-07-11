@@ -17,6 +17,7 @@ import PersonalityProfileCard from '@/components/models/PersonalityProfileCard'
 import ModelCatalogCard from '@/components/models/ModelCatalogCard'
 import ModelPlaygroundCard from '@/components/models/ModelPlaygroundCard'
 import ModelCacheCard from '@/components/models/ModelCacheCard'
+import QuantizationCard from '@/components/models/QuantizationCard'
 import {
   useModels,
   useSouls,
@@ -147,6 +148,7 @@ export default function ModelsPage() {
           onModelLoaded={async () => { await refreshHealth(); await refetchModels() }}
         />
         <ModelPlaygroundCard activeRuntimeId={activeRuntimeId} />
+        <QuantizationCard isOnline={isOnline} />
         <ModelCacheCard
           cacheUsage={cacheUsage}
           health={health}

@@ -52,6 +52,22 @@ export interface HealthStatus {
   device?: string
 }
 
+export interface QuantizationResult {
+  quantized: boolean
+  bits: number
+  mode: string
+  layers_quantized: number
+  total_layers: number
+  summary: {
+    tensors: number
+    bits: number
+    avg_cosine_sim: number
+    min_cosine_sim: number
+  }
+  per_tensor: Record<string, { scale: number; zero_point: number; cosine_sim: number }>
+  avx2_enabled: boolean
+}
+
 export const modelController = {
   async list(): Promise<ModelInfo[]> {
     try {
@@ -121,6 +137,10 @@ export const modelController = {
 
   async getCacheUsage(): Promise<{ total_bytes: number; total_gb: number; model_count: number; cache_dir: string }> {
     return apiGet('/models/cache-usage')
+  },
+
+  async quantize(bits: number = 8, mode: string = 'symmetric'): Promise<QuantizationResult> {
+    return apiPost<QuantizationResult>('/models/quantize', { bits, mode })
   },
 }
 
