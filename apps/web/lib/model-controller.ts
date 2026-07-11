@@ -50,6 +50,15 @@ export interface HealthStatus {
   block_size?: number
   num_parameters?: number
   device?: string
+  quantization?: {
+    quantized: boolean
+    summary?: {
+      bits: number
+      tensors: number
+      avg_cosine_sim: number
+      min_cosine_sim: number
+    }
+  }
 }
 
 export interface QuantizationResult {

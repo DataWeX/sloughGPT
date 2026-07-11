@@ -24,6 +24,7 @@ export default function ModelStatusCard({
   modelsCount, soulsCount, checkpointsCount,
   modelsLoading, soulsLoading, checkpointsLoading,
 }: ModelStatusCardProps) {
+  const quant = health?.quantization?.quantized ? health.quantization : null
   return (
     <>
       {isOnline && (
@@ -35,6 +36,9 @@ export default function ModelStatusCard({
                 <span className={cn("w-2 h-2 rounded-full", health.model_loaded ? "bg-success animate-pulse" : "bg-warning")} />
                 <span className="text-xs font-medium">{modelDisplayName(health.model_type) || 'No model'}</span>
               </div>
+              {quant && (
+                <Chip label={`int${quant.summary?.bits ?? '?'}`} />
+              )}
               {currentSoul && (
                 <>
                   <span className="text-muted-foreground/40 text-xs">→</span>
