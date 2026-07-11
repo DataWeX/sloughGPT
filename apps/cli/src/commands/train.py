@@ -1286,7 +1286,7 @@ def cmd_distill(args):
             resp = requests.post(f"{base_url}/training/distill", json=payload, timeout=30)
             if resp.status_code == 200:
                 data = resp.json()
-                job_id = data.get("id")
+                job_id = data.get("job_id")
                 printer.success(f"Distillation started: {job_id}")
                 _stream_api_progress(base_url, job_id)
             else:
