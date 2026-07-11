@@ -359,3 +359,62 @@ class TestQuantizeEndpoint:
         # Verify lm_head is quantized
         assert tiny_model.layers[-1]._quant_info is not None
         assert tiny_model.layers[-1]._quant_info.meta.bits == 8
+
+    def test_from_slnc_object_identity_matching(self, tiny_model, sample_input):
+        """Simulate from_slnc() quantize path: match params by object identity.
+
+        from_slnc() uses walk_slo_linears + object-identity matching
+        (``param is module.weight``) instead of string prefix matching.
+        This test verifies every parameter finds its module. Prevents
+        regression of the naming mismatch bug (q_proj vs W_q).
+        """
+        from domains.infrastructure.quantization import QuantEngine, walk_slo_linears
+
+        linear_map = walk_slo_linears(tiny_model)
+        param_names = dict(tiny_model.named_parameters())
+
+        # Build reverse lookup by object identity (same as from_slnc)
+        param_to_module = {}
+        for mod_name, module in linear_map.items():
+            for pname, param in param_names.items():
+                if param is module.weight:
+                    param_to_module[pname] = mod_name
+                    break
+
+        # Every SloLinear weight should match
+        linear_params_found = set()
+        for mod_name, module in linear_map.items():
+            for pname, param in param_names.items():
+                if param is module.weight:
+                    linear_params_found.add(pname)
+                    break
+
+        # Quantize using object-identity matching
+        engine = QuantEngine(bits=8, mode="symmetric")
+        quantized_count = 0
+        for pname, param in param_names.items():
+            if pname not in param_to_module:
+                continue
+            arr = param.data.copy()
+            info = engine.quantize(pname, arr)
+            if info.is_quantized:
+                linear_map[param_to_module[pname]].set_quantized_weight(info)
+                quantized_count += 1
+
+        assert quantized_count > 0, "No layers quantized via object-identity matching"
+        assert quantized_count == len(linear_map), (
+            f"Object-identity matching quantized {quantized_count}/{len(linear_map)}"
+        )
+
+        # Inference with quantized weights
+        logits = _run_model(tiny_model, sample_input)
+        assert logits.shape == (1, 8, 100)
+
+        # Logit stability: 10 sequential calls
+        N = 10
+        for i in range(N):
+            inp = np.array([[i + 1]], dtype=np.int64)
+            out = _run_model(tiny_model, inp)
+            assert out.shape[0] == 1
+            assert not np.any(np.isnan(out.data)), f"NaN in output at step {i}"
+            assert not np.any(np.isinf(out.data)), f"Inf in output at step {i}"
