@@ -82,12 +82,27 @@ def _numpy_fallback(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """Pure-numpy int8 GEMM fallback."""
     return np.matmul(a.astype(np.int32), b.astype(np.int32).T)
 
+def _int4_numpy_fallback(A: np.ndarray, B_packed: np.ndarray, K: int) -> np.ndarray:
+    """Pure-numpy int4 GEMM fallback: unpack to int8 then matmul."""
+    N = B_packed.shape[0]
+    B_unpacked = np.zeros((N, K), dtype=np.int8)
+    for j in range(N):
+        for k in range(K):
+            if k % 2 == 0:
+                nib = int(B_packed[j, k // 2]) & 0x0F
+            else:
+                nib = (int(B_packed[j, k // 2]) >> 4) & 0x0F
+            B_unpacked[j, k] = np.int8((nib ^ 8) - 8)
+    return np.matmul(A.astype(np.int32), B_unpacked.astype(np.int32).T)
+
 _c_matmul = _numpy_fallback
+_c_matmul_int4 = _int4_numpy_fallback
 try:
-    from domains.infrastructure.quant_core.wrapper import matmul_int8_c, HAS_AVX2
+    from domains.infrastructure.quant_core.wrapper import matmul_int8_c, matmul_int4_c, HAS_AVX2
     if HAS_AVX2:
         _c_matmul = matmul_int8_c
-        logger.info("Using AVX2 int8 GEMM (quant_core)")
+        _c_matmul_int4 = matmul_int4_c
+        logger.info("Using AVX2 int8 + int4 GEMM (quant_core)")
 except Exception:
     pass
 
@@ -660,6 +675,61 @@ def quantize_activation(
         return np.clip(np.round(x / scale) + zero_point, -128, 127).astype(np.int8)
 
 
+def _ensure_2d_packed(b_packed: np.ndarray, orig_k: int) -> np.ndarray:
+    """Reshape packed int4 array from 1D ``(N * K // 2,)`` to 2D ``(N, K // 2)``."""
+    if b_packed.ndim == 1:
+        n = b_packed.shape[0] * 2 // orig_k
+        return b_packed.reshape(n, orig_k // 2)
+    return b_packed
+
+
+def int4_matmul(
+    a: np.ndarray,
+    b_packed: np.ndarray,
+    a_scale: float,
+    b_scale: float,
+    orig_k: int,
+    a_zero_point: int = 0,
+    b_zero_point: int = 0,
+) -> np.ndarray:
+    """INT4 × INT8 matrix multiplication with float32 output.
+
+    ``b_packed`` is a uint8 array storing two signed int4 values per byte
+    (low nibble = even index, high nibble = odd index). May be 1D
+    ``(N * K // 2,)`` or 2D ``(N, K // 2)``.
+
+    Uses AVX2 C extension if available, otherwise falls back to
+    unpack→int8→numpy.
+
+    Args:
+        a: int8 matrix (M, K) — activations
+        b_packed: uint8 array — packed int4 weights (1D or 2D)
+        a_scale: quantization scale for a
+        b_scale: quantization scale for b
+        orig_k: original (unpacked) dimension K
+        a_zero_point: zero point for a (0 for symmetric)
+        b_zero_point: zero point for b (0 for symmetric)
+
+    Returns:
+        float32 result matrix (M, N)
+    """
+    b_packed = _ensure_2d_packed(b_packed, orig_k)
+    if a_zero_point == 0 and b_zero_point == 0:
+        accum = _c_matmul_int4(a, b_packed, orig_k)
+        return accum.astype(np.float32) * (a_scale * b_scale)
+    else:
+        N = b_packed.shape[0]
+        b_unpacked = np.zeros((N, orig_k), dtype=np.int8)
+        for j in range(N):
+            for k in range(orig_k):
+                if k % 2 == 0:
+                    nib = int(b_packed[j, k // 2]) & 0x0F
+                else:
+                    nib = (int(b_packed[j, k // 2]) >> 4) & 0x0F
+                b_unpacked[j, k] = np.int8((nib ^ 8) - 8)
+        return int8_matmul(a, b_unpacked, a_scale, b_scale, a_zero_point, b_zero_point)
+
+
 def int8_matmul(
     a: np.ndarray,
     b: np.ndarray,
@@ -758,3 +828,56 @@ def quantized_linear(
         result = result + bias
 
     return result.reshape(orig_shape[:-1] + (weight_int8.shape[0],))
+
+
+def int4_quantized_linear(
+    x: np.ndarray,
+    weight_packed: np.ndarray,
+    weight_scale: float,
+    weight_zero_point: int,
+    orig_k: int,
+    bias: Optional[np.ndarray] = None,
+) -> np.ndarray:
+    """Quantized linear layer with packed int4 weights: x @ weight.T + bias.
+
+    ``weight_packed`` is (N, K//2) uint8 — two signed int4 values per byte
+    (low nibble = even index, high nibble = odd index).
+
+    Uses AVX2 C kernel if available (inline unpack during dot product),
+    otherwise falls back to unpack→int8→numpy.
+
+    Args:
+        x: float32 input (..., in_features=K)
+        weight_packed: uint8 packed int4 weight matrix (out_features=N, K//2)
+        weight_scale: quantization scale for weight
+        weight_zero_point: zero point for weight (0 for symmetric)
+        orig_k: original (unpacked) dimension K
+        bias: optional float32 bias (out_features,)
+
+    Returns:
+        float32 output (..., out_features)
+    """
+    orig_shape = x.shape
+    x_flat = x.reshape(-1, x.shape[-1])  # (M, K)
+
+    # Compute activation scale dynamically
+    x_max = np.max(np.abs(x_flat))
+    act_scale = x_max / 127.0 if x_max > 0 else 1.0
+
+    # Quantize activation to int8
+    x_int8 = quantize_activation(x_flat, act_scale, 0)
+
+    # Int4 GEMM
+    result = int4_matmul(
+        x_int8, weight_packed,
+        a_scale=act_scale, b_scale=weight_scale,
+        orig_k=orig_k,
+        a_zero_point=0, b_zero_point=weight_zero_point,
+    )
+
+    if bias is not None:
+        result = result + bias
+
+    # Determine number of output features from packed array
+    n = weight_packed.shape[0] if weight_packed.ndim == 2 else weight_packed.shape[0] * 2 // orig_k
+    return result.reshape(orig_shape[:-1] + (n,))

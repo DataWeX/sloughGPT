@@ -1241,8 +1241,19 @@ class SloLinear(SloLayer):
 
     def forward_numpy(self, x: np.ndarray) -> np.ndarray:
         if self._quant_info is not None and self._quant_info.is_quantized:
-            from domains.infrastructure.quantization import quantized_linear
+            from domains.infrastructure.quantization import (
+                quantized_linear, int4_quantized_linear,
+            )
             bias_arr = self.bias.data if self.use_bias else None
+            bits = self._quant_info.meta.bits
+            if bits == 4:
+                K = self._quant_info.meta.original_shape[-1]
+                return int4_quantized_linear(
+                    x, self._quant_info.array,
+                    self._quant_info.meta.scale,
+                    self._quant_info.meta.zero_point,
+                    K, bias_arr,
+                )
             return quantized_linear(
                 x, self._get_quant_array(), self._quant_info.meta.scale,
                 self._quant_info.meta.zero_point, bias_arr,
@@ -1251,12 +1262,24 @@ class SloLinear(SloLayer):
 
     def forward(self, x: Tensor) -> Tensor:
         if self._quant_info is not None and self._quant_info.is_quantized:
-            from domains.infrastructure.quantization import quantized_linear
-            bias_arr = self.bias.data if self.use_bias else None
-            result = quantized_linear(
-                x.data, self._get_quant_array(), self._quant_info.meta.scale,
-                self._quant_info.meta.zero_point, bias_arr,
+            from domains.infrastructure.quantization import (
+                quantized_linear, int4_quantized_linear,
             )
+            bias_arr = self.bias.data if self.use_bias else None
+            bits = self._quant_info.meta.bits
+            if bits == 4:
+                K = self._quant_info.meta.original_shape[-1]
+                result = int4_quantized_linear(
+                    x.data, self._quant_info.array,
+                    self._quant_info.meta.scale,
+                    self._quant_info.meta.zero_point,
+                    K, bias_arr,
+                )
+            else:
+                result = quantized_linear(
+                    x.data, self._get_quant_array(), self._quant_info.meta.scale,
+                    self._quant_info.meta.zero_point, bias_arr,
+                )
             return Tensor(result, requires_grad=x.requires_grad, _children=(x,))
         out = _matmul(x, self._get_weight_T())
         if self.use_bias:

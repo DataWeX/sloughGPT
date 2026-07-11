@@ -60,12 +60,17 @@ test: test-py-fast test-web-lib
 build: quant-core
 
 quant-core:
-	@echo "Building AVX2 int8 GEMM extension..."
+	@echo "Building AVX2 C GEMM extensions..."
 	@gcc -O3 -mavx2 -shared -fPIC \
 		-o packages/core-py/domains/infrastructure/quant_core/matmul_int8.dylib \
 		packages/core-py/domains/infrastructure/quant_core/matmul_int8.c \
 		2>/dev/null && echo "  ✓ matmul_int8.dylib" \
-		|| echo "  ⚠  gcc/AVX2 unavailable — using numpy fallback"
+		|| echo "  ⚠  matmul_int8.c — gcc/AVX2 unavailable"
+	@gcc -O3 -mavx2 -shared -fPIC \
+		-o packages/core-py/domains/infrastructure/quant_core/matmul_int4.dylib \
+		packages/core-py/domains/infrastructure/quant_core/matmul_int4.c \
+		2>/dev/null && echo "  ✓ matmul_int4.dylib" \
+		|| echo "  ⚠  matmul_int4.c — gcc/AVX2 unavailable"
 
 # ── Install ──────────────────────────────────────────────
 install: build
