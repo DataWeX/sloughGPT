@@ -83,9 +83,11 @@ def _get_quantization_info() -> Dict[str, Any]:
             return {}
         provider = getattr(server_state, '_provider', None)
         if provider is None:
-            # Try to get provider from provider system
+            # Try to get provider from provider system (slonet first, then hf-default)
             from domains.models.provider import get_provider
             provider = get_provider("slonet")
+            if provider is None:
+                provider = get_provider("hf-default")
         if provider is not None and hasattr(provider, 'quantization_report'):
             return provider.quantization_report()
         return {}

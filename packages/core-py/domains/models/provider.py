@@ -496,6 +496,25 @@ class HFModelProvider:
         self._model_id_str = model_id_str
         self._formatter = PromptFormatter(tokenizer=tokenizer)
         self._server = model_server
+        self._quant_engine = None
+
+    def quantization_report(self) -> dict:
+        """Get quantization error report (if quantized).
+
+        Returns:
+            Dict with per-tensor error metrics and aggregate summary.
+            Empty dict if model was not quantized.
+        """
+        if self._quant_engine is None:
+            return {"quantized": False}
+        summary = self._quant_engine.summary()
+        return {
+            "quantized": True,
+            "bits": summary.get("bits", 0),
+            "mode": summary.get("mode", "symmetric"),
+            "summary": summary,
+            "per_tensor": self._quant_engine.error_report(),
+        }
 
     @property
     def model_id(self) -> str:
@@ -511,6 +530,7 @@ class HFModelProvider:
         max_tokens: int = 512,
         temperature: float = 0.8,
         cancel_event=None,
+        session_id: Optional[str] = None,
         **kwargs,
     ) -> AsyncIterator[str]:
         prompt = self._formatter.messages_to_prompt(messages)
@@ -523,6 +543,7 @@ class HFModelProvider:
                 temperature=temperature,
                 top_p=kwargs.pop("top_p", 0.9),
                 cancel_event=cancel_event,
+                session_id=session_id,
                 **kwargs,
             ):
                 cleaned = self._formatter.clean_chunk(text, first=is_first)
@@ -602,6 +623,7 @@ class HFModelProvider:
         messages: List[ChatMessage],
         max_tokens: int = 512,
         temperature: float = 0.8,
+        session_id: Optional[str] = None,
         **kwargs,
     ) -> str:
         if self._server is not None:
@@ -611,12 +633,13 @@ class HFModelProvider:
                 max_new_tokens=max_tokens,
                 temperature=temperature,
                 top_p=kwargs.pop("top_p", 0.9),
+                session_id=session_id,
                 **kwargs,
             )
             return result.get("text", "")
         # Fallback: collect from streaming
         chunks = []
-        async for chunk in self.chat_stream(messages, max_tokens, temperature, **kwargs):
+        async for chunk in self.chat_stream(messages, max_tokens, temperature, session_id=session_id, **kwargs):
             chunks.append(chunk)
         return "".join(chunks)
 
@@ -685,6 +708,7 @@ class InferenceEngineProvider:
         messages: List[ChatMessage],
         max_tokens: int = 512,
         temperature: float = 0.8,
+        session_id: Optional[str] = None,
         **kwargs,
     ) -> AsyncIterator[str]:
         prompt = self._formatter.messages_to_prompt(messages)
@@ -699,6 +723,7 @@ class InferenceEngineProvider:
                 top_p=kwargs.get("top_p", 0.9),
                 top_k=kwargs.get("top_k", 40),
                 cancel_event=cancel_event,
+                session_id=session_id,
             ):
                 cleaned = self._formatter.clean_chunk(text, first=is_first)
                 is_first = False
@@ -726,6 +751,7 @@ class InferenceEngineProvider:
         messages: List[ChatMessage],
         max_tokens: int = 512,
         temperature: float = 0.8,
+        session_id: Optional[str] = None,
         **kwargs,
     ) -> str:
         if self._server is not None:
@@ -736,11 +762,12 @@ class InferenceEngineProvider:
                 temperature=temperature,
                 top_p=kwargs.get("top_p", 0.9),
                 top_k=kwargs.get("top_k", 40),
+                session_id=session_id,
             )
             return result.get("text", "")
 
         chunks = []
-        async for chunk in self.chat_stream(messages, max_tokens, temperature, **kwargs):
+        async for chunk in self.chat_stream(messages, max_tokens, temperature, session_id=session_id, **kwargs):
             chunks.append(chunk)
         return "".join(chunks)
 
