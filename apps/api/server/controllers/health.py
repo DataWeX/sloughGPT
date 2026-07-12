@@ -77,17 +77,11 @@ def _get_inference_stats() -> Dict[str, Any]:
 def _get_quantization_info() -> Dict[str, Any]:
     """Get quantization status from the active provider."""
     try:
-        import state as server_state
-        model = getattr(server_state, 'model', None)
-        if model is None:
-            return {}
-        provider = getattr(server_state, '_provider', None)
+        from domains.models.provider import get_provider
+        # Try slonet first, then hf-default
+        provider = get_provider("slonet")
         if provider is None:
-            # Try to get provider from provider system (slonet first, then hf-default)
-            from domains.models.provider import get_provider
-            provider = get_provider("slonet")
-            if provider is None:
-                provider = get_provider("hf-default")
+            provider = get_provider("hf-default")
         if provider is not None and hasattr(provider, 'quantization_report'):
             return provider.quantization_report()
         return {}
@@ -164,6 +158,11 @@ class HealthController:
                         result["num_parameters"] = sum(p.numel() for p in model.parameters())
             except Exception:
                 pass
+
+        # Quantization status
+        quant_info = _get_quantization_info()
+        if quant_info:
+            result["quantization"] = quant_info
 
         return result
 
