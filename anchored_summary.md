@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 66797dc release: v0.3.0
+No active task. Last commit: 2565b41 chore: auto-update anchored_summary.md on every commit
 
 No active task. All prior work committed and released as v0.3.0.
 
