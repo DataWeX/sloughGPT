@@ -660,6 +660,10 @@ impl Trainer {
         self.config.clone()
     }
 
+    pub fn get_step(&self) -> usize {
+        self.step
+    }
+
     pub fn save_checkpoint(&self, path: &str) -> std::io::Result<()> {
         let state = CheckpointState {
             step: self.step,

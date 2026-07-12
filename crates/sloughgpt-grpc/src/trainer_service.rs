@@ -24,10 +24,12 @@ impl TrainerGrpcService {
         let loss = trainer.step(&batch, &targets);
         let config = trainer.get_config();
 
+        let step = trainer.get_step();
+
         TrainingResult {
             loss,
             learning_rate: config.learning_rate,
-            step: 0, // TODO: get actual step
+            step,
         }
     }
 

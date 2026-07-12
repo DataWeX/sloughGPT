@@ -1907,7 +1907,7 @@ Built a crash-resilient, composable model serving layer. `ModelServer` wraps any
 ### Status
 - [x] Warmup request on model registration (daemon thread in `ModelServer.__init__`)
 - [x] `request.is_disconnected()` checks alongside `cancel_event` in all streaming routers (inference, session, souls, agents, auto_train)
-- [ ] Wire `InferenceEngineProvider` into `ModelServer` pattern (deduplicate semaphore/circuit-breaker/warmup)
+- [x] Wire `InferenceEngineProvider` into `ModelServer` pattern (deduplicate semaphore/circuit-breaker/warmup)
 - [ ] Consider process-level isolation (Ray Serve, Triton) if single-process crashes recur despite circuit breaker
 
 ### Relevant Files
@@ -2497,11 +2497,7 @@ Triple improvement to the activity recognition pipeline: 4.9× faster conv backw
 | Training stability | Diverges after epoch 6 | Monotonic improvement for 60 epochs |
 
 ### On-Device Training TODO (future)
-Next step: wire background sensor collection + periodic training into the React Native mobile app (`apps/mobile/`). Collect 6-axis sensor data during daily activity, periodically auto-train the classifier on the server, sync updated weights back to the device for real-time local predictions.
-
-### Relevant Files
-- `packages/core-py/domains/training/slonet.py`: `_im2col` vectorized (line 1958), col2im via `np.add.at` (line 2040)
-- `packages/core-py/domains/activity/classifier.py`: `_augment_batch()` (line 140), grad clipping + scheduler + augmentation wiring in `train_classifier`**
+Simple training on phone — train a small model directly on the device using user data collected in-app.
 
 ---
 
