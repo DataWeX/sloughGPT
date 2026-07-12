@@ -1,6 +1,8 @@
 # Anchored Summary
 
 ## Current Task
+No active task. Last commit: 66797dc release: v0.3.0
+
 No active task. All prior work committed and released as v0.3.0.
 
 ## Session 2026-07-12 — Distill Fix, Tests, Roadmap, Release

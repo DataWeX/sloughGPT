@@ -30,3 +30,10 @@ repos:
         types: [python]
         pass_filenames: true
         stages: [pre-commit]
+
+      - id: update-anchored-summary
+        name: Update anchored_summary.md
+        entry: python3 scripts/update_summary.py
+        language: system
+        always_run: true
+        stages: [pre-commit]
