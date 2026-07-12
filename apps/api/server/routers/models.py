@@ -525,11 +525,11 @@ class QuantizeRequest(BaseModel):
 
 @router.post("/quantize")
 async def quantize_model(req: QuantizeRequest):
-    """Apply int8/int4 quantization to the currently loaded SloNet model.
+    """Apply int8/int4 quantization to the currently loaded model.
 
-    Quantizes all SloLinear layers in-place — no model reload required.
-    The quantization state is reflected in the health endpoint's
-    ``quantization`` field.
+    Works with both SloNet and HuggingFace models. Quantizes all
+    linear layers in-place — no model reload required. The quantization
+    state is reflected in the health endpoint's ``quantization`` field.
 
     Args:
         bits: 4 or 8 (default 8)
@@ -549,27 +549,41 @@ async def quantize_model(req: QuantizeRequest):
     if mode not in ("symmetric", "asymmetric"):
         raise HTTPException(status_code=400, detail=f"mode must be symmetric or asymmetric, got {mode}")
 
-    # Find the SloNet provider
+    # Find the active provider (try SloNet first, then HuggingFace)
     from domains.models.provider import get_provider
+
     provider = get_provider("slonet")
+    model_type = "slonet"
+
     if provider is None:
-        raise HTTPException(status_code=400, detail="No SloNet model loaded")
+        provider = get_provider("hf-default")
+        model_type = "huggingface"
+
+    if provider is None:
+        raise HTTPException(status_code=400, detail="No model loaded")
 
     model = getattr(provider, "_model", None)
     if model is None:
-        raise HTTPException(status_code=400, detail="SloNet provider has no model")
+        raise HTTPException(status_code=400, detail="Provider has no model")
 
-    # Walk SloLinear layers using shared utility
-    from domains.infrastructure.quantization import walk_slo_linears
-
-    layers = walk_slo_linears(model)
+    # Walk linear layers using the appropriate walker
+    if model_type == "slonet":
+        from domains.infrastructure.quantization import walk_slo_linears
+        layers = walk_slo_linears(model)
+    else:
+        from domains.infrastructure.quantization import walk_hf_linears
+        layers = walk_hf_linears(model)
 
     engine = QuantEngine(bits=bits, mode=mode)
     quantized_count = 0
     for name, module in layers.items():
         info = engine.quantize(f"{name}.weight", module.weight.data.copy())
         if info.is_quantized:
-            module.set_quantized_weight(info)
+            if model_type == "slonet":
+                module.set_quantized_weight(info)
+            else:
+                # For HuggingFace models, store quantized weight directly
+                module._quant_info = info
             quantized_count += 1
 
     # Store the engine on the provider for health endpoint access
@@ -579,6 +593,7 @@ async def quantize_model(req: QuantizeRequest):
         "quantized": True,
         "bits": bits,
         "mode": mode,
+        "model_type": model_type,
         "layers_quantized": quantized_count,
         "total_layers": len(layers),
         "summary": engine.summary(),

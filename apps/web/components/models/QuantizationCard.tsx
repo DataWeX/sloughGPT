@@ -60,10 +60,11 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
 
             {result && (
               <div className="pt-2 border-t border-border/40">
-                <KpiGrid columns={3}>
+                <KpiGrid columns={4}>
                   <StatCard label="Layers" value={`${result.layers_quantized}/${result.total_layers}`} />
                   <StatCard label="Avg Cosine" value={result.summary.avg_cosine_sim.toFixed(4)} />
                   <StatCard label="AVX2" value={result.avx2_enabled ? 'Enabled' : 'N/A'} />
+                  <StatCard label="Type" value={result.model_type === 'slonet' ? 'SloNet' : 'HuggingFace'} />
                 </KpiGrid>
               </div>
             )}

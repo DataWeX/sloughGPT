@@ -20,6 +20,7 @@ const mockResult: QuantizationResult = {
   quantized: true,
   bits: 8,
   mode: 'symmetric',
+  model_type: 'slonet',
   layers_quantized: 15,
   total_layers: 15,
   summary: { tensors: 15, bits: 8, avg_cosine_sim: 0.9987, min_cosine_sim: 0.9921 },

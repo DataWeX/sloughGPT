@@ -65,6 +65,7 @@ export interface QuantizationResult {
   quantized: boolean
   bits: number
   mode: string
+  model_type: string
   layers_quantized: number
   total_layers: number
   summary: {
