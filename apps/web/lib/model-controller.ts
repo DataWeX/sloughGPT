@@ -152,6 +152,10 @@ export const modelController = {
   async quantize(bits: number = 8, mode: string = 'symmetric'): Promise<QuantizationResult> {
     return apiPost<QuantizationResult>('/models/quantize', { bits, mode })
   },
+
+  async dequantize(): Promise<{ dequantized: boolean; model_type: string; layers_reset: number }> {
+    return apiPost('/models/dequantize')
+  },
 }
 
 export async function* streamModelEvents(

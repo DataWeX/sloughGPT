@@ -609,3 +609,52 @@ async def quantize_model(req: QuantizeRequest):
         pass
 
     return success_response(data=report)
+
+
+@router.post("/dequantize")
+async def dequantize_model():
+    """Reset quantized model back to float32 weights.
+
+    Clears quantization state from all linear layers. The model
+    returns to its original float32 precision.
+
+    Returns:
+        Status report with number of layers reset.
+    """
+    from domains.models.provider import get_provider
+
+    provider = get_provider("slonet")
+    model_type = "slonet"
+
+    if provider is None:
+        provider = get_provider("hf-default")
+        model_type = "huggingface"
+
+    if provider is None:
+        raise HTTPException(status_code=400, detail="No model loaded")
+
+    model = getattr(provider, "_model", None)
+    if model is None:
+        raise HTTPException(status_code=400, detail="Provider has no model")
+
+    # Clear quantization state
+    if model_type == "slonet":
+        from domains.infrastructure.quantization import walk_slo_linears
+        layers = walk_slo_linears(model)
+        for name, module in layers.items():
+            module._quant_info = None
+    else:
+        from domains.infrastructure.quantization import walk_hf_linears
+        layers = walk_hf_linears(model)
+        for name, module in layers.items():
+            if hasattr(module, "_quant_info"):
+                module._quant_info = None
+
+    # Clear the quantization engine
+    provider._quant_engine = None
+
+    return success_response(data={
+        "dequantized": True,
+        "model_type": model_type,
+        "layers_reset": len(layers),
+    })

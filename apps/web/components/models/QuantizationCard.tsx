@@ -11,6 +11,7 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
   const addToast = useToastStore(s => s.addToast)
   const [bits, setBits] = useState<4 | 8>(8)
   const [quantizing, setQuantizing] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const [result, setResult] = useState<QuantizationResult | null>(null)
 
   const handleQuantize = async () => {
@@ -24,6 +25,19 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
       addToast(err instanceof Error ? err.message : 'Quantization failed', 'error')
     } finally {
       setQuantizing(false)
+    }
+  }
+
+  const handleReset = async () => {
+    setResetting(true)
+    try {
+      const res = await modelController.dequantize()
+      setResult(null)
+      addToast(`Reset to float32 (${res.layers_reset} layers)`, 'success')
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Reset failed', 'error')
+    } finally {
+      setResetting(false)
     }
   }
 
@@ -56,6 +70,11 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
               <Button size="sm" disabled={quantizing} onClick={handleQuantize}>
                 {quantizing ? 'Quantizing...' : 'Apply'}
               </Button>
+              {result && (
+                <Button size="sm" variant="outline" disabled={resetting} onClick={handleReset}>
+                  {resetting ? 'Resetting...' : 'Reset'}
+                </Button>
+              )}
             </div>
 
             {result && (
