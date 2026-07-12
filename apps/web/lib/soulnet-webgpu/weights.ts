@@ -12,8 +12,9 @@
  * For each param i in 0..N-1:
  *   [4 bytes] name_len (uint32 LE)
  *   [name_len bytes] key name (UTF-8, e.g. "p0")
- *   [4 bytes] count (uint32 LE)
- *   [count * 4 bytes] raw float32 data (little-endian)
+ *   [4 bytes] ndim (uint32 LE)
+ *   [ndim * 4 bytes] shape dimensions (uint32 LE each)
+ *   [product(shape) * 4 bytes] raw float32 data (little-endian)
  * ```
  *
  * Parameter order convention (LSTM):
@@ -105,11 +106,14 @@ export function inferArch(buffer: ArrayBuffer): SoulNetArch {
         const nl = view.getUint32(offset, true); offset += 4
         const name = new TextDecoder().decode(new Uint8Array(buffer, offset, nl))
         offset += nl
-        const count = view.getUint32(offset, true); offset += 4
+        const ndim = view.getUint32(offset, true); offset += 4
+        const shape: number[] = []
+        for (let d = 0; d < ndim; d++) {
+          shape.push(view.getUint32(offset, true)); offset += 4
+        }
+        const count = shape.reduce((a, b) => a * b, 1)
         sizes[name] = count
-        // Align before skipping float32 data
-        const alignedOffset = (offset + 3) & ~3
-        offset = alignedOffset + count * 4
+        offset += count * 4
       }
     } else {
       const wl = view.getUint32(offset, true); offset += 4
@@ -179,10 +183,13 @@ export function parseSou(buffer: ArrayBuffer): SoulCheckpoint {
       const nameLen = view.getUint32(offset, true); offset += 4
       const name = new TextDecoder().decode(new Uint8Array(buffer, offset, nameLen))
       offset += nameLen
-      const count = view.getUint32(offset, true); offset += 4
-      // Ensure offset is 4-byte aligned before creating Float32Array
-      const alignedOffset = (offset + 3) & ~3
-      const arr = new Float32Array(buffer, alignedOffset, count)
+      const ndim = view.getUint32(offset, true); offset += 4
+      const shape: number[] = []
+      for (let d = 0; d < ndim; d++) {
+        shape.push(view.getUint32(offset, true)); offset += 4
+      }
+      const count = shape.reduce((a, b) => a * b, 1)
+      const arr = new Float32Array(buffer, offset, count)
       weights[name as `p${number}`] = new Float32Array(arr)
       totalElements += count
       offset += count * 4

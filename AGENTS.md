@@ -79,6 +79,16 @@ Order:
 
 Rationale: Core logic is reusable, testable, and doesn't depend on FastAPI. Endpoints are just adapters — if you build them first, the logic gets tangled in request/response plumbing and is hard to test or reuse from CLI.
 
+### Endpoints Are for Integration, Not Features
+Not every core feature needs an API endpoint. Before adding one, ask:
+- Does a frontend or external service need to trigger this at runtime?
+- Does it form part of the larger service infrastructure (model loading, health, feedback pipeline)?
+- Is it purely an internal optimization (C extension, compile-time flag, algorithm improvement)?
+
+If a feature is internal — a faster GEMM kernel, a new sampling strategy, a refactored embedder — it lives entirely in core logic + tests. No endpoint needed.
+
+The `POST /models/quantize` endpoint *is* justified: it switches model precision at runtime without restart, which is part of the model-serving infrastructure. The AVX2 C extension is *not*: it's a compile-time optimization invisible to callers.
+
 ### UX First — No API Complexity for Users
 Users should never interact with API endpoints. Complex operations (RAG, ingestion, context management) must be **one-click or fully automatic**.
 

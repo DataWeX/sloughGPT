@@ -17,7 +17,7 @@ Architecture::
 Backends:
     GuardBackend  — delegates to ProcessGuard subprocess (crash-isolated).
                     Falls back to LocalBackend when subprocess is dead.
-    LocalBackend  — direct model.generate() with MPS CPU fallback.
+    LocalBackend  — direct model.generate().
 """
 
 import asyncio
@@ -379,14 +379,9 @@ class NumpyBackend(GenerateBackend):
             yield token
 
         return {"text": "", "tokens_generated": token_count}
-    """Direct in-process model.generate() with MPS CPU fallback.
-
-    On MPS devices, moves the model to CPU for generation (avoids the
-    Metal async deadlock) and moves it back afterward.
-    """
 
 class LocalBackend(GenerateBackend):
-    """Direct in-process model.generate() with MPS CPU fallback."""
+    """Direct in-process model.generate()."""
 
     def __init__(
         self,

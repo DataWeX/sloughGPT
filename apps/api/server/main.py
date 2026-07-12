@@ -569,19 +569,21 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # Daemonize if requested
+    # Daemonize if requested — use subprocess to avoid fork() issues
     if args.daemon:
-        pid = os.fork()
-        if pid > 0:
-            print(f"Server started as daemon (PID {pid})")
-            sys.exit(0)
-        os.setsid()
-        # Redirect stdio to /dev/null
-        devnull = os.open(os.devnull, os.O_RDWR)
-        os.dup2(devnull, 0)
-        os.dup2(devnull, 1)
-        os.dup2(devnull, 2)
-        os.close(devnull)
+        import subprocess as sp
+        cmd = [sys.executable, __file__]
+        if args.port:
+            cmd += ["--port", str(args.port)]
+        proc = sp.Popen(
+            cmd,
+            stdin=sp.DEVNULL,
+            stdout=sp.DEVNULL,
+            stderr=sp.DEVNULL,
+            start_new_session=True,
+        )
+        print(f"Server started as daemon (PID {proc.pid})")
+        sys.exit(0)
 
     # Kill orphan processes on target port to avoid port conflicts
     bind_port = args.port or cfg.port

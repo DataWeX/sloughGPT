@@ -12,7 +12,7 @@ from typing import List, Optional, Dict, Any
 from pathlib import Path
 
 from schemas.models import ModelInfo, LoadModelRequest, LoadModelResponse, ModelStatus
-from schemas.common import success_response, error_response
+from schemas.common import StandardResponse, success_response, error_response
 from controllers.models import get_models_controller
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ from domains.infrastructure.model_size import compute_model_size_gb, format_size
 _hf_cache_dir = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"
 
 
-@router.get("", response_model=List[ModelInfo])
+@router.get("", response_model=StandardResponse[List[ModelInfo]])
 async def list_models():
     """List available/loaded models with plain-language descriptions."""
     ctrl = get_models_controller()
