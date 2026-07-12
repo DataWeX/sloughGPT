@@ -540,6 +540,7 @@ async def quantize_model(req: QuantizeRequest):
     """
     from domains.infrastructure.quantization import QuantEngine
     from domains.infrastructure.quant_core.wrapper import HAS_AVX2
+    import numpy as np
 
     bits = req.bits
     mode = req.mode
@@ -577,7 +578,13 @@ async def quantize_model(req: QuantizeRequest):
     engine = QuantEngine(bits=bits, mode=mode)
     quantized_count = 0
     for name, module in layers.items():
-        info = engine.quantize(f"{name}.weight", module.weight.data.copy())
+        weight = module.weight.data
+        # Convert torch tensor to numpy if needed
+        if hasattr(weight, 'cpu'):
+            weight = weight.cpu().numpy().astype(np.float32).copy()
+        else:
+            weight = np.asarray(weight, dtype=np.float32).copy()
+        info = engine.quantize(f"{name}.weight", weight)
         if info.is_quantized:
             if model_type == "slonet":
                 module.set_quantized_weight(info)
