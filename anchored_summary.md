@@ -1,29 +1,31 @@
 # Anchored Summary
 
 ## Current Task
-Patch `react-native-svg` for RN 0.86 C++ Fabric compatibility, finish emoji→Icon migration, remove dead deps.
+No active task. All prior work committed and released as v0.3.0.
 
-## Session 2026-07-08 — RN-SVG Patches, Build Fixes, Dep Cleanup
-- Patched 5 `react-native-svg@15.11.1` C++ files for RN 0.86 Fabric API (`ConcreteShadowNode` template arg, `StyleSizeLength`, `SharedImageManager`→`shared_ptr`, `ImageResponseObserverProxy` ownership).
-- Created `scripts/apply-patches.sh` + `postinstall` hook — patches persist across `npm install`.
-- Xcode build succeeds; app launches on iPhone 16 Pro simulator (iOS 18.4).
-- Removed `onnxruntime-react-native` (version `^0.3.0` never existed on npm — blocked install).
-- Removed `llama.rn` from `package.json` + `ios/Podfile` (no `.podspec` at tag, graceful fallback exists).
-- Removed `react-native-markdown-display` (0 consumers).
-- Deleted `src/types/native-modules.d.ts` (dead type declarations for removed modules).
-- Fixed `input_ids...` indentation SyntaxError in `model_server.py:808` — Python test suite was fully blocked.
-- **Mobile**: `tsc --noEmit` 0 errors, 253 Jest tests pass.
-- **Web**: 592 lib tests pass, `next build` succeeds (22 pages, 0 errors).
-- **Python**: 1799 tests pass (was 0 — syntax error was a hard blocker).
+## Session 2026-07-12 — Distill Fix, Tests, Roadmap, Release
+- Fixed CLI API mode `distill` command: `data.get("id")` → `data.get("job_id")` (progress polling was broken)
+- Added 36 new tests: `test_distill_gpt2.py` (26 tests for DistillConfig, TextDataset, softmax, KL/CE losses) + `test_training_distill.py` (10 tests for endpoint schema, route, errors, queued status)
+- Committed prior session leftovers: pad token fix, provider registration, dead ONNX removal, inference_mode optimization, daemon subprocess fix, SOU ndim+shape format
+- Created `ROADMAP.md` — structured phases 1-7 with prioritized tasks
+- Bumped version to v0.3.0, tagged release
 
-## Emoji→Icon Migration (prev. session)
-- Created `src/components/Icon.tsx` — 55+ `IconName` → lucide-react-native mapping.
-- Replaced ~55 emoji/text icons across 14 files.
-- Zero emoji remain in JSX content.
+## Project State (v0.3.0)
+- **Inference**: SloNet autograd, SloTransformer, GPT-2/LLaMA import, forward_fast, KV cache, generate_numpy (8.2ms/tok), .slnc mmap, .sou binary
+- **Training**: Char LSTM, distill GPT-2→SloTransformer, HF fine-tune+LoRA, auto-train SSE, online LoRA, activity classifier CNN
+- **Serving**: ModelServer (semaphore, circuit breaker, MPS OOM recovery), ModelRegistry, ProcessGuard subprocess isolation, torch.inference_mode, CPU thread optimization
+- **API**: 20+ FastAPI routers, SSE standard envelope, 31+ CLI commands, shell REPL (40+ commands, pipelines, tab completion)
+- **Frontend**: Next.js 25+ pages, Strui component library, 2000+ vitest tests, 6 Cypress E2E specs
+- **Quantization**: int8/int4 AVX2 GEMM kernels, SloLinear quantized forward, SLNC persistence, frontend QuantizationCard
 
-## Progress
-- `react-native-svg`: patched + postinstall script ✅
-- Dead deps: `onnxruntime-react-native`, `llama.rn`, `react-native-markdown-display`, `native-modules.d.ts` — all removed ✅
-- Python SyntaxError: fixed ✅
-- Mobile builds & launches on simulator ✅
-- All 3 test suites (mobile 253, web 592, Python 1799) pass ✅
+## Roadmap
+See `ROADMAP.md` for structured task list (Phase 6: active work, Phase 7: mobile).
+
+## Key Files
+- `ROADMAP.md` — structured task list with priorities and estimates
+- `AGENTS.md` — project conventions, commands, architecture
+- `packages/core-py/domains/training/distill_gpt2.py` — GPT-2→SloTransformer distillation
+- `apps/cli/src/commands/train.py` — CLI train/distill commands
+- `packages/core-py/domains/shell/repl.py` — Shell REPL with train/distill/follow
+- `packages/core-py/tests/test_distill_gpt2.py` — 26 distill module tests
+- `tests/test_training_distill.py` — 10 distill endpoint tests
