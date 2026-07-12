@@ -19,6 +19,7 @@ import pytest
 from domains.infrastructure.quantization import (
     QuantEngine,
     QuantMeta,
+    QuantizedLinear,
     TensorInfo,
     _cosine_similarity,
     _pack_int4,
@@ -448,3 +449,173 @@ class TestInt4Quantization:
             np.linalg.norm(arr) * np.linalg.norm(deq)
         )
         assert cosine > 0.90
+
+
+class TestQuantizedLinear:
+    """Test QuantizedLinear drop-in replacement for nn.Linear."""
+
+    def test_create_from_quantized_data(self):
+        """QuantizedLinear stores int8 data and dequantizes correctly."""
+        w = np.random.randn(32, 32).astype(np.float32) * 0.02
+        engine = QuantEngine(bits=8, mode="symmetric")
+        info = engine.quantize("test.weight", w)
+        assert info.is_quantized
+
+        ql = QuantizedLinear(
+            weight_int8=info.array,
+            scale=info.meta.scale,
+            zero_point=info.meta.zero_point,
+            bias=None,
+            bits=info.meta.bits,
+            original_shape=info.meta.original_shape,
+            mode=info.meta.mode,
+        )
+
+        deq = ql.dequantize()
+        cosine = _cosine_similarity(w, deq)
+        assert cosine > 0.99, f"cosine={cosine}"
+
+    def test_forward_numpy_shape(self):
+        """numpy forward produces correct output shape."""
+        w = np.random.randn(16, 32).astype(np.float32) * 0.02
+        engine = QuantEngine(bits=8, mode="symmetric")
+        info = engine.quantize("test.weight", w)
+
+        ql = QuantizedLinear(
+            weight_int8=info.array,
+            scale=info.meta.scale,
+            zero_point=info.meta.zero_point,
+            bias=None,
+            bits=info.meta.bits,
+            original_shape=info.meta.original_shape,
+            mode=info.meta.mode,
+        )
+
+        x = np.random.randn(4, 32).astype(np.float32)
+        result = ql.forward_numpy(x)
+        assert result.shape == (4, 16)
+
+    def test_forward_numpy_with_bias(self):
+        """numpy forward includes bias when present."""
+        w = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
+        b = np.array([0.5, -0.5], dtype=np.float32)
+        engine = QuantEngine(bits=8, mode="symmetric")
+        info = engine.quantize("test.weight", w)
+
+        ql = QuantizedLinear(
+            weight_int8=info.array,
+            scale=info.meta.scale,
+            zero_point=info.meta.zero_point,
+            bias=b,
+            bits=info.meta.bits,
+            original_shape=info.meta.original_shape,
+            mode=info.meta.mode,
+        )
+
+        x = np.array([[1.0, 2.0]], dtype=np.float32)
+        result = ql.forward_numpy(x)
+        expected = x @ w.T + b
+        np.testing.assert_allclose(result, expected, atol=0.1)
+
+    def test_make_torch_forward_returns_callable(self):
+        """make_torch_forward returns a callable that processes torch tensors."""
+        try:
+            import torch
+        except ImportError:
+            pytest.skip("torch not installed")
+
+        w = np.random.randn(8, 16).astype(np.float32) * 0.02
+        engine = QuantEngine(bits=8, mode="symmetric")
+        info = engine.quantize("test.weight", w)
+
+        ql = QuantizedLinear(
+            weight_int8=info.array,
+            scale=info.meta.scale,
+            zero_point=info.meta.zero_point,
+            bias=None,
+            bits=info.meta.bits,
+            original_shape=info.meta.original_shape,
+            mode=info.meta.mode,
+        )
+
+        fwd = ql.make_torch_forward()
+        assert callable(fwd)
+
+        x_torch = torch.randn(2, 16)
+        result = fwd(x_torch)
+        assert isinstance(result, torch.Tensor)
+        assert result.shape == (2, 8)
+
+    def test_from_linear_extraction(self):
+        """from_linear extracts bias from nn.Linear module."""
+        try:
+            import torch
+            import torch.nn as nn
+        except ImportError:
+            pytest.skip("torch not installed")
+
+        linear = nn.Linear(16, 8, bias=True)
+        engine = QuantEngine(bits=8, mode="symmetric")
+        w = linear.weight.data.cpu().numpy().astype(np.float32).copy()
+        info = engine.quantize("test.weight", w)
+        assert info.is_quantized
+
+        ql = QuantizedLinear.from_linear(linear, info)
+        assert ql.bias is not None
+        assert ql.bias.shape == (8,)
+
+    def test_from_linear_no_bias(self):
+        """from_linear handles nn.Linear without bias."""
+        try:
+            import torch
+            import torch.nn as nn
+        except ImportError:
+            pytest.skip("torch not installed")
+
+        linear = nn.Linear(16, 8, bias=False)
+        engine = QuantEngine(bits=8, mode="symmetric")
+        w = linear.weight.data.cpu().numpy().astype(np.float32).copy()
+        info = engine.quantize("test.weight", w)
+
+        ql = QuantizedLinear.from_linear(linear, info)
+        assert ql.bias is None
+
+    def test_int4_quantized_linear(self):
+        """QuantizedLinear works with int4 quantization."""
+        w = np.random.randn(32, 32).astype(np.float32) * 0.02
+        engine = QuantEngine(bits=4, mode="symmetric")
+        info = engine.quantize("test.weight", w)
+
+        ql = QuantizedLinear(
+            weight_int8=info.array,
+            scale=info.meta.scale,
+            zero_point=info.meta.zero_point,
+            bias=None,
+            bits=info.meta.bits,
+            original_shape=info.meta.original_shape,
+            mode=info.meta.mode,
+        )
+
+        x = np.random.randn(4, 32).astype(np.float32)
+        result = ql.forward_numpy(x)
+        assert result.shape == (4, 32)
+
+    def test_asymmetric_mode(self):
+        """QuantizedLinear works with asymmetric quantization."""
+        w = np.random.randn(16, 16).astype(np.float32) * 0.02
+        engine = QuantEngine(bits=8, mode="asymmetric")
+        info = engine.quantize("test.weight", w)
+
+        ql = QuantizedLinear(
+            weight_int8=info.array,
+            scale=info.meta.scale,
+            zero_point=info.meta.zero_point,
+            bias=None,
+            bits=info.meta.bits,
+            original_shape=info.meta.original_shape,
+            mode=info.meta.mode,
+        )
+
+        x = np.random.randn(2, 16).astype(np.float32)
+        result = ql.forward_numpy(x)
+        assert result.shape == (2, 16)

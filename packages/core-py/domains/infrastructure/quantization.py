@@ -910,3 +910,105 @@ def int4_quantized_linear(
     # Determine number of output features from packed array
     n = weight_packed.shape[0] if weight_packed.ndim == 2 else weight_packed.shape[0] * 2 // orig_k
     return result.reshape(orig_shape[:-1] + (n,))
+
+
+class QuantizedLinear:
+    """Drop-in replacement for nn.Linear that uses quantized int8/int4 weights.
+
+    Stores the quantized weight data and dequantizes on the fly during forward().
+    Weight memory drops from float32 (4 bytes/elem) to int8 (1 byte/elem).
+
+    Uses the industry-standard forward monkey-patching pattern (same as
+    bitsandbytes, GPTQ, AWQ): the original ``nn.Linear.forward`` is replaced
+    with a closure that dequantizes and calls ``forward_numpy``.
+
+    Usage::
+
+        ql = QuantizedLinear.from_linear(original_linear, tensor_info)
+        # Wire into model via forward monkey-patching:
+        module._orig_forward = module.forward
+        module._ql = ql
+        module.forward = ql.make_torch_forward()
+    """
+
+    def __init__(self, weight_int8, scale, zero_point, bias, bits, original_shape, mode="symmetric"):
+        self.weight_int8 = np.asarray(weight_int8, dtype=np.int8)
+        self.scale = np.float32(scale)
+        self.zero_point = np.int32(zero_point)
+        self.bias = np.asarray(bias, dtype=np.float32).copy() if bias is not None else None
+        self.bits = bits
+        self.original_shape = original_shape
+        self.mode = mode
+        self._dequantized_cache = None
+
+    @classmethod
+    def from_linear(cls, linear_module, tensor_info):
+        """Create a QuantizedLinear from a quantized nn.Linear module.
+
+        Args:
+            linear_module: The original nn.Linear with quantized weight data
+            tensor_info: TensorInfo with quantized array + meta
+        """
+        bias = None
+        if hasattr(linear_module, 'bias') and linear_module.bias is not None:
+            bias = linear_module.bias.data.cpu().numpy().astype(np.float32).copy()
+        return cls(
+            weight_int8=tensor_info.array,
+            scale=tensor_info.meta.scale,
+            zero_point=tensor_info.meta.zero_point,
+            bias=bias,
+            bits=tensor_info.meta.bits,
+            original_shape=tensor_info.meta.original_shape,
+            mode=tensor_info.meta.mode,
+        )
+
+    def dequantize(self):
+        """Dequantize the int8 weight back to float32 (cached)."""
+        if self._dequantized_cache is not None:
+            return self._dequantized_cache
+        signed = (self.mode == "symmetric") if self.bits == 4 else True
+        w = _dequantize(
+            self.weight_int8,
+            scale=self.scale,
+            zero_point=self.zero_point,
+            bits=self.bits,
+            original_shape=self.original_shape,
+            signed=signed,
+        )
+        self._dequantized_cache = w
+        return w
+
+    def forward_numpy(self, x):
+        """Forward pass using numpy (for inference without torch)."""
+        w = self.dequantize()
+        result = np.matmul(x, w.T)
+        if self.bias is not None:
+            result = result + self.bias
+        return result
+
+    def make_torch_forward(self):
+        """Create a torch-compatible forward function for monkey-patching.
+
+        Returns a closure that accepts a torch.Tensor, dequantizes via numpy,
+        and returns a torch.Tensor.  The closure captures ``self`` so the
+        quantized weights and bias are available without module registration.
+        """
+        ql = self
+
+        def _quantized_forward(x):
+            import torch
+            x_np = x.detach().cpu().numpy().astype(np.float32)
+            result = ql.forward_numpy(x_np)
+            return torch.from_numpy(result.astype(np.float32))
+
+        return _quantized_forward
+
+    def __call__(self, x):
+        """Forward pass — auto-detects torch vs numpy input."""
+        try:
+            import torch
+            if isinstance(x, torch.Tensor):
+                return self.make_torch_forward()(x)
+        except ImportError:
+            pass
+        return self.forward_numpy(x)

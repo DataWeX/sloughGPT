@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 4940182 feat: symmetric/asymmetric quantization mode selector + pad token sync
+No active task. Last commit: 3469b35 fix: broken model_loader imports + _resolve_device consolidation
 
 No active task. All prior work committed and released as v0.3.0.
 

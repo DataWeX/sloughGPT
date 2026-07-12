@@ -589,8 +589,13 @@ async def quantize_model(req: QuantizeRequest):
             if model_type == "slonet":
                 module.set_quantized_weight(info)
             else:
-                # For HuggingFace models, store quantized weight directly
+                # For HuggingFace models: monkey-patch forward with quantized path
+                from domains.infrastructure.quantization import QuantizedLinear
                 module._quant_info = info
+                ql = QuantizedLinear.from_linear(module, info)
+                module._ql = ql
+                module._orig_forward = module.forward
+                module.forward = ql.make_torch_forward()
             quantized_count += 1
 
     # Store the engine on the provider for health endpoint access
@@ -656,6 +661,12 @@ async def dequantize_model():
         for name, module in layers.items():
             if hasattr(module, "_quant_info"):
                 module._quant_info = None
+                # Restore original forward if we patched it
+                if hasattr(module, "_orig_forward"):
+                    module.forward = module._orig_forward
+                    del module._orig_forward
+                if hasattr(module, "_ql"):
+                    del module._ql
 
     # Clear the quantization engine
     provider._quant_engine = None
