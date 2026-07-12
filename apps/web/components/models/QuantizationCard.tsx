@@ -22,6 +22,7 @@ function formatLayerName(name: string): string {
 export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
   const addToast = useToastStore(s => s.addToast)
   const [bits, setBits] = useState<4 | 8>(8)
+  const [mode, setMode] = useState<'symmetric' | 'asymmetric'>('symmetric')
   const [quantizing, setQuantizing] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [result, setResult] = useState<QuantizationResult | null>(null)
@@ -31,9 +32,9 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
     setQuantizing(true)
     setResult(null)
     try {
-      const res = await modelController.quantize(bits, 'symmetric')
+      const res = await modelController.quantize(bits, mode)
       setResult(res)
-      addToast(`${res.bits}-bit quantization applied (${res.layers_quantized} layers)`, 'success')
+      addToast(`${res.bits}-bit ${mode} quantization applied (${res.layers_quantized} layers)`, 'success')
     } catch (err) {
       addToast(err instanceof Error ? err.message : 'Quantization failed', 'error')
     } finally {
@@ -84,6 +85,23 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
                   className={`px-2 py-1 text-xs rounded border transition-colors ${bits === 4 ? 'bg-primary/10 border-primary text-primary' : 'border-border/60 text-muted-foreground hover:border-primary/40'}`}
                 >
                   int4
+                </button>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground">Mode:</span>
+                <button
+                  type="button"
+                  onClick={() => setMode('symmetric')}
+                  className={`px-2 py-1 text-xs rounded border transition-colors ${mode === 'symmetric' ? 'bg-primary/10 border-primary text-primary' : 'border-border/60 text-muted-foreground hover:border-primary/40'}`}
+                >
+                  Sym
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('asymmetric')}
+                  className={`px-2 py-1 text-xs rounded border transition-colors ${mode === 'asymmetric' ? 'bg-primary/10 border-primary text-primary' : 'border-border/60 text-muted-foreground hover:border-primary/40'}`}
+                >
+                  Asym
                 </button>
               </div>
               <Button size="sm" disabled={quantizing} onClick={handleQuantize}>

@@ -206,6 +206,9 @@ class ModelLoader:
             # Resize embeddings if we added a new pad token
             if len(tokenizer) != model.config.vocab_size:
                 model.resize_token_embeddings(len(tokenizer))
+                model.config.pad_token_id = tokenizer.pad_token_id
+            # Sync pad token to generation config (used by model.generate)
+            model.generation_config.pad_token_id = tokenizer.pad_token_id
 
             model = model.to(device)
             model.eval()
@@ -272,7 +275,11 @@ class ModelLoader:
                 if hasattr(result.model, "device"):
                     input_tensor = input_tensor.to(result.model.device)
                 with torch.no_grad():
-                    output = result.model.generate(input_tensor, max_new_tokens=10)
+                    output = result.model.generate(
+                        input_tensor,
+                        max_new_tokens=10,
+                        attention_mask=torch.ones_like(input_tensor),
+                    )
 
             # Check output
             if output is None or (hasattr(output, "shape") and output.shape[-1] == 0):

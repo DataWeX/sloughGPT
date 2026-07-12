@@ -50,10 +50,12 @@ describe('QuantizationCard', () => {
     expect(screen.getByText(/Load a model first/)).toBeDefined()
   })
 
-  it('shows precision selector and Apply button when online', () => {
+  it('shows precision and mode selectors when online', () => {
     render(<QuantizationCard isOnline={true} />)
     expect(screen.getByText('int8')).toBeDefined()
     expect(screen.getByText('int4')).toBeDefined()
+    expect(screen.getByText('Sym')).toBeDefined()
+    expect(screen.getByText('Asym')).toBeDefined()
     expect(screen.getByText('Apply')).toBeDefined()
   })
 
@@ -68,6 +70,32 @@ describe('QuantizationCard', () => {
     fireEvent.click(screen.getByText('int4'))
     const int4Btn = screen.getByText('int4')
     expect(int4Btn.className).toContain('bg-primary')
+  })
+
+  it('highlights symmetric by default', () => {
+    render(<QuantizationCard isOnline={true} />)
+    const symBtn = screen.getByText('Sym')
+    expect(symBtn.className).toContain('bg-primary')
+  })
+
+  it('toggles to asymmetric on click', () => {
+    render(<QuantizationCard isOnline={true} />)
+    fireEvent.click(screen.getByText('Asym'))
+    const asymBtn = screen.getByText('Asym')
+    expect(asymBtn.className).toContain('bg-primary')
+  })
+
+  it('passes selected mode to quantize call', async () => {
+    const mockQuantize = vi.mocked(modelController.quantize)
+    mockQuantize.mockResolvedValue({ ...mockResult, mode: 'asymmetric' })
+
+    render(<QuantizationCard isOnline={true} />)
+    fireEvent.click(screen.getByText('Asym'))
+    fireEvent.click(screen.getByText('Apply'))
+
+    await waitFor(() => {
+      expect(mockQuantize).toHaveBeenCalledWith(8, 'asymmetric')
+    })
   })
 
   it('calls modelController.quantize on Apply', async () => {

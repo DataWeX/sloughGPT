@@ -50,6 +50,7 @@ def hf_model_loader(
         if tokenizer.pad_token is None or tokenizer.pad_token_id == tokenizer.eos_token_id:
             tokenizer.add_special_tokens({"pad_token": "<|pad|>"})
             model.resize_token_embeddings(len(tokenizer))
+            model.generation_config.pad_token_id = tokenizer.pad_token_id
 
     logger.info("hf_model_loader[%s]: loaded (device=%s)", model_id, resolved_device)
     return model, tokenizer

@@ -377,7 +377,7 @@ class StartupOrchestrator:
         """Gracefully stop the background task queue."""
         if self._task_queue is not None:
             try:
-                self._task_queue.stop()
+                await self._task_queue.stop()
                 logger.info("Task queue stopped")
             except Exception as e:
                 logger.warning("Task queue shutdown: %s", e)
