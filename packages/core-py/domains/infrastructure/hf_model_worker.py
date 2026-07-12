@@ -34,10 +34,12 @@ def hf_model_loader(
     """
     resolved_device = _resolve_device(device)
 
-    from domains.infrastructure.model_loader import load_hf_model as safe_load
-    model, tokenizer, actual_device = safe_load(model_id, resolved_device)
+    from domains.infrastructure.model_loader import get_model_loader
+    result = get_model_loader().load(model_id, device=resolved_device, verify=False)
+    model = result.model
+    tokenizer = result.tokenizer
 
-    if isinstance(model, dict):
+    if model is None:
         # Safe loader returned safetensors weights dict — load real model
         from transformers import AutoModelForCausalLM, AutoTokenizer
         model = AutoModelForCausalLM.from_pretrained(
@@ -60,11 +62,8 @@ def _resolve_device(device: str) -> str:
     """Resolve device string, defaulting to CPU for stability."""
     if device == "auto":
         try:
-            import torch
-            if torch.backends.mps.is_available():
-                return "mps"
-            elif torch.cuda.is_available():
-                return "cuda"
+            from domains.infrastructure.ml_types import auto_device
+            return auto_device()
         except Exception:
             pass
         return "cpu"

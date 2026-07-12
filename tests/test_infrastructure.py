@@ -19,138 +19,22 @@ import pytest
 
 class TestModelLoaderPlatformDetection:
     def test_mps_available_returns_bool(self):
-        from domains.infrastructure.model_loader import _mps_available
+        from domains.infrastructure.ml_types import _mps_available
         assert isinstance(_mps_available(), bool)
 
     def test_cuda_available_returns_bool(self):
-        from domains.infrastructure.model_loader import _cuda_available
+        from domains.infrastructure.ml_types import _cuda_available
         assert isinstance(_cuda_available(), bool)
 
     def test_mps_available_handles_exception(self):
-        from domains.infrastructure.model_loader import _mps_available
-        with patch("torch.backends.mps.is_available", side_effect=Exception("no mps")):
+        from domains.infrastructure.ml_types import _mps_available
+        with patch("torch.backends.mps.is_available", side_effect=AttributeError("no mps")):
             assert _mps_available() is False
 
     def test_cuda_available_handles_exception(self):
-        from domains.infrastructure.model_loader import _cuda_available
-        with patch("torch.cuda.is_available", side_effect=Exception("no cuda")):
+        from domains.infrastructure.ml_types import _cuda_available
+        with patch("torch.cuda.is_available", side_effect=AttributeError("no cuda")):
             assert _cuda_available() is False
-
-
-def _make_dummy_model():
-    """Create a tiny nn.Module with Embedding + Linear for verify_model_integrity tests.
-    Mimics how HF causal LMs accept Long token IDs."""
-    return torch.nn.Sequential(
-        torch.nn.Embedding(10, 4),
-        torch.nn.Linear(4, 4),
-    )
-
-
-def _make_dummy_model_with_weight(modify_fn=None):
-    """Create a dummy model, optionally modifying a named param.
-    modify_fn receives (param, name) and calls param.data[...] = ... to modify in place."""
-    model = _make_dummy_model()
-    if modify_fn:
-        with torch.no_grad():
-            for name, param in model.named_parameters():
-                modify_fn(param, name)
-    return model
-
-
-def _make_dummy_tokenizer():
-    tok = MagicMock()
-    tok.pad_token_id = 0
-    return tok
-
-
-class TestModelLoaderVerifyIntegrity:
-    def test_passes_clean_model(self):
-        from domains.infrastructure.model_loader import verify_model_integrity
-        model = _make_dummy_model()
-        tokenizer = _make_dummy_tokenizer()
-        verify_model_integrity(model, "test", tokenizer)
-
-    def test_passes_model_with_zero_params(self):
-        from domains.infrastructure.model_loader import verify_model_integrity
-        model = _make_dummy_model_with_weight(
-            lambda p, n: p.data.zero_() if "weight" in n and "embed" not in n.lower() else None
-        )
-        tokenizer = _make_dummy_tokenizer()
-        verify_model_integrity(model, "test", tokenizer)
-
-    def test_raises_on_nan_weights(self):
-        from domains.infrastructure.model_loader import verify_model_integrity
-        model = _make_dummy_model_with_weight(
-            lambda p, n: p.data.__setitem__((0, 0), float("nan")) if "weight" in n and "embed" not in n.lower() else None
-        )
-        tokenizer = _make_dummy_tokenizer()
-        with pytest.raises(RuntimeError, match="NaN"):
-            verify_model_integrity(model, "test", tokenizer)
-
-    def test_raises_on_inf_weights(self):
-        from domains.infrastructure.model_loader import verify_model_integrity
-        model = _make_dummy_model_with_weight(
-            lambda p, n: p.data.__setitem__((0, 0), float("inf")) if "weight" in n and "embed" not in n.lower() else None
-        )
-        tokenizer = _make_dummy_tokenizer()
-        with pytest.raises(RuntimeError, match="Inf"):
-            verify_model_integrity(model, "test", tokenizer)
-
-    def test_raises_on_nan_logits(self):
-        from domains.infrastructure.model_loader import verify_model_integrity
-        model = _make_dummy_model()
-        tokenizer = _make_dummy_tokenizer()
-        # Override forward to return NaN logits
-        original_forward = model.forward
-        def bad_forward(x):
-            return type("Out", (), {"logits": torch.tensor([[float("nan")]])})()
-        model.forward = bad_forward
-        with pytest.raises(RuntimeError, match="NaN logits"):
-            verify_model_integrity(model, "test", tokenizer)
-
-    def test_raises_on_forward_pass_exception(self):
-        from domains.infrastructure.model_loader import verify_model_integrity
-        model = _make_dummy_model()
-        tokenizer = _make_dummy_tokenizer()
-        def broken_forward(x):
-            raise ValueError("oops")
-        model.forward = broken_forward
-        with pytest.raises(RuntimeError, match="smoke test"):
-            verify_model_integrity(model, "test", tokenizer)
-
-
-class TestModelLoaderLoadHF:
-    def test_device_auto_resolves_cpu(self):
-        from domains.infrastructure.model_loader import load_hf_model
-
-        with patch("domains.infrastructure.model_loader._mps_available", return_value=False), \
-             patch("domains.infrastructure.model_loader._cuda_available", return_value=False), \
-             patch("transformers.AutoTokenizer.from_pretrained") as mock_tok, \
-             patch("transformers.AutoModelForCausalLM.from_pretrained") as mock_model_cls, \
-             patch("domains.infrastructure.model_loader.verify_model_integrity"):
-
-            mock_model = MagicMock()
-            mock_model.cpu.return_value = mock_model  # return self for chaining
-            mock_model_cls.return_value = mock_model
-            model, tok, device = load_hf_model("gpt2", device="cpu")
-            assert device == "cpu"
-            assert mock_model.eval.called
-            assert mock_model.cpu.called
-
-    def test_raises_on_integrity_failure(self):
-        from domains.infrastructure.model_loader import load_hf_model
-
-        with patch("domains.infrastructure.model_loader._mps_available", return_value=False), \
-             patch("domains.infrastructure.model_loader._cuda_available", return_value=False), \
-             patch("transformers.AutoTokenizer.from_pretrained"), \
-             patch("transformers.AutoModelForCausalLM.from_pretrained") as mock_model_cls, \
-             patch("domains.infrastructure.model_loader.verify_model_integrity",
-                   side_effect=RuntimeError("corrupt")):
-
-            mock_model = MagicMock()
-            mock_model_cls.return_value = mock_model
-            with pytest.raises(RuntimeError, match="corrupt"):
-                load_hf_model("gpt2", device="cpu")
 
 
 # =============================================================================

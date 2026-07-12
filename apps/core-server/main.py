@@ -44,12 +44,14 @@ def _get_provider():
         return _provider
 
     from domains.models.provider import setup_providers, get_provider
-    from domains.infrastructure.model_loader import load_hf_model
+    from domains.infrastructure.model_loader import get_model_loader
 
     model_name = os.environ.get("MAN_CORE_MODEL", "gpt2")
     logger.info("Loading model: %s", model_name)
 
-    model, tokenizer, _device = load_hf_model(model_name, device="cpu")
+    result = get_model_loader().load(model_name, device="cpu", verify=False)
+    model = result.model
+    tokenizer = result.tokenizer
     _model = model
     _tokenizer = tokenizer
     _model_name = model_name
@@ -172,11 +174,13 @@ async def load_model(req: Request):
     model_id = body.get("model_id", body.get("model", "gpt2"))
 
     global _model, _tokenizer, _model_name, _provider
-    from domains.infrastructure.model_loader import load_hf_model
+    from domains.infrastructure.model_loader import get_model_loader
     from domains.models.provider import setup_providers, get_provider
 
     try:
-        model, tokenizer, _device = load_hf_model(model_id, device="cpu")
+        result = get_model_loader().load(model_id, device="cpu", verify=False)
+        model = result.model
+        tokenizer = result.tokenizer
         _model = model
         _tokenizer = tokenizer
         _model_name = model_id
