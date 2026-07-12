@@ -520,9 +520,12 @@ class SloNetChatProvider:
         """
         if self._quant_engine is None:
             return {"quantized": False}
+        summary = self._quant_engine.summary()
         return {
             "quantized": True,
-            "summary": self._quant_engine.summary(),
+            "bits": summary.get("bits", 0),
+            "mode": summary.get("mode", "symmetric"),
+            "summary": summary,
             "per_tensor": self._quant_engine.error_report(),
         }
 

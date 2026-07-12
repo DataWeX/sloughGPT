@@ -52,6 +52,8 @@ export interface HealthStatus {
   device?: string
   quantization?: {
     quantized: boolean
+    bits?: number
+    mode?: string
     summary?: {
       bits: number
       tensors: number

@@ -37,7 +37,7 @@ export default function ModelStatusCard({
                 <span className="text-xs font-medium">{modelDisplayName(health.model_type) || 'No model'}</span>
               </div>
               {quant && (
-                <Chip label={`int${quant.summary?.bits ?? '?'}`} />
+                <Chip label={`int${quant.bits ?? quant.summary?.bits ?? '?'} ${quant.mode === 'asymmetric' ? 'asym' : ''}`} />
               )}
               {currentSoul && (
                 <>
