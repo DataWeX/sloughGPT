@@ -7,12 +7,25 @@ import { KpiGrid, StatCard } from '@sloughgpt/strui'
 import { modelController, type QuantizationResult } from '@/lib/model-controller'
 import { useToastStore } from '@/lib/toast-store'
 
+type TensorEntry = { scale: number; zero_point: number; cosine_sim: number }
+
+function cosineColor(cos: number): string {
+  if (cos >= 0.99) return 'text-green-600'
+  if (cos >= 0.95) return 'text-yellow-600'
+  return 'text-red-600'
+}
+
+function formatLayerName(name: string): string {
+  return name.replace('.weight', '').replace('blocks.', 'B').replace('.q_proj', '/Q').replace('.k_proj', '/K').replace('.v_proj', '/V').replace('.o_proj', '/O').replace('.fc1', '/FC1').replace('.fc2', '/FC2')
+}
+
 export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
   const addToast = useToastStore(s => s.addToast)
   const [bits, setBits] = useState<4 | 8>(8)
   const [quantizing, setQuantizing] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [result, setResult] = useState<QuantizationResult | null>(null)
+  const [showLayers, setShowLayers] = useState(false)
 
   const handleQuantize = async () => {
     setQuantizing(true)
@@ -31,15 +44,21 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
   const handleReset = async () => {
     setResetting(true)
     try {
-      const res = await modelController.dequantize()
+      await modelController.dequantize()
       setResult(null)
-      addToast(`Reset to float32 (${res.layers_reset} layers)`, 'success')
+      setShowLayers(false)
+      addToast('Reset to float32', 'success')
     } catch (err) {
       addToast(err instanceof Error ? err.message : 'Reset failed', 'error')
     } finally {
       setResetting(false)
     }
   }
+
+  const sortedLayers = result
+    ? (Object.entries(result.per_tensor) as [string, TensorEntry][])
+        .sort((a, b) => a[1].cosine_sim - b[1].cosine_sim)
+    : []
 
   return (
     <Card>
@@ -78,13 +97,50 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
             </div>
 
             {result && (
-              <div className="pt-2 border-t border-border/40">
+              <div className="pt-2 border-t border-border/40 space-y-2">
                 <KpiGrid columns={4}>
                   <StatCard label="Layers" value={`${result.layers_quantized}/${result.total_layers}`} />
                   <StatCard label="Avg Cosine" value={result.summary.avg_cosine_sim.toFixed(4)} />
                   <StatCard label="AVX2" value={result.avx2_enabled ? 'Enabled' : 'N/A'} />
                   <StatCard label="Type" value={result.model_type === 'slonet' ? 'SloNet' : 'HuggingFace'} />
                 </KpiGrid>
+
+                {sortedLayers.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowLayers(!showLayers)}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showLayers ? 'Hide' : 'Show'} per-layer detail ({sortedLayers.length} layers, sorted by quality)
+                  </button>
+                )}
+
+                {showLayers && (
+                  <div className="max-h-64 overflow-y-auto rounded border border-border/40">
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 bg-muted/50">
+                        <tr className="text-left text-muted-foreground">
+                          <th className="px-2 py-1 font-medium">Layer</th>
+                          <th className="px-2 py-1 font-medium text-right">Cosine</th>
+                          <th className="px-2 py-1 font-medium text-right">Scale</th>
+                          <th className="px-2 py-1 font-medium text-right">Zero Pt</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedLayers.map(([name, entry]) => (
+                          <tr key={name} className="border-t border-border/20 hover:bg-muted/20">
+                            <td className="px-2 py-1 font-mono">{formatLayerName(name)}</td>
+                            <td className={`px-2 py-1 text-right font-mono ${cosineColor(entry.cosine_sim)}`}>
+                              {entry.cosine_sim.toFixed(6)}
+                            </td>
+                            <td className="px-2 py-1 text-right font-mono">{entry.scale.toFixed(6)}</td>
+                            <td className="px-2 py-1 text-right font-mono">{entry.zero_point}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </div>

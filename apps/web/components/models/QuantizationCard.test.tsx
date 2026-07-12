@@ -28,6 +28,16 @@ const mockResult: QuantizationResult = {
   avx2_enabled: true,
 }
 
+const mockResultWithLayers: QuantizationResult = {
+  ...mockResult,
+  per_tensor: {
+    'blocks.0.q_proj.weight': { scale: 0.01, zero_point: 0, cosine_sim: 0.9995 },
+    'blocks.0.k_proj.weight': { scale: 0.02, zero_point: 0, cosine_sim: 0.9980 },
+    'blocks.0.fc1.weight': { scale: 0.03, zero_point: 0, cosine_sim: 0.9920 },
+    'lm_head.weight': { scale: 0.04, zero_point: 0, cosine_sim: 0.9970 },
+  },
+}
+
 describe('QuantizationCard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -97,6 +107,27 @@ describe('QuantizationCard', () => {
 
     await waitFor(() => {
       expect(addToast).toHaveBeenCalledWith('No model loaded', 'error')
+    })
+  })
+
+  it('expands per-layer detail table after quantization', async () => {
+    const mockQuantize = vi.mocked(modelController.quantize)
+    mockQuantize.mockResolvedValue(mockResultWithLayers)
+
+    render(<QuantizationCard isOnline={true} />)
+    fireEvent.click(screen.getByText('Apply'))
+
+    await waitFor(() => {
+      expect(screen.getByText(/Show.*per-layer detail/)).toBeDefined()
+    })
+
+    fireEvent.click(screen.getByText(/Show.*per-layer detail/))
+
+    await waitFor(() => {
+      expect(screen.getByText('B0/Q')).toBeDefined()
+      expect(screen.getByText('B0/FC1')).toBeDefined()
+      expect(screen.getByText('lm_head')).toBeDefined()
+      expect(screen.getByText(/Hide.*per-layer detail/)).toBeDefined()
     })
   })
 })
