@@ -1,271 +1,115 @@
 """
-Rate Limiter — token bucket with per-endpoint, per-user, per-model limits.
-Integrates with ErrorTaxonomy (ResourceExhaustedError) and EventBus.
+Rate limiter middleware for FastAPI.
+
+Uses a sliding window counter per client IP.  Exceeds ``max_requests`` in
+``window_seconds`` → 429 Too Many Requests.
+
+Thread-safe via ``threading.Lock``.  No external dependencies (no Redis).
 """
 
-from __future__ import annotations
-
-import asyncio
-import logging
-import threading
 import time
-from dataclasses import dataclass, field
-from typing import Any
-
-logger = logging.getLogger("man.rate_limiter")
-
-
-@dataclass
-class TokenBucket:
-    rate: float  # tokens per second
-    burst: int   # max accumulated tokens
-    tokens: float = field(init=False)
-    last_refill: float = field(init=False)
-    key: str = ""
-
-    def __post_init__(self):
-        self.tokens = float(self.burst)
-        self.last_refill = time.monotonic()
-
-    def refill(self) -> float:
-        now = time.monotonic()
-        elapsed = now - self.last_refill
-        added = elapsed * self.rate
-        self.tokens = min(float(self.burst), self.tokens + added)
-        self.last_refill = now
-        return self.tokens
-
-    def try_consume(self, count: float = 1.0) -> bool:
-        self.refill()
-        if self.tokens >= count:
-            self.tokens -= count
-            return True
-        return False
-
-    def wait_time(self, count: float = 1.0) -> float:
-        """How many seconds until `count` tokens are available."""
-        if self.rate <= 0:
-            return float("inf")
-        self.refill()
-        if self.tokens >= count:
-            return 0.0
-        deficit = count - self.tokens
-        return deficit / self.rate
-
-    @property
-    def fill_pct(self) -> float:
-        return self.tokens / self.burst * 100
+import threading
+from collections import defaultdict
+from typing import Dict, List, Tuple
 
 
 class RateLimiter:
-    """Token-bucket rate limiter with multiple dimensions and async support."""
+    """Sliding-window rate limiter keyed by client identifier (IP)."""
 
-    def __init__(self):
-        self._buckets: dict[str, TokenBucket] = {}
+    def __init__(self, max_requests: int = 60, window_seconds: int = 60):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
         self._lock = threading.Lock()
-        self._event_bus = None
-        self._try_event_bus()
+        self._windows: Dict[str, List[float]] = defaultdict(list)
 
-    def _try_event_bus(self):
-        try:
-            from domains.infrastructure.event_bus import get_event_bus
-            self._event_bus = get_event_bus()
-        except Exception:
-            pass
+    def check(self, key: str) -> Tuple[bool, int]:
+        """
+        Check if ``key`` has exceeded the rate limit.
 
-    # ── Bucket management ──
+        Returns ``(allowed, remaining)`` where ``allowed`` is True if the
+        request should proceed, and ``remaining`` is the number of requests
+        remaining in the current window.
+        """
+        now = time.monotonic()
+        cutoff = now - self.window_seconds
 
-    def add_limit(self, key: str, rate: float, burst: int):
-        """Add or update a rate limit for a key (endpoint, user, model)."""
         with self._lock:
-            self._buckets[key] = TokenBucket(rate=rate, burst=burst, key=key)
+            timestamps = self._windows[key]
+            # Prune expired entries
+            while timestamps and timestamps[0] < cutoff:
+                timestamps.pop(0)
 
-    def remove_limit(self, key: str):
+            if len(timestamps) >= self.max_requests:
+                return False, 0
+
+            timestamps.append(now)
+            remaining = self.max_requests - len(timestamps)
+            return True, remaining
+
+    def reset(self, key: str) -> None:
+        """Clear all timestamps for ``key``."""
         with self._lock:
-            self._buckets.pop(key, None)
-
-    def get_bucket(self, key: str) -> TokenBucket | None:
-        with self._lock:
-            return self._buckets.get(key)
-
-    def clear(self):
-        with self._lock:
-            self._buckets.clear()
-
-    # ── Synchronous check ──
-
-    def check(self, key: str, count: float = 1.0) -> bool:
-        """Non-blocking check. Returns True if request is allowed."""
-        bucket = self.get_bucket(key)
-        if bucket is None:
-            return True
-        allowed = bucket.try_consume(count)
-        if not allowed and self._event_bus:
-            try:
-                self._event_bus.emit_sync("rate_limit.exceeded", {
-                    "key": key,
-                    "retry_after": bucket.wait_time(count),
-                    "bucket_fill": bucket.fill_pct,
-                }, source="rate_limiter")
-            except Exception:
-                pass
-        return allowed
-
-    def wait_seconds(self, key: str, count: float = 1.0) -> float:
-        """How long until `count` tokens are available."""
-        bucket = self.get_bucket(key)
-        if bucket is None:
-            return 0.0
-        return bucket.wait_time(count)
-
-    # ── Stats ──
-
-    def stats(self) -> list[dict[str, Any]]:
-        result = []
-        with self._lock:
-            for key, bucket in self._buckets.items():
-                result.append({
-                    "key": key,
-                    "rate": bucket.rate,
-                    "burst": bucket.burst,
-                    "tokens": round(bucket.tokens, 1),
-                    "fill_pct": round(bucket.fill_pct, 1),
-                })
-        return result
-
-    @property
-    def bucket_count(self) -> int:
-        return len(self._buckets)
+            self._windows.pop(key, None)
 
 
-# ── Async rate limiter (for integration with async endpoints) ──
+# ── Singleton ────────────────────────────────────────────────────────
 
-class AsyncRateLimiter(RateLimiter):
-    """Adds async acquire() for awaiting token availability."""
-
-    async def acquire(self, key: str, count: float = 1.0, timeout: float | None = None) -> bool:
-        """Wait for a token. Returns True if acquired, False on timeout."""
-        deadline = None
-        if timeout is not None:
-            deadline = time.monotonic() + timeout
-
-        while True:
-            if self.check(key, count):
-                return True
-            if deadline is not None and time.monotonic() >= deadline:
-                return False
-            await asyncio.sleep(0.05)
+_limiter: RateLimiter = None
 
 
-# ── Predefined limits ──
-
-DEFAULT_LIMITS: dict[str, tuple[float, int]] = {
-    # key → (rate, burst)
-    "endpoint:health": (10.0, 20),       # 10 req/s, burst 20
-    "endpoint:chat": (2.0, 5),           # 2 req/s, burst 5
-    "endpoint:generate": (1.0, 3),       # 1 req/s, burst 3
-    "endpoint:training": (2.0, 8),       # 2 req/s, burst 8 (supports page load + polling)
-    "endpoint:login": (0.5, 3),          # 1 req/2s, burst 3
-    "endpoint:register": (0.2, 2),       # 1 req/5s, burst 2
-    "model:inference": (1.0, 2),         # 1 inference/s, burst 2
-}
+def get_rate_limiter(
+    max_requests: int = 60,
+    window_seconds: int = 60,
+) -> RateLimiter:
+    global _limiter
+    if _limiter is None:
+        _limiter = RateLimiter(max_requests, window_seconds)
+    return _limiter
 
 
-# ── Singleton ──
-
-_default_limiter: RateLimiter | None = None
+# ── FastAPI Middleware ────────────────────────────────────────────────
 
 
-def get_rate_limiter() -> RateLimiter:
-    global _default_limiter
-    if _default_limiter is None:
-        _default_limiter = RateLimiter()
-        for key, (rate, burst) in DEFAULT_LIMITS.items():
-            _default_limiter.add_limit(key, rate, burst)
-    return _default_limiter
+RATE_LIMIT_HEADER_REMAINING = "X-RateLimit-Remaining"
+RATE_LIMIT_HEADER_LIMIT = "X-RateLimit-Limit"
+RATE_LIMIT_HEADER_RESET = "X-RateLimit-Reset"
 
 
-def set_rate_limiter(limiter: RateLimiter):
-    global _default_limiter
-    _default_limiter = limiter
+# ── FastAPI Middleware (BaseHTTPMiddleware) ──
+
+from starlette.middleware.base import BaseHTTPMiddleware
 
 
-# ── FastAPI middleware ──
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """Per-IP rate limiting via sliding window counter.
 
-try:
-    from starlette.middleware.base import BaseHTTPMiddleware
-    from starlette.requests import Request
-    from starlette.responses import JSONResponse
+    Applies to all routes.  Exceeding ``max_requests`` in ``window_seconds``
+    returns 429 with ``Retry-After`` header.
+    """
 
-    class RateLimitMiddleware(BaseHTTPMiddleware):
-        """FastAPI middleware that checks rate limits per endpoint group."""
+    def __init__(self, app, max_requests: int = 60, window_seconds: int = 60):
+        super().__init__(app)
+        self.limiter = RateLimiter(max_requests, window_seconds)
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
 
-        def __init__(self, app, limiter: RateLimiter | None = None):
-            super().__init__(app)
-            self.limiter = limiter or get_rate_limiter()
+    async def dispatch(self, request, call_next):
+        client_ip = request.client.host if request.client else "unknown"
+        allowed, remaining = self.limiter.check(client_ip)
 
-        async def dispatch(self, request: Request, call_next):
-            path = request.url.path
-            method = request.method
-
-            endpoint_key = _path_to_endpoint_key(path)
-            if endpoint_key:
-                user_key = f"user:{request.client.host}" if request.client else None
-
-                # Check endpoint limit
-                if not self.limiter.check(f"endpoint:{endpoint_key}"):
-                    wait = self.limiter.wait_seconds(f"endpoint:{endpoint_key}")
-                    return self._rate_limited_response(request, wait)
-
-                # Check per-user limit
-                if user_key and self.limiter.get_bucket(user_key):
-                    if not self.limiter.check(user_key):
-                        wait = self.limiter.wait_seconds(user_key)
-                        return self._rate_limited_response(request, wait)
-
-            return await call_next(request)
-
-        @staticmethod
-        def _rate_limited_response(request: Request, wait: float) -> JSONResponse:
-            """Build a 429 response with CORS headers so browsers see the error."""
-            origin = request.headers.get("origin", "")
-            headers = {
-                "Retry-After": str(int(wait)),
-                "Access-Control-Allow-Origin": origin or "*",
-                "Access-Control-Allow-Credentials": "true",
-            }
+        if not allowed:
+            from fastapi.responses import JSONResponse
             return JSONResponse(
                 status_code=429,
-                content={
-                    "error": "rate_limit_exceeded",
-                    "message": "Too many requests. Please slow down.",
-                    "retry_after": round(wait, 1),
+                content={"detail": "Too many requests. Try again later."},
+                headers={
+                    RATE_LIMIT_HEADER_REMAINING: "0",
+                    RATE_LIMIT_HEADER_LIMIT: str(self.max_requests),
+                    "Retry-After": str(self.window_seconds),
                 },
-                headers=headers,
             )
 
-
-    def _path_to_endpoint_key(path: str) -> str | None:
-        parts = path.strip("/").split("/")
-        if not parts:
-            return None
-        # Map common paths to endpoint group keys
-        area = parts[0]
-        mapping = {
-            "health": "health",
-            "chat": "chat",
-            "inference": "generate",
-            "training": "training",
-            "auth": "login",
-            "register": "register",
-        }
-        for prefix, key in mapping.items():
-            if area == prefix or area.startswith(prefix):
-                return key
-        return None
-
-except ImportError:
-    class RateLimitMiddleware:  # type: ignore
-        """Stub — Starlette not available."""
-        def __init__(self, app, limiter=None):
-            pass
+        response = await call_next(request)
+        response.headers[RATE_LIMIT_HEADER_REMAINING] = str(remaining)
+        response.headers[RATE_LIMIT_HEADER_LIMIT] = str(self.max_requests)
+        return response

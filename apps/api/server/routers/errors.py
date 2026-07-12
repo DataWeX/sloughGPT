@@ -22,6 +22,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from schemas.common import success_response
+
 logger = logging.getLogger("man.errors")
 
 router = APIRouter(prefix="/errors", tags=["errors"])
@@ -144,7 +146,7 @@ async def log_errors(batch: ErrorBatch, request: Request):
     while len(_error_buffer) > MAX_ERRORS:
         _error_buffer.pop(0)
 
-    return {"status": "ok", "logged": len(batch.errors)}
+    return success_response(data={"status": "ok", "logged": len(batch.errors)})
 
 
 @router.get("/recent")
@@ -153,13 +155,13 @@ async def get_recent_errors(limit: int = 50, offset: int = 0):
     total = len(_error_buffer)
     start = max(0, total - offset - limit)
     end = max(0, total - offset)
-    return {
+    return success_response(data={
         "errors": list(reversed(_error_buffer[start:end])),
         "unread_count": _error_count_since_clear,
         "total": total,
         "offset": offset,
         "limit": limit,
-    }
+    })
 
 
 @router.get("/grouped")
@@ -183,7 +185,7 @@ async def get_grouped_errors():
                 "sample_line": entry.get("line"),
             }
     result = sorted(groups.values(), key=lambda g: g["count"], reverse=True)
-    return {"groups": result, "total_groups": len(result)}
+    return success_response(data={"groups": result, "total_groups": len(result)})
 
 
 @router.get("/trends")
@@ -233,7 +235,7 @@ async def get_error_trends(hours: int = 24):
         pass
 
     result = [{"hour": k, "count": v} for k, v in sorted(buckets.items())]
-    return {"trends": result, "hours": hours}
+    return success_response(data={"trends": result, "hours": hours})
 
 
 @router.get("/export")
@@ -255,13 +257,13 @@ async def clear_errors():
     _clear_disk()
     global _error_count_since_clear
     _error_count_since_clear = 0
-    return {"status": "ok", "cleared": True}
+    return success_response(data={"status": "ok", "cleared": True})
 
 
 @router.get("/unread")
 async def unread_count():
     """Return the number of errors logged since last clear."""
-    return {"unread_count": _error_count_since_clear}
+    return success_response(data={"unread_count": _error_count_since_clear})
 
 
 @router.get("/log")
@@ -313,4 +315,4 @@ async def get_opencode_log():
 
     # Sort newest first
     entries.sort(key=lambda e: e.get("timestamp", ""), reverse=True)
-    return {"entries": entries[:200], "total": len(entries)}
+    return success_response(data={"entries": entries[:200], "total": len(entries)})

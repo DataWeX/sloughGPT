@@ -18,7 +18,7 @@ export interface Message {
 
 export interface Session {
   id: string;
-  title: string;
+  name: string;
   created_at: string;
   updated_at: string;
   message_count: number;

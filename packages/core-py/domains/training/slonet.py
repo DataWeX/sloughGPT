@@ -290,8 +290,7 @@ class Tensor:
     def __pow__(self, p): return _pow(self, p)
     def __truediv__(self, other): return _mul(self, _ensure(other) ** -1)
     def __getitem__(self, key):
-        sliced = self.data[key]
-        return Tensor(sliced, requires_grad=False)
+        return _slice(self, key)
     def __setitem__(self, key, value):
         self.data[key] = value.data if isinstance(value, Tensor) else value
     def __matmul__(self, other): return _matmul(self, _ensure(other))
@@ -307,7 +306,7 @@ class Tensor:
         def build(v):
             if v.id in visited: return
             visited.add(v.id)
-            for c in getattr(v, '_children', ()): build(c)
+            for c in (getattr(v, '_children', None) or ()): build(c)
             topo.append(v)
         build(self)
         for node in reversed(topo):
@@ -332,7 +331,7 @@ class Tensor:
         def topo(v):
             if v.id in visited: return
             visited.add(v.id)
-            for c in getattr(v, '_children', ()):
+            for c in (getattr(v, '_children', None) or ()):
                 if isinstance(c, Tensor): topo(c)
             order.append(v)
         topo(self)
@@ -1201,16 +1200,121 @@ class SloLinear(SloLayer):
         self.out_features = out_f; self.in_features = in_f
         self._weight_T = None
         self.soul_traits = {"creativity": 0.5, "confidence": 0.5, "warmth": 0.5}
+        self._quant_info = None  # TensorInfo for quantized weight
+        self._quant_unpacked = None  # lazy int4→int8 unpack cache
+        self._point_weight = None  # PointWeight: function-based weight representation
 
     def _get_weight_T(self) -> Tensor:
         if self._weight_T is None:
             self._weight_T = self.weight.T()
         return self._weight_T
 
+    def set_quantized_weight(self, quant_info):
+        """Set a quantized weight for this layer.
+
+        When set, forward() uses int8 GEMM instead of float32 matmul.
+        The float32 weight is kept for gradient computation (training).
+
+        For int4 (bits=4), the packed 1D array stays packed for memory
+        efficiency. On first forward() call, it is lazily unpacked into
+        a cached 2D int8 matrix.
+        """
+        self._quant_info = quant_info
+        self._quant_unpacked = None  # lazy unpack cache for int4
+
+    def _get_quant_array(self) -> np.ndarray:
+        """Return the quantized weight array as 2D int8 matrix.
+
+        For int4, lazily unpacks the packed array and caches it.
+        """
+        if self._quant_info is None or not self._quant_info.is_quantized:
+            return None
+        if self._quant_info.meta.bits == 4:
+            if self._quant_unpacked is None:
+                from domains.infrastructure.quantization import _unpack_int4
+                signed = self._quant_info.meta.mode == "symmetric"
+                n_total = int(np.prod(self._quant_info.meta.original_shape))
+                unpacked_1d = _unpack_int4(self._quant_info.array, n_total, signed=signed)
+                self._quant_unpacked = unpacked_1d.reshape(self._quant_info.meta.original_shape).astype(np.int8)
+            return self._quant_unpacked
+        return self._quant_info.array
+
+    def set_point_weight(self, point_weight):
+        """Set a PointWeight for this layer.
+
+        When set, forward() generates weight from the Point on-the-fly
+        instead of using the raw Tensor weight.
+
+        Args:
+            point_weight: PointWeight instance (from pugqeep.point_weight)
+        """
+        self._point_weight = point_weight
+        # Sync generated data into self.weight so training/gradients still work
+        arr = point_weight.generate()
+        self.weight.data = arr.astype(np.float32)
+
+    def get_point_weight(self):
+        """Return the PointWeight for this layer, or None."""
+        return self._point_weight
+
+    def compress_to_point(self, method: str = "auto", n_clusters: int = 16):
+        """Compress this layer's weight tensor to a PointWeight.
+
+        After compression, the Point replaces raw storage. The generated
+        data is synced into self.weight for backward compatibility.
+        """
+        from domains.infrastructure.pugqeep.point_weight import PointWeight
+        pw = PointWeight.from_array(
+            self.weight.data,
+            identity=self.name,
+            method=method,
+            n_clusters=n_clusters,
+        )
+        self.set_point_weight(pw)
+        return pw
+
     def forward_numpy(self, x: np.ndarray) -> np.ndarray:
+        if self._quant_info is not None and self._quant_info.is_quantized:
+            from domains.infrastructure.quantization import (
+                quantized_linear, int4_quantized_linear,
+            )
+            bias_arr = self.bias.data if self.use_bias else None
+            bits = self._quant_info.meta.bits
+            if bits == 4:
+                K = self._quant_info.meta.original_shape[-1]
+                return int4_quantized_linear(
+                    x, self._quant_info.array,
+                    self._quant_info.meta.scale,
+                    self._quant_info.meta.zero_point,
+                    K, bias_arr,
+                )
+            return quantized_linear(
+                x, self._get_quant_array(), self._quant_info.meta.scale,
+                self._quant_info.meta.zero_point, bias_arr,
+            )
         return x @ self.weight.data.T + self.bias.data
 
     def forward(self, x: Tensor) -> Tensor:
+        if self._quant_info is not None and self._quant_info.is_quantized:
+            from domains.infrastructure.quantization import (
+                quantized_linear, int4_quantized_linear,
+            )
+            bias_arr = self.bias.data if self.use_bias else None
+            bits = self._quant_info.meta.bits
+            if bits == 4:
+                K = self._quant_info.meta.original_shape[-1]
+                result = int4_quantized_linear(
+                    x.data, self._quant_info.array,
+                    self._quant_info.meta.scale,
+                    self._quant_info.meta.zero_point,
+                    K, bias_arr,
+                )
+            else:
+                result = quantized_linear(
+                    x.data, self._get_quant_array(), self._quant_info.meta.scale,
+                    self._quant_info.meta.zero_point, bias_arr,
+                )
+            return Tensor(result, requires_grad=x.requires_grad, _children=(x,))
         out = _matmul(x, self._get_weight_T())
         if self.use_bias:
             out = out + self.bias
@@ -1660,20 +1764,43 @@ class SloRMSNorm(SloLayer):
         return [self.weight]
 
 
+class SloLayerNorm(SloLayer):
+    """Layer normalization with weight and bias (GPT-2 style)."""
+
+    def __init__(self, dim: int, eps: float = 1e-5, name=""):
+        super().__init__(name or f"LayerNorm{dim}")
+        self.eps = eps
+        self.weight = ones((dim,), requires_grad=True)
+        self.bias = zeros((dim,), requires_grad=True)
+
+    def forward_numpy(self, x: np.ndarray) -> np.ndarray:
+        mean = x.mean(axis=-1, keepdims=True)
+        var = x.var(axis=-1, keepdims=True)
+        return (x - mean) / np.sqrt(var + self.eps) * self.weight.data + self.bias.data
+
+    def forward(self, x: Tensor) -> Tensor:
+        return _layernorm(x, self.weight, self.bias, self.eps)
+
+    def parameters(self) -> List[Tensor]:
+        return [self.weight, self.bias]
+
+
 class SloTransformerBlock(SloLayer):
     def __init__(self, d_model: int, n_heads: int, n_kv_head: Optional[int] = None,
                  dim_ff: int = None, use_rope: bool = False, max_seq_len: int = 2048,
-                 rope_base: float = 10000.0, dropout: float = 0.1, eps: float = 1e-5, name=""):
+                 rope_base: float = 10000.0, dropout: float = 0.1, eps: float = 1e-5,
+                 norm_type: str = "rms_norm", name=""):
         super().__init__(name or f"Transformer{d_model}")
         dim_ff = dim_ff or d_model * 4
         self.d_model = d_model
         self.n_heads = n_heads
         self.head_dim = d_model // n_heads
-        self.attn_norm = SloRMSNorm(d_model, eps, name + "_attn_norm")
+        NormCls = SloLayerNorm if norm_type == "layer_norm" else SloRMSNorm
+        self.attn_norm = NormCls(d_model, eps, name + "_attn_norm")
         self.attn = SloMultiHeadAttention(d_model, n_heads, n_kv_head=n_kv_head,
                                            use_rope=use_rope, max_seq_len=max_seq_len,
                                            rope_base=rope_base, name=name + "_attn")
-        self.ff_norm = SloRMSNorm(d_model, eps, name + "_ff_norm")
+        self.ff_norm = NormCls(d_model, eps, name + "_ff_norm")
         self.ff = SloFeedForward(d_model, dim_ff, name=name + "_ff")
         self.drop = SloDropout(dropout) if dropout > 0 else None
         self.use_checkpoint = False
@@ -1698,6 +1825,17 @@ class SloTransformerBlock(SloLayer):
         h = self.ff_norm.forward(x)
         h = self.ff.forward(h)
         if self.drop: h = self.drop.forward(h)
+        return x + h, ca
+
+    def forward_numpy(self, x: np.ndarray, mask: Optional[np.ndarray] = None,
+                      kv_cache: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+                      start_pos: int = 0) -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+        """Numpy-only forward — no Tensor overhead, no autograd."""
+        h = self.attn_norm.forward_numpy(x)
+        h, ca = self.attn.forward_numpy(h, h, h, mask, kv_cache=kv_cache, start_pos=start_pos)
+        x = x + h
+        h = self.ff_norm.forward_numpy(x)
+        h = self.ff.forward_numpy(h)
         return x + h, ca
 
     def parameters(self) -> List[Tensor]:
@@ -2855,13 +2993,16 @@ def _sanitize(obj):
     return obj
 
 
-def export_to_sou(net: SloNet, path: str, include_weights=True) -> str:
-    metadata = {
+def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict = None) -> str:
+    base_metadata = {
         "version": 3, "soul_name": net.soul_name, "soul_traits": net.soul_traits,
         "lineage": net.lineage, "system_prompt": net.system_prompt,
         "soul_signature": net.soul_signature(), "metadata": net.metadata,
         "created_at": net._created_at, "step": net._step,
     }
+    if metadata:
+        base_metadata["metadata"] = {**(base_metadata.get("metadata") or {}), **metadata}
+    metadata = base_metadata
     json_bytes = json.dumps(_sanitize(metadata), allow_nan=False).encode()
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
@@ -3133,6 +3274,8 @@ class SloTransformer(SloNet):
         rope_base: float = 10000.0,
         tie_weights: bool = True,
         intermediate_size: Optional[int] = None,
+        use_abs_pos_emb: bool = False,
+        norm_type: str = "rms_norm",
         soul_name: str = "SloTransformer",
         soul_traits: Optional[Dict[str, float]] = None,
     ):
@@ -3146,10 +3289,11 @@ class SloTransformer(SloNet):
             layers.append(SloTransformerBlock(
                 n_embed, n_head, n_kv_head=n_kv_head,
                 dim_ff=dim_ff, use_rope=use_rope, max_seq_len=max_seq_len,
-                rope_base=rope_base, dropout=0, eps=eps,
+                rope_base=rope_base, dropout=0, eps=eps, norm_type=norm_type,
                 name=f"blocks.{i}",
             ))
-        layers.append(SloRMSNorm(n_embed, eps, "norm"))
+        NormCls = SloLayerNorm if norm_type == "layer_norm" else SloRMSNorm
+        layers.append(NormCls(n_embed, eps, "norm"))
         layers.append(SloLinear(n_embed, vocab_size, "lm_head"))
         super().__init__(
             layers=layers,
@@ -3177,6 +3321,12 @@ class SloTransformer(SloNet):
         self.max_seq_len = max_seq_len
         self.tie_weights = tie_weights
         self._kv_caches: List[Optional[Tuple[np.ndarray, np.ndarray]]] = [None] * n_layer
+
+        # Absolute positional embedding (GPT-2 style, optional)
+        self.pos_emb: Optional[SloEmbedding] = None
+        if use_abs_pos_emb:
+            self.pos_emb = SloEmbedding(max_seq_len, n_embed, "pos_emb")
+
         if tie_weights:
             self.layers[-1].weight.data[:] = self.layers[0].weight.data.copy()
 
@@ -3234,6 +3384,10 @@ class SloTransformer(SloNet):
                 input_ids = input_ids.cpu().detach().numpy()
             x = Tensor(np.array(input_ids, dtype=np.int64))
         x = self.layers[0].forward(x)
+        if self.pos_emb is not None:
+            seq_len = x.data.shape[1]
+            pos = Tensor(np.arange(seq_len, dtype=np.int64).reshape(1, -1))
+            x = x + self.pos_emb.forward(pos)
         seq_len = x.data.shape[1]
         if mask is None:
             causal = np.triu(np.full((seq_len, seq_len), -1e9, dtype=np.float32), k=1)
@@ -3302,6 +3456,10 @@ class SloTransformer(SloNet):
                 pos = tokens.shape[1] - 1
                 step_mask = None
             x = self.layers[0].forward(Tensor(idx.astype(np.int64)))
+            if self.pos_emb is not None:
+                seq = x.data.shape[1]
+                p = Tensor(np.arange(pos, pos + seq, dtype=np.int64).reshape(1, -1))
+                x = x + self.pos_emb.forward(p)
             block_idx = 0
             for l in self.layers[1:-2]:
                 if isinstance(l, SloTransformerBlock):
@@ -3328,6 +3486,214 @@ class SloTransformer(SloNet):
         self.clear_kv_cache()
         return Tensor(tokens)
 
+    def generate_numpy(
+        self,
+        input_ids: np.ndarray,
+        max_new_tokens: int = 50,
+        temperature: float = 1.0,
+        top_k: Optional[int] = None,
+        top_p: Optional[float] = None,
+        repetition_penalty: float = 1.0,
+        eos_token: int = 0,
+    ) -> np.ndarray:
+        """Fully inlined numpy generation — minimal Python overhead.
+
+        Bypasses the entire layer system for maximum inference speed.
+        Accesses weight data directly, no method dispatch overhead.
+        Supports temperature, top_k, top_p, and repetition penalty.
+        """
+        if input_ids.ndim == 1:
+            input_ids = input_ids.reshape(1, -1)
+        tokens = input_ids.copy()
+        prompt_len = tokens.shape[1]
+        total_len = min(prompt_len + max_new_tokens, self.max_seq_len)
+        max_gen = total_len - prompt_len
+
+        # Pre-extract all weights for each block (avoid repeated attribute lookup)
+        blocks = []
+        for l in self.layers[1:-2]:
+            if isinstance(l, SloTransformerBlock):
+                b = l
+                has_ln = isinstance(b.attn_norm, SloLayerNorm)
+                blocks.append({
+                    'an_w': b.attn_norm.weight.data,
+                    'an_b': b.attn_norm.bias.data if has_ln else None,
+                    'an_eps': b.attn_norm.eps,
+                    'fn_w': b.ff_norm.weight.data,
+                    'fn_b': b.ff_norm.bias.data if has_ln else None,
+                    'fn_eps': b.ff_norm.eps,
+                    'wq': b.attn.W_q.weight.data,
+                    'bq': b.attn.W_q.bias.data if b.attn.W_q.use_bias else None,
+                    'wk': b.attn.W_k.weight.data,
+                    'bk': b.attn.W_k.bias.data if b.attn.W_k.use_bias else None,
+                    'wv': b.attn.W_v.weight.data,
+                    'bv': b.attn.W_v.bias.data if b.attn.W_v.use_bias else None,
+                    'wo': b.attn.W_o.weight.data,
+                    'bo': b.attn.W_o.bias.data if b.attn.W_o.use_bias else None,
+                    'w1': b.ff.w1.weight.data,
+                    'b1': b.ff.w1.bias.data if b.ff.w1.use_bias else None,
+                    'w2': b.ff.w2.weight.data,
+                    'b2': b.ff.w2.bias.data if b.ff.w2.use_bias else None,
+                    'w3': b.ff.w3.weight.data,
+                    'b3': b.ff.w3.bias.data if b.ff.w3.use_bias else None,
+                    'n_heads': b.attn.n_heads,
+                    'n_kv_heads': b.attn.n_kv_head,
+                    'head_dim': b.attn.head_dim,
+                })
+
+        tok_emb_w = self.layers[0].weight.data
+        pos_emb_w = self.pos_emb.weight.data if self.pos_emb is not None else None
+        pos_emb_n = self.pos_emb.num_embeddings if self.pos_emb is not None else 0
+
+        norm_layer = self.layers[-2]
+        norm_has_bias = isinstance(norm_layer, SloLayerNorm)
+        norm_w = norm_layer.weight.data
+        norm_b = norm_layer.bias.data if norm_has_bias else None
+        norm_eps = norm_layer.eps
+        lm_w = self.layers[-1].weight.data
+
+        E = blocks[0]['head_dim']
+        H = blocks[0]['n_heads']
+        K_H = blocks[0]['n_kv_heads']
+        scale = 1.0 / math.sqrt(E)
+
+        # Pre-allocate KV cache buffers for all layers
+        kv_caches = [None] * len(blocks)
+        kv_buf_k = [None] * len(blocks)
+        kv_buf_v = [None] * len(blocks)
+        kv_len = [0] * len(blocks)
+
+        for step in range(max_gen):
+            if step == 0:
+                idx = tokens[:, -self.block_size:]
+                pos = 0
+                seq_len = idx.shape[1]
+            else:
+                idx = tokens[:, -1:]
+                pos = tokens.shape[1] - 1
+                seq_len = 1
+
+            clipped = np.clip(idx.astype(np.int64), 0, tok_emb_w.shape[0] - 1)
+            x = np.take(tok_emb_w, clipped, axis=0)
+
+            if pos_emb_w is not None:
+                p = np.arange(pos, pos + seq_len, dtype=np.int64).reshape(1, -1)
+                x = x + np.take(pos_emb_w, np.clip(p, 0, pos_emb_n - 1), axis=0)
+
+            B = x.shape[0]
+
+            for bi, bw in enumerate(blocks):
+                # attn_norm (inline)
+                mean = x.mean(axis=-1, keepdims=True)
+                var = x.var(axis=-1, keepdims=True)
+                h = (x - mean) / np.sqrt(var + bw['an_eps']) * bw['an_w']
+                if bw['an_b'] is not None:
+                    h = h + bw['an_b']
+
+                # QKV projections WITH bias
+                q = h @ bw['wq'].T
+                if bw['bq'] is not None:
+                    q = q + bw['bq']
+                k = h @ bw['wk'].T
+                if bw['bk'] is not None:
+                    k = k + bw['bk']
+                v = h @ bw['wv'].T
+                if bw['bv'] is not None:
+                    v = v + bw['bv']
+
+                q = q.reshape(B, seq_len, H, E)
+                k = k.reshape(B, seq_len, K_H, E)
+                v = v.reshape(B, seq_len, K_H, E)
+
+                # KV cache: pre-allocated buffer, slice-assign
+                new_len = kv_len[bi] + seq_len
+                if kv_buf_k[bi] is None or new_len > kv_buf_k[bi].shape[1]:
+                    # Grow buffer (2x current + new)
+                    cap = max(64, new_len * 2)
+                    new_buf_k = np.zeros((B, cap, K_H, E), dtype=k.dtype)
+                    new_buf_v = np.zeros((B, cap, K_H, E), dtype=v.dtype)
+                    if kv_buf_k[bi] is not None:
+                        old_len = kv_len[bi]
+                        new_buf_k[:, :old_len] = kv_buf_k[bi][:, :old_len]
+                        new_buf_v[:, :old_len] = kv_buf_v[bi][:, :old_len]
+                    kv_buf_k[bi] = new_buf_k
+                    kv_buf_v[bi] = new_buf_v
+                kv_buf_k[bi][:, kv_len[bi]:kv_len[bi]+seq_len] = k
+                kv_buf_v[bi][:, kv_len[bi]:kv_len[bi]+seq_len] = v
+                kv_len[bi] = new_len
+                k = kv_buf_k[bi][:, :new_len]
+                v = kv_buf_v[bi][:, :new_len]
+
+                # GQA: expand K/V heads if n_kv_heads < n_heads
+                if K_H < H:
+                    reps = H // K_H
+                    k = np.repeat(k, reps, axis=2)
+                    v = np.repeat(v, reps, axis=2)
+
+                # Attention scores
+                scores = np.einsum('bnhd,bmhd->bhnm', q, k) * scale
+
+                # Causal mask for first step
+                if step == 0 and seq_len > 1:
+                    causal = np.triu(np.full((seq_len, seq_len), -1e9, dtype=np.float32), k=1)
+                    scores = scores + causal
+
+                attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
+                attn = attn / attn.sum(axis=-1, keepdims=True)
+                ao = np.einsum('bhnm,bmhd->bnhd', attn, v).reshape(B, seq_len, H * E)
+
+                # Output projection WITH bias
+                ao = ao @ bw['wo'].T
+                if bw['bo'] is not None:
+                    ao = ao + bw['bo']
+                x = x + ao
+
+                # ff_norm (inline)
+                mean = x.mean(axis=-1, keepdims=True)
+                var = x.var(axis=-1, keepdims=True)
+                h = (x - mean) / np.sqrt(var + bw['fn_eps']) * bw['fn_w']
+                if bw['fn_b'] is not None:
+                    h = h + bw['fn_b']
+
+                # FFN: w2(act(w1(x)) * w3(x))
+                h1 = h @ bw['w1'].T
+                if bw['b1'] is not None:
+                    h1 = h1 + bw['b1']
+                h3 = h @ bw['w3'].T
+                if bw['b3'] is not None:
+                    h3 = h3 + bw['b3']
+                h1 = 0.5 * h1 * (1.0 + np.tanh(0.7978845608 * (h1 + 0.044715 * h1**3)))
+                h = h1 * h3
+                h = h @ bw['w2'].T
+                if bw['b2'] is not None:
+                    h = h + bw['b2']
+                x = x + h
+
+            # Final norm
+            mean = x.mean(axis=-1, keepdims=True)
+            var = x.var(axis=-1, keepdims=True)
+            x = (x - mean) / np.sqrt(var + norm_eps) * norm_w
+            if norm_has_bias:
+                x = x + norm_b
+
+            # LM head
+            logits = x[:, -1, :] @ lm_w.T
+
+            # Sample with full pipeline (temperature, top_k, top_p, repetition penalty)
+            generated_so_far = tokens[:, prompt_len:].flatten()
+            next_id = _sample_from_logits(
+                logits, temperature=temperature,
+                top_k=top_k, top_p=top_p,
+                repetition_penalty=repetition_penalty,
+                generated_ids=generated_so_far,
+                eos_token=eos_token if step < max_gen - 1 else None,
+            )
+            tokens = np.concatenate([tokens, np.array([[next_id]], dtype=np.int64)], axis=1)
+            if next_id == eos_token:
+                break
+
+        return tokens
+
     def state_dict(self) -> Dict[str, np.ndarray]:
         result = {}
         for name, param in self._named_parameters():
@@ -3350,13 +3716,22 @@ class SloTransformer(SloNet):
                 continue
             elif isinstance(layer, SloTransformerBlock):
                 named.append((f"{prefix}{lname}.attn_norm.weight", layer.attn_norm.weight))
+                if isinstance(layer.attn_norm, SloLayerNorm):
+                    named.append((f"{prefix}{lname}.attn_norm.bias", layer.attn_norm.bias))
                 named.extend(_named_mha(f"{prefix}{lname}.attn", layer.attn))
                 named.append((f"{prefix}{lname}.ff_norm.weight", layer.ff_norm.weight))
+                if isinstance(layer.ff_norm, SloLayerNorm):
+                    named.append((f"{prefix}{lname}.ff_norm.bias", layer.ff_norm.bias))
                 named.extend(_named_ff(f"{prefix}{lname}.ff", layer.ff))
             elif isinstance(layer, SloRMSNorm):
                 named.append((f"{prefix}{lname}.weight", layer.weight))
+            elif isinstance(layer, SloLayerNorm):
+                named.append((f"{prefix}{lname}.weight", layer.weight))
+                named.append((f"{prefix}{lname}.bias", layer.bias))
             elif isinstance(layer, SloLinear):
                 named.append((f"{prefix}{lname}.weight", layer.weight))
+        if self.pos_emb is not None:
+            named.append((f"{prefix}pos_emb.weight", self.pos_emb.weight))
         return named
 
     def load_state_dict(self, state_dict: Dict[str, np.ndarray], strict: bool = True):
@@ -3428,6 +3803,8 @@ def _named_mha(prefix: str, mha: SloMultiHeadAttention) -> List[Tuple[str, Tenso
         named.append((f"{prefix}.k_proj.bias", mha.W_k.bias))
     if mha.W_v.use_bias:
         named.append((f"{prefix}.v_proj.bias", mha.W_v.bias))
+    if mha.W_o.use_bias:
+        named.append((f"{prefix}.o_proj.bias", mha.W_o.bias))
     return named
 
 

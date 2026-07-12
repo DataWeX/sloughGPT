@@ -24,31 +24,7 @@ import logging
 import re
 import time
 
-# In-memory training log ring buffer
-class _LogBuffer(logging.Handler):
-    def __init__(self, capacity: int = 500):
-        super().__init__()
-        self.capacity = capacity
-        self._lines: list[str] = []
-        self._lock = threading.Lock()
-
-    def emit(self, record: logging.LogRecord) -> None:
-        msg = self.format(record)
-        with self._lock:
-            self._lines.append(msg)
-            if len(self._lines) > self.capacity:
-                self._lines.pop(0)
-
-    def get_lines(self, n: int = 200) -> list[str]:
-        with self._lock:
-            return self._lines[-n:]
-
-    def clear(self) -> None:
-        with self._lock:
-            self._lines.clear()
-
-_log_buffer = _LogBuffer()
-_log_buffer.setFormatter(logging.Formatter("%(asctime)s %(levelname)-8s %(message)s", datefmt="%H:%M:%S"))
+from schemas.common import success_response, error_response
 
 try:
     from domains.api.sse_envelope import sse_event, sse_error, sse_complete
@@ -90,7 +66,7 @@ MAX_CHECKPOINT_DISK_MB = 500  # Global checkpoint disk budget
 
 autotrain_logger = logging.getLogger("man.autotrain")
 autotrain_logger.setLevel(logging.INFO)
-autotrain_logger.addHandler(_log_buffer)
+# Log handler is now the unified ServerOutputBuffer (wired via init_server_io)
 
 
 def _enforce_checkpoint_budget():
@@ -806,7 +782,7 @@ async def list_checkpoints():
     for ckpt in checkpoints:
         ckpt["description"] = _describe_checkpoint(ckpt)
 
-    return {"checkpoints": checkpoints}
+    return success_response(data=checkpoints)
 
 
 @router.delete("/checkpoints/{name}")
@@ -832,8 +808,8 @@ async def delete_checkpoint(name: str):
                 meta.unlink()
 
     if deleted:
-        return {"status": "deleted", "name": deleted}
-    return {"status": "not_found"}
+        return success_response(data={"name": deleted}, message="deleted")
+    return success_response(data={"name": name}, message="not_found")
 
 
 @router.post("/checkpoints/{name}/load")
@@ -859,23 +835,29 @@ async def load_checkpoint(name: str):
                 cp = candidate
                 break
     if not cp.exists():
-        return {"status": "not_found", "name": name}
+        return error_response(message=f"Checkpoint not found: {name}", data={"name": name})
 
     try:
         # Load the SloTransformer model from .soul file
         soul_net = import_from_sou(str(cp))
         soul_meta = soul_net.soul_signature()
-        md = soul_net.metadata or {}
 
-        # Extract vocab from metadata
-        stoi = md.get("stoi")
-        itos = md.get("itos")
+        # Read raw JSON metadata from .soul header (stoi/itos stored at top level)
+        import struct as _struct
+        with open(str(cp), "rb") as f:
+            raw = f.read(12)
+            json_len = _struct.unpack("<I", raw[8:12])[0]
+            meta_bytes = f.read(json_len).rstrip(b"\x00")
+        md = json.loads(meta_bytes.decode())
+
+        # Extract vocab from metadata — check top level and nested metadata dict
+        stoi = md.get("stoi") or md.get("metadata", {}).get("stoi")
+        itos = md.get("itos") or md.get("metadata", {}).get("itos")
         if stoi is None or itos is None:
-            return {
-                "status": "error",
-                "name": cp.name,
-                "error": "Checkpoint has no stoi/itos vocab — retrain to include vocab.",
-            }
+            return error_response(
+                message="Checkpoint has no stoi/itos vocab — retrain to include vocab.",
+                data={"name": cp.name},
+            )
 
         # Create provider and register as default
         provider = SloTransformerProvider(
@@ -893,8 +875,7 @@ async def load_checkpoint(name: str):
             extra={"context": {"checkpoint": cp.name, "vocab_size": len(stoi), "params": soul_net.num_parameters()}},
         )
 
-        return {
-            "status": "loaded",
+        return success_response(data={
             "name": cp.name,
             "soul": soul_meta.get("soul_name", soul_net.soul_name),
             "loss": md.get("final_train_loss"),
@@ -904,17 +885,18 @@ async def load_checkpoint(name: str):
             "vocab_size": len(stoi),
             "params": soul_net.num_parameters(),
             "provider": "slonet",
-        }
+        }, message="loaded")
     except Exception as e:
         import traceback
         autotrain_logger.error("Failed to load checkpoint %s: %s", cp.name, e, extra={"context": {"checkpoint": cp.name, "error": str(e), "traceback": traceback.format_exc()}})
-        return {"status": "error", "name": cp.name, "error": str(e)}
+        return error_response(message=str(e), data={"name": cp.name})
 
 
 @router.get("/log")
 async def auto_train_log():
-    """Return the auto-training log content from the in-memory ring buffer."""
-    lines = _log_buffer.get_lines(200)
+    """Return the auto-training log content from the shared server buffer."""
+    from domains.infrastructure.output_buffer import get_server_buffer
+    lines = [line.text for line in get_server_buffer().tail(200)]
     return {"lines": lines, "total": len(lines)}
 
 

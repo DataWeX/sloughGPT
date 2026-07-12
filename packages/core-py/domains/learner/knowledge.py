@@ -79,6 +79,331 @@ def _topic_slug(topic: str) -> str:
     return s[:64]
 
 
+# ---------------------------------------------------------------------------
+# Document chunking strategies
+# ---------------------------------------------------------------------------
+
+def chunk_by_fixed_size(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
+    """Split text into fixed-size chunks with optional overlap.
+
+    Args:
+        text: Input text to chunk
+        chunk_size: Maximum characters per chunk
+        overlap: Number of overlapping characters between chunks
+
+    Returns:
+        List of text chunks
+    """
+    if not text or not text.strip():
+        return []
+
+    text = text.strip()
+    if len(text) <= chunk_size:
+        return [text]
+
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunk = text[start:end]
+        if chunk.strip():
+            chunks.append(chunk.strip())
+        start = end - overlap if overlap < chunk_size else end
+
+    return chunks
+
+
+def chunk_by_paragraph(text: str, max_chunk_size: int = 1000) -> list[str]:
+    """Split text by paragraph boundaries (double newlines).
+
+    Merges short paragraphs to avoid too-small chunks.
+
+    Args:
+        text: Input text to chunk
+        max_chunk_size: Maximum characters per merged chunk
+
+    Returns:
+        List of text chunks
+    """
+    if not text or not text.strip():
+        return []
+
+    # Split on paragraph boundaries
+    paragraphs = re.split(r'\n\s*\n', text.strip())
+
+    chunks = []
+    current = ""
+    for para in paragraphs:
+        para = para.strip()
+        if not para:
+            continue
+
+        if current and len(current) + len(para) + 2 > max_chunk_size:
+            if current:
+                chunks.append(current)
+            current = para
+        else:
+            current = f"{current}\n\n{para}" if current else para
+
+    if current:
+        chunks.append(current)
+
+    return chunks if chunks else [text.strip()]
+
+
+def chunk_by_heading(text: str, max_chunk_size: int = 1500) -> list[str]:
+    """Split text by markdown-style headings (# ## ###).
+
+    Each heading starts a new chunk. Content under a heading is kept together
+    unless it exceeds max_chunk_size.
+
+    Args:
+        text: Input text to chunk
+        max_chunk_size: Maximum characters per chunk
+
+    Returns:
+        List of text chunks
+    """
+    if not text or not text.strip():
+        return []
+
+    # Split on heading lines
+    lines = text.strip().split('\n')
+    sections = []
+    current_heading = ""
+    current_content = []
+
+    for line in lines:
+        if re.match(r'^#{1,3}\s+', line):
+            # Save previous section
+            if current_heading or current_content:
+                content = '\n'.join(current_content).strip()
+                if content:
+                    sections.append(f"{current_heading}\n{content}" if current_heading else content)
+            current_heading = line.strip()
+            current_content = []
+        else:
+            current_content.append(line)
+
+    # Save last section
+    if current_heading or current_content:
+        content = '\n'.join(current_content).strip()
+        if content:
+            sections.append(f"{current_heading}\n{content}" if current_heading else content)
+
+    if not sections:
+        return chunk_by_fixed_size(text, max_chunk_size)
+
+    # Merge small sections
+    chunks = []
+    current = ""
+    for section in sections:
+        if current and len(current) + len(section) + 2 > max_chunk_size:
+            chunks.append(current)
+            current = section
+        else:
+            current = f"{current}\n\n{section}" if current else section
+
+    if current:
+        chunks.append(current)
+
+    return chunks if chunks else [text.strip()]
+
+
+def chunk_by_semantic(text: str, max_chunk_size: int = 800, min_chunk_size: int = 100) -> list[str]:
+    """Semantic chunking — split at sentence boundaries, group by coherence.
+
+    Tries to keep related sentences together based on:
+    - Sentence length (short = likely a transition)
+    - Keyword overlap between adjacent sentences
+
+    Args:
+        text: Input text to chunk
+        max_chunk_size: Maximum characters per chunk
+        min_chunk_size: Minimum characters before forcing a split
+
+    Returns:
+        List of text chunks
+    """
+    if not text or not text.strip():
+        return []
+
+    # Split into sentences
+    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    if len(sentences) <= 2:
+        return [text.strip()]
+
+    chunks = []
+    current_chunk = [sentences[0]]
+
+    for i in range(1, len(sentences)):
+        sent = sentences[i]
+        current_text = ' '.join(current_chunk)
+        current_len = len(current_text)
+        sent_len = len(sent)
+
+        # Force split if too long
+        if current_len + sent_len > max_chunk_size:
+            if current_len >= min_chunk_size:
+                chunks.append(current_text)
+                current_chunk = [sent]
+            else:
+                current_chunk.append(sent)
+                chunks.append(' '.join(current_chunk))
+                current_chunk = []
+            continue
+
+        # Check for natural break: short sentence or low keyword overlap
+        if sent_len < 40:
+            # Short sentence = likely transition — good split point
+            if current_len >= min_chunk_size:
+                chunks.append(current_text)
+                current_chunk = [sent]
+                continue
+
+        # Check keyword overlap
+        current_words = set(current_text.lower().split())
+        sent_words = set(sent.lower().split())
+        overlap = len(current_words & sent_words)
+        total = len(current_words | sent_words)
+        similarity = overlap / max(total, 1)
+
+        if similarity < 0.1 and current_len >= min_chunk_size:
+            # Low similarity = topic shift
+            chunks.append(current_text)
+            current_chunk = [sent]
+        else:
+            current_chunk.append(sent)
+
+    # Final chunk
+    if current_chunk:
+        final = ' '.join(current_chunk).strip()
+        if final:
+            chunks.append(final)
+
+    return chunks if chunks else [text.strip()]
+
+
+def chunk_text(text: str, strategy: str = "auto", **kwargs) -> list[str]:
+    """High-level chunking API with strategy selection.
+
+    Args:
+        text: Input text to chunk
+        strategy: One of "auto", "fixed", "paragraph", "heading", "semantic"
+        **kwargs: Additional arguments passed to the chunking function
+
+    Returns:
+        List of text chunks
+    """
+    strategies = {
+        "fixed": chunk_by_fixed_size,
+        "paragraph": chunk_by_paragraph,
+        "heading": chunk_by_heading,
+        "semantic": chunk_by_semantic,
+    }
+
+    if strategy == "auto":
+        # Auto-select based on content
+        if re.search(r'^#{1,3}\s+', text, re.MULTILINE):
+            return chunk_by_heading(text, **kwargs)
+        elif '\n\n' in text and text.count('\n\n') >= 3:
+            return chunk_by_paragraph(text, **kwargs)
+        elif len(text) > 2000:
+            return chunk_by_semantic(text, **kwargs)
+        else:
+            return chunk_by_fixed_size(text, **kwargs)
+
+    fn = strategies.get(strategy)
+    if fn is None:
+        raise ValueError(f"Unknown strategy: {strategy}. Use: {list(strategies.keys())}")
+    return fn(text, **kwargs)
+
+
+def _extract_facts_from_text(text: str) -> list[str]:
+    """Extract declarative statements (facts) from text.
+
+    Uses simple heuristics to identify sentences that likely contain
+    factual information rather than opinions or questions.
+
+    Args:
+        text: Input text to analyze
+
+    Returns:
+        List of extracted fact strings
+    """
+    if not text or len(text.strip()) < 30:
+        return []
+
+    # Split into sentences
+    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+
+    facts = []
+    for sent in sentences:
+        sent = sent.strip()
+        if not sent or len(sent) < 20:
+            continue
+
+        # Skip questions
+        if sent.startswith(('?', 'What', 'How', 'Why', 'When', 'Where', 'Who', 'Is', 'Are', 'Do', 'Does', 'Can', 'Could', 'Would', 'Should')):
+            continue
+
+        # Skip imperative (instructions/commands)
+        if sent.startswith(('Try', 'Consider', 'Remember', 'Note', 'Make sure', 'Ensure')):
+            continue
+
+        # Skip very short or exclamatory
+        if len(sent) < 25 or sent.endswith('!'):
+            continue
+
+        # Likely factual if it contains declarative patterns
+        is_fact = False
+
+        # "X is/are/was/were Y"
+        if re.search(r'\b\w+\s+(is|are|was|were)\s+\w+', sent, re.I):
+            is_fact = True
+
+        # "X has/have/had Y"
+        if re.search(r'\b\w+\s+(has|have|had)\s+\w+', sent, re.I):
+            is_fact = True
+
+        # Contains numbers/dates (often factual)
+        if re.search(r'\d{4}|\d+\.\d+|\d+%', sent):
+            is_fact = True
+
+        # "X can/must/should Y"
+        if re.search(r'\b\w+\s+(can|must|should|may|might)\s+\w+', sent, re.I):
+            is_fact = True
+
+        if is_fact:
+            facts.append(sent)
+
+    return facts
+
+
+def _extract_topics(text: str) -> list[str]:
+    """Extract topic keywords from text using simple heuristics."""
+    if not text:
+        return ["general"]
+
+    # Common topic indicators
+    topic_patterns = {
+        "programming": r'\b(python|javascript|code|function|variable|class|api|bug|deploy)\b',
+        "science": r'\b(experiment|hypothesis|theory|research|study|data|analysis)\b',
+        "technology": r'\b(ai|machine learning|neural|model|algorithm|software|hardware)\b',
+        "history": r'\b(century|war|civilization|ancient|era|dynasty|revolution)\b',
+        "math": r'\b(equation|formula|calculate|proof|theorem|algebra|geometry)\b',
+        "general": r'.*',
+    }
+
+    text_lower = text.lower()
+    topics = []
+    for topic, pattern in topic_patterns.items():
+        if topic != "general" and re.search(pattern, text_lower):
+            topics.append(topic)
+
+    return topics[:3] if topics else ["general"]
+
+
 def _extract_topics(text: str, max_topics: int = 5) -> list[str]:
     """Extract likely topic keywords from text via simple TF-like scoring."""
     words = re.findall(r'[a-zA-Z][a-zA-Z-]{2,}', text.lower())
@@ -387,6 +712,48 @@ class KnowledgeMemory:
                 )
                 if self.add_fact(fact):
                     added += 1
+        return added
+
+    def auto_ingest_from_chat(self, user_message: str, assistant_response: str,
+                               max_facts: int = 3) -> int:
+        """Extract and store facts from a chat exchange.
+
+        Analyzes the assistant's response for declarative statements (facts)
+        and stores them in the knowledge base with topic inference.
+
+        Args:
+            user_message: The user's message for context
+            assistant_response: The assistant's response to extract facts from
+            max_facts: Maximum number of facts to extract per exchange
+
+        Returns:
+            Number of new facts stored
+        """
+        facts = _extract_facts_from_text(assistant_response)
+        if not facts:
+            return 0
+
+        # Infer topic from user message
+        topics = _extract_topics(user_message)
+        topic = topics[0] if topics else "general"
+
+        now = time.time()
+        added = 0
+        for fact_text in facts[:max_facts]:
+            if len(fact_text) < 20:  # skip very short fragments
+                continue
+            fact = KnowledgeFact(
+                content=fact_text,
+                topic=topic,
+                source="chat",
+                timestamp=now,
+                importance=0.6,  # slightly above default for chat-sourced
+            )
+            if self.add_fact(fact):
+                added += 1
+
+        if added > 0:
+            logger.info("Auto-ingested %d facts from chat (topic=%s)", added, topic)
         return added
 
     # ---- queries -----------------------------------------------------------

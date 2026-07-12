@@ -41,6 +41,7 @@ class ModelConfig(BaseModel):
     max_new_tokens: int = 200
     use_slonet: bool = False
     autoload: bool = True
+    use_flash_attention: bool = False
 
 
 class ServerConfig(BaseModel):
@@ -121,11 +122,35 @@ def _env_to_key(env_name: str) -> str:
     return ".".join(parts)
 
 
+# Env vars consumed by external systems (ServerConfig, etc.) — silently ignored.
+_SKIP_ENV_KEYS: frozenset[str] = frozenset({
+    # ServerConfig (apps/api/server/config.py) — not in infrastructure AppConfig schema
+    "MAN_ENABLE_PROCESS_GUARD",
+    "MAN_AUTOLOAD_MODEL",
+    "MAN_AUTOLOAD_DEVICE",
+    "MAN_USE_SLONET",
+    "MAN_STARTUP_PROFILE",
+    "MAN_RELOAD",
+    "MAN_GUARD_MEMORY_LIMIT_MB",
+    "MAN_GUARD_MAX_RESTARTS",
+    "MAN_GUARD_RESTART_DELAY",
+    # Server feature flags consumed directly in main.py lifecycle
+    "MAN_HEALTH_MONITOR",
+    "MAN_WATCHDOG",
+    "MAN_WEB",
+    "MAN_AUTO_WORKFLOW",
+})
+
+
 def _apply_env_overrides(config: AppConfig) -> AppConfig:
     """Walk environment variables, parse MAN_* keys, override config values."""
     overrides: dict[str, Any] = {}
     for key, value in os.environ.items():
         if not key.startswith(_ENV_PREFIX):
+            continue
+        if key in _SKIP_ENV_KEYS:
+            continue
+        if key.startswith("MAN_RATE_LIMIT__"):
             continue
         if key == _ENV_PREFIX.rstrip("_"):
             continue

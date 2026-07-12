@@ -28,10 +28,10 @@ describe('formatDate', () => {
 })
 
 describe('truncateMessage', () => {
-  it('returns empty for falsy content', () => {
-    expect(truncateMessage('')).toBe('')
-    expect(truncateMessage(null as unknown as string)).toBe('')
-    expect(truncateMessage(undefined as unknown as string)).toBe('')
+  it('returns placeholder for falsy content', () => {
+    expect(truncateMessage('')).toBe('Empty conversation')
+    expect(truncateMessage(null as unknown as string)).toBe('Empty conversation')
+    expect(truncateMessage(undefined as unknown as string)).toBe('Empty conversation')
   })
   it('returns first line if short enough', () => {
     expect(truncateMessage('Hello world')).toBe('Hello world')

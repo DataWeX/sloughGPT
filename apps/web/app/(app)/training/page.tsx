@@ -11,6 +11,7 @@ import { Tabs } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { datasetController } from '@/lib/controllers'
 import { useTrainingForm } from '@/hooks/useTrainingForm'
+import { OutputCard } from '@/components/OutputCard'
 import { TestModelDialog } from '@/components/training/TestModelDialog'
 import { WebhookManager } from '@/components/training/WebhookManager'
 import { useTrainingSession } from '@/hooks/useTrainingSession'
@@ -36,6 +37,7 @@ export default function TrainingPage() {
   const datasets = useTrainingDatasets(addToast)
   const checkpoints = useTrainingCheckpoints()
   const test = useTestDialog()
+
 
   const form = useTrainingForm(datasets, session, checkpoints, addToast)
 
@@ -195,6 +197,11 @@ export default function TrainingPage() {
             </Card>
           </div>
         )}
+      </div>
+
+      {/* Server Output */}
+      <div className="mt-4">
+        <OutputCard />
       </div>
 
       <TestModelDialog

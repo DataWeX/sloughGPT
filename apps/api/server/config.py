@@ -52,6 +52,10 @@ class ServerConfig:
     autoload_model: str = "Qwen/Qwen2.5-0.5B-Instruct"
     autoload_device: str = "auto"
     use_slonet: bool = False
+    quantize_slonet: bool = False
+    quant_bits: int = 8
+    quant_mode: str = "symmetric"
+    quant_clip: float = 0.999
 
     inference_pool_size: int = field(default_factory=lambda: max(1, multiprocessing.cpu_count() // 2))
     request_timeout_seconds: float = 120.0
@@ -88,6 +92,10 @@ class ServerConfig:
             autoload_model=os.getenv("MAN_AUTOLOAD_MODEL", "Qwen/Qwen2.5-0.5B-Instruct").strip(),
             autoload_device=(os.getenv("MAN_AUTOLOAD_DEVICE") or "auto").strip(),
             use_slonet=os.getenv("MAN_USE_SLONET", "0").strip().lower() in ("1", "true", "yes"),
+            quantize_slonet=os.getenv("MAN_QUANTIZE", "").lower() in ("1", "true", "yes"),
+            quant_bits=int(os.getenv("MAN_QUANT_BITS", "8")),
+            quant_mode=os.getenv("MAN_QUANT_MODE", "symmetric").strip(),
+            quant_clip=float(os.getenv("MAN_QUANT_CLIP", "0.999")),
             inference_pool_size=int(os.getenv("MAN_INFERENCE_POOL_SIZE", str(max(1, multiprocessing.cpu_count() // 2)))),
             request_timeout_seconds=float(os.getenv("MAN_REQUEST_TIMEOUT", "120.0")),
             enable_watchdog=os.getenv("MAN_WATCHDOG", "true").lower() == "true",

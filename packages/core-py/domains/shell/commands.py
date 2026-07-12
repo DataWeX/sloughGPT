@@ -216,6 +216,60 @@ class ShellCommands:
         """Delete a fine-tuned model."""
         return _api_delete(f"/training/finetuned-models/{name}")
 
+    # ── Training ─────────────────────────────────────────────────────────
+
+    @staticmethod
+    def train_quick(dataset: str, name: str = "") -> dict[str, Any]:
+        """Start quick training on a dataset."""
+        return _api_post("/training/quick", {"dataset": dataset, "name": name or None})
+
+    @staticmethod
+    def train_auto(soul_name: str = "", teacher: str = "gpt2", epochs: int = 10,
+                   source_text: str = "", dataset_id: str = "") -> dict[str, Any]:
+        """Start auto-train (SloNet student learning)."""
+        return _api_post("/auto-train/start", {
+            "soul_name": soul_name, "teacher_model": teacher,
+            "epochs": epochs, "source_text": source_text, "dataset_id": dataset_id,
+        })
+
+    @staticmethod
+    def train_distill(dataset: str, teacher: str = "gpt2", name: str = "",
+                      temperature: float = 2.0, epochs: int = 5) -> dict[str, Any]:
+        """Start knowledge distillation."""
+        return _api_post("/training/distill", {
+            "dataset": dataset, "teacher_model": teacher, "name": name or None,
+            "temperature": temperature, "epochs": epochs,
+        })
+
+    @staticmethod
+    def train_hf(model: str, dataset: str, name: str = "", epochs: int = 3,
+                 use_lora: bool = True) -> dict[str, Any]:
+        """Start HuggingFace fine-tuning."""
+        return _api_post("/training/hf-start", {
+            "model": model, "dataset": dataset, "name": name or None,
+            "epochs": epochs, "use_lora": use_lora,
+        })
+
+    @staticmethod
+    def train_status() -> list[dict[str, Any]]:
+        """List all training jobs with status."""
+        result = _api_get("/training/jobs")
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict):
+            return result.get("jobs", [])
+        return []
+
+    @staticmethod
+    def train_stop(job_id: str) -> dict[str, Any]:
+        """Stop a running training job."""
+        return _api_post(f"/training/jobs/{job_id}/stop")
+
+    @staticmethod
+    def train_delete(job_id: str) -> dict[str, Any]:
+        """Delete a training job record."""
+        return _api_delete(f"/training/jobs/{job_id}")
+
     @staticmethod
     def generate(prompt: str, max_tokens: int = 100) -> dict[str, Any]:
         """Generate text via the inference endpoint."""

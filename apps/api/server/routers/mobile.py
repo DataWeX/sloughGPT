@@ -12,6 +12,8 @@ from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel
 import httpx
 
+from schemas.common import success_response, error_response
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/mobile", tags=["mobile"])
 
@@ -567,16 +569,21 @@ async def sync_offline(request: Request, body: SyncRequest):
                 error=str(e),
             ))
 
-    # Return updated session list
+    # Return updated session list — internal /chat/sessions now returns StandardResponse
     sessions_data = await _internal_get(request, "/chat/sessions") or {}
-    sessions = sessions_data.get("sessions", []) if isinstance(sessions_data, dict) else []
+    if isinstance(sessions_data, dict) and "data" in sessions_data:
+        sessions = sessions_data["data"] if isinstance(sessions_data["data"], list) else []
+    elif isinstance(sessions_data, dict) and "sessions" in sessions_data:
+        sessions = sessions_data["sessions"]
+    else:
+        sessions = []
 
-    return {
+    return success_response(data={
         "results": [r.model_dump() for r in results],
         "synced_count": sum(1 for r in results if r.status == "sent"),
         "failed_count": sum(1 for r in results if r.status == "error"),
         "sessions": sessions[:20],
-    }
+    })
 
 
 @router.get("/sync/status")
@@ -589,12 +596,12 @@ async def sync_status(request: Request):
     """
     health = await _internal_get(request, "/health") or {}
 
-    return {
+    return success_response(data={
         "reachable": health.get("status") == "healthy",
         "model_loaded": health.get("model_loaded", False),
         "server_time": int(__import__("time").time() * 1000),
         "inference_count": health.get("inference_count", 0),
-    }
+    })
 
 
 # ── Push Notifications ───────────────────────────────────────────────────────

@@ -1,19 +1,14 @@
-import React, {useEffect, useState, useCallback} from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-} from 'react-native';
+import React, {useEffect, useState} from 'react';
+import {FlatList, Alert} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {useChatStore} from '../stores/chat-store';
 import {getBookmarks, removeBookmark, type Bookmark} from '../services/bookmarks';
 import {triggerHaptic} from '../services/haptics';
-import {colors, spacing, radii, typography} from '../theme';
+import {Icon} from '../components/Icon';
 
 export function BookmarksScreen() {
+  const theme = useTheme();
   const {loadSession} = useChatStore();
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
 
@@ -41,121 +36,56 @@ export function BookmarksScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Bookmarks</Text>
-          <Text style={styles.subtitle}>{bookmarks.length} saved messages</Text>
-        </View>
+    <SafeAreaView style={{flex: 1}} edges={['top']}>
+      <YStack flex={1}>
+        <YStack paddingHorizontal={16} paddingTop={12} paddingBottom={8}>
+          <Text fontSize={20} fontWeight="600" letterSpacing={-0.2} color="$color">
+            Bookmarks
+          </Text>
+          <Text fontSize={11} fontWeight="500" color="$color10" marginTop={2}>
+            {bookmarks.length} saved messages
+          </Text>
+        </YStack>
 
         <FlatList
           data={bookmarks}
           keyExtractor={b => b.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={{paddingHorizontal: 16, paddingTop: 12, gap: 8}}
           renderItem={({item: b}) => (
-            <TouchableOpacity
-              style={styles.bookmarkItem}
+            <YStack
+              backgroundColor="$background"
+              borderRadius={12}
+              padding={14}
+              borderWidth={0.5}
+              borderColor="$borderColor"
               onPress={() => handleOpen(b)}
-              onLongPress={() => handleRemove(b.id)}
-              activeOpacity={0.7}>
-              <View style={styles.bookmarkHeader}>
-                <Text style={styles.role}>{b.role === 'user' ? 'You' : 'AI'}</Text>
-                <Text style={styles.date}>
+              onLongPress={() => handleRemove(b.id)}>
+              <XStack justifyContent="space-between" alignItems="center" marginBottom={4}>
+                <Text fontSize={11} fontWeight="600" color="$color9">
+                  {b.role === 'user' ? 'You' : 'AI'}
+                </Text>
+                <Text fontSize={11} fontWeight="500" color="$color10">
                   {new Date(b.savedAt).toLocaleDateString()}
                 </Text>
-              </View>
-              <Text style={styles.content} numberOfLines={3}>
+              </XStack>
+              <Text fontSize={14} color="$color" lineHeight={20} numberOfLines={3}>
                 {b.content}
               </Text>
-            </TouchableOpacity>
+            </YStack>
           )}
           ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>☆</Text>
-              <Text style={styles.emptyTitle}>No bookmarks yet</Text>
-              <Text style={styles.emptySubtitle}>
+            <YStack alignItems="center" paddingTop={96} paddingHorizontal={32}>
+              <Icon name="star" size={48} color={(theme.color10?.val || '#9B95A8')} />
+              <Text fontSize={20} fontWeight="600" color="$color" marginBottom={8} textAlign="center">
+                No bookmarks yet
+              </Text>
+              <Text fontSize={14} color="$color11" textAlign="center">
                 Long-press any message and tap Bookmark to save it here.
               </Text>
-            </View>
+            </YStack>
           }
         />
-      </View>
+      </YStack>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  container: {
-    flex: 1,
-  },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  title: {
-    ...typography.h2,
-    color: colors.text,
-  },
-  subtitle: {
-    ...typography.small,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  list: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    gap: spacing.sm,
-  },
-  bookmarkItem: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  bookmarkHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  role: {
-    ...typography.small,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  date: {
-    ...typography.small,
-    color: colors.textMuted,
-  },
-  content: {
-    ...typography.body,
-    color: colors.text,
-    lineHeight: 20,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingTop: spacing.xxxl * 2,
-    paddingHorizontal: spacing.xxxl,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    color: colors.textMuted,
-    marginBottom: spacing.md,
-  },
-  emptyTitle: {
-    ...typography.h2,
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  emptySubtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-});

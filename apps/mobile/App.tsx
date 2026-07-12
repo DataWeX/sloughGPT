@@ -1,41 +1,33 @@
 import React, {useEffect, useState} from 'react';
-import {StatusBar, Text, View, StyleSheet} from 'react-native';
+import {StatusBar, Text, StyleSheet, useColorScheme} from 'react-native';
 import {NavigationContainer, DefaultTheme, DarkTheme} from '@react-navigation/native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
-import {ChatScreen} from './src/screens/ChatScreen';
-import {ModelsScreen} from './src/screens/ModelsScreen';
-import {TrainingScreen} from './src/screens/TrainingScreen';
-import {KnowledgeScreen} from './src/screens/KnowledgeScreen';
-import {ActivityScreen} from './src/screens/ActivityScreen';
 import {SettingsScreen} from './src/screens/SettingsScreen';
 import {HealthScreen} from './src/screens/HealthScreen';
 import {AboutScreen} from './src/screens/AboutScreen';
-import {SearchScreen} from './src/screens/SearchScreen';
 import {BookmarksScreen} from './src/screens/BookmarksScreen';
-import {useModelStore} from './src/stores/model-store';
+import {HelpScreen} from './src/screens/HelpScreen';
+import {TrainingScreen} from './src/screens/TrainingScreen';
+import {KnowledgeScreen} from './src/screens/KnowledgeScreen';
+import {SearchScreen} from './src/screens/SearchScreen';
 import {useSettingsStore} from './src/stores/settings-store';
-import {ThemeProvider, useTheme} from './src/theme/ThemeContext';
+import {TamaguiProvider} from './src/theme/TamaguiProvider';
 import {ErrorBoundary} from './src/components/ErrorBoundary';
 import {LoadingScreen} from './src/components/LoadingScreen';
 import {ConnectionStatusBar} from './src/components/ConnectionStatusBar';
 import {ToastContainer} from './src/components/ToastContainer';
 import {OnboardingScreen, isFirstLaunch} from './src/screens/OnboardingScreen';
-import {colors} from './src/theme';
-import {initInference} from './src/services/activity-inference';
+import {ALL_TABS} from './src/navigation/tabs';
 import {registerForPushNotifications, onNotification} from './src/services/push-notifications';
-
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
 const TAB_ICONS: Record<string, string> = {
   Chat: '💬',
-  Search: '🔍',
   Models: '🧠',
-  Train: '🏋️',
-  Knowledge: '📚',
   Settings: '⚙️',
 };
 
@@ -54,24 +46,25 @@ function SettingsStack() {
       <Stack.Screen name="Health" component={HealthScreen} />
       <Stack.Screen name="About" component={AboutScreen} />
       <Stack.Screen name="Bookmarks" component={BookmarksScreen} />
+      <Stack.Screen name="Help" component={HelpScreen} />
+      <Stack.Screen name="Training" component={TrainingScreen} />
+      <Stack.Screen name="Knowledge" component={KnowledgeScreen} />
+      <Stack.Screen name="Search" component={SearchScreen} />
     </Stack.Navigator>
   );
 }
 
 function AppInner() {
-  const refresh = useModelStore(s => s.refresh);
-  const {isDark} = useTheme();
+  const isDark = useColorScheme() === 'dark';
   const [ready, setReady] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
-    Promise.all([refresh(), initInference()]).finally(() => setReady(true));
-    isFirstLaunch().then(setNeedsOnboarding);
+    setReady(true);
+    isFirstLaunch().then(setNeedsOnboarding).catch(() => {});
 
-    // Register for push notifications on startup (non-blocking)
     registerForPushNotifications().catch(() => {});
 
-    // Listen for incoming notifications (non-blocking)
     const unsub = onNotification((title, body) => {
       console.log('[Push]', title, body);
     });
@@ -81,7 +74,7 @@ function AppInner() {
   if (!ready) {
     return (
       <SafeAreaProvider>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#0F0D15' : '#FFFFFF'} />
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#0F0D18' : '#F5F0FF'} />
         <LoadingScreen />
       </SafeAreaProvider>
     );
@@ -90,7 +83,7 @@ function AppInner() {
   if (needsOnboarding) {
     return (
       <SafeAreaProvider>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#0F0D15' : '#FFFFFF'} />
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#0F0D18' : '#F5F0FF'} />
         <OnboardingScreen onComplete={() => setNeedsOnboarding(false)} />
       </SafeAreaProvider>
     );
@@ -101,8 +94,8 @@ function AppInner() {
         ...DarkTheme,
         colors: {
           ...DarkTheme.colors,
-          background: '#0F0D15',
-          card: '#1A1725',
+          background: '#0F0D18',
+          card: '#1A1730',
           text: '#F0ECF5',
           border: '#2D2A3A',
           primary: '#C0AAF4',
@@ -112,8 +105,8 @@ function AppInner() {
         ...DefaultTheme,
         colors: {
           ...DefaultTheme.colors,
-          background: '#FFFFFF',
-          card: '#F5F3F7',
+          background: '#F5F0FF',
+          card: '#FFFFFF',
           text: '#1A1625',
           border: '#E0DCE8',
           primary: '#7C52C4',
@@ -122,7 +115,7 @@ function AppInner() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#0F0D15' : '#FFFFFF'} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#0F0D18' : '#F5F0FF'} />
       <NavigationContainer theme={navTheme}>
         <ConnectionStatusBar />
         <ToastContainer />
@@ -135,7 +128,7 @@ function AppInner() {
             tabBarActiveTintColor: isDark ? '#C0AAF4' : '#7C52C4',
             tabBarInactiveTintColor: isDark ? '#6B6580' : '#9B95A8',
             tabBarStyle: {
-              backgroundColor: isDark ? '#1A1725' : '#FFFFFF',
+              backgroundColor: isDark ? '#1A1730' : '#FFFFFF',
               borderTopColor: isDark ? '#2D2A3A' : '#E0DCE8',
               height: 60,
               paddingBottom: 8,
@@ -146,17 +139,18 @@ function AppInner() {
               fontWeight: '500',
             },
           })}>
-          <Tab.Screen name="Chat" component={ChatScreen} />
-          <Tab.Screen name="Search" component={SearchScreen} />
-          <Tab.Screen name="Models" component={ModelsScreen} />
-          <Tab.Screen name="Train" component={TrainingScreen} />
-          <Tab.Screen name="Knowledge" component={KnowledgeScreen} />
-          <Tab.Screen name="Activity" component={ActivityScreen} />
-          <Tab.Screen
-            name="Settings"
-            component={SettingsStack}
-            options={{headerShown: false}}
-          />
+          {ALL_TABS.map(tab =>
+            tab.stack ? (
+              <Tab.Screen
+                key={tab.name}
+                name={tab.name}
+                component={SettingsStack}
+                options={{headerShown: false}}
+              />
+            ) : (
+              <Tab.Screen key={tab.name} name={tab.name} component={tab.component} />
+            )
+          )}
         </Tab.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
@@ -166,9 +160,9 @@ function AppInner() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider>
+      <TamaguiProvider>
         <AppInner />
-      </ThemeProvider>
+      </TamaguiProvider>
     </ErrorBoundary>
   );
 }

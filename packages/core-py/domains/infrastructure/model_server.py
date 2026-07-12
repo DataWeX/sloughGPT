@@ -6,12 +6,18 @@ that handles concurrency control, timeouts, error recovery, and metrics.
 
 Architecture::
 
-    Request → ModelServer.generate()
+    Request → ModelServer.generate() / generate_stream()
+                ├── select backend (GuardBackend or LocalBackend)
                 ├── acquire semaphore (serializes concurrent access)
                 ├── pre-generation hook (OOM check, cache warm)
-                ├── model.generate() with timeout wrapper
+                ├── backend.generate() / backend.generate_stream()
                 ├── post-generation hook (KV cache reset)
                 └── release semaphore
+
+Backends:
+    GuardBackend  — delegates to ProcessGuard subprocess (crash-isolated).
+                    Falls back to LocalBackend when subprocess is dead.
+    LocalBackend  — direct model.generate().
 """
 
 import asyncio
@@ -21,6 +27,7 @@ import gc
 import os
 import functools
 from threading import Lock, Thread, Event
+from typing import Generator as GeneratorType
 
 def _ensure_torch() -> bool:
     """Check if real PyTorch is available (needed for HF model inference)."""
@@ -34,6 +41,148 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 logger = logging.getLogger("man.infrastructure.model_server")
+
+
+class SessionKVCache:
+    """Thread-safe per-session KV cache for incremental cross-turn decoding.
+
+    Stores ``(token_ids, past_key_values)`` per session so that follow-up
+    messages can skip re-encoding the shared prompt prefix.
+
+    Cache entries expire after ``ttl`` seconds and at most ``max_sessions``
+    entries are kept (LRU eviction).
+    """
+
+    def __init__(self, max_sessions: int = 100, ttl: float = 1800.0):
+        self._caches: dict[str, Any] = {}
+        self._max_sessions = max_sessions
+        self._ttl = ttl
+        self._lock = Lock()
+
+    def get(self, session_id: str, current_ids: list[int]):
+        """Return the cached ``past_key_values`` if ``current_ids`` shares a
+        prefix with the stored token IDs, else ``None``.
+
+        Also returns the prefix length so the caller can build the correct
+        attention mask.
+        """
+        with self._lock:
+            entry = self._caches.get(session_id)
+            if entry is None:
+                return None, 0
+            cached_ids, cached_pkv, _ = entry
+            prefix_len = 0
+            for a, b in zip(cached_ids, current_ids):
+                if a != b:
+                    break
+                prefix_len += 1
+            if prefix_len == 0:
+                return None, 0
+            return cached_pkv, prefix_len
+
+    def store(self, session_id: str, token_ids: list[int], past_key_values: Any) -> None:
+        """Store ``past_key_values`` keyed by session + token IDs."""
+        with self._lock:
+            self._evict_expired()
+            if len(self._caches) >= self._max_sessions:
+                oldest = min(self._caches, key=lambda k: self._caches[k][2])
+                del self._caches[oldest]
+            self._caches[session_id] = (token_ids, past_key_values, time.time())
+
+    def clear(self, session_id: str) -> None:
+        with self._lock:
+            self._caches.pop(session_id, None)
+
+    def _evict_expired(self) -> None:
+        now = time.time()
+        stale = [k for k, v in self._caches.items() if now - v[2] > self._ttl]
+        for k in stale:
+            del self._caches[k]
+
+    def evict_expired(self) -> None:
+        with self._lock:
+            self._evict_expired()
+
+    @property
+    def size(self) -> int:
+        with self._lock:
+            return len(self._caches)
+
+    def stats(self) -> dict:
+        with self._lock:
+            return {
+                "entries": len(self._caches),
+                "max_sessions": self._max_sessions,
+                "ttl_seconds": self._ttl,
+            }
+
+
+def _optimize_cpu_threads() -> None:
+    """Set optimal CPU thread count for PyTorch inference on Intel Mac."""
+    import os
+    if not _ensure_torch():
+        return
+    import torch
+    # Detect physical cores — on this Intel Mac (i7-9750H) that's 6
+    try:
+        import multiprocessing
+        n_cores = multiprocessing.cpu_count()
+    except Exception:
+        n_cores = 4
+    # Reserve 1 thread for async overhead when >4 cores
+    intra_ops = max(1, n_cores - 1) if n_cores > 4 else n_cores
+    inter_ops = 2  # parallel graph partitions
+    torch.set_num_threads(intra_ops)
+    if hasattr(torch, "set_num_interop_threads"):
+        try:
+            torch.set_num_interop_threads(min(inter_ops, intra_ops))
+        except RuntimeError:
+            pass  # already set — ignore
+    os.environ.setdefault("OMP_NUM_THREADS", str(intra_ops))
+    os.environ.setdefault("MKL_NUM_THREADS", str(intra_ops))
+    os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+    logger.debug("CPU threads: intra=%d inter=%d cores=%d", intra_ops, inter_ops, n_cores)
+
+
+def _torch_compile_model(model, model_id: str) -> Any:
+    """Apply ``torch.compile`` to the model.  Returns compiled model or original."""
+    if not _ensure_torch():
+        return model
+    import torch
+    if not hasattr(torch, "compile") or not callable(torch.compile):
+        return model
+    # Skip models too small to benefit (compile overhead > gain)
+    try:
+        n_params = sum(p.numel() for p in model.parameters())
+        if n_params < 10_000_000:  # <10M params — not worth it
+            logger.debug("Skipping torch.compile for %s (%d params)", model_id, n_params)
+            return model
+    except Exception:
+        pass
+    try:
+        compiled = torch.compile(model, backend="aot_eager" if _is_intel_mac() else "inductor")
+        logger.info("torch.compile applied to %s", model_id)
+        return compiled
+    except Exception as e:
+        logger.warning("torch.compile failed for %s: %s", model_id, e)
+        return model
+
+
+def _inference_mode_generate(model, gen_kwargs: dict) -> Any:
+    """Generate under ``torch.inference_mode()`` for ~5-15% speedup over no_grad."""
+    if not _ensure_torch():
+        return model.generate(**gen_kwargs)
+    import torch
+    with torch.inference_mode():
+        return model.generate(**gen_kwargs)
+
+
+def _is_intel_mac() -> bool:
+    try:
+        import platform
+        return platform.system() == "Darwin" and platform.machine() == "x86_64"
+    except Exception:
+        return False
 
 
 class ModelStatus(Enum):
@@ -168,21 +317,544 @@ def _mps_oom_recovery() -> None:
         pass
 
 
-def _cpu_fallback() -> str:
-    """Force model to CPU; returns device string."""
-    try:
-        from domains.training.slonet_compat import torch
-        for obj in gc.get_objects():
-            if hasattr(obj, "device") and hasattr(obj, "to"):
+# ── Generate Backends ─────────────────────────────────────────────────────────
+#
+# Strategy pattern: ModelServer delegates generation to a backend.  Each backend
+# owns one generation path (guard subprocess or local model).  Backends are
+# selected at request time, so a dead guard transparently falls back to local
+# generation without restarting the server.
+
+class GenerateBackend:
+    """Base class for token generation backends.
+
+    Subclasses implement ``generate()`` (non-streaming) and
+    ``generate_stream()`` (streaming).  ModelServer delegates to whichever
+    backend is selected for the current request.
+    """
+
+    def generate(
+        self,
+        prompt: str,
+        max_new_tokens: int,
+        temperature: float,
+        top_p: float,
+        top_k: int,
+        repetition_penalty: float,
+        **kwargs: Any,
+    ) -> dict:
+        """Non-streaming generation.  Returns {"text": str, "tokens_generated": int}."""
+        raise NotImplementedError
+
+    def generate_stream(
+        self,
+        prompt: str,
+        max_new_tokens: int,
+        temperature: float,
+        top_p: float,
+        top_k: int,
+        repetition_penalty: float,
+        cancel_event=None,
+        **kwargs: Any,
+    ) -> GeneratorType[str, None, dict]:
+        """Streaming generation.  Yields tokens, returns final result dict."""
+        raise NotImplementedError
+
+    @property
+    def alive(self) -> bool:
+        """Whether this backend is ready to serve requests."""
+        return True
+
+
+class GuardBackend(GenerateBackend):
+    """Delegates generation to a ProcessGuard subprocess.
+
+    When the subprocess is dead (MPS OOM, crash, etc.), ``alive`` returns
+    False and the caller falls back to LocalBackend.
+    """
+
+    def __init__(self, guard: Any):
+        self._guard = guard
+
+    @property
+    def alive(self) -> bool:
+        return self._guard is not None and self._guard.alive
+
+    def generate(
+        self,
+        prompt: str,
+        max_new_tokens: int,
+        temperature: float,
+        top_p: float,
+        top_k: int,
+        repetition_penalty: float,
+        **kwargs: Any,
+    ) -> dict:
+        safe_kwargs = {k: v for k, v in kwargs.items()
+                       if k not in ("input_ids", "attention_mask")}
+        start = time.time()
+        result = self._guard.generate(
+            prompt=prompt,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            repetition_penalty=repetition_penalty,
+            **safe_kwargs,
+        )
+        result["elapsed_ms"] = round((time.time() - start) * 1000, 1)
+        return result
+
+    def generate_stream(
+        self,
+        prompt: str,
+        max_new_tokens: int,
+        temperature: float,
+        top_p: float,
+        top_k: int,
+        repetition_penalty: float,
+        cancel_event=None,
+        **kwargs: Any,
+    ) -> GeneratorType[str, None, dict]:
+        safe_kwargs = {k: v for k, v in kwargs.items()
+                       if k not in ("input_ids", "attention_mask")}
+        gen = self._guard.generate_stream(
+            prompt=prompt,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            repetition_penalty=repetition_penalty,
+            **safe_kwargs,
+        )
+        if cancel_event is not None:
+            gen = _cancelable_gen(gen, cancel_event)
+        return gen
+
+
+class NumpyBackend(GenerateBackend):
+    """Pure-NumPy backend — no PyTorch, no tokenizer, no MPS.
+
+    Wraps a NumpyEngine instance for direct safetensors→numpy inference.
+    Used when NumpyEngine is loaded as the primary model (zero PyTorch dep).
+
+    Features:
+      - Compression: weights compressed via VQ (4x memory savings)
+      - KV cache: incremental decoding (faster generation)
+      - Streaming: token-by-token async output
+    """
+
+    def __init__(self, engine: Any):
+        self._engine = engine
+
+    @property
+    def alive(self) -> bool:
+        return self._engine is not None
+
+    def generate(
+        self,
+        prompt: str,
+        max_new_tokens: int,
+        temperature: float,
+        top_p: float,
+        top_k: int,
+        repetition_penalty: float,
+        **kwargs: Any,
+    ) -> dict:
+        """Generate text using NumpyEngine with KV cache."""
+        text = self._engine.generate(
+            prompt,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_k=top_k,
+            use_kv_cache=True,
+        )
+        input_len = len(self._engine.tokenizer.encode(prompt))
+        output_len = len(self._engine.tokenizer.encode(text))
+        tokens_generated = max(0, output_len - input_len)
+        return {"text": text, "tokens_generated": tokens_generated}
+
+    def generate_stream(
+        self,
+        prompt: str,
+        max_new_tokens: int,
+        temperature: float,
+        top_p: float,
+        top_k: int,
+        repetition_penalty: float,
+        cancel_event=None,
+        **kwargs: Any,
+    ) -> GeneratorType[str, None, dict]:
+        """Stream tokens from NumpyEngine — yields one token at a time.
+
+        Uses the engine's generate_stream() async generator for true
+        token-by-token streaming with KV cache support.
+        """
+        if cancel_event is not None and cancel_event.is_set():
+            return {"text": "", "tokens_generated": 0}
+
+        import asyncio
+
+        # Collect tokens from async generator via a coroutine
+        collected_tokens = []
+
+        async def _collect():
+            async for token in self._engine.generate_stream(
+                prompt,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                top_k=top_k,
+            ):
+                if cancel_event is not None and cancel_event.is_set():
+                    break
+                collected_tokens.append(token)
+
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(_collect())
+        finally:
+            loop.close()
+
+        # Yield collected tokens synchronously
+        token_count = 0
+        for token in collected_tokens:
+            token_count += 1
+            yield token
+
+        return {"text": "", "tokens_generated": token_count}
+
+class ONNXBackend(GenerateBackend):
+    """Wraps ONNXInferenceEngine for fast CPU/MPS inference.
+
+    Provides 5-10x speedup over PyTorch on CPU by using ONNX Runtime's
+    optimized execution providers (CoreML, XNNPACK, etc.).
+    """
+
+    def __init__(self, engine: Any, tokenizer: Any):
+        self._engine = engine
+        self._tokenizer = tokenizer
+
+    @property
+    def alive(self) -> bool:
+        try:
+            return self._engine is not None and self._engine.session is not None
+        except Exception:
+            return False
+
+    def generate(
+        self,
+        prompt: str,
+        max_new_tokens: int,
+        temperature: float,
+        top_p: float,
+        top_k: int,
+        repetition_penalty: float,
+        **kwargs: Any,
+    ) -> dict:
+        """Generate text using ONNX Runtime."""
+        do_sample = temperature > 0 and top_k > 0
+        text = self._engine.generate(
+            prompt,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
+            do_sample=do_sample,
+        )
+        input_len = len(self._tokenizer.encode(prompt).ids if hasattr(self._tokenizer, 'encode') and hasattr(self._tokenizer.encode(prompt), 'ids') else self._tokenizer.encode(prompt))
+        output_ids = self._tokenizer.encode(text).ids if hasattr(self._tokenizer.encode(text), 'ids') else self._tokenizer.encode(text)
+        output_len = len(output_ids)
+        tokens_generated = max(0, output_len - input_len)
+        return {"text": text, "tokens_generated": tokens_generated}
+
+    def generate_stream(
+        self,
+        prompt: str,
+        max_new_tokens: int,
+        temperature: float,
+        top_p: float,
+        top_k: int,
+        repetition_penalty: float,
+        cancel_event=None,
+        **kwargs: Any,
+    ) -> GeneratorType[str, None, dict]:
+        """Stream tokens from ONNX Runtime — yields one token at a time."""
+        if cancel_event is not None and cancel_event.is_set():
+            return {"text": "", "tokens_generated": 0}
+
+        token_count = 0
+        for token_text in self._engine.generate_stream(prompt, max_new_tokens=max_new_tokens):
+            if cancel_event is not None and cancel_event.is_set():
+                break
+            yield token_text
+            token_count += 1
+
+        return {"text": "", "tokens_generated": token_count}
+
+
+class LocalBackend(GenerateBackend):
+    """Direct in-process model.generate()."""
+
+    def __init__(
+        self,
+        model: Any,
+        tokenizer: Any,
+        lock: Lock,
+        device: str,
+        tokenize_cache: dict,
+    ):
+        self._model_ref = model
+        self._tokenizer = tokenizer
+        self._lock = lock
+        self._device = device
+        self._tokenize_cache = tokenize_cache
+
+    @property
+    def alive(self) -> bool:
+        return self._model_ref is not None
+
+    def generate(
+        self,
+        prompt: str,
+        max_new_tokens: int,
+        temperature: float,
+        top_p: float,
+        top_k: int,
+        repetition_penalty: float,
+        session_id: Optional[str] = None,
+        **kwargs: Any,
+    ) -> dict:
+        from domains.infrastructure.ml_types import no_grad as ml_no_grad
+
+        inputs = _tokenize_cached(self._tokenizer, prompt, self._tokenize_cache)
+        input_ids = inputs["input_ids"].to(self._device)
+        attention_mask = inputs.get("attention_mask")
+        if attention_mask is not None:
+            attention_mask = attention_mask.to(self._device)
+
+        # Session KV cache: reuse cached prefix to skip re-encoding
+        pkv = None
+        if session_id is not None and self._model_ref is not None:
+            pkv, prefix_len = SESSION_KV_CACHE.get(session_id, input_ids[0].tolist())
+            if pkv is not None:
+                logger.debug(
+                    "Session[%s]: reuse KV cache for %d of %d tokens",
+                    session_id, prefix_len, input_ids.shape[1],
+                )
+            else:
+                logger.debug("Session[%s]: no cached KV — full encode", session_id)
+
+        gen_kwargs = dict(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            max_new_tokens=max_new_tokens,
+            do_sample=True,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            repetition_penalty=repetition_penalty,
+            pad_token_id=self._tokenizer.pad_token_id or self._tokenizer.eos_token_id,
+            eos_token_id=self._tokenizer.eos_token_id,
+        )
+        if pkv is not None:
+            gen_kwargs["past_key_values"] = pkv
+        gen_kwargs.update(kwargs)
+
+        # MPS workaround: model.generate() deadlocks when called from
+        # an async context on MPS.  Move to CPU for generation.
+        _cpu_fallback = False
+        if self._device.startswith("mps"):
+            try:
+                with self._lock:
+                    self._model_ref = self._model_ref.cpu()
+                input_ids = input_ids.cpu()
+                if attention_mask is not None:
+                    attention_mask = attention_mask.cpu()
+                gen_kwargs["input_ids"] = input_ids
+                if attention_mask is not None:
+                    gen_kwargs["attention_mask"] = attention_mask
+                _cpu_fallback = True
+            except Exception:
+                pass
+
+        output = _inference_mode_generate(self._model_ref, gen_kwargs)
+
+        if _cpu_fallback:
+            try:
+                with self._lock:
+                    self._model_ref = self._model_ref.to(self._device)
+            except Exception:
+                pass
+
+        _mps_empty_cache()
+
+        tokens_generated = output.shape[1] - input_ids.shape[1]
+        text = self._tokenizer.decode(output[0][input_ids.shape[1]:], skip_special_tokens=True)
+
+        # Store updated KV cache for next turn
+        if session_id is not None and self._model_ref is not None:
+            if pkv is not None:
+                # Cache was passed — it's been extended in-place during generate
+                SESSION_KV_CACHE.store(session_id, input_ids[0].tolist(), pkv)
+            else:
+                # No cache was passed (first turn or mismatch) — store it now
+                # If we can get it from the model's internal state, do so
                 try:
-                    if str(obj.device) != "cpu":
-                        obj.to("cpu")
+                    import torch
+                    captured = getattr(self._model_ref, "_past_key_values", None) or \
+                               getattr(self._model_ref, "past_key_values", None)
+                    if captured is not None:
+                        SESSION_KV_CACHE.store(session_id, input_ids[0].tolist(), captured)
                 except Exception:
                     pass
-        logger.warning("Forced all torch tensors to CPU")
+
+        return {"text": text, "tokens_generated": tokens_generated}
+
+    def generate_stream(
+        self,
+        prompt: str,
+        max_new_tokens: int,
+        temperature: float,
+        top_p: float,
+        top_k: int,
+        repetition_penalty: float,
+        cancel_event=None,
+        session_id: Optional[str] = None,
+        **kwargs: Any,
+    ) -> GeneratorType[str, None, dict]:
+        """Stream via TextIteratorStreamer in background thread.
+
+        Yields tokens as they arrive.  Returns final result dict when done.
+
+        This is a **sync** generator — ``ModelServer.generate_stream()``
+        wraps it in ``run_in_executor`` so it doesn't block the event loop.
+        """
+        from transformers import TextIteratorStreamer, StoppingCriteria
+        import queue
+
+        inputs = _tokenize_cached(self._tokenizer, prompt, self._tokenize_cache)
+        input_ids = inputs["input_ids"].to(self._device)
+        attention_mask = inputs.get("attention_mask")
+        if attention_mask is not None:
+            attention_mask = attention_mask.to(self._device)
+
+        # Session KV cache: reuse cached prefix to skip re-encoding
+        pkv = None
+        if session_id is not None and self._model_ref is not None:
+            pkv, prefix_len = SESSION_KV_CACHE.get(session_id, input_ids[0].tolist())
+            if pkv is not None:
+                logger.debug(
+                    "Session[%s]: reuse KV cache for %d of %d tokens",
+                    session_id, prefix_len, input_ids.shape[1],
+                )
+
+        streamer = TextIteratorStreamer(self._tokenizer, skip_prompt=True, timeout=120.0)
+
+        gen_kwargs = dict(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            max_new_tokens=max_new_tokens,
+            do_sample=True,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            repetition_penalty=repetition_penalty,
+            pad_token_id=self._tokenizer.pad_token_id or self._tokenizer.eos_token_id,
+            eos_token_id=self._tokenizer.eos_token_id,
+            streamer=streamer,
+        )
+        if pkv is not None:
+            gen_kwargs["past_key_values"] = pkv
+        gen_kwargs.update(kwargs)
+
+        if cancel_event is not None:
+            class _CancelCriteria(StoppingCriteria):
+                def __call__(self, input_ids_, scores_, **kwargs):
+                    return cancel_event.is_set()
+            gen_kwargs.setdefault("stopping_criteria", [])
+            gen_kwargs["stopping_criteria"].append(_CancelCriteria())
+
+        _error: list = []
+        _pkv_holder: list = [pkv]  # capture the cache ref for after generation
+
+        def _generate_inner():
+            try:
+                _inference_mode_generate(self._model_ref, gen_kwargs)
+            except Exception as e:
+                _error.append(e)
+
+        thread = Thread(target=_generate_inner, daemon=True)
+        thread.start()
+
+        start = time.time()
+        token_count = 0
+
+        while thread.is_alive() or not streamer.text_queue.empty():
+            if _error:
+                raise _error[0]
+            try:
+                text = streamer.text_queue.get(timeout=0.02)
+            except queue.Empty:
+                time.sleep(0.01)
+                continue
+            if text == streamer.stop_signal:
+                break
+            if text:
+                token_count += 1
+                yield text
+
+        thread.join(timeout=30)
+
+        elapsed_ms = (time.time() - start) * 1000
+
+        # Store updated KV cache after generation completes
+        if session_id is not None and self._model_ref is not None:
+            final_pkv = _pkv_holder[0]
+            if final_pkv is not None:
+                SESSION_KV_CACHE.store(session_id, input_ids[0].tolist(), final_pkv)
+
+        return {"text": "", "tokens_generated": token_count, "elapsed_ms": elapsed_ms}
+
+
+def _tokenize_cached(tokenizer, prompt: str, cache: dict) -> dict:
+    """Tokenize with LRU cache (64 entries)."""
+    if prompt in cache:
+        ids, attn = cache[prompt]
+        import torch
+        result = {"input_ids": torch.tensor([ids])}
+        if attn is not None:
+            result["attention_mask"] = torch.tensor([attn])
+        return result
+    import torch
+    inputs = tokenizer(prompt, return_tensors="pt")
+    attn_list = None
+    if inputs.get("attention_mask") is not None:
+        attn_list = inputs["attention_mask"][0].tolist()
+    cache[prompt] = (inputs["input_ids"][0].tolist(), attn_list)
+    if len(cache) > 64:
+        cache.pop(next(iter(cache)))
+    return inputs
+
+
+# Module-level session KV cache singleton
+SESSION_KV_CACHE = SessionKVCache()
+
+
+def _mps_empty_cache() -> None:
+    """Free MPS cached memory if available."""
+    try:
+        import torch
+        if hasattr(torch, "mps") and hasattr(torch.mps, "empty_cache"):
+            torch.mps.empty_cache()
     except Exception:
         pass
-    return "cpu"
+
+
+def _cancelable_gen(gen, cancel_event):
+    """Wrap a generator so it stops when cancel_event is set."""
+    for token in gen:
+        if cancel_event.is_set():
+            break
+        yield token
 
 
 class ModelServer:
@@ -196,8 +868,8 @@ class ModelServer:
 
     def __init__(
         self,
-        model: Any,
-        tokenizer: Any,
+        model: Any = None,
+        tokenizer: Any = None,
         model_id: str = "unknown",
         max_concurrent: int = 1,
         generate_timeout: float = 120.0,
@@ -207,12 +879,38 @@ class ModelServer:
         process_guard: Optional[Any] = None,
         enable_warmup: bool = True,
         warmup_prompt: str = "Hello",
+        numpy_engine: Optional[Any] = None,
+        onnx_engine: Optional[Any] = None,
     ):
+        # CPU threading optimization (torch.set_num_threads etc.)
+        _optimize_cpu_threads()
+
         self.model_id = model_id
         self._tokenizer = tokenizer
         self._model_ref = model
         self._lock = Lock()  # protects model reference swap
         self._process_guard = process_guard  # optional ProcessGuard for bulk gen
+
+        # Generate backends — strategy pattern
+        self._guard_backend: Optional[GuardBackend] = (
+            GuardBackend(process_guard) if process_guard is not None else None
+        )
+        self._numpy_backend: Optional[NumpyBackend] = (
+            NumpyBackend(numpy_engine) if numpy_engine is not None else None
+        )
+        self._onnx_backend: Optional[ONNXBackend] = (
+            ONNXBackend(onnx_engine, tokenizer) if onnx_engine is not None else None
+        )
+        self._local_backend = LocalBackend(
+            model=model,
+            tokenizer=tokenizer,
+            lock=self._lock,
+            device="cpu",  # updated by _check_device below
+            tokenize_cache={},  # shared with ModelServer
+        ) if model is not None else None
+
+        # torch.compile flag — applied after warmup
+        self._compiled = False
 
         # Warmup
         self._enable_warmup = enable_warmup
@@ -235,7 +933,7 @@ class ModelServer:
         ) if enable_circuit_breaker else None
 
         # Wire guard crash callbacks to circuit breaker
-        if self._process_guard is not None and self._circuit_breaker is not None:
+        if self._guard_backend is not None and self._circuit_breaker is not None:
             self._process_guard.on_crash(
                 lambda wid: self._circuit_breaker.record_failure()
             )
@@ -256,8 +954,10 @@ class ModelServer:
         self._post_generate_hooks: list[Callable[[], None]] = []
         self._on_error_hooks: list[Callable[[Exception], None]] = []
 
-        # Tokenizer cache (LRU, 64 entries)
-        self._tokenize_cache: dict = {}
+        # Tokenizer cache (LRU, 64 entries) — shared with LocalBackend
+        self._tokenize_cache: dict = (
+            self._local_backend._tokenize_cache if self._local_backend is not None else {}
+        )
 
         # Device tracking
         self._device: Optional[str] = None
@@ -269,6 +969,14 @@ class ModelServer:
         # Background warmup
         if self._enable_warmup:
             Thread(target=self._run_warmup, daemon=True).start()
+
+    @property
+    def _resolved_device(self) -> str:
+        """Get a valid PyTorch device string, falling back to ``"cpu"`` when
+        the stored device is a sentinel like ``"guard"`` or ``"unknown"``."""
+        if self._device in ("guard", "unknown", None):
+            return "cpu"
+        return self._device
 
     def _run_warmup(self) -> None:
         """Send a short warmup request to prime the model (JIT, KV cache, etc.).
@@ -291,12 +999,23 @@ class ModelServer:
             with self._warmup_lock:
                 self._warmup_completed = True
             logger.info("ModelServer[%s]: warmup completed", self.model_id)
+            # Apply torch.compile after warmup (enhances JIT cache)
+            if not self._compiled and self._model_ref is not None:
+                compiled = _torch_compile_model(self._model_ref, self.model_id)
+                if compiled is not self._model_ref:
+                    self._compiled = True
+                    self._model_ref = compiled
+                    if self._local_backend is not None:
+                        self._local_backend._model_ref = compiled
         except Exception as e:
             with self._warmup_lock:
                 self._warmup_error = f"{type(e).__name__}: {e}"
             logger.warning("ModelServer[%s]: warmup failed: %s", self.model_id, e)
 
     def _check_device(self) -> None:
+        if self._model_ref is None:
+            self._device = "guard"
+            return
         if not _ensure_torch():
             self._device = "unknown"
             return
@@ -309,14 +1028,45 @@ class ModelServer:
                     self._device = str(p.device)
         except Exception:
             self._device = "unknown"
+        # Sync device to local backend
+        if self._local_backend is not None:
+            self._local_backend._device = self._resolved_device
+
+    def _select_backend(self) -> GenerateBackend:
+        """Pick the best available backend for the current request.
+
+        Priority: GuardBackend (crash-isolated) > NumpyBackend (no torch) > ONNXBackend (fast CPU) > LocalBackend.
+        """
+        if self._guard_backend is not None and self._guard_backend.alive:
+            return self._guard_backend
+        if self._numpy_backend is not None and self._numpy_backend.alive:
+            return self._numpy_backend
+        if self._onnx_backend is not None and self._onnx_backend.alive:
+            return self._onnx_backend
+        return self._local_backend
+
+    def drop_model_ref(self) -> None:
+        """Release the in-memory model reference.
+
+        When a ``ProcessGuard`` is active, the in-memory model is not needed
+        for inference. Calling this method sets ``_model_ref = None`` so the
+        model can be garbage collected, saving main-process memory.
+        """
+        with self._lock:
+            self._model_ref = None
+        if self._local_backend is not None:
+            self._local_backend._model_ref = None
+        self._device = "guard"
+        logger.info("ModelServer[%s]: dropped in-memory model ref (guard mode)", self.model_id)
 
     def _cleanup_kv_cache(self) -> None:
         """Clear any KV cache tensors the model may have accumulated."""
+        if self._model_ref is None:
+            return
         try:
             import torch
             if hasattr(self._model_ref, "past_key_values"):
                 self._model_ref.past_key_values = None
-            # Clear model's internal cache dict if it exists
             for attr in ("_past_key_values", "kv_cache", "_cache"):
                 if hasattr(self._model_ref, attr):
                     try:
@@ -403,9 +1153,14 @@ class ModelServer:
         top_p: float = 0.9,
         top_k: int = 50,
         repetition_penalty: float = 1.0,
+        session_id: Optional[str] = None,
         **kwargs: Any,
     ) -> dict:
         """Generate text with full lifecycle management.
+
+        If ``session_id`` is provided, the KV cache from previous
+        generations is reused via :class:`SessionKVCache`, avoiding
+        re-encoding the shared prompt prefix.
 
         Returns::
 
@@ -462,6 +1217,7 @@ class ModelServer:
                     top_p,
                     top_k,
                     repetition_penalty,
+                    session_id=session_id,
                     **kwargs,
                 ),
                 timeout=self._generate_timeout,
@@ -505,33 +1261,6 @@ class ModelServer:
                 except Exception as e:
                     logger.warning("Post-gen hook failed: %s", e)
 
-    def _tokenize_cached(self, tokenizer, prompt: str) -> tuple:
-        """Tokenize with LRU cache to avoid redundant tokenization.
-
-        Keyed on prompt text only — each ModelServer has exactly one
-        tokenizer, so the prompt is sufficient for cache identity.
-        """
-        if prompt in self._tokenize_cache:
-            ids, attn = self._tokenize_cache[prompt]
-            import torch
-            result = {"input_ids": torch.tensor([ids])}
-            if attn is not None:
-                result["attention_mask"] = torch.tensor([attn])
-            return result
-        import torch
-        inputs = tokenizer(prompt, return_tensors="pt")
-        attn_list = None
-        if inputs.get("attention_mask") is not None:
-            attn_list = inputs["attention_mask"][0].tolist()
-        self._tokenize_cache[prompt] = (
-            inputs["input_ids"][0].tolist(),
-            attn_list,
-        )
-        if len(self._tokenize_cache) > 64:
-            # Evict oldest
-            self._tokenize_cache.pop(next(iter(self._tokenize_cache)))
-        return inputs
-
     def _generate_sync(
         self,
         prompt: str,
@@ -540,64 +1269,22 @@ class ModelServer:
         top_p: float,
         top_k: int,
         repetition_penalty: float,
+        session_id: Optional[str] = None,
         **kwargs: Any,
     ) -> dict:
-        """Synchronous generation — runs in thread pool (or process guard)."""
-        # Delegate to process guard if available (process-level isolation)
-        if self._process_guard is not None:
-            # Strip kwargs that should not be forwarded (input_ids, attention_mask
-            # are built inside the worker)
-            safe_kwargs = {k: v for k, v in kwargs.items()
-                           if k not in ("input_ids", "attention_mask")}
-            start = time.time()
-            result = self._process_guard.generate(
-                prompt=prompt,
-                max_new_tokens=max_new_tokens,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                repetition_penalty=repetition_penalty,
-                **safe_kwargs,
-            )
-            result["elapsed_ms"] = round((time.time() - start) * 1000, 1)
-            return result
+        """Synchronous generation — delegates to selected backend.
 
-        if not _ensure_torch():
-            raise RuntimeError("torch is required for synchronous generation")
-
-        with self._lock:
-            model = self._model_ref
-            tokenizer = self._tokenizer
-
-        inputs = self._tokenize_cached(tokenizer, prompt)
-        input_ids = inputs["input_ids"].to(self._device or "cpu")
-        attention_mask = inputs.get("attention_mask")
-        if attention_mask is not None:
-            attention_mask = attention_mask.to(self._device or "cpu")
-
-        gen_kwargs = dict(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            max_new_tokens=max_new_tokens,
-            do_sample=True,
-            temperature=temperature,
-            top_p=top_p,
-            top_k=top_k,
-            repetition_penalty=repetition_penalty,
-            pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
-            eos_token_id=tokenizer.eos_token_id,
+        Backend selection: prefers GuardBackend (crash-isolated), falls back
+        to LocalBackend when guard is dead or absent.
+        """
+        backend = self._select_backend()
+        is_local = isinstance(backend, LocalBackend)
+        return backend.generate(
+            prompt, max_new_tokens, temperature,
+            top_p, top_k, repetition_penalty,
+            session_id=session_id if is_local else None,
+            **kwargs,
         )
-        gen_kwargs.update(kwargs)
-
-        import torch
-        from domains.infrastructure.ml_types import no_grad as ml_no_grad
-        with ml_no_grad():
-            output = model.generate(**gen_kwargs)
-
-        tokens_generated = output.shape[1] - input_ids.shape[1]
-        text = tokenizer.decode(output[0][input_ids.shape[1]:], skip_special_tokens=True)
-
-        return {"text": text, "tokens_generated": tokens_generated}
 
     # --- Streaming generation ---
 
@@ -610,92 +1297,23 @@ class ModelServer:
         top_k: int = 50,
         repetition_penalty: float = 1.0,
         cancel_event=None,
+        session_id: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
         """Synchronous streaming generation — returns a text streamer.
 
-        Runs in caller's thread. The caller is responsible for polling
-        the streamer and for semaphore management.
-
-        When a ``_process_guard`` is configured, delegates to the guard's
-        ``generate_stream()`` which streams from a subprocess worker.
-
-        Args:
-            cancel_event: Optional ``threading.Event``. When set, a
-                ``StoppingCriteria`` tells ``model.generate()`` to stop
-                early (e.g. on client disconnect).
+        Delegates to the selected backend's generate_stream().
         """
-        # Delegate to process guard if available
-        if self._process_guard is not None:
-            safe_kwargs = {k: v for k, v in kwargs.items()
-                           if k not in ("input_ids", "attention_mask")}
-            if cancel_event is not None:
-                # Guard doesn't support cancel_event yet; wrap in a custom
-                # generator that stops yielding when cancel is set
-                gen = self._process_guard.generate_stream(
-                    prompt=prompt,
-                    max_new_tokens=max_new_tokens,
-                    temperature=temperature,
-                    top_p=top_p,
-                    top_k=top_k,
-                    repetition_penalty=repetition_penalty,
-                    **safe_kwargs,
-                )
-                return self._wrap_cancelable_streamer(gen, cancel_event)
-            from typing import Generator
-            gen = self._process_guard.generate_stream(
-                prompt=prompt,
-                max_new_tokens=max_new_tokens,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                repetition_penalty=repetition_penalty,
-                **safe_kwargs,
-            )
-            return self._wrap_generator_as_streamer(gen)
-
-        from transformers import TextIteratorStreamer, StoppingCriteria
-
-        with self._lock:
-            model = self._model_ref
-            tokenizer = self._tokenizer
-
-        inputs = self._tokenize_cached(tokenizer, prompt)
-        input_ids = inputs["input_ids"].to(self._device or "cpu")
-        attention_mask = inputs.get("attention_mask")
-        if attention_mask is not None:
-            attention_mask = attention_mask.to(self._device or "cpu")
-
-        streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, timeout=self._generate_timeout)
-
-        gen_kwargs = dict(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            max_new_tokens=max_new_tokens,
-            do_sample=True,
-            temperature=temperature,
-            top_p=top_p,
-            top_k=top_k,
-            repetition_penalty=repetition_penalty,
-            pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
-            eos_token_id=tokenizer.eos_token_id,
-            streamer=streamer,
+        backend = self._select_backend()
+        is_local = isinstance(backend, LocalBackend)
+        gen = backend.generate_stream(
+            prompt, max_new_tokens, temperature,
+            top_p, top_k, repetition_penalty,
+            cancel_event=cancel_event,
+            session_id=session_id if is_local else None,
+            **kwargs,
         )
-        gen_kwargs.update(kwargs)
-
-        if cancel_event is not None:
-            class _CancelCriteria(StoppingCriteria):
-                def __call__(self, input_ids_, scores_, **kwargs):
-                    return cancel_event.is_set()
-            gen_kwargs.setdefault("stopping_criteria", [])
-            gen_kwargs["stopping_criteria"].append(_CancelCriteria())
-
-        import torch
-        from domains.infrastructure.ml_types import no_grad as ml_no_grad
-        with ml_no_grad():
-            model.generate(**gen_kwargs)
-
-        return streamer
+        return self._wrap_generator_as_streamer(gen)
 
     # --- Async streaming generation ---
 
@@ -708,15 +1326,18 @@ class ModelServer:
         top_k: int = 50,
         repetition_penalty: float = 1.0,
         cancel_event=None,
+        session_id: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
         """Async streaming generation with full lifecycle management.
 
-        Acquires semaphore, runs hooks, starts generation in background
-        thread, and yields tokens from the streamer.
+        Selects the best backend (guard or local), acquires semaphore,
+        runs hooks, runs generation in a thread pool (non-blocking), and
+        yields tokens.
 
-        When ``cancel_event`` is set (e.g. client disconnect), a stopping
-        criteria tells ``model.generate()`` to stop early.
+        If ``session_id`` is provided, the KV cache from previous
+        generations is reused via :class:`SessionKVCache`, avoiding
+        re-encoding the shared prompt prefix.
 
         Args:
             cancel_event: Optional ``threading.Event`` to abort generation early.
@@ -726,8 +1347,6 @@ class ModelServer:
 
         Raises ``TimeoutError`` if semaphore cannot be acquired.
         """
-        from transformers import StoppingCriteria
-
         with self._metrics_lock:
             self.metrics.requests_total += 1
 
@@ -744,6 +1363,11 @@ class ModelServer:
                 hook()
             except Exception as e:
                 logger.warning("Pre-gen hook failed: %s", e)
+
+        # Select backend (guard if alive, else local)
+        backend = self._select_backend()
+        logger.debug("generate_stream[%s]: backend=%s session_id=%s",
+                     self.model_id, type(backend).__name__, session_id)
 
         # Acquire semaphore (serialize concurrent access, per-event-loop)
         acquired = False
@@ -765,83 +1389,66 @@ class ModelServer:
         else:
             acquired = True
 
-        streamer = None
-        thread = None
-        start = 0.0
+        start = time.time()
         token_count = 0
         aborted = False
         try:
-            from transformers import TextIteratorStreamer
-            import torch
-            from threading import Thread
-            import queue
+            # Run the backend's sync generator in a thread pool so we
+            # don't block the event loop during generation.
+            loop = asyncio.get_event_loop()
 
-            with self._lock:
-                model = self._model_ref
-                tokenizer = self._tokenizer
+            def _gen():
+                return backend.generate_stream(
+                    prompt, max_new_tokens, temperature,
+                    top_p, top_k, repetition_penalty,
+                    cancel_event=cancel_event, **kwargs,
+                )
 
-            inputs = self._tokenize_cached(tokenizer, prompt)
-            input_ids = inputs["input_ids"].to(self._device or "cpu")
-            attention_mask = inputs.get("attention_mask")
-            if attention_mask is not None:
-                attention_mask = attention_mask.to(self._device or "cpu")
+            # We can't directly await a generator, so we run the
+            # first-token generation in a thread and then iterate
+            # the sync generator's queue from the async context.
+            #
+            # Strategy: start a thread that pumps the sync generator
+            # into a queue; the async generator reads from the queue.
+            import queue as _queue
+            q: _queue.Queue = _queue.Queue()
+            _sentinel = object()
 
-            streamer = TextIteratorStreamer(
-                tokenizer, skip_prompt=True, timeout=self._generate_timeout
-            )
+            is_local = isinstance(backend, LocalBackend)
 
-            gen_kwargs = dict(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                max_new_tokens=max_new_tokens,
-                do_sample=True,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                repetition_penalty=repetition_penalty,
-                pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
-                eos_token_id=tokenizer.eos_token_id,
-                streamer=streamer,
-            )
-            gen_kwargs.update(kwargs)
-
-            if cancel_event is not None:
-                class _CancelCriteria(StoppingCriteria):
-                    def __call__(self, input_ids_, scores_, **kwargs):
-                        return cancel_event.is_set()
-                gen_kwargs.setdefault("stopping_criteria", [])
-                gen_kwargs["stopping_criteria"].append(_CancelCriteria())
-
-            _error: list[Exception] = []
-
-            def _generate_inner():
+            def _pump():
+                logger.debug("_pump started: session_id=%s is_local=%s", session_id, is_local)
                 try:
-                    from domains.infrastructure.ml_types import no_grad as ml_no_grad
-                    with ml_no_grad():
-                        model.generate(**gen_kwargs)
+                    for token in backend.generate_stream(
+                        prompt, max_new_tokens, temperature,
+                        top_p, top_k, repetition_penalty,
+                        cancel_event=cancel_event,
+                        session_id=session_id if is_local else None,
+                        **kwargs,
+                    ):
+                        q.put(token)
                 except Exception as e:
-                    _error.append(e)
+                    q.put(e)
+                finally:
+                    q.put(_sentinel)
 
-            thread = Thread(target=_generate_inner)
-            thread.start()
+            pump_thread = Thread(target=_pump, daemon=True)
+            pump_thread.start()
 
-            start = time.time()
-
-            while thread.is_alive() or not streamer.text_queue.empty():
-                if _error:
-                    raise _error[0]
+            while True:
                 try:
-                    text = streamer.text_queue.get(timeout=0.02)
-                except queue.Empty:
+                    item = q.get(timeout=0.02)
+                except _queue.Empty:
                     await asyncio.sleep(0)
                     continue
-                if text == streamer.stop_signal:
+                if item is _sentinel:
                     break
-                if text:
-                    token_count += 1
-                    yield text
+                if isinstance(item, Exception):
+                    raise item
+                token_count += 1
+                yield item
 
-            thread.join(timeout=30)
+            pump_thread.join(timeout=30)
 
             # Success — record metrics
             elapsed_ms = (time.time() - start) * 1000
@@ -855,13 +1462,6 @@ class ModelServer:
             logger.info("generate_stream[%s]: client disconnected mid-stream", self.model_id)
             if cancel_event is not None:
                 cancel_event.set()
-            if streamer is not None:
-                try:
-                    streamer.text_queue.put(streamer.stop_signal)
-                except Exception:
-                    pass
-            if thread is not None and thread.is_alive():
-                thread.join(timeout=5)
             return
         except asyncio.TimeoutError:
             with self._metrics_lock:
@@ -920,35 +1520,6 @@ class ModelServer:
         streamer.stop_signal = stop_signal
         return streamer
 
-    @staticmethod
-    def _wrap_cancelable_streamer(gen, cancel_event):
-        """Wrap a generator as a cancelable TextIteratorStreamer."""
-        import queue
-        q = queue.Queue()
-        stop_signal = object()
-
-        def _pump():
-            try:
-                for token in gen:
-                    if cancel_event.is_set():
-                        break
-                    q.put(token)
-            except StopIteration:
-                pass
-            except Exception:
-                pass
-            finally:
-                q.put(stop_signal)
-
-        import threading
-        t = threading.Thread(target=_pump, daemon=True)
-        t.start()
-
-        streamer = type("_GenStreamer", (), {})()
-        streamer.text_queue = q
-        streamer.stop_signal = stop_signal
-        return streamer
-
     # --- Error handling ---
 
     def _on_generation_error(self, error: Exception) -> None:
@@ -966,6 +1537,9 @@ class ModelServer:
         with self._lock:
             old = self._model_ref
             self._model_ref = new_model
+        # Sync local backend
+        if self._local_backend is not None:
+            self._local_backend._model_ref = new_model
         # Clean up old model
         if old is not None and old is not new_model:
             try:

@@ -45,7 +45,7 @@ class TestWorkflowStatus:
 
         resp = client.get("/workflow/status")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["running"] is True
         assert data["aggregate_count"] == 5
         assert data["prune_count"] == 2
@@ -80,7 +80,7 @@ class TestWorkflowStart:
             },
         )
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "started"
         assert data["config"]["aggregate_interval_minutes"] == 30
         assert data["config"]["prune_interval_minutes"] == 60
@@ -95,7 +95,7 @@ class TestWorkflowStart:
 
         resp = client.post("/workflow/start", json={})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["config"]["aggregate_interval_minutes"] == 60
         assert data["config"]["prune_interval_minutes"] == 120
         assert data["config"]["export_interval_hours"] == 24
@@ -131,7 +131,7 @@ class TestWorkflowStop:
 
         resp = client.post("/workflow/stop")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "stopped"
         wf.stop.assert_called_once()
 

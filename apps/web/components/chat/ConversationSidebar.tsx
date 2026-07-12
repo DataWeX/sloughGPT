@@ -6,6 +6,7 @@ import { Button } from '@sloughgpt/strui'
 import { IconPlus, IconStar, IconPin, IconChat, IconChevronRight, IconX, IconSearch, IconFolder, IconSort, IconCheck } from '@sloughgpt/strui'
 import { cn } from '@/lib/cn'
 import type { Conversation } from '@/lib/session-controller'
+import { formatDate, truncateMessage } from '@/lib/conversations-utils'
 
 interface ConversationSidebarProps {
   conversations: Conversation[]
@@ -20,28 +21,6 @@ interface ConversationSidebarProps {
   onRenameConversation?: (id: string, name: string) => void
   open: boolean
   onClose: () => void
-}
-
-function formatDate(dateStr: string | undefined): string {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
-  if (isNaN(date.getTime())) return ''
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
-  const diffHours = Math.floor(diffMs / 3600000)
-  const diffDays = Math.floor(diffMs / 86400000)
-  if (diffMins < 1) return 'Just now'
-  if (diffMins < 60) return `${diffMins}m`
-  if (diffHours < 24) return `${diffHours}h`
-  if (diffDays < 7) return `${diffDays}d`
-  return date.toLocaleDateString()
-}
-
-function truncateMessage(content: string, maxLen = 36): string {
-  if (!content) return 'Empty conversation'
-  const firstLine = content.split('\n')[0]
-  return firstLine.length > maxLen ? firstLine.slice(0, maxLen) + '…' : firstLine
 }
 
 function SidebarContent({
@@ -441,7 +420,7 @@ function ConvRow({
         </div>
         {lastMsg && !editing && (
           <p className="text-[11px] text-muted-foreground/70 mt-0.5 line-clamp-1">
-            {truncateMessage(lastMsg)}
+            {truncateMessage(lastMsg, 36)}
           </p>
         )}
         {!editing && (

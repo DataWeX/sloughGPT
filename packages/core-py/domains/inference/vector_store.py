@@ -352,18 +352,61 @@ async def create_vector_store(provider: str = "in_memory", **kwargs: Any) -> Vec
 _embed_model: Optional[Any] = None
 _EMBED_DIM: int = 384
 _EMBED_LOAD_FAILED: bool = False
+_EMBED_MODEL_NAME: str = "all-MiniLM-L6-v2"
+_EMBED_MIN_MEMORY_MB: int = 500
 
 
 def _load_embed_model() -> Any:
     """Lazy-load a sentence-transformers model for semantic embeddings.
 
-    Currently disabled to avoid OOM on 8GB Mac (two PyTorch models in same process).
-    Falls back to fast n-gram TF-IDF embedder.
+    Auto-downloads all-MiniLM-L6-v2 (~80 MB) on first use. Checks available
+    memory before loading to avoid OOM when a larger model is already in RAM.
+    Falls back to fast n-gram TF-IDF embedder on any failure.
+
+    Returns:
+        SentenceTransformer model or None (falls back to n-gram embedder).
     """
     global _embed_model, _EMBED_LOAD_FAILED
     if _EMBED_LOAD_FAILED:
         return None
-    return None
+    if _embed_model is not None:
+        return _embed_model
+
+    # Check available memory before loading
+    try:
+        import psutil
+        avail_mb = psutil.virtual_memory().available / (1024 * 1024)
+        if avail_mb < _EMBED_MIN_MEMORY_MB:
+            logger.warning(
+                "Embed model skipped: only %.0f MB available (need %d MB)",
+                avail_mb, _EMBED_MIN_MEMORY_MB,
+            )
+            _EMBED_LOAD_FAILED = True
+            return None
+    except ImportError:
+        pass  # psutil not installed — proceed without memory check
+
+    # Try importing sentence-transformers
+    try:
+        from sentence_transformers import SentenceTransformer
+    except ImportError:
+        logger.info(
+            "sentence-transformers not installed; using n-gram embedder. "
+            "Install with: pip install sentence-transformers"
+        )
+        _EMBED_LOAD_FAILED = True
+        return None
+
+    # Load model on CPU (auto-downloads on first run)
+    try:
+        logger.info("Loading embedding model %s (device=cpu)...", _EMBED_MODEL_NAME)
+        _embed_model = SentenceTransformer(_EMBED_MODEL_NAME, device="cpu")
+        logger.info("Embedding model loaded (%d-dimensional, device=cpu)", _EMBED_DIM)
+        return _embed_model
+    except Exception as exc:
+        logger.warning("Failed to load embedding model: %s — using n-gram fallback", exc)
+        _EMBED_LOAD_FAILED = True
+        return None
 
 
 _STOPWORDS: frozenset = frozenset({

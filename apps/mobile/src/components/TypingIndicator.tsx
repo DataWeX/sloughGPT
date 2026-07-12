@@ -4,8 +4,8 @@
  */
 
 import React, {useEffect, useRef} from 'react';
-import {View, Animated, StyleSheet} from 'react-native';
-import {colors, radii, spacing} from '../theme';
+import {Animated} from 'react-native';
+import {XStack} from 'tamagui';
 
 interface Props {
   visible: boolean;
@@ -27,7 +27,15 @@ function Dot({delay}: {delay: number}) {
   }, []);
 
   return (
-    <Animated.View style={[styles.dot, {transform: [{translateY: bounce}]}]} />
+    <Animated.View
+      style={{
+        width: 7,
+        height: 7,
+        borderRadius: 3.5,
+        backgroundColor: '$color10',
+        transform: [{translateY: bounce}],
+      }}
+    />
   );
 }
 
@@ -35,36 +43,19 @@ export function TypingIndicator({visible}: Props) {
   if (!visible) return null;
 
   return (
-    <View style={styles.row}>
-      <View style={styles.bubble}>
+    <XStack paddingHorizontal={16} marginBottom={8} alignItems="flex-start">
+      <XStack
+        alignItems="center"
+        backgroundColor="$background"
+        paddingHorizontal={16}
+        paddingVertical={12}
+        borderRadius={12}
+        borderBottomLeftRadius={4}
+        gap={5}>
         <Dot delay={0} />
         <Dot delay={150} />
         <Dot delay={300} />
-      </View>
-    </View>
+      </XStack>
+    </XStack>
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-    alignItems: 'flex-start',
-  },
-  bubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md + 4,
-    paddingVertical: spacing.sm + 4,
-    borderRadius: radii.lg,
-    borderBottomLeftRadius: radii.sm,
-    gap: 5,
-  },
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: colors.textMuted,
-  },
-});

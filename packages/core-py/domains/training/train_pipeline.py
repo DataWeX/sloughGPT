@@ -183,8 +183,8 @@ class TrainerConfig:
     local_rank: int = 0
     sharding_strategy: str = "FULL_SHARD"  # FULL_SHARD, SHARD_GRAD_OP, NO_SHARD
 
-    # Checkpointing
-    checkpoint_dir: str = "checkpoints"
+    # Checkpointing - uses .soul format
+    checkpoint_dir: str = "models/auto-training"
     checkpoint_interval: int = 500
     save_best_only: bool = False
     max_checkpoints: int = 5
@@ -274,49 +274,80 @@ class CheckpointManager:
         if metric_value < self.best_metric:
             self.best_metric = metric_value
 
-        model_path = self.checkpoint_dir / f"step_{step}.pt"
+        # Use .soul format for all checkpoints
+        import time
+        timestamp = int(time.time())
+        model_path = self.checkpoint_dir / f"assistant_{timestamp}.soul"
 
-        # Only save weights by default (much smaller files)
-        save_dict = {
-            "model_state_dict": model.state_dict(),
-            "step": step,
-            "epoch": epoch,
-            "metrics": metrics,
-            "timestamp": datetime.now().isoformat(),
-            "config": {
-                "vocab_size": config.vocab_size,
-                "n_embed": config.n_embed,
-                "n_layer": config.n_layer,
-                "n_head": config.n_head,
-                "block_size": config.block_size,
-            },
-        }
+        # Export as .soul format (includes weights + metadata)
+        try:
+            from domains.inference import create_soul_profile, save_soul
 
-        # Save optimizer state for resume
-        if optimizer is not None:
-            try:
-                save_dict["optimizer_state_dict"] = optimizer.state_dict()
-            except Exception as exc:
-                logger.warning("Could not serialize optimizer state: %s", exc)
+            soul = create_soul_profile(
+                name="assistant",
+                base_model="sloughgpt",
+                training_dataset=getattr(config, 'data_path', 'unknown'),
+                epochs_trained=epoch,
+                final_val_loss=metric_value,
+                lineage="sloughgpt",
+                tags=["sloughgpt", "trained", "soul"],
+            )
 
-        # Save scheduler state for resume
-        if scheduler is not None:
-            try:
-                save_dict["scheduler_state_dict"] = scheduler.state_dict()
-            except Exception as exc:
-                logger.warning("Could not serialize scheduler state: %s", exc)
+            # Save vocab in soul metadata
+            if stoi is not None:
+                soul.metadata["stoi"] = stoi
+            if itos is not None:
+                soul.metadata["itos"] = itos
+            if chars is not None:
+                soul.metadata["chars"] = chars
+            elif stoi is not None and itos is not None:
+                soul.metadata["chars"] = [itos[i] for i in range(len(stoi))]
 
-        # Add vocab (needed for inference)
-        if stoi is not None:
-            save_dict["stoi"] = stoi
-        if itos is not None:
-            save_dict["itos"] = itos
-        if chars is not None:
-            save_dict["chars"] = chars
-        elif stoi is not None and itos is not None:
-            save_dict["chars"] = [itos[i] for i in range(len(stoi))]
+            save_soul(model, str(model_path), soul_profile=soul)
 
-        torch.save(save_dict, model_path)
+        except Exception as exc:
+            # Fallback to .pt if .soul export fails
+            logger.warning("Soul export failed, falling back to .pt: %s", exc)
+            model_path = self.checkpoint_dir / f"step_{step}.pt"
+
+            save_dict = {
+                "model_state_dict": model.state_dict(),
+                "step": step,
+                "epoch": epoch,
+                "metrics": metrics,
+                "timestamp": datetime.now().isoformat(),
+                "config": {
+                    "vocab_size": config.vocab_size,
+                    "n_embed": config.n_embed,
+                    "n_layer": config.n_layer,
+                    "n_head": config.n_head,
+                    "block_size": config.block_size,
+                },
+            }
+
+            if optimizer is not None:
+                try:
+                    save_dict["optimizer_state_dict"] = optimizer.state_dict()
+                except Exception as exc:
+                    logger.warning("Could not serialize optimizer state: %s", exc)
+
+            if scheduler is not None:
+                try:
+                    save_dict["scheduler_state_dict"] = scheduler.state_dict()
+                except Exception as exc:
+                    logger.warning("Could not serialize scheduler state: %s", exc)
+
+            if stoi is not None:
+                save_dict["stoi"] = stoi
+            if itos is not None:
+                save_dict["itos"] = itos
+            if chars is not None:
+                save_dict["chars"] = chars
+            elif stoi is not None and itos is not None:
+                save_dict["chars"] = [itos[i] for i in range(len(stoi))]
+
+            torch.save(save_dict, model_path)
+
         self.checkpoints.append({"step": step, "path": str(model_path), "metrics": metrics})
 
         logger.info(f"Checkpoint saved: {model_path} (step={step}, loss={metric_value:.4f})")
@@ -1057,7 +1088,7 @@ class SloughGPTTrainer:
         )
 
     def save_checkpoint(self, metrics: Optional[Dict[str, float]] = None, is_final: bool = False):
-        """Save a checkpoint."""
+        """Save a checkpoint in .soul format with vocab."""
         metrics = metrics or {"loss": 0.0}
         chars_list: Optional[List[str]] = None
         if self.itos is not None:
@@ -1066,30 +1097,37 @@ class SloughGPTTrainer:
             except (KeyError, TypeError):
                 chars_list = None
 
-        self.checkpoint_manager.save(
-            self.model,
-            self.optimizer,
-            self.scheduler,
-            self.global_step,
-            metrics,
-            self.config,
-            epoch=self.current_epoch,
-            is_final=is_final,
-            stoi=self.stoi,
-            itos=self.itos,
-            chars=chars_list,
-        )
+        # Use .soul format instead of .pt
+        checkpoint_dir = Path(self.config.checkpoint_dir if hasattr(self.config, 'checkpoint_dir') else "models/auto-training")
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-    def save(self, path: str, format: str = "sou"):
+        # Generate descriptive checkpoint name from dataset
+        import time
+        timestamp = int(time.time())
+        soul_name = getattr(self, 'soul_name', 'assistant')
+
+        # Extract dataset name from path for checkpoint name
+        data_path = getattr(self, 'data_path', '')
+        if data_path:
+            # e.g. "/Users/mac/sloughGPT/datasets/python_flask/corpus.jsonl" -> "python_flask"
+            ds_name = Path(data_path).parent.name
+        else:
+            ds_name = soul_name
+
+        checkpoint_path = checkpoint_dir / f"{ds_name}_{timestamp}"
+
+        # Save in .soul format with vocab
+        self.save(str(checkpoint_path), format="sou",
+                  stoi=self.stoi, itos=self.itos, chars=chars_list)
+
+    def save(self, path: str, format: str = "sou", stoi=None, itos=None, chars=None):
         """Save model in specified format."""
-        import os
-
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
         metadata = {
             "vocab_size": self.vocab_size,
-            "stoi": self.stoi,
-            "itos": self.itos,
+            "stoi": stoi or self.stoi,
+            "itos": itos or self.itos,
             "config": {
                 "n_embed": self.config.n_embed,
                 "n_layer": self.config.n_layer,
@@ -1114,6 +1152,20 @@ class SloughGPTTrainer:
                 lineage="sloughgpt",
                 tags=["sloughgpt", "trained", "soul"],
             )
+            # Bake vocab into soul metadata so checkpoint is self-contained
+            _stoi = stoi or self.stoi
+            _itos = itos or self.itos
+            if _stoi is not None:
+                soul.metadata["stoi"] = _stoi
+            if _itos is not None:
+                soul.metadata["itos"] = _itos
+            if chars is not None:
+                soul.metadata["chars"] = chars
+            elif _itos is not None:
+                soul.metadata["chars"] = [_itos[i] for i in range(len(_stoi))]
+            soul.metadata["vocab_size"] = self.vocab_size
+            soul.metadata["config"] = metadata["config"]
+
             output_path = path + ".soul"
             save_soul(self.model, output_path, soul_profile=soul)
         elif format == "safetensors":

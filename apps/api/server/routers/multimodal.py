@@ -17,6 +17,7 @@ import numpy as np
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form
 from pydantic import BaseModel, Field
 from domains.multimodal import get_multimodal_manager
+from schemas.common import success_response
 
 logger = logging.getLogger("man.routers.multimodal")
 
@@ -137,7 +138,7 @@ async def status():
     with _dpo_lock:
         dpo = dict(_dpo_state)
 
-    return {
+    return success_response(data={
         "engine": {
             "speech_to_text": caps.speech_to_text,
             "image_caption": caps.image_caption,
@@ -170,7 +171,7 @@ async def status():
         },
         "dpo": dpo,
         "video": video,
-    }
+    })
 
 
 # ── Training ───────────────────────────────────────────────────────
@@ -187,14 +188,14 @@ async def train_on_image(file: UploadFile = File(...), label: Optional[str] = Fo
         import io
         img = Image.open(io.BytesIO(contents)).convert("RGB")
         caption = mgr.caption_image(img, ground_truth=label)
-        return {
+        return success_response(data={
             "status": "ok",
             "caption": caption.text,
             "confidence": caption.confidence,
             "images_learned": getattr(mgr, "_learning_count", 0),
             "accuracy": caption.accuracy,
             "supervised": label is not None and label.strip() != "",
-        }
+        })
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -234,7 +235,7 @@ async def train_batch(
         started_at=datetime.datetime.now().isoformat(), finished_at=None,
     )
     asyncio.create_task(_run_batch_training(mgr, image_paths))
-    return {"status": "started", "job_id": job_id, "total_images": len(image_paths)}
+    return success_response(data={"status": "started", "job_id": job_id, "total_images": len(image_paths)})
 
 
 async def _run_batch_training(mgr, image_sources: list):
@@ -304,7 +305,7 @@ async def train_video(req: VideoTrainRequest):
 
     import threading
     threading.Thread(target=_run, daemon=True).start()
-    return {"status": "started", "job_id": job_id, "data_path": req.data_path}
+    return success_response(data={"status": "started", "job_id": job_id, "data_path": req.data_path})
 
 
 @router.post("/video-infer")
@@ -322,7 +323,7 @@ async def video_infer(req: VideoInferRequest):
         trainer.load_checkpoint(latest["path"])
         t0 = time.time()
         text = trainer.generate(video_path=req.video_path, max_len=req.max_len, temperature=req.temperature)
-        return {"text": text, "checkpoint": latest["name"], "elapsed_ms": round((time.time() - t0) * 1000, 1)}
+        return success_response(data={"text": text, "checkpoint": latest["name"], "elapsed_ms": round((time.time() - t0) * 1000, 1)})
     except HTTPException:
         raise
     except Exception as e:
@@ -358,12 +359,12 @@ async def trigger_dpo(req: DPOTriggerRequest):
                 _dpo_state["accepted_count"] += 1
             elif result["status"] == "rejected":
                 _dpo_state["rejected_count"] += 1
-        return {
+        return success_response(data={
             "status": result["status"], "steps": result.get("steps", 0),
             "avg_loss": result.get("avg_loss"), "ppl_before": result.get("ppl_before"),
             "ppl_after": result.get("ppl_after"), "ppl_delta_pct": result.get("ppl_delta_pct"),
             "pairs_trained": result.get("pairs_trained", 0), "elapsed_seconds": round(elapsed, 1),
-        }
+        })
     except Exception as e:
         with _dpo_lock:
             _dpo_state["status"] = "error"
@@ -389,13 +390,13 @@ async def analyze_image(file: UploadFile = File(...)):
         engine = getattr(mgr, "_multimodal_engine", None)
         buf = getattr(mgr, "_replay_buffer", None)
         accuracy_history = getattr(mgr, "_accuracy_history", [])
-        return {
+        return success_response(data={
             "caption": cap.text, "confidence": cap.confidence, "tags": cap.tags or [],
             "accuracy": cap.accuracy, "supervised": cap.accuracy > 0,
             "images_learned": learning, "trained": getattr(engine, "_trained", False) if engine else False,
             "replay_buffer_size": buf.size if buf else 0,
             "mean_accuracy": round(sum(accuracy_history) / max(len(accuracy_history), 1), 2),
-        }
+        })
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {e}")
 
@@ -420,10 +421,10 @@ async def analyze_pdf(
             text = "\n\n".join(f"--- Page {r['page']} ---\n{r['text']}" for r in results)
         else:
             text = processor.analyze(tmp_path, question=question, max_new_tokens=max_new_tokens)
-        return {
+        return success_response(data={
             "analysis": text, "filename": file.filename, "pages_analyzed": 10,
             "method": "vlm" if processor._get_vlm() is not None else "text_extract",
-        }
+        })
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PDF analysis failed: {e}")
     finally:
@@ -449,8 +450,8 @@ async def process_video(file: UploadFile = File(...), num_frames: int = Form(16)
             video_embedding = processor.encode_video(frames, engine.vision)
             first_frame = frames[0].reshape(1, 224, 224, 3)
             caption = engine.generate(first_frame, max_len=20, temperature=0.8)
-            return {"status": "success", "caption": caption.text, "num_frames": len(frames),
-                    "video_embedding_shape": list(video_embedding.data.shape)}
+            return success_response(data={"status": "success", "caption": caption.text, "num_frames": len(frames),
+                    "video_embedding_shape": list(video_embedding.data.shape)})
         finally:
             os.unlink(tmp_path)
     except Exception as e:
@@ -469,8 +470,8 @@ async def transcribe_audio(file: UploadFile = File(...), language: str = Form("e
         raise HTTPException(status_code=501, detail="Server ASR not available.")
     try:
         result = mgr.recognize_speech(await file.read(), language=language)
-        return {"text": result.text, "confidence": result.confidence,
-                "language": result.language or language, "duration": result.duration}
+        return success_response(data={"text": result.text, "confidence": result.confidence,
+                "language": result.language or language, "duration": result.duration})
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transcription failed: {e}")
 
@@ -491,8 +492,8 @@ async def synthesize_speech(text: str = Form(...)):
             wf.setsampwidth(2)
             wf.setframerate(tts.sample_rate)
             wf.writeframes((waveform * 32767).astype(np.int16).tobytes())
-        return {"status": "success", "audio": f"data:audio/wav;base64,{base64.b64encode(buffer.getvalue()).decode()}",
-                "text": text, "duration_sec": len(waveform) / tts.sample_rate}
+        return success_response(data={"status": "success", "audio": f"data:audio/wav;base64,{base64.b64encode(buffer.getvalue()).decode()}",
+                "text": text, "duration_sec": len(waveform) / tts.sample_rate})
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"TTS failed: {e}")
 
@@ -522,8 +523,8 @@ async def generate_image(prompt: str = Form(...), steps: int = Form(20),
         img = Image.fromarray(image_np)
         buffer = io.BytesIO()
         img.save(buffer, format="PNG")
-        return {"status": "success", "image": f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}",
-                "prompt": prompt, "steps": steps}
+        return success_response(data={"status": "success", "image": f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}",
+                "prompt": prompt, "steps": steps})
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Generation failed: {e}")
 
@@ -563,8 +564,8 @@ async def create_visual_dataset(req: VisualDatasetRequest):
                     pass
             f.write(json.dumps(entry) + "\n")
             entries += 1
-    return {"status": "created", "dataset": req.name, "path": str(output_path),
-            "entries": entries, "auto_captioned": auto_captioned}
+    return success_response(data={"status": "created", "dataset": req.name, "path": str(output_path),
+            "entries": entries, "auto_captioned": auto_captioned})
 
 
 # ── Checkpoints ────────────────────────────────────────────────────
@@ -595,7 +596,7 @@ async def load_checkpoint(name: str):
             raise HTTPException(status_code=404, detail=f"Checkpoint '{name}' not found")
         trainer = VideoCaptionTrainer()
         trainer.load_checkpoint(match[0]["path"])
-        return {"status": "loaded", "checkpoint": name}
+        return success_response(data={"status": "loaded", "checkpoint": name})
     except HTTPException:
         raise
     except Exception as e:
@@ -617,7 +618,7 @@ async def delete_checkpoint(name: str):
         for p in [path, path.with_suffix(".npz"), path.parent / f"{path.stem}_meta.json"]:
             if p.exists():
                 os.remove(p)
-        return {"status": "deleted", "checkpoint": name}
+        return success_response(data={"status": "deleted", "checkpoint": name})
     except HTTPException:
         raise
     except Exception as e:
@@ -636,4 +637,4 @@ async def reset():
     if getattr(mgr, "_replay_buffer", None):
         mgr._replay_buffer.clear()
     mgr._multimodal_engine = None
-    return {"status": "ok", "message": "Multimodal engine reset"}
+    return success_response(data={"status": "ok", "message": "Multimodal engine reset"})

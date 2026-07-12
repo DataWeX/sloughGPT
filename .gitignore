@@ -3,6 +3,9 @@ apps/mobile/ios/Pods/
 apps/mobile/ios/build/
 apps/mobile/ios/
 
+# Design docs (not committed)
+LLM.md
+
 # SloughGPT Enterprise Framework
 __pycache__/
 *.py[cod]

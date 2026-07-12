@@ -729,8 +729,6 @@ class SloEngine:
 
     async def generate_async(self, prompt: str, **kwargs) -> str:
         """Async wrapper."""
-        import asyncio
-
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, lambda: self.generate(prompt, **kwargs))
 

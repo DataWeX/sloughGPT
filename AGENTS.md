@@ -79,6 +79,16 @@ Order:
 
 Rationale: Core logic is reusable, testable, and doesn't depend on FastAPI. Endpoints are just adapters — if you build them first, the logic gets tangled in request/response plumbing and is hard to test or reuse from CLI.
 
+### Endpoints Are for Integration, Not Features
+Not every core feature needs an API endpoint. Before adding one, ask:
+- Does a frontend or external service need to trigger this at runtime?
+- Does it form part of the larger service infrastructure (model loading, health, feedback pipeline)?
+- Is it purely an internal optimization (C extension, compile-time flag, algorithm improvement)?
+
+If a feature is internal — a faster GEMM kernel, a new sampling strategy, a refactored embedder — it lives entirely in core logic + tests. No endpoint needed.
+
+The `POST /models/quantize` endpoint *is* justified: it switches model precision at runtime without restart, which is part of the model-serving infrastructure. The AVX2 C extension is *not*: it's a compile-time optimization invisible to callers.
+
 ### UX First — No API Complexity for Users
 Users should never interact with API endpoints. Complex operations (RAG, ingestion, context management) must be **one-click or fully automatic**.
 
@@ -2655,3 +2665,120 @@ Extracted `PineconeVectorStore` and `ChromaDBVectorStore` from `vector_store.py`
 | 4 | Removed stale `Next Steps (Current)` section from AGENTS.md | AGENTS.md | No outdated todos |
 | 5 | Full frontend: 0 failing tests across 210 files, 2114 tests | — | All pass |
 | 6 | Full Python: 1785 passed, 13 skipped, 1 xfailed, **0 warnings** | — | Clean run |
+
+---
+
+## .slnc Memory-Mapped Inference Format
+
+### Format
+Binary format for zero-copy weight loading via mmap. Layout follows computation order (not alphabetical):
+```
+[Magic "SLNC"] [Version 1] [64-byte Metadata] [Config JSON] [Tensor Table] [Tensor Data]
+```
+
+### Files
+| File | Purpose |
+|------|---------|
+| `domains/infrastructure/slnc/spec.py` | Format definition, magic bytes, dtype codes |
+| `domains/infrastructure/slnc/compiler.py` | `SLNCCompiler.compile()` — safetensors → .slnc |
+| `domains/infrastructure/slnc/parser.py` | `SLNCParser` — mmap-based zero-copy loader |
+
+### Usage
+```python
+# Compile (automatic on first server start)
+from domains.infrastructure.slnc.compiler import SLNCCompiler
+SLNCCompiler.compile("model.safetensors", "model.slnc")
+
+# Load
+from domains.inference.slonet_provider import SloNetChatProvider
+provider = SloNetChatProvider.from_slnc("model.slnc", model_id="gpt2")
+
+# Generate
+response = provider.generate("Hello", max_tokens=50)
+```
+
+### Server Integration
+`startup.py` auto-converts on first load:
+1. Check for `.slnc` in model cache dir
+2. If exists: load via mmap (2.2x faster)
+3. If not: compile from safetensors, then load from .slnc
+4. Falls back to safetensors on any error
+
+### Benchmark (GPT-2)
+| Metric | safetensors | .slnc | Improvement |
+|--------|------------|-------|-------------|
+| Load time | 32s | 14s | 2.2x |
+| Generate | 3.1s | 2.7s | 1.2x |
+| Throughput | 11 tok/s | 13 tok/s | +19% |
+| File size | 548 MB | 498 MB | 0.91x |
+
+### Design
+- **Computation order**: Block 0 → ... → norm → lm_head (sequential cache access)
+- **Excludes causal masks**: 12 non-learnable HF artifacts (~48MB) omitted
+- **Zero-copy**: `SLNCLoader.get_tensor()` returns numpy view into mmap'd pages
+- **Demand loading**: only accessed pages fault into RAM
+
+---
+
+## Session 2026-07-12 — Cross-Turn KV Cache + Server Crash Fix (MPS on Intel Mac, Watchdog)
+
+### Summary
+Added cross-turn KV cache for multi-turn conversation speedup. Fixed 3 startup warnings. Diagnosed and fixed root cause of server crashes: **PyTorch 2.2.2 reports MPS available on Intel Mac x86_64 but silently crashes during inference**, plus watchdog recovery was loading a second model copy.
+
+### Changes
+
+| # | Change | Files | Impact |
+|---|--------|-------|--------|
+| 1 | **Watchdog recovery removed** — log-only instead of `_load_hf_model_core()` | `main.py:499-516` | Eliminates model reload from watchdog thread (45s block, memory pressure, provider state corruption). `MAN_DISABLE_WATCHDOG=1` no longer needed. |
+| 2 | **MPS blocked on Intel Mac** — `_mps_available()` returns False on x86_64. PyTorch 2.x reports MPS available via `torch.backends.mps.is_available()` but crashes at runtime. | `ml_types.py:102-120`, `model_loader.py:247-257` | `auto_device()` returns `"cpu"` on Intel Macs. All model paths use CPU. |
+| 3 | **SentenceTransformer forced CPU** — `device="cpu"` arg to constructor. Was defaulting to MPS and crashing. | `vector_store.py:402-404` | Embedding model no longer crashes the process. |
+| 4 | **Cross-turn SessionKVCache** — `session_id` threaded through provider chain, cached `past_key_values` reused for shared prompt prefix | `model_server.py`, `provider.py`, `inference.py`, `session.py` | Verified: 0→21→57 cached tokens across 3 turns. Active on both manual and autoload paths. |
+| 5 | **3 startup warnings fixed** — `torch_dtype`→`dtype`, `pad_token==eos_token`→`<\|pad\|>`, `TaskQueue.stop`→`await` | `model_loader.py:207`, `engine.py:494-498`, `startup.py:360` | Server starts with zero relevant warnings. |
+
+### Root Cause of Server Crashes
+The "server hangs after first request" was a cascade:
+1. **MPS false positive**: PyTorch 2.2.2 on Intel Mac (x86_64) reports `torch.backends.mps.is_available() == True` on macOS 12+. `_mps_available()` returned True → `auto_device()` returned `"mps"` → model loaded on non-functional Metal backend.
+2. **MPS crash**: In practice, Metal GPU inference on Intel integrated graphics silently kills the Python process (no traceback, no core dump).
+3. **Watchdog recovery**: After process death, the watchdog's `_recover()` function called `_load_hf_model_core()` → loaded a second copy of the model → more memory pressure → faster crash next time.
+
+Fix order: (1) Block MPS on Intel Mac → models load on CPU and survive. (2) Remove watchdog recovery → no model reload from background thread.
+
+### Environment
+| Attribute | Value |
+|-----------|-------|
+| CPU | Intel Core i7-9750H (6C/12T) |
+| RAM | 16 GB DDR4 |
+| GPU | None usable for ML (Intel UHD 630) |
+| OS | macOS 15+ (x86_64) |
+| Python | 3.9 (blocks ONNX Runtime) |
+| torch | 2.2.2 (CPU-only in practice) |
+| Default model | Qwen/Qwen2.5-0.5B-Instruct (500M, ~40s load, ~6.5s first infer) |
+| Embedding | all-MiniLM-L6-v2 (forced CPU) |
+
+### Follow-up (same session) — Autoload Rewrite
+
+| # | Change | Files | Impact |
+|---|--------|-------|--------|
+| 1 | **Autoload rewritten** to use `ModelRegistry.register()` + `setup_providers()`. Previously used direct `register_provider()` which bypassed ModelServer/SessionKVCache. | `startup.py:468-497` | KV cache now active on autoload (both manual and autoload paths). |
+| 2 | **ChatDomain gpt2 fallback eliminated** — ModelServer-backed hf-default is the primary provider, no second model loaded. | — | Single model in memory (Qwen 500M, not both Qwen + gpt2). |
+
+### Verified
+- Autoload time: 25s (Qwen 500M on CPU)
+- `/health`: model_loaded=True
+- `/chat` (non-streaming): "Hello." in ~15s
+- `/chat/stream`: 24 tokens streamed
+- No gpt2 loaded (0 references in logs)
+- KV cache active: both paths now use SessionKVCache
+
+### Relevant Files
+| File | Changes |
+|------|---------|
+| `apps/api/server/main.py` | Watchdog `_recover()` changed to log-only |
+| `packages/core-py/domains/infrastructure/ml_types.py` | `_mps_available()` returns False on x86_64 |
+| `packages/core-py/domains/infrastructure/model_loader.py` | `_resolve_device()` skips MPS on Intel Mac |
+| `packages/core-py/domains/inference/vector_store.py` | SentenceTransformer `device="cpu"` |
+| `packages/core-py/domains/infrastructure/model_server.py` | SessionKVCache class |
+| `packages/core-py/domains/models/provider.py` | session_id threading through providers |
+| `apps/api/server/routers/inference.py` | session_id param in /chat/stream |
+| `apps/api/server/routers/session.py` | session_id in regeneration |
+| `apps/api/server/infrastructure/startup.py` | Autoload rewritten: ModelRegistry + setup_providers instead of register_provider |

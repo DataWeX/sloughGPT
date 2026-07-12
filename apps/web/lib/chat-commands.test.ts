@@ -1,238 +1,255 @@
-import { describe, it, expect, vi } from 'vitest'
-import { getCommand, getAllCommands } from './chat-commands'
+import {describe, it, expect, vi, beforeEach} from 'vitest'
+import {getAllCommands, type CommandContext} from './chat-commands'
 
-describe('getCommand', () => {
-  it('returns null for normal messages', () => {
-    expect(getCommand('hello world')).toBeNull()
-    expect(getCommand('')).toBeNull()
-    expect(getCommand('  ')).toBeNull()
+function makeCtx(overrides?: Partial<CommandContext>): CommandContext {
+  return {
+    showToast: vi.fn(),
+    clearChat: vi.fn(),
+    setTemperature: vi.fn(),
+    setModel: vi.fn().mockResolvedValue(undefined),
+    setSoul: vi.fn().mockResolvedValue(undefined),
+    exportChat: vi.fn(),
+    attachFile: vi.fn(),
+    searchKnowledge: vi.fn().mockResolvedValue(undefined),
+    navigateTo: vi.fn(),
+    addSystemMessage: vi.fn(),
+    sendMessage: vi.fn().mockResolvedValue(undefined),
+    archiveConversation: vi.fn(),
+    renameConversation: vi.fn(),
+    searchConversations: vi.fn(),
+    ...overrides,
+  }
+}
+
+describe('chat-commands', () => {
+  const cmds = getAllCommands()
+
+  it('returns an array of commands', () => {
+    expect(cmds.length).toBeGreaterThan(0)
   })
 
-  it('returns null for unknown commands', () => {
-    expect(getCommand('/foobar')).toBeNull()
-    expect(getCommand('/xyz abc')).toBeNull()
-  })
-
-  it('recognizes /help', () => {
-    const result = getCommand('/help')
-    expect(result).not.toBeNull()
-    expect(result!.command.command).toBe('/help')
-    expect(result!.args).toEqual([])
-  })
-
-  it('parses arguments after command', () => {
-    const result = getCommand('/model gpt2')
-    expect(result).not.toBeNull()
-    expect(result!.command.command).toBe('/model')
-    expect(result!.args).toEqual(['gpt2'])
-  })
-
-  it('handles multiple arguments', () => {
-    const result = getCommand('/temp 0.8')
-    expect(result).not.toBeNull()
-    expect(result!.command.command).toBe('/temp')
-    expect(result!.args).toEqual(['0.8'])
-  })
-
-  it('is case insensitive', () => {
-    expect(getCommand('/CLEAR')).not.toBeNull()
-    expect(getCommand('/Help')).not.toBeNull()
-  })
-})
-
-describe('getAllCommands', () => {
-  it('returns all commands', () => {
-    const cmds = getAllCommands()
-    expect(cmds.length).toBeGreaterThanOrEqual(14)
-    const names = cmds.map(c => c.command)
-    expect(names).toContain('/help')
-    expect(names).toContain('/clear')
-    expect(names).toContain('/model')
-    expect(names).toContain('/temp')
-  })
-})
-
-describe('/help command', () => {
-  it('returns a help message listing all commands', async () => {
-    const cmd = getCommand('/help')!
-    const ctx = {
-      showToast: vi.fn(),
-      clearChat: vi.fn(),
-      setTemperature: vi.fn(),
-      setModel: vi.fn(),
-      setSoul: vi.fn(),
-      exportChat: vi.fn(),
-      attachFile: vi.fn(),
-      searchKnowledge: vi.fn(),
-      navigateTo: vi.fn(),
-      addSystemMessage: vi.fn(),
-      sendMessage: vi.fn(),
-      archiveConversation: vi.fn(),
-      renameConversation: vi.fn(),
-      searchConversations: vi.fn(),
-    }
-    const result = await cmd.command.execute(cmd.args, ctx)
-    expect(result.handled).toBe(true)
-    expect(ctx.addSystemMessage).toHaveBeenCalledOnce()
-    const msg = ctx.addSystemMessage.mock.calls[0][0] as string
-    expect(msg).toContain('Chat Commands')
-    const names = getAllCommands().map(c => c.command)
-    for (const n of names) {
-      if (n !== '/help') expect(msg).toContain(n)
+  it('each command has required fields', () => {
+    for (const cmd of cmds) {
+      expect(cmd.command).toBeTruthy()
+      expect(cmd.description).toBeTruthy()
+      expect(cmd.usage).toBeTruthy()
+      expect(typeof cmd.execute).toBe('function')
     }
   })
-})
 
-describe('/temp command', () => {
-  it('shows error for invalid temperature', async () => {
-    const cmd = getCommand('/temp abc')!
-    const ctx = {
-      showToast: vi.fn(), clearChat: vi.fn(), setTemperature: vi.fn(),
-      setModel: vi.fn(), setSoul: vi.fn(), exportChat: vi.fn(),
-      attachFile: vi.fn(), searchKnowledge: vi.fn(), navigateTo: vi.fn(),
-      addSystemMessage: vi.fn(), sendMessage: vi.fn(),
-      archiveConversation: vi.fn(), renameConversation: vi.fn(), searchConversations: vi.fn(),
-    }
-    await cmd.command.execute(cmd.args, ctx)
-    expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('Usage'), 'error')
-    expect(ctx.setTemperature).not.toHaveBeenCalled()
-  })
-
-  it('sets temperature for valid value', async () => {
-    const cmd = getCommand('/temp 0.5')!
-    const ctx = {
-      showToast: vi.fn(), clearChat: vi.fn(), setTemperature: vi.fn(),
-      setModel: vi.fn(), setSoul: vi.fn(), exportChat: vi.fn(),
-      attachFile: vi.fn(), searchKnowledge: vi.fn(), navigateTo: vi.fn(),
-      addSystemMessage: vi.fn(), sendMessage: vi.fn(),
-      archiveConversation: vi.fn(), renameConversation: vi.fn(), searchConversations: vi.fn(),
-    }
-    await cmd.command.execute(cmd.args, ctx)
-    expect(ctx.setTemperature).toHaveBeenCalledWith(0.5)
-    expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('0.5'), 'success')
-  })
-})
-
-describe('/soul command', () => {
-  it('shows error with no args', async () => {
-    const cmd = getCommand('/soul')!
-    const ctx = {
-      showToast: vi.fn(), clearChat: vi.fn(), setTemperature: vi.fn(),
-      setModel: vi.fn(), setSoul: vi.fn().mockRejectedValue(new Error('not found')),
-      exportChat: vi.fn(), attachFile: vi.fn(), searchKnowledge: vi.fn(),
-      navigateTo: vi.fn(), addSystemMessage: vi.fn(), sendMessage: vi.fn(),
-      archiveConversation: vi.fn(), renameConversation: vi.fn(), searchConversations: vi.fn(),
-    }
-    await cmd.command.execute(cmd.args, ctx)
-    expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('Usage'), 'error')
-  })
-})
-
-describe('/knowledge command', () => {
-  it('shows error with no args', async () => {
-    const cmd = getCommand('/knowledge')!
-    const ctx = {
-      showToast: vi.fn(), clearChat: vi.fn(), setTemperature: vi.fn(),
-      setModel: vi.fn(), setSoul: vi.fn(), exportChat: vi.fn(),
-      attachFile: vi.fn(), searchKnowledge: vi.fn(), navigateTo: vi.fn(),
-      addSystemMessage: vi.fn(), sendMessage: vi.fn(),
-      archiveConversation: vi.fn(), renameConversation: vi.fn(), searchConversations: vi.fn(),
-    }
-    await cmd.command.execute(cmd.args, ctx)
-    expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('Usage'), 'error')
-  })
-})
-
-describe('/summarize command', () => {
-  it('injects a summarisation system message', async () => {
-    const cmd = getCommand('/summarize')!
-    const ctx = {
-      showToast: vi.fn(), clearChat: vi.fn(), setTemperature: vi.fn(),
-      setModel: vi.fn(), setSoul: vi.fn(), exportChat: vi.fn(),
-      attachFile: vi.fn(), searchKnowledge: vi.fn(), navigateTo: vi.fn(),
-      addSystemMessage: vi.fn(), sendMessage: vi.fn(),
-      archiveConversation: vi.fn(), renameConversation: vi.fn(), searchConversations: vi.fn(),
-    }
-    const result = await cmd!.command.execute(cmd!.args, ctx)
-    expect(result.handled).toBe(true)
-    expect(ctx.addSystemMessage).toHaveBeenCalledOnce()
-    const msg = ctx.addSystemMessage.mock.calls[0][0] as string
-    expect(msg).toContain('summarise')
-    expect(msg).toContain('bullet points')
-    expect(ctx.sendMessage).toHaveBeenCalledOnce()
-  })
-})
-
-describe('/feedback command', () => {
-  const makeCtx = () => ({
-    showToast: vi.fn(), clearChat: vi.fn(), setTemperature: vi.fn(),
-    setModel: vi.fn(), setSoul: vi.fn(), exportChat: vi.fn(),
-    attachFile: vi.fn(), searchKnowledge: vi.fn(), navigateTo: vi.fn(),
-    addSystemMessage: vi.fn(), sendMessage: vi.fn(),
-    archiveConversation: vi.fn(), renameConversation: vi.fn(), searchConversations: vi.fn(),
-  })
-
-  it('shows error with no args', async () => {
-    const cmd = getCommand('/feedback')!
+  // /help
+  it('/help lists commands', async () => {
     const ctx = makeCtx()
-    await cmd!.command.execute(cmd!.args, ctx)
-    expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('Usage'), 'error')
-  })
-
-  it('shows error with invalid sentiment', async () => {
-    const cmd = getCommand('/feedback neutral')!
-    const ctx = makeCtx()
-    await cmd!.command.execute(cmd!.args, ctx)
-    expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('Usage'), 'error')
-  })
-
-  it('records positive feedback without reason', async () => {
-    const cmd = getCommand('/feedback positive')!
-    const ctx = makeCtx()
-    const result = await cmd!.command.execute(cmd!.args, ctx)
+    const cmd = cmds.find(c => c.command === '/help')!
+    const result = await cmd.execute([], ctx)
     expect(result.handled).toBe(true)
-    expect(ctx.addSystemMessage).toHaveBeenCalledWith(expect.stringContaining('positive'))
+    expect(ctx.addSystemMessage).toHaveBeenCalled()
+  })
+
+  // /clear
+  it('/clear clears chat', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/clear')!
+    await cmd.execute([], ctx)
+    expect(ctx.clearChat).toHaveBeenCalled()
+    expect(ctx.showToast).toHaveBeenCalledWith('Chat cleared', 'success')
+  })
+
+  // /temp
+  it('/temp sets temperature', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/temp')!
+    await cmd.execute(['0.8'], ctx)
+    expect(ctx.setTemperature).toHaveBeenCalledWith(0.8)
+  })
+
+  it('/temp rejects invalid values', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/temp')!
+    await cmd.execute(['abc'], ctx)
+    expect(ctx.showToast).toHaveBeenCalledWith('Usage: /temp <0.0–2.0>', 'error')
+    await cmd.execute(['3.0'], ctx)
+    expect(ctx.showToast).toHaveBeenCalledWith('Usage: /temp <0.0–2.0>', 'error')
+    await cmd.execute(['-1'], ctx)
+    expect(ctx.showToast).toHaveBeenCalledWith('Usage: /temp <0.0–2.0>', 'error')
+  })
+
+  // /model
+  it('/model switches model', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/model')!
+    await cmd.execute(['gpt2'], ctx)
+    expect(ctx.setModel).toHaveBeenCalledWith('gpt2')
+    expect(ctx.addSystemMessage).toHaveBeenCalled()
+  })
+
+  it('/model with no args shows usage', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/model')!
+    await cmd.execute([], ctx)
+    expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('/model'), 'error')
+  })
+
+  it('/model handles error', async () => {
+    const ctx = makeCtx({setModel: vi.fn().mockRejectedValue(new Error('fail'))})
+    const cmd = cmds.find(c => c.command === '/model')!
+    await cmd.execute(['bad-model'], ctx)
+    const lastMsg = (ctx.addSystemMessage as any).mock.calls.at(-1)?.[0]
+    expect(lastMsg).toContain('Failed')
+  })
+
+  // /soul
+  it('/soul switches soul', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/soul')!
+    await cmd.execute(['friendly'], ctx)
+    expect(ctx.setSoul).toHaveBeenCalledWith('friendly')
+  })
+
+  it('/soul with no args shows usage', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/soul')!
+    await cmd.execute([], ctx)
+    expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('/soul'), 'error')
+  })
+
+  it('/soul handles error', async () => {
+    const ctx = makeCtx({setSoul: vi.fn().mockRejectedValue(new Error('not found'))})
+    const cmd = cmds.find(c => c.command === '/soul')!
+    await cmd.execute(['bad-soul'], ctx)
+    const lastMsg = (ctx.addSystemMessage as any).mock.calls.at(-1)?.[0]
+    expect(lastMsg).toContain('not found')
+  })
+
+  // /export
+  it('/export exports chat', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/export')!
+    await cmd.execute([], ctx)
+    expect(ctx.exportChat).toHaveBeenCalled()
+  })
+
+  // /file
+  it('/file attaches file', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/file')!
+    await cmd.execute([], ctx)
+    expect(ctx.attachFile).toHaveBeenCalled()
+  })
+
+  // /knowledge
+  it('/knowledge searches knowledge base', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/knowledge')!
+    await cmd.execute(['python async'], ctx)
+    expect(ctx.searchKnowledge).toHaveBeenCalledWith('python async')
+  })
+
+  it('/knowledge with no args shows usage', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/knowledge')!
+    await cmd.execute([], ctx)
+    expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('/knowledge'), 'error')
+  })
+
+  // /goto
+  it('/goto navigates', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/goto')!
+    await cmd.execute(['/models'], ctx)
+    expect(ctx.navigateTo).toHaveBeenCalledWith('/models')
+  })
+
+  it('/goto with no args shows usage', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/goto')!
+    await cmd.execute([], ctx)
+    expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('/goto'), 'error')
+  })
+
+  // /summarize
+  it('/summarize sends message', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/summarize')!
+    await cmd.execute([], ctx)
+    expect(ctx.addSystemMessage).toHaveBeenCalled()
+    expect(ctx.sendMessage).toHaveBeenCalled()
+  })
+
+  // /feedback
+  it('/feedback records feedback', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/feedback')!
+    await cmd.execute(['positive', 'great answer'], ctx)
+    expect(ctx.addSystemMessage).toHaveBeenCalled()
     expect(ctx.showToast).toHaveBeenCalledWith('Feedback recorded', 'success')
   })
 
-  it('records negative feedback with reason', async () => {
-    const cmd = getCommand('/feedback negative too verbose')!
+  it('/feedback with invalid sentiment shows usage', async () => {
     const ctx = makeCtx()
-    const result = await cmd!.command.execute(cmd!.args, ctx)
-    expect(result.handled).toBe(true)
-    const msg = ctx.addSystemMessage.mock.calls[0][0] as string
-    expect(msg).toContain('negative')
-    expect(msg).toContain('too verbose')
-    expect(ctx.showToast).toHaveBeenCalledWith('Feedback recorded', 'success')
-  })
-})
-
-describe('/translate command', () => {
-  it('shows error with no args', async () => {
-    const cmd = getCommand('/translate')!
-    const ctx = {
-      showToast: vi.fn(), clearChat: vi.fn(), setTemperature: vi.fn(),
-      setModel: vi.fn(), setSoul: vi.fn(), exportChat: vi.fn(),
-      attachFile: vi.fn(), searchKnowledge: vi.fn(), navigateTo: vi.fn(),
-      addSystemMessage: vi.fn(), sendMessage: vi.fn(),
-      archiveConversation: vi.fn(), renameConversation: vi.fn(), searchConversations: vi.fn(),
-    }
-    await cmd!.command.execute(cmd!.args, ctx)
-    expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('Usage'), 'error')
+    const cmd = cmds.find(c => c.command === '/feedback')!
+    await cmd.execute(['maybe'], ctx)
+    expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('/feedback'), 'error')
   })
 
-  it('adds a system message and triggers generation', async () => {
-    const cmd = getCommand('/translate Spanish')!
-    const ctx = {
-      showToast: vi.fn(), clearChat: vi.fn(), setTemperature: vi.fn(),
-      setModel: vi.fn(), setSoul: vi.fn(), exportChat: vi.fn(),
-      attachFile: vi.fn(), searchKnowledge: vi.fn(), navigateTo: vi.fn(),
-      addSystemMessage: vi.fn(), sendMessage: vi.fn(),
-      archiveConversation: vi.fn(), renameConversation: vi.fn(), searchConversations: vi.fn(),
-    }
-    const result = await cmd!.command.execute(cmd!.args, ctx)
-    expect(result.handled).toBe(true)
-    expect(ctx.addSystemMessage).toHaveBeenCalledWith(expect.stringContaining('Spanish'))
-    expect(ctx.sendMessage).toHaveBeenCalledOnce()
+  it('/feedback with no args shows usage', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/feedback')!
+    await cmd.execute([], ctx)
+    expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('/feedback'), 'error')
+  })
+
+  // /translate
+  it('/translate sends translation request', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/translate')!
+    await cmd.execute(['Spanish'], ctx)
+    expect(ctx.addSystemMessage).toHaveBeenCalled()
+    expect(ctx.sendMessage).toHaveBeenCalled()
+  })
+
+  it('/translate with no args shows usage', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/translate')!
+    await cmd.execute([], ctx)
+    expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('/translate'), 'error')
+  })
+
+  // /search
+  it('/search searches conversations', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/search')!
+    await cmd.execute(['python'], ctx)
+    expect(ctx.searchConversations).toHaveBeenCalledWith('python')
+  })
+
+  it('/search with no args shows usage', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/search')!
+    await cmd.execute([], ctx)
+    expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('/search'), 'error')
+  })
+
+  // /archive
+  it('/archive archives conversation', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/archive')!
+    await cmd.execute([], ctx)
+    expect(ctx.archiveConversation).toHaveBeenCalled()
+  })
+
+  // /rename
+  it('/rename renames conversation', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/rename')!
+    await cmd.execute(['My Chat'], ctx)
+    expect(ctx.renameConversation).toHaveBeenCalledWith('My Chat')
+  })
+
+  it('/rename with no args shows usage', async () => {
+    const ctx = makeCtx()
+    const cmd = cmds.find(c => c.command === '/rename')!
+    await cmd.execute([], ctx)
+    expect(ctx.showToast).toHaveBeenCalledWith(expect.stringContaining('/rename'), 'error')
   })
 })

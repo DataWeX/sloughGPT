@@ -15,6 +15,8 @@ from typing import Optional
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
+from schemas.common import success_response, error_response
+
 router = APIRouter(prefix="/learn", tags=["learner"])
 
 
@@ -37,14 +39,13 @@ def learn_search(req: LearnSearchRequest):
     learner = get_learner()
     result = learner.search_and_learn(req.query, req.max_results)
     status = learner.status()
-    return {
-        "status": "ok",
+    return success_response(data={
         "tokens_ingested": result.get("tokens_ingested", 0),
         "new_facts": result.get("new_facts", 0),
         "rejected": result.get("rejected", 0),
         "filter_stats": result.get("filter_stats", {}),
         **status,
-    }
+    })
 
 
 @router.post("/feed")
@@ -67,17 +68,17 @@ def learn_feed(
     learner = get_learner()
     if action == "subscribe":
         if not url:
-            return {"status": "error", "message": "url required"}
+            return error_response("url required")
         ok = learner.subscribe_feed(url, poll_interval)
-        return {"status": "ok" if ok else "already_subscribed", "feeds": learner.list_feeds()}
+        return success_response(data={"status": "ok" if ok else "already_subscribed", "feeds": learner.list_feeds()})
     elif action == "unsubscribe":
         if not url:
-            return {"status": "error", "message": "url required"}
+            return error_response("url required")
         ok = learner.unsubscribe_feed(url)
-        return {"status": "ok" if ok else "not_found", "feeds": learner.list_feeds()}
+        return success_response(data={"status": "ok" if ok else "not_found", "feeds": learner.list_feeds()})
     elif action == "list":
-        return {"status": "ok", "feeds": learner.list_feeds()}
-    return {"status": "error", "message": "unknown action"}
+        return success_response(data={"feeds": learner.list_feeds()})
+    return error_response("unknown action")
 
 
 @router.post("/ingest-url")
@@ -93,7 +94,7 @@ def learn_ingest_url(url: str = Query(...)):
     from domains.learner import get_learner
     learner = get_learner()
     result = learner.ingest_url(url)
-    return {"status": "ok", **result}
+    return success_response(data=result)
 
 
 @router.get("/knowledge")
@@ -120,7 +121,7 @@ def learn_knowledge(
         facts = learner.search_knowledge(query, top_k=top_k)
     else:
         facts = []
-    return {"status": "ok", "facts": facts, "count": len(facts)}
+    return success_response(data={"facts": facts, "count": len(facts)})
 
 
 @router.post("/ingest")
@@ -146,7 +147,7 @@ def learn_ingest(
         pairs = [(c[0], c[1]) for c in conversations if len(c) >= 2]
         learner.ingest_conversation(pairs)
 
-    return {"status": "ok", **learner.status()}
+    return success_response(data=learner.status())
 
 
 @router.post("/train")
@@ -159,7 +160,7 @@ def learn_train():
     from domains.learner import get_learner
     learner = get_learner()
     status = learner.train_now()
-    return {"status": "ok", **status}
+    return success_response(data=status)
 
 
 @router.post("/deploy")
@@ -175,7 +176,7 @@ def learn_deploy(name: Optional[str] = None):
     from domains.learner import get_learner
     learner = get_learner()
     result = learner.deploy(name=name)
-    return {"status": "ok", **result}
+    return success_response(data=result)
 
 
 @router.post("/evaluate")
@@ -191,7 +192,7 @@ def learn_evaluate(text: Optional[str] = None):
     from domains.learner import get_learner
     learner = get_learner()
     result = learner.evaluate(text=text)
-    return {"status": "ok", **result}
+    return success_response(data=result)
 
 
 @router.get("/status")
@@ -205,4 +206,4 @@ def learn_status():
     """
     from domains.learner import get_learner
     learner = get_learner()
-    return {"status": "ok", **learner.status()}
+    return success_response(data=learner.status())

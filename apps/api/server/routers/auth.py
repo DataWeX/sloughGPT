@@ -2,13 +2,16 @@
 Auth Router - JWT token management + login/register/me/logout endpoints
 """
 import uuid, json, os, hashlib, secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Header, Request, Depends
 from pydantic import BaseModel
 from typing import Optional
 
+from schemas.common import success_response
+
 router = APIRouter(prefix="/auth", tags=["auth"])
-USERS_FILE = "data/users.json"
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+USERS_FILE = os.path.join(_REPO_ROOT, "data", "users.json")
 
 
 # ---------- in‑memory user store (persisted to JSON) ----------
@@ -123,7 +126,7 @@ async def register(req: RegisterRequest):
         "username": req.username,
         "email": req.email,
         "password_hash": _hash_password(req.password),
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
     _save_users(users)
     _, exp_hours, jwt_auth, _ = _get_auth_deps()
@@ -173,7 +176,7 @@ async def verify_token(authorization: Optional[str] = Header(None)):
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-    return {"valid": True, "subject": payload.get("sub"), "expires": payload.get("exp")}
+    return success_response(data={"valid": True, "subject": payload.get("sub"), "expires": payload.get("exp")})
 
 
 @router.post("/refresh", response_model=TokenResponse)

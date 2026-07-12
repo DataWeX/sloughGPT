@@ -647,15 +647,25 @@ class MultimodalEngine:
                 tokens.append(next_tok)
             text = self.text.decode(tokens)
         else:
-            # Beam search: keep top-k hypotheses
-            beams = [(0.0, [bos])]  # (log_prob, tokens)
+            # Beam search with KV cache: each beam maintains its own cache
+            beams = [(0.0, [bos], None)]  # (log_prob, tokens, kv_cache)
             completed = []
 
             for step in range(max_len):
                 candidates = []
-                for log_prob, seq in beams:
-                    inp = _tensor(np.array([seq]), requires_grad=False)
-                    logits, _, _ = self.decoder.forward(embed, inp, patches)
+                for log_prob, seq, kv_cache in beams:
+                    if kv_cache is None:
+                        # First step: process full prefix
+                        inp = _tensor(np.array([seq]), requires_grad=False)
+                        start_pos = 0
+                    else:
+                        # Subsequent steps: only process the new token
+                        inp = _tensor(np.array([[seq[-1]]]), requires_grad=False)
+                        start_pos = kv_cache[0][0].shape[1] if kv_cache else len(seq) - 1
+
+                    logits, _, new_kv = self.decoder.forward(
+                        embed, inp, patches, kv_cache=kv_cache, start_pos=start_pos
+                    )
                     last_pos = logits.data.reshape(-1, logits.data.shape[-1])[-1]
 
                     # Penalize repetition on raw logits (same as greedy)
@@ -678,7 +688,7 @@ class MultimodalEngine:
                         if idx == eos:
                             completed.append((cand_log_prob, cand_seq))
                         else:
-                            candidates.append((cand_log_prob, cand_seq))
+                            candidates.append((cand_log_prob, cand_seq, new_kv))
 
                 if not candidates and completed:
                     break
@@ -688,11 +698,11 @@ class MultimodalEngine:
                 beams = candidates[:beam_width]
 
                 # Early stop if all beams hit EOS
-                if all(seq[-1] == eos for _, seq in beams):
+                if all(seq[-1] == eos for _, seq, _ in beams):
                     break
 
                 if step >= max_len - 1:
-                    for _, seq in beams:
+                    for _, seq, _ in beams:
                         completed.append((0.0, seq))
 
             # Pick best: prefer completed sequences, longest if tied
@@ -758,15 +768,25 @@ class VisionEncoder:
         """Forward pass: patches -> embeddings -> transformer -> cls token."""
         patches = self.extract_patches(images_np)
         B = patches.shape[0]
-        x = self.patch_proj.forward(Tensor(patches, requires_grad=False, _copy=True))
-        # Prepend cls token - preserve gradient by using Tensor repeat
-        cls_tokens_data = self.cls_token.data.repeat(B, axis=0)
-        cls_tokens = Tensor(cls_tokens_data, requires_grad=True, _children=(self.cls_token,))
-        x_data = np.concatenate([cls_tokens.data, x.data], axis=1)
-        # Add positional embeddings
-        x_data = x_data + self.pos_embed.data
-        x = Tensor(x_data, requires_grad=True, _children=(x, self.pos_embed, cls_tokens))
+        patch_out = self.patch_proj.forward(Tensor(patches, requires_grad=False, _copy=True))
+        # Prepend cls token and add positional embeddings with gradient tracking
+        cls_tiled = self.cls_token.data.repeat(B, axis=0)
+        combined_np = np.concatenate([cls_tiled, patch_out.data], axis=1)
+        combined_np = combined_np + self.pos_embed.data
+        combined = Tensor(combined_np, requires_grad=True, _children=(self.cls_token, patch_out, self.pos_embed))
+        def _vit_backward(g):
+            if self.cls_token.requires_grad:
+                g_cls = g[:, 0:1, :].sum(axis=0, keepdims=True)
+                self.cls_token.grad = Tensor(g_cls) if self.cls_token.grad is None else Tensor(self.cls_token.grad.data + g_cls)
+            if patch_out.requires_grad:
+                g_patches = g[:, 1:, :]
+                patch_out.grad = Tensor(g_patches) if patch_out.grad is None else Tensor(patch_out.grad.data + g_patches)
+            if self.pos_embed.requires_grad:
+                g_pos = g.sum(axis=0, keepdims=True)
+                self.pos_embed.grad = Tensor(g_pos) if self.pos_embed.grad is None else Tensor(self.pos_embed.grad.data + g_pos)
+        combined._backward_fn = _vit_backward
         # Pass through transformer blocks
+        x = combined
         for block in self.blocks:
             x, _ = block.forward(x)
         # Return normalized cls token (first position) as image embedding
@@ -778,12 +798,23 @@ class VisionEncoder:
         """Return all patch embeddings (B, num_patches+1, embed_dim) for cross-attention."""
         patches = self.extract_patches(images_np)
         B = patches.shape[0]
-        x = self.patch_proj.forward(Tensor(patches, requires_grad=False, _copy=True))
-        cls_tokens_data = self.cls_token.data.repeat(B, axis=0)
-        cls_tokens = Tensor(cls_tokens_data, requires_grad=True, _children=(self.cls_token,))
-        x_data = np.concatenate([cls_tokens.data, x.data], axis=1)
-        x_data = x_data + self.pos_embed.data
-        x = Tensor(x_data, requires_grad=True, _children=(x, self.pos_embed, cls_tokens))
+        patch_out = self.patch_proj.forward(Tensor(patches, requires_grad=False, _copy=True))
+        cls_tiled = self.cls_token.data.repeat(B, axis=0)
+        combined_np = np.concatenate([cls_tiled, patch_out.data], axis=1)
+        combined_np = combined_np + self.pos_embed.data
+        combined = Tensor(combined_np, requires_grad=True, _children=(self.cls_token, patch_out, self.pos_embed))
+        def _vit_backward(g):
+            if self.cls_token.requires_grad:
+                g_cls = g[:, 0:1, :].sum(axis=0, keepdims=True)
+                self.cls_token.grad = Tensor(g_cls) if self.cls_token.grad is None else Tensor(self.cls_token.grad.data + g_cls)
+            if patch_out.requires_grad:
+                g_patches = g[:, 1:, :]
+                patch_out.grad = Tensor(g_patches) if patch_out.grad is None else Tensor(patch_out.grad.data + g_patches)
+            if self.pos_embed.requires_grad:
+                g_pos = g.sum(axis=0, keepdims=True)
+                self.pos_embed.grad = Tensor(g_pos) if self.pos_embed.grad is None else Tensor(self.pos_embed.grad.data + g_pos)
+        combined._backward_fn = _vit_backward
+        x = combined
         for block in self.blocks:
             x, _ = block.forward(x)
         return self.norm.forward(x)

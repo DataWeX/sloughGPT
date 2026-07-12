@@ -11,6 +11,8 @@ from typing import Optional, Any, Dict
 from pydantic import BaseModel
 import json, asyncio, numpy as np, logging
 
+from schemas.common import success_response, error_response
+
 try:
     from domains.api.sse_envelope import sse_event, sse_token, sse_error, sse_complete
 except ImportError:
@@ -142,7 +144,7 @@ async def soul_chat(req: SloChatRequest, request: Request):
             checkpoint_file = repo_root / "models" / (req.checkpoint_name + ".soul")
 
         if not checkpoint_file.exists():
-            return {"error": f"Checkpoint not found: {req.checkpoint_name}"}
+            return error_response(message=f"Checkpoint not found: {req.checkpoint_name}")
 
         # Load checkpoint into SloughGPTModel
         model = _load_slough_model(checkpoint_file)
@@ -214,7 +216,7 @@ async def soul_chat(req: SloChatRequest, request: Request):
         import traceback
 
         traceback.print_exc()
-        return {"error": str(e)}
+        return error_response(message=str(e))
 
 
 def _soul_tensor(data):
@@ -293,9 +295,9 @@ async def switch_soul(
         except Exception:
             pass
 
-        return result
+        return success_response(data=result)
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return error_response(message=str(e))
 
 
 def _load_checkpoint_into_model(checkpoint_name: str) -> dict:
@@ -374,21 +376,18 @@ async def list_souls():
         manager = get_slo_manager()
         souls = manager.list_souls()
         current = manager.get_current_soul()
-        return {
-            "souls": [
-                {
-                    "name": s.name,
-                    "path": s.path,
-                    "description": s.description,
-                    "personality": getattr(s, "personality", {}),
-                    "traits": getattr(s, "traits", []),
-                }
-                for s in souls
-            ],
-            "current_soul": current.name if current else None,
-        }
+        return success_response(data=[
+            {
+                "name": s.name,
+                "path": s.path,
+                "description": s.description,
+                "personality": getattr(s, "personality", {}),
+                "traits": getattr(s, "traits", []),
+            }
+            for s in souls
+        ], meta={"current_soul": current.name if current else None})
     except Exception as e:
-        return {"souls": [], "current_soul": None, "error": str(e)}
+        return success_response(data=[], meta={"current_soul": None, "error": str(e)})
 
 
 @router.get("/weights")
@@ -412,9 +411,9 @@ async def get_trait_weights():
         from domains.inference.slo_manager import get_slo_manager
         manager = get_slo_manager()
         weights = manager.get_trait_weights()
-        return weights
+        return success_response(data=weights)
     except Exception as e:
-        return {"error": str(e)}
+        return error_response(message=str(e))
 
 
 class SaveWeightsRequest(BaseModel):
@@ -447,9 +446,9 @@ async def save_trait_weights(body: SaveWeightsRequest):
                 for k, v in traits.items():
                     flat[k] = float(v)
         config.set_many(flat)
-        return {"status": "saved"}
+        return success_response(message="saved")
     except Exception as e:
-        return {"status": "error", "error": str(e)}
+        return error_response(message=str(e))
 
 
 @router.get("/weights/modes")
@@ -476,14 +475,14 @@ async def get_trait_modes():
             StyleManager, TaskManager,
         )
         config = get_trait_config()
-        return {
+        return success_response(data={
             "personality": PersonalityManager(config).get_mode(),
             "memory": MemoryManager(config).get_mode(),
             "style": StyleManager(config).get_mode(),
             "task": TaskManager(config).get_mode(),
-        }
+        })
     except Exception as e:
-        return {"error": str(e)}
+        return error_response(message=str(e))
 
 
 @router.get("/current")
@@ -502,12 +501,14 @@ async def get_current_soul():
         manager = get_slo_manager()
         current = manager.get_current_soul()
         if current:
-            return {"name": current.name, "path": current.path, "description": current.description,
-                    "personality": getattr(current, "personality", {}),
-                    "traits": getattr(current, "traits", [])}
-        return {"name": None}
+            return success_response(data={
+                "name": current.name, "path": current.path, "description": current.description,
+                "personality": getattr(current, "personality", {}),
+                "traits": getattr(current, "traits", []),
+            })
+        return success_response(data={"name": None})
     except Exception as e:
-        return {"error": str(e)}
+        return error_response(message=str(e))
 
 
 @router.get("/weights/snapshots")
@@ -524,9 +525,9 @@ async def list_weight_snapshots():
     try:
         from domains.context.managers import get_trait_config
         config = get_trait_config()
-        return {"snapshots": config.list_snapshots()}
+        return success_response(data=config.list_snapshots())
     except Exception as e:
-        return {"snapshots": [], "error": str(e)}
+        return success_response(data=[], meta={"error": str(e)})
 
 
 @router.post("/weights/snapshot/{name}")
@@ -547,9 +548,9 @@ async def save_weight_snapshot(name: str):
         from domains.context.managers import get_trait_config
         config = get_trait_config()
         path = config.save_snapshot(name)
-        return {"status": "saved", "path": path}
+        return success_response(data={"path": path}, message="saved")
     except Exception as e:
-        return {"error": str(e)}
+        return error_response(message=str(e))
 
 
 @router.post("/weights/snapshot/{name}/load")
@@ -570,9 +571,9 @@ async def load_weight_snapshot(name: str):
         from domains.context.managers import get_trait_config
         config = get_trait_config()
         count = config.load_snapshot(name)
-        return {"status": "loaded", "traits_loaded": count}
+        return success_response(data={"traits_loaded": count}, message="loaded")
     except Exception as e:
-        return {"error": str(e)}
+        return error_response(message=str(e))
 
 
 @router.delete("/weights/snapshot/{name}")
@@ -593,9 +594,9 @@ async def delete_weight_snapshot(name: str):
         from domains.context.managers import get_trait_config
         config = get_trait_config()
         ok = config.delete_snapshot(name)
-        return {"deleted": ok}
+        return success_response(data={"deleted": ok})
     except Exception as e:
-        return {"error": str(e)}
+        return error_response(message=str(e))
 
 
 @router.get("/stats")
@@ -611,6 +612,6 @@ async def get_soul_stats():
     """
     try:
         from domains.inference.slo_manager import get_slo_manager
-        return get_slo_manager().get_stats()
+        return success_response(data=get_slo_manager().get_stats())
     except Exception as e:
-        return {"error": str(e)}
+        return error_response(message=str(e))

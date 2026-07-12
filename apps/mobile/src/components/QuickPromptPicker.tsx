@@ -1,22 +1,19 @@
 import React, {useEffect, useState} from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
+  Pressable,
   Modal,
   FlatList,
   TextInput,
 } from 'react-native';
+import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {
-  getQuickPrompts,
   getQuickPromptsByCategory,
   addQuickPrompt,
   deleteQuickPrompt,
   type QuickPrompt,
 } from '../services/quick-prompts';
 import {triggerHaptic} from '../services/haptics';
-import {colors, spacing, radii, typography} from '../theme';
+import {Icon} from './Icon';
 
 const CATEGORIES = ['all', 'general', 'coding', 'writing', 'analysis', 'custom'] as const;
 
@@ -27,11 +24,14 @@ interface Props {
 }
 
 export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
+  const theme = useTheme();
   const [prompts, setPrompts] = useState<QuickPrompt[]>([]);
   const [category, setCategory] = useState<string>('all');
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newPrompt, setNewPrompt] = useState('');
+
+  const accent = theme.color9?.val || '#7C52C4';
 
   useEffect(() => {
     if (visible) {
@@ -68,15 +68,28 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={styles.container}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.title}>Quick Prompts</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Text style={styles.closeBtn}>✕</Text>
-            </TouchableOpacity>
-          </View>
+      <YStack flex={1} backgroundColor="rgba(0,0,0,0.5)" justifyContent="flex-end">
+        <YStack
+          backgroundColor="$background"
+          borderTopLeftRadius={24}
+          borderTopRightRadius={24}
+          maxHeight="80%"
+          paddingBottom={34}>
+          <XStack
+            justifyContent="space-between"
+            alignItems="center"
+            paddingHorizontal={20}
+            paddingTop={14}
+            paddingBottom={8}>
+            <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">
+              Quick Prompts
+            </Text>
+            <Pressable onPress={onClose}>
+              <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
+                <Icon name="x" size={16} color={(theme.color11?.val || '#6B7280')} />
+              </YStack>
+            </Pressable>
+          </XStack>
 
           {/* Category chips */}
           <FlatList
@@ -84,15 +97,25 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
             showsHorizontalScrollIndicator={false}
             data={[...CATEGORIES]}
             keyExtractor={c => c}
-            contentContainerStyle={styles.chipRow}
+            contentContainerStyle={{paddingHorizontal: 16, gap: 4, paddingBottom: 8}}
             renderItem={({item: c}) => (
-              <TouchableOpacity
-                style={[styles.chip, category === c && styles.chipActive]}
-                onPress={() => setCategory(c)}>
-                <Text style={[styles.chipText, category === c && styles.chipTextActive]}>
-                  {c.charAt(0).toUpperCase() + c.slice(1)}
-                </Text>
-              </TouchableOpacity>
+              <Pressable onPress={() => setCategory(c)}>
+                <YStack
+                  paddingHorizontal={12}
+                  paddingVertical={5}
+                  borderRadius={999}
+                  backgroundColor={category === c ? accent : '$background'}
+                  borderWidth={0.5}
+                  borderColor={category === c ? accent : '$borderColor'}>
+                  <Text
+                    fontSize={11}
+                    fontWeight="500"
+                    letterSpacing={0.2}
+                    color={category === c ? 'white' : '$color11'}>
+                    {c.charAt(0).toUpperCase() + c.slice(1)}
+                  </Text>
+                </YStack>
+              </Pressable>
             )}
           />
 
@@ -100,203 +123,102 @@ export function QuickPromptPicker({visible, onClose, onSelect}: Props) {
           <FlatList
             data={prompts}
             keyExtractor={p => p.id}
-            contentContainerStyle={styles.list}
+            contentContainerStyle={{paddingHorizontal: 16, gap: 4}}
             renderItem={({item: p}) => (
-              <TouchableOpacity
-                style={styles.promptItem}
-                onPress={() => handleSelect(p)}
-                onLongPress={() => handleDelete(p.id)}
-                activeOpacity={0.7}>
-                <View style={styles.promptHeader}>
-                  <Text style={styles.promptTitle}>{p.title}</Text>
-                  <Text style={styles.promptCategory}>{p.category}</Text>
-                </View>
-                <Text style={styles.promptPreview} numberOfLines={2}>
-                  {p.prompt}
-                </Text>
-              </TouchableOpacity>
+              <Pressable onPress={() => handleSelect(p)} onLongPress={() => handleDelete(p.id)}>
+                <YStack backgroundColor="$background" borderRadius={10} padding={12} borderWidth={0.5} borderColor="$borderColor">
+                  <XStack justifyContent="space-between" alignItems="center" marginBottom={4}>
+                    <Text fontSize={15} fontWeight="600" color="$color">
+                      {p.title}
+                    </Text>
+                    <Text fontSize={11} fontWeight="500" letterSpacing={0.2} color="$color10" textTransform="capitalize">
+                      {p.category}
+                    </Text>
+                  </XStack>
+                  <Text
+                    fontSize={11}
+                    fontWeight="500"
+                    letterSpacing={0.2}
+                    color="$color11"
+                    lineHeight={18}
+                    numberOfLines={2}>
+                    {p.prompt}
+                  </Text>
+                </YStack>
+              </Pressable>
             )}
             ListEmptyComponent={
-              <Text style={styles.empty}>No prompts yet. Tap + to add one.</Text>
+              <Text fontSize={15} fontWeight="400" color="$color10" textAlign="center" paddingVertical={24}>
+                No prompts yet. Tap + to add one.
+              </Text>
             }
           />
 
           {/* Add button */}
-          <TouchableOpacity
-            style={styles.addBtn}
-            onPress={() => setShowAdd(!showAdd)}>
-            <Text style={styles.addBtnText}>{showAdd ? '✕ Cancel' : '+ New Prompt'}</Text>
-          </TouchableOpacity>
+          <Pressable onPress={() => setShowAdd(!showAdd)}>
+            <YStack marginHorizontal={16} marginTop={8} padding={12} borderRadius={10} backgroundColor={accent} alignItems="center">
+              <XStack alignItems="center" gap={6}>
+                <Icon name={showAdd ? 'x' : 'plus'} size={16} color="white" />
+                <Text fontSize={15} fontWeight="600" color="white">
+                  {showAdd ? 'Cancel' : 'New Prompt'}
+                </Text>
+              </XStack>
+            </YStack>
+          </Pressable>
 
           {/* Add form */}
           {showAdd && (
-            <View style={styles.addForm}>
+            <YStack paddingHorizontal={16} paddingTop={8} gap={8}>
               <TextInput
-                style={styles.input}
                 placeholder="Title"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor="#9B95A8"
                 value={newTitle}
                 onChangeText={setNewTitle}
+                style={{
+                  fontSize: 14,
+                  backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                  borderRadius: 10,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  color: '#1A1625',
+                  borderWidth: 0.5,
+                  borderColor: 'rgba(124, 82, 196, 0.12)',
+                }}
               />
               <TextInput
-                style={[styles.input, styles.inputMultiline]}
                 placeholder="Prompt text (use {variable} for placeholders)"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor="#9B95A8"
                 value={newPrompt}
                 onChangeText={setNewPrompt}
                 multiline
                 numberOfLines={3}
+                style={{
+                  fontSize: 14,
+                  backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                  borderRadius: 10,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  color: '#1A1625',
+                  borderWidth: 0.5,
+                  borderColor: 'rgba(124, 82, 196, 0.12)',
+                  minHeight: 80,
+                  textAlignVertical: 'top',
+                }}
               />
-              <TouchableOpacity
-                style={[styles.saveBtn, (!newTitle.trim() || !newPrompt.trim()) && styles.saveBtnDisabled]}
-                onPress={handleAdd}
-                disabled={!newTitle.trim() || !newPrompt.trim()}>
-                <Text style={styles.saveBtnText}>Save</Text>
-              </TouchableOpacity>
-            </View>
+              <Pressable onPress={handleAdd} disabled={!newTitle.trim() || !newPrompt.trim()}>
+                <YStack
+                  padding={12}
+                  borderRadius={10}
+                  backgroundColor={accent}
+                  alignItems="center"
+                  opacity={(!newTitle.trim() || !newPrompt.trim()) ? 0.5 : 1}>
+                  <Text fontSize={15} fontWeight="600" color="white">Save</Text>
+                </YStack>
+              </Pressable>
+            </YStack>
           )}
-        </View>
-      </View>
+        </YStack>
+      </YStack>
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  container: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
-    maxHeight: '80%',
-    paddingBottom: 34,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
-  title: {
-    ...typography.h2,
-    color: colors.text,
-  },
-  closeBtn: {
-    fontSize: 20,
-    color: colors.textMuted,
-    padding: spacing.xs,
-  },
-  chipRow: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.xs,
-    paddingBottom: spacing.sm,
-  },
-  chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.full,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  chipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  chipText: {
-    ...typography.small,
-    color: colors.textSecondary,
-  },
-  chipTextActive: {
-    color: colors.white,
-  },
-  list: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.xs,
-  },
-  promptItem: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  promptHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  promptTitle: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  promptCategory: {
-    ...typography.small,
-    color: colors.textMuted,
-    textTransform: 'capitalize',
-  },
-  promptPreview: {
-    ...typography.small,
-    color: colors.textSecondary,
-    lineHeight: 18,
-  },
-  empty: {
-    ...typography.body,
-    color: colors.textMuted,
-    textAlign: 'center',
-    paddingVertical: spacing.xxl,
-  },
-  addBtn: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary + '15',
-    alignItems: 'center',
-  },
-  addBtnText: {
-    ...typography.body,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  addForm: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    gap: spacing.sm,
-  },
-  input: {
-    ...typography.body,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  inputMultiline: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  saveBtn: {
-    padding: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-  },
-  saveBtnDisabled: {
-    opacity: 0.5,
-  },
-  saveBtnText: {
-    ...typography.body,
-    color: colors.white,
-    fontWeight: '600',
-  },
-});

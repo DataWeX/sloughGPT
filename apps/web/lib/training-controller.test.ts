@@ -87,7 +87,7 @@ describe('trainingJobsController.listCheckpoints', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('GETs /auto-train/checkpoints', async () => {
-    apiClient.apiGet.mockResolvedValue({ checkpoints: [{ name: 'v1', soul: 'friendly' }] })
+    apiClient.apiGet.mockResolvedValue([{ name: 'v1', soul: 'friendly' }])
     const result = await trainingJobsController.listCheckpoints()
     expect(result).toHaveLength(1)
     expect(apiClient.apiGet).toHaveBeenCalledWith('/auto-train/checkpoints')

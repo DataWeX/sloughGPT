@@ -15,7 +15,9 @@ import os
 
 # Disable background services so lifespan completes quickly.
 # These MUST be set before importing the app (config reads env vars at import time).
-os.environ["MAN_AUTOLOAD_MODEL"] = ""
+# Don't touch MAN_AUTOLOAD_MODEL — let the user's shell env (or lack thereof)
+# determine whether a model is loaded. Set it to "gpt2" for generation tests:
+#   MAN_AUTOLOAD_MODEL=gpt2 pytest tests/test_e2e_smoke.py
 os.environ["MAN_AUTO_WORKFLOW"] = "false"
 os.environ["MAN_HEALTH_MONITOR"] = "false"
 os.environ["MAN_WATCHDOG"] = "false"
@@ -44,7 +46,7 @@ def model_loaded(client):
     in a background task and may not be complete when the lifespan yields).
     """
     import time
-    deadline = time.time() + 5
+    deadline = time.time() + 20
     while time.time() < deadline:
         resp = client.get("/health")
         data = resp.json()

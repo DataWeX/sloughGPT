@@ -1,23 +1,21 @@
 import React, {useEffect, useState, useCallback, useRef} from 'react';
 import {
-  View,
-  Text,
   FlatList,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
+  TextInput as RNTextInput,
+  Pressable,
   RefreshControl,
   Modal,
   Keyboard,
   Share,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {api} from '../services/api-client';
-import {StatusBadge} from '../components/StatusBadge';
-import {colors, spacing, radii, typography} from '../theme';
+import {Icon} from '../components/Icon';
 import type {KnowledgeItem} from '../types';
 
 export function KnowledgeScreen() {
+  const theme = useTheme();
   const [items, setItems] = useState<KnowledgeItem[]>([]);
   const [topics, setTopics] = useState<string[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
@@ -144,10 +142,7 @@ export function KnowledgeScreen() {
         importance: item.importance,
       }));
       const json = JSON.stringify(data, null, 2);
-      await Share.share({
-        title: 'Knowledge Export',
-        message: json,
-      });
+      await Share.share({title: 'Knowledge Export', message: json});
     } catch {}
   };
 
@@ -168,10 +163,7 @@ export function KnowledgeScreen() {
       const lines = importText.split('\n').filter(l => l.trim().length > 2);
       await Promise.all(
         lines.map(line =>
-          api.post('/knowledge', {
-            content: line.trim(),
-            topic: formTopic.trim() || undefined,
-          }),
+          api.post('/knowledge', {content: line.trim(), topic: formTopic.trim() || undefined}),
         ),
       );
       setImportModalVisible(false);
@@ -183,563 +175,386 @@ export function KnowledgeScreen() {
     setImporting(false);
   };
 
+  const accent = theme.color9?.val || '#7C52C4';
+  const bgMuted = `rgba(124, 82, 196, 0.06)`;
+
   const renderItem = ({item}: {item: KnowledgeItem}) => {
     const isSelected = selectedIds.has(item.id);
     return (
-      <TouchableOpacity
-        style={[styles.itemCard, isSelected && styles.itemCardSelected]}
-        onLongPress={() => {
-          setSelectMode(true);
-          setSelectedIds(new Set([item.id]));
-        }}
+      <YStack
+        backgroundColor={isSelected ? bgMuted : 'transparent'}
+        borderRadius={12}
+        padding={14}
+        borderWidth={isSelected ? 1 : 0.5}
+        borderColor={isSelected ? accent : '$borderColor'}
+        onLongPress={() => { setSelectMode(true); setSelectedIds(new Set([item.id])); }}
         onPress={() => {
-          if (selectMode) {
-            toggleSelect(item.id);
-          } else {
-            openEdit(item);
-          }
+          if (selectMode) toggleSelect(item.id);
+          else openEdit(item);
         }}
-        activeOpacity={0.7}>
-        <View style={styles.itemHeader}>
+        pressStyle={{opacity: 0.85}}>
+        <XStack alignItems="flex-start" gap={10} marginBottom={8}>
           {selectMode && (
-            <View style={[styles.checkbox, isSelected && styles.checkboxActive]}>
-              {isSelected && <View style={styles.checkInner} />}
-            </View>
+            <YStack
+              width={22} height={22} borderRadius={6} borderWidth={2}
+              borderColor={isSelected ? accent : '$borderColor'}
+              backgroundColor={isSelected ? accent : 'transparent'}
+              alignItems="center" justifyContent="center" marginTop={1}>
+              {isSelected && (
+                <Icon name="check" size={12} color="white" />
+              )}
+            </YStack>
           )}
-          <Text style={styles.itemContent} numberOfLines={3}>
+          <Text fontSize={14} color="$color" flex={1} numberOfLines={3}>
             {item.content}
           </Text>
-        </View>
-        <View style={styles.itemFooter}>
-          <View style={styles.itemMeta}>
-            {item.topic && <StatusBadge label={item.topic} variant="info" />}
-            <View style={styles.importanceDots}>
+        </XStack>
+        <XStack alignItems="center" justifyContent="space-between">
+          <XStack alignItems="center" gap={8} flex={1}>
+            {item.topic && (
+              <YStack backgroundColor={bgMuted} paddingHorizontal={8} paddingVertical={2} borderRadius={6}>
+                <Text fontSize={10} fontWeight="500" color="$color9">{item.topic}</Text>
+              </YStack>
+            )}
+            <XStack gap={3}>
               {Array.from({length: 5}).map((_, i) => (
-                <View
+                <YStack
                   key={i}
-                  style={[styles.dot, i < item.importance && styles.dotFilled]}
+                  width={6} height={6} borderRadius={3}
+                  backgroundColor={i < item.importance ? accent : '$borderColor'}
                 />
               ))}
-            </View>
-          </View>
+            </XStack>
+          </XStack>
           {!selectMode && (
-            <View style={styles.itemActions}>
-              <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={() => openEdit(item)}>
-                <StatusBadge label="Edit" variant="info" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={() => handleDelete(item.id)}>
-                <StatusBadge label="Del" variant="error" />
-              </TouchableOpacity>
-            </View>
+            <XStack gap={6}>
+              <Pressable onPress={() => openEdit(item)}>
+                <YStack width={28} height={28} borderRadius={8} backgroundColor={bgMuted} alignItems="center" justifyContent="center">
+                  <Icon name="edit-3" size={12} color={accent} />
+                </YStack>
+              </Pressable>
+              <Pressable onPress={() => handleDelete(item.id)}>
+                <YStack width={28} height={28} borderRadius={8} backgroundColor="rgba(239, 68, 68, 0.08)" alignItems="center" justifyContent="center">
+                  <Icon name="trash-2" size={12} color="#EF4444" />
+                </YStack>
+              </Pressable>
+            </XStack>
           )}
-        </View>
-      </TouchableOpacity>
+        </XStack>
+      </YStack>
     );
   };
 
+  const renderBottomSheet = (
+    visible: boolean,
+    onClose: () => void,
+    title: string,
+    children: React.ReactNode,
+  ) => (
+    <Modal visible={visible} animationType="slide" transparent>
+      <YStack flex={1} justifyContent="flex-end">
+        <Pressable style={{flex: 1}} onPress={onClose} />
+        <YStack
+          backgroundColor="$background"
+          borderTopLeftRadius={24}
+          borderTopRightRadius={24}
+          padding={20}
+          gap={14}>
+          <XStack alignItems="center" justifyContent="space-between" marginBottom={4}>
+            <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">{title}</Text>
+            <Pressable onPress={onClose}>
+              <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
+                <Icon name="x" size={14} color={(theme.color11?.val || '#6B7280')} />
+              </YStack>
+            </Pressable>
+          </XStack>
+          {children}
+        </YStack>
+      </YStack>
+    </Modal>
+  );
+
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        {selectMode ? (
-          <View style={styles.selectHeader}>
-            <TouchableOpacity onPress={() => { setSelectMode(false); setSelectedIds(new Set()); }}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={styles.selectCount}>{selectedIds.size} selected</Text>
-            <TouchableOpacity
-              onPress={handleBatchDelete}
-              disabled={selectedIds.size === 0}>
-              <Text style={[styles.deleteText, selectedIds.size === 0 && styles.disabledText]}>
-                Delete ({selectedIds.size})
+    <SafeAreaView style={{flex: 1}} edges={['top']}>
+      <YStack flex={1}>
+        <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={16} paddingVertical={12}>
+          {selectMode ? (
+            <XStack alignItems="center" justifyContent="space-between" flex={1}>
+              <Pressable onPress={() => { setSelectMode(false); setSelectedIds(new Set()); }}>
+                <Text fontSize={13} fontWeight="600" color="$color9">Cancel</Text>
+              </Pressable>
+              <Text fontSize={14} fontWeight="600" color="$color">{selectedIds.size} selected</Text>
+              <Pressable onPress={handleBatchDelete} style={{opacity: selectedIds.size === 0 ? 0.4 : 1}}>
+                <Text fontSize={13} fontWeight="600" color="#EF4444">
+                  Delete ({selectedIds.size})
+                </Text>
+              </Pressable>
+            </XStack>
+          ) : (
+            <>
+              <Text fontSize={20} fontWeight="600" letterSpacing={-0.2} color="$color">
+                What AI Knows About Me
               </Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            <Text style={styles.title}>Knowledge</Text>
-            <View style={styles.headerActions}>
-              {items.length > 0 && (
-                <TouchableOpacity style={styles.exportBtn} onPress={handleExport}>
-                  <Text style={styles.exportBtnText}>Export</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={styles.importBtn}
-                onPress={() => { setImportText(''); setImportModalVisible(true); }}>
-                <Text style={styles.importBtnText}>Import</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.addBtn}
-                onPress={() => {
-                  setFormContent('');
-                  setFormTopic('');
-                  setAddModalVisible(true);
-                }}>
-                <Text style={styles.addBtnText}>+ Add</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
-      </View>
-
-      {!selectMode && (
-        <View style={styles.searchRow}>
-          <TextInput
-            style={styles.searchInput}
-            value={search}
-            onChangeText={debouncedSearch}
-            placeholder="Search knowledge..."
-            placeholderTextColor={colors.textMuted}
-            returnKeyType="search"
-            onSubmitEditing={() => Keyboard.dismiss()}
-          />
-        </View>
-      )}
-
-      {!selectMode && topics.length > 0 && (
-        <FlatList
-          horizontal
-          data={[null, ...topics]}
-          renderItem={({item: topic}) => (
-            <TouchableOpacity
-              style={[
-                styles.topicChip,
-                selectedTopic === topic && styles.topicChipActive,
-              ]}
-              onPress={() => setSelectedTopic(topic)}>
-              <Text
-                style={[
-                  styles.topicChipText,
-                  selectedTopic === topic && styles.topicChipTextActive,
-                ]}>
-                {topic || 'All'}
-              </Text>
-            </TouchableOpacity>
+              <XStack gap={8}>
+                {items.length > 0 && (
+                  <Pressable onPress={handleExport}>
+                    <YStack backgroundColor={bgMuted} borderRadius={8} paddingHorizontal={12} paddingVertical={8}>
+                      <Text fontSize={12} fontWeight="600" color="$color9">Export</Text>
+                    </YStack>
+                  </Pressable>
+                )}
+                <Pressable onPress={() => { setImportText(''); setImportModalVisible(true); }}>
+                  <YStack backgroundColor={bgMuted} borderRadius={8} paddingHorizontal={12} paddingVertical={8}>
+                    <Text fontSize={12} fontWeight="600" color="$color9">Import</Text>
+                  </YStack>
+                </Pressable>
+                <Pressable onPress={() => { setFormContent(''); setFormTopic(''); setAddModalVisible(true); }}>
+                  <YStack backgroundColor={accent} borderRadius={8} paddingHorizontal={14} paddingVertical={8}>
+                    <Text fontSize={12} fontWeight="600" color="white">+ Add</Text>
+                  </YStack>
+                </Pressable>
+              </XStack>
+            </>
           )}
-          keyExtractor={item => item || 'all'}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.topicRow}
+        </XStack>
+
+        {!selectMode && (
+          <YStack paddingHorizontal={16} marginBottom={8}>
+            <RNTextInput
+              style={{
+                flex: 1, fontSize: 14, color: '#1A1625',
+                backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                borderRadius: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                borderWidth: 0.5,
+                borderColor: 'rgba(124, 82, 196, 0.12)',
+              }}
+              value={search}
+              onChangeText={debouncedSearch}
+              placeholder="Search knowledge..."
+              placeholderTextColor="#9B95A8"
+              returnKeyType="search"
+              onSubmitEditing={() => Keyboard.dismiss()}
+            />
+          </YStack>
+        )}
+
+        {!selectMode && topics.length > 0 && (
+          <FlatList
+            horizontal
+            data={[null, ...topics]}
+            renderItem={({item: topic}) => (
+              <YStack
+                paddingHorizontal={12} paddingVertical={5} borderRadius={999}
+                backgroundColor={selectedTopic === topic ? accent : 'transparent'}
+                borderWidth={0.5}
+                borderColor={selectedTopic === topic ? accent : '$borderColor'}
+                onPress={() => setSelectedTopic(topic)}>
+                <Text fontSize={11} fontWeight="500" color={selectedTopic === topic ? 'white' : '$color11'}>
+                  {topic || 'All'}
+                </Text>
+              </YStack>
+            )}
+            keyExtractor={item => item || 'all'}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{paddingHorizontal: 16, gap: 6, marginBottom: 8, paddingVertical: 4}}
+          />
+        )}
+
+        <FlatList
+          data={items}
+          renderItem={renderItem}
+          keyExtractor={item => item.id}
+          contentContainerStyle={{padding: 16, gap: 8}}
+          keyboardDismissMode="on-drag"
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={accent}
+            />
+          }
+          ListEmptyComponent={
+            <YStack alignItems="center" paddingVertical={64}>
+              <Icon name="book-open" size={48} color={(theme.color10?.val || '#9B95A8')} />
+              <Text fontSize={14} color="$color10">No knowledge items yet</Text>
+            </YStack>
+          }
         />
-      )}
+      </YStack>
 
-      <FlatList
-        data={items}
-        renderItem={renderItem}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.list}
-        keyboardDismissMode="on-drag"
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>📚</Text>
-            <Text style={styles.emptyText}>No knowledge items yet</Text>
-          </View>
-        }
-      />
+      {renderBottomSheet(addModalVisible, () => setAddModalVisible(false), 'Add Knowledge', (
+        <>
+          <RNTextInput
+            style={{
+              fontSize: 14, color: '#1A1625',
+              backgroundColor: 'rgba(124, 82, 196, 0.04)',
+              borderRadius: 10,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              minHeight: 100,
+              textAlignVertical: 'top',
+              borderWidth: 0.5,
+              borderColor: 'rgba(124, 82, 196, 0.12)',
+            }}
+            value={formContent}
+            onChangeText={setFormContent}
+            placeholder="Content..."
+            placeholderTextColor="#9B95A8"
+            multiline
+            autoFocus
+          />
+          <RNTextInput
+            style={{
+              fontSize: 14, color: '#1A1625',
+              backgroundColor: 'rgba(124, 82, 196, 0.04)',
+              borderRadius: 10,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              borderWidth: 0.5,
+              borderColor: 'rgba(124, 82, 196, 0.12)',
+            }}
+            value={formTopic}
+            onChangeText={setFormTopic}
+            placeholder="Topic (optional)"
+            placeholderTextColor="#9B95A8"
+            returnKeyType="done"
+          />
+          <XStack gap={8} justifyContent="flex-end">
+            <Pressable onPress={() => setAddModalVisible(false)}>
+              <YStack paddingHorizontal={20} paddingVertical={10} borderRadius={8}>
+                <Text fontSize={13} fontWeight="600" color="$color11">Cancel</Text>
+              </YStack>
+            </Pressable>
+            <Pressable onPress={handleAdd} disabled={!formContent.trim()}>
+              <YStack
+                backgroundColor={accent}
+                opacity={!formContent.trim() ? 0.4 : 1}
+                paddingHorizontal={24} paddingVertical={10} borderRadius={8}
+              >
+                <Text fontSize={13} fontWeight="600" color="white">Add</Text>
+              </YStack>
+            </Pressable>
+          </XStack>
+        </>
+      ))}
 
-      <Modal visible={addModalVisible} animationType="slide" transparent>
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setAddModalVisible(false)}>
-          <TouchableOpacity activeOpacity={1} style={styles.modalContent} onPress={() => {}}>
-            <Text style={styles.modalTitle}>Add Knowledge</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={formContent}
-              onChangeText={setFormContent}
-              placeholder="Content..."
-              placeholderTextColor={colors.textMuted}
-              multiline
-              textAlignVertical="top"
-              autoFocus
-            />
-            <TextInput
-              style={styles.modalInputShort}
-              value={formTopic}
-              onChangeText={setFormTopic}
-              placeholder="Topic (optional)"
-              placeholderTextColor={colors.textMuted}
-              returnKeyType="done"
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setAddModalVisible(false)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveBtn, !formContent.trim() && styles.saveBtnDisabled]}
-                onPress={handleAdd}
-                disabled={!formContent.trim()}>
-                <Text style={styles.saveText}>Add</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+      {renderBottomSheet(!!editItem, () => setEditItem(null), 'Edit Knowledge', (
+        <>
+          <RNTextInput
+            style={{
+              fontSize: 14, color: '#1A1625',
+              backgroundColor: 'rgba(124, 82, 196, 0.04)',
+              borderRadius: 10,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              minHeight: 100,
+              textAlignVertical: 'top',
+              borderWidth: 0.5,
+              borderColor: 'rgba(124, 82, 196, 0.12)',
+            }}
+            value={formContent}
+            onChangeText={setFormContent}
+            placeholder="Content..."
+            placeholderTextColor="#9B95A8"
+            multiline
+          />
+          <RNTextInput
+            style={{
+              fontSize: 14, color: '#1A1625',
+              backgroundColor: 'rgba(124, 82, 196, 0.04)',
+              borderRadius: 10,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              borderWidth: 0.5,
+              borderColor: 'rgba(124, 82, 196, 0.12)',
+            }}
+            value={formTopic}
+            onChangeText={setFormTopic}
+            placeholder="Topic (optional)"
+            placeholderTextColor="#9B95A8"
+            returnKeyType="done"
+          />
+          <XStack gap={8} justifyContent="flex-end">
+            <Pressable onPress={() => setEditItem(null)}>
+              <YStack paddingHorizontal={20} paddingVertical={10} borderRadius={8}>
+                <Text fontSize={13} fontWeight="600" color="$color11">Cancel</Text>
+              </YStack>
+            </Pressable>
+            <Pressable onPress={handleEdit} disabled={!formContent.trim()}>
+              <YStack
+                backgroundColor={accent}
+                opacity={!formContent.trim() ? 0.4 : 1}
+                paddingHorizontal={24} paddingVertical={10} borderRadius={8}
+              >
+                <Text fontSize={13} fontWeight="600" color="white">Save</Text>
+              </YStack>
+            </Pressable>
+          </XStack>
+        </>
+      ))}
 
-      <Modal visible={!!editItem} animationType="slide" transparent>
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setEditItem(null)}>
-          <TouchableOpacity activeOpacity={1} style={styles.modalContent} onPress={() => {}}>
-            <Text style={styles.modalTitle}>Edit Knowledge</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={formContent}
-              onChangeText={setFormContent}
-              placeholder="Content..."
-              placeholderTextColor={colors.textMuted}
-              multiline
-              textAlignVertical="top"
-            />
-            <TextInput
-              style={styles.modalInputShort}
-              value={formTopic}
-              onChangeText={setFormTopic}
-              placeholder="Topic (optional)"
-              placeholderTextColor={colors.textMuted}
-              returnKeyType="done"
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditItem(null)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveBtn, !formContent.trim() && styles.saveBtnDisabled]}
-                onPress={handleEdit}
-                disabled={!formContent.trim()}>
-                <Text style={styles.saveText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Import modal */}
-      <Modal visible={importModalVisible} animationType="slide" transparent>
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setImportModalVisible(false)}>
-          <TouchableOpacity activeOpacity={1} style={styles.modalContent} onPress={() => {}}>
-            <Text style={styles.modalTitle}>Import Knowledge</Text>
-            <Text style={styles.importHint}>
-              Paste one item per line. Each line becomes a knowledge entry.
-            </Text>
-            <TextInput
-              style={styles.modalInput}
-              value={importText}
-              onChangeText={setImportText}
-              placeholder="Line 1\nLine 2\nLine 3..."
-              placeholderTextColor={colors.textMuted}
-              multiline
-              textAlignVertical="top"
-              autoFocus
-            />
-            <TextInput
-              style={styles.modalInputShort}
-              value={formTopic}
-              onChangeText={setFormTopic}
-              placeholder="Topic for all (optional)"
-              placeholderTextColor={colors.textMuted}
-              returnKeyType="done"
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setImportModalVisible(false)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveBtn, (!importText.trim() || importing) && styles.saveBtnDisabled]}
-                onPress={handleImport}
-                disabled={!importText.trim() || importing}>
-                <Text style={styles.saveText}>
+      {renderBottomSheet(importModalVisible, () => setImportModalVisible(false), 'Import Knowledge', (
+        <>
+          <Text fontSize={13} color="$color10" marginBottom={4}>
+            Paste one item per line. Each line becomes a knowledge entry.
+          </Text>
+          <RNTextInput
+            style={{
+              fontSize: 14, color: '#1A1625',
+              backgroundColor: 'rgba(124, 82, 196, 0.04)',
+              borderRadius: 10,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              minHeight: 100,
+              textAlignVertical: 'top',
+              borderWidth: 0.5,
+              borderColor: 'rgba(124, 82, 196, 0.12)',
+            }}
+            value={importText}
+            onChangeText={setImportText}
+            placeholder="Line 1\nLine 2\nLine 3..."
+            placeholderTextColor="#9B95A8"
+            multiline
+            autoFocus
+          />
+          <RNTextInput
+            style={{
+              fontSize: 14, color: '#1A1625',
+              backgroundColor: 'rgba(124, 82, 196, 0.04)',
+              borderRadius: 10,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              borderWidth: 0.5,
+              borderColor: 'rgba(124, 82, 196, 0.12)',
+            }}
+            value={formTopic}
+            onChangeText={setFormTopic}
+            placeholder="Topic for all (optional)"
+            placeholderTextColor="#9B95A8"
+            returnKeyType="done"
+          />
+          <XStack gap={8} justifyContent="flex-end">
+            <Pressable onPress={() => setImportModalVisible(false)}>
+              <YStack paddingHorizontal={20} paddingVertical={10} borderRadius={8}>
+                <Text fontSize={13} fontWeight="600" color="$color11">Cancel</Text>
+              </YStack>
+            </Pressable>
+            <Pressable onPress={handleImport} disabled={!importText.trim() || importing}>
+              <YStack
+                backgroundColor={accent}
+                opacity={(!importText.trim() || importing) ? 0.4 : 1}
+                paddingHorizontal={24} paddingVertical={10} borderRadius={8}
+              >
+                <Text fontSize={13} fontWeight="600" color="white">
                   {importing ? 'Importing...' : `Import (${importText.split('\n').filter(l => l.trim().length > 2).length})`}
                 </Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+              </YStack>
+            </Pressable>
+          </XStack>
+        </>
+      ))}
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  title: {
-    ...typography.h1,
-    color: colors.text,
-  },
-  importBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  importBtnText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  exportBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  exportBtnText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  importHint: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginBottom: spacing.xs,
-  },
-  selectHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flex: 1,
-  },
-  selectCount: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  cancelText: {
-    ...typography.caption,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  deleteText: {
-    ...typography.caption,
-    color: colors.error,
-    fontWeight: '600',
-  },
-  disabledText: {
-    opacity: 0.4,
-  },
-  addBtn: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-  },
-  addBtnText: {
-    ...typography.caption,
-    color: colors.white,
-    fontWeight: '600',
-  },
-  searchRow: {
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-  },
-  searchInput: {
-    ...typography.body,
-    color: colors.text,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  topicRow: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  topicChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.full,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  topicChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  topicChipText: {
-    ...typography.small,
-    color: colors.textSecondary,
-  },
-  topicChipTextActive: {
-    color: colors.white,
-  },
-  list: {
-    padding: spacing.lg,
-    gap: spacing.sm,
-  },
-  itemCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    padding: spacing.md,
-  },
-  itemCardSelected: {
-    backgroundColor: colors.primary + '10',
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  itemHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: radii.sm,
-    borderWidth: 2,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  checkboxActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary,
-  },
-  checkInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 2,
-    backgroundColor: colors.white,
-  },
-  itemContent: {
-    ...typography.body,
-    color: colors.text,
-    flex: 1,
-  },
-  itemFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  itemMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flex: 1,
-  },
-  importanceDots: {
-    flexDirection: 'row',
-    gap: 3,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.border,
-  },
-  dotFilled: {
-    backgroundColor: colors.accent,
-  },
-  itemActions: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  actionBtn: {},
-  empty: {
-    alignItems: 'center',
-    paddingVertical: spacing.xxxl * 2,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: spacing.lg,
-  },
-  emptyText: {
-    ...typography.body,
-    color: colors.textMuted,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
-    padding: spacing.xl,
-    gap: spacing.md,
-  },
-  modalTitle: {
-    ...typography.h3,
-    color: colors.text,
-  },
-  modalInput: {
-    ...typography.body,
-    color: colors.text,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    minHeight: 100,
-  },
-  modalInputShort: {
-    ...typography.body,
-    color: colors.text,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    justifyContent: 'flex-end',
-  },
-  cancelBtn: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-  },
-  cancelBtnText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  saveBtn: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary,
-  },
-  saveBtnDisabled: {
-    opacity: 0.4,
-  },
-  saveText: {
-    ...typography.caption,
-    color: colors.white,
-    fontWeight: '600',
-  },
-});

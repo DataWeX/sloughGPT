@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from domains.training.tokenizer_manager import get_tokenizer_manager
+from schemas.common import success_response
 
 
 class TokenizeRequest(BaseModel):
@@ -46,14 +47,14 @@ async def get_tokenizer_stats():
     _require_trained()
     mgr = get_tokenizer_manager()
     stats = mgr.stats()
-    return {
+    return success_response(data={
         "vocab_size": stats["vocab_size"],
         "base_chars": stats.get("base_chars", 0),
         "merged_subwords": stats.get("merged_subwords", stats.get("subwords", 0)),
         "special_tokens": stats["special_tokens"],
         "total_merges": stats.get("total_merges", stats.get("total_merges_learned", 0)),
         "trained": stats.get("trained", True),
-    }
+    })
 
 
 class PretokenizeRequest(BaseModel):
@@ -69,7 +70,7 @@ async def pretokenize_text(req: PretokenizeRequest):
     """Show how text splits into pretokens before BPE encoding."""
     _require_trained()
     mgr = get_tokenizer_manager()
-    return mgr.show_pretokenization(req.text)
+    return success_response(data=mgr.show_pretokenization(req.text))
 
 
 @router.post("/decompose")
@@ -78,7 +79,7 @@ async def decompose_token(req: DecomposeRequest):
     _require_trained()
     mgr = get_tokenizer_manager()
     try:
-        return mgr.decompose_token(req.text)
+        return success_response(data=mgr.decompose_token(req.text))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -88,7 +89,7 @@ async def analyze_corpus(req: AnalyzeRequest):
     """Compute token frequency and compression stats on a corpus."""
     _require_trained()
     mgr = get_tokenizer_manager()
-    return mgr.analyze_corpus(req.texts)
+    return success_response(data=mgr.analyze_corpus(req.texts))
 
 
 @router.post("/tokenize")
@@ -98,7 +99,7 @@ async def tokenize_text(req: TokenizeRequest):
     ids = mgr.tokenize(req.text)
     tok = mgr.get_tokenizer()
     tokens = [tok.itos.get(i, "<?>") for i in ids]
-    return {"tokens": tokens, "ids": ids}
+    return success_response(data={"tokens": tokens, "ids": ids})
 
 
 @router.post("/detokenize")
@@ -106,7 +107,7 @@ async def detokenize_ids(req: DetokenizeRequest):
     _require_trained()
     mgr = get_tokenizer_manager()
     text = mgr.detokenize(req.ids)
-    return {"text": text}
+    return success_response(data={"text": text})
 
 
 @router.get("/vocab")
@@ -118,7 +119,7 @@ async def get_vocab(limit: int = 50, offset: int = 0):
     for i in range(offset, min(offset + limit, total)):
         token = tok.vocab[i]
         entries.append({"id": i, "token": token, "is_special": token in tok.SPECIAL_TOKENS})
-    return {"entries": entries, "total": total, "offset": offset, "limit": limit}
+    return success_response(data={"entries": entries, "total": total, "offset": offset, "limit": limit})
 
 
 @router.get("/merges")
@@ -132,7 +133,7 @@ async def get_merges(limit: int = 30):
             result.append({"index": i, "left": m[0], "right": m[1], "token": m[0] + m[1]})
         else:
             result.append({"index": i, "left": str(m), "right": "", "token": str(m)})
-    return {"merges": result, "total": len(merges)}
+    return success_response(data={"merges": result, "total": len(merges)})
 
 
 class TrainTokenizerRequest2(BaseModel):
@@ -152,7 +153,7 @@ async def train_tokenizer(req: TrainTokenizerRequest2):
         lines = [line.strip() for line in text.split("\n") if line.strip()][:2000]
     mgr = get_tokenizer_manager()
     mgr.train(lines, vocab_size=req.vocab_size, min_frequency=3)
-    return {"status": "trained", "corpus_size": len(lines), "stats": mgr.stats()}
+    return success_response(data={"status": "trained", "corpus_size": len(lines), "stats": mgr.stats()})
 
 
 @router.get("/sample")
@@ -169,4 +170,4 @@ async def get_tokenization_sample():
         ids = tok.encode(word)
         tokens = [tok.itos.get(i, "<?>") for i in ids]
         results.append({"word": word, "ids": ids, "tokens": tokens, "count": len(ids)})
-    return {"samples": results}
+    return success_response(data={"samples": results})

@@ -88,9 +88,6 @@ class DomainException(Exception):
     pass
 
 
-# Re-export Thought from soul module for cognitive backward compat
-from .soul.base import Thought
-
 
 __all__ = [
     "ChatDomain",

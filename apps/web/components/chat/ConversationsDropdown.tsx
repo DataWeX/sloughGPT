@@ -7,34 +7,13 @@ import { IconMessage, IconStar, IconPin, IconChat, IconPlus, IconChevronRight } 
 import { cn } from '@/lib/cn'
 import { useChatToolbarContext } from '@/contexts/ChatToolbarContext'
 import type { Conversation } from '@/lib/session-controller'
+import { formatDate, truncateMessage } from '@/lib/conversations-utils'
 
 export function ConversationsDropdown() {
   const ctx = useChatToolbarContext()
   const { conversations, sessionIdRef, onLoad, onStar, onPin, onNewChat } = ctx.conversations
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-
-  function formatDate(dateStr: string | undefined): string {
-    if (!dateStr) return ''
-    const date = new Date(dateStr)
-    if (isNaN(date.getTime())) return ''
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-    const diffHours = Math.floor(diffMs / 3600000)
-    const diffDays = Math.floor(diffMs / 86400000)
-    if (diffMins < 1) return 'Just now'
-    if (diffMins < 60) return `${diffMins}m`
-    if (diffHours < 24) return `${diffHours}h`
-    if (diffDays < 7) return `${diffDays}d`
-    return date.toLocaleDateString()
-  }
-
-  function truncateMessage(content: string, maxLen = 40): string {
-    if (!content) return 'Empty conversation'
-    const firstLine = content.split('\n')[0]
-    return firstLine.length > maxLen ? firstLine.slice(0, maxLen) + '…' : firstLine
-  }
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -160,17 +139,11 @@ export function ConversationsDropdown() {
   )
 }
 
-function formatDate(date: string | Date | undefined): string {
+function formatDateShort(date: string | Date | undefined): string {
   if (!date) return ''
   const d = new Date(date)
   if (isNaN(d.getTime())) return ''
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
-
-function truncateMessage(content: string, maxLen = 36): string {
-  if (!content) return 'Empty conversation'
-  const firstLine = content.split('\n')[0]
-  return firstLine.length > maxLen ? firstLine.slice(0, maxLen) + '…' : firstLine
 }
 
 function ConvRow({
@@ -206,13 +179,13 @@ function ConvRow({
         </div>
         {lastMsg && (
           <p className="text-[11px] text-muted-foreground/70 mt-0.5 line-clamp-1">
-            {truncateMessage(lastMsg)}
+            {truncateMessage(lastMsg, 36)}
           </p>
         )}
         <div className="flex items-center gap-1 mt-0.5">
           <IconChat className="h-2.5 w-2.5 text-muted-foreground/50 shrink-0" />
           <span className="text-[10px] text-muted-foreground/50">
-            {msgCount} msgs · {formatDate(c.updated_at || c.updatedAt)}
+            {msgCount} msgs · {formatDateShort(c.updated_at || c.updatedAt)}
           </span>
         </div>
       </div>

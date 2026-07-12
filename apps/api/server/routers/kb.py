@@ -10,6 +10,8 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 import time
 
+from schemas.common import success_response
+
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
 
@@ -156,7 +158,7 @@ def add_knowledge(req: KnowledgeCreate):
         importance=req.importance,
     )
     memory.add_fact(fact)
-    return {"status": "stored", "content": req.content, "topic": topic}
+    return success_response(data={"status": "stored", "content": req.content, "topic": topic})
 
 
 @router.patch("/{item_id}")
@@ -186,7 +188,7 @@ def update_knowledge(item_id: str, req: KnowledgeUpdate):
     # Delete old, add new
     memory.delete_by_id(item_id)
     ok = memory.add_fact(new_fact)
-    return {"status": "updated" if ok else "stored"}
+    return success_response(data={"status": "updated" if ok else "stored"})
 
 
 @router.post("/batch")
@@ -205,17 +207,17 @@ def batch_ingest(req: KnowledgeBatchRequest):
         )
         if memory.add_fact(fact):
             stored += 1
-    return {"stored": stored}
+    return success_response(data={"stored": stored})
 
 
 @router.get("/search")
 def search_knowledge(query: str = ""):
     memory = _get_memory()
     results = memory.search(query, top_k=20) if query else []
-    return {
+    return success_response(data={
         "results": [_fact_from_entry(r) for r in results],
         "count": len(results),
-    }
+    })
 
 
 @router.get("/stats")
@@ -232,14 +234,14 @@ def knowledge_stats():
         s = item.get("source", "unknown")
         sources[s] = sources.get(s, 0) + 1
     avg_importance = sum(item.get("importance", 0.5) for item in all_items) / max(total, 1)
-    return {
+    return success_response(data={
         "total_items": total,
         "topics": topics,
         "topic_count": len(topics),
         "sources": sources,
         "avg_importance": round(avg_importance, 3),
         "searchable": True,
-    }
+    })
 
 
 @router.get("/topics")
@@ -252,10 +254,10 @@ def list_topics():
         t = item.get("topic", "general")
         topics[t] = topics.get(t, 0) + 1
     sorted_topics = sorted(topics.items(), key=lambda x: -x[1])
-    return {
+    return success_response(data={
         "topics": [{"name": t, "count": c} for t, c in sorted_topics],
         "total": len(topics),
-    }
+    })
 
 
 @router.post("/ingest-url")
@@ -265,14 +267,14 @@ def ingest_url(req: UrlIngestRequest):
         from domains.learner.knowledge import get_knowledge_ingestor
         ingestor = get_knowledge_ingestor()
         result = ingestor.ingest_url(req.url)
-        return {
+        return success_response(data={
             "status": result.get("status", "ok"),
             "new_facts": result.get("new_facts", 0),
             "title": result.get("title", ""),
             "content_length": result.get("content_length", 0),
             "rejected": result.get("rejected", False),
             "reason": result.get("reason"),
-        }
+        })
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {e}")
 
@@ -285,21 +287,21 @@ def batch_delete_knowledge(req: BatchDeleteRequest):
     for item_id in req.ids:
         if memory.delete_by_id(item_id):
             deleted += 1
-    return {"deleted": deleted}
+    return success_response(data={"deleted": deleted})
 
 
 @router.post("/suggest-topic")
 def suggest_topic(req: SuggestTopicRequest):
     """Return the best auto-detected topic for content without storing."""
     topic = _auto_tag(req.content)
-    return {"topic": topic, "confidence": "high" if topic != "general" else "low"}
+    return success_response(data={"topic": topic, "confidence": "high" if topic != "general" else "low"})
 
 
 @router.delete("/{item_id}")
 def delete_knowledge(item_id: str):
     memory = _get_memory()
     if memory.delete_by_id(item_id):
-        return {"status": "deleted"}
+        return success_response(data={"status": "deleted"})
     raise HTTPException(status_code=404, detail="Item not found")
 
 
@@ -316,14 +318,14 @@ def train_knowledge_adapter_route():
     )
 
     status = get_adapter_status()
-    return {**result, "adapter_status": status}
+    return success_response(data={**result, "adapter_status": status})
 
 
 @router.get("/adapter-status")
 def knowledge_adapter_status():
     """Return status of the knowledge weight adapter."""
     from domains.infrastructure.knowledge_weight_integrator import get_adapter_status
-    return get_adapter_status()
+    return success_response(data=get_adapter_status())
 
 
 @router.get("/{item_id}/related")
@@ -340,7 +342,7 @@ def related_knowledge(item_id: str, top_k: int = Query(6, ge=1, le=20)):
         raise HTTPException(status_code=404, detail="Item not found")
     results = memory.search(target.get("content", ""), top_k=top_k + 1)
     related = [r for r in results if r.get("id") != item_id][:top_k]
-    return {"items": [_fact_from_entry(r) for r in related], "count": len(related)}
+    return success_response(data={"items": [_fact_from_entry(r) for r in related], "count": len(related)})
 
 
 @router.get("/context")
@@ -348,7 +350,7 @@ def get_context():
     memory = _get_memory()
     context = memory.get_context_string(max_items=50)
     all_facts = memory.list_all()
-    return {"context": context, "count": len(all_facts)}
+    return success_response(data={"context": context, "count": len(all_facts)})
 
 
 @router.post("/ingest-file")
@@ -410,14 +412,14 @@ async def ingest_file(
     import asyncio
     stored = await asyncio.to_thread(_store_chunks)
 
-    return {
+    return success_response(data={
         "status": "imported",
         "stored": stored,
         "total_chunks": len(chunks),
         "topic": topic,
         "filename": file.filename or "unknown",
         "file_size": len(raw),
-    }
+    })
 
 
 def _lines_for_chars(lines: list[str], target_chars: int, start: int) -> int:
@@ -524,11 +526,11 @@ async def search_files(req: FileSearchRequest):
     stats = idx.index_directory(req.path, extensions=extensions)
     results = idx.search(req.query, top_k=req.top_k)
 
-    return {
+    return success_response(data={
         "results": results,
         "indexed_files": stats["files_indexed"],
         "indexed_chunks": stats["chunks_total"],
-    }
+    })
 
 
 @router.post("/check-duplicate")
@@ -545,12 +547,12 @@ async def check_duplicate(req: DuplicateCheckRequest):
 
     is_dup, best_match, score = dup.check(req.content, embed_fn=memory._get_embedding)
 
-    return {
+    return success_response(data={
         "is_duplicate": is_dup,
         "best_match": best_match,
         "score": score,
         "threshold": req.threshold,
-    }
+    })
 
 
 @router.post("/categorize")

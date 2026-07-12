@@ -35,7 +35,7 @@ except ImportError:
 
 from .jobs import training_jobs
 from .resolution import resolve_training_inputs
-from .schemas import TrainingRequest, TrainRequest, TrainResolveRequest, HFTrainingRequest, UnifiedStartRequest, QuickTrainRequest, ActivityTrainingRequest, DistillStartRequest
+from .schemas import TrainingRequest, TrainRequest, TrainResolveRequest, HFTrainingRequest, UnifiedStartRequest, QuickTrainRequest, DistillStartRequest
 from .controller import get_training_controller, TrainingState
 from .webhooks import (
     get_webhook_store,
@@ -819,80 +819,6 @@ async def start_hf_training(request: HFTrainingRequest):
 # ── Activity Training ──────────────────────────────────────────────
 
 
-@router.post("/training/activity-start")
-async def start_activity_training(request: ActivityTrainingRequest):
-    """Train the activity classifier on collected sensor data.
-
-    Loads recorded .npz files from ``data/activity_records/``, trains the
-    SloNet-based ActivityClassifier, and tracks progress as a training job.
-
-    Returns:
-        Job ID and status for tracking via ``GET /training/jobs/{job_id}``.
-    """
-    job_id = f"activity_{int(time.time())}"
-
-    job: dict[str, Any] = {
-        "id": job_id,
-        "name": request.name,
-        "type": "activity",
-        "status": "queued",
-        "progress": 0,
-        "epochs": request.epochs,
-        "current_epoch": 0,
-        "loss": None,
-        "loss_history": [],
-        "explanation": "Activity classifier training",
-    }
-    training_jobs[job_id] = job
-
-    def _run_activity_training():
-        jid = job_id
-        try:
-            from domains.activity.trainer import ActivityTrainer
-
-            training_jobs[jid]["status"] = "running"
-
-            trainer = ActivityTrainer()
-
-            result = trainer.train(
-                epochs=request.epochs,
-                lr=request.lr,
-                batch_size=request.batch_size,
-            )
-
-            if result.success:
-                training_jobs[jid]["status"] = "completed"
-                training_jobs[jid]["progress"] = 100
-                training_jobs[jid]["result"] = result.to_dict()
-                val_acc = result.metrics.get("val_accuracy", 0)
-                num_labeled = result.metrics.get("num_labeled", 0)
-                training_jobs[jid]["explanation"] = (
-                    f"Activity training complete! "
-                    f"Accuracy: {val_acc:.1%} on {num_labeled} labeled samples, "
-                    f"loss: {result.final_loss:.4f}."
-                )
-            else:
-                training_jobs[jid]["status"] = "failed"
-                training_jobs[jid]["error"] = result.error
-                training_jobs[jid]["explanation"] = f"Training failed: {result.error}"
-
-        except Exception as exc:
-            logger.exception("Activity training job %s failed", job_id)
-            if jid in training_jobs:
-                training_jobs[jid]["status"] = "failed"
-                training_jobs[jid]["error"] = str(exc)
-                training_jobs[jid]["explanation"] = f"Error: {exc}"
-
-    thread = threading.Thread(target=_run_activity_training, daemon=True)
-    thread.start()
-
-    return {
-        "job_id": job_id,
-        "status": "queued",
-        "message": f"Activity training started: {request.epochs} epochs, lr={request.lr}",
-    }
-
-
 # ── Visual Training ────────────────────────────────────────────────
 
 
@@ -911,6 +837,55 @@ class VisualTrainRequest(BaseModel):
     lora_rank: int = 8
     freeze_vision: bool = True
     name: Optional[str] = None
+
+
+class MergeLoRARequest(BaseModel):
+    """Request body for merging a LoRA adapter into its base model."""
+    adapter_path: str
+    output_path: Optional[str] = None
+    push_to_hub: bool = False
+    hub_model_id: Optional[str] = None
+
+
+@router.post("/training/merge-lora")
+async def merge_lora_adapter(request: MergeLoRARequest):
+    """Merge LoRA adapter weights into the base model and save the merged result.
+
+    Takes a path to a saved PEFT adapter directory (containing
+    adapter_config.json + adapter_model.bin), merges the low-rank matrices
+    back into the base weights, and saves a standalone model with no adapter
+    overhead.
+
+    Args:
+        request: MergeLoRARequest with adapter_path, optional output_path,
+            push_to_hub flag, and hub_model_id.
+
+    Returns:
+        Dict with status, merged_path, and base_model name.
+
+    Raises:
+        HTTPException: If merge fails (file not found, import error, etc.)
+    """
+    import os
+    try:
+        from domains.training.hf_finetune import merge_lora_adapter as do_merge
+        result = do_merge(
+            adapter_path=request.adapter_path,
+            output_path=request.output_path,
+            push_to_hub=request.push_to_hub,
+            hub_model_id=request.hub_model_id,
+        )
+        return {
+            "status": "merged",
+            "merged_path": result,
+        }
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ImportError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.error("LoRA merge failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Merge failed: {e}")
 
 
 @router.post("/training/visual-start")

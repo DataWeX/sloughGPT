@@ -12,9 +12,8 @@ Fixed version of RAGGrounder with:
 
 import hashlib
 import re
-import json
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
 from collections import Counter
 import numpy as np
 

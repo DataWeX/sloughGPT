@@ -33,21 +33,21 @@ export const useModelStore = create<ModelState>((set, get) => ({
   refresh: async () => {
     set({loading: true, error: null});
     try {
-      const [models, souls, currentSoul, checkpoints, health] =
+      const [models, soulsData, currentSoul, checkpoints, health] =
         await Promise.all([
           api.get<ModelInfo[]>('/models').catch(() => []),
-          api.get<SoulInfo[]>('/souls').catch(() => []),
+          api.get<{souls: SoulInfo[]; current_soul: string | null}>('/souls').catch(() => ({souls: [], current_soul: null})),
           api.get<SoulInfo>('/souls/current').catch(() => null),
           api.get<CheckpointInfo[]>('/auto-train/checkpoints').catch(() => []),
           api.get<HealthStatus>('/health').catch(() => null),
         ]);
       set({
         models,
-        souls,
+        souls: Array.isArray(soulsData) ? soulsData : (soulsData.souls || []),
         currentSoul,
         checkpoints,
         health,
-        currentModel: health?.model_name || null,
+        currentModel: health?.model_type || null,
         loading: false,
       });
     } catch (err: any) {

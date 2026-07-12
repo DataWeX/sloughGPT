@@ -50,13 +50,41 @@ export interface HealthStatus {
   block_size?: number
   num_parameters?: number
   device?: string
+  quantization?: {
+    quantized: boolean
+    bits?: number
+    mode?: string
+    summary?: {
+      bits: number
+      tensors: number
+      avg_cosine_sim: number
+      min_cosine_sim: number
+    }
+  }
+}
+
+export interface QuantizationResult {
+  quantized: boolean
+  bits: number
+  mode: string
+  model_type: string
+  layers_quantized: number
+  total_layers: number
+  summary: {
+    tensors: number
+    bits: number
+    avg_cosine_sim: number
+    min_cosine_sim: number
+  }
+  per_tensor: Record<string, { scale: number; zero_point: number; cosine_sim: number }>
+  avx2_enabled: boolean
 }
 
 export const modelController = {
   async list(): Promise<ModelInfo[]> {
     try {
-      const data = await apiGet<{ models: (string | ModelInfo)[] }>('/models/hf')
-      const modelList = data.models ?? []
+      const data = await apiGet<ModelInfo[] | { models: (string | ModelInfo)[] }>('/models/hf')
+      const modelList = Array.isArray(data) ? data : (data.models ?? [])
       return modelList.map((m: string | ModelInfo) =>
         typeof m === 'string' ? { id: m, name: m, type: 'huggingface' } : m,
       )
@@ -121,6 +149,14 @@ export const modelController = {
 
   async getCacheUsage(): Promise<{ total_bytes: number; total_gb: number; model_count: number; cache_dir: string }> {
     return apiGet('/models/cache-usage')
+  },
+
+  async quantize(bits: number = 8, mode: string = 'symmetric'): Promise<QuantizationResult> {
+    return apiPost<QuantizationResult>('/models/quantize', { bits, mode })
+  },
+
+  async dequantize(): Promise<{ dequantized: boolean; model_type: string; layers_reset: number }> {
+    return apiPost('/models/dequantize')
   },
 }
 

@@ -85,7 +85,7 @@ class StabilityResult:
 
 # ── HTTP Helpers ────────────────────────────────────────────────────────────
 
-def _chat_request(url: str, prompt: str, timeout: int = 30) -> tuple:
+def _chat_request(url: str, prompt: str, timeout: int = 60) -> tuple:
     """Send one chat request, return (status, latency_s, response_text)."""
     body = json.dumps({
         "messages": [{"role": "user", "content": prompt}],
@@ -306,7 +306,9 @@ def main():
         print(f"❌ Server at {args.url} is not reachable")
         return 1
 
-    model_loaded = health.get("model_loaded", health.get("status") == "healthy")
+    # Health may be wrapped in {status, data} envelope
+    payload = health.get("data", health)
+    model_loaded = payload.get("model_loaded", health.get("status") == "healthy")
     if not model_loaded:
         print(f"⚠  Server reachable but no model loaded")
         print(f"   Health: {json.dumps(health, indent=2)[:200]}")

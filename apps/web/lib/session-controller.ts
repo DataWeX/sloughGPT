@@ -52,8 +52,8 @@ export interface Session {
 export const sessionController = {
   async list(archived?: boolean): Promise<Session[]> {
     const suffix = archived !== undefined ? `?archived=${archived}` : ''
-    const data = await apiGet<{ sessions: Session[] }>(`/chat/sessions${suffix}`)
-    return data.sessions || []
+    const data = await apiGet<Session[] | { sessions: Session[] }>(`/chat/sessions${suffix}`)
+    return Array.isArray(data) ? data : (data.sessions ?? [])
   },
 
   async listArchived(): Promise<Session[]> {
@@ -90,8 +90,8 @@ export const sessionController = {
 
   async search(q: string, limit = 20): Promise<SearchResult[]> {
     if (!q.trim()) return []
-    const data = await apiGet<{ results: SearchResult[] }>(`/chat/sessions/search?q=${encodeURIComponent(q)}&limit=${limit}`)
-    return data.results || []
+    const data = await apiGet<SearchResult[] | { results: SearchResult[] }>(`/chat/sessions/search?q=${encodeURIComponent(q)}&limit=${limit}`)
+    return Array.isArray(data) ? data : (data.results ?? [])
   },
 
   async saveContext(id: string, messages: { role: string; content: string }[]): Promise<void> {

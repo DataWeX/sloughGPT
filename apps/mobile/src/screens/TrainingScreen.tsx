@@ -1,22 +1,20 @@
 import React, {useEffect, useState, useRef} from 'react';
 import {
-  View,
-  Text,
   ScrollView,
   TextInput,
-  TouchableOpacity,
-  StyleSheet,
+  Modal,
   RefreshControl,
   ActivityIndicator,
   Alert,
-  Modal,
+  Pressable,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {YStack, XStack, Text, useTheme} from 'tamagui';
 import {useTrainingStore, type TrainPhase, type TrainingMethod} from '../stores/training-store';
 import {useModelStore} from '../stores/model-store';
 import {api} from '../services/api-client';
 import {StatusBadge} from '../components/StatusBadge';
-import {colors, spacing, radii, typography} from '../theme';
+import {Icon} from '../components/Icon';
 
 const PHASE_LABELS: Record<string, {text: string; variant: string}> = {
   idle: {text: 'Ready', variant: 'default'},
@@ -35,11 +33,11 @@ const PHASE_LABELS: Record<string, {text: string; variant: string}> = {
 function LossChart({data}: {data: {step: number; value: number}[]}) {
   if (data.length < 2) {
     return (
-      <View style={styles.chartPlaceholder}>
-        <Text style={styles.chartPlaceholderText}>
+      <YStack height={80} backgroundColor="$background" borderRadius={4} alignItems="center" justifyContent="center">
+        <Text fontSize={13} color="$color10">
           Loss curve will appear here
         </Text>
-      </View>
+      </YStack>
     );
   }
 
@@ -51,18 +49,18 @@ function LossChart({data}: {data: {step: number; value: number}[]}) {
   const pad = 4;
 
   return (
-    <View style={styles.chartWrap}>
-      <View style={[styles.chart, {width: W, height: H}]}>
+    <YStack marginTop={4}>
+      <YStack backgroundColor="$background" borderRadius={4} overflow="hidden" style={{width: W, height: H}}>
         {data.map((point, i) => {
           const x = pad + (i / (data.length - 1)) * (W - pad * 2);
           const y = H - pad - ((point.value - minLoss) / range) * (H - pad * 2);
           const dotSize = i === data.length - 1 ? 6 : 3;
-          const color = i === data.length - 1 ? colors.primary : colors.primaryLight;
+          const color = i === data.length - 1 ? '#7C52C4' : '#C0AAF4';
           return (
-            <View
+            <YStack
               key={i}
+              position="absolute"
               style={{
-                position: 'absolute',
                 left: x - dotSize / 2,
                 top: y - dotSize / 2,
                 width: dotSize,
@@ -73,13 +71,13 @@ function LossChart({data}: {data: {step: number; value: number}[]}) {
             />
           );
         })}
-      </View>
-      <View style={styles.chartAxis}>
-        <Text style={styles.chartAxisText}>{minLoss.toFixed(2)}</Text>
-        <Text style={styles.chartAxisText}>{data.length} points</Text>
-        <Text style={styles.chartAxisText}>{maxLoss.toFixed(2)}</Text>
-      </View>
-    </View>
+      </YStack>
+      <XStack justifyContent="space-between" marginTop={4}>
+        <Text fontSize={11} color="$color10">{minLoss.toFixed(2)}</Text>
+        <Text fontSize={11} color="$color10">{data.length} points</Text>
+        <Text fontSize={11} color="$color10">{maxLoss.toFixed(2)}</Text>
+      </XStack>
+    </YStack>
   );
 }
 
@@ -111,6 +109,7 @@ export function TrainingScreen() {
     deleteCheckpoint,
     clearError,
   } = useTrainingStore();
+  const theme = useTheme();
   const modelStore = useModelStore();
   const [sourceText, setSourceText] = useState('');
   const [selectedDataset, setSelectedDataset] = useState<string | null>(null);
@@ -187,772 +186,628 @@ export function TrainingScreen() {
     phase === 'EVALUATE' || phase === 'DEPLOY';
   const isDone = phase === 'COMPLETE';
   const isFailed = phase === 'FAILED';
+  const accent = theme.color9?.val || '#7C52C4';
   const progress =
     totalEpochs > 0 ? Math.round((epoch / totalEpochs) * 100) : 0;
   const phaseInfo = PHASE_LABELS[phase] || PHASE_LABELS.idle;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={{flex: 1}} edges={['top']}>
       <ScrollView
-        contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }>
-        <View style={styles.header}>
-          <Text style={styles.title}>Training</Text>
-          <StatusBadge
-            label={phaseInfo.text}
-            variant={phaseInfo.variant as any}
-          />
-        </View>
+        <YStack padding={16} gap={12}>
+          <XStack alignItems="center" justifyContent="space-between">
+            <Text fontSize={26} fontWeight="700" letterSpacing={-0.3} color="$color">Training</Text>
+            <StatusBadge
+              label={phaseInfo.text}
+              variant={phaseInfo.variant as any}
+            />
+          </XStack>
 
-        {error && (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity onPress={clearError}>
-              <Text style={styles.dismiss}>×</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {!isTraining && !isDone && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Method</Text>
-            <View style={styles.modeRow}>
-              <TouchableOpacity
-                style={[styles.modeBtn, method === 'distill' && styles.modeBtnActive]}
-                onPress={() => setMethod('distill')}>
-                <Text style={[styles.modeBtnText, method === 'distill' && styles.modeBtnTextActive]}>
-                  Distill
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modeBtn, method === 'finetune' && styles.modeBtnActive]}
-                onPress={() => setMethod('finetune')}>
-                <Text style={[styles.modeBtnText, method === 'finetune' && styles.modeBtnTextActive]}>
-                  Fine-tune
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {!isTraining && !isDone && method === 'finetune' && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Fine-tune Settings</Text>
-            <View style={styles.paramRow}>
-              <Text style={styles.paramLabel}>Base Model</Text>
-              <TextInput
-                style={styles.textInput}
-                value={hfOpts.model}
-                onChangeText={v => setHfOpts({model: v})}
-                placeholder="gpt2, Qwen/Qwen2.5-0.5B, ..."
-                placeholderTextColor={colors.textMuted}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
-            <View style={styles.paramRow}>
-              <Text style={styles.paramLabel}>Dataset</Text>
-              <View style={styles.datasetList}>
-                {datasets.length === 0 ? (
-                  <Text style={styles.empty}>No datasets found. Import one first.</Text>
-                ) : (
-                  datasets.map(ds => (
-                    <TouchableOpacity
-                      key={ds.id}
-                      style={[styles.datasetItem, hfOpts.dataset === ds.id && styles.datasetItemActive]}
-                      onPress={() => setHfOpts({dataset: ds.id})}>
-                      <View style={styles.datasetInfo}>
-                        <Text style={styles.datasetName}>{ds.name}</Text>
-                        <Text style={styles.datasetMeta}>
-                          {ds.file_count} files · {ds.total_chars.toLocaleString()} chars
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.previewBtn}
-                        onPress={() => fetchPreview(ds.id)}>
-                        <Text style={styles.previewBtnText}>Preview</Text>
-                      </TouchableOpacity>
-                      {hfOpts.dataset === ds.id && <Text style={styles.check}>✓</Text>}
-                    </TouchableOpacity>
-                  ))
-                )}
-              </View>
-            </View>
-            <View style={styles.paramRow}>
-              <Text style={styles.paramLabel}>Epochs</Text>
-              <View style={styles.paramBtns}>
-                {[1, 2, 3, 5].map(v => (
-                  <TouchableOpacity
-                    key={v}
-                    style={[styles.paramBtn, hfOpts.epochs === v && styles.paramBtnActive]}
-                    onPress={() => setHfOpts({epochs: v})}>
-                    <Text style={[styles.paramBtnText, hfOpts.epochs === v && styles.paramBtnTextActive]}>{v}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-            <View style={styles.paramRow}>
-              <Text style={styles.paramLabel}>Batch Size</Text>
-              <View style={styles.paramBtns}>
-                {[2, 4, 8, 16].map(v => (
-                  <TouchableOpacity
-                    key={v}
-                    style={[styles.paramBtn, hfOpts.batch_size === v && styles.paramBtnActive]}
-                    onPress={() => setHfOpts({batch_size: v})}>
-                    <Text style={[styles.paramBtnText, hfOpts.batch_size === v && styles.paramBtnTextActive]}>{v}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-            <View style={styles.paramRow}>
-              <Text style={styles.paramLabel}>Learning Rate</Text>
-              <View style={styles.paramBtns}>
-                {[1e-5, 2e-5, 5e-5, 1e-4].map(v => (
-                  <TouchableOpacity
-                    key={v}
-                    style={[styles.paramBtn, Math.abs(hfOpts.learning_rate - v) < 1e-6 && styles.paramBtnActive]}
-                    onPress={() => setHfOpts({learning_rate: v})}>
-                    <Text style={[styles.paramBtnText, Math.abs(hfOpts.learning_rate - v) < 1e-6 && styles.paramBtnTextActive]}>{v.toExponential()}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-            <View style={styles.paramRow}>
-              <View style={styles.switchRow}>
-                <Text style={styles.paramLabel}>Use LoRA</Text>
-                <TouchableOpacity
-                  style={[styles.switch, hfOpts.use_lora && styles.switchOn]}
-                  onPress={() => setHfOpts({use_lora: !hfOpts.use_lora})}>
-                  <View style={[styles.switchThumb, hfOpts.use_lora && styles.switchThumbOn]} />
-                </TouchableOpacity>
-              </View>
-            </View>
-            {hfOpts.use_lora && (
-              <View style={styles.paramRow}>
-                <Text style={styles.paramLabel}>LoRA Rank</Text>
-                <View style={styles.paramBtns}>
-                  {[4, 8, 16, 32].map(v => (
-                    <TouchableOpacity
-                      key={v}
-                      style={[styles.paramBtn, hfOpts.lora_rank === v && styles.paramBtnActive]}
-                      onPress={() => setHfOpts({lora_rank: v})}>
-                      <Text style={[styles.paramBtnText, hfOpts.lora_rank === v && styles.paramBtnTextActive]}>{v}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
-          </View>
-        )}
-
-        {!isTraining && !isDone && method === 'distill' && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Training Data</Text>
-            <View style={styles.modeRow}>
-              <TouchableOpacity
-                style={[styles.modeBtn, inputMode === 'text' && styles.modeBtnActive]}
-                onPress={() => setInputMode('text')}>
-                <Text style={[styles.modeBtnText, inputMode === 'text' && styles.modeBtnTextActive]}>
-                  Paste Text
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modeBtn, inputMode === 'dataset' && styles.modeBtnActive]}
-                onPress={() => setInputMode('dataset')}>
-                <Text style={[styles.modeBtnText, inputMode === 'dataset' && styles.modeBtnTextActive]}>
-                  Dataset
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {inputMode === 'text' ? (
-              <TextInput
-                style={styles.textArea}
-                value={sourceText}
-                onChangeText={setSourceText}
-                placeholder="Paste training text here (SRT, plain text, or lines)..."
-                placeholderTextColor={colors.textMuted}
-                multiline
-                textAlignVertical="top"
-              />
-            ) : (
-              <View style={styles.datasetList}>
-                {datasets.length === 0 ? (
-                  <Text style={styles.empty}>No datasets found</Text>
-                ) : (
-                  datasets.map(ds => (
-                    <TouchableOpacity
-                      key={ds.id}
-                      style={[styles.datasetItem, selectedDataset === ds.id && styles.datasetItemActive]}
-                      onPress={() => setSelectedDataset(ds.id)}>
-                      <View style={styles.datasetInfo}>
-                        <Text style={styles.datasetName}>{ds.name}</Text>
-                        <Text style={styles.datasetMeta}>
-                          {ds.file_count} files · {ds.total_chars.toLocaleString()} chars
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.previewBtn}
-                        onPress={() => fetchPreview(ds.id)}>
-                        <Text style={styles.previewBtnText}>Preview</Text>
-                      </TouchableOpacity>
-                      {selectedDataset === ds.id && <Text style={styles.check}>✓</Text>}
-                    </TouchableOpacity>
-                  ))
-                )}
-              </View>
-            )}
-          </View>
-        )}
-
-        {!isTraining && !isDone && method === 'distill' && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Hyperparameters</Text>
-            <View style={styles.paramRow}>
-              <Text style={styles.paramLabel}>Epochs</Text>
-              <View style={styles.paramBtns}>
-                {[3, 5, 10, 20, 50].map(v => (
-                  <TouchableOpacity
-                    key={v}
-                    style={[styles.paramBtn, config.epochs === v && styles.paramBtnActive]}
-                    onPress={() => setConfig({epochs: v})}>
-                    <Text style={[styles.paramBtnText, config.epochs === v && styles.paramBtnTextActive]}>{v}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-            <View style={styles.paramRow}>
-              <Text style={styles.paramLabel}>Learning Rate</Text>
-              <View style={styles.paramBtns}>
-                {[0.0001, 0.001, 0.01].map(v => (
-                  <TouchableOpacity
-                    key={v}
-                    style={[styles.paramBtn, config.learning_rate === v && styles.paramBtnActive]}
-                    onPress={() => setConfig({learning_rate: v})}>
-                    <Text style={[styles.paramBtnText, config.learning_rate === v && styles.paramBtnTextActive]}>{v}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-            <View style={styles.paramRow}>
-              <Text style={styles.paramLabel}>Soul</Text>
-              <View style={styles.paramBtns}>
-                {['assistant', 'creative', 'coder', 'teacher', 'analyst'].map(v => (
-                  <TouchableOpacity
-                    key={v}
-                    style={[styles.paramBtn, config.soul_name === v && styles.paramBtnActive]}
-                    onPress={() => setConfig({soul_name: v})}>
-                    <Text style={[styles.paramBtnText, config.soul_name === v && styles.paramBtnTextActive]}>{v}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          </View>
-        )}
-
-        {(isTraining || isDone || isFailed) && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Progress</Text>
-            <View style={styles.progressHeader}>
-              <Text style={styles.progressText}>Epoch {epoch}/{totalEpochs}</Text>
-              <Text style={styles.progressText}>{progress}%</Text>
-            </View>
-            <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  {
-                    width: `${progress}%`,
-                    backgroundColor: isDone ? colors.success : isFailed ? colors.error : colors.primary,
-                  },
-                ]}
-              />
-            </View>
-            <View style={styles.statsRow}>
-              <View style={styles.stat}>
-                <Text style={styles.statLabel}>Loss</Text>
-                <Text style={styles.statValue}>{loss !== null ? loss.toFixed(4) : '—'}</Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={styles.statLabel}>Steps</Text>
-                <Text style={styles.statValue}>{steps}</Text>
-              </View>
-            </View>
-            <LossChart data={lossHistory} />
-            {isTraining && (
-              <View style={styles.progressActions}>
-                <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={styles.trainingText}>{phaseInfo.text}...</Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {isDone && checkpoint && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Training Complete</Text>
-            <StatusBadge label="Success" variant="success" />
-            <Text style={styles.completeText}>Checkpoint: {checkpoint}</Text>
-            <Text style={styles.completeMeta}>
-              Final loss: {loss?.toFixed(4) || '—'} · {steps} steps
-            </Text>
-            <TouchableOpacity
-              style={styles.loadBtn}
-              onPress={() => handleLoadCheckpoint(checkpoint)}
-              disabled={loadingCheckpoint === checkpoint}>
-              {loadingCheckpoint === checkpoint ? (
-                <ActivityIndicator size="small" color={colors.white} />
-              ) : (
-                <Text style={styles.loadBtnText}>Load Model for Chat</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <View style={styles.actions}>
-          {isTraining ? (
-            <TouchableOpacity style={styles.stopBtn} onPress={stop}>
-              <Text style={styles.stopBtnText}>Stop Training</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={[styles.startBtn, running && styles.startBtnDisabled]}
-              onPress={handleStart}
-              disabled={running}>
-              <Text style={styles.startBtnText}>
-                {isDone ? 'Train Again' : 'Start Training'}
-              </Text>
-            </TouchableOpacity>
+          {error && (
+            <XStack alignItems="center" justifyContent="space-between" backgroundColor="rgba(239, 68, 68, 0.08)" padding={12} borderRadius={10}>
+              <Text fontSize={13} color="#EF4444" lineHeight={18} flex={1}>{error}</Text>
+              <Pressable onPress={clearError}>
+                <Icon name="x" size={16} color="#EF4444" />
+              </Pressable>
+            </XStack>
           )}
-        </View>
 
-        {isDone && hfFinetunedPath && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Fine-tune Complete</Text>
-            <StatusBadge label="Success" variant="success" />
-            <Text style={styles.completeText}>Model saved to: {hfFinetunedPath}</Text>
-            <Text style={styles.completeMeta}>
-              Loss: {loss?.toFixed(4) || '—'} · {steps} steps
-            </Text>
-            <TouchableOpacity
-              style={styles.loadBtn}
-              onPress={async () => {
-                try {
-                  await modelStore.loadModel(hfFinetunedPath);
-                  Alert.alert('Loaded', `Fine-tuned model loaded for chat`);
-                } catch (err: any) {
-                  Alert.alert('Error', err.message || 'Failed to load model');
-                }
-              }}>
-              <Text style={styles.loadBtnText}>Load Model for Chat</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+          {!isTraining && !isDone && (
+            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
+              <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Method</Text>
+              <XStack gap={8} marginBottom={12}>
+                <YStack
+                  flex={1}
+                  paddingVertical={8}
+                  borderRadius={8}
+                  backgroundColor={method === 'distill' ? '#7C52C4' : '$background'}
+                  alignItems="center"
+borderWidth={0.5}
+            borderColor={method === 'distill' ? accent : '$borderColor'}
+            onPress={() => setMethod('distill')}
+                  pressStyle={{opacity: 0.7}}>
+                  <Text fontSize={13} color={method === 'distill' ? '#FFFFFF' : '$color10'} fontWeight="500">
+                    Distill
+                  </Text>
+                </YStack>
+                <YStack
+                  flex={1}
+                  paddingVertical={8}
+                  borderRadius={8}
+                  backgroundColor={method === 'finetune' ? accent : '$background'}
+                  alignItems="center"
+                  borderWidth={0.5}
+                  borderColor={method === 'finetune' ? '#7C52C4' : '$borderColor'}
+                  onPress={() => setMethod('finetune')}
+                  pressStyle={{opacity: 0.7}}>
+                  <Text fontSize={13} color={method === 'finetune' ? '#FFFFFF' : '$color10'} fontWeight="500">
+                    Fine-tune
+                  </Text>
+                </YStack>
+              </XStack>
+            </YStack>
+          )}
 
-        {hfJobs.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Job History</Text>
-            {hfJobs.slice().reverse().map((job: any, i: number) => (
-              <View key={job.job_id || job.id || i} style={styles.ckptRow}>
-                <View style={styles.ckptInfo}>
-                  <Text style={styles.ckptName}>
-                    {job.model || 'Model'} · {job.dataset || 'dataset'}
-                  </Text>
-                  <Text style={styles.ckptMeta}>
-                    Status: {job.status || job.phase || 'unknown'}{' '}
-                    {job.loss != null ? `· Loss: ${Number(job.loss).toFixed(4)}` : ''}{' '}
-                    {job.epoch != null ? `· Epoch ${job.epoch}` : ''}
-                  </Text>
-                </View>
-                <StatusBadge
-                  label={job.status === 'completed' ? 'Done' : job.status === 'failed' ? 'Failed' : job.status === 'running' ? 'Running' : job.phase || '—'}
-                  variant={job.status === 'completed' ? 'success' : job.status === 'failed' ? 'error' : 'info'}
+          {!isTraining && !isDone && method === 'finetune' && (
+            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
+              <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Fine-tune Settings</Text>
+              <YStack marginBottom={12}>
+                <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>Base Model</Text>
+                <TextInput
+                  value={hfOpts.model}
+                  onChangeText={v => setHfOpts({model: v})}
+                  placeholder="gpt2, Qwen/Qwen2.5-0.5B, ..."
+                  placeholderTextColor="#9B95A8"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={{
+                    fontSize: 15,
+                    color: '#1A1625',
+                    backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderWidth: 1,
+                    borderColor: '#E0DCE8',
+                    lineHeight: 22,
+                  }}
                 />
-              </View>
-            ))}
-          </View>
-        )}
+              </YStack>
+              <YStack marginBottom={12}>
+                <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>Dataset</Text>
+                <YStack gap={4}>
+                  {datasets.length === 0 ? (
+                    <Text fontSize={13} color="$color10" lineHeight={18} textAlign="center" padding={16}>No datasets found. Import one first.</Text>
+                  ) : (
+                    datasets.map(ds => (
+                      <XStack
+                        key={ds.id}
+                        alignItems="center"
+                        justifyContent="space-between"
+                        padding={12}
+                        backgroundColor="$background"
+                        borderRadius={8}
+                        borderWidth={0.5}
+                        borderColor={hfOpts.dataset === ds.id ? '#7C52C4' : '$borderColor'}
+                        style={hfOpts.dataset === ds.id ? {backgroundColor: 'rgba(124, 82, 196, 0.1)'} : undefined}
+                        onPress={() => setHfOpts({dataset: ds.id})}
+                        pressStyle={{opacity: 0.7}}>
+                        <YStack flex={1}>
+                          <Text fontSize={15} color="$color" fontWeight="500" lineHeight={22}>{ds.name}</Text>
+                          <Text fontSize={11} color="$color10" letterSpacing={0.2}>
+                            {ds.file_count} files · {ds.total_chars.toLocaleString()} chars
+                          </Text>
+                        </YStack>
+                        <YStack
+                          paddingHorizontal={8}
+                          paddingVertical={2}
+                          borderRadius={4}
+                          style={{backgroundColor: 'rgba(124, 82, 196, 0.15)'}}
+                          onPress={() => fetchPreview(ds.id)}
+                          pressStyle={{opacity: 0.7}}>
+                          <Text fontSize={11} color="#7C52C4" fontWeight="500" letterSpacing={0.2}>Preview</Text>
+                        </YStack>
+                        {hfOpts.dataset === ds.id && <Icon name="check" size={18} color="#7C52C4" />}
+                      </XStack>
+                    ))
+                  )}
+                </YStack>
+              </YStack>
+              <YStack marginBottom={12}>
+                <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>Epochs</Text>
+                <XStack gap={4} flexWrap="wrap">
+                  {[1, 2, 3, 5].map(v => (
+                    <YStack
+                      key={v}
+                      paddingHorizontal={12}
+                      paddingVertical={4}
+                      borderRadius={999}
+                      backgroundColor={hfOpts.epochs === v ? '#7C52C4' : '$background'}
+                      borderWidth={0.5}
+                      borderColor={hfOpts.epochs === v ? '#7C52C4' : '$borderColor'}
+                      onPress={() => setHfOpts({epochs: v})}
+                      pressStyle={{opacity: 0.7}}>
+                      <Text fontSize={11} color={hfOpts.epochs === v ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v}</Text>
+                    </YStack>
+                  ))}
+                </XStack>
+              </YStack>
+              <YStack marginBottom={12}>
+                <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>Batch Size</Text>
+                <XStack gap={4} flexWrap="wrap">
+                  {[2, 4, 8, 16].map(v => (
+                    <YStack
+                      key={v}
+                      paddingHorizontal={12}
+                      paddingVertical={4}
+                      borderRadius={999}
+                      backgroundColor={hfOpts.batch_size === v ? '#7C52C4' : '$background'}
+                      borderWidth={0.5}
+                      borderColor={hfOpts.batch_size === v ? '#7C52C4' : '$borderColor'}
+                      onPress={() => setHfOpts({batch_size: v})}
+                      pressStyle={{opacity: 0.7}}>
+                      <Text fontSize={11} color={hfOpts.batch_size === v ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v}</Text>
+                    </YStack>
+                  ))}
+                </XStack>
+              </YStack>
+              <YStack marginBottom={12}>
+                <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>Learning Rate</Text>
+                <XStack gap={4} flexWrap="wrap">
+                  {[1e-5, 2e-5, 5e-5, 1e-4].map(v => (
+                    <YStack
+                      key={v}
+                      paddingHorizontal={12}
+                      paddingVertical={4}
+                      borderRadius={999}
+                      backgroundColor={Math.abs(hfOpts.learning_rate - v) < 1e-6 ? '#7C52C4' : '$background'}
+                      borderWidth={0.5}
+                      borderColor={Math.abs(hfOpts.learning_rate - v) < 1e-6 ? '#7C52C4' : '$borderColor'}
+                      onPress={() => setHfOpts({learning_rate: v})}
+                      pressStyle={{opacity: 0.7}}>
+                      <Text fontSize={11} color={Math.abs(hfOpts.learning_rate - v) < 1e-6 ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v.toExponential()}</Text>
+                    </YStack>
+                  ))}
+                </XStack>
+              </YStack>
+              <YStack marginBottom={12}>
+                <XStack alignItems="center" justifyContent="space-between">
+                  <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>Use LoRA</Text>
+                  <YStack
+                    width={44}
+                    height={24}
+                    borderRadius={12}
+                    backgroundColor={hfOpts.use_lora ? '#7C52C4' : '$borderColor'}
+                    justifyContent="center"
+                    paddingHorizontal={2}
+                    onPress={() => setHfOpts({use_lora: !hfOpts.use_lora})}
+                    pressStyle={{opacity: 0.7}}>
+                    <YStack
+                      width={20}
+                      height={20}
+                      borderRadius={10}
+                      backgroundColor="transparent"
+                      alignSelf={hfOpts.use_lora ? 'flex-end' : 'flex-start'}
+                    />
+                  </YStack>
+                </XStack>
+              </YStack>
+              {hfOpts.use_lora && (
+                <YStack marginBottom={12}>
+                  <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>LoRA Rank</Text>
+                  <XStack gap={4} flexWrap="wrap">
+                    {[4, 8, 16, 32].map(v => (
+                      <YStack
+                        key={v}
+                        paddingHorizontal={12}
+                        paddingVertical={4}
+                        borderRadius={999}
+                        backgroundColor={hfOpts.lora_rank === v ? '#7C52C4' : '$background'}
+                        borderWidth={0.5}
+                        borderColor={hfOpts.lora_rank === v ? '#7C52C4' : '$borderColor'}
+                        onPress={() => setHfOpts({lora_rank: v})}
+                        pressStyle={{opacity: 0.7}}>
+                        <Text fontSize={11} color={hfOpts.lora_rank === v ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v}</Text>
+                      </YStack>
+                    ))}
+                  </XStack>
+                </YStack>
+              )}
+            </YStack>
+          )}
 
-        {checkpoints.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Checkpoints</Text>
-            {checkpoints.map(cp => (
-              <View key={cp.name} style={styles.ckptRow}>
-                <View style={styles.ckptInfo}>
-                  <Text style={styles.ckptName}>{cp.name}</Text>
-                  <Text style={styles.ckptMeta}>
-                    {cp.loss !== null ? `Loss: ${cp.loss.toFixed(3)}` : ''}{' '}
-                    {cp.steps > 0 ? `· ${cp.steps} steps` : ''}{' '}
-                    {cp.size_mb ? `· ${cp.size_mb} MB` : ''}
+          {!isTraining && !isDone && method === 'distill' && (
+            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
+              <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Training Data</Text>
+              <XStack gap={8} marginBottom={12}>
+                <YStack
+                  flex={1}
+                  paddingVertical={8}
+                  borderRadius={8}
+                  backgroundColor={inputMode === 'text' ? '#7C52C4' : '$background'}
+                  alignItems="center"
+                  borderWidth={0.5}
+                  borderColor={inputMode === 'text' ? '#7C52C4' : '$borderColor'}
+                  onPress={() => setInputMode('text')}
+                  pressStyle={{opacity: 0.7}}>
+                  <Text fontSize={13} color={inputMode === 'text' ? '#FFFFFF' : '$color10'} fontWeight="500">
+                    Paste Text
                   </Text>
-                  <View style={styles.ckptBadges}>
-                    {cp.soul && cp.soul !== 'unknown' && (
-                      <StatusBadge label={cp.soul} variant="info" />
-                    )}
-                    {cp.verdict && (
-                      <StatusBadge
-                        label={cp.verdict}
-                        variant={cp.verdict === 'improved' ? 'success' : 'warning'}
-                      />
-                    )}
-                  </View>
-                </View>
-                <View style={styles.ckptActions}>
-                  <TouchableOpacity
-                    style={styles.ckptLoad}
-                    onPress={() => handleLoadCheckpoint(cp.name)}
-                    disabled={loadingCheckpoint === cp.name}>
-                    {loadingCheckpoint === cp.name ? (
-                      <ActivityIndicator size="small" color={colors.primary} />
-                    ) : (
-                      <Text style={styles.ckptLoadText}>Load</Text>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.ckptDelete}
-                    onPress={() => {
-                      Alert.alert('Delete', `Delete ${cp.name}?`, [
-                        {text: 'Cancel', style: 'cancel'},
-                        {text: 'Delete', style: 'destructive', onPress: () => deleteCheckpoint(cp.name)},
-                      ]);
-                    }}>
-                    <Text style={styles.ckptDeleteText}>×</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
+                </YStack>
+                <YStack
+                  flex={1}
+                  paddingVertical={8}
+                  borderRadius={8}
+                  backgroundColor={inputMode === 'dataset' ? '#7C52C4' : '$background'}
+                  alignItems="center"
+                  borderWidth={0.5}
+                  borderColor={inputMode === 'dataset' ? '#7C52C4' : '$borderColor'}
+                  onPress={() => setInputMode('dataset')}
+                  pressStyle={{opacity: 0.7}}>
+                  <Text fontSize={13} color={inputMode === 'dataset' ? '#FFFFFF' : '$color10'} fontWeight="500">
+                    Dataset
+                  </Text>
+                </YStack>
+              </XStack>
+
+              {inputMode === 'text' ? (
+                <TextInput
+                  value={sourceText}
+                  onChangeText={setSourceText}
+                  placeholder="Paste training text here (SRT, plain text, or lines)..."
+                  placeholderTextColor="#9B95A8"
+                  multiline
+                  textAlignVertical="top"
+                  style={{
+                    fontSize: 15,
+                    color: '#1A1625',
+                    backgroundColor: 'rgba(124, 82, 196, 0.04)',
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 12,
+                    minHeight: 120,
+                    lineHeight: 22,
+                  }}
+                />
+              ) : (
+                <YStack gap={4}>
+                  {datasets.length === 0 ? (
+                    <Text fontSize={13} color="$color10" lineHeight={18} textAlign="center" padding={16}>No datasets found</Text>
+                  ) : (
+                    datasets.map(ds => (
+                      <XStack
+                        key={ds.id}
+                        alignItems="center"
+                        justifyContent="space-between"
+                        padding={12}
+                        backgroundColor="$background"
+                        borderRadius={8}
+                        borderWidth={0.5}
+                        borderColor={selectedDataset === ds.id ? '#7C52C4' : '$borderColor'}
+                        style={selectedDataset === ds.id ? {backgroundColor: 'rgba(124, 82, 196, 0.1)'} : undefined}
+                        onPress={() => setSelectedDataset(ds.id)}
+                        pressStyle={{opacity: 0.7}}>
+                        <YStack flex={1}>
+                          <Text fontSize={15} color="$color" fontWeight="500" lineHeight={22}>{ds.name}</Text>
+                          <Text fontSize={11} color="$color10" letterSpacing={0.2}>
+                            {ds.file_count} files · {ds.total_chars.toLocaleString()} chars
+                          </Text>
+                        </YStack>
+                        <YStack
+                          paddingHorizontal={8}
+                          paddingVertical={2}
+                          borderRadius={4}
+                          style={{backgroundColor: 'rgba(124, 82, 196, 0.15)'}}
+                          onPress={() => fetchPreview(ds.id)}
+                          pressStyle={{opacity: 0.7}}>
+                          <Text fontSize={11} color="#7C52C4" fontWeight="500" letterSpacing={0.2}>Preview</Text>
+                        </YStack>
+                        {selectedDataset === ds.id && <Icon name="check" size={18} color="#7C52C4" />}
+                      </XStack>
+                    ))
+                  )}
+                </YStack>
+              )}
+            </YStack>
+          )}
+
+          {!isTraining && !isDone && method === 'distill' && (
+            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
+              <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Hyperparameters</Text>
+              <YStack marginBottom={12}>
+                <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>Epochs</Text>
+                <XStack gap={4} flexWrap="wrap">
+                  {[3, 5, 10, 20, 50].map(v => (
+                    <YStack
+                      key={v}
+                      paddingHorizontal={12}
+                      paddingVertical={4}
+                      borderRadius={999}
+                      backgroundColor={config.epochs === v ? '#7C52C4' : '$background'}
+                      borderWidth={0.5}
+                      borderColor={config.epochs === v ? '#7C52C4' : '$borderColor'}
+                      onPress={() => setConfig({epochs: v})}
+                      pressStyle={{opacity: 0.7}}>
+                      <Text fontSize={11} color={config.epochs === v ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v}</Text>
+                    </YStack>
+                  ))}
+                </XStack>
+              </YStack>
+              <YStack marginBottom={12}>
+                <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>Learning Rate</Text>
+                <XStack gap={4} flexWrap="wrap">
+                  {[0.0001, 0.001, 0.01].map(v => (
+                    <YStack
+                      key={v}
+                      paddingHorizontal={12}
+                      paddingVertical={4}
+                      borderRadius={999}
+                      backgroundColor={config.learning_rate === v ? '#7C52C4' : '$background'}
+                      borderWidth={0.5}
+                      borderColor={config.learning_rate === v ? '#7C52C4' : '$borderColor'}
+                      onPress={() => setConfig({learning_rate: v})}
+                      pressStyle={{opacity: 0.7}}>
+                      <Text fontSize={11} color={config.learning_rate === v ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v}</Text>
+                    </YStack>
+                  ))}
+                </XStack>
+              </YStack>
+              <YStack marginBottom={12}>
+                <Text fontSize={13} color="$color10" lineHeight={18} marginBottom={4}>Soul</Text>
+                <XStack gap={4} flexWrap="wrap">
+                  {['assistant', 'creative', 'coder', 'teacher', 'analyst'].map(v => (
+                    <YStack
+                      key={v}
+                      paddingHorizontal={12}
+                      paddingVertical={4}
+                      borderRadius={999}
+                      backgroundColor={config.soul_name === v ? '#7C52C4' : '$background'}
+                      borderWidth={0.5}
+                      borderColor={config.soul_name === v ? '#7C52C4' : '$borderColor'}
+                      onPress={() => setConfig({soul_name: v})}
+                      pressStyle={{opacity: 0.7}}>
+                      <Text fontSize={11} color={config.soul_name === v ? '#FFFFFF' : '$color10'} letterSpacing={0.2}>{v}</Text>
+                    </YStack>
+                  ))}
+                </XStack>
+              </YStack>
+            </YStack>
+          )}
+
+          {(isTraining || isDone || isFailed) && (
+            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
+              <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Progress</Text>
+              <XStack justifyContent="space-between" marginBottom={8}>
+                <Text fontSize={15} color="$color" fontWeight="500" lineHeight={22}>Epoch {epoch}/{totalEpochs}</Text>
+                <Text fontSize={15} color="$color" fontWeight="500" lineHeight={22}>{progress}%</Text>
+              </XStack>
+              <YStack height={8} backgroundColor="$borderColor" borderRadius={4} overflow="hidden" marginBottom={12}>
+                <YStack
+                  height="100%"
+                  borderRadius={4}
+                  backgroundColor={isDone ? '#2E9B7C' : isFailed ? '#D44C56' : '#7C52C4'}
+                  width={`${progress}%`}
+                />
+              </YStack>
+              <XStack gap={24} marginBottom={12}>
+                <YStack>
+                  <Text fontSize={11} color="$color10" letterSpacing={0.2}>Loss</Text>
+                  <Text fontSize={16} fontWeight="600" color="$color">{loss !== null ? loss.toFixed(4) : '—'}</Text>
+                </YStack>
+                <YStack>
+                  <Text fontSize={11} color="$color10" letterSpacing={0.2}>Steps</Text>
+                  <Text fontSize={16} fontWeight="600" color="$color">{steps}</Text>
+                </YStack>
+              </XStack>
+              <LossChart data={lossHistory} />
+              {isTraining && (
+                <XStack alignItems="center" gap={8} marginTop={12}>
+                  <ActivityIndicator size="small" color="#7C52C4" />
+                  <Text fontSize={13} color="$color10" lineHeight={18}>{phaseInfo.text}...</Text>
+                </XStack>
+              )}
+            </YStack>
+          )}
+
+          {isDone && checkpoint && (
+            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
+              <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Training Complete</Text>
+              <StatusBadge label="Success" variant="success" />
+              <Text fontSize={15} color="$color" lineHeight={22} marginTop={12}>Checkpoint: {checkpoint}</Text>
+              <Text fontSize={11} color="$color10" letterSpacing={0.2} marginTop={4}>
+                Final loss: {loss?.toFixed(4) || '—'} · {steps} steps
+              </Text>
+              <YStack
+                marginTop={12}
+                backgroundColor="#7C52C4"
+                paddingVertical={8}
+                paddingHorizontal={16}
+                borderRadius={8}
+                alignItems="center"
+                onPress={() => handleLoadCheckpoint(checkpoint)}
+                disabled={loadingCheckpoint === checkpoint}
+                pressStyle={{opacity: 0.7}}>
+                {loadingCheckpoint === checkpoint ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text fontSize={13} color="#FFFFFF" fontWeight="600" lineHeight={18}>Load Model for Chat</Text>
+                )}
+              </YStack>
+            </YStack>
+          )}
+
+          <YStack gap={8}>
+            {isTraining ? (
+              <YStack
+                backgroundColor="#D44C56"
+                paddingVertical={12}
+                borderRadius={8}
+                alignItems="center"
+                onPress={stop}
+                pressStyle={{opacity: 0.7}}>
+                <Text fontSize={15} color="#FFFFFF" fontWeight="600" lineHeight={22}>Stop Training</Text>
+              </YStack>
+            ) : (
+              <YStack
+                backgroundColor="#7C52C4"
+                paddingVertical={12}
+                borderRadius={8}
+                alignItems="center"
+                opacity={running ? 0.5 : 1}
+                onPress={handleStart}
+                disabled={running}
+                pressStyle={{opacity: 0.7}}>
+                <Text fontSize={15} color="#FFFFFF" fontWeight="600" lineHeight={22}>
+                  {isDone ? 'Train Again' : 'Start Training'}
+                </Text>
+              </YStack>
+            )}
+          </YStack>
+
+          {isDone && hfFinetunedPath && (
+            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
+              <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Fine-tune Complete</Text>
+              <StatusBadge label="Success" variant="success" />
+              <Text fontSize={15} color="$color" lineHeight={22} marginTop={12}>Model saved to: {hfFinetunedPath}</Text>
+              <Text fontSize={11} color="$color10" letterSpacing={0.2} marginTop={4}>
+                Loss: {loss?.toFixed(4) || '—'} · {steps} steps
+              </Text>
+              <YStack
+                marginTop={12}
+                backgroundColor="#7C52C4"
+                paddingVertical={8}
+                paddingHorizontal={16}
+                borderRadius={8}
+                alignItems="center"
+                onPress={async () => {
+                  try {
+                    await modelStore.loadModel(hfFinetunedPath);
+                    Alert.alert('Loaded', `Fine-tuned model loaded for chat`);
+                  } catch (err: any) {
+                    Alert.alert('Error', err.message || 'Failed to load model');
+                  }
+                }}
+                pressStyle={{opacity: 0.7}}>
+                <Text fontSize={13} color="#FFFFFF" fontWeight="600" lineHeight={18}>Load Model for Chat</Text>
+              </YStack>
+            </YStack>
+          )}
+
+          {hfJobs.length > 0 && (
+            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
+              <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Job History</Text>
+              {hfJobs.slice().reverse().map((job: any, i: number) => (
+                <XStack key={job.job_id || job.id || i} alignItems="center" justifyContent="space-between" paddingVertical={8} borderBottomWidth={1} borderBottomColor="$borderColor">
+                  <YStack flex={1} gap={4}>
+                    <Text fontSize={15} color="$color" fontWeight="500" lineHeight={22}>
+                      {job.model || 'Model'} · {job.dataset || 'dataset'}
+                    </Text>
+                    <Text fontSize={11} color="$color10" letterSpacing={0.2}>
+                      Status: {job.status || job.phase || 'unknown'}{' '}
+                      {job.loss != null ? `· Loss: ${Number(job.loss).toFixed(4)}` : ''}{' '}
+                      {job.epoch != null ? `· Epoch ${job.epoch}` : ''}
+                    </Text>
+                  </YStack>
+                  <StatusBadge
+                    label={job.status === 'completed' ? 'Done' : job.status === 'failed' ? 'Failed' : job.status === 'running' ? 'Running' : job.phase || '—'}
+                    variant={job.status === 'completed' ? 'success' : job.status === 'failed' ? 'error' : 'info'}
+                  />
+                </XStack>
+              ))}
+            </YStack>
+          )}
+
+          {checkpoints.length > 0 && (
+            <YStack backgroundColor="$background" borderRadius={12} borderWidth={0.5} borderColor="$borderColor" padding={16} gap={8}>
+              <Text fontSize={16} fontWeight="600" color="$color" marginBottom={12}>Checkpoints</Text>
+              {checkpoints.map(cp => (
+                <XStack key={cp.name} alignItems="center" justifyContent="space-between" paddingVertical={8} borderBottomWidth={1} borderBottomColor="$borderColor">
+                  <YStack flex={1} gap={4}>
+                    <Text fontSize={15} color="$color" fontWeight="500" lineHeight={22}>{cp.name}</Text>
+                    <Text fontSize={11} color="$color10" letterSpacing={0.2}>
+                      {cp.loss !== null ? `Loss: ${cp.loss.toFixed(3)}` : ''}{' '}
+                      {cp.steps > 0 ? `· ${cp.steps} steps` : ''}{' '}
+                      {cp.size_mb ? `· ${cp.size_mb} MB` : ''}
+                    </Text>
+                    <XStack gap={4}>
+                      {cp.soul && cp.soul !== 'unknown' && (
+                        <StatusBadge label={cp.soul} variant="info" />
+                      )}
+                      {cp.verdict && (
+                        <StatusBadge
+                          label={cp.verdict}
+                          variant={cp.verdict === 'improved' ? 'success' : 'warning'}
+                        />
+                      )}
+                    </XStack>
+                  </YStack>
+                  <XStack gap={4} alignItems="center">
+                    <YStack
+                      paddingHorizontal={12}
+                      paddingVertical={4}
+                      borderRadius={8}
+                      style={{backgroundColor: 'rgba(124, 82, 196, 0.15)'}}
+                      onPress={() => handleLoadCheckpoint(cp.name)}
+                      disabled={loadingCheckpoint === cp.name}
+                      pressStyle={{opacity: 0.7}}>
+                      {loadingCheckpoint === cp.name ? (
+                        <ActivityIndicator size="small" color="#7C52C4" />
+                      ) : (
+                        <Text fontSize={11} color="#7C52C4" fontWeight="600" letterSpacing={0.2}>Load</Text>
+                      )}
+                    </YStack>
+                    <YStack
+                      width={28}
+                      height={28}
+                      borderRadius={999}
+                      style={{backgroundColor: 'rgba(212, 76, 86, 0.15)'}}
+                      alignItems="center"
+                      justifyContent="center"
+                      onPress={() => {
+                        Alert.alert('Delete', `Delete ${cp.name}?`, [
+                          {text: 'Cancel', style: 'cancel'},
+                          {text: 'Delete', style: 'destructive', onPress: () => deleteCheckpoint(cp.name)},
+                        ]);
+                      }}
+                      pressStyle={{opacity: 0.7}}>
+                      <Icon name="x" size={16} color="#D44C56" />
+                    </YStack>
+                  </XStack>
+                </XStack>
+              ))}
+            </YStack>
+          )}
+        </YStack>
       </ScrollView>
 
-      {/* Dataset preview modal */}
       <Modal visible={previewVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Dataset Preview</Text>
-              <TouchableOpacity onPress={() => setPreviewVisible(false)}>
-                <Text style={styles.modalClose}>×</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.modalBody}>
+        <YStack flex={1} backgroundColor="rgba(0,0,0,0.4)" justifyContent="flex-end">
+          <YStack backgroundColor="$background" borderTopLeftRadius={24} borderTopRightRadius={24} maxHeight="70%">
+            <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20} paddingVertical={16} borderBottomWidth={1} borderBottomColor="$borderColor">
+              <Text fontSize={16} fontWeight="600" color="$color">Dataset Preview</Text>
+              <Pressable onPress={() => setPreviewVisible(false)}>
+                <YStack width={28} height={28} borderRadius={9} alignItems="center" justifyContent="center">
+                  <Icon name="x" size={16} color={(theme.color11?.val || '#6B7280')} />
+                </YStack>
+              </Pressable>
+            </XStack>
+            <ScrollView style={{paddingHorizontal: 20, paddingVertical: 12}}>
               {previewData.map((line, i) => (
-                <View key={i} style={styles.previewLine}>
-                  <Text style={styles.previewNum}>{i + 1}</Text>
-                  <Text style={styles.previewText} numberOfLines={3}>{line}</Text>
-                </View>
+                <XStack key={i} gap={8} paddingVertical={4} borderBottomWidth={1} borderBottomColor="$borderColor">
+                  <Text fontSize={11} color="$color10" letterSpacing={0.2} width={24}>{i + 1}</Text>
+                  <Text fontSize={13} color="$color" lineHeight={18} flex={1} numberOfLines={3}>{line}</Text>
+                </XStack>
               ))}
               {previewData.length === 0 && (
-                <Text style={styles.previewEmpty}>No preview available</Text>
+                <Text fontSize={13} color="$color10" lineHeight={18} textAlign="center" padding={24}>No preview available</Text>
               )}
             </ScrollView>
-          </View>
-        </View>
+          </YStack>
+        </YStack>
       </Modal>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: {flex: 1, backgroundColor: colors.background},
-  content: {padding: spacing.lg, gap: spacing.md},
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  title: {...typography.h1, color: colors.text},
-  errorCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FDE8E8',
-    padding: spacing.md,
-    borderRadius: radii.md,
-  },
-  errorText: {...typography.caption, color: colors.error, flex: 1},
-  dismiss: {...typography.body, color: colors.error, fontWeight: '600'},
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    padding: spacing.lg,
-  },
-  cardTitle: {
-    ...typography.h3,
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  modeRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  modeBtn: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  modeBtnActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  modeBtnText: {...typography.caption, color: colors.textSecondary, fontWeight: '500'},
-  modeBtnTextActive: {color: colors.white},
-  textArea: {
-    ...typography.body,
-    color: colors.text,
-    backgroundColor: colors.background,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    minHeight: 120,
-  },
-  textInput: {
-    ...typography.body,
-    color: colors.text,
-    backgroundColor: colors.background,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  switch: {
-    width: 44,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.border,
-    justifyContent: 'center',
-    paddingHorizontal: 2,
-  },
-  switchOn: {
-    backgroundColor: colors.primary,
-  },
-  switchThumb: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.white,
-    alignSelf: 'flex-start',
-  },
-  switchThumbOn: {
-    alignSelf: 'flex-end',
-  },
-  datasetList: {gap: spacing.xs},
-  datasetItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.md,
-    backgroundColor: colors.background,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  datasetItemActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary + '10',
-  },
-  datasetInfo: {flex: 1},
-  datasetName: {...typography.body, color: colors.text, fontWeight: '500'},
-  datasetMeta: {...typography.small, color: colors.textMuted},
-  check: {color: colors.primary, fontSize: 18, fontWeight: '700'},
-  empty: {...typography.caption, color: colors.textMuted, textAlign: 'center', padding: spacing.lg},
-  paramRow: {marginBottom: spacing.md},
-  paramLabel: {...typography.caption, color: colors.textSecondary, marginBottom: spacing.xs},
-  paramBtns: {flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap'},
-  paramBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.full,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  paramBtnActive: {backgroundColor: colors.primary, borderColor: colors.primary},
-  paramBtnText: {...typography.small, color: colors.textSecondary},
-  paramBtnTextActive: {color: colors.white},
-  progressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  progressText: {...typography.body, color: colors.text, fontWeight: '500'},
-  progressTrack: {
-    height: 8,
-    backgroundColor: colors.border,
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: spacing.md,
-  },
-  progressFill: {height: '100%', borderRadius: 4},
-  statsRow: {
-    flexDirection: 'row',
-    gap: spacing.xl,
-    marginBottom: spacing.md,
-  },
-  stat: {},
-  statLabel: {...typography.small, color: colors.textMuted},
-  statValue: {...typography.h3, color: colors.text},
-  chartWrap: {marginTop: spacing.sm},
-  chart: {
-    backgroundColor: colors.background,
-    borderRadius: radii.sm,
-    overflow: 'hidden',
-  },
-  chartPlaceholder: {
-    height: 80,
-    backgroundColor: colors.background,
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chartPlaceholderText: {...typography.caption, color: colors.textMuted},
-  chartAxis: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: spacing.xs,
-  },
-  chartAxisText: {...typography.small, color: colors.textMuted},
-  progressActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  trainingText: {...typography.caption, color: colors.textMuted},
-  completeText: {...typography.body, color: colors.text, marginTop: spacing.md},
-  completeMeta: {...typography.small, color: colors.textMuted, marginTop: spacing.xs},
-  loadBtn: {
-    marginTop: spacing.md,
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radii.md,
-    alignItems: 'center',
-  },
-  loadBtnText: {...typography.caption, color: colors.white, fontWeight: '600'},
-  actions: {gap: spacing.sm},
-  startBtn: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    alignItems: 'center',
-  },
-  startBtnDisabled: {opacity: 0.5},
-  startBtnText: {...typography.body, color: colors.white, fontWeight: '600'},
-  stopBtn: {
-    backgroundColor: colors.error,
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    alignItems: 'center',
-  },
-  stopBtnText: {...typography.body, color: colors.white, fontWeight: '600'},
-  ckptRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  ckptInfo: {flex: 1, gap: spacing.xs},
-  ckptName: {...typography.body, color: colors.text, fontWeight: '500'},
-  ckptMeta: {...typography.small, color: colors.textMuted},
-  ckptBadges: {flexDirection: 'row', gap: spacing.xs},
-  ckptActions: {flexDirection: 'row', gap: spacing.xs, alignItems: 'center'},
-  ckptLoad: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary + '15',
-  },
-  ckptLoadText: {...typography.small, color: colors.primary, fontWeight: '600'},
-  ckptDelete: {
-    width: 28,
-    height: 28,
-    borderRadius: radii.full,
-    backgroundColor: colors.error + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ckptDeleteText: {color: colors.error, fontSize: 16, fontWeight: '600'},
-  previewBtn: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radii.sm,
-    backgroundColor: colors.primary + '15',
-  },
-  previewBtnText: {
-    ...typography.small,
-    color: colors.primary,
-    fontWeight: '500',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
-    maxHeight: '70%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  modalTitle: {
-    ...typography.h3,
-    color: colors.text,
-  },
-  modalClose: {
-    fontSize: 24,
-    color: colors.textMuted,
-    padding: spacing.xs,
-  },
-  modalBody: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-  },
-  previewLine: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  previewNum: {
-    ...typography.small,
-    color: colors.textMuted,
-    width: 24,
-  },
-  previewText: {
-    ...typography.caption,
-    color: colors.text,
-    flex: 1,
-  },
-  previewEmpty: {
-    ...typography.caption,
-    color: colors.textMuted,
-    textAlign: 'center',
-    padding: spacing.xxl,
-  },
-});

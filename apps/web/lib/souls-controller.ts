@@ -52,7 +52,10 @@ export interface CheckpointsResponse {
 
 export const soulsController = {
   async list(): Promise<SoulsResponse> {
-    return apiGet<SoulsResponse>('/souls')
+    const souls = await apiGet<Soul[]>('/souls')
+    // _meta is attached by http-client unwrap for StandardResponse meta field
+    const meta = (souls as any)?._meta
+    return {souls: souls || [], current_soul: meta?.current_soul}
   },
 
   async getCurrent(): Promise<Soul | null> {
@@ -70,7 +73,9 @@ export const soulsController = {
   },
 
   async listCheckpoints(): Promise<CheckpointsResponse> {
-    return apiGet<CheckpointsResponse>('/auto-train/checkpoints')
+    const data = await apiGet<Checkpoint[] | { checkpoints: Checkpoint[] }>('/auto-train/checkpoints')
+    const checkpoints = Array.isArray(data) ? data : (data?.checkpoints ?? [])
+    return {checkpoints}
   },
 
   async loadCheckpoint(name: string): Promise<{ status: string; name: string; soul?: string; loss?: number; steps?: number; traits?: Record<string, number>; path?: string }> {
@@ -99,29 +104,30 @@ export const soulsController = {
   },
 
   async listWeightSnapshots(): Promise<{ name: string; saved_at?: string; label?: string }[]> {
-    const res = await apiGet<{ snapshots: { name: string; saved_at?: string; label?: string }[] }>('/souls/weights/snapshots')
-    return res.snapshots
+    const data = await apiGet<{ name: string; saved_at?: string; label?: string }[] | { snapshots: { name: string; saved_at?: string; label?: string }[] }>('/souls/weights/snapshots')
+    // Handle both StandardResponse (unwrapped array) and legacy {snapshots: [...]}
+    return Array.isArray(data) ? data : (data?.snapshots ?? [])
   },
 
   async saveWeightSnapshot(name: string): Promise<string> {
-    const res = await apiPost<{ status: string; path: string }>(
+    const res = await apiPost<{ path: string } | { status: string; path: string }>(
       `/souls/weights/snapshot/${encodeURIComponent(name)}`
     )
     return res.path
   },
 
   async loadWeightSnapshot(name: string): Promise<number> {
-    const res = await apiPost<{ status: string; traits_loaded: number }>(
+    const res = await apiPost<{ traits_loaded: number } | { status: string; traits_loaded: number }>(
       `/souls/weights/snapshot/${encodeURIComponent(name)}/load`
     )
     return res.traits_loaded
   },
 
   async deleteWeightSnapshot(name: string): Promise<boolean> {
-    const res = await apiDelete<{ deleted: boolean }>(
+    const res = await apiDelete<{ deleted: boolean } | { status: string; data: { deleted: boolean } }>(
       `/souls/weights/snapshot/${encodeURIComponent(name)}`
     )
-    return res.deleted
+    return (res as any).deleted ?? (res as any)?.data?.deleted ?? false
   },
 
   async saveTraitWeights(weights: Record<string, Record<string, number>>): Promise<{ status: string }> {

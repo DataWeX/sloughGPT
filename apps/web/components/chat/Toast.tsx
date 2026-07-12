@@ -187,7 +187,7 @@ export function ToastContainer({ toasts, onDismiss, onClearAll }: ToastContainer
 // ── Radix Toast Bridge ──────────────────────────────────────────
 
 import {
-  ToastProvider, ToastViewport, Toast as RadixToast,
+  ToastProvider, ToastViewport, Toast,
   ToastTitle, ToastDescription, ToastClose,
 } from '@sloughgpt/strui'
 
@@ -199,7 +199,7 @@ const TYPE_BORDER: Record<ToastType, string> = {
 
 export function RadixToastContainer({ toasts, onDismiss, onClearAll }: ToastContainerProps) {
   return (
-    <ToastProvider duration={Infinity}>
+    <ToastProvider>
       {toasts.length > 2 && onClearAll && (
         <button
           onClick={onClearAll}
@@ -210,7 +210,7 @@ export function RadixToastContainer({ toasts, onDismiss, onClearAll }: ToastCont
         </button>
       )}
       {toasts.map((t) => (
-        <RadixToast key={t.id} open onOpenChange={(open) => { if (!open) onDismiss(t.id) }} className={['border-l-4', TYPE_BORDER[t.type]].join(' ')}>
+        <Toast key={t.id} className={['border-l-4', TYPE_BORDER[t.type]].join(' ')}>
           <div className="flex items-start gap-3 w-full">
             <span className="mt-0.5 text-sm shrink-0">
               {t.type === 'success' ? '✨' : t.type === 'error' ? '😕' : '💡'}
@@ -219,9 +219,9 @@ export function RadixToastContainer({ toasts, onDismiss, onClearAll }: ToastCont
               <ToastTitle className="text-sm">{t.message}</ToastTitle>
               {t.verbose && <ToastDescription className="mt-1">{t.verbose}</ToastDescription>}
             </div>
-            <ToastClose />
+            <ToastClose onClick={() => onDismiss(t.id)} />
           </div>
-        </RadixToast>
+        </Toast>
       ))}
       <ToastViewport />
     </ToastProvider>

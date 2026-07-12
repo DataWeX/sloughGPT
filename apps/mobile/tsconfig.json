@@ -19,5 +19,5 @@
     }
   },
   "include": ["src/**/*", "App.tsx", "index.js"],
-  "exclude": ["node_modules", "**/__tests__/**", "**/*.test.ts", "**/*.test.tsx"]
+  "exclude": ["node_modules", "**/__tests__/**", "**/*.test.ts", "**/*.test.tsx", "node_modules/@tamagui/**"]
 }

@@ -3,6 +3,8 @@ LoRA Evaluation Router - Trigger adapter quality evaluation.
 """
 from fastapi import APIRouter, HTTPException, Query
 
+from schemas.common import success_response
+
 router = APIRouter(prefix="/lora-eval", tags=["lora-eval"])
 
 
@@ -38,21 +40,21 @@ async def run_eval(
             if Path(adapter_file).exists():
                 with_adapter = evaluator.run(adapter_path=adapter_file, soul_name=soul, save=True)
                 delta = evaluator.compare(baseline, with_adapter)
-                return {
+                return success_response(data={
                     "status": "compared",
                     "baseline": baseline.to_dict(),
                     "with_adapter": with_adapter.to_dict(),
                     "delta": delta,
                     "report": evaluator.compare_with_report(baseline, with_adapter),
-                }
+                })
         except Exception:
             pass
 
-        return {
+        return success_response(data={
             "status": "baseline_only",
             "baseline": baseline.to_dict(),
             "note": "No adapter found — run aggregate first",
-        }
+        })
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -75,7 +77,7 @@ async def get_eval_history(limit: int = 20):
         from domains.feedback.lora_eval import get_lora_evaluator
         evaluator = get_lora_evaluator()
         results = evaluator.get_history(limit=limit)
-        return {"results": [r.to_dict() for r in results]}
+        return success_response(data={"results": [r.to_dict() for r in results]})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -105,11 +107,11 @@ async def trigger_aggregation(
         )
 
         if "error" in result:
-            return {"status": "no_adapters", "message": result["error"]}
+            return success_response(data={"status": "no_adapters", "message": result["error"]})
 
         eval_result = result.get("eval", {})
         if "error" not in eval_result:
-            return {
+            return success_response(data={
                 "status": "aggregated_with_eval",
                 "output_path": result["output_path"],
                 "user_count": result["user_count"],
@@ -121,13 +123,13 @@ async def trigger_aggregation(
                     "throughput_delta": eval_result.get("delta", {}).get("throughput_delta"),
                     "report": eval_result.get("report", ""),
                 },
-            }
+            })
 
-        return {
+        return success_response(data={
             "status": "aggregated_no_eval",
             "output_path": result["output_path"],
             "user_count": result["user_count"],
             "total_feedback": result["total_feedback"],
-        }
+        })
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

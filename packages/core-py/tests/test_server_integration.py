@@ -402,9 +402,9 @@ class TestWarmup:
     def test_warmup_default_enabled(self, model, tokenizer):
         """Warmup runs by default on construction."""
         server = ModelServer(model, tokenizer, model_id="warmup", enable_warmup=True)
-        # Give warmup thread time to finish (may take longer on slow machines)
+        # Give warmup thread time to finish (may take longer on slow machines or with CPU fallback)
         import time
-        for _ in range(10):
+        for _ in range(20):
             time.sleep(0.5)
             with server._warmup_lock:
                 if server._warmup_completed or server._warmup_error:

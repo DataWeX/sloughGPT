@@ -41,6 +41,27 @@ def _get_model_info() -> Tuple[bool, Optional[str]]:
     return False, None
 
 
+def _get_lifecycle_info() -> Dict[str, Any]:
+    """Get lifecycle phase and profile info from the lifecycle manager."""
+    try:
+        from domains.infrastructure.lifecycle import get_lifecycle_manager
+        mgr = get_lifecycle_manager()
+        return {
+            "phase": mgr.phase.value,
+            "profile": mgr.get_profile().value,
+            "is_running": mgr.is_running(),
+            "is_draining": mgr.is_draining(),
+            "uptime": round(mgr.uptime_seconds, 1),
+            "in_flight": mgr.in_flight_count,
+        }
+    except Exception as exc:
+        return {
+            "phase": "unavailable",
+            "profile": "unknown",
+            "error": str(exc),
+        }
+
+
 def _get_inference_stats() -> Dict[str, Any]:
     """Get inference stats from models controller"""
     try:
@@ -51,6 +72,51 @@ def _get_inference_stats() -> Dict[str, Any]:
         return {}
     except Exception:
         return {}
+
+
+def _get_quantization_info() -> Dict[str, Any]:
+    """Get quantization status from the active provider."""
+    try:
+        from domains.models.provider import get_provider
+        # Try slonet first, then hf-default
+        provider = get_provider("slonet")
+        if provider is None:
+            provider = get_provider("hf-default")
+        if provider is not None and hasattr(provider, 'quantization_report'):
+            return provider.quantization_report()
+        return {}
+    except Exception:
+        return {}
+
+
+def _build_status_message(
+    model_loaded: bool,
+    model_type: Optional[str],
+    current_soul: Optional[str],
+    request_count: int,
+    error_count: int,
+    lifecycle: Dict[str, Any],
+) -> str:
+    """Build a human-readable status message incorporating lifecycle phase."""
+    phase = lifecycle.get("phase", "unknown")
+    profile = lifecycle.get("profile", "unknown")
+
+    if lifecycle.get("is_draining"):
+        return f"Draining — completing {lifecycle.get('in_flight', 0)} in-flight requests."
+
+    if not lifecycle.get("is_running", False):
+        return f"Starting — phase={phase}, profile={profile}."
+
+    if model_loaded:
+        msg = (
+            f"Ready — {model_type or 'model'} loaded"
+            + (f" with {current_soul} personality" if current_soul else "")
+            + f". Served {request_count} requests."
+            + (f" {error_count} errors." if error_count > 0 else "")
+        )
+    else:
+        msg = f"Server running, no model loaded. Profile: {profile}."
+    return msg
 
 
 class HealthController:
@@ -67,6 +133,7 @@ class HealthController:
         """Get basic health status with flow-based summary."""
         model_loaded, model_type = _get_model_info()
         inference_stats = _get_inference_stats()
+        lifecycle = _get_lifecycle_info()
         result: Dict[str, Any] = {
             "status": "healthy",
             "timestamp": datetime.now().isoformat(),
@@ -74,16 +141,13 @@ class HealthController:
             "model_type": model_type,
             "is_inferencing": inference_stats.get("is_inferencing", False),
             "inference_count": inference_stats.get("inference_count", 0),
+            "lifecycle": lifecycle,
         }
 
-        # Flow-based summary sentence
-        try:
-            from domains.infrastructure.server_state import get_server_state
-            ss = get_server_state()
-            hs = ss.get_health_score()
-            result["summary"] = hs.get("summary", "")
-        except Exception:
-            result["summary"] = ""
+        # Status message from lifecycle + model state
+        result["status_message"] = _build_status_message(
+            model_loaded, model_type, None, 0, 0, lifecycle,
+        )
 
         if model_loaded:
             try:
@@ -94,6 +158,11 @@ class HealthController:
                         result["num_parameters"] = sum(p.numel() for p in model.parameters())
             except Exception:
                 pass
+
+        # Quantization status
+        quant_info = _get_quantization_info()
+        if quant_info:
+            result["quantization"] = quant_info
 
         return result
 
@@ -172,8 +241,10 @@ class HealthController:
             memory_history = []
             rate_violations = []
 
+        lifecycle = _get_lifecycle_info()
+
         result = {
-            "status": "healthy",
+            "status": "healthy" if lifecycle.get("is_running", False) else lifecycle.get("phase", "unknown"),
             "uptime_seconds": uptime,
             "timestamp": datetime.now().isoformat(),
             "request_count": request_count,
@@ -203,12 +274,12 @@ class HealthController:
             "soul": current_soul,
             "inference": inference_stats,
             "registry": registry_health,
-            "status_message": (
-                f"Ready — {model_type or 'model'} loaded"
-                + (f" with {current_soul} personality" if current_soul else "")
-                + f". Served {request_count} requests."
-                + (f" {error_count} errors." if error_count > 0 else "")
-            ) if model_loaded else "Server running, no model loaded.",
+            "quantization": _get_quantization_info(),
+            "lifecycle": lifecycle,
+            "status_message": _build_status_message(
+                model_loaded, model_type, current_soul,
+                request_count, error_count, lifecycle,
+            ),
         }
         self._cache = result
         self._cache_time = now

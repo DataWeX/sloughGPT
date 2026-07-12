@@ -4,6 +4,9 @@ Standard I/O abstraction for shell — one writer, one reader, no raw escapes.
 Provides a clean interface over the terminal so that the REPL, CLI, and TUI
 share the same output model. All ANSI escapes, cursor movement, pagination,
 and layout are encapsulated here.
+
+OutputLine and OutputBuffer live in domains.infrastructure.output_buffer
+and are re-exported here for backward compatibility.
 """
 
 import os
@@ -13,6 +16,9 @@ import signal
 import threading
 from contextlib import contextmanager
 from typing import IO, Callable, Optional
+
+# Re-export from shared infrastructure (single source of truth)
+from domains.infrastructure.output_buffer import OutputLine, OutputBuffer  # noqa: F401
 
 
 # ── Colour & Style helpers ──────────────────────────────────────────────
@@ -147,84 +153,6 @@ class TerminalInfo:
         self.height: int = size.lines
         self.color: bool = _COLOR_CAPS
         self.is_tty: bool = sys.stdout.isatty()
-
-
-# ── Output Types ────────────────────────────────────────────────────────
-
-class OutputLine:
-    """A single line of output with style metadata."""
-
-    __slots__ = ("text", "style", "indent")
-
-    def __init__(self, text: str = "", style: str = "", indent: int = 0) -> None:
-        self.text = text
-        self.style = style       # ANSI prefix
-        self.indent = indent
-
-    def render(self, width: int, color: bool = True) -> str:
-        prefix = " " * self.indent
-        line = prefix + self.text
-        if color and self.style:
-            return self.style + line + Ansi.reset()
-        return line
-
-    def __repr__(self) -> str:
-        return f"OutputLine({self.text[:30]!r})"
-
-
-class OutputBuffer:
-    """Scrollable buffer of OutputLines with viewport tracking."""
-
-    def __init__(self, max_lines: int = 5000) -> None:
-        self._lines: list[OutputLine] = []
-        self._max = max_lines
-        self._view_top = 0        # first visible line index
-        self._view_height = 0     # number of visible lines
-        self._lock = threading.Lock()
-
-    def append(self, line: OutputLine) -> None:
-        with self._lock:
-            self._lines.append(line)
-            if len(self._lines) > self._max:
-                excess = len(self._lines) - self._max
-                self._lines = self._lines[excess:]
-                self._view_top = max(0, self._view_top - excess)
-
-    def append_text(self, text: str, style: str = "", indent: int = 0) -> None:
-        self.append(OutputLine(text, style, indent))
-
-    def clear(self) -> None:
-        with self._lock:
-            self._lines.clear()
-            self._view_top = 0
-
-    @property
-    def lines(self) -> list[OutputLine]:
-        return self._lines
-
-    @property
-    def count(self) -> int:
-        return len(self._lines)
-
-    def scroll(self, delta: int) -> None:
-        with self._lock:
-            max_top = max(0, len(self._lines) - self._view_height)
-            self._view_top = max(0, min(self._view_top + delta, max_top))
-
-    def scroll_to_bottom(self) -> None:
-        with self._lock:
-            self._view_top = max(0, len(self._lines) - self._view_height)
-
-    @property
-    def visible_lines(self) -> list[OutputLine]:
-        with self._lock:
-            return self._lines[self._view_top:self._view_top + self._view_height]
-
-    def set_viewport(self, height: int) -> None:
-        self._view_height = max(1, height)
-        with self._lock:
-            max_top = max(0, len(self._lines) - self._view_height)
-            self._view_top = max(0, min(self._view_top, max_top))
 
 
 # ── StdioWriter ─────────────────────────────────────────────────────────

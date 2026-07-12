@@ -29,13 +29,7 @@ class ModelsController:
         self._is_inferencing: bool = False
 
     def _resolve_device(self, device: str) -> str:
-        """Resolve device string for PyTorch model placement.
-
-        Forces CPU on 8GB Macs — MPS hits the 6.8GB limit after a few
-        generations due to KV cache accumulation in float32. The MPS
-        monitor is kept for reference but device resolution always
-        prefers CPU for stability.
-        """
+        """Resolve device string for PyTorch model placement: mps > cuda > cpu."""
         if device is None or device == "auto":
             try:
                 from domains.infrastructure.ml_types import auto_device
@@ -136,10 +130,22 @@ class ModelsController:
             }
 
         try:
-            from domains.infrastructure.model_loader import load_hf_model as safe_load
+            from domains.infrastructure.model_loader import load_model
+            from domains.infrastructure.model_loader import LoadResult
 
             resolved_device = self._resolve_device(device)
-            model, tokenizer, actual_device = safe_load(model_id, resolved_device)
+            result: LoadResult = load_model(
+                model_id,
+                device=resolved_device,
+                verify=False,
+            )
+
+            if not result.success:
+                raise RuntimeError(result.error or f"Failed to load {model_id}")
+
+            model = result.model
+            tokenizer = result.tokenizer
+            actual_device = result.metrics.get("device", resolved_device)
 
             self._tokenizer = tokenizer
             self._hf_model = model
@@ -149,7 +155,6 @@ class ModelsController:
                 from domains.infrastructure.safetensors_loader import load_model_config
                 config = load_model_config(model_id) if not isinstance(tokenizer, dict) else tokenizer
                 total_params = sum(arr.size for arr in model.values())
-                # Store weights for provider — no model object available
                 self._hf_weights = model
                 self._hf_config = config if isinstance(config, dict) else {}
             else:
@@ -160,7 +165,6 @@ class ModelsController:
             server_state.tokenizer = tokenizer
 
             # Register model with ModelRegistry BEFORE setup_providers()
-            # Only register if we have a real model object (not safetensors dict)
             if not isinstance(model, dict):
                 from domains.infrastructure.model_registry import get_model_registry
                 model_registry = get_model_registry()
@@ -184,8 +188,7 @@ class ModelsController:
                 except Exception as e:
                     logger.warning("Failed to create InferenceEngine: %s", e)
 
-            # Register all providers via setup_providers (handles priority,
-            # hf-default registration, and default router wiring).
+            # Register all providers via setup_providers
             try:
                 from domains.models.provider import setup_providers
                 setup_providers(

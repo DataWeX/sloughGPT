@@ -15,6 +15,7 @@ from schemas.datasets import (
     BatchImportRequest, ISBNImportRequest, ImportResponse,
     VersionCreateResponse, VersionListResponse, VersionRestoreResponse,
 )
+from schemas.common import success_response
 from controllers.datasets import get_datasets_controller
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
@@ -264,7 +265,7 @@ async def batch_import(request: BatchImportRequest):
         except Exception as e:
             errors.append({"index": i, "error": str(e)})
 
-    return {"imported": len(results), "errors": errors}
+    return success_response(data={"imported": len(results), "errors": errors})
 
 
 @router.get("/search/books")
@@ -273,7 +274,7 @@ async def search_books(q: str = Query(..., description="Search by title or ISBN"
     from domains.training.data_import import BooksSearch
     searcher = BooksSearch()
     results = searcher.search(q, limit)
-    return {"books": results}
+    return success_response(data={"books": results})
 
 
 @router.get("/search/github")
@@ -294,7 +295,7 @@ async def search_github(q: str = Query(..., description="Search query"), limit: 
         }
         for item in items
     ]
-    return {"repos": repos}
+    return success_response(data={"repos": repos})
 
 
 @router.post("/import/isbn", response_model=ImportResponse)
@@ -328,7 +329,7 @@ async def search_datasets(q: str = Query(..., description="Search query")):
     """Search datasets by name"""
     ctrl = get_datasets_controller()
     results = ctrl.search_datasets(q)
-    return {"results": results, "count": len(results)}
+    return success_response(data={"results": results, "count": len(results)})
 
 
 @router.get("/{dataset_id}", response_model=DatasetInfo)
@@ -376,7 +377,7 @@ async def delete_dataset(dataset_id: str):
     ok = ctrl.delete_dataset(dataset_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Dataset not found")
-    return {"status": "deleted", "dataset_id": dataset_id}
+    return success_response(data={"status": "deleted", "dataset_id": dataset_id})
 
 
 @router.post("/{dataset_id}/versions", response_model=VersionCreateResponse)
@@ -416,7 +417,7 @@ async def add_dataset_data(dataset_id: str, req: DatasetDataRequest):
     result = ctrl.add_data(dataset_id, req.data)
     if result is None:
         raise HTTPException(status_code=404, detail="Dataset not found")
-    return {"status": "appended", "rows_added": result}
+    return success_response(data={"status": "appended", "rows_added": result})
 
 
 

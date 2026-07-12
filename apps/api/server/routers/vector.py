@@ -6,6 +6,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
 
+from schemas.common import success_response
+
 router = APIRouter(prefix="/vector", tags=["vector"])
 
 _vector_store = None
@@ -59,7 +61,7 @@ async def init_vector_store(config: VectorStoreConfig):
             set_vector_store_ref(_vector_store)
         except Exception:
             pass
-        return {"status": "connected", "provider": _vector_store_type}
+        return success_response(data={"status": "connected", "provider": _vector_store_type})
     except ImportError:
         _vector_store_type = "in_memory"
         _vector_store = await create_vector_store(provider="in_memory", dimension=384)
@@ -68,7 +70,7 @@ async def init_vector_store(config: VectorStoreConfig):
             set_vector_store_ref(_vector_store)
         except Exception:
             pass
-        return {"status": "connected", "provider": "in_memory", "note": "chromadb not installed, using in-memory store"}
+        return success_response(data={"status": "connected", "provider": "in_memory", "note": "chromadb not installed, using in-memory store"})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -77,8 +79,8 @@ async def init_vector_store(config: VectorStoreConfig):
 async def get_stats():
     store = await get_vector_store()
     if not store:
-        return {"provider": _vector_store_type, "count": 0}
-    return {"provider": _vector_store_type, "count": await store.count()}
+        return success_response(data={"provider": _vector_store_type, "count": 0})
+    return success_response(data={"provider": _vector_store_type, "count": await store.count()})
 
 
 @router.post("/upsert")
@@ -98,20 +100,20 @@ async def upsert_vectors(request: UpsertRequest):
         )
         entries.append(entry)
     count = await store.upsert(entries)
-    return {"status": "upserted", "count": count}
+    return success_response(data={"status": "upserted", "count": count})
 
 
 @router.post("/search")
 async def search_vectors(request: SearchRequest):
     store = await get_vector_store()
     if not store:
-        return {"results": []}
+        return success_response(data={"results": []})
     from domains.inference.vector_store import simple_embed
     query_embedding = simple_embed(request.query)
     results = await store.query(query_embedding, top_k=request.top_k)
-    return {"results": [{"text": r.text, "score": r.score, "id": r.id} for r in results]}
+    return success_response(data={"results": [{"text": r.text, "score": r.score, "id": r.id} for r in results]})
 
 
 @router.get("/ingest/status")
 async def ingest_status():
-    return {"status": "ready"}
+    return success_response(data={"status": "ready"})

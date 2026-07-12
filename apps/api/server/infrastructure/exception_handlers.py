@@ -12,6 +12,7 @@ Register via ``register_all_handlers(app)``.
 
 from __future__ import annotations
 
+import json
 import logging
 import traceback
 
@@ -46,10 +47,12 @@ async def _validation_error_handler(request: Request, exc: ValidationError) -> J
 async def _request_validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """Catch FastAPI request validation errors."""
     errors = exc.errors()
-    logger.warning("Request validation error on %s: %s", request.url.path, errors)
+    # Pydantic v2 may include bytes in error detail (raw request body) — convert for JSON safety
+    _safe = json.loads(json.dumps(errors, default=str))
+    logger.warning("Request validation error on %s: %s", request.url.path, _safe)
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"error": "Request validation failed", "details": errors},
+        content={"error": "Request validation failed", "details": _safe},
     )
 
 

@@ -12,14 +12,8 @@ import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { IconTrash, IconDownload, IconEdit, IconCheck, IconX, IconRefresh } from '@sloughgpt/strui'
 import { datasetController, type Dataset, type DatasetStats } from '@/lib/dataset-controller'
 import { DatasetPreview } from '@/components/DatasetPreview'
+import { formatBytes } from '@/lib/format-bytes'
 import { useToastStore } from '@/lib/toast-store'
-
-function formatBytes(bytes: number): string {
-  if (!bytes) return '—'
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
 
 export default function DatasetDetailPage() {
   const params = useParams()

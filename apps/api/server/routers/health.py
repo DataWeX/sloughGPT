@@ -11,43 +11,44 @@ from schemas.health import (
 )
 from controllers.health import get_health_controller
 from startup_progress import STARTUP_PHASE
+from schemas.common import success_response
 
 router = APIRouter(prefix="/health", tags=["health"])
 
 
-@router.get("", response_model=HealthResponse)
+@router.get("")
 async def health():
     """Basic health check"""
     ctrl = get_health_controller()
-    return ctrl.get_basic_health()
+    return success_response(data=ctrl.get_basic_health())
 
 
-@router.get("/live", response_model=LivenessResponse)
+@router.get("/live")
 async def liveness():
     """Kubernetes liveness probe"""
     ctrl = get_health_controller()
-    return ctrl.get_liveness()
+    return success_response(data=ctrl.get_liveness())
 
 
-@router.get("/ready", response_model=ReadinessResponse)
+@router.get("/ready")
 async def readiness():
     """Kubernetes readiness probe"""
     ctrl = get_health_controller()
-    return ctrl.get_readiness()
+    return success_response(data=ctrl.get_readiness())
 
 
-@router.get("/detailed", response_model=DetailedHealthResponse)
+@router.get("/detailed")
 async def detailed_health():
     """Detailed health with system metrics"""
     ctrl = get_health_controller()
-    return ctrl.get_detailed_health()
+    return success_response(data=ctrl.get_detailed_health())
 
 
 @router.get("/startup-progress")
 async def startup_progress():
     """Return current server startup phase so the frontend can show
     meaningful progress during the startup sequence."""
-    return STARTUP_PHASE
+    return success_response(data=STARTUP_PHASE)
 
 
 @router.get("/debug")
@@ -59,7 +60,7 @@ async def debug_info():
     """
     ctrl = get_health_controller()
     detailed = ctrl.get_detailed_health()
-    return {
+    return success_response(data={
         "model_loaded": detailed.get("model_loaded", False),
         "model_type": detailed.get("model_type"),
         "soul": detailed.get("soul"),
@@ -83,7 +84,7 @@ async def debug_info():
         "cpu_percent": detailed.get("system", {}).get("cpu_percent"),
         "memory_percent": detailed.get("system", {}).get("memory_percent"),
         "gpu_backend": detailed.get("gpu", {}).get("backend"),
-    }
+    })
 
 
 @router.get("/model")
@@ -100,9 +101,9 @@ async def model_health():
         if server_state.model is not None and mon._model is None:
             mon.set_model(server_state.model, server_state.tokenizer)
         stats = mon.get_stats()
-        return {"status": "ok", **stats}
+        return success_response(data={"status": "ok", **stats})
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return success_response(data={"status": "error", "message": str(e)})
 
 
 @router.get("/summary")
@@ -115,7 +116,7 @@ async def health_summary():
     ctrl = get_health_controller()
     detailed = ctrl.get_detailed_health()
     hs = detailed.get("health_score", {})
-    return {
+    return success_response(data={
         "score": hs.get("score", 0),
         "status": hs.get("status", "unknown"),
         "summary": hs.get("summary", ""),
@@ -129,4 +130,4 @@ async def health_summary():
         "tokens_per_sec": detailed.get("tokens_per_sec", 0),
         "cpu_percent": detailed.get("system", {}).get("cpu_percent"),
         "memory_percent": detailed.get("system", {}).get("memory_percent"),
-    }
+    })

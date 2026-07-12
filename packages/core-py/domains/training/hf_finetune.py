@@ -357,6 +357,110 @@ class HFFineTuner:
         )
 
 
+def merge_lora_adapter(
+    adapter_path: str,
+    output_path: Optional[str] = None,
+    push_to_hub: bool = False,
+    hub_model_id: Optional[str] = None,
+) -> str:
+    """Merge LoRA adapter weights into the base model and save the merged result.
+
+    Uses peft's merge_and_unload() to fold the low-rank matrices back into the
+    base weights, producing a standalone model with no adapter overhead.
+
+    Args:
+        adapter_path: Path to the saved PEFT adapter directory (contains
+            adapter_config.json + adapter_model.bin).
+        output_path: Where to save the merged model. Defaults to
+            ``<adapter_path>/merged``.
+        push_to_hub: If True, push the merged model to HuggingFace Hub.
+        hub_model_id: Hub model ID (e.g. ``user/model-name``). Required when
+            push_to_hub is True.
+
+    Returns:
+        Absolute path to the merged model directory.
+
+    Raises:
+        ImportError: If peft is not installed.
+        FileNotFoundError: If adapter_path does not exist.
+        ValueError: If push_to_hub is True but hub_model_id is not provided.
+    """
+    import os
+    from pathlib import Path
+
+    # Check peft availability first (before filesystem checks)
+    try:
+        from peft import PeftModel  # noqa: F401
+    except ImportError:
+        raise ImportError(
+            "peft is required for LoRA merge. Install with: pip install peft"
+        )
+
+    adapter_dir = Path(adapter_path)
+    if not adapter_dir.exists():
+        raise FileNotFoundError(f"Adapter not found: {adapter_path}")
+
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    # Load adapter config to find base model name
+    adapter_config_path = adapter_dir / "adapter_config.json"
+    if not adapter_config_path.exists():
+        raise FileNotFoundError(f"Missing adapter_config.json in {adapter_path}")
+
+    with open(adapter_config_path) as f:
+        adapter_config = json.load(f)
+
+    base_model_name = adapter_config.get("base_model_name_or_path")
+    if not base_model_name:
+        raise ValueError("adapter_config.json missing base_model_name_or_path")
+
+    logger.info("Loading base model: %s", base_model_name)
+    base_model = AutoModelForCausalLM.from_pretrained(
+        base_model_name,
+        dtype=torch.float32,
+        trust_remote_code=True,
+    )
+
+    logger.info("Loading LoRA adapter from: %s", adapter_path)
+    model = PeftModel.from_pretrained(base_model, adapter_path)
+
+    logger.info("Merging LoRA weights into base model...")
+    merged_model = model.merge_and_unload()
+
+    if output_path is None:
+        output_path = str(adapter_dir / "merged")
+
+    out = Path(output_path)
+    out.mkdir(parents=True, exist_ok=True)
+
+    logger.info("Saving merged model to: %s", output_path)
+    merged_model.save_pretrained(output_path)
+
+    # Save tokenizer too
+    tokenizer = AutoTokenizer.from_pretrained(adapter_path, trust_remote_code=True)
+    tokenizer.save_pretrained(output_path)
+
+    # Write merge metadata
+    merge_info = {
+        "base_model": base_model_name,
+        "adapter_path": str(adapter_path),
+        "merged_at": datetime.now(timezone.utc).isoformat(),
+    }
+    with open(out / "merge_info.json", "w") as f:
+        json.dump(merge_info, f, indent=2)
+
+    if push_to_hub:
+        if not hub_model_id:
+            raise ValueError("hub_model_id is required when push_to_hub=True")
+        merged_model.push_to_hub(hub_model_id)
+        tokenizer.push_to_hub(hub_model_id)
+        logger.info("Pushed merged model to Hub: %s", hub_model_id)
+
+    logger.info("LoRA merge complete: %s", output_path)
+    return str(out.resolve())
+
+
 class RewardFn:
     """Scoring function for generated completions.
 

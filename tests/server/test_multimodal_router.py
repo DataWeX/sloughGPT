@@ -53,52 +53,56 @@ def _mock_manager():
 
 
 class TestCapabilities:
-    """GET /multimodal/capabilities"""
+    """GET /multimodal/status (consolidated from /capabilities, /learning-progress, /training-report)"""
 
     @patch(MGR_TARGET)
     def test_get_capabilities(self, mock_get):
         mock_get.return_value = _mock_manager()
-        resp = client.get("/multimodal/capabilities")
+        resp = client.get("/multimodal/status")
         assert resp.status_code == 200
-        data = resp.json()
-        assert "speech_to_text" in data
-        assert "image_caption" in data
-        assert "images_learned" in data
-        assert "trained" in data
-        assert data["trained"] is True
-        assert data["images_learned"] == 5
-        assert data["status"] == "trained"
+        data = resp.json()["data"]
+        caps = data["engine"]
+        assert "speech_to_text" in caps
+        assert "image_caption" in caps
+        assert caps["status"] == "trained"
+        learning = data["learning"]
+        assert "images_learned" in learning
+        assert "trained" in learning
+        assert learning["images_learned"] == 5
+        assert learning["trained"] is True
 
 
 class TestLearningProgress:
-    """GET /multimodal/learning-progress"""
+    """GET /multimodal/status (consolidated)"""
 
     @patch(MGR_TARGET)
     def test_get_progress(self, mock_get):
         mock_get.return_value = _mock_manager()
-        resp = client.get("/multimodal/learning-progress")
+        resp = client.get("/multimodal/status")
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["images_learned"] == 5
-        assert data["trained"] is True
-        assert data["vocab_size"] == 3
-        assert data["replay_buffer_size"] == 42
+        data = resp.json()["data"]
+        learning = data["learning"]
+        assert learning["images_learned"] == 5
+        assert learning["trained"] is True
+        assert learning["vocab_size"] == 3
+        assert learning["replay_buffer_size"] == 42
 
 
 class TestTrainingReport:
-    """GET /multimodal/training-report"""
+    """GET /multimodal/status (consolidated)"""
 
     @patch(MGR_TARGET)
     def test_get_report(self, mock_get):
         mock_get.return_value = _mock_manager()
-        resp = client.get("/multimodal/training-report")
+        resp = client.get("/multimodal/status")
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["images_learned"] == 5
-        assert len(data["caption_history"]) == 3
-        assert data["unique_captions"] == 3
-        assert data["diversity_ratio"] == 1.0
-        assert data["mean_accuracy"] == 0.6
+        data = resp.json()["data"]
+        learning = data["learning"]
+        assert learning["images_learned"] == 5
+        assert len(learning["caption_history"]) == 3
+        assert learning["unique_captions"] == 3
+        assert learning["diversity_ratio"] == 1.0
+        assert learning["mean_accuracy"] == 0.6
 
 
 class TestTranscribe:
@@ -113,7 +117,7 @@ class TestTranscribe:
             data={"language": "en"},
         )
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["text"] == "hello world"
         assert data["confidence"] == 0.9
 
@@ -153,7 +157,7 @@ class TestTrainOnImage:
 
 
 class TestTrainingStatus:
-    """GET /multimodal/training-status"""
+    """GET /multimodal/status (consolidated from /training-status)"""
 
     def test_training_status_idle(self):
         _background_job["running"] = False
@@ -161,11 +165,12 @@ class TestTrainingStatus:
         _background_job["total"] = 0
         _background_job["completed"] = 0
         _background_job["errors"] = 0
-        resp = client.get("/multimodal/training-status")
+        resp = client.get("/multimodal/status")
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["running"] is False
-        assert data["progress_pct"] == 0
+        data = resp.json()["data"]
+        batch = data["batch"]
+        assert batch["running"] is False
+        assert batch["progress_pct"] == 0
 
 
 class TestGenerateImage:
@@ -182,11 +187,11 @@ class TestGenerateImage:
 
 
 class TestGenerationStatus:
-    """GET /multimodal/generation-status"""
+    """GET /multimodal/status (consolidated from /generation-status)"""
 
     def test_generation_status(self):
-        resp = client.get("/multimodal/generation-status")
+        resp = client.get("/multimodal/status")
         assert resp.status_code == 200
-        data = resp.json()
-        assert "models_loaded" in data
-        assert "capabilities" in data
+        data = resp.json()["data"]
+        assert "engine" in data
+        assert "learning" in data

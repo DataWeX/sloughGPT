@@ -27,7 +27,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-import torch
+try:
+    import torch
+except ImportError:
+    torch = None
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -71,6 +74,13 @@ _bridge.setLevel(getattr(logging, _log_level_name, logging.INFO))
 logging.root.addHandler(_bridge)
 logging.root.setLevel(getattr(logging, _log_level_name, logging.INFO))
 
+# Log bridge → output buffer (for SSE streaming via /system/stream)
+try:
+    from domains.infrastructure.output_buffer import install_log_bridge
+    install_log_bridge()
+except Exception:
+    pass
+
 logger = logging.getLogger("man")
 
 
@@ -102,9 +112,11 @@ except Exception as exc:
 async def lifespan(app_inst: FastAPI):
     """Delegate startup phases to ``StartupOrchestrator``."""
     try:
+        import os
         from infrastructure.startup import StartupOrchestrator
 
-        orch = StartupOrchestrator(app_inst, cfg)
+        profile = os.environ.get("MAN_STARTUP_PROFILE", "full")
+        orch = StartupOrchestrator(app_inst, cfg, profile=profile)
         await orch.run()
         yield
         await orch.shutdown()
@@ -366,12 +378,20 @@ def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> 
             register_provider("hf-default", provider)
             logger.info("hf-default provider re-registered with ModelServer: %s", request.model_id)
 
-            # Wire default provider router with VisionProcessor for image captioning
-            router = ProviderRouter()
-            router.add_processor(VisionProcessor("multimodal"))
-            router.set_text_provider("hf-default")
-            register_provider("default", router)
-            logger.info("Default provider router registered with VisionProcessor")
+            # Wire default provider router — but don't override SloNet if already active.
+            # SloNet is registered by auto_train as "default"; replacing it would
+            # cause chat to silently fall back to HF and produce empty responses.
+            from domains.models.provider import get_provider as _gp
+            existing = _gp("default")
+            _is_slonet = existing is not None and type(existing).__name__ in ("SloTransformerProvider", "SloNetChatProvider")
+            if not _is_slonet:
+                router = ProviderRouter()
+                router.add_processor(VisionProcessor("multimodal"))
+                router.set_text_provider("hf-default")
+                register_provider("default", router)
+                logger.info("Default provider router registered with VisionProcessor")
+            else:
+                logger.info("SloNet provider active — keeping as default (skipping HF override)")
         except Exception as e:
             logger.warning("Failed to register with ModelRegistry: %s", e)
 
@@ -477,28 +497,21 @@ def _start_watchdog() -> None:
                 return False
 
         def _recover() -> bool:
-            """Attempt to recover by reloading the autoload model."""
-            try:
-                import gc
-                import torch
-
-                gc.collect()
-                if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                    torch.mps.empty_cache()
-                from config import ServerConfig
-
-                c = ServerConfig.from_env()
-                req = LoadModelRequest(model_id=c.autoload_model, mode="local", device=c.autoload_device)
-                result = _load_hf_model_core(req, use_slonet=c.use_slonet)
-                return result.get("status") != "error"
-            except Exception as e:
-                logger.error("Recovery failed: %s", e)
-                return False
+            """Log-only recovery — model reload from a watchdog thread is dangerous
+            (memory pressure, provider state corruption, 45s+ blocking on GIL/I/O).
+            If recovery is truly needed, call /models/load manually.
+            """
+            logger.warning(
+                "Watchdog detected %d consecutive health failures. "
+                "Manual recovery required — model inference may be degraded.",
+                watchdog._consecutive_failures,
+            )
+            return False
 
         watchdog.set_health_check_fn(_check_health)
         watchdog.set_recovery_fn(_recover)
         watchdog.start(poll_interval=15, max_failures=3)
-        logger.info("Health watchdog started (poll=15s, max_failures=3)")
+        logger.info("Health watchdog started (poll=15s, max_failures=3, recovery=log-only)")
     except Exception as e:
         logger.warning("Failed to start watchdog: %s", e)
 
@@ -549,19 +562,21 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # Daemonize if requested
+    # Daemonize if requested — use subprocess to avoid fork() issues
     if args.daemon:
-        pid = os.fork()
-        if pid > 0:
-            print(f"Server started as daemon (PID {pid})")
-            sys.exit(0)
-        os.setsid()
-        # Redirect stdio to /dev/null
-        devnull = os.open(os.devnull, os.O_RDWR)
-        os.dup2(devnull, 0)
-        os.dup2(devnull, 1)
-        os.dup2(devnull, 2)
-        os.close(devnull)
+        import subprocess as sp
+        cmd = [sys.executable, __file__]
+        if args.port:
+            cmd += ["--port", str(args.port)]
+        proc = sp.Popen(
+            cmd,
+            stdin=sp.DEVNULL,
+            stdout=sp.DEVNULL,
+            stderr=sp.DEVNULL,
+            start_new_session=True,
+        )
+        print(f"Server started as daemon (PID {proc.pid})")
+        sys.exit(0)
 
     # Kill orphan processes on target port to avoid port conflicts
     bind_port = args.port or cfg.port

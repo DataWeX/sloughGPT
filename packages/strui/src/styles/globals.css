@@ -165,19 +165,6 @@ body {
       radial-gradient(ellipse at 80% 100%, color-mix(in srgb, var(--accent) 12%, transparent) 0%, transparent 50%);
   }
 
-  /**
-   * Chat message list — Claude-style “notebook” canvas: flat surface, no busy gradients.
-   * Scroll padding keeps the last line clear of the composer on mobile.
-   */
-  .str-chat-thread {
-    scroll-padding-bottom: 1.25rem;
-    background-color: var(--background);
-  }
-
-  .sl-page {
-    @apply p-4 sm:p-6 md:p-8 text-foreground;
-  }
-
   /** Monitoring SYS.LOG — subtle scanlines + primary wash (matches shell “lattice” look) */
   .sl-log-feed {
     background-color: color-mix(in srgb, var(--card) 88%, var(--muted));

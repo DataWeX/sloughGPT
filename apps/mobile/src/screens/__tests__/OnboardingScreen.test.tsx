@@ -1,5 +1,5 @@
 import React from 'react';
-import {render} from '@testing-library/react-native';
+import {render} from '@/test-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {isFirstLaunch, markOnboarded} from '../OnboardingScreen';
 

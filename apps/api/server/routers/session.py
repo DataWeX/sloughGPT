@@ -10,6 +10,8 @@ from typing import Optional, List, Dict, Any, AsyncIterator
 from datetime import datetime
 import json
 
+from schemas.common import success_response, error_response
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/session", tags=["session"])
@@ -43,8 +45,8 @@ async def set_session_context(session_id: str, ctx: SessionContext):
     if ctx.messages:
         from domains.infrastructure.session_core import SessionCore
         result = SessionCore.store_context(session_id, ctx.messages)
-        return result
-    return {"status": "stored", "session_id": session_id, "message_count": 0}
+        return success_response(data=result)
+    return success_response(data={"session_id": session_id, "message_count": 0}, message="stored")
 
 
 def get_router_session_context(session_id: str) -> Optional[List[Dict[str, Any]]]:
@@ -66,7 +68,7 @@ async def get_session_messages(session_id: str):
     from domains.infrastructure.session_core import SessionCore
     try:
         msgs = SessionCore.get_messages(session_id)
-        return {"status": "ok", "session_id": session_id, "messages": msgs}
+        return success_response(data={"session_id": session_id, "messages": msgs})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -176,6 +178,7 @@ async def regenerate_session(session_id: str, request: Request) -> StreamingResp
                     msgs,
                     max_tokens=512,
                     temperature=0.8,
+                    session_id=session_id,
                 ):
                     if await request.is_disconnected():
                         logger.info("Client disconnected from regenerate stream (request)", extra={"context": {"session_id": session_id}})

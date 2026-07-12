@@ -509,6 +509,152 @@ def cmd_benchmark(args):
     printer.success("Benchmark complete!")
 
 
+def _cmd_models_select(args):
+    """Interactive model selector with fuzzy search."""
+    import curses
+    import requests
+
+    base_url = f"http://{args.host}:{args.port}"
+
+    # Fetch available models
+    printer.step("Fetching available models...")
+    try:
+        resp = requests.get(f"{base_url}/models/hf", timeout=10)
+        hf_models = resp.json() if resp.status_code == 200 else []
+    except Exception as e:
+        printer.warn(f"HuggingFace models: {e}")
+        hf_models = []
+
+    try:
+        resp = requests.get(f"{base_url}/models", timeout=10)
+        local_models = resp.json() if resp.status_code == 200 else []
+    except Exception as e:
+        printer.warn(f"Local models: {e}")
+        local_models = []
+
+    # Build model list: (display_name, model_id, source)
+    model_list = []
+    for m in hf_models:
+        mid = m.get("id", m.get("model_id", ""))
+        name = m.get("name", mid)
+        model_list.append((name, mid, "hf"))
+    seen = set()
+    for m in local_models:
+        mid = m.get("id", m.get("model_id", ""))
+        if mid not in seen:
+            seen.add(mid)
+            name = m.get("name", mid)
+            model_list.append((name, mid, "local"))
+
+    if not model_list:
+        printer.info("No models available. Use 'model download <id>' to add one.")
+        return
+
+    model_list.sort(key=lambda x: x[0].lower())
+    printer.success(f"Found {len(model_list)} models")
+
+    # ── curses interactive selector ──
+    def _run_selector(stdscr):
+        curses.curs_set(0)
+        curses.use_default_colors()
+        stdscr.nodelay(False)
+
+        height, width = stdscr.getmaxyx()
+        query = ""
+        selected = 0
+        scroll_offset = 0
+
+        while True:
+            stdscr.clear()
+            # Header
+            stdscr.addstr(0, 0, " SloughGPT Model Selector ", curses.A_REVERSE)
+            stdscr.addstr(2, 0, f" Search: {query}")
+            stdscr.addstr(3, 0, "─" * min(width - 1, 60))
+
+            # Filter models
+            filtered = [(n, i, s) for n, i, s in model_list
+                        if query.lower() in n.lower() or query.lower() in i.lower()]
+
+            if not filtered:
+                stdscr.addstr(5, 0, " No matching models")
+                key = stdscr.getch()
+                if key == 27:  # ESC
+                    return None
+                elif key in (10, 13):  # Enter
+                    continue
+                elif key == 263 or key == 127:  # Backspace
+                    query = query[:-1]
+                elif 32 <= key <= 126:
+                    query += chr(key)
+                continue
+
+            # Ensure selected index is valid
+            selected = min(selected, len(filtered) - 1)
+            if selected < scroll_offset:
+                scroll_offset = selected
+            if selected >= scroll_offset + height - 6:
+                scroll_offset = selected - height + 7
+
+            # Draw list
+            max_display = height - 6
+            for i, (name, mid, src) in enumerate(filtered[scroll_offset:scroll_offset + max_display]):
+                line_y = 5 + i
+                prefix = "▸ " if i + scroll_offset == selected else "  "
+                src_tag = " [HF]" if src == "hf" else " [LOCAL]"
+                label = f"{prefix}{name}{src_tag}"
+                if len(label) > width - 1:
+                    label = label[:width - 4] + "..."
+                if i + scroll_offset == selected:
+                    stdscr.addstr(line_y, 0, label, curses.A_REVERSE)
+                else:
+                    stdscr.addstr(line_y, 0, label)
+
+            # Footer
+            stdscr.addstr(height - 1, 0, f" {len(filtered)} matches  ↑↓ navigate  Enter select  ESC cancel  / search")
+
+            key = stdscr.getch()
+            if key == 27:  # ESC
+                return None
+            elif key in (10, 13):  # Enter
+                return filtered[selected]
+            elif key == 259:  # Up
+                selected = max(0, selected - 1)
+            elif key == 258:  # Down
+                selected = min(len(filtered) - 1, selected + 1)
+            elif key == 338 or key == 261:  # PageDown / Right
+                selected = min(len(filtered) - 1, selected + 10)
+            elif key == 339 or key == 260:  # PageUp / Left
+                selected = max(0, selected - 10)
+            elif key == 263 or key == 127:  # Backspace
+                query = query[:-1]
+            elif 32 <= key <= 126:
+                query += chr(key)
+
+    try:
+        result = curses.wrapper(_run_selector)
+    except Exception as e:
+        printer.error(f"Selector error: {e}")
+        return
+
+    if result is None:
+        printer.info("Selection cancelled")
+        return
+
+    name, model_id, source = result
+    printer.success(f"Selected: {name} ({model_id})")
+
+    # Load the model
+    printer.step(f"Loading {model_id}...")
+    try:
+        resp = requests.post(f"{base_url}/models/load", json={"model_id": model_id}, timeout=120)
+        if resp.status_code == 200:
+            printer.success(f"Loaded {model_id}")
+        else:
+            printer.error(f"Load failed: {resp.json().get('detail', resp.text)}")
+    except Exception as e:
+        printer.error(f"Load error: {e}")
+
+
 def register(subparsers):
     """Register model commands with argparse."""
     # Models (with subcommands)
@@ -517,6 +663,12 @@ def register(subparsers):
         help="List models. Subcommands: info, download, compare, personalities",
     )
     models_sub = models_parser.add_subparsers(dest="models_cmd", metavar="SUBCOMMAND")
+
+    # Select (interactive)
+    models_select = models_sub.add_parser("select", help="Interactive model selector with fuzzy search")
+    models_select.add_argument("--host", default="localhost", help="API host")
+    models_select.add_argument("--port", type=int, default=8000, help="API port")
+    models_select.set_defaults(func=_cmd_models_select)
 
     # List (default)
     models_list = models_sub.add_parser("list", help="List available models")

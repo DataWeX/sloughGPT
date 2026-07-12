@@ -253,6 +253,9 @@ class ShellREPL:
             if cmd in ("finetuned",):
                 ft = self.cmds.finetuned_models()
                 return [m.get("model_name", "") for m in ft]
+            if cmd == "train":
+                # Subcommand completion: status, follow, stop, distill, hf, auto, load, del
+                return ["status", "follow", "stop", "distill", "hf", "auto", "load", "del"]
         except Exception:
             pass
         # Fallback: file/directory path completion
@@ -1167,6 +1170,7 @@ class ShellREPL:
                 "procs": "  procs | ps  — List running training jobs",
                 "ps": "  procs | ps  — List running training jobs",
                 "kill": "  kill <id>  — Stop a training job by ID",
+                "train": "  train [dataset]  — Start training or list datasets",
                 "bg": "  bg | jobs  — List background shell processes",
                 "jobs": "  bg | jobs  — List background shell processes",
                 "fg": "  fg <id>  — Bring a background process to foreground (wait for completion)",
@@ -1186,6 +1190,8 @@ class ShellREPL:
                 "remember": "  remember <fact>  — Store a fact in the knowledge base",
                 "recall": "  recall <query>  — Search the knowledge base",
                 "checkpoints": "  checkpoints  — List training checkpoints (tab-completes names)",
+                "finetuned": "  finetuned  — List fine-tuned models",
+                "train": "  train [dataset] | train status | train follow <id> | train stop <id>  — Training operations",
                 "finetuned": "  finetuned  — List fine-tuned model paths (tab-completes names)",
                 "gen": "  gen <prompt>  — Generate text via inference",
                 "tokenizer": "  tokenizer  — Show tokenizer vocabulary stats",
@@ -1301,6 +1307,15 @@ Unix scripting:
 Process management:
   procs / ps              List running training jobs
   kill <id>               Stop a training job
+  train [dataset]         Start training (or list datasets)
+  train status            Show training job status
+  train follow <id>       Stream live training progress
+  train stop <id>         Stop a training job
+  train distill <ds>      Distill teacher into student
+  train hf <model> <ds>   HuggingFace fine-tuning
+  train auto [soul]       Auto-train with SloNet
+  train load <cp>         Load a checkpoint
+  train del <cp>          Delete a checkpoint
   bg / jobs               List background shell processes
   fg <id>                 Bring a background process to foreground
 
@@ -1709,6 +1724,201 @@ Examples:
             sz_str = f"{sz_bytes / 1048576:.0f}M"
             rows.append([name, f"{loss}", f"{ep}ep", sz_str])
         self._print(self._format_table(rows, ["Model", "Loss", "Epochs", "Size"]))
+
+    def _cmd_train(self, args: str = "") -> None:
+        """Train: train [dataset] | train status | train follow <id> | train stop <id> | train distill <dataset>"""
+        parts = args.strip().split()
+        sub = parts[0] if parts else ""
+
+        if sub == "status":
+            jobs = self.cmds.train_status()
+            if not jobs:
+                self._print("  No training jobs")
+                return
+            rows = []
+            for j in jobs:
+                jid = j.get("id", "")[:8]
+                status = j.get("status", "?")
+                model = j.get("model", j.get("data_source", ""))
+                prog = j.get("progress", 0)
+                rows.append([jid, status, model, f"{prog}%"])
+            self._print(self._format_table(rows, ["ID", "Status", "Model", "Progress"]))
+            return
+
+        if sub == "follow":
+            job_id = parts[1] if len(parts) > 1 else ""
+            if not job_id:
+                self._print("  Usage: train follow <job_id>")
+                return
+            self._stream_train_progress(job_id)
+            return
+
+        if sub == "stop":
+            if len(parts) < 2:
+                self._print("  Usage: train stop <job_id>")
+                return
+            r = self.cmds.train_stop(parts[1])
+            self._print(f"  Stopped: {r}")
+            return
+
+        if sub == "distill":
+            dataset = parts[1] if len(parts) > 1 else ""
+            if not dataset:
+                self._print("  Usage: train distill <dataset> [teacher] [epochs]")
+                return
+            teacher = parts[2] if len(parts) > 2 else "gpt2"
+            epochs = int(parts[3]) if len(parts) > 3 else 5
+            r = self.cmds.train_distill(dataset, teacher=teacher, epochs=epochs)
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                job_id = r.get("id", "")
+                self._print(f"  Distillation started: {r.get('status', r)}")
+                if job_id:
+                    self._stream_train_progress(job_id)
+            return
+
+        if sub == "hf":
+            model = parts[1] if len(parts) > 1 else ""
+            dataset = parts[2] if len(parts) > 2 else ""
+            if not model or not dataset:
+                self._print("  Usage: train hf <model> <dataset> [epochs]")
+                return
+            epochs = int(parts[3]) if len(parts) > 3 else 3
+            r = self.cmds.train_hf(model, dataset, epochs=epochs)
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                job_id = r.get("id", "")
+                self._print(f"  Fine-tuning started: {r.get('status', r)}")
+                if job_id:
+                    self._stream_train_progress(job_id)
+            return
+
+        if sub == "auto":
+            soul = parts[1] if len(parts) > 1 else ""
+            teacher = parts[2] if len(parts) > 2 else "gpt2"
+            epochs = int(parts[3]) if len(parts) > 3 else 10
+            r = self.cmds.train_auto(soul_name=soul, teacher=teacher, epochs=epochs)
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                self._print(f"  Auto-train started: {r.get('status', r)}")
+            return
+
+        if sub == "load":
+            name = parts[1] if len(parts) > 1 else ""
+            if not name:
+                self._print("  Usage: train load <checkpoint_name>")
+                return
+            r = self.cmds.load_checkpoint(name)
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                self._print(f"  Loaded: {name}")
+            return
+
+        if sub == "del":
+            name = parts[1] if len(parts) > 1 else ""
+            if not name:
+                self._print("  Usage: train del <checkpoint_name>")
+                return
+            r = self.cmds.delete_checkpoint(name)
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                self._print(f"  Deleted: {name}")
+            return
+
+        # Default: quick train on dataset (or list datasets if none specified)
+        dataset = sub
+        if not dataset:
+            datasets = self.cmds.datasets()
+            if not datasets:
+                self._print("  No datasets available. Import data first.")
+                return
+            self._print("  Available datasets:")
+            for d in datasets:
+                self._print(f"    {d.get('name', d.get('id', '?'))}")
+            self._print("\n  Usage: train <dataset>")
+            return
+
+        name = parts[1] if len(parts) > 1 else ""
+        r = self.cmds.train_quick(dataset, name=name)
+        if "error" in r:
+            self._print(f"  Error: {r['error']}")
+        else:
+            job_id = r.get("id", "")
+            self._print(f"  Training started: {r.get('status', r)}")
+            if job_id:
+                self._stream_train_progress(job_id)
+
+    def _stream_train_progress(self, job_id: str) -> None:
+        """Stream training progress for a job with live progress bar."""
+        import time
+        from .commands import _api_get
+
+        FILLED = "█"
+        HALF = "▓"
+        EMPTY = "░"
+        bar_width = 32
+        last_rendered = ""
+
+        self._print(f"  Following job {job_id} (Ctrl+C to detach)")
+
+        while True:
+            try:
+                result = _api_get(f"/training/jobs/{job_id}")
+                if not result:
+                    self._print(f"  Job {job_id} not found")
+                    return
+
+                status = result.get("status", "unknown")
+                progress = result.get("progress", 0)
+                epoch = result.get("current_epoch", result.get("epoch", 0))
+                epochs = result.get("epochs", 0)
+                loss = result.get("train_loss", result.get("loss", 0))
+
+                # Build bar
+                pct = progress / 100 if progress > 0 else 0
+                filled = int(bar_width * pct)
+                has_half = (bar_width * pct) - filled >= 0.5
+                bar = FILLED * filled
+                if has_half and filled < bar_width:
+                    bar += HALF
+                    bar += EMPTY * (bar_width - filled - 1)
+                else:
+                    bar += EMPTY * (bar_width - filled)
+
+                line = f"  [{bar}] {progress:3d}%  epoch {epoch}/{epochs}  loss={loss or 0:.4f}  [{status}]"
+
+                # In-place update using stdio
+                if hasattr(self, '_stdio') and self._stdio:
+                    self._stdio.progress(line, done=(status in ("completed", "failed", "error")))
+                else:
+                    # Fallback: manual in-place update with space-padding
+                    pad = max(0, len(last_rendered) - len(line))
+                    sys.stdout.write(f"\r{line}{' ' * pad}\r")
+                    sys.stdout.flush()
+                    last_rendered = line
+
+                if status in ("completed", "failed", "error"):
+                    if status == "completed":
+                        ckpt = result.get("checkpoint", "")
+                        self._print(f"\n  Training complete" + (f" — {ckpt}" if ckpt else ""))
+                    else:
+                        err = result.get("error", "unknown error")
+                        self._print(f"\n  Training {status}: {err}")
+                    return
+
+            except KeyboardInterrupt:
+                self._print("\n  Detached (job continues on server)")
+                return
+            except Exception as e:
+                self._print(f"\n  Error: {e}")
+                return
+
+            time.sleep(3)
 
     def _cmd_gen(self, args: str = "") -> None:
         if not args:
@@ -2175,8 +2385,7 @@ Examples:
                     self._last_exit_code = 1
                     continue
                 if recursive and os.path.isdir(path):
-                    import shutil as _sh
-                    _sh.rmtree(path)
+                    shutil.rmtree(path)
                 else:
                     os.remove(path)
             except FileNotFoundError:
@@ -2201,14 +2410,12 @@ Examples:
         try:
             if os.path.isdir(src):
                 if recursive:
-                    import shutil as _sh
-                    _sh.copytree(src, dst, dirs_exist_ok=True)
+                    shutil.copytree(src, dst, dirs_exist_ok=True)
                 else:
                     self._print(f"  cp: omitting directory '{targets[0]}'")
                     self._last_exit_code = 1
             else:
-                import shutil as _sh
-                _sh.copy2(src, dst)
+                shutil.copy2(src, dst)
         except FileNotFoundError:
             self._print(f"  cp: cannot stat '{targets[0]}': No such file or directory")
             self._last_exit_code = 1
@@ -2229,8 +2436,7 @@ Examples:
             return
         src, dst = os.path.expanduser(targets[0]), os.path.expanduser(targets[1])
         try:
-            import shutil as _sh
-            _sh.move(src, dst)
+            shutil.move(src, dst)
         except FileNotFoundError:
             self._print(f"  mv: cannot stat '{targets[0]}': No such file or directory")
             self._last_exit_code = 1
@@ -2373,7 +2579,6 @@ Examples:
             else:
                 path = parts[i]
                 i += 1
-        import fnmatch
         root = os.path.expanduser(path)
         if not os.path.isdir(root):
             self._print(f"  find: '{path}': No such directory")
@@ -2697,8 +2902,7 @@ Examples:
             self._last_exit_code = 1
             return
         try:
-            import subprocess as _sp
-            p = _sp.Popen(["pbcopy"], stdin=_sp.PIPE)
+            p = subprocess.Popen(["pbcopy"], stdin=subprocess.PIPE)
             p.communicate(data.encode("utf-8"))
             self._print(f"  Copied {len(data)} chars to clipboard")
         except Exception as e:
@@ -2708,8 +2912,7 @@ Examples:
     def _cmd_pbpaste(self, args: str = "") -> None:
         """Paste from macOS clipboard (like pbpaste)."""
         try:
-            import subprocess as _sp
-            p = _sp.run(["pbpaste"], capture_output=True)
+            p = subprocess.run(["pbpaste"], capture_output=True)
             self._print(p.stdout.decode("utf-8").rstrip())
         except Exception as e:
             self._print(f"  pbpaste: {e}")
@@ -2916,6 +3119,7 @@ Examples:
         "knowledge": _cmd_knowledge,
         "checkpoints": _cmd_checkpoints,
         "finetuned": _cmd_finetuned,
+        "train": _cmd_train,
         "gen": _cmd_gen,
         "chat": _cmd_chat,
         "tokenizer": _cmd_tokenizer,

@@ -38,7 +38,6 @@ def detect_dataset_type(path: str) -> DatasetType:
         Detected DatasetType
     """
     from pathlib import Path
-    import json
 
     p = Path(path)
     if p.is_dir():
@@ -68,7 +67,6 @@ def detect_dataset_type(path: str) -> DatasetType:
                 continue
 
     # Check for code (contains common programming keywords)
-    import re
     code_patterns = ["def ", "class ", "import ", "function ", "const ", "fn "]
     code_lines = sum(1 for pat in code_patterns if pat in text)
     if code_lines >= 3:
@@ -467,28 +465,7 @@ def __getattr__(name):
         "TrainingConfig": ".unified_training",
         "DataLoader": ".unified_training",
         "UniversalDataLoader": ".unified_training",
-        "ModelWrapper": ".unified_training",
-        "TorchModelWrapper": ".unified_training",
         "train": ".unified_training",
-        "DatasetRegistry": ".dataset_manager",
-        "DatasetMixer": ".dataset_manager",
-        "DatasetInfo": ".dataset_manager",
-        "DistributedTrainer": ".distributed",
-        "DistributedConfig": ".distributed",
-        "HuggingFaceManager": ".huggingface",
-        "HuggingFaceDatasetManager": ".huggingface",
-        "DatasetCreator": ".dataset_creator",
-        "create_dataset": ".dataset_creator",
-        "BatchProcessor": ".batch_processor",
-        "JobScheduler": ".batch_processor",
-        "DatasetValidator": ".validator",
-        "DatasetVersion": ".validator",
-        "DatasetQualityScorer": ".quality_scorer",
-        "TextCleaner": ".dataset_prep",
-        "Tokenizer": ".dataset_prep",
-        "DatasetPreparer": ".dataset_prep",
-        "DatasetStats": ".dataset_prep",
-        "prepare_dataset": ".dataset_prep",
         "DataImporter": ".data_import",
         "RepoImporter": ".data_import",
         "HuggingFaceImporter": ".data_import",
@@ -511,11 +488,6 @@ def __getattr__(name):
         "export_to_sou": ".export",
         "export_all_formats": ".export",
         "list_export_formats": ".export",
-        # Unified pipeline
-        "UnifiedTrainingConfig": ".unified_pipeline",
-        "UnifiedTrainingPipeline": ".unified_pipeline",
-        "TrainingProgress": ".unified_pipeline",
-        "TrainingStage": ".unified_pipeline",
     }
 
     if name in lazy_imports:

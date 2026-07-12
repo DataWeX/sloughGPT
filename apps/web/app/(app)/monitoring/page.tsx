@@ -17,12 +17,11 @@ const SystemChart = dynamicNext(() => import('@/components/monitoring/SystemChar
   loading: () => <div className="h-40 w-full animate-pulse bg-muted rounded-lg" />,
 })
 import { formatUptime } from '@/lib/chat-utils'
-import { PUBLIC_API_URL } from '@/lib/config'
 import { GpuCard, DiskCard, ServerInfoCard } from '@/components/monitoring/SystemInfoCards'
 import { Skeleton } from '@sloughgpt/strui'
 import { apiPost } from '@/lib/http-client'
 import { useErrorStore } from '@/lib/error-store'
-import { activityController, type ActivityStatus } from '@/lib/activity-controller'
+import { OutputCard } from '@/components/OutputCard'
 
 export default function SystemHealthPage() {
   const [detailed, setDetailed] = useState<DetailedHealth | null>(null)
@@ -43,9 +42,6 @@ export default function SystemHealthPage() {
   const [dpoStatus, setDpoStatus] = useState<{ status: string; last_run: string | null; accepted_count: number; rejected_count: number; result: any } | null>(null)
   const [dpoRunning, setDpoRunning] = useState(false)
   const [visualStatus, setVisualStatus] = useState<{ visual_loaded: boolean; training: { status: string } } | null>(null)
-  const [activityStatus, setActivityStatus] = useState<ActivityStatus | null>(null)
-  const [activityTraining, setActivityTraining] = useState(false)
-  const [activityTrainProgress, setActivityTrainProgress] = useState<string | null>(null)
   const MAX_HISTORY = 30
   const recentErrors = useErrorStore(s => s.errors)
   const dismissError = useErrorStore(s => s.dismissError)
@@ -66,7 +62,6 @@ export default function SystemHealthPage() {
         benchmarkController.stats().catch(() => null),
         multimodalController.getDPOStatus().catch(() => null),
         multimodalController.getStatus().catch(() => null),
-        activityController.status().catch(() => null),
       ])
       setDetailed(d)
       setMetrics(m)
@@ -343,6 +338,9 @@ export default function SystemHealthPage() {
           <DiskCard disk={disk ?? undefined} />
           <ServerInfoCard info={info ?? undefined} />
         </div>
+
+        {/* Server Output */}
+        <OutputCard />
 
         {recentErrors.length > 0 && (
           <Card>

@@ -148,7 +148,7 @@ class ONNXInferenceEngine:
 
     def _export_to_onnx(self, output_path: str):
         """Export PyTorch model to ONNX format."""
-        from domains.training.slonet_compat import torch  # stub — torch.onnx is a no-op
+        import torch
 
         # Prepare dummy input
         dummy_input = self.tokenizer(

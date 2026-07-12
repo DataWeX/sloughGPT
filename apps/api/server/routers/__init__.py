@@ -61,8 +61,6 @@ def get_all_routers() -> List[APIRouter]:
     from . import images
     from . import files
     from . import voice
-    from . import activity
-
     _cached_routers = [
         auth.router, auto_train.router, models.router, inference.router,
         feedback.router, knowledge.router, agents.router, system.router,
@@ -79,6 +77,5 @@ def get_all_routers() -> List[APIRouter]:
         images.router,
         files.router,
         voice.router,
-        activity.router,
     ]
     return _cached_routers
