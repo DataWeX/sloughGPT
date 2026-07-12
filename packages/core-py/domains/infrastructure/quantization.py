@@ -464,26 +464,35 @@ class QuantEngine:
         return float(scale), 0
 
     def _compute_asymmetric(self, flat: np.ndarray) -> Tuple[float, int]:
-        """Asymmetric quantization: maps [lo, hi] → [0, 2^bits - 1].
+        """Asymmetric quantization: maps [lo, hi] → [qmin, qmax].
 
         Handles non-zero-centered distributions better than symmetric.
-        zero_point can be negative (stored as int8 when bits=8).
+        For 8-bit: maps to signed int8 [-128, 127].
+        For 4-bit: maps to unsigned int4 [0, 15].
+
+        The encode formula: q = clip(round(x / scale) + zero_point, qmin, qmax)
+        The decode formula: x = (q - zero_point) * scale
+
+        For 8-bit, zero_point = round(-128 - lo / scale) so that
+        lo maps to -128 and hi maps to 127.  For 4-bit, zero_point = round(-lo / scale)
+        so that lo maps to 0 and hi maps to 15.
         """
         lo = float(np.min(flat))
         hi = float(np.max(flat))
-        qmax = (2 ** self._bits) - 1  # 255 for uint8, 15 for int4
 
         # Avoid division by zero
         range_val = hi - lo
         if range_val < 1e-10:
             return 1.0, 0
 
-        scale = range_val / qmax
-        zero_point = int(np.round(-lo / scale))
         if self._bits == 8:
-            zero_point = max(-128, min(127, zero_point))
+            # Signed int8: [-128, 127]
+            scale = range_val / 255
+            zero_point = int(np.round(-128 - lo / scale))
         else:
-            zero_point = max(0, min(qmax, zero_point))
+            # Unsigned int4: [0, 15]
+            scale = range_val / 15
+            zero_point = int(np.round(-lo / scale))
 
         return float(scale), zero_point
 
