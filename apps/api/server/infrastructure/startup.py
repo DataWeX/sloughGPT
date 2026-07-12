@@ -437,224 +437,46 @@ class StartupOrchestrator:
 
 
 def _autoload_model(cfg: ServerConfig):
-    """Background model loader — delegates to controller + registry."""
+    """Background model loader — uses unified ModelLoader."""
     import state as server_state
 
     if server_state.model is not None:
         return
 
-    class _LoadRequest:
-        model_id = cfg.autoload_model
-        mode = "local"
-        device = cfg.autoload_device
+    from domains.infrastructure.model_loader import ModelLoader
 
-    from controllers.models import get_models_controller
-    ctrl = get_models_controller()
+    loader = ModelLoader()
+    result = loader.load(
+        model_id=cfg.autoload_model,
+        device=cfg.autoload_device,
+        quantize=cfg.quantize_slonet,
+        quant_bits=cfg.quant_bits,
+        quant_mode=cfg.quant_mode,
+        verify=True,
+    )
 
-    # Auto-convert to .slnc if not already converted
-    if cfg.use_slonet:
-        slnc_result = _try_load_slnc(cfg, ctrl)
-        if slnc_result is not None:
-            return slnc_result
-
-    result = ctrl.load_model(cfg.autoload_model, cfg.autoload_device, use_slonet=cfg.use_slonet)
-
-    if result.get("status") == "error":
-        logger.warning("Autoload failed: %s", result.get("error"))
+    if not result.success:
+        logger.warning("Autoload failed: %s", result.error)
         return
 
-    if cfg.use_slonet:
-        server_state.model_type = cfg.autoload_model
-        return
+    # Store model references in server state
+    server_state.model = result.model
+    server_state.model_type = result.model_id
+    if result.tokenizer is not None:
+        server_state.tokenizer = result.tokenizer
 
-    model = getattr(ctrl, "_hf_model", None)
-    tokenizer = getattr(ctrl, "_tokenizer", None)
-    if model is None or tokenizer is None:
-        logger.warning("Autoload: model loaded but refs unavailable")
-        return
+    # Register provider
+    from domains.models.provider import register_provider, ProviderRouter, VisionProcessor, get_provider as _gp
 
-    server_state.model = model
-    server_state.tokenizer = tokenizer
-    server_state.model_type = cfg.autoload_model
+    register_provider("default", result.provider)
 
-    # Optionally wrap in ProcessGuard for crash isolation
-    process_guard = None
-    if cfg.enable_process_guard:
-        try:
-            from domains.infrastructure.process_guard import create_model_guard
-            process_guard = create_model_guard(
-                model_id=cfg.autoload_model,
-                device=cfg.autoload_device,
-                max_restarts=3,
-                restart_delay=2.0,
-                memory_limit_mb=4096,
-            )
-            logger.info("Autoload: ProcessGuard started for %s", cfg.autoload_model)
-        except Exception as e:
-            logger.warning("Autoload: ProcessGuard init failed (continuing without): %s", e)
-            process_guard = None
+    # Set up default router
+    existing = _gp("default")
+    _is_slonet = result.model_type == "slonet"
+    if not _is_slonet:
+        router = ProviderRouter()
+        router.add_processor(VisionProcessor("multimodal"))
+        router.set_text_provider("hf-default")
+        register_provider("default", router)
 
-    # Register with ModelRegistry for lifecycle management
-    try:
-        from domains.infrastructure.model_registry import get_model_registry
-        registry = get_model_registry()
-        registry.register(
-            model_id=cfg.autoload_model,
-            model=model,
-            tokenizer=tokenizer,
-            make_default=True,
-            max_concurrent=1,
-            generate_timeout=120.0,
-            process_guard=process_guard,
-        )
-        from domains.models.provider import register_provider, HFModelProvider, ProviderRouter, VisionProcessor, get_provider as _gp
-        model_server = registry.get(cfg.autoload_model)
-        provider = HFModelProvider(model, tokenizer, model_id_str=cfg.autoload_model, model_server=model_server)
-        register_provider("hf-default", provider)
-
-        # Don't override SloNet if already active (e.g. reloaded checkpoint)
-        existing = _gp("default")
-        _is_slonet = existing is not None and type(existing).__name__ in ("SloTransformerProvider", "SloNetChatProvider")
-        if not _is_slonet:
-            router = ProviderRouter()
-            router.add_processor(VisionProcessor("multimodal"))
-            router.set_text_provider("hf-default")
-            register_provider("default", router)
-            logger.info("Autoload: registered with ModelRegistry + provider + default router%s",
-                         " (process guard enabled)" if process_guard else "")
-        else:
-            logger.info("Autoload: SloNet provider active — keeping as default")
-
-        # When ProcessGuard is active, drop the in-memory model ref to save memory.
-        # The guard handles all inference in a subprocess, so the main process
-        # doesn't need the model weights (~500MB+ for GPT-2).
-        if process_guard is not None:
-            model_server.drop_model_ref()
-            server_state.model = None
-            server_state.tokenizer = None
-            provider._model = None
-            import gc; gc.collect()
-            logger.info("Autoload: dropped in-memory model ref (guard mode) — saved ~%dMB",
-                        sum(p.numel() for p in model.parameters()) * 4 // (1024 * 1024)
-                        if hasattr(model, "parameters") else 500)
-    except Exception as e:
-        logger.warning("Autoload: registry registration failed: %s", e)
-
-    logger.info("Autoload ok: %s", cfg.autoload_model)
-
-
-def _try_load_slnc(cfg: ServerConfig, ctrl) -> Optional[dict]:
-    """Try to load model from .slnc file. Auto-convert if needed.
-
-    Returns:
-        dict with status/result if loaded, None if should fallback to safetensors
-    """
-    import state as server_state
-    from pathlib import Path
-
-    model_id = cfg.autoload_model
-
-    # Resolve cache dir and .slnc path
-    try:
-        from domains.infrastructure.safetensors_loader import _get_model_dir
-        cache_dir = _get_model_dir(model_id)
-    except Exception:
-        logger.debug("Cannot resolve cache dir for %s", model_id)
-        return None
-
-    slnc_path = cache_dir / "model.slnc"
-
-    # If .slnc exists, load directly
-    if slnc_path.exists():
-        logger.info("Autoload: found .slnc at %s — loading via mmap", slnc_path)
-        try:
-            from domains.inference.slonet_provider import SloNetChatProvider
-            provider = SloNetChatProvider.from_slnc(
-                str(slnc_path), model_id=model_id,
-                quantize=cfg.quantize_slonet,
-                quant_bits=cfg.quant_bits,
-                quant_mode=cfg.quant_mode,
-                quant_clip=cfg.quant_clip,
-            )
-
-            # Register with provider system
-            from domains.models.provider import (
-                register_provider,
-                ProviderRouter,
-                VisionProcessor,
-                get_provider as _gp,
-            )
-            from domains.infrastructure.model_registry import get_model_registry
-
-            server_state.model = provider._model
-            server_state.model_type = model_id
-            register_provider("slonet", provider)
-
-            existing = _gp("default")
-            _is_slonet = existing is not None and type(existing).__name__ in (
-                "SloNetChatProvider", "SloTransformerProvider",
-            )
-            if not _is_slonet:
-                router = ProviderRouter()
-                router.add_processor(VisionProcessor("multimodal"))
-                router.set_text_provider("slonet")
-                register_provider("default", router)
-
-            logger.info("Autoload: .slnc loaded successfully")
-            return {"status": "success"}
-        except Exception as e:
-            logger.warning("Autoload: .slnc load failed (%s) — falling back to safetensors", e)
-            return None
-
-    # No .slnc yet — check if safetensors is available for conversion
-    try:
-        from domains.infrastructure.safetensors_loader import _find_safetensors
-        st_path = _find_safetensors(cache_dir)
-        if st_path is None:
-            logger.debug("No safetensors found for %s — will download first", model_id)
-            return None
-
-        logger.info("Autoload: converting safetensors → .slnc (%s)", st_path.name)
-        from domains.infrastructure.slnc.compiler import SLNCCompiler
-
-        slnc_result = SLNCCompiler.compile(st_path, slnc_path)
-        logger.info("Autoload: .slnc compiled — %d blocks, %.0f MB",
-                     slnc_result["total_blocks"], slnc_result["file_size_mb"])
-        # Now load the .slnc
-        from domains.inference.slonet_provider import SloNetChatProvider
-        provider = SloNetChatProvider.from_slnc(
-            str(slnc_path), model_id=model_id,
-            quantize=cfg.quantize_slonet,
-            quant_bits=cfg.quant_bits,
-            quant_mode=cfg.quant_mode,
-            quant_clip=cfg.quant_clip,
-        )
-
-
-        from domains.models.provider import (
-            register_provider,
-            ProviderRouter,
-            VisionProcessor,
-            get_provider as _gp,
-        )
-        from domains.infrastructure.model_registry import get_model_registry
-
-        server_state.model = provider._model
-        server_state.model_type = model_id
-        register_provider("slonet", provider)
-
-        existing = _gp("default")
-        _is_slonet = existing is not None and type(existing).__name__ in (
-            "SloNetChatProvider", "SloTransformerProvider",
-        )
-        if not _is_slonet:
-            router = ProviderRouter()
-            router.add_processor(VisionProcessor("multimodal"))
-            router.set_text_provider("slonet")
-            register_provider("default", router)
-
-        logger.info("Autoload: .slnc converted and loaded")
-        return {"status": "success"}
-    except Exception as e:
-        logger.warning("Autoload: .slnc conversion failed (%s) — falling back to safetensors", e)
-        return None
+    logger.info("Autoload ok: %s (%s)", cfg.autoload_model, result.model_type)

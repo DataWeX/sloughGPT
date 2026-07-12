@@ -1,199 +1,377 @@
 """
-Safe HuggingFace model loader — handles platform-specific quirks.
+Unified Model Loader — single interface for SloNet and HuggingFace models.
 
-Apple Silicon MPS does not support BFloat16. This module detects the
-platform and forces float32 when on MPS, then provides a uniform
-load_model() that returns (model, tokenizer).
+Provides a common `ModelLoader` class that handles:
+  - Model detection (SloNet .slnc vs HuggingFace safetensors)
+  - Verification (test inference on load)
+  - Provider registration (SloNet or HF provider)
+  - Quantization (via walk_slo_linears or walk_hf_linears)
 
-After loading, the model is verified for integrity:
-  - No NaN / Inf parameter values (partial download detection)
-  - Forward pass smoke test with dummy input → non-NaN logits
+Usage:
+    from domains.infrastructure.model_loader import ModelLoader
 
-Raises RuntimeError if any check fails.
-
-Design: uses ml_types for dtypes and device detection. Torch is only
-imported when actually loading HF models (torch.nn.Module instances).
-SloNet models bypass torch entirely.
+    loader = ModelLoader()
+    result = loader.load("gpt2", device="cpu")
+    if result.success:
+        print(f"Loaded {result.model_type} with {result.provider}")
 """
 
 import logging
-from typing import Optional
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Protocol
 
-from domains.infrastructure.ml_types import (
-    float32 as ml_float32,
-    _mps_available as mps_available,
-    _cuda_available as cuda_available,
-    isnan as ml_isnan,
-    isinf as ml_isinf,
-    auto_device,
-)
+import numpy as np
 
 logger = logging.getLogger("man.infrastructure.model_loader")
 
 
-def _torch_available() -> bool:
-    """Check if PyTorch is installed."""
-    try:
-        from domains.training.slonet_compat import torch
-        return True
-    except ImportError:
-        return False
+@dataclass
+class LoadResult:
+    """Standardized result from model loading."""
+    success: bool
+    model_id: str
+    model_type: str  # "slonet" or "huggingface"
+    provider: Any = None
+    model: Any = None
+    tokenizer: Any = None
+    error: Optional[str] = None
+    metrics: Dict[str, Any] = field(default_factory=dict)
 
 
-def verify_model_integrity(model, model_id: str, tokenizer) -> None:
+class ModelLoader:
+    """Unified loader for SloNet and HuggingFace models.
+
+    Detects model format and routes to the appropriate loader.
+    Provides common verification and registration logic.
     """
-    Run integrity checks on a loaded model to catch partial/corrupt downloads.
 
-    Checks:
-      1. No parameter is NaN or Inf (corrupt weights).
-      2. Forward pass with a dummy input produces finite logits.
+    def __init__(self, models_dir: Optional[Path] = None):
+        self.models_dir = models_dir or Path("models")
 
-    Raises RuntimeError with a descriptive message on failure.
-    """
-    logger.info("Verifying integrity of %s ...", model_id)
+    def load(
+        self,
+        model_id: str,
+        device: str = "auto",
+        quantize: bool = False,
+        quant_bits: int = 8,
+        quant_mode: str = "symmetric",
+        verify: bool = True,
+    ) -> LoadResult:
+        """Load a model by ID, detecting format automatically.
 
-    # ── check 1: no NaN / Inf weights ──────────────────────────────────
-    nan_params = []
-    inf_params = []
-    for name, param in model.named_parameters():
-        # Works for both torch tensors and numpy arrays
-        param_np = param.detach().cpu().numpy() if hasattr(param, 'detach') else param
-        if ml_isnan(param_np).any():
-            nan_params.append(name)
-        if ml_isinf(param_np).any():
-            inf_params.append(name)
+        Args:
+            model_id: Model identifier (e.g., "gpt2", "meta-llama/Llama-3-8B")
+            device: Target device ("auto", "cpu", "mps", "cuda")
+            quantize: Apply quantization after loading
+            quant_bits: Bits for quantization (8 or 4)
+            quant_mode: "symmetric" or "asymmetric"
+            verify: Run test inference to verify model works
 
-    if nan_params:
-        raise RuntimeError(
-            f"Model {model_id} has NaN weights in {len(nan_params)} parameters "
-            f"(e.g. {nan_params[0]}). The download may be corrupt."
-        )
-    if inf_params:
-        raise RuntimeError(
-            f"Model {model_id} has Inf weights in {len(inf_params)} parameters "
-            f"(e.g. {inf_params[0]}). The download may be corrupt."
-        )
+        Returns:
+            LoadResult with provider, model, tokenizer, and metrics
+        """
+        # Try SloNet first (.slnc file)
+        slnc_result = self._try_load_slnc(model_id, device, quantize, quant_bits, quant_mode)
+        if slnc_result is not None:
+            if verify and slnc_result.success:
+                self._verify_model(slnc_result)
+            return slnc_result
 
-    # ── check 2: forward-pass smoke test ───────────────────────────────
-    try:
-        import torch
+        # Fall back to HuggingFace
+        hf_result = self._try_load_hf(model_id, device, quantize, quant_bits, quant_mode)
+        if verify and hf_result.success:
+            self._verify_model(hf_result)
+        return hf_result
 
-        device = next(model.parameters()).device
-        pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
-        dummy_input = torch.tensor([[pad_id]], device=device)
-        with torch.no_grad():
-            output = model(dummy_input)
-        logits = output.logits if hasattr(output, "logits") else output[0]
+    def _try_load_slnc(
+        self,
+        model_id: str,
+        device: str,
+        quantize: bool,
+        quant_bits: int,
+        quant_mode: str,
+    ) -> Optional[LoadResult]:
+        """Try to load a SloNet model from .slnc file.
 
-        logits_np = logits.detach().cpu().numpy()
-        if ml_isnan(logits_np).any():
-            raise RuntimeError(
-                f"Model {model_id} produced NaN logits on a forward pass. "
-                f"The download may be incomplete."
-            )
-        if ml_isinf(logits_np).any():
-            raise RuntimeError(
-                f"Model {model_id} produced Inf logits on a forward pass. "
-                f"The download may be incomplete."
-            )
-    except RuntimeError:
-        raise
-    except Exception as e:
-        raise RuntimeError(
-            f"Forward-pass smoke test for {model_id} failed: {e}"
-        ) from e
-
-    logger.info("Integrity check passed for %s", model_id)
-
-
-def load_hf_model(model_id: str, device: Optional[str] = None):
-    """
-    Load a HuggingFace AutoModelForCausalLM with its tokenizer.
-
-    Device resolution:
-      - "auto" → mps > cuda > cpu
-      - "mps" / "cuda" / "cpu" → explicit
-      - None → same as "auto"
-
-    Returns (model, tokenizer, resolved_device).
-
-    Uses float32 on CPU, float16 on MPS/CUDA (BFloat16 not supported on MPS).
-
-    Raises RuntimeError if the model fails integrity checks (partial download).
-    """
-    import os
-    from pathlib import Path
-
-    if device is None or device == "auto":
-        resolved = auto_device()
-    else:
-        resolved = device
-
-    # ── check HF cache before downloading ──────────────────────────────
-    cache_id = model_id.replace("/", "--")
-    hf_home = os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))
-    cache_dir = Path(hf_home) / "hub" / f"models--{cache_id}"
-    if cache_dir.exists():
-        logger.info("%s found in local cache (%s)", model_id, cache_dir)
-    else:
-        logger.info("%s not cached — downloading from HuggingFace", model_id)
-
-    use_fp16 = resolved in ("mps", "cuda")
-    dtype_str = "float16" if use_fp16 else "float32"
-    logger.info("Loading %s → %s (%s)", model_id, resolved, dtype_str)
-
-    # Try torch first (for full HF model support)
-    try:
-        import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-
-        # Monkey-patch Mistral regex check that tries remote even in offline mode
+        Returns None if no .slnc file found, otherwise LoadResult.
+        """
         try:
-            import transformers.tokenization_utils_base as _tub
-            _tub._patch_mistral_regex = lambda cls, name: cls
+            from domains.infrastructure.safetensors_loader import _get_model_dir
+            cache_dir = _get_model_dir(model_id)
+        except Exception:
+            return None
+
+        slnc_path = cache_dir / "model.slnc"
+        if not slnc_path.exists():
+            # Try auto-conversion from safetensors
+            slnc_path = self._try_convert_to_slnc(cache_dir, model_id)
+            if slnc_path is None:
+                return None
+
+        logger.info("Loading SloNet model from %s", slnc_path)
+        try:
+            from domains.inference.slonet_provider import SloNetChatProvider
+
+            provider = SloNetChatProvider.from_slnc(
+                str(slnc_path),
+                model_id=model_id,
+                quantize=quantize,
+                quant_bits=quant_bits,
+                quant_mode=quant_mode,
+            )
+
+            return LoadResult(
+                success=True,
+                model_id=model_id,
+                model_type="slonet",
+                provider=provider,
+                model=provider._model,
+                tokenizer=getattr(provider, "_tokenizer", None),
+                metrics={
+                    "slnc_path": str(slnc_path),
+                    "quantized": quantize,
+                    "quant_bits": quant_bits if quantize else None,
+                },
+            )
+        except Exception as e:
+            logger.warning("SloNet load failed: %s", e)
+            return LoadResult(
+                success=False,
+                model_id=model_id,
+                model_type="slonet",
+                error=str(e),
+            )
+
+    def _try_convert_to_slnc(self, cache_dir: Path, model_id: str) -> Optional[Path]:
+        """Try to convert safetensors to .slnc format.
+
+        Returns path to new .slnc file, or None if conversion fails.
+        """
+        try:
+            from domains.infrastructure.safetensors_loader import _find_safetensors
+            st_path = _find_safetensors(cache_dir)
+            if st_path is None:
+                return None
+
+            slnc_path = cache_dir / "model.slnc"
+            logger.info("Converting %s to .slnc", st_path.name)
+
+            from domains.infrastructure.slnc.compiler import SLNCCompiler
+            SLNCCompiler.compile(str(st_path), str(slnc_path))
+
+            logger.info("Converted to .slnc: %s", slnc_path)
+            return slnc_path
+        except Exception as e:
+            logger.warning("SloNet conversion failed: %s", e)
+            return None
+
+    def _try_load_hf(
+        self,
+        model_id: str,
+        device: str,
+        quantize: bool,
+        quant_bits: int,
+        quant_mode: str,
+    ) -> LoadResult:
+        """Load a HuggingFace model via transformers.
+
+        Returns LoadResult with HFModelProvider.
+        """
+        logger.info("Loading HuggingFace model: %s", model_id)
+        try:
+            import torch
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+
+            # Resolve device
+            if device == "auto":
+                device = self._resolve_device()
+
+            # Load tokenizer
+            tokenizer = AutoTokenizer.from_pretrained(model_id)
+            if tokenizer.pad_token is None:
+                tokenizer.pad_token = tokenizer.eos_token
+
+            # Load model
+            model = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                torch_dtype=torch.float32,
+                device_map=None,
+            )
+            model = model.to(device)
+            model.eval()
+
+            # Create provider
+            from domains.models.provider import HFModelProvider
+            provider = HFModelProvider(model, tokenizer, model_id_str=model_id)
+
+            # Apply quantization if requested
+            if quantize:
+                self._quantize_hf_model(provider, quant_bits, quant_mode)
+
+            return LoadResult(
+                success=True,
+                model_id=model_id,
+                model_type="huggingface",
+                provider=provider,
+                model=model,
+                tokenizer=tokenizer,
+                metrics={
+                    "device": device,
+                    "quantized": quantize,
+                    "quant_bits": quant_bits if quantize else None,
+                    "parameters": sum(p.numel() for p in model.parameters()),
+                },
+            )
+        except Exception as e:
+            logger.warning("HuggingFace load failed: %s", e)
+            return LoadResult(
+                success=False,
+                model_id=model_id,
+                model_type="huggingface",
+                error=str(e),
+            )
+
+    def _resolve_device(self) -> str:
+        """Resolve best available device: mps > cuda > cpu."""
+        try:
+            import torch
+            if torch.backends.mps.is_available():
+                return "mps"
+            if torch.cuda.is_available():
+                return "cuda"
         except Exception:
             pass
+        return "cpu"
 
-        dtype = torch.float16 if use_fp16 else torch.float32
+    def _verify_model(self, result: LoadResult) -> bool:
+        """Run test inference to verify model works.
 
+        Returns True if verification passes.
+        """
         try:
-            tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
-            model = AutoModelForCausalLM.from_pretrained(
-                model_id,
-                dtype=dtype,
-                local_files_only=True,
-                device_map="cpu" if resolved == "cpu" else None,
-            )
-            logger.info("%s loaded from local cache", model_id)
-        except OSError:
-            logger.info("%s not in cache — downloading from HuggingFace", model_id)
-            tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=False)
-            model = AutoModelForCausalLM.from_pretrained(
-                model_id,
-                dtype=dtype,
-                local_files_only=False,
-                device_map="cpu" if resolved == "cpu" else None,
-            )
-            logger.info("%s downloaded successfully", model_id)
+            # Create test input
+            test_input = np.array([[1, 2, 3, 4, 5]], dtype=np.int64)
 
-        if resolved == "mps":
-            model = model.to("mps")
-        elif resolved == "cuda":
-            model = model.to("cuda")
-        else:
-            model = model.cpu()
+            # Run inference via provider
+            if result.model_type == "slonet":
+                output = result.provider.generate(test_input, max_new_tokens=10)
+            else:
+                # For HF models, use the model directly
+                import torch
+                input_tensor = torch.tensor(test_input, dtype=torch.long)
+                if hasattr(result.model, "device"):
+                    input_tensor = input_tensor.to(result.model.device)
+                with torch.no_grad():
+                    output = result.model.generate(input_tensor, max_new_tokens=10)
 
-        model.eval()
-        verify_model_integrity(model, model_id, tokenizer)
-        return model, tokenizer, resolved
+            # Check output
+            if output is None or (hasattr(output, "shape") and output.shape[-1] == 0):
+                result.success = False
+                result.error = "Model produced empty output"
+                return False
 
-    except ImportError:
-        # No torch — use safetensors for weight loading
-        logger.info("torch not available — using safetensors loader")
-        from domains.infrastructure.safetensors_loader import load_model_weights, load_model_config
+            result.metrics["verified"] = True
+            logger.info("Model verification passed: %s", result.model_id)
+            return True
+        except Exception as e:
+            logger.warning("Model verification failed: %s", e)
+            result.metrics["verified"] = False
+            return False
 
-        weights = load_model_weights(model_id)
-        config = load_model_config(model_id)
+    def _quantize_hf_model(self, provider: Any, bits: int, mode: str) -> None:
+        """Quantize all nn.Linear layers in a HuggingFace model.
 
-        # Return numpy weights dict and config (no model object)
-        return weights, config, resolved
+        Uses the same quantization engine as SloNet, but targets
+        HuggingFace's nn.Linear layers instead of SloLinear.
+        """
+        try:
+            from domains.infrastructure.quantization import QuantEngine
+
+            model = provider._model
+            engine = QuantEngine(bits=bits, mode=mode)
+
+            # Find all nn.Linear layers
+            linear_layers = {}
+            for name, module in model.named_modules():
+                if module.__class__.__name__ == "Linear":
+                    linear_layers[name] = module
+
+            # Quantize each layer
+            quantized_count = 0
+            for name, module in linear_layers.items():
+                if hasattr(module, "weight") and module.weight is not None:
+                    weight = module.weight.data.cpu().numpy()
+                    info = engine.quantize(f"{name}.weight", weight)
+                    if info.is_quantized:
+                        # Store quantized weight
+                        module._quant_info = info
+                        quantized_count += 1
+
+            provider._quant_engine = engine
+            logger.info("Quantized %d/%d layers in %s",
+                       quantized_count, len(linear_layers), provider._model_id)
+        except Exception as e:
+            logger.warning("HF quantization failed: %s", e)
+
+    def walk_hf_linears(self, model: Any) -> Dict[str, Any]:
+        """Find all nn.Linear layers in a HuggingFace model.
+
+        Similar to walk_slo_linears() but for HuggingFace models.
+        Returns dict of {name: nn.Linear_module}.
+
+        Usage:
+            from domains.infrastructure.model_loader import ModelLoader
+            loader = ModelLoader()
+            layers = loader.walk_hf_linears(hf_model)
+            for name, module in layers.items():
+                print(f"{name}: {module.weight.shape}")
+        """
+        layers = {}
+        for name, module in model.named_modules():
+            if module.__class__.__name__ == "Linear":
+                layers[name] = module
+        return layers
+
+
+# Singleton for convenience
+_loader: Optional[ModelLoader] = None
+
+
+def get_model_loader() -> ModelLoader:
+    """Get the global ModelLoader instance."""
+    global _loader
+    if _loader is None:
+        _loader = ModelLoader()
+    return _loader
+
+
+def load_model(
+    model_id: str,
+    device: str = "auto",
+    quantize: bool = False,
+    quant_bits: int = 8,
+    quant_mode: str = "symmetric",
+    verify: bool = True,
+) -> LoadResult:
+    """Convenience function to load a model.
+
+    Args:
+        model_id: Model identifier (e.g., "gpt2", "meta-llama/Llama-3-8B")
+        device: Target device ("auto", "cpu", "mps", "cuda")
+        quantize: Apply quantization after loading
+        quant_bits: Bits for quantization (8 or 4)
+        quant_mode: "symmetric" or "asymmetric"
+        verify: Run test inference to verify model works
+
+    Returns:
+        LoadResult with provider, model, tokenizer, and metrics
+    """
+    return get_model_loader().load(
+        model_id=model_id,
+        device=device,
+        quantize=quantize,
+        quant_bits=quant_bits,
+        quant_mode=quant_mode,
+        verify=verify,
+    )

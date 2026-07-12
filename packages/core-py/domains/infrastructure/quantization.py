@@ -77,6 +77,26 @@ def walk_slo_linears(model) -> dict:
 
     return layers
 
+
+def walk_hf_linears(model) -> dict:
+    """Find all nn.Linear layers in a HuggingFace model.
+
+    Unlike SloNet models (which store layers in plain Python lists),
+    HuggingFace models use standard ``nn.Module`` hierarchy, so
+    ``named_modules()`` works. This function extracts all ``nn.Linear``
+    layers, which are the targets for int8/int4 quantization.
+
+    Returns:
+        dict of ``{name: nn.Linear_layer}``.
+    """
+    layers = {}
+    for name, module in model.named_modules():
+        cls_name = module.__class__.__name__
+        if cls_name == "Linear" and hasattr(module, "weight"):
+            layers[name] = module
+    return layers
+
+
 # Try to load AVX2-accelerated int8 GEMM
 def _numpy_fallback(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """Pure-numpy int8 GEMM fallback."""
