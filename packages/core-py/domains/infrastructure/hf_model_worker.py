@@ -42,13 +42,14 @@ def hf_model_loader(
         from transformers import AutoModelForCausalLM, AutoTokenizer
         model = AutoModelForCausalLM.from_pretrained(
             model_id,
-            torch_dtype="auto",
+            dtype="auto",
             device_map=device,
         )
         model.eval()
         tokenizer = AutoTokenizer.from_pretrained(model_id)
-        if tokenizer.pad_token_id is None:
-            tokenizer.pad_token_id = tokenizer.eos_token_id
+        if tokenizer.pad_token is None or tokenizer.pad_token_id == tokenizer.eos_token_id:
+            tokenizer.add_special_tokens({"pad_token": "<|pad|>"})
+            model.resize_token_embeddings(len(tokenizer))
 
     logger.info("hf_model_loader[%s]: loaded (device=%s)", model_id, resolved_device)
     return model, tokenizer

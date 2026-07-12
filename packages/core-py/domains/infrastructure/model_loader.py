@@ -189,15 +189,24 @@ class ModelLoader:
 
             # Load tokenizer
             tokenizer = AutoTokenizer.from_pretrained(model_id)
-            if tokenizer.pad_token is None:
-                tokenizer.pad_token = tokenizer.eos_token
+
+            # Add a distinct pad token to avoid the "pad_token == eos_token"
+            # warning.  The model never generates this token — it only appears
+            # when padding sequences to equal length for batched generation.
+            if tokenizer.pad_token is None or tokenizer.pad_token_id == tokenizer.eos_token_id:
+                tokenizer.add_special_tokens({"pad_token": "<|pad|>"})
 
             # Load model
             model = AutoModelForCausalLM.from_pretrained(
                 model_id,
-                torch_dtype=torch.float32,
+                dtype=torch.float32,
                 device_map=None,
             )
+
+            # Resize embeddings if we added a new pad token
+            if len(tokenizer) != model.config.vocab_size:
+                model.resize_token_embeddings(len(tokenizer))
+
             model = model.to(device)
             model.eval()
 

@@ -465,18 +465,18 @@ def _autoload_model(cfg: ServerConfig):
     if result.tokenizer is not None:
         server_state.tokenizer = result.tokenizer
 
-    # Register provider
+    # Register provider under its lookup name (hf-default, slonet-native, etc.)
     from domains.models.provider import register_provider, ProviderRouter, VisionProcessor, get_provider as _gp
 
-    register_provider("default", result.provider)
+    provider_name = "slonet-native" if result.model_type == "slonet" else "hf-default"
+    register_provider(provider_name, result.provider)
 
     # Set up default router
-    existing = _gp("default")
     _is_slonet = result.model_type == "slonet"
     if not _is_slonet:
         router = ProviderRouter()
         router.add_processor(VisionProcessor("multimodal"))
-        router.set_text_provider("hf-default")
+        router.set_text_provider(provider_name)
         register_provider("default", router)
 
     logger.info("Autoload ok: %s (%s)", cfg.autoload_model, result.model_type)

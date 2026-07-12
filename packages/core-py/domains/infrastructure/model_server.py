@@ -76,7 +76,6 @@ def _torch_compile_model(model, model_id: str) -> Any:
         return model
     # Skip models too small to benefit (compile overhead > gain)
     try:
-        p = next(model.parameters())
         n_params = sum(p.numel() for p in model.parameters())
         if n_params < 10_000_000:  # <10M params — not worth it
             logger.debug("Skipping torch.compile for %s (%d params)", model_id, n_params)
@@ -90,6 +89,15 @@ def _torch_compile_model(model, model_id: str) -> Any:
     except Exception as e:
         logger.warning("torch.compile failed for %s: %s", model_id, e)
         return model
+
+
+def _inference_mode_generate(model, gen_kwargs: dict) -> Any:
+    """Generate under ``torch.inference_mode()`` for ~5-15% speedup over no_grad."""
+    if not _ensure_torch():
+        return model.generate(**gen_kwargs)
+    import torch
+    with torch.inference_mode():
+        return model.generate(**gen_kwargs)
 
 
 def _is_intel_mac() -> bool:
@@ -507,8 +515,7 @@ class LocalBackend(GenerateBackend):
             except Exception:
                 pass
 
-        with ml_no_grad():
-            output = self._model_ref.generate(**gen_kwargs)
+        output = _inference_mode_generate(self._model_ref, gen_kwargs)
 
         if _cpu_fallback:
             try:
@@ -578,9 +585,7 @@ class LocalBackend(GenerateBackend):
 
         def _generate_inner():
             try:
-                from domains.infrastructure.ml_types import no_grad as ml_no_grad
-                with ml_no_grad():
-                    self._model_ref.generate(**gen_kwargs)
+                _inference_mode_generate(self._model_ref, gen_kwargs)
             except Exception as e:
                 _error.append(e)
 
@@ -608,180 +613,6 @@ class LocalBackend(GenerateBackend):
 
         elapsed_ms = (time.time() - start) * 1000
         return {"text": "", "tokens_generated": token_count, "elapsed_ms": elapsed_ms}
-
-
-class ONNXBackend:
-    """ONNX Runtime inference backend.
-
-    Lazily exports the HuggingFace model to ONNX on first ``generate()``
-    call.  Subsequent calls use ONNX Runtime with Intel MKL for ~2-3x
-    speedup over raw PyTorch on CPU.
-
-    Falls back to PyTorch on export/load failure.
-    """
-
-    def __init__(
-        self,
-        model_id: str,
-        orig_model: Any,
-        tokenizer: Any,
-        device: str,
-    ):
-        self._model_id = model_id
-        self._orig_model = orig_model
-        self._tokenizer = tokenizer
-        self._device = device
-        self._ort_model: Optional[Any] = None
-        self._conversion_error: Optional[str] = None
-        self._conversion_attempted = False
-        self._conversion_lock = Lock()
-
-    @property
-    def alive(self) -> bool:
-        return self._ort_model is not None or self._orig_model is not None
-
-    def _ensure_converted(self) -> None:
-        """Export model to ONNX once.  Thread-safe, no-op after first attempt."""
-        if self._conversion_attempted:
-            return
-        with self._conversion_lock:
-            if self._conversion_attempted:
-                return
-            self._conversion_attempted = True
-        try:
-            from optimum.onnxruntime import ORTModelForCausalLM
-            logger.info("Exporting %s to ONNX (first call may be slow)…", self._model_id)
-            onnx_model = ORTModelForCausalLM.from_pretrained(
-                self._model_id,
-                export=True,
-                provider="CPUExecutionProvider",
-            )
-            self._ort_model = onnx_model
-            logger.info("ONNX backend ready for %s", self._model_id)
-        except Exception as e:
-            self._conversion_error = f"{type(e).__name__}: {e}"
-            logger.warning("ONNX conversion failed for %s: %s", self._model_id, e)
-
-    def generate(
-        self,
-        prompt: str,
-        max_new_tokens: int,
-        temperature: float,
-        top_p: float,
-        top_k: int,
-        repetition_penalty: float,
-        **kwargs: Any,
-    ) -> dict:
-        self._ensure_converted()
-        if self._ort_model is not None:
-            import torch
-            inputs = self._tokenizer(prompt, return_tensors="pt")
-            with torch.no_grad():
-                output_ids = self._ort_model.generate(
-                    **inputs,
-                    max_new_tokens=max_new_tokens,
-                    do_sample=True,
-                    temperature=temperature,
-                    top_p=top_p,
-                    top_k=top_k,
-                    repetition_penalty=repetition_penalty,
-                    pad_token_id=self._tokenizer.pad_token_id or self._tokenizer.eos_token_id,
-                    eos_token_id=self._tokenizer.eos_token_id,
-                )
-            tokens_generated = output_ids.shape[1] - inputs["input_ids"].shape[1]
-            text = self._tokenizer.decode(
-                output_ids[0][inputs["input_ids"].shape[1]:],
-                skip_special_tokens=True,
-            )
-            return {"text": text, "tokens_generated": tokens_generated}
-        # Fallback to original PyTorch model
-        return self._fallback_generate(
-            prompt, max_new_tokens, temperature, top_p, top_k, repetition_penalty, **kwargs,
-        )
-
-    def generate_stream(
-        self,
-        prompt: str,
-        max_new_tokens: int,
-        temperature: float,
-        top_p: float,
-        top_k: int,
-        repetition_penalty: float,
-        cancel_event=None,
-        **kwargs: Any,
-    ) -> Any:
-        self._ensure_converted()
-        if self._ort_model is not None:
-            # ONNX Runtime doesn't support streaming natively via ORTModelForCausalLM,
-            # so fall back to PyTorch for streaming.
-            return self._fallback_generate_stream(
-                prompt, max_new_tokens, temperature, top_p, top_k, repetition_penalty,
-                cancel_event=cancel_event, **kwargs,
-            )
-        return self._fallback_generate_stream(
-            prompt, max_new_tokens, temperature, top_p, top_k, repetition_penalty,
-            cancel_event=cancel_event, **kwargs,
-        )
-
-    def _fallback_generate(self, *args, **kwargs) -> dict:
-        """Fallback to PyTorch LocalBackend-style generation."""
-        from domains.infrastructure.ml_types import no_grad as ml_no_grad
-        import torch
-        inputs = self._tokenizer(args[0], return_tensors="pt")
-        with ml_no_grad():
-            output = self._orig_model.generate(
-                **inputs,
-                max_new_tokens=kwargs.get("max_new_tokens", 100),
-                do_sample=True,
-                temperature=kwargs.get("temperature", 0.7),
-                pad_token_id=self._tokenizer.pad_token_id or self._tokenizer.eos_token_id,
-                eos_token_id=self._tokenizer.eos_token_id,
-            )
-        tokens_generated = output.shape[1] - inputs["input_ids"].shape[1]
-        text = self._tokenizer.decode(output[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True)
-        return {"text": text, "tokens_generated": tokens_generated}
-
-    def _fallback_generate_stream(self, prompt, max_new_tokens, temperature, top_p, top_k, repetition_penalty, cancel_event=None, **kwargs):
-        """Fallback streaming via PyTorch."""
-        from transformers import TextIteratorStreamer, StoppingCriteria
-        import queue, threading
-        inputs = self._tokenizer(prompt, return_tensors="pt")
-        streamer = TextIteratorStreamer(self._tokenizer, skip_prompt=True, timeout=120.0)
-        gen_kwargs = dict(
-            **inputs,
-            max_new_tokens=max_new_tokens,
-            do_sample=True,
-            temperature=temperature,
-            top_p=top_p,
-            top_k=top_k,
-            repetition_penalty=repetition_penalty,
-            pad_token_id=self._tokenizer.pad_token_id or self._tokenizer.eos_token_id,
-            eos_token_id=self._tokenizer.eos_token_id,
-            streamer=streamer,
-        )
-        if cancel_event is not None:
-            class _CancelCriteria(StoppingCriteria):
-                def __call__(self, input_ids_, scores_, **kwargs):
-                    return cancel_event.is_set()
-            gen_kwargs.setdefault("stopping_criteria", [])
-            gen_kwargs["stopping_criteria"].append(_CancelCriteria())
-
-        def _gen():
-            from domains.infrastructure.ml_types import no_grad as ml_no_grad
-            with ml_no_grad():
-                self._orig_model.generate(**gen_kwargs)
-        thread = threading.Thread(target=_gen, daemon=True)
-        thread.start()
-
-        while thread.is_alive() or not streamer.text_queue.empty():
-            try:
-                text = streamer.text_queue.get(timeout=0.02)
-            except queue.Empty:
-                continue
-            if text == streamer.stop_signal:
-                break
-            yield text
-        thread.join(timeout=30)
 
 
 def _tokenize_cached(tokenizer, prompt: str, cache: dict) -> dict:
@@ -869,12 +700,6 @@ class ModelServer:
             device="cpu",  # updated by _check_device below
             tokenize_cache={},  # shared with ModelServer
         ) if model is not None else None
-
-        # ONNX Runtime backend — lazily converts on first generate()
-        self._onnx_backend: Optional[ONNXBackend] = (
-            ONNXBackend(model_id=model_id, orig_model=model, tokenizer=tokenizer, device="cpu")
-            if model is not None else None
-        )
 
         # torch.compile flag — applied after warmup
         self._compiled = False
@@ -999,18 +824,15 @@ class ModelServer:
         if self._local_backend is not None:
             self._local_backend._device = self._resolved_device
 
-    def _select_backend(self) -> Any:
+    def _select_backend(self) -> GenerateBackend:
         """Pick the best available backend for the current request.
 
-        Priority: GuardBackend (crash-isolated) > NumpyBackend (no torch)
-                  > ONNXBackend (fast CPU inference) > LocalBackend.
+        Priority: GuardBackend (crash-isolated) > NumpyBackend (no torch) > LocalBackend.
         """
         if self._guard_backend is not None and self._guard_backend.alive:
             return self._guard_backend
         if self._numpy_backend is not None and self._numpy_backend.alive:
             return self._numpy_backend
-        if self._onnx_backend is not None and self._onnx_backend.alive:
-            return self._onnx_backend
         return self._local_backend
 
     def drop_model_ref(self) -> None:
