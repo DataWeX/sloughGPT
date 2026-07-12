@@ -119,8 +119,8 @@ describe('QuantizationCard', () => {
 
     await waitFor(() => {
       expect(screen.getByText('15/15')).toBeDefined()
-      expect(screen.getByText('0.9987')).toBeDefined()
-      expect(screen.getByText('Enabled')).toBeDefined()
+      expect(screen.getByText('Good')).toBeDefined()
+      expect(screen.getAllByText('Sym').length).toBeGreaterThanOrEqual(2)
     })
   })
 

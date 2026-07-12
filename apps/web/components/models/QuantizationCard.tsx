@@ -19,6 +19,13 @@ function formatLayerName(name: string): string {
   return name.replace('.weight', '').replace('blocks.', 'B').replace('.q_proj', '/Q').replace('.k_proj', '/K').replace('.v_proj', '/V').replace('.o_proj', '/O').replace('.fc1', '/FC1').replace('.fc2', '/FC2')
 }
 
+function qualityGrade(cos: number): { label: string; color: string } {
+  if (cos >= 0.999) return { label: 'Excellent', color: 'text-green-600' }
+  if (cos >= 0.99) return { label: 'Good', color: 'text-green-600' }
+  if (cos >= 0.95) return { label: 'Fair', color: 'text-yellow-600' }
+  return { label: 'Poor', color: 'text-red-600' }
+}
+
 export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
   const addToast = useToastStore(s => s.addToast)
   const [bits, setBits] = useState<4 | 8>(8)
@@ -114,14 +121,16 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
               )}
             </div>
 
-            {result && (
-              <div className="pt-2 border-t border-border/40 space-y-2">
-                <KpiGrid columns={4}>
-                  <StatCard label="Layers" value={`${result.layers_quantized}/${result.total_layers}`} />
-                  <StatCard label="Avg Cosine" value={result.summary.avg_cosine_sim.toFixed(4)} />
-                  <StatCard label="AVX2" value={result.avx2_enabled ? 'Enabled' : 'N/A'} />
-                  <StatCard label="Type" value={result.model_type === 'slonet' ? 'SloNet' : 'HuggingFace'} />
-                </KpiGrid>
+            {result && (() => {
+              const grade = qualityGrade(result.summary.avg_cosine_sim)
+              return (
+                <div className="pt-2 border-t border-border/40 space-y-2">
+                  <KpiGrid columns={4}>
+                    <StatCard label="Layers" value={`${result.layers_quantized}/${result.total_layers}`} />
+                    <StatCard label="Quality" value={grade.label} icon={<span className={`text-xs ${grade.color}`}>●</span>} />
+                    <StatCard label="Mode" value={result.mode === 'asymmetric' ? 'Asym' : 'Sym'} />
+                    <StatCard label="Type" value={result.model_type === 'slonet' ? 'SloNet' : 'HuggingFace'} />
+                  </KpiGrid>
 
                 {sortedLayers.length > 0 && (
                   <button
@@ -160,7 +169,7 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
                   </div>
                 )}
               </div>
-            )}
+            )})()}
           </div>
         )}
       </CardContent>
