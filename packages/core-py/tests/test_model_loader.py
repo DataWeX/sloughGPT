@@ -181,6 +181,32 @@ class TestWalkHfLinearsFunction:
             pytest.skip("torch not installed")
 
 
+class TestFlashAttention:
+    """Tests for flash attention resolution."""
+
+    def test_returns_empty_when_disabled(self):
+        """_resolve_attn_kwargs returns {} when use_flash_attention=False."""
+        from domains.infrastructure.model_loader import ModelLoader
+        loader = ModelLoader()
+        kwargs = loader._resolve_attn_kwargs()
+        assert kwargs == {}
+
+    def test_returns_empty_without_cuda(self):
+        """_resolve_attn_kwargs returns {} on non-CUDA systems."""
+        from domains.infrastructure.config import get_config
+        from domains.infrastructure.model_loader import ModelLoader
+        cfg = get_config()
+        old = cfg.model.use_flash_attention
+        cfg.model.use_flash_attention = True
+        try:
+            loader = ModelLoader()
+            kwargs = loader._resolve_attn_kwargs()
+            # No CUDA on this machine → empty
+            assert kwargs == {}
+        finally:
+            cfg.model.use_flash_attention = old
+
+
 class TestModelLoaderSingleton:
     """Test the singleton accessor."""
 

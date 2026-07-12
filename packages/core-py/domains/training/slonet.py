@@ -290,8 +290,7 @@ class Tensor:
     def __pow__(self, p): return _pow(self, p)
     def __truediv__(self, other): return _mul(self, _ensure(other) ** -1)
     def __getitem__(self, key):
-        sliced = self.data[key]
-        return Tensor(sliced, requires_grad=False)
+        return _slice(self, key)
     def __setitem__(self, key, value):
         self.data[key] = value.data if isinstance(value, Tensor) else value
     def __matmul__(self, other): return _matmul(self, _ensure(other))
@@ -1203,6 +1202,7 @@ class SloLinear(SloLayer):
         self.soul_traits = {"creativity": 0.5, "confidence": 0.5, "warmth": 0.5}
         self._quant_info = None  # TensorInfo for quantized weight
         self._quant_unpacked = None  # lazy int4→int8 unpack cache
+        self._point_weight = None  # PointWeight: function-based weight representation
 
     def _get_weight_T(self) -> Tensor:
         if self._weight_T is None:
@@ -1238,6 +1238,40 @@ class SloLinear(SloLayer):
                 self._quant_unpacked = unpacked_1d.reshape(self._quant_info.meta.original_shape).astype(np.int8)
             return self._quant_unpacked
         return self._quant_info.array
+
+    def set_point_weight(self, point_weight):
+        """Set a PointWeight for this layer.
+
+        When set, forward() generates weight from the Point on-the-fly
+        instead of using the raw Tensor weight.
+
+        Args:
+            point_weight: PointWeight instance (from pugqeep.point_weight)
+        """
+        self._point_weight = point_weight
+        # Sync generated data into self.weight so training/gradients still work
+        arr = point_weight.generate()
+        self.weight.data = arr.astype(np.float32)
+
+    def get_point_weight(self):
+        """Return the PointWeight for this layer, or None."""
+        return self._point_weight
+
+    def compress_to_point(self, method: str = "auto", n_clusters: int = 16):
+        """Compress this layer's weight tensor to a PointWeight.
+
+        After compression, the Point replaces raw storage. The generated
+        data is synced into self.weight for backward compatibility.
+        """
+        from domains.infrastructure.pugqeep.point_weight import PointWeight
+        pw = PointWeight.from_array(
+            self.weight.data,
+            identity=self.name,
+            method=method,
+            n_clusters=n_clusters,
+        )
+        self.set_point_weight(pw)
+        return pw
 
     def forward_numpy(self, x: np.ndarray) -> np.ndarray:
         if self._quant_info is not None and self._quant_info.is_quantized:
@@ -1745,12 +1779,7 @@ class SloLayerNorm(SloLayer):
         return (x - mean) / np.sqrt(var + self.eps) * self.weight.data + self.bias.data
 
     def forward(self, x: Tensor) -> Tensor:
-        mean = x.data.mean(axis=-1, keepdims=True)
-        var = x.data.var(axis=-1, keepdims=True)
-        x_norm = (x.data - mean) / np.sqrt(var + self.eps)
-        out = x_norm * self.weight.data + self.bias.data
-        return Tensor(out, requires_grad=x.requires_grad,
-                      _children=(x,) if x.requires_grad else None)
+        return _layernorm(x, self.weight, self.bias, self.eps)
 
     def parameters(self) -> List[Tensor]:
         return [self.weight, self.bias]
@@ -2964,13 +2993,16 @@ def _sanitize(obj):
     return obj
 
 
-def export_to_sou(net: SloNet, path: str, include_weights=True) -> str:
-    metadata = {
+def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict = None) -> str:
+    base_metadata = {
         "version": 3, "soul_name": net.soul_name, "soul_traits": net.soul_traits,
         "lineage": net.lineage, "system_prompt": net.system_prompt,
         "soul_signature": net.soul_signature(), "metadata": net.metadata,
         "created_at": net._created_at, "step": net._step,
     }
+    if metadata:
+        base_metadata["metadata"] = {**(base_metadata.get("metadata") or {}), **metadata}
+    metadata = base_metadata
     json_bytes = json.dumps(_sanitize(metadata), allow_nan=False).encode()
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 

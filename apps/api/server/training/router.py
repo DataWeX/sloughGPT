@@ -839,6 +839,55 @@ class VisualTrainRequest(BaseModel):
     name: Optional[str] = None
 
 
+class MergeLoRARequest(BaseModel):
+    """Request body for merging a LoRA adapter into its base model."""
+    adapter_path: str
+    output_path: Optional[str] = None
+    push_to_hub: bool = False
+    hub_model_id: Optional[str] = None
+
+
+@router.post("/training/merge-lora")
+async def merge_lora_adapter(request: MergeLoRARequest):
+    """Merge LoRA adapter weights into the base model and save the merged result.
+
+    Takes a path to a saved PEFT adapter directory (containing
+    adapter_config.json + adapter_model.bin), merges the low-rank matrices
+    back into the base weights, and saves a standalone model with no adapter
+    overhead.
+
+    Args:
+        request: MergeLoRARequest with adapter_path, optional output_path,
+            push_to_hub flag, and hub_model_id.
+
+    Returns:
+        Dict with status, merged_path, and base_model name.
+
+    Raises:
+        HTTPException: If merge fails (file not found, import error, etc.)
+    """
+    import os
+    try:
+        from domains.training.hf_finetune import merge_lora_adapter as do_merge
+        result = do_merge(
+            adapter_path=request.adapter_path,
+            output_path=request.output_path,
+            push_to_hub=request.push_to_hub,
+            hub_model_id=request.hub_model_id,
+        )
+        return {
+            "status": "merged",
+            "merged_path": result,
+        }
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ImportError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.error("LoRA merge failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Merge failed: {e}")
+
+
 @router.post("/training/visual-start")
 async def start_visual_training(request: VisualTrainRequest):
     """Start a vision-language model (VLM) fine-tune on a visual dataset.

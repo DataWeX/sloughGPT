@@ -336,3 +336,111 @@ def test_bulk_processor_empty():
     bp = BulkProcessor(mem)
     report = bp.ingest_texts([])
     assert report["added"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Document Chunking Strategies
+# ---------------------------------------------------------------------------
+
+class TestChunkingStrategies:
+    """Tests for document chunking functions."""
+
+    def test_chunk_by_fixed_size_basic(self):
+        from domains.learner.knowledge import chunk_by_fixed_size
+        text = "A" * 1000
+        chunks = chunk_by_fixed_size(text, chunk_size=300)
+        assert len(chunks) >= 3
+        assert all(len(c) <= 300 for c in chunks)
+
+    def test_chunk_by_fixed_size_short_text(self):
+        from domains.learner.knowledge import chunk_by_fixed_size
+        text = "Short text"
+        chunks = chunk_by_fixed_size(text, chunk_size=500)
+        assert chunks == [text]
+
+    def test_chunk_by_fixed_size_empty(self):
+        from domains.learner.knowledge import chunk_by_fixed_size
+        assert chunk_by_fixed_size("") == []
+        assert chunk_by_fixed_size("  ") == []
+
+    def test_chunk_by_fixed_size_overlap(self):
+        from domains.learner.knowledge import chunk_by_fixed_size
+        text = "A" * 1000
+        chunks = chunk_by_fixed_size(text, chunk_size=300, overlap=50)
+        assert len(chunks) >= 3
+        # With overlap, chunks should share characters
+        for i in range(1, len(chunks)):
+            prev_end = chunks[i-1][-50:]
+            assert prev_end in chunks[i] or len(chunks[i]) > 0
+
+    def test_chunk_by_paragraph_basic(self):
+        from domains.learner.knowledge import chunk_by_paragraph
+        text = ("First paragraph with enough content to exceed the merge threshold. "
+                "This makes it long enough to be its own chunk.\n\n"
+                "Second paragraph also with enough content to stay separate. "
+                "This ensures it won't be merged with the first paragraph.")
+        chunks = chunk_by_paragraph(text, max_chunk_size=100)
+        assert len(chunks) >= 2
+
+    def test_chunk_by_paragraph_single(self):
+        from domains.learner.knowledge import chunk_by_paragraph
+        text = "Single paragraph without breaks."
+        chunks = chunk_by_paragraph(text)
+        assert len(chunks) == 1
+
+    def test_chunk_by_paragraph_empty(self):
+        from domains.learner.knowledge import chunk_by_paragraph
+        assert chunk_by_paragraph("") == []
+        assert chunk_by_paragraph("  ") == []
+
+    def test_chunk_by_heading_basic(self):
+        from domains.learner.knowledge import chunk_by_heading
+        text = ("# Title\n"
+                "Content under title that is long enough to be its own chunk section.\n"
+                "More content to make it substantial.\n"
+                "## Section\n"
+                "Content under section that is also long enough to be separate.\n"
+                "Additional content for the section.")
+        chunks = chunk_by_heading(text, max_chunk_size=100)
+        assert len(chunks) >= 2
+
+    def test_chunk_by_heading_no_headings(self):
+        from domains.learner.knowledge import chunk_by_heading
+        text = "No headings here. Just plain text."
+        chunks = chunk_by_heading(text)
+        assert len(chunks) >= 1
+
+    def test_chunk_by_heading_empty(self):
+        from domains.learner.knowledge import chunk_by_heading
+        assert chunk_by_heading("") == []
+
+    def test_chunk_by_semantic_basic(self):
+        from domains.learner.knowledge import chunk_by_semantic
+        text = ("Python is a language. It is used for web development. "
+                "JavaScript is also popular. It runs in browsers. "
+                "Rust is a systems language. It focuses on safety.")
+        chunks = chunk_by_semantic(text)
+        assert len(chunks) >= 1
+
+    def test_chunk_by_semantic_short(self):
+        from domains.learner.knowledge import chunk_by_semantic
+        text = "Short text."
+        chunks = chunk_by_semantic(text)
+        assert len(chunks) == 1
+
+    def test_chunk_text_auto_strategy(self):
+        from domains.learner.knowledge import chunk_text
+        text = "# Heading\nSome content.\n\nAnother paragraph."
+        chunks = chunk_text(text, strategy="auto")
+        assert len(chunks) >= 1
+
+    def test_chunk_text_explicit_strategy(self):
+        from domains.learner.knowledge import chunk_text
+        text = "A" * 1000
+        chunks = chunk_text(text, strategy="fixed", chunk_size=300)
+        assert len(chunks) >= 3
+
+    def test_chunk_text_unknown_strategy(self):
+        from domains.learner.knowledge import chunk_text
+        with pytest.raises(ValueError, match="Unknown strategy"):
+            chunk_text("text", strategy="nonexistent")

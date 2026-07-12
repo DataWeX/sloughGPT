@@ -73,6 +73,11 @@ def load_model_weights(
     if safetensors_path is None:
         raise ValueError(f"No .safetensors file found for {model_id}")
 
+    # Check for .slnc cache (2.2x faster load via mmap)
+    slnc_path = safetensors_path.with_suffix(".slnc")
+    if slnc_path.exists():
+        return _load_from_slnc(slnc_path, dtype)
+
     logger.info("Loading %s from %s", model_id, safetensors_path.name)
 
     weights = {}
@@ -93,7 +98,53 @@ def load_model_weights(
                     weights[key] = np.asarray(arr).astype(dtype)
 
     logger.info("Loaded %d parameters from %s", len(weights), model_id)
+
+    # Auto-convert to .slnc for faster future loads
+    _try_convert_to_slnc(model_id, safetensors_path, weights)
+
     return weights
+
+
+def _load_from_slnc(slnc_path: Path, dtype: np.dtype) -> Dict[str, np.ndarray]:
+    """Load weights from .slnc memory-mapped format."""
+    from domains.infrastructure.slnc.parser import SLNCParser
+
+    logger.info("Loading from .slnc cache: %s (memory-mapped)", slnc_path.name)
+    parser = SLNCParser(str(slnc_path))
+    weights = parser.get_weights_dict()
+
+    # Apply dtype conversion if needed
+    result = {}
+    for key, arr in weights.items():
+        result[key] = arr.astype(dtype) if arr.dtype != dtype else arr
+
+    logger.info("Loaded %d parameters from .slnc: %s", len(result), slnc_path.name)
+    return result
+
+
+def _try_convert_to_slnc(
+    model_id: str,
+    safetensors_path: Path,
+    weights: Dict[str, np.ndarray],
+) -> None:
+    """Attempt to convert safetensors weights to .slnc format.
+
+    This is a background optimization — failures are silently ignored.
+    """
+    try:
+        from domains.infrastructure.slnc.compiler import SLNCCompiler
+
+        slnc_path = safetensors_path.with_suffix(".slnc")
+        config = load_model_config(model_id)
+
+        logger.info("Auto-converting %s to .slnc format...", model_id)
+        compiler = SLNCCompiler()
+        compiler.compile_from_dict(config, weights, str(slnc_path))
+        logger.info("SLNC conversion complete: %s (%.1f MB)",
+                     slnc_path.name, slnc_path.stat().st_size / 1024 / 1024)
+    except Exception as e:
+        # Non-critical — just log and continue
+        logger.debug("SLNC auto-conversion skipped for %s: %s", model_id, e)
 
 
 def load_model_config(model_id: str) -> Dict[str, Any]:

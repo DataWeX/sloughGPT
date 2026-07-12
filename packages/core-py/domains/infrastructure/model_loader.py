@@ -84,6 +84,36 @@ class ModelLoader:
             self._verify_model(hf_result)
         return hf_result
 
+    def _resolve_attn_kwargs(self) -> dict:
+        """Resolve attention implementation kwargs based on config.
+
+        Returns a dict with ``attn_implementation`` when flash attention is
+        requested and available, otherwise an empty dict.  Flash attention 2
+        requires:
+          - transformers >= 4.35
+          - torch >= 2.0
+          - CUDA-capable GPU (A100, V100, RTX 30xx+) or compatible hardware
+        On CPU / MPS the kwarg is silently omitted and the default (eager /
+        SDPA math backend) is used.
+        """
+        try:
+            import torch
+            from domains.infrastructure.config import get_config
+            cfg = get_config()
+            if not cfg.model.use_flash_attention:
+                return {}
+            if not torch.cuda.is_available():
+                logger.info("Flash attention requested but no CUDA device — skipping")
+                return {}
+            if not hasattr(torch.nn.functional, "scaled_dot_product_attention"):
+                logger.info("Flash attention requested but torch SDPA not available — skipping")
+                return {}
+            logger.info("Using flash attention 2 for %s", cfg.model.name)
+            return {"attn_implementation": "flash_attention_2"}
+        except Exception as e:
+            logger.debug("Flash attention detection failed: %s", e)
+            return {}
+
     def _try_load_slnc(
         self,
         model_id: str,
@@ -196,11 +226,15 @@ class ModelLoader:
             if tokenizer.pad_token is None or tokenizer.pad_token_id == tokenizer.eos_token_id:
                 tokenizer.add_special_tokens({"pad_token": "<|pad|>"})
 
+            # Resolve attention implementation
+            attn_kwargs = self._resolve_attn_kwargs()
+
             # Load model
             model = AutoModelForCausalLM.from_pretrained(
                 model_id,
                 dtype=torch.float32,
                 device_map=None,
+                **attn_kwargs,
             )
 
             # Resize embeddings if we added a new pad token
@@ -245,10 +279,16 @@ class ModelLoader:
             )
 
     def _resolve_device(self) -> str:
-        """Resolve best available device: mps > cuda > cpu."""
+        """Resolve best available device: mps (arm64 only) > cuda > cpu.
+
+        Intel Macs skip MPS — PyTorch can report it available but it
+        crashes at runtime during actual inference on x86_64.
+        """
         try:
+            import platform
+            is_apple_silicon = platform.machine() in ("arm64", "aarch64")
             import torch
-            if torch.backends.mps.is_available():
+            if is_apple_silicon and torch.backends.mps.is_available():
                 return "mps"
             if torch.cuda.is_available():
                 return "cuda"

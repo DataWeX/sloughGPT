@@ -178,6 +178,7 @@ async def regenerate_session(session_id: str, request: Request) -> StreamingResp
                     msgs,
                     max_tokens=512,
                     temperature=0.8,
+                    session_id=session_id,
                 ):
                     if await request.is_disconnected():
                         logger.info("Client disconnected from regenerate stream (request)", extra={"context": {"session_id": session_id}})

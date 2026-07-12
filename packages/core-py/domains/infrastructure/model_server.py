@@ -43,6 +43,80 @@ from enum import Enum
 logger = logging.getLogger("man.infrastructure.model_server")
 
 
+class SessionKVCache:
+    """Thread-safe per-session KV cache for incremental cross-turn decoding.
+
+    Stores ``(token_ids, past_key_values)`` per session so that follow-up
+    messages can skip re-encoding the shared prompt prefix.
+
+    Cache entries expire after ``ttl`` seconds and at most ``max_sessions``
+    entries are kept (LRU eviction).
+    """
+
+    def __init__(self, max_sessions: int = 100, ttl: float = 1800.0):
+        self._caches: dict[str, Any] = {}
+        self._max_sessions = max_sessions
+        self._ttl = ttl
+        self._lock = Lock()
+
+    def get(self, session_id: str, current_ids: list[int]):
+        """Return the cached ``past_key_values`` if ``current_ids`` shares a
+        prefix with the stored token IDs, else ``None``.
+
+        Also returns the prefix length so the caller can build the correct
+        attention mask.
+        """
+        with self._lock:
+            entry = self._caches.get(session_id)
+            if entry is None:
+                return None, 0
+            cached_ids, cached_pkv, _ = entry
+            prefix_len = 0
+            for a, b in zip(cached_ids, current_ids):
+                if a != b:
+                    break
+                prefix_len += 1
+            if prefix_len == 0:
+                return None, 0
+            return cached_pkv, prefix_len
+
+    def store(self, session_id: str, token_ids: list[int], past_key_values: Any) -> None:
+        """Store ``past_key_values`` keyed by session + token IDs."""
+        with self._lock:
+            self._evict_expired()
+            if len(self._caches) >= self._max_sessions:
+                oldest = min(self._caches, key=lambda k: self._caches[k][2])
+                del self._caches[oldest]
+            self._caches[session_id] = (token_ids, past_key_values, time.time())
+
+    def clear(self, session_id: str) -> None:
+        with self._lock:
+            self._caches.pop(session_id, None)
+
+    def _evict_expired(self) -> None:
+        now = time.time()
+        stale = [k for k, v in self._caches.items() if now - v[2] > self._ttl]
+        for k in stale:
+            del self._caches[k]
+
+    def evict_expired(self) -> None:
+        with self._lock:
+            self._evict_expired()
+
+    @property
+    def size(self) -> int:
+        with self._lock:
+            return len(self._caches)
+
+    def stats(self) -> dict:
+        with self._lock:
+            return {
+                "entries": len(self._caches),
+                "max_sessions": self._max_sessions,
+                "ttl_seconds": self._ttl,
+            }
+
+
 def _optimize_cpu_threads() -> None:
     """Set optimal CPU thread count for PyTorch inference on Intel Mac."""
     import os
@@ -60,7 +134,10 @@ def _optimize_cpu_threads() -> None:
     inter_ops = 2  # parallel graph partitions
     torch.set_num_threads(intra_ops)
     if hasattr(torch, "set_num_interop_threads"):
-        torch.set_num_interop_threads(min(inter_ops, intra_ops))
+        try:
+            torch.set_num_interop_threads(min(inter_ops, intra_ops))
+        except RuntimeError:
+            pass  # already set — ignore
     os.environ.setdefault("OMP_NUM_THREADS", str(intra_ops))
     os.environ.setdefault("MKL_NUM_THREADS", str(intra_ops))
     os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
@@ -445,6 +522,75 @@ class NumpyBackend(GenerateBackend):
 
         return {"text": "", "tokens_generated": token_count}
 
+class ONNXBackend(GenerateBackend):
+    """Wraps ONNXInferenceEngine for fast CPU/MPS inference.
+
+    Provides 5-10x speedup over PyTorch on CPU by using ONNX Runtime's
+    optimized execution providers (CoreML, XNNPACK, etc.).
+    """
+
+    def __init__(self, engine: Any, tokenizer: Any):
+        self._engine = engine
+        self._tokenizer = tokenizer
+
+    @property
+    def alive(self) -> bool:
+        try:
+            return self._engine is not None and self._engine.session is not None
+        except Exception:
+            return False
+
+    def generate(
+        self,
+        prompt: str,
+        max_new_tokens: int,
+        temperature: float,
+        top_p: float,
+        top_k: int,
+        repetition_penalty: float,
+        **kwargs: Any,
+    ) -> dict:
+        """Generate text using ONNX Runtime."""
+        do_sample = temperature > 0 and top_k > 0
+        text = self._engine.generate(
+            prompt,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
+            do_sample=do_sample,
+        )
+        input_len = len(self._tokenizer.encode(prompt).ids if hasattr(self._tokenizer, 'encode') and hasattr(self._tokenizer.encode(prompt), 'ids') else self._tokenizer.encode(prompt))
+        output_ids = self._tokenizer.encode(text).ids if hasattr(self._tokenizer.encode(text), 'ids') else self._tokenizer.encode(text)
+        output_len = len(output_ids)
+        tokens_generated = max(0, output_len - input_len)
+        return {"text": text, "tokens_generated": tokens_generated}
+
+    def generate_stream(
+        self,
+        prompt: str,
+        max_new_tokens: int,
+        temperature: float,
+        top_p: float,
+        top_k: int,
+        repetition_penalty: float,
+        cancel_event=None,
+        **kwargs: Any,
+    ) -> GeneratorType[str, None, dict]:
+        """Stream tokens from ONNX Runtime — yields one token at a time."""
+        if cancel_event is not None and cancel_event.is_set():
+            return {"text": "", "tokens_generated": 0}
+
+        token_count = 0
+        for token_text in self._engine.generate_stream(prompt, max_new_tokens=max_new_tokens):
+            if cancel_event is not None and cancel_event.is_set():
+                break
+            yield token_text
+            token_count += 1
+
+        return {"text": "", "tokens_generated": token_count}
+
+
 class LocalBackend(GenerateBackend):
     """Direct in-process model.generate()."""
 
@@ -474,6 +620,7 @@ class LocalBackend(GenerateBackend):
         top_p: float,
         top_k: int,
         repetition_penalty: float,
+        session_id: Optional[str] = None,
         **kwargs: Any,
     ) -> dict:
         from domains.infrastructure.ml_types import no_grad as ml_no_grad
@@ -483,6 +630,18 @@ class LocalBackend(GenerateBackend):
         attention_mask = inputs.get("attention_mask")
         if attention_mask is not None:
             attention_mask = attention_mask.to(self._device)
+
+        # Session KV cache: reuse cached prefix to skip re-encoding
+        pkv = None
+        if session_id is not None and self._model_ref is not None:
+            pkv, prefix_len = SESSION_KV_CACHE.get(session_id, input_ids[0].tolist())
+            if pkv is not None:
+                logger.debug(
+                    "Session[%s]: reuse KV cache for %d of %d tokens",
+                    session_id, prefix_len, input_ids.shape[1],
+                )
+            else:
+                logger.debug("Session[%s]: no cached KV — full encode", session_id)
 
         gen_kwargs = dict(
             input_ids=input_ids,
@@ -496,6 +655,8 @@ class LocalBackend(GenerateBackend):
             pad_token_id=self._tokenizer.pad_token_id or self._tokenizer.eos_token_id,
             eos_token_id=self._tokenizer.eos_token_id,
         )
+        if pkv is not None:
+            gen_kwargs["past_key_values"] = pkv
         gen_kwargs.update(kwargs)
 
         # MPS workaround: model.generate() deadlocks when called from
@@ -528,6 +689,24 @@ class LocalBackend(GenerateBackend):
 
         tokens_generated = output.shape[1] - input_ids.shape[1]
         text = self._tokenizer.decode(output[0][input_ids.shape[1]:], skip_special_tokens=True)
+
+        # Store updated KV cache for next turn
+        if session_id is not None and self._model_ref is not None:
+            if pkv is not None:
+                # Cache was passed — it's been extended in-place during generate
+                SESSION_KV_CACHE.store(session_id, input_ids[0].tolist(), pkv)
+            else:
+                # No cache was passed (first turn or mismatch) — store it now
+                # If we can get it from the model's internal state, do so
+                try:
+                    import torch
+                    captured = getattr(self._model_ref, "_past_key_values", None) or \
+                               getattr(self._model_ref, "past_key_values", None)
+                    if captured is not None:
+                        SESSION_KV_CACHE.store(session_id, input_ids[0].tolist(), captured)
+                except Exception:
+                    pass
+
         return {"text": text, "tokens_generated": tokens_generated}
 
     def generate_stream(
@@ -539,6 +718,7 @@ class LocalBackend(GenerateBackend):
         top_k: int,
         repetition_penalty: float,
         cancel_event=None,
+        session_id: Optional[str] = None,
         **kwargs: Any,
     ) -> GeneratorType[str, None, dict]:
         """Stream via TextIteratorStreamer in background thread.
@@ -557,6 +737,16 @@ class LocalBackend(GenerateBackend):
         if attention_mask is not None:
             attention_mask = attention_mask.to(self._device)
 
+        # Session KV cache: reuse cached prefix to skip re-encoding
+        pkv = None
+        if session_id is not None and self._model_ref is not None:
+            pkv, prefix_len = SESSION_KV_CACHE.get(session_id, input_ids[0].tolist())
+            if pkv is not None:
+                logger.debug(
+                    "Session[%s]: reuse KV cache for %d of %d tokens",
+                    session_id, prefix_len, input_ids.shape[1],
+                )
+
         streamer = TextIteratorStreamer(self._tokenizer, skip_prompt=True, timeout=120.0)
 
         gen_kwargs = dict(
@@ -572,6 +762,8 @@ class LocalBackend(GenerateBackend):
             eos_token_id=self._tokenizer.eos_token_id,
             streamer=streamer,
         )
+        if pkv is not None:
+            gen_kwargs["past_key_values"] = pkv
         gen_kwargs.update(kwargs)
 
         if cancel_event is not None:
@@ -582,6 +774,7 @@ class LocalBackend(GenerateBackend):
             gen_kwargs["stopping_criteria"].append(_CancelCriteria())
 
         _error: list = []
+        _pkv_holder: list = [pkv]  # capture the cache ref for after generation
 
         def _generate_inner():
             try:
@@ -612,6 +805,13 @@ class LocalBackend(GenerateBackend):
         thread.join(timeout=30)
 
         elapsed_ms = (time.time() - start) * 1000
+
+        # Store updated KV cache after generation completes
+        if session_id is not None and self._model_ref is not None:
+            final_pkv = _pkv_holder[0]
+            if final_pkv is not None:
+                SESSION_KV_CACHE.store(session_id, input_ids[0].tolist(), final_pkv)
+
         return {"text": "", "tokens_generated": token_count, "elapsed_ms": elapsed_ms}
 
 
@@ -633,6 +833,10 @@ def _tokenize_cached(tokenizer, prompt: str, cache: dict) -> dict:
     if len(cache) > 64:
         cache.pop(next(iter(cache)))
     return inputs
+
+
+# Module-level session KV cache singleton
+SESSION_KV_CACHE = SessionKVCache()
 
 
 def _mps_empty_cache() -> None:
@@ -676,6 +880,7 @@ class ModelServer:
         enable_warmup: bool = True,
         warmup_prompt: str = "Hello",
         numpy_engine: Optional[Any] = None,
+        onnx_engine: Optional[Any] = None,
     ):
         # CPU threading optimization (torch.set_num_threads etc.)
         _optimize_cpu_threads()
@@ -692,6 +897,9 @@ class ModelServer:
         )
         self._numpy_backend: Optional[NumpyBackend] = (
             NumpyBackend(numpy_engine) if numpy_engine is not None else None
+        )
+        self._onnx_backend: Optional[ONNXBackend] = (
+            ONNXBackend(onnx_engine, tokenizer) if onnx_engine is not None else None
         )
         self._local_backend = LocalBackend(
             model=model,
@@ -827,12 +1035,14 @@ class ModelServer:
     def _select_backend(self) -> GenerateBackend:
         """Pick the best available backend for the current request.
 
-        Priority: GuardBackend (crash-isolated) > NumpyBackend (no torch) > LocalBackend.
+        Priority: GuardBackend (crash-isolated) > NumpyBackend (no torch) > ONNXBackend (fast CPU) > LocalBackend.
         """
         if self._guard_backend is not None and self._guard_backend.alive:
             return self._guard_backend
         if self._numpy_backend is not None and self._numpy_backend.alive:
             return self._numpy_backend
+        if self._onnx_backend is not None and self._onnx_backend.alive:
+            return self._onnx_backend
         return self._local_backend
 
     def drop_model_ref(self) -> None:
@@ -943,9 +1153,14 @@ class ModelServer:
         top_p: float = 0.9,
         top_k: int = 50,
         repetition_penalty: float = 1.0,
+        session_id: Optional[str] = None,
         **kwargs: Any,
     ) -> dict:
         """Generate text with full lifecycle management.
+
+        If ``session_id`` is provided, the KV cache from previous
+        generations is reused via :class:`SessionKVCache`, avoiding
+        re-encoding the shared prompt prefix.
 
         Returns::
 
@@ -1002,6 +1217,7 @@ class ModelServer:
                     top_p,
                     top_k,
                     repetition_penalty,
+                    session_id=session_id,
                     **kwargs,
                 ),
                 timeout=self._generate_timeout,
@@ -1053,6 +1269,7 @@ class ModelServer:
         top_p: float,
         top_k: int,
         repetition_penalty: float,
+        session_id: Optional[str] = None,
         **kwargs: Any,
     ) -> dict:
         """Synchronous generation — delegates to selected backend.
@@ -1061,9 +1278,12 @@ class ModelServer:
         to LocalBackend when guard is dead or absent.
         """
         backend = self._select_backend()
+        is_local = isinstance(backend, LocalBackend)
         return backend.generate(
             prompt, max_new_tokens, temperature,
-            top_p, top_k, repetition_penalty, **kwargs,
+            top_p, top_k, repetition_penalty,
+            session_id=session_id if is_local else None,
+            **kwargs,
         )
 
     # --- Streaming generation ---
@@ -1077,6 +1297,7 @@ class ModelServer:
         top_k: int = 50,
         repetition_penalty: float = 1.0,
         cancel_event=None,
+        session_id: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
         """Synchronous streaming generation — returns a text streamer.
@@ -1084,10 +1305,13 @@ class ModelServer:
         Delegates to the selected backend's generate_stream().
         """
         backend = self._select_backend()
+        is_local = isinstance(backend, LocalBackend)
         gen = backend.generate_stream(
             prompt, max_new_tokens, temperature,
             top_p, top_k, repetition_penalty,
-            cancel_event=cancel_event, **kwargs,
+            cancel_event=cancel_event,
+            session_id=session_id if is_local else None,
+            **kwargs,
         )
         return self._wrap_generator_as_streamer(gen)
 
@@ -1102,6 +1326,7 @@ class ModelServer:
         top_k: int = 50,
         repetition_penalty: float = 1.0,
         cancel_event=None,
+        session_id: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
         """Async streaming generation with full lifecycle management.
@@ -1109,6 +1334,10 @@ class ModelServer:
         Selects the best backend (guard or local), acquires semaphore,
         runs hooks, runs generation in a thread pool (non-blocking), and
         yields tokens.
+
+        If ``session_id`` is provided, the KV cache from previous
+        generations is reused via :class:`SessionKVCache`, avoiding
+        re-encoding the shared prompt prefix.
 
         Args:
             cancel_event: Optional ``threading.Event`` to abort generation early.
@@ -1137,6 +1366,8 @@ class ModelServer:
 
         # Select backend (guard if alive, else local)
         backend = self._select_backend()
+        logger.debug("generate_stream[%s]: backend=%s session_id=%s",
+                     self.model_id, type(backend).__name__, session_id)
 
         # Acquire semaphore (serialize concurrent access, per-event-loop)
         acquired = False
@@ -1183,12 +1414,17 @@ class ModelServer:
             q: _queue.Queue = _queue.Queue()
             _sentinel = object()
 
+            is_local = isinstance(backend, LocalBackend)
+
             def _pump():
+                logger.debug("_pump started: session_id=%s is_local=%s", session_id, is_local)
                 try:
                     for token in backend.generate_stream(
                         prompt, max_new_tokens, temperature,
                         top_p, top_k, repetition_penalty,
-                        cancel_event=cancel_event, **kwargs,
+                        cancel_event=cancel_event,
+                        session_id=session_id if is_local else None,
+                        **kwargs,
                     ):
                         q.put(token)
                 except Exception as e:

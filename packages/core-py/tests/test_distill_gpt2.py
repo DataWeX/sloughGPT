@@ -1,6 +1,6 @@
 """Tests for distill_gpt2 — GPT-2 → SloTransformer distillation module.
 
-Covers DistillConfig, TextDataset, loss functions, and softmax.
+Covers DistillConfig, TextDataset, loss functions, softmax, and DistillEvaluator.
 The full distill_gpt2_to_slo() is slow (downloads GPT-2) and marked @slow.
 """
 import sys, os
@@ -12,9 +12,13 @@ import pytest
 from domains.training.distill_gpt2 import (
     DistillConfig,
     TextDataset,
+    DistillEvaluator,
+    DistillEvalResult,
     _softmax,
     _kl_div_loss,
     _cross_entropy_loss,
+    _compute_perplexity,
+    _bleu_score,
 )
 
 
@@ -205,3 +209,148 @@ class TestCrossEntropyLoss:
         loss = _cross_entropy_loss(logits, targets)
         expected = -np.log(1.0 / 3.0)
         assert abs(loss - expected) < 1e-4
+
+
+class TestComputePerplexity:
+    def test_zero_loss(self):
+        assert _compute_perplexity(0.0) == 1.0
+
+    def test_positive_loss(self):
+        assert _compute_perplexity(1.0) == pytest.approx(np.exp(1.0))
+
+    def test_high_loss(self):
+        ppl = _compute_perplexity(5.0)
+        assert ppl > 100
+
+    def test_negative_loss(self):
+        ppl = _compute_perplexity(-1.0)
+        assert 0 < ppl < 1
+
+
+class TestBleuScore:
+    def test_identical_text(self):
+        score = _bleu_score("hello world", "hello world")
+        assert score == 100.0
+
+    def test_empty_candidate(self):
+        assert _bleu_score("", "hello") == 0.0
+
+    def test_empty_reference(self):
+        assert _bleu_score("hello", "") == 0.0
+
+    def test_both_empty(self):
+        assert _bleu_score("", "") == 0.0
+
+    def test_partial_overlap(self):
+        score = _bleu_score("the cat sat", "the cat mat")
+        assert 0 < score < 100
+
+    def test_no_overlap(self):
+        score = _bleu_score("abc def", "xyz uvw")
+        assert score == 0.0
+
+    def test_subset(self):
+        score = _bleu_score("the", "the cat sat")
+        assert 0 < score < 100
+
+    def test_superset(self):
+        score = _bleu_score("the cat sat on", "the cat sat")
+        assert 0 < score < 100
+
+    def test_unigram_only(self):
+        score = _bleu_score("a b c", "a b d")
+        assert 0 < score < 100
+
+    def test_perfect_unigram_imperfect_bigram(self):
+        score = _bleu_score("a b a b", "a b b a")
+        assert 0 < score < 100
+
+
+class TestDistillEvalResult:
+    def test_to_dict(self):
+        result = DistillEvalResult(
+            perplexity=42.5,
+            bleu_vs_teacher=75.3,
+            avg_response_len=12.5,
+            teacher_samples=["hello", "world"],
+            student_samples=["hi there", "earth"],
+            eval_prompts=["Hello", "World"],
+            inference_time_sec=0.5,
+        )
+        d = result.to_dict()
+        assert d["perplexity"] == 42.5
+        assert d["bleu_vs_teacher"] == 75.3
+        assert d["avg_response_len"] == 12.5
+        assert d["inference_time_sec"] == 0.5
+        assert len(d["samples"]) == 2
+        assert d["samples"][0]["prompt"] == "Hello"
+        assert d["samples"][0]["teacher"] == "hello"
+        assert d["samples"][0]["student"] == "hi there"
+
+    def test_to_dict_rounding(self):
+        result = DistillEvalResult(
+            perplexity=42.56789,
+            bleu_vs_teacher=75.34,
+            avg_response_len=12.567,
+            teacher_samples=[],
+            student_samples=[],
+            eval_prompts=[],
+            inference_time_sec=0.123456,
+        )
+        d = result.to_dict()
+        assert d["perplexity"] == 42.5679
+        assert d["bleu_vs_teacher"] == 75.34
+        assert d["inference_time_sec"] == 0.123
+
+
+class TestDistillEvaluator:
+    def test_init_defaults(self):
+        evaluator = DistillEvaluator(
+            teacher_rw={},
+            teacher_arch=None,
+            itos={0: "a"},
+            stoi={"a": 0},
+        )
+        assert evaluator.max_tokens == 50
+        assert len(evaluator.eval_prompts) == 5
+
+    def test_init_custom_prompts(self):
+        prompts = ["test prompt"]
+        evaluator = DistillEvaluator(
+            teacher_rw={},
+            teacher_arch=None,
+            itos={0: "a"},
+            stoi={"a": 0},
+            eval_prompts=prompts,
+        )
+        assert evaluator.eval_prompts == prompts
+
+    def test_bleu_score_static_method(self):
+        score = DistillEvaluator._bleu_score("hello world", "hello world") if hasattr(DistillEvaluator, '_bleu_score') else _bleu_score("hello world", "hello world")
+        # _bleu_score is a module-level function, not a method
+        score = _bleu_score("hello world", "hello world")
+        assert score == 100.0
+
+
+class TestDistillConfigResume:
+    def test_resume_checkpoint_default(self):
+        c = DistillConfig()
+        assert c.resume_checkpoint is None
+
+    def test_resume_checkpoint_set(self):
+        c = DistillConfig(resume_checkpoint="/path/to/checkpoint.soul")
+        assert c.resume_checkpoint == "/path/to/checkpoint.soul"
+
+    def test_resume_epoch_default(self):
+        c = DistillConfig()
+        assert c.resume_epoch == 0
+
+    def test_resume_step_default(self):
+        c = DistillConfig()
+        assert c.resume_step == 0
+
+    def test_resume_custom_values(self):
+        c = DistillConfig(resume_checkpoint="test.soul", resume_epoch=5, resume_step=100)
+        assert c.resume_checkpoint == "test.soul"
+        assert c.resume_epoch == 5
+        assert c.resume_step == 100

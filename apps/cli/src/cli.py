@@ -679,10 +679,11 @@ def train_embed(corpus, epochs, lr, batch_size, embed_dim, vocab_size, output, t
 @click.option("--preset", type=click.Choice(["tiny", "small", "medium"]), help="Architecture preset")
 @click.option("--api", is_flag=True, help="Use server API instead of local")
 @click.option("--json", "json_output", is_flag=True, help="JSON output")
+@click.option("--resume", default=None, help="Resume from checkpoint path (.soul file)")
 @click.pass_context
 def train_distill(ctx, text_source, file, epochs, lr, batch_size, n_embed, n_layer,
                   n_head, block_size, temperature, dropout, checkpoint_dir,
-                  log_interval, preset, api, json_output):
+                  log_interval, preset, api, json_output, resume):
     """Distill GPT-2 into a smaller, faster student model.
 
     \b
@@ -691,6 +692,7 @@ def train_distill(ctx, text_source, file, epochs, lr, batch_size, n_embed, n_lay
       sloughgpt train distill -f my_book.txt --epochs 20 --preset small
       sloughgpt train distill datasets/shakespeare/input.txt --api
       sloughgpt train distill datasets/shakespeare/input.txt --n-embed 64 --n-layer 2
+      sloughgpt train distill datasets/shakespeare/input.txt --resume models/auto-training/checkpoint.soul
     """
     from commands.train import cmd_distill
     args = _ns(
@@ -700,6 +702,7 @@ def train_distill(ctx, text_source, file, epochs, lr, batch_size, n_embed, n_lay
         dropout=dropout, checkpoint_dir=checkpoint_dir,
         log_interval=log_interval, preset=preset, api=api,
         json_output=json_output, host=ctx.obj["host"], port=ctx.obj["port"],
+        resume=resume,
     )
     cmd_distill(args)
 

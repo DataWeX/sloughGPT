@@ -1,7 +1,8 @@
-"""Tests for InMemoryVectorStore and MogDBVectorStore — core vector CRUD + similarity search."""
+"""Tests for InMemoryVectorStore, MogDBVectorStore, embed model loading — core vector CRUD + similarity search."""
 
 import os
 import tempfile
+from unittest.mock import patch, MagicMock
 
 import pytest
 import numpy as np
@@ -11,6 +12,8 @@ from domains.inference.vector_store import (
     VectorEntry,
     simple_embed,
     _cosine_similarity,
+    _load_embed_model,
+    _EMBED_MIN_MEMORY_MB,
 )
 
 
@@ -257,3 +260,92 @@ class TestSimpleEmbed:
         assert len(vec) == 384
         norm = np.linalg.norm(vec)
         assert abs(norm - 1.0) < 1e-6
+
+
+# =========================================================================
+# Embed model loading tests
+# =========================================================================
+
+
+class TestLoadEmbedModel:
+    """Tests for _load_embed_model() auto-download + fallback behavior."""
+
+    def setup_method(self):
+        """Reset global state before each test."""
+        import domains.inference.vector_store as vs
+        vs._embed_model = None
+        vs._EMBED_LOAD_FAILED = False
+
+    def teardown_method(self):
+        """Reset global state after each test."""
+        import domains.inference.vector_store as vs
+        vs._embed_model = None
+        vs._EMBED_LOAD_FAILED = False
+
+    def test_returns_none_when_sentence_transformers_missing(self):
+        """Falls back gracefully when sentence-transformers can't import."""
+        with patch.dict("sys.modules", {"sentence_transformers": None}):
+            result = _load_embed_model()
+            assert result is None
+
+    def test_returns_none_when_import_error(self):
+        """Handles ImportError from sentence-transformers sub-dependencies."""
+        import domains.inference.vector_store as vs
+        vs._EMBED_LOAD_FAILED = False
+        vs._embed_model = None
+
+        # Make sentence_transformers importable but SentenceTransformer raise on construction
+        fake_st = MagicMock()
+        fake_st.SentenceTransformer.side_effect = RuntimeError("no torch")
+
+        fake_mem = MagicMock()
+        fake_mem.available = 2 * 1024 * 1024 * 1024
+
+        with patch.dict("sys.modules", {"sentence_transformers": fake_st}):
+            with patch("psutil.virtual_memory", return_value=fake_mem):
+                result = _load_embed_model()
+                assert result is None
+                assert vs._EMBED_LOAD_FAILED is True
+
+    def test_returns_none_when_memory_low(self):
+        """Skips loading when available memory is below threshold."""
+        fake_mem = MagicMock()
+        fake_mem.available = _EMBED_MIN_MEMORY_MB * 1024 * 1024 - 1  # 1 byte below threshold
+        with patch("psutil.virtual_memory", return_value=fake_mem):
+            result = _load_embed_model()
+            assert result is None
+
+    def test_caches_model_after_successful_load(self):
+        """Returns cached model on second call."""
+        import domains.inference.vector_store as vs
+        mock_model = MagicMock()
+        vs._embed_model = mock_model
+
+        result = _load_embed_model()
+        assert result is mock_model
+
+    def test_load_failed_flag_prevents_retry(self):
+        """Once loading fails, subsequent calls return None immediately."""
+        import domains.inference.vector_store as vs
+        vs._EMBED_LOAD_FAILED = True
+
+        result = _load_embed_model()
+        assert result is None
+
+    def test_returns_model_on_successful_import(self):
+        """Returns the SentenceTransformer model when everything works."""
+        mock_st = MagicMock()
+        mock_model = MagicMock()
+        mock_st.SentenceTransformer.return_value = mock_model
+
+        fake_mem = MagicMock()
+        fake_mem.available = 2 * 1024 * 1024 * 1024  # 2 GB
+
+        with patch.dict("sys.modules", {"sentence_transformers": mock_st}):
+            with patch("psutil.virtual_memory", return_value=fake_mem):
+                import domains.inference.vector_store as vs
+                vs._embed_model = None
+                vs._EMBED_LOAD_FAILED = False
+                result = _load_embed_model()
+                assert result is mock_model
+                mock_st.SentenceTransformer.assert_called_once_with(vs._EMBED_MODEL_NAME, device="cpu")

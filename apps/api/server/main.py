@@ -497,28 +497,21 @@ def _start_watchdog() -> None:
                 return False
 
         def _recover() -> bool:
-            """Attempt to recover by reloading the autoload model."""
-            try:
-                import gc
-                import torch
-
-                gc.collect()
-                if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                    torch.mps.empty_cache()
-                from config import ServerConfig
-
-                c = ServerConfig.from_env()
-                req = LoadModelRequest(model_id=c.autoload_model, mode="local", device=c.autoload_device)
-                result = _load_hf_model_core(req, use_slonet=c.use_slonet)
-                return result.get("status") != "error"
-            except Exception as e:
-                logger.error("Recovery failed: %s", e)
-                return False
+            """Log-only recovery — model reload from a watchdog thread is dangerous
+            (memory pressure, provider state corruption, 45s+ blocking on GIL/I/O).
+            If recovery is truly needed, call /models/load manually.
+            """
+            logger.warning(
+                "Watchdog detected %d consecutive health failures. "
+                "Manual recovery required — model inference may be degraded.",
+                watchdog._consecutive_failures,
+            )
+            return False
 
         watchdog.set_health_check_fn(_check_health)
         watchdog.set_recovery_fn(_recover)
         watchdog.start(poll_interval=15, max_failures=3)
-        logger.info("Health watchdog started (poll=15s, max_failures=3)")
+        logger.info("Health watchdog started (poll=15s, max_failures=3, recovery=log-only)")
     except Exception as e:
         logger.warning("Failed to start watchdog: %s", e)
 

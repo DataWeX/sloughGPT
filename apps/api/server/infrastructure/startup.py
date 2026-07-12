@@ -465,18 +465,36 @@ def _autoload_model(cfg: ServerConfig):
     if result.tokenizer is not None:
         server_state.tokenizer = result.tokenizer
 
-    # Register provider under its lookup name (hf-default, slonet-native, etc.)
-    from domains.models.provider import register_provider, ProviderRouter, VisionProcessor, get_provider as _gp
+    # Register with ModelRegistry (creates ModelServer with SessionKVCache)
+    from domains.infrastructure.model_registry import get_model_registry
+    registry = get_model_registry()
+    if result.model is not None and result.tokenizer is not None:
+        registry.register(
+            result.model_id, result.model, result.tokenizer,
+            make_default=True, generate_timeout=120.0,
+        )
 
-    provider_name = "slonet-native" if result.model_type == "slonet" else "hf-default"
-    register_provider(provider_name, result.provider)
+    # Create InferenceEngine for KV-cache-powered generation
+    inference_engine = None
+    if result.model is not None and result.tokenizer is not None and result.model_type != "slonet":
+        try:
+            from domains.inference.engine import InferenceEngine
+            inference_engine = InferenceEngine(
+                model=result.model, tokenizer=result.tokenizer, device="cpu",
+            )
+        except Exception as e:
+            logger.warning("Failed to create InferenceEngine: %s", e)
 
-    # Set up default router
-    _is_slonet = result.model_type == "slonet"
-    if not _is_slonet:
-        router = ProviderRouter()
-        router.add_processor(VisionProcessor("multimodal"))
-        router.set_text_provider(provider_name)
-        register_provider("default", router)
+    # Register providers via setup_providers (handles hf-default + inference-engine + default router)
+    from domains.models.provider import setup_providers
 
-    logger.info("Autoload ok: %s (%s)", cfg.autoload_model, result.model_type)
+    setup_providers(
+        hf_model=result.model,
+        hf_tokenizer=result.tokenizer,
+        hf_model_id=result.model_id,
+        inference_engine=inference_engine,
+        model_registry=registry,
+    )
+
+    logger.info("Autoload ok: %s (%s) — KV cache active (ModelServer + InferenceEngine)",
+                cfg.autoload_model, result.model_type)

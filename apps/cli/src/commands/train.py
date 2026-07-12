@@ -1298,6 +1298,10 @@ def cmd_distill(args):
     # ── Local mode ────────────────────────────────────────────────────
     from domains.training.distill_gpt2 import DistillConfig, distill_gpt2_to_slo
 
+    resume_path = getattr(args, "resume", None)
+    if resume_path:
+        printer.info(f"Resuming from checkpoint: {resume_path}")
+
     config = DistillConfig(
         n_embed=n_embed,
         n_layer=n_layer,
@@ -1310,6 +1314,7 @@ def cmd_distill(args):
         temperature=getattr(args, "temperature", 4.0),
         checkpoint_dir=getattr(args, "checkpoint_dir", "models/auto-training"),
         log_interval=getattr(args, "log_interval", 10),
+        resume_checkpoint=resume_path,
     )
 
     # Progress bar — compute total steps from config

@@ -501,6 +501,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
         return StreamingResponse(error_stream(), media_type="text/event-stream")
 
     async def generate() -> AsyncIterator[str]:
+        logger.debug("chat_stream.generate() ENTERED")
         cancel_event = threading.Event()
         user_msg = _extract_user_message(req.messages)
         if not user_msg:
@@ -510,6 +511,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
         start_time = datetime.datetime.now()
 
         # ── Progressive: emit "thinking" immediately, start enrichment in parallel ──
+        logger.debug("chat_stream: yielding thinking event")
         yield _sse_event("chat", "STREAMING", "thinking",
             data={}, message="Thinking...")
 
@@ -685,6 +687,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                     })
 
                 full_response = ""
+                logger.debug("chat_stream: about to call provider.chat_stream()")
                 try:
                     try:
                         async for token in provider.chat_stream(
@@ -695,6 +698,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                             top_k=req.top_k,
                             repetition_penalty=req.repetition_penalty,
                             cancel_event=cancel_event,
+                            session_id=session_id,
                         ):
                             if await request.is_disconnected():
                                 cancel_event.set()

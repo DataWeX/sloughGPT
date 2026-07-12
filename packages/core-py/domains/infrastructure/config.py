@@ -41,6 +41,7 @@ class ModelConfig(BaseModel):
     max_new_tokens: int = 200
     use_slonet: bool = False
     autoload: bool = True
+    use_flash_attention: bool = False
 
 
 class ServerConfig(BaseModel):

@@ -754,6 +754,8 @@ class InferenceEngineProvider:
         session_id: Optional[str] = None,
         **kwargs,
     ) -> str:
+        import time as _time
+        t0 = _time.monotonic()
         if self._server is not None:
             prompt = self._formatter.messages_to_prompt(messages)
             result = await self._server.generate(
@@ -764,11 +766,22 @@ class InferenceEngineProvider:
                 top_k=kwargs.get("top_k", 40),
                 session_id=session_id,
             )
-            return result.get("text", "")
+            text = result.get("text", "")
+            try:
+                from domains.infrastructure.metrics import get_metrics_collector
+                get_metrics_collector().record_inference(_time.monotonic() - t0, tokens=result.get("tokens_generated", 0))
+            except Exception:
+                pass
+            return text
 
         chunks = []
         async for chunk in self.chat_stream(messages, max_tokens, temperature, session_id=session_id, **kwargs):
             chunks.append(chunk)
+        try:
+            from domains.infrastructure.metrics import get_metrics_collector
+            get_metrics_collector().record_inference(_time.monotonic() - t0, tokens=len(chunks))
+        except Exception:
+            pass
         return "".join(chunks)
 
     def embed(self, text: str) -> List[float]:

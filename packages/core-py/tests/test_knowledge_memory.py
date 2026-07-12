@@ -117,3 +117,55 @@ class TestKnowledgeMemory:
         assert len(results) >= 2
         # Should be sorted by importance descending
         assert results[0]["importance"] >= results[1]["importance"]
+
+
+class TestAutoIngestFromChat:
+    """Tests for auto_ingest_from_chat feature."""
+
+    def test_extract_facts_from_text_with_facts(self):
+        from domains.learner.knowledge import _extract_facts_from_text
+        text = "Python is a programming language. It has dynamic typing. The current version is 3.12."
+        facts = _extract_facts_from_text(text)
+        assert len(facts) >= 1
+        # Should extract at least one declarative fact
+        assert any("Python" in f or "typing" in f or "version" in f for f in facts)
+
+    def test_extract_facts_skips_questions(self):
+        from domains.learner.knowledge import _extract_facts_from_text
+        text = "What is Python? How does it work? Is it fast?"
+        facts = _extract_facts_from_text(text)
+        assert len(facts) == 0
+
+    def test_extract_facts_skips_short(self):
+        from domains.learner.knowledge import _extract_facts_from_text
+        text = "Yes. No. Maybe."
+        facts = _extract_facts_from_text(text)
+        assert len(facts) == 0
+
+    def test_extract_facts_empty(self):
+        from domains.learner.knowledge import _extract_facts_from_text
+        assert _extract_facts_from_text("") == []
+        assert _extract_facts_from_text("short") == []
+
+    def test_auto_ingest_adds_facts(self, km):
+        response = "Python is a versatile programming language. It supports multiple paradigms. The language was created in 1991."
+        added = km.auto_ingest_from_chat("Tell me about Python", response)
+        assert added >= 1
+        # Query by inferred topic (may be "programming" or "general")
+        items = km.list_all()
+        assert len(items) >= 1
+
+    def test_auto_ingest_empty_response(self, km):
+        added = km.auto_ingest_from_chat("Hi", "")
+        assert added == 0
+
+    def test_auto_ingest_respects_max_facts(self, km):
+        response = "Fact one about science. Fact two about science. Fact three about science. Fact four about science."
+        added = km.auto_ingest_from_chat("science facts", response, max_facts=2)
+        assert added <= 2
+
+    def test_auto_ingest_source_is_chat(self, km):
+        km.auto_ingest_from_chat("test", "Python is a language used for web development.")
+        items = km.list_all()
+        chat_items = [i for i in items if i.get("source") == "chat"]
+        assert len(chat_items) >= 1

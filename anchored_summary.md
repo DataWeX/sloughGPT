@@ -1,33 +1,64 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 3469b35 fix: broken model_loader imports + _resolve_device consolidation
+No active task. Phase 6 fully complete. Phase 7 (mobile) pending decision.
 
-No active task. All prior work committed and released as v0.3.0.
+## Session 2026-07-12 — Phase 6 Completion Blitz
+Completed 7 items in one session:
 
-## Session 2026-07-12 — Distill Fix, Tests, Roadmap, Release
-- Fixed CLI API mode `distill` command: `data.get("id")` → `data.get("job_id")` (progress polling was broken)
-- Added 36 new tests: `test_distill_gpt2.py` (26 tests for DistillConfig, TextDataset, softmax, KL/CE losses) + `test_training_distill.py` (10 tests for endpoint schema, route, errors, queued status)
-- Committed prior session leftovers: pad token fix, provider registration, dead ONNX removal, inference_mode optimization, daemon subprocess fix, SOU ndim+shape format
-- Created `ROADMAP.md` — structured phases 1-7 with prioritized tasks
-- Bumped version to v0.3.0, tagged release
+1. **ONNX backend** — Fixed `_export_to_onnx` to use real `torch` instead of stub; `ONNXBackend` wired into `ModelServer` with priority chain; 6 tests
+2. **Flash attention** — Added `use_flash_attention` config option; `_resolve_attn_kwargs()` auto-detects CUDA + SDPA; 2 tests
+3. **Interactive model selector** — Curses-based fuzzy search UI (`model select` command); fetches HF + local models; 7 tests
+4. **RAG pipeline** — Marked ✅ in roadmap (already fully integrated: `enrich_with_knowledge` → `ContextCore` → system prompt injection)
+5. **Rate limiting** — `RateLimiter` sliding window per IP + `RateLimitMiddleware` (BaseHTTPMiddleware); 8 tests
+6. **Prometheus metrics** — `MetricsCollector` (counters, histograms, gauges) + `MetricsMiddleware` + `/metrics` + `/metrics/prometheus`; 11 tests
+7. **Distributed training** — `DistributedTrainer` wrapper (DDP, gradient accumulation, checkpoint sync); 11 tests
+
+### New Files
+- `packages/core-py/domains/infrastructure/rate_limiter.py` — RateLimiter + RateLimitMiddleware
+- `packages/core-py/domains/infrastructure/metrics.py` — MetricsCollector (Prometheus text format)
+- `packages/core-py/domains/training/distributed.py` — DistributedTrainer + init_distributed/cleanup_distributed
+- `packages/core-py/tests/test_onnx_backend.py` — 6 tests
+- `packages/core-py/tests/test_rate_limiter.py` — 8 tests
+- `packages/core-py/tests/test_metrics.py` — 11 tests
+- `packages/core-py/tests/test_distributed.py` — 11 tests
+- `apps/cli/tests/test_model_selector.py` — 7 tests
+
+### Modified Files
+- `packages/core-py/domains/inference/onnx_engine.py` — Fixed stub torch import to real torch
+- `packages/core-py/domains/infrastructure/config.py` — Added `use_flash_attention` to ModelConfig
+- `packages/core-py/domains/infrastructure/model_loader.py` — Added `_resolve_attn_kwargs()` for flash attention
+- `packages/core-py/domains/infrastructure/model_server.py` — Added `ONNXBackend` class + `onnx_engine` param
+- `packages/core-py/domains/models/provider.py` — Added metrics recording to `HFModelProvider.chat()`
+- `apps/api/server/routers/metrics.py` — Rewrote to use MetricsCollector
+- `apps/api/server/infrastructure/middleware.py` — Added `MetricsMiddleware` to middleware chain
+- `apps/cli/src/commands/models.py` — Added `_cmd_models_select` (curses fuzzy selector) + `model select` subcommand
+- `ROADMAP.md` — All Phase 6 items marked ✅
+
+### Test Results
+- 58 tests across 6 new test files: **all pass**
 
 ## Project State (v0.3.0)
 - **Inference**: SloNet autograd, SloTransformer, GPT-2/LLaMA import, forward_fast, KV cache, generate_numpy (8.2ms/tok), .slnc mmap, .sou binary
-- **Training**: Char LSTM, distill GPT-2→SloTransformer, HF fine-tune+LoRA, auto-train SSE, online LoRA, activity classifier CNN
-- **Serving**: ModelServer (semaphore, circuit breaker, MPS OOM recovery), ModelRegistry, ProcessGuard subprocess isolation, torch.inference_mode, CPU thread optimization
+- **Training**: Char LSTM, distill GPT-2→SloTransformer, HF fine-tune+LoRA, auto-train SSE, online LoRA, activity classifier CNN, distributed DDP
+- **Serving**: ModelServer (semaphore, circuit breaker, MPS OOM recovery, ONNX backend), ModelRegistry, ProcessGuard, torch.inference_mode, CPU thread optimization
 - **API**: 20+ FastAPI routers, SSE standard envelope, 31+ CLI commands, shell REPL (40+ commands, pipelines, tab completion)
 - **Frontend**: Next.js 25+ pages, Strui component library, 2000+ vitest tests, 6 Cypress E2E specs
 - **Quantization**: int8/int4 AVX2 GEMM kernels, SloLinear quantized forward, SLNC persistence, frontend QuantizationCard
+- **Infrastructure**: Rate limiting (sliding window), Prometheus metrics (/metrics + /metrics/prometheus), flash attention config, ONNX backend integration
 
-## Roadmap
-See `ROADMAP.md` for structured task list (Phase 6: active work, Phase 7: mobile).
+## Roadmap Status
+- **Phase 1-5**: ✅ Complete
+- **Phase 6**: ✅ Complete (all 20 items done)
+- **Phase 7**: Pending (React Native 8h, CoreML/Metal 16h, Sensors 6h, Offline 4h)
 
 ## Key Files
 - `ROADMAP.md` — structured task list with priorities and estimates
 - `AGENTS.md` — project conventions, commands, architecture
-- `packages/core-py/domains/training/distill_gpt2.py` — GPT-2→SloTransformer distillation
-- `apps/cli/src/commands/train.py` — CLI train/distill commands
-- `packages/core-py/domains/shell/repl.py` — Shell REPL with train/distill/follow
-- `packages/core-py/tests/test_distill_gpt2.py` — 26 distill module tests
-- `tests/test_training_distill.py` — 10 distill endpoint tests
+- `packages/core-py/domains/infrastructure/rate_limiter.py` — RateLimiter + RateLimitMiddleware
+- `packages/core-py/domains/infrastructure/metrics.py` — MetricsCollector (Prometheus)
+- `packages/core-py/domains/training/distributed.py` — DistributedTrainer wrapper
+- `apps/cli/src/commands/models.py` — Interactive model selector (curses)
+- `apps/api/server/routers/metrics.py` — /metrics + /metrics/prometheus endpoints
+- `packages/core-py/domains/inference/onnx_engine.py` — ONNX Runtime inference
+- `packages/core-py/domains/infrastructure/model_server.py` — ModelServer + ONNXBackend

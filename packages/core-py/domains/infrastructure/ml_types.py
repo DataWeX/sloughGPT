@@ -100,8 +100,16 @@ def dtype(name_or_value: Any) -> np.dtype:
 # ---------------------------------------------------------------------------
 
 def _mps_available() -> bool:
-    """Check if Apple Metal Performance Shaders are available."""
+    """Check if Apple Metal Performance Shaders are available.
+
+    Only returns ``True`` on Apple Silicon (arm64). On Intel Macs (x86_64),
+    PyTorch 2.x can report MPS as available via ``torch.backends.mps.is_available()``
+    even though it silently crashes during actual inference.
+    """
     if sys.platform != "darwin":
+        return False
+    # Intel Macs: PyTorch may report MPS available but it crashes at runtime.
+    if platform.machine() in ("x86_64", "i386"):
         return False
     try:
         import torch

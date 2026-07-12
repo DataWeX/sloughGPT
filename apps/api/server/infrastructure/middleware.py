@@ -100,13 +100,34 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             raise
 
 
+class MetricsMiddleware(BaseHTTPMiddleware):
+    """Records every request to the Prometheus MetricsCollector."""
+
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+        from domains.infrastructure.metrics import get_metrics_collector
+        collector = get_metrics_collector()
+        collector.set_active_requests(collector._active_requests + 1)
+        start = time.monotonic()
+        status_code = 500
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+            return response
+        finally:
+            elapsed = time.monotonic() - start
+            collector.set_active_requests(max(0, collector._active_requests - 1))
+            path = request.url.path
+            collector.record_request(path, status_code, elapsed)
+
+
 def get_configured_middleware(request_timeout: float = REQUEST_TIMEOUT_SECONDS) -> list[tuple[type[BaseHTTPMiddleware], dict]]:
     """Return middleware classes with kwargs in registration order.
 
-    Registration order: RequestTimeout → CorrelationId → Timing → RequestLogging.
+    Registration order: RequestTimeout → Metrics → CorrelationId → Timing → RequestLogging.
     """
     return [
         (RequestTimeoutMiddleware, {"timeout": request_timeout}),
+        (MetricsMiddleware, {}),
         (CorrelationIdMiddleware, {}),
         (RequestTimingMiddleware, {}),
         (RequestLoggingMiddleware, {}),
