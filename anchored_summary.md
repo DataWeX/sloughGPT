@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: cbef49f feat: batch select + bulk delete in TrainingDataCard
+No active task. Last commit: e7f854f fix(strui): polish design tokens, fix broken imports, modernize Card/Badge
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

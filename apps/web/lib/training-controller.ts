@@ -2,7 +2,7 @@
  * Training Jobs Controller — axios-based API for training job management.
  */
 
-import { apiGet, apiPost, apiDelete } from './http-client'
+import { apiGet, apiPost, apiDelete, apiPatch } from './http-client'
 import type { Checkpoint } from './souls-controller'
 
 export interface TrainingJob {
@@ -363,6 +363,14 @@ export const trainingJobsController = {
 
   async getAutoTrainStatus(): Promise<AutoTrainStatus> {
     return apiGet<AutoTrainStatus>('/mobile/train/auto-status')
+  },
+
+  async updateAutoTrainConfig(params: { threshold?: number; interval_s?: number }): Promise<AutoTrainStatus> {
+    const query = new URLSearchParams()
+    if (params.threshold != null) query.set('threshold', String(params.threshold))
+    if (params.interval_s != null) query.set('interval_s', String(params.interval_s))
+    const qs = query.toString()
+    return apiPatch<AutoTrainStatus>(`/mobile/train/auto-config${qs ? `?${qs}` : ''}`)
   },
 
   // ---------------------------------------------------------------------------
