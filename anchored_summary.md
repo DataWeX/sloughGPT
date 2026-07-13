@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 6c8c6f7 Merge branch 'chore/remove-more-dead-code'
+No active task. Last commit: c210728 update anchored summary with pair_extractor + auto_trainer session
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
