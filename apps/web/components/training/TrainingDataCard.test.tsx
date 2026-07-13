@@ -9,7 +9,7 @@ const mockToastStore = { addToast: mockAddToast, toasts: [], dismissToast: vi.fn
 vi.mock('@/lib/controllers', () => ({
   trainingController: {
     getTrainingStats: vi.fn(),
-    getPendingPairs: vi.fn(),
+    listTrainingPairs: vi.fn(),
     deletePair: vi.fn(),
     deleteSyncedPairs: vi.fn(),
   },
@@ -23,7 +23,7 @@ import { TrainingDataCard } from './TrainingDataCard'
 import { trainingController } from '@/lib/controllers'
 
 const mockGetStats = vi.mocked(trainingController.getTrainingStats)
-const mockGetPairs = vi.mocked(trainingController.getPendingPairs)
+const mockListPairs = vi.mocked(trainingController.listTrainingPairs)
 const mockDeletePair = vi.mocked(trainingController.deletePair)
 const mockDeleteSynced = vi.mocked(trainingController.deleteSyncedPairs)
 
@@ -36,12 +36,14 @@ beforeEach(() => {
     used: 2,
     by_quality: { '0': 20, '3': 15, '5': 7 },
   })
-  mockGetPairs.mockResolvedValue({
+  mockListPairs.mockResolvedValue({
     pairs: [
       { id: 'p1', user_msg: 'Hello', assistant_msg: 'Hi there!', quality: 3.5, session_id: 's1', timestamp: 123 },
       { id: 'p2', user_msg: 'Bye', assistant_msg: 'Goodbye!', quality: 4.0, session_id: 's1', timestamp: 124 },
     ],
+    total: 42,
     count: 2,
+    offset: 0,
   })
 })
 
@@ -57,7 +59,7 @@ describe('TrainingDataCard', () => {
     render(<TrainingDataCard />)
     await waitFor(() => {
       expect(mockGetStats).toHaveBeenCalled()
-      expect(mockGetPairs).toHaveBeenCalledWith(20)
+      expect(mockListPairs).toHaveBeenCalledWith({ limit: 20, offset: 0, min_quality: undefined, search: undefined })
     })
   })
 
@@ -85,10 +87,10 @@ describe('TrainingDataCard', () => {
     render(<TrainingDataCard />)
 
     await waitFor(() => {
-      expect(screen.getByText(/Show recent pairs/)).toBeDefined()
+      expect(screen.getByText(/Show pairs/)).toBeDefined()
     })
 
-    await user.click(screen.getByText(/Show recent pairs/))
+    await user.click(screen.getByText(/Show pairs/))
 
     await waitFor(() => {
       expect(screen.getByText('Hello')).toBeDefined()
@@ -102,10 +104,10 @@ describe('TrainingDataCard', () => {
     render(<TrainingDataCard />)
 
     await waitFor(() => {
-      expect(screen.getByText(/Show recent pairs/)).toBeDefined()
+      expect(screen.getByText(/Show pairs/)).toBeDefined()
     })
 
-    await user.click(screen.getByText(/Show recent pairs/))
+    await user.click(screen.getByText(/Show pairs/))
 
     await waitFor(() => {
       expect(screen.getByText('Hello')).toBeDefined()

@@ -378,6 +378,22 @@ export const trainingJobsController = {
     return data
   },
 
+  async listTrainingPairs(params?: {
+    limit?: number
+    offset?: number
+    min_quality?: number
+    session_id?: string
+    search?: string
+  }): Promise<{ pairs: TrainingPair[]; total: number; count: number; offset: number }> {
+    const query: Record<string, string> = {}
+    if (params?.limit != null) query.limit = String(params.limit)
+    if (params?.offset != null) query.offset = String(params.offset)
+    if (params?.min_quality != null) query.min_quality = String(params.min_quality)
+    if (params?.session_id) query.session_id = params.session_id
+    if (params?.search) query.search = params.search
+    return apiGet('/mobile/train/pairs', query)
+  },
+
   async getSessionPairs(sessionId: string): Promise<{ pairs: TrainingPair[]; count: number }> {
     const data = await apiGet<{ pairs: TrainingPair[]; count: number }>(`/mobile/train/session/${encodeURIComponent(sessionId)}`)
     return data
@@ -398,6 +414,25 @@ export const trainingJobsController = {
   async listChatSessions(): Promise<ChatSession[]> {
     const data = await apiGet<{ data: ChatSession[] } | ChatSession[]>('/chat/sessions')
     return Array.isArray(data) ? data : (data as any).data || []
+  },
+
+  async exportTrainingPairs(params?: {
+    min_quality?: number
+    session_id?: string
+    limit?: number
+  }): Promise<Blob> {
+    const { PUBLIC_API_URL } = await import('./config')
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+    const query = new URLSearchParams()
+    if (params?.min_quality != null) query.set('min_quality', String(params.min_quality))
+    if (params?.session_id) query.set('session_id', params.session_id)
+    if (params?.limit != null) query.set('limit', String(params.limit))
+    const qs = query.toString()
+    const res = await fetch(`${PUBLIC_API_URL}/mobile/train/export${qs ? `?${qs}` : ''}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error(`Export failed (${res.status})`)
+    return res.blob()
   },
 
   // ---------------------------------------------------------------------------

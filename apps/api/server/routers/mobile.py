@@ -984,6 +984,101 @@ async def get_pending_pairs(limit: int = Query(50, ge=1, le=500)):
     }
 
 
+@router.get("/train/pairs")
+async def list_training_pairs(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    min_quality: Optional[float] = Query(None),
+    session_id: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+):
+    """
+    List training pairs with optional filters.
+
+    Args:
+        limit: Max pairs to return (default 50, max 500).
+        offset: Skip first N pairs (for pagination).
+        min_quality: Filter to quality >= this value.
+        session_id: Filter to specific session.
+        search: Search in user_msg and assistant_msg content.
+
+    Returns:
+        List of training pair documents, newest first.
+
+    Side effects:
+        - Reads from MogDB training data collection.
+    """
+    from domains.training.mobile_training_store import get_training_store
+
+    store = get_training_store()
+    pairs = store.list_pairs(
+        limit=limit,
+        offset=offset,
+        min_quality=min_quality,
+        session_id=session_id,
+        search=search,
+    )
+    total = store.count()
+    return {
+        "pairs": [
+            {
+                "id": p.get("_id", ""),
+                "user_msg": p.get("user_msg", ""),
+                "assistant_msg": p.get("assistant_msg", ""),
+                "quality": p.get("quality", 0),
+                "session_id": p.get("session_id", ""),
+                "timestamp": p.get("timestamp", 0),
+            }
+            for p in pairs
+        ],
+        "total": total,
+        "count": len(pairs),
+        "offset": offset,
+    }
+
+
+@router.get("/train/export")
+async def export_training_pairs(
+    min_quality: Optional[float] = Query(None),
+    session_id: Optional[str] = Query(None),
+    limit: int = Query(500, ge=1, le=5000),
+):
+    """
+    Export training pairs as JSONL for download.
+
+    Args:
+        min_quality: Filter to quality >= this value.
+        session_id: Filter to specific session.
+        limit: Max pairs to export (default 500, max 5000).
+
+    Returns:
+        StreamingResponse with JSONL content.
+
+    Side effects:
+        - Reads from MogDB training data collection.
+    """
+    from fastapi.responses import StreamingResponse
+    from domains.training.mobile_training_store import get_training_store
+
+    store = get_training_store()
+    pairs = store.list_pairs(limit=limit, min_quality=min_quality, session_id=session_id)
+
+    def generate():
+        for p in pairs:
+            yield json.dumps({
+                "user_msg": p.get("user_msg", ""),
+                "assistant_msg": p.get("assistant_msg", ""),
+                "quality": p.get("quality", 0),
+                "session_id": p.get("session_id", ""),
+            }) + "\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="application/x-ndjson",
+        headers={"Content-Disposition": "attachment; filename=training_pairs.jsonl"},
+    )
+
+
 @router.get("/train/session/{session_id}")
 async def get_session_pairs(session_id: str):
     """

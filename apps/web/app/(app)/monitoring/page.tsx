@@ -9,7 +9,8 @@ import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { systemController, type DetailedHealth, type SystemMetrics, type SystemInfo, type DiskUsage, type GPUInfo, type ExecutorStatus } from '@/lib/system-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { benchmarkController } from '@/lib/benchmark-controller'
-import { multimodalController } from '@/lib/controllers'
+import { multimodalController, trainingController } from '@/lib/controllers'
+import type { AutoTrainStatus } from '@/lib/training-controller'
 import dynamicNext from 'next/dynamic'
 
 const SystemChart = dynamicNext(() => import('@/components/monitoring/SystemChart').then(m => m.SystemChart), {
@@ -43,6 +44,7 @@ export default function SystemHealthPage() {
   const [dpoRunning, setDpoRunning] = useState(false)
   const [visualStatus, setVisualStatus] = useState<{ visual_loaded: boolean; training: { status: string } } | null>(null)
   const [executorStatus, setExecutorStatus] = useState<ExecutorStatus | null>(null)
+  const [autoTrainStatus, setAutoTrainStatus] = useState<AutoTrainStatus | null>(null)
   const MAX_HISTORY = 30
   const recentErrors = useErrorStore(s => s.errors)
   const dismissError = useErrorStore(s => s.dismissError)
@@ -52,7 +54,7 @@ export default function SystemHealthPage() {
     if (showRefreshing) setRefreshing(true)
     setError(null)
     try {
-      const [d, m, i, di, ks, as, bq, bs, dsRes, vs, ex] = await Promise.all([
+      const [d, m, i, di, ks, as, bq, bs, dsRes, vs, ex, at] = await Promise.all([
         systemController.getDetailedHealth().catch(() => null),
         systemController.getMetrics().catch(() => null),
         systemController.getInfo().catch(() => null),
@@ -64,6 +66,7 @@ export default function SystemHealthPage() {
         multimodalController.getDPOStatus().catch(() => null),
         multimodalController.getStatus().catch(() => null),
         systemController.getExecutorStatus().catch(() => null),
+        trainingController.getAutoTrainStatus().catch(() => null),
       ])
       setDetailed(d)
       setMetrics(m)
@@ -80,6 +83,7 @@ export default function SystemHealthPage() {
       setDpoStatus(dsRes as typeof dpoStatus)
       setVisualStatus(null)
       setExecutorStatus(ex)
+      setAutoTrainStatus(at)
       setLastUpdated(new Date().toLocaleTimeString())
       if (m) {
         setChartHistory(prev => {
@@ -236,6 +240,39 @@ export default function SystemHealthPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Auto-Trainer */}
+        {autoTrainStatus && (
+          <Card>
+            <CardHeader><CardTitle className="text-base">Auto-Trainer</CardTitle></CardHeader>
+            <CardContent>
+              <KpiGrid columns={4}>
+                <StatCard
+                  label="Status"
+                  value={autoTrainStatus.enabled ? 'Running' : 'Off'}
+                  icon={
+                    <span className={`inline-block w-2 h-2 rounded-full ${autoTrainStatus.enabled ? 'bg-success' : 'bg-muted-foreground/50'}`} />
+                  }
+                />
+                <StatCard label="Conversations" value={`${autoTrainStatus.pending_conversations} / ${autoTrainStatus.threshold}`} />
+                <StatCard label="Trains completed" value={autoTrainStatus.total_trains.toString()} />
+                <StatCard
+                  label="Last loss"
+                  value={autoTrainStatus.last_loss != null ? autoTrainStatus.last_loss.toFixed(4) : '...'}
+                />
+              </KpiGrid>
+              {autoTrainStatus.last_train && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Last trained: {new Date(autoTrainStatus.last_train).toLocaleString()}
+                  {autoTrainStatus.last_checkpoint && <> · {autoTrainStatus.last_checkpoint}</>}
+                </p>
+              )}
+              <p className="text-[11px] text-muted-foreground/50 mt-1">
+                {autoTrainStatus.session_count} conversations · {autoTrainStatus.response_log_count} log files · interval {autoTrainStatus.interval_s}s
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Training Executor Pool */}
         {executorStatus && executorStatus.initialized && (

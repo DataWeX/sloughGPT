@@ -204,6 +204,43 @@ class MobileTrainingStore:
         """Delete all synced pairs (already used for training)."""
         return self._col.delete_many({"synced": True})
 
+    def list_pairs(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        min_quality: Optional[float] = None,
+        session_id: Optional[str] = None,
+        search: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """List training pairs with optional filters.
+
+        Args:
+            limit: Max pairs to return.
+            offset: Skip first N pairs (for pagination).
+            min_quality: Filter to quality >= this value.
+            session_id: Filter to specific session.
+            search: Search in user_msg and assistant_msg content.
+
+        Returns:
+            List of training pair documents, newest first.
+        """
+        query: Dict[str, Any] = {}
+        if min_quality is not None:
+            query["quality"] = {"$gte": min_quality}
+        if session_id:
+            query["session_id"] = session_id
+        if search:
+            query["$or"] = [
+                {"user_msg": {"$regex": search, "$options": "i"}},
+                {"assistant_msg": {"$regex": search, "$options": "i"}},
+            ]
+        return self._col.find(
+            query,
+            sort=[("timestamp", -1)],
+            limit=limit,
+            skip=offset,
+        )
+
     def count(self, query: Optional[Dict] = None) -> int:
         """Count pairs matching query (or all if None)."""
         return self._col.count(query)
