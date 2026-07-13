@@ -345,32 +345,9 @@ __all__ = [
     "ModelConfig",
     "ModelType",
     "ModelArchitecture",
-    # NanoGPT model
-    "NanoGPT",
-    "Block",
-    "CausalSelfAttention",
-    "MLP",
-    # Unified training (NEW)
-    "TrainingConfig",
-    "DataLoader",
-    "UniversalDataLoader",
-    "ModelWrapper",
-    "TorchModelWrapper",
-    "Trainer",
-    "train",
-    # Dataset management
-    "DatasetRegistry",
-    "DatasetMixer",
-    "DatasetInfo",
-    # Distributed training
-    "DistributedTrainer",
-    "DistributedConfig",
     # Trainer protocol
     "TrainerProtocol",
     "TrainResult",
-    # HuggingFace
-    "HuggingFaceManager",
-    "HuggingFaceDatasetManager",
     # Dataset creation
     "DatasetCreator",
     "create_dataset",
@@ -381,9 +358,6 @@ __all__ = [
     "DatasetValidator",
     "DatasetVersion",
     "DatasetQualityScorer",
-    # Universal data loading and training
-    "load_dataset",
-    "UniversalTrainer",
     # Dataset preparation
     "TextCleaner",
     "Tokenizer",
@@ -397,7 +371,7 @@ __all__ = [
     "URLImporter",
     "ImportResult",
     "import_data",
-    # Export modules (NEW)
+    # Export modules
     "export_model",
     "ExportConfig",
     "ModelMetadata",
@@ -420,11 +394,6 @@ __all__ = [
     "GGUFExportConfig",
     "estimate_memory_requirements",
     "quantize_gguf",
-    # Unified pipeline
-    "UnifiedTrainingConfig",
-    "UnifiedTrainingPipeline",
-    "TrainingProgress",
-    "TrainingStage",
 ]
 
 
@@ -435,7 +404,7 @@ def get_nanogpt():
         from .models.nanogpt import NanoGPT
 
         return NanoGPT
-    except ImportError:
+    except (ImportError, ModuleNotFoundError):
         return None
 
 
@@ -445,7 +414,7 @@ def get_trainer():
         from .unified_training import train, TrainingConfig
 
         return train, TrainingConfig
-    except ImportError:
+    except (ImportError, ModuleNotFoundError):
         return None, None
 
 
@@ -458,14 +427,6 @@ def __getattr__(name):
     global _TRAINING_EXTRA_AVAILABLE
 
     lazy_imports = {
-        "NanoGPT": ".models.nanogpt",
-        "Block": ".models.nanogpt",
-        "CausalSelfAttention": ".models.nanogpt",
-        "MLP": ".models.nanogpt",
-        "TrainingConfig": ".unified_training",
-        "DataLoader": ".unified_training",
-        "UniversalDataLoader": ".unified_training",
-        "train": ".unified_training",
         "DataImporter": ".data_import",
         "RepoImporter": ".data_import",
         "HuggingFaceImporter": ".data_import",

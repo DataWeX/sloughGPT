@@ -56,12 +56,6 @@ __all__ = [
     "GenerationRequest",
     "BatchedRequest",
     "create_engine",
-    "LlamaInferenceEngine",
-    "LlamaInferenceConfig",
-    "OllamaInferenceEngine",
-    "find_gguf_models",
-    "LLAMA_CPP_AVAILABLE",
-    "LLAMA_CPP_ERROR",
 ]
 
 # ── Lazy imports for torch-dependent submodules ──────────────────────────
@@ -82,13 +76,6 @@ _LAZY_MODULES: dict[str, str] = {
     "GenerationRequest": ".engine",
     "BatchedRequest": ".engine",
     "create_engine": ".engine",
-    # .llama_engine
-    "LlamaInferenceEngine": ".llama_engine",
-    "LlamaInferenceConfig": ".llama_engine",
-    "OllamaInferenceEngine": ".llama_engine",
-    "find_gguf_models": ".llama_engine",
-    "LLAMA_CPP_AVAILABLE": ".llama_engine",
-    "LLAMA_CPP_ERROR": ".llama_engine",
 }
 
 

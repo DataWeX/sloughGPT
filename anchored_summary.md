@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: f50d674 Merge branch 'chore/remove-dead-server-packages'
+No active task. Last commit: 6008462 Merge branch 'fix/cognitive-task-cleanup'
 
 ## Session 2026-07-13 — On-Device Training Pipeline + Storage Integration
 

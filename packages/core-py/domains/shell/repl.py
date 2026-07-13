@@ -2640,22 +2640,22 @@ Examples:
                 self._last_exit_code = 0 if a != b else 1
             elif op == "-eq":
                 try: self._last_exit_code = 0 if int(a) == int(b) else 1
-                except: self._last_exit_code = 1
+                except (ValueError, TypeError): self._last_exit_code = 1
             elif op == "-ne":
                 try: self._last_exit_code = 0 if int(a) != int(b) else 1
-                except: self._last_exit_code = 1
+                except (ValueError, TypeError): self._last_exit_code = 1
             elif op == "-gt":
                 try: self._last_exit_code = 0 if int(a) > int(b) else 1
-                except: self._last_exit_code = 1
+                except (ValueError, TypeError): self._last_exit_code = 1
             elif op == "-lt":
                 try: self._last_exit_code = 0 if int(a) < int(b) else 1
-                except: self._last_exit_code = 1
+                except (ValueError, TypeError): self._last_exit_code = 1
             elif op == "-ge":
                 try: self._last_exit_code = 0 if int(a) >= int(b) else 1
-                except: self._last_exit_code = 1
+                except (ValueError, TypeError): self._last_exit_code = 1
             elif op == "-le":
                 try: self._last_exit_code = 0 if int(a) <= int(b) else 1
-                except: self._last_exit_code = 1
+                except (ValueError, TypeError): self._last_exit_code = 1
             elif op == "-n":
                 self._last_exit_code = 0 if len(a) > 0 else 1
             elif op == "-z":
