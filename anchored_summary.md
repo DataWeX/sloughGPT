@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: e7b874f feat: auto-train config UI (threshold + interval) in TrainFromSessionsCard
+No active task. Last commit: 1e37fa8 feat: quality summary in TrainingDataCard (high quality %, synced %, used count)
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

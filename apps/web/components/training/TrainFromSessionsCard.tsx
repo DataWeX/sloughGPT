@@ -20,6 +20,10 @@ export function TrainFromSessionsCard() {
   const [configThreshold, setConfigThreshold] = useState<string>('')
   const [configInterval, setConfigInterval] = useState<string>('')
   const [savingConfig, setSavingConfig] = useState(false)
+  const [lastResult, setLastResult] = useState<{ loss: number; steps: number; elapsed_ms: number; checkpoint: string } | null>(null)
+  const [elapsed, setElapsed] = useState(0)
+  const startTimeRef = useRef<number>(0)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const fetchStatus = useCallback(async () => {
@@ -59,12 +63,24 @@ export function TrainFromSessionsCard() {
 
   const handleTrainFromSessions = useCallback(async () => {
     setTraining(true)
+    setLastResult(null)
+    startTimeRef.current = Date.now()
+    setElapsed(0)
+    timerRef.current = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000))
+    }, 1000)
     try {
       const sessionIds = selectedSessions.size > 0 ? Array.from(selectedSessions) : undefined
       const result = await trainingController.trainFromSessions({
         limit: 50,
         min_length: 5,
         session_ids: sessionIds,
+      })
+      setLastResult({
+        loss: result.loss,
+        steps: result.steps,
+        elapsed_ms: result.elapsed_ms,
+        checkpoint: result.checkpoint_name || '',
       })
       const label = sessionIds ? `${sessionIds.length} sessions` : 'all sessions'
       addToast(
@@ -77,6 +93,7 @@ export function TrainFromSessionsCard() {
       addToast(msg, 'error')
     } finally {
       setTraining(false)
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
     }
   }, [addToast, fetchStatus, selectedSessions])
 
@@ -256,13 +273,38 @@ export function TrainFromSessionsCard() {
           </div>
         )}
 
+        {/* Training progress */}
+        {training && (
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+            </span>
+            <span>Training in progress — {elapsed}s elapsed</span>
+          </div>
+        )}
+
+        {/* Last training result */}
+        {lastResult && !training && (
+          <div className="rounded-lg border border-success/30 bg-success/5 p-2 text-[11px] space-y-0.5">
+            <div className="flex items-center gap-1.5 text-success font-medium">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-success" />
+              Training complete
+            </div>
+            <div className="text-muted-foreground/70">
+              loss {lastResult.loss.toFixed(4)} · {lastResult.steps} steps · {(lastResult.elapsed_ms / 1000).toFixed(1)}s
+              {lastResult.checkpoint && <> · {lastResult.checkpoint}</>}
+            </div>
+          </div>
+        )}
+
         <Button
           size="sm"
           onClick={() => void handleTrainFromSessions()}
           disabled={training}
         >
           {training
-            ? 'Training...'
+            ? `Training... ${elapsed}s`
             : selectedSessions.size > 0
               ? `Train from ${selectedSessions.size} sessions`
               : 'Train from conversations'
