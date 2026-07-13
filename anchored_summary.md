@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 7ab8e2a Merge branch 'chore/cleanup-and-stability': dead code removal, server stability, training UX simplification, gradient fixes, new training modules, mobile pipeline
+No active task. Last commit: f0a666d Merge branch 'fix/server-test-envelopes': envelope-aware assertions in 14 test files
 
 ## Session 2026-07-13 — On-Device Training Pipeline + Storage Integration
 
