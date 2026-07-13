@@ -1,16 +1,11 @@
 """
 Cognitive Architecture Domain
 
-This domain contains all components related to cognitive processing,
-memory management, reasoning, learning, and creativity.
+Components for cognitive processing, memory management, reasoning,
+learning, and creativity.
 """
 
 from .base import CognitiveDomain
-from .creativity import CreativityEngine
-from .learning import LearningOptimizer
-from .memory import MemoryManager
-from .metacognition import MetacognitiveMonitor
-from .reasoning import ReasoningEngine
 from .processor import CognitiveProcessor
 from .core import (
     CognitiveCore,
@@ -37,11 +32,6 @@ from .rag import (
 __all__ = [
     "CognitiveDomain",
     "CognitiveProcessor",
-    "MemoryManager",
-    "ReasoningEngine",
-    "MetacognitiveMonitor",
-    "LearningOptimizer",
-    "CreativityEngine",
     "CognitiveCore",
     "ThinkingMode",
     "ReasoningType",

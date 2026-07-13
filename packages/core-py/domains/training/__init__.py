@@ -348,36 +348,11 @@ __all__ = [
     # Trainer protocol
     "TrainerProtocol",
     "TrainResult",
-    # Dataset creation
-    "DatasetCreator",
-    "create_dataset",
-    # Batch processing
-    "BatchProcessor",
-    "JobScheduler",
-    # Validation
-    "DatasetValidator",
-    "DatasetVersion",
-    "DatasetQualityScorer",
-    # Dataset preparation
-    "TextCleaner",
-    "Tokenizer",
-    "DatasetPreparer",
-    "DatasetStats",
-    "prepare_dataset",
-    # Data import
-    "DataImporter",
-    "RepoImporter",
-    "HuggingFaceImporter",
-    "URLImporter",
-    "ImportResult",
-    "import_data",
     # Export modules
     "export_model",
     "ExportConfig",
     "ModelMetadata",
     "create_model_metadata",
-    "ONNXExportOptions",
-    "GGUFExportOptions",
     "export_to_safetensors",
     "export_to_onnx",
     "export_to_gguf",
@@ -388,6 +363,8 @@ __all__ = [
     "export_all_formats",
     "list_export_formats",
     # ONNX export
+    "ONNXExportOptions",
+    "GGUFExportOptions",
     "SloughGPTONNXExport",
     "ONNXExportConfig",
     # GGUF export
@@ -400,22 +377,17 @@ __all__ = [
 # Lazy imports for optional dependencies
 def get_nanogpt():
     """Get NanoGPT model (requires torch)."""
-    try:
-        from .models.nanogpt import NanoGPT
-
-        return NanoGPT
-    except (ImportError, ModuleNotFoundError):
-        return None
+    return None  # NanoGPT not available in this codebase
 
 
 def get_trainer():
     """Get trainer function and config (requires torch)."""
     try:
-        from .unified_training import train, TrainingConfig
+        from .unified_pipeline import UnifiedTrainingPipeline
 
-        return train, TrainingConfig
+        return UnifiedTrainingPipeline
     except (ImportError, ModuleNotFoundError):
-        return None, None
+        return None
 
 
 # Lazy imports - avoid importing torch-dependent modules at package load time
@@ -449,6 +421,15 @@ def __getattr__(name):
         "export_to_sou": ".export",
         "export_all_formats": ".export",
         "list_export_formats": ".export",
+        # ONNX export
+        "ONNXExportOptions": ".export",
+        "GGUFExportOptions": ".export",
+        "SloughGPTONNXExport": ".onnx_export",
+        "ONNXExportConfig": ".onnx_export",
+        # GGUF export
+        "GGUFExportConfig": ".gguf_export",
+        "estimate_memory_requirements": ".gguf_export",
+        "quantize_gguf": ".gguf_export",
     }
 
     if name in lazy_imports:
