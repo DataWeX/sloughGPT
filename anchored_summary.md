@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 6d808dc fix: remove stale test_model_compat.py (imported deleted module)
+No active task. Last commit: c8f8b1f feat: training data API + chat mode hook + monitoring auto-trainer + e2e test
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
