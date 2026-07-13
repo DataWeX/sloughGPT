@@ -8,12 +8,15 @@ Implements:
 """
 
 import asyncio
+import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from .advanced import ThoughtStep, ReasoningResult, ReasoningMode
+
+logger = logging.getLogger("man.cognitive.reasoning.deep")
 
 
 # =============================================================================
@@ -137,8 +140,8 @@ class DeepReasoning:
                             relevance=float(similarity),
                             source_id=doc_id,
                         ))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Vector store retrieval failed: %s", e)
 
         # From memory store
         if self.memory_store:
@@ -151,8 +154,8 @@ class DeepReasoning:
                         relevance=item.get("relevance", 0.5),
                         source_id=item.get("id"),
                     ))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Memory store retrieval failed: %s", e)
 
         # Fallback: local reasoning knowledge
         if not results:

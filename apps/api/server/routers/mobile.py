@@ -6,7 +6,11 @@ Provides paginated, trimmed payloads suitable for the React Native mobile app.
 All endpoints prefixed with /mobile.
 """
 
+import asyncio
+import json
 import logging
+import subprocess
+import time as _time
 from typing import Optional, List
 from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field
@@ -819,8 +823,6 @@ async def mobile_train(body: MobileTrainRequest):
         - Spawns subprocess for HF fine-tuning.
         - Saves new checkpoint to models/auto-training/.
     """
-    import json
-    import subprocess
     import time
     from pathlib import Path
     from fastapi import HTTPException
@@ -867,7 +869,8 @@ async def mobile_train(body: MobileTrainRequest):
         raise HTTPException(500, "Training environment not found (.venv missing)")
 
     try:
-        proc = subprocess.run(
+        proc = await asyncio.to_thread(
+            subprocess.run,
             [
                 str(venv_python),
                 str(train_script),
@@ -1132,8 +1135,6 @@ async def train_from_sessions(body: FromSessionsRequest = FromSessionsRequest())
         - Writes training text to data/mobile_training/.
         - Spawns HF fine-tune subprocess.
     """
-    import subprocess
-    import time as _time
     from pathlib import Path
     from fastapi import HTTPException
 
@@ -1192,7 +1193,8 @@ async def train_from_sessions(body: FromSessionsRequest = FromSessionsRequest())
         raise HTTPException(500, "Training environment not found (.venv missing)")
 
     try:
-        proc = subprocess.run(
+        proc = await asyncio.to_thread(
+            subprocess.run,
             [
                 str(venv_python),
                 str(train_script),

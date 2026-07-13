@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: a2804b0 fix: training pipeline audit — remove dead distillation, fix naming, add SSE heartbeat
+No active task. Last commit: 9f5ea2d fix: training pipeline audit — remove dead distillation, fix naming, add SSE heartbeat
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

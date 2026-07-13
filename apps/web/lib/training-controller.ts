@@ -342,6 +342,29 @@ export const trainingJobsController = {
   },
 
   // ---------------------------------------------------------------------------
+  // Train from server conversation logs
+  // ---------------------------------------------------------------------------
+
+  async trainFromSessions(params?: {
+    limit?: number
+    min_length?: number
+    model?: string
+  }): Promise<{
+    success: boolean
+    checkpoint_name: string
+    loss: number
+    steps: number
+    elapsed_ms: number
+    message?: string
+  }> {
+    return apiPost('/mobile/train/from-sessions', params ?? {})
+  },
+
+  async getAutoTrainStatus(): Promise<AutoTrainStatus> {
+    return apiGet<AutoTrainStatus>('/mobile/train/auto-status')
+  },
+
+  // ---------------------------------------------------------------------------
   // Unified Pipeline
   // ---------------------------------------------------------------------------
 
@@ -419,6 +442,22 @@ export interface UnifiedStreamEvent {
   }
   meta?: Record<string, unknown>
   message?: string
+}
+
+export interface AutoTrainStatus {
+  enabled: boolean
+  threshold: number
+  interval_s: number
+  pending_conversations: number
+  total_trains: number
+  last_train: string | null
+  last_loss: number | null
+  last_checkpoint: string | null
+  session_dirs?: string[]
+  response_log_dirs?: string[]
+  min_pairs_per_file?: number
+  max_length?: number
+  model?: string
 }
 
 export const trainingController = trainingJobsController

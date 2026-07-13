@@ -261,7 +261,7 @@ class AutoIngester:
             await store.connect()
             return store
         except ImportError:
-            print("⚠️  Vector store not available. Running in dry-run mode.")
+            logger.warning("Vector store not available. Running in dry-run mode.")
             return None
 
     def build_metadata(self, chunk: FileChunk) -> Dict[str, Any]:
@@ -287,7 +287,7 @@ class AutoIngester:
         all_chunks: List[FileChunk] = []
 
         # Scan and chunk
-        print(f"🔍 Scanning {self.root}...")
+        logger.info("Scanning %s...", self.root)
         for path, content in self.scanner.iter_files():
             self.stats["files_scanned"] += 1
             try:
@@ -297,14 +297,14 @@ class AutoIngester:
             except Exception:
                 self.stats["errors"] += 1
 
-        print(f"  📄 {self.stats['files_scanned']} files, {self.stats['chunks_created']} chunks")
+        logger.info("  %d files, %d chunks", self.stats['files_scanned'], self.stats['chunks_created'])
 
         if dry_run or not store:
-            print("  🧪 Dry run — not writing to vector store")
+            logger.info("  Dry run — not writing to vector store")
             return self.stats
 
         # Upsert to vector store
-        print(f"  📤 Ingesting to {self.provider}...")
+        logger.info("  Ingesting to %s...", self.provider)
         from domains.inference.vector_store import VectorEntry
 
         entries = []
@@ -321,7 +321,7 @@ class AutoIngester:
         count = await store.upsert(entries)
         self.stats["files_ingested"] = count
 
-        print(f"  ✅ {count} chunks ingested")
+        logger.info("  %d chunks ingested", count)
         return self.stats
 
     async def ingest_single_file(self, file_path: str) -> int:

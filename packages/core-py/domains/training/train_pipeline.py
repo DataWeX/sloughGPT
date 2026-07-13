@@ -1182,7 +1182,7 @@ class SloughGPTTrainer:
             output_path = path + ".safetensors"
             export_to_safetensors(self.model, output_path, metadata)
 
-        print(f"Model saved to {output_path} ({format})")
+        logger.info("Model saved to %s (%s)", output_path, format)
 
     def generate(self, prompt: str, max_tokens: int = 200, temperature: float = 0.8) -> str:
         """Generate text."""

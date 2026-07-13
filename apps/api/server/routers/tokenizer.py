@@ -148,8 +148,10 @@ async def train_tokenizer(req: TrainTokenizerRequest2):
     if req.texts:
         lines = req.texts
     else:
+        import asyncio
         url = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
-        text = urllib.request.urlopen(url).read().decode("utf-8")
+        text = await asyncio.to_thread(urllib.request.urlopen, url)
+        text = text.read().decode("utf-8")
         lines = [line.strip() for line in text.split("\n") if line.strip()][:2000]
     mgr = get_tokenizer_manager()
     mgr.train(lines, vocab_size=req.vocab_size, min_frequency=3)

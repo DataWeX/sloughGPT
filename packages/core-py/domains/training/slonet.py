@@ -3209,8 +3209,7 @@ def _load_pytorch_zip_weights(zip_data: bytes) -> Dict[str, np.ndarray]:
         from domains.infrastructure.pt_loader import load_pt_bytes as _load_pt
         return _load_pt(zip_data)
     except Exception as e:
-        import sys
-        print(f"_load_pytorch_zip_weights failed: {type(e).__name__}: {e}", file=sys.stderr)
+        logger.warning("_load_pytorch_zip_weights failed: %s: %s", type(e).__name__, e)
         return {}
 
 
@@ -3378,7 +3377,7 @@ class SloTransformer(SloNet):
                     self.lm_head.bias = Tensor(np.zeros_like(self.lm_head.bias.data), requires_grad=False)
         except Exception as e:
             # Fail silently – tying is optional and should not break loading
-            print(f"[SloTransformer] weight tying error: {e}")
+            logger.debug("weight tying error: %s", e)
 
     def clear_kv_cache(self):
         self._kv_caches = [None] * self.n_layer

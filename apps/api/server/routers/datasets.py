@@ -148,19 +148,21 @@ async def import_from_url(request: URLImportRequest):
 @router.post("/import/kaggle", response_model=ImportResponse)
 async def import_from_kaggle(request: KaggleImportRequest):
     """Import dataset from Kaggle."""
-    import subprocess
+    import asyncio
     import shutil
     try:
         name = request.name or request.dataset.replace("/", "_")
         output_dir = _DATASETS_DIR / name
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        result = subprocess.run(
-            ["kaggle", "datasets", "download", "-d", request.dataset, "-p", str(output_dir), "--unzip"],
-            capture_output=True, text=True, timeout=300,
+        proc = await asyncio.create_subprocess_exec(
+            "kaggle", "datasets", "download", "-d", request.dataset, "-p", str(output_dir), "--unzip",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
-        if result.returncode != 0:
-            raise HTTPException(status_code=400, detail=f"Kaggle import failed: {result.stderr}")
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+        if proc.returncode != 0:
+            raise HTTPException(status_code=400, detail=f"Kaggle import failed: {stderr.decode()}")
 
         temp_dir = output_dir / request.dataset.replace("/", "_")
         if temp_dir.exists():
@@ -189,6 +191,7 @@ async def import_from_kaggle(request: KaggleImportRequest):
 async def import_from_csv(request: CSVImportRequest):
     """Import dataset from CSV URL."""
     import csv
+    import asyncio
     import urllib.request
     try:
         name = request.name
@@ -196,8 +199,8 @@ async def import_from_csv(request: CSVImportRequest):
         output_dir.mkdir(parents=True, exist_ok=True)
 
         req = urllib.request.Request(request.url, headers={"User-Agent": "SloughGPT"})
-        with urllib.request.urlopen(req, timeout=30) as response:
-            content = response.read().decode(request.encoding or "utf-8")
+        raw = await asyncio.to_thread(urllib.request.urlopen, req, 30)
+        content = raw.read().decode(request.encoding or "utf-8")
 
         lines = content.strip().split("\n")
         if not lines:

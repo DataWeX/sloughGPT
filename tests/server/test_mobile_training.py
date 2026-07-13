@@ -141,17 +141,15 @@ class TestTrainFromSessions:
             {"user_msg": f"Question {i}", "assistant_msg": f"Answer {i} with enough text"}
             for i in range(5)
         ]
+        mock_proc_result = MagicMock()
+        mock_proc_result.returncode = 0
+        mock_proc_result.stdout = '{"success": true, "loss": 1.5, "steps": 8}\n'
+        mock_proc_result.stderr = ""
         with patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=sessions_pairs) as mock_s, \
              patch("domains.training.pair_extractor.extract_pairs_from_logs", return_value=[]) as mock_l, \
              patch("domains.training.pair_extractor.write_training_text") as mock_w, \
              patch("domains.training.mobile_training_store.get_training_store") as mock_store, \
-             patch("subprocess.run") as mock_proc:
-            mock_w.return_value = Path("/tmp/test.txt")
-            mock_proc.return_value = MagicMock(
-                returncode=0,
-                stdout='{"success": true, "loss": 1.5, "steps": 8}\n',
-                stderr="",
-            )
+             patch("routers.mobile.subprocess.run", return_value=mock_proc_result):
             resp = client.post("/mobile/train/from-sessions", json={"limit": 10})
             assert resp.status_code == 200
             mock_s.assert_called_once()
@@ -164,17 +162,16 @@ class TestTrainFromSessions:
             {"user_msg": f"Question {i}", "assistant_msg": f"Answer {i} with enough text"}
             for i in range(10)
         ]
+        mock_proc_result = MagicMock()
+        mock_proc_result.returncode = 0
+        mock_proc_result.stdout = '{"success": true, "loss": 2.0, "steps": 5}\n'
+        mock_proc_result.stderr = ""
         with patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[]), \
              patch("domains.training.pair_extractor.extract_pairs_from_logs", return_value=log_pairs), \
              patch("domains.training.pair_extractor.write_training_text") as mock_w, \
              patch("domains.training.mobile_training_store.get_training_store") as mock_store, \
-             patch("subprocess.run") as mock_proc:
+             patch("routers.mobile.subprocess.run", return_value=mock_proc_result):
             mock_w.return_value = Path("/tmp/test.txt")
-            mock_proc.return_value = MagicMock(
-                returncode=0,
-                stdout='{"success": true, "loss": 2.0, "steps": 5}\n',
-                stderr="",
-            )
             resp = client.post("/mobile/train/from-sessions", json={"limit": 10})
             assert resp.status_code == 200
             data = resp.json()
@@ -184,16 +181,15 @@ class TestTrainFromSessions:
     def test_training_failure(self):
         """Returns 500 when subprocess fails."""
         pairs = [{"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough"} for i in range(5)]
+        mock_proc_result = MagicMock()
+        mock_proc_result.returncode = 1
+        mock_proc_result.stdout = ""
+        mock_proc_result.stderr = "RuntimeError: CUDA out of memory"
         with patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=pairs), \
              patch("domains.training.pair_extractor.write_training_text") as mock_w, \
              patch("domains.training.mobile_training_store.get_training_store") as mock_store, \
-             patch("subprocess.run") as mock_proc:
+             patch("routers.mobile.subprocess.run", return_value=mock_proc_result):
             mock_w.return_value = Path("/tmp/test.txt")
-            mock_proc.return_value = MagicMock(
-                returncode=1,
-                stdout="",
-                stderr="RuntimeError: CUDA out of memory",
-            )
             resp = client.post("/mobile/train/from-sessions")
             assert resp.status_code == 500
 

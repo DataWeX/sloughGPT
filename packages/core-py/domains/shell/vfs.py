@@ -64,7 +64,7 @@ class VFSWriteOnlyFile(VFSEntry):
     def write(self, data: str) -> None:
         result = self._write_fn(data)
         if result:
-            print(result)
+            logger.debug(result)
 
 
 class VFSDirectory:
