@@ -3555,6 +3555,9 @@ class SloTransformer(SloNet):
         - Causal mask pre-allocated once
         - Output buffer pre-allocated (no concat per step)
         - GQA expand avoided when K_H == H
+        - Flat tuple indexing (eliminates dict hash lookups in hot loop)
+        - Pre-allocated scratch buffers (avoids per-step allocation)
+        - Inlined greedy sampling (avoids function call + logits copy)
         """
         if input_ids.ndim == 1:
             input_ids = input_ids.reshape(1, -1)
@@ -3562,59 +3565,49 @@ class SloTransformer(SloNet):
         total_len = min(prompt_len + max_new_tokens, self.max_seq_len)
         max_gen = total_len - prompt_len
 
-        # Pre-allocate output buffer (avoids np.concat every step)
         out_buf = np.empty((1, total_len), dtype=np.int64)
         out_buf[:, :prompt_len] = input_ids
 
-        # Pre-extract all weights for each block (avoid repeated attribute lookup).
-        # Also pre-concatenate Q/K/V weights for fused matmul.
-        # Detect norm type: RMSNorm vs LayerNorm
-        _first_norm = self.layers[-2]
-        _is_rms_norm = not isinstance(_first_norm, SloLayerNorm)
         _use_kernels = _KERNELS_AVAILABLE
+        _is_greedy = temperature < 1e-6 and top_p is None and repetition_penalty == 1.0
+        _need_sampling = not _is_greedy
 
-        blocks = []
-        block_nkv = []  # n_kv_heads per block for KV cache alloc
+        # Flatten block weights into parallel lists — eliminates dict hash lookups.
+        # Each block is indexed by integer; inner loop uses direct list indexing.
+        n_an_w = []; n_an_b = []; n_an_e = []
+        n_fn_w = []; n_fn_b = []; n_fn_e = []
+        m_wqkv = []; m_bqkv = []; m_wo = []; m_bo = []
+        m_w13 = []; m_b13 = []; m_w2 = []; m_b2 = []
+        _nkv = []
         for l in self.layers[1:-2]:
             if isinstance(l, SloTransformerBlock):
                 b = l
                 has_ln = isinstance(b.attn_norm, SloLayerNorm)
-                wq = b.attn.W_q.weight.data
-                wk = b.attn.W_k.weight.data
-                wv = b.attn.W_v.weight.data
-                wqkv = np.concatenate([wq, wk, wv], axis=0)
+                n_an_w.append(b.attn_norm.weight.data)
+                n_an_b.append(b.attn_norm.bias.data if has_ln else None)
+                n_an_e.append(b.attn_norm.eps)
+                n_fn_w.append(b.ff_norm.weight.data)
+                n_fn_b.append(b.ff_norm.bias.data if has_ln else None)
+                n_fn_e.append(b.ff_norm.eps)
+                wqkv = np.concatenate([b.attn.W_q.weight.data, b.attn.W_k.weight.data,
+                                       b.attn.W_v.weight.data], axis=0)
                 bq = b.attn.W_q.bias.data if b.attn.W_q.use_bias else None
                 bk = b.attn.W_k.bias.data if b.attn.W_k.use_bias else None
                 bv = b.attn.W_v.bias.data if b.attn.W_v.use_bias else None
                 bqkv = np.concatenate([bq, bk, bv]) if bq is not None else None
-                # FFN: fuse W1+W3 into single weight matrix — saves 1 BLAS call per block
-                w13 = np.concatenate([b.ff.w1.weight.data.T, b.ff.w3.weight.data.T], axis=1)  # (E, 8E)
+                w13 = np.concatenate([b.ff.w1.weight.data.T, b.ff.w3.weight.data.T], axis=1)
                 b1 = b.ff.w1.bias.data if b.ff.w1.use_bias else None
                 b3 = b.ff.w3.bias.data if b.ff.w3.use_bias else None
-                # Pre-concatenate biases if both exist
                 b13 = np.concatenate([b1, b3]) if b1 is not None else None
+                _nkv.append(b.attn.n_kv_head)
+                m_wqkv.append(wqkv); m_bqkv.append(bqkv)
+                m_wo.append(b.attn.W_o.weight.data)
+                m_bo.append(b.attn.W_o.bias.data if b.attn.W_o.use_bias else None)
+                m_w13.append(w13); m_b13.append(b13)
+                m_w2.append(b.ff.w2.weight.data)
+                m_b2.append(b.ff.w2.bias.data if b.ff.w2.use_bias else None)
 
-                block_nkv.append(b.attn.n_kv_head)
-                blocks.append({
-                    'an_w': b.attn_norm.weight.data,
-                    'an_b': b.attn_norm.bias.data if has_ln else None,
-                    'an_eps': b.attn_norm.eps,
-                    'fn_w': b.ff_norm.weight.data,
-                    'fn_b': b.ff_norm.bias.data if has_ln else None,
-                    'fn_eps': b.ff_norm.eps,
-                    'wqkv': wqkv,
-                    'bqkv': bqkv,
-                    'wo': b.attn.W_o.weight.data,
-                    'bo': b.attn.W_o.bias.data if b.attn.W_o.use_bias else None,
-                    'w13': w13,       # fused W1.T || W3.T  shape (E, 8E)
-                    'b13': b13,       # fused bias or None
-                    'w2': b.ff.w2.weight.data,
-                    'b2': b.ff.w2.bias.data if b.ff.w2.use_bias else None,
-                    'n_heads': b.attn.n_heads,
-                    'n_kv_heads': b.attn.n_kv_head,
-                    'head_dim': b.attn.head_dim,
-                })
-
+        n_blocks = len(m_wqkv)
         tok_emb_w = self.layers[0].weight.data
         pos_emb_w = self.pos_emb.weight.data if self.pos_emb is not None else None
         pos_emb_n = self.pos_emb.num_embeddings if self.pos_emb is not None else 0
@@ -3626,31 +3619,35 @@ class SloTransformer(SloNet):
         norm_eps = norm_layer.eps
         lm_w = self.layers[-1].weight.data
 
-        E = blocks[0]['head_dim']
-        H = blocks[0]['n_heads']
-        K_H = blocks[0]['n_kv_heads']
+        # Extract E (head_dim) and H (n_heads) from the first transformer block
+        _first_block = None
+        for l in self.layers[1:-2]:
+            if isinstance(l, SloTransformerBlock):
+                _first_block = l
+                break
+        E = _first_block.attn.head_dim
+        H = _first_block.attn.n_heads
+        K_H = _nkv[0]
+        _ff_dim = m_w13[0].shape[1] // 2
         scale = np.float32(1.0 / math.sqrt(E))
-        n_blocks = len(blocks)
         _clip_max = np.int64(tok_emb_w.shape[0] - 1)
         _pos_clip_max = np.int64(pos_emb_n - 1 if pos_emb_n > 0 else 0)
         _use_gqa = K_H < H
         _gqa_reps = H // K_H if _use_gqa else 0
-
-        # Pre-allocate KV cache to max capacity (no realloc per step)
-        kv_buf_k = [None] * n_blocks
-        kv_buf_v = [None] * n_blocks
-        kv_len = [0] * n_blocks
-        for bi, bw in enumerate(blocks):
-            kv_buf_k[bi] = np.zeros((1, total_len, bw['n_kv_heads'], E), dtype=np.float32)
-            kv_buf_v[bi] = np.zeros((1, total_len, bw['n_kv_heads'], E), dtype=np.float32)
-
-        # Pre-allocate causal mask (reuse across steps)
-        causal_mask = np.triu(np.full((self.block_size, self.block_size), -1e9, dtype=np.float32), k=1)
-
-        # Cache frequently used shapes
         _he = H * E
         _khe = K_H * E
-        _ff_dim = blocks[0]['w13'].shape[1] // 2  # FFN intermediate size
+
+        # Pre-allocate KV cache
+        kv_buf_k = [np.zeros((1, total_len, _nkv[i], E), dtype=np.float32) for i in range(n_blocks)]
+        kv_buf_v = [np.zeros((1, total_len, _nkv[i], E), dtype=np.float32) for i in range(n_blocks)]
+        kv_len = [0] * n_blocks
+
+        causal_mask = np.triu(np.full((self.block_size, self.block_size), -1e9, dtype=np.float32), k=1)
+
+        _use_bias_bqkv = m_bqkv[0] is not None
+        _use_bias_bo = m_bo[0] is not None
+        _use_bias_b13 = m_b13[0] is not None
+        _use_bias_b2 = m_b2[0] is not None
 
         for step in range(max_gen):
             if step == 0:
@@ -3662,7 +3659,7 @@ class SloTransformer(SloNet):
                 pos = step + prompt_len - 1
                 seq_len = 1
 
-            # Embedding: direct fancy indexing (faster than np.take)
+            # Embedding
             clipped = np.clip(idx, 0, _clip_max)
             x = tok_emb_w[clipped].astype(np.float32)
 
@@ -3670,27 +3667,28 @@ class SloTransformer(SloNet):
                 p = np.arange(pos, pos + seq_len, dtype=np.int64).reshape(1, -1)
                 x = x + pos_emb_w[np.clip(p, 0, _pos_clip_max)]
 
-            for bi, bw in enumerate(blocks):
-                # Attn norm — use numba kernel when available
+            # --- Transformer blocks (flat tuple indexing) ---
+            for bi in range(n_blocks):
+                # Attn norm
                 if _use_kernels:
-                    h = _nb_layernorm(x, bw['an_w'], bw['an_b'], bw['an_eps'])
+                    h = _nb_layernorm(x, n_an_w[bi], n_an_b[bi], n_an_e[bi])
                 else:
                     mu = x.mean(axis=-1, keepdims=True)
                     centered = x - mu
                     var = (centered * centered).mean(axis=-1, keepdims=True)
-                    h = centered * (bw['an_w'] * np.float32(1.0) / np.sqrt(var + bw['an_eps']))
-                    if bw['an_b'] is not None:
-                        h = h + bw['an_b']
+                    h = centered * (n_an_w[bi] * np.float32(1.0) / np.sqrt(var + n_an_e[bi]))
+                    if n_an_b[bi] is not None:
+                        h = h + n_an_b[bi]
 
-                # Fused QKV: single matmul
-                qkv = h @ bw['wqkv'].T
-                if bw['bqkv'] is not None:
-                    qkv = qkv + bw['bqkv']
+                # Fused QKV
+                qkv = h @ m_wqkv[bi].T
+                if _use_bias_bqkv:
+                    qkv = qkv + m_bqkv[bi]
                 q = qkv[:, :, :_he].reshape(1, seq_len, H, E)
                 k = qkv[:, :, _he:_he+_khe].reshape(1, seq_len, K_H, E)
                 v = qkv[:, :, _he+_khe:].reshape(1, seq_len, K_H, E)
 
-                # KV cache: write to pre-allocated buffer (no alloc)
+                # KV cache
                 new_len = kv_len[bi] + seq_len
                 kv_buf_k[bi][:, kv_len[bi]:new_len] = k
                 kv_buf_v[bi][:, kv_len[bi]:new_len] = v
@@ -3698,56 +3696,52 @@ class SloTransformer(SloNet):
                 k = kv_buf_k[bi][:, :new_len]
                 v = kv_buf_v[bi][:, :new_len]
 
-                # GQA: expand K/V heads if n_kv_heads < n_heads
                 if _use_gqa:
                     k = np.repeat(k, _gqa_reps, axis=2)
                     v = np.repeat(v, _gqa_reps, axis=2)
 
-                # Attention: einsum (C-optimized)
+                # Attention
                 scores = np.einsum('bnhd,bmhd->bhnm', q, k) * scale
-
-                # Causal mask for first step only
                 if step == 0 and seq_len > 1:
                     scores = scores + causal_mask[:seq_len, :new_len]
-
                 attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
                 attn = attn / attn.sum(axis=-1, keepdims=True)
-                ao = np.einsum('bhnm,bmhd->bnhd', attn, v).reshape(1, seq_len, H * E)
+                ao = np.einsum('bhnm,bmhd->bnhd', attn, v).reshape(1, seq_len, _he)
 
                 # Output projection
-                ao = ao @ bw['wo'].T
-                if bw['bo'] is not None:
-                    ao = ao + bw['bo']
+                ao = ao @ m_wo[bi].T
+                if _use_bias_bo:
+                    ao = ao + m_bo[bi]
                 x = x + ao
 
-                # FFN norm — use numba kernel when available
+                # FFN norm
                 if _use_kernels:
-                    h = _nb_layernorm(x, bw['fn_w'], bw['fn_b'], bw['fn_eps'])
+                    h = _nb_layernorm(x, n_fn_w[bi], n_fn_b[bi], n_fn_e[bi])
                 else:
                     mu = x.mean(axis=-1, keepdims=True)
                     centered = x - mu
                     var = (centered * centered).mean(axis=-1, keepdims=True)
-                    h = centered * (bw['fn_w'] * np.float32(1.0) / np.sqrt(var + bw['fn_eps']))
-                    if bw['fn_b'] is not None:
-                        h = h + bw['fn_b']
+                    h = centered * (n_fn_w[bi] * np.float32(1.0) / np.sqrt(var + n_fn_e[bi]))
+                    if n_fn_b[bi] is not None:
+                        h = h + n_fn_b[bi]
 
-                # FFN: fused W13 matmul — 2 matmuls → 1
-                h13 = h @ bw['w13']  # (1, 2*ff_dim) or (seq_len, 2*ff_dim)
-                if bw['b13'] is not None:
-                    h13 = h13 + bw['b13']
-                h1 = h13[..., :_ff_dim]   # gate
-                h3 = h13[..., _ff_dim:]   # up
+                # FFN: fused W13
+                h13 = h @ m_w13[bi]
+                if _use_bias_b13:
+                    h13 = h13 + m_b13[bi]
+                h1 = h13[..., :_ff_dim]
+                h3 = h13[..., _ff_dim:]
                 if _use_kernels:
                     h = _nb_swi_glu_mul(h1, h3)
                 else:
-                    s = 0.5 * h1 * (1.0 + np.tanh(0.7978845608 * (h1 + 0.044715 * h1**3)))
+                    s = np.float32(0.5) * h1 * (np.float32(1.0) + np.tanh(np.float32(0.7978845608) * (h1 + np.float32(0.044715) * h1**3)))
                     h = s * h3
-                h = h @ bw['w2'].T
-                if bw['b2'] is not None:
-                    h = h + bw['b2']
+                h = h @ m_w2[bi].T
+                if _use_bias_b2:
+                    h = h + m_b2[bi]
                 x = x + h
 
-            # Final norm — use numba kernel when available
+            # Final norm
             if _use_kernels:
                 x = _nb_layernorm(x, norm_w, norm_b, norm_eps)
             else:
@@ -3761,15 +3755,17 @@ class SloTransformer(SloNet):
             # LM head
             logits = x[:, -1, :] @ lm_w.T
 
-            # Sample with full pipeline (temperature, top_k, top_p, repetition penalty)
-            generated_so_far = out_buf[:, prompt_len:step + prompt_len].flatten()
-            next_id = _sample_from_logits(
-                logits, temperature=temperature,
-                top_k=top_k, top_p=top_p,
-                repetition_penalty=repetition_penalty,
-                generated_ids=generated_so_far,
-                eos_token=eos_token if step < max_gen - 1 else None,
-            )
+            # Inlined greedy sampling (avoids function call + logits.copy + penalty checks)
+            if _is_greedy:
+                next_id = int(np.argmax(logits[0]))
+            else:
+                next_id = _sample_from_logits(
+                    logits, temperature=temperature,
+                    top_k=top_k, top_p=top_p,
+                    repetition_penalty=repetition_penalty,
+                    generated_ids=out_buf[:, prompt_len:step + prompt_len].flatten(),
+                    eos_token=eos_token if step < max_gen - 1 else None,
+                )
             out_buf[0, prompt_len + step] = next_id
             if next_id == eos_token:
                 return out_buf[:, :prompt_len + step + 1]
