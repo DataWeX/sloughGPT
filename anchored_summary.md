@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: e7f854f fix(strui): polish design tokens, fix broken imports, modernize Card/Badge
+No active task. Last commit: 1e37fa8 feat: quality summary in TrainingDataCard (high quality %, synced %, used count)
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

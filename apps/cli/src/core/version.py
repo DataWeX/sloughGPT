@@ -63,16 +63,6 @@ def get_version() -> VersionInfo:
     return VersionInfo()
 
 
-def check_for_updates() -> Optional[str]:
-    """Check for CLI updates (placeholder for future implementation).
-
-    Returns:
-        New version string if available, None otherwise
-    """
-    # TODO: Implement update checking against PyPI or GitHub releases
-    return None
-
-
 def format_version_display() -> str:
     """Format version for display in help/about."""
     info = get_version()
