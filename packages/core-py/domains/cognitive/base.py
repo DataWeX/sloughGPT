@@ -34,6 +34,9 @@ class CognitiveDomain(BaseDomain):
         self.metacognitive_monitor: Optional[IMetacognitiveMonitor] = None
         self.cognitive_processor: Optional[ICognitiveProcessor] = None
 
+        # Background tasks
+        self._background_tasks: list[asyncio.Task] = []
+
         # Cognitive state
         self.cognitive_state = "idle"
         self.active_thoughts = []
@@ -121,19 +124,20 @@ class CognitiveDomain(BaseDomain):
 
     async def _start_cognitive_processes(self) -> None:
         """Start background cognitive processes"""
-        # Start memory consolidation
-        asyncio.create_task(self._memory_consolidation_loop())
-
-        # Start metacognitive monitoring
-        asyncio.create_task(self._metacognitive_monitoring_loop())
-
-        # Start reasoning optimization
-        asyncio.create_task(self._reasoning_optimization_loop())
+        self._background_tasks = [
+            asyncio.create_task(self._memory_consolidation_loop()),
+            asyncio.create_task(self._metacognitive_monitoring_loop()),
+            asyncio.create_task(self._reasoning_optimization_loop()),
+        ]
 
     async def _stop_cognitive_processes(self) -> None:
-        """Stop background cognitive processes"""
-        # Implementation for stopping background processes
-        pass
+        """Stop background cognitive processes by cancelling tracked tasks."""
+        for task in self._background_tasks:
+            if not task.done():
+                task.cancel()
+        if self._background_tasks:
+            await asyncio.gather(*self._background_tasks, return_exceptions=True)
+        self._background_tasks.clear()
 
     async def _memory_consolidation_loop(self) -> None:
         """Background memory consolidation loop"""
