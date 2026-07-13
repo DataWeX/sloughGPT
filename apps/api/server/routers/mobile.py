@@ -1185,6 +1185,30 @@ async def delete_synced_pairs():
     return {"status": "deleted", "count": count}
 
 
+@router.delete("/train/pairs/bulk")
+async def delete_pairs_bulk(ids: list[str] = Query(..., description="Pair IDs to delete")):
+    """
+    Delete multiple training pairs by ID.
+
+    Args:
+        ids: List of pair IDs to delete.
+
+    Returns:
+        Count of deleted pairs.
+
+    Side effects:
+        - Deletes matching pairs from MogDB training data collection.
+    """
+    from domains.training.mobile_training_store import get_training_store
+
+    store = get_training_store()
+    count = 0
+    for pair_id in ids:
+        if store.delete_pair(pair_id):
+            count += 1
+    return {"status": "deleted", "count": count}
+
+
 @router.post("/train/compact")
 async def compact_training_store():
     """

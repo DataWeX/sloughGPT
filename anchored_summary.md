@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 9930220 fix: monitoring page uses trainingController.list() (not listJobs)
+No active task. Last commit: 844839a feat: eval report UI + training e2e smoke test
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

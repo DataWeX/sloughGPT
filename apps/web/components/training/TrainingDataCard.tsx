@@ -20,6 +20,7 @@ export function TrainingDataCard() {
   const [qualityFilter, setQualityFilter] = useState<string>('all')
   const [sessionFilter, setSessionFilter] = useState<string>('all')
   const [allSessions, setAllSessions] = useState<string[]>([])
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [page, setPage] = useState(0)
   const pageSize = 20
 
@@ -99,6 +100,34 @@ export function TrainingDataCard() {
     }
   }, [addToast, fetchData])
 
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedIds.size === 0) return
+    try {
+      const result = await trainingController.deletePairsBulk(Array.from(selectedIds))
+      addToast(`Deleted ${result.count} pairs`, 'success')
+      setSelectedIds(new Set())
+      void fetchData()
+    } catch {
+      addToast('Bulk delete failed', 'error')
+    }
+  }, [addToast, fetchData, selectedIds])
+
+  const togglePair = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const toggleAll = useCallback(() => {
+    setSelectedIds(prev => {
+      if (prev.size === pairs.length) return new Set()
+      return new Set(pairs.map(p => p.id))
+    })
+  }, [pairs])
+
   if (loading && !stats) {
     return (
       <Card>
@@ -121,6 +150,11 @@ export function TrainingDataCard() {
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base">Training data</CardTitle>
         <div className="flex items-center gap-2">
+          {selectedIds.size > 0 && (
+            <Button size="sm" variant="ghost" className="h-6 text-[11px] text-destructive hover:text-destructive" onClick={() => void handleBulkDelete()}>
+              Delete {selectedIds.size} selected
+            </Button>
+          )}
           {stats.total > 0 && (
             <Button size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => void handleExport()}>
               Export JSONL
@@ -218,12 +252,31 @@ export function TrainingDataCard() {
             {expanded && (
               <>
                 <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {pairs.length > 1 && (
+                    <label className="flex items-center gap-2 text-[11px] text-muted-foreground/70 cursor-pointer py-0.5">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.size === pairs.length && pairs.length > 0}
+                        onChange={toggleAll}
+                        className="h-3 w-3 rounded border-border"
+                      />
+                      Select all ({pairs.length})
+                    </label>
+                  )}
                   {pairs.map(pair => (
                     <div key={pair.id} className="rounded-lg border border-border/40 p-2 text-[11px] space-y-1">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-foreground font-medium truncate">{pair.user_msg}</p>
-                          <p className="text-muted-foreground/70 truncate">{pair.assistant_msg}</p>
+                        <div className="flex items-start gap-2 min-w-0 flex-1">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(pair.id)}
+                            onChange={() => togglePair(pair.id)}
+                            className="h-3 w-3 rounded border-border mt-0.5 shrink-0"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-foreground font-medium truncate">{pair.user_msg}</p>
+                            <p className="text-muted-foreground/70 truncate">{pair.assistant_msg}</p>
+                          </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           <span className="text-[10px] text-muted-foreground/50">Q:{pair.quality.toFixed(1)}</span>
