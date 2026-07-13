@@ -3571,6 +3571,14 @@ class SloTransformer(SloNet):
         _use_kernels = _KERNELS_AVAILABLE
         _is_greedy = temperature < 1e-6 and top_p is None and repetition_penalty == 1.0
 
+        # Detect quantization — if any SloLinear has _quant_info, use quantized path.
+        _is_quantized = False
+        for l in self.layers[1:-2]:
+            if isinstance(l, SloTransformerBlock):
+                if getattr(l.attn.W_q, '_quant_info', None) is not None:
+                    _is_quantized = True
+                    break
+
         # Flatten block weights into parallel lists — eliminates dict hash lookups.
         # Each block is indexed by integer; inner loop uses direct list indexing.
         n_an_w = []; n_an_b = []; n_an_e = []
@@ -3578,6 +3586,10 @@ class SloTransformer(SloNet):
         m_wqkv = []; m_bqkv = []; m_wo = []; m_bo = []
         m_w13 = []; m_b13 = []; m_w2 = []; m_b2 = []
         _nkv = []
+        # Quantized path: store SloLinear module references for forward_numpy()
+        if _is_quantized:
+            q_wq = []; q_wk = []; q_wv = []; q_wo = []
+            q_w1 = []; q_w3 = []; q_w2 = []
         for l in self.layers[1:-2]:
             if isinstance(l, SloTransformerBlock):
                 b = l
@@ -3588,28 +3600,40 @@ class SloTransformer(SloNet):
                 n_fn_w.append(b.ff_norm.weight.data)
                 n_fn_b.append(b.ff_norm.bias.data if has_ln else None)
                 n_fn_e.append(b.ff_norm.eps)
-                wqkv = np.concatenate([b.attn.W_q.weight.data, b.attn.W_k.weight.data,
-                                       b.attn.W_v.weight.data], axis=0)
-                bq = b.attn.W_q.bias.data if b.attn.W_q.use_bias else None
-                bk = b.attn.W_k.bias.data if b.attn.W_k.use_bias else None
-                bv = b.attn.W_v.bias.data if b.attn.W_v.use_bias else None
-                bqkv = np.concatenate([bq, bk, bv]) if bq is not None else None
-                w13 = np.concatenate([b.ff.w1.weight.data.T, b.ff.w3.weight.data.T], axis=1)
-                b1 = b.ff.w1.bias.data if b.ff.w1.use_bias else None
-                b3 = b.ff.w3.bias.data if b.ff.w3.use_bias else None
-                b13 = np.concatenate([b1, b3]) if b1 is not None else None
-                _nkv.append(b.attn.n_kv_head)
-                m_wqkv.append(wqkv); m_bqkv.append(bqkv)
-                m_wo.append(b.attn.W_o.weight.data)
-                m_bo.append(b.attn.W_o.bias.data if b.attn.W_o.use_bias else None)
-                m_w13.append(w13); m_b13.append(b13)
-                m_w2.append(b.ff.w2.weight.data)
-                m_b2.append(b.ff.w2.bias.data if b.ff.w2.use_bias else None)
+                if _is_quantized:
+                    q_wq.append(b.attn.W_q); q_wk.append(b.attn.W_k)
+                    q_wv.append(b.attn.W_v); q_wo.append(b.attn.W_o)
+                    q_w1.append(b.ff.w1); q_w3.append(b.ff.w3)
+                    q_w2.append(b.ff.w2)
+                    _nkv.append(b.attn.n_kv_head)
+                    m_wqkv.append(None); m_bqkv.append(None)
+                    m_wo.append(None); m_bo.append(None)
+                    m_w13.append(None); m_b13.append(None)
+                    m_w2.append(None); m_b2.append(None)
+                else:
+                    wqkv = np.concatenate([b.attn.W_q.weight.data, b.attn.W_k.weight.data,
+                                           b.attn.W_v.weight.data], axis=0)
+                    bq = b.attn.W_q.bias.data if b.attn.W_q.use_bias else None
+                    bk = b.attn.W_k.bias.data if b.attn.W_k.use_bias else None
+                    bv = b.attn.W_v.bias.data if b.attn.W_v.use_bias else None
+                    bqkv = np.concatenate([bq, bk, bv]) if bq is not None else None
+                    w13 = np.concatenate([b.ff.w1.weight.data.T, b.ff.w3.weight.data.T], axis=1)
+                    b1 = b.ff.w1.bias.data if b.ff.w1.use_bias else None
+                    b3 = b.ff.w3.bias.data if b.ff.w3.use_bias else None
+                    b13 = np.concatenate([b1, b3]) if b1 is not None else None
+                    _nkv.append(b.attn.n_kv_head)
+                    m_wqkv.append(wqkv); m_bqkv.append(bqkv)
+                    m_wo.append(b.attn.W_o.weight.data)
+                    m_bo.append(b.attn.W_o.bias.data if b.attn.W_o.use_bias else None)
+                    m_w13.append(w13); m_b13.append(b13)
+                    m_w2.append(b.ff.w2.weight.data)
+                    m_b2.append(b.ff.w2.bias.data if b.ff.w2.use_bias else None)
 
         n_blocks = len(m_wqkv)
         tok_emb_w = self.layers[0].weight.data
         pos_emb_w = self.pos_emb.weight.data if self.pos_emb is not None else None
         pos_emb_n = self.pos_emb.num_embeddings if self.pos_emb is not None else 0
+        lm_head_mod = self.layers[-1]  # SloLinear
 
         norm_layer = self.layers[-2]
         norm_has_bias = isinstance(norm_layer, SloLayerNorm)
@@ -3679,13 +3703,21 @@ class SloTransformer(SloNet):
                     if n_an_b[bi] is not None:
                         h = h + n_an_b[bi]
 
-                # Fused QKV
-                qkv = h @ m_wqkv[bi].T
-                if _use_bias_bqkv:
-                    qkv = qkv + m_bqkv[bi]
-                q = qkv[:, :, :_he].reshape(1, seq_len, H, E)
-                k = qkv[:, :, _he:_he+_khe].reshape(1, seq_len, K_H, E)
-                v = qkv[:, :, _he+_khe:].reshape(1, seq_len, K_H, E)
+                # QKV projection
+                if _is_quantized:
+                    q = q_wq[bi].forward_numpy(h)
+                    k = q_wk[bi].forward_numpy(h)
+                    v = q_wv[bi].forward_numpy(h)
+                    q = q.reshape(1, seq_len, H, E)
+                    k = k.reshape(1, seq_len, K_H, E)
+                    v = v.reshape(1, seq_len, K_H, E)
+                else:
+                    qkv = h @ m_wqkv[bi].T
+                    if _use_bias_bqkv:
+                        qkv = qkv + m_bqkv[bi]
+                    q = qkv[:, :, :_he].reshape(1, seq_len, H, E)
+                    k = qkv[:, :, _he:_he+_khe].reshape(1, seq_len, K_H, E)
+                    v = qkv[:, :, _he+_khe:].reshape(1, seq_len, K_H, E)
 
                 # KV cache
                 new_len = kv_len[bi] + seq_len
@@ -3708,9 +3740,12 @@ class SloTransformer(SloNet):
                 ao = np.einsum('bhnm,bmhd->bnhd', attn, v).reshape(1, seq_len, _he)
 
                 # Output projection
-                ao = ao @ m_wo[bi].T
-                if _use_bias_bo:
-                    ao = ao + m_bo[bi]
+                if _is_quantized:
+                    ao = q_wo[bi].forward_numpy(ao)
+                else:
+                    ao = ao @ m_wo[bi].T
+                    if _use_bias_bo:
+                        ao = ao + m_bo[bi]
                 x = x + ao
 
                 # FFN norm
@@ -3724,20 +3759,30 @@ class SloTransformer(SloNet):
                     if n_fn_b[bi] is not None:
                         h = h + n_fn_b[bi]
 
-                # FFN: fused W13
-                h13 = h @ m_w13[bi]
-                if _use_bias_b13:
-                    h13 = h13 + m_b13[bi]
-                h1 = h13[..., :_ff_dim]
-                h3 = h13[..., _ff_dim:]
-                if _use_kernels:
-                    h = _nb_swi_glu_mul(h1, h3)
+                # FFN
+                if _is_quantized:
+                    h1 = q_w1[bi].forward_numpy(h)
+                    h3 = q_w3[bi].forward_numpy(h)
+                    if _use_kernels:
+                        h = _nb_swi_glu_mul(h1, h3)
+                    else:
+                        s = np.float32(0.5) * h1 * (np.float32(1.0) + np.tanh(np.float32(0.7978845608) * (h1 + np.float32(0.044715) * h1**3)))
+                        h = s * h3
+                    h = q_w2[bi].forward_numpy(h)
                 else:
-                    s = np.float32(0.5) * h1 * (np.float32(1.0) + np.tanh(np.float32(0.7978845608) * (h1 + np.float32(0.044715) * h1**3)))
-                    h = s * h3
-                h = h @ m_w2[bi].T
-                if _use_bias_b2:
-                    h = h + m_b2[bi]
+                    h13 = h @ m_w13[bi]
+                    if _use_bias_b13:
+                        h13 = h13 + m_b13[bi]
+                    h1 = h13[..., :_ff_dim]
+                    h3 = h13[..., _ff_dim:]
+                    if _use_kernels:
+                        h = _nb_swi_glu_mul(h1, h3)
+                    else:
+                        s = np.float32(0.5) * h1 * (np.float32(1.0) + np.tanh(np.float32(0.7978845608) * (h1 + np.float32(0.044715) * h1**3)))
+                        h = s * h3
+                    h = h @ m_w2[bi].T
+                    if _use_bias_b2:
+                        h = h + m_b2[bi]
                 x = x + h
 
             # Final norm
