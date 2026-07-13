@@ -923,6 +923,11 @@ class ModelServer:
         self._max_concurrent = max_concurrent
         self._semaphores: dict[int, asyncio.Semaphore] = {}
 
+        # Read/write separation — readers (tokenize, health) can run concurrently;
+        # writers (generate) get exclusive access.
+        self._read_semaphores: dict[int, asyncio.Semaphore] = {}
+        self._max_readers = max_concurrent * 4 if max_concurrent else 4
+
         # Timeout
         self._generate_timeout = generate_timeout
 
@@ -1112,6 +1117,54 @@ class ModelServer:
         if loop_id not in self._semaphores:
             self._semaphores[loop_id] = asyncio.Semaphore(self._max_concurrent)
         return self._semaphores[loop_id]
+
+    async def _get_read_semaphore(self) -> Optional[asyncio.Semaphore]:
+        """Get a read semaphore for the current event loop.
+
+        Read operations (tokenize, health) share this semaphore and can
+        run concurrently up to ``_max_readers``.  Write operations
+        (generate) use the exclusive ``_get_semaphore()`` instead.
+        """
+        if self._max_concurrent is None:
+            return None
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return None
+        loop_id = id(loop)
+        if loop_id not in self._read_semaphores:
+            self._read_semaphores[loop_id] = asyncio.Semaphore(self._max_readers)
+        return self._read_semaphores[loop_id]
+
+    async def tokenize(self, text: str) -> dict:
+        """Tokenize text without acquiring the write semaphore.
+
+        Read-only operation — runs concurrently with other tokenizations
+        and health checks.  Only blocks during model swap (lock(self._lock)).
+        """
+        semaphore = await self._get_read_semaphore()
+        acquired = False
+        if semaphore is not None:
+            try:
+                await asyncio.wait_for(
+                    semaphore.acquire(),
+                    timeout=min(self._generate_timeout, 10.0),
+                )
+                acquired = True
+            except asyncio.TimeoutError:
+                raise TimeoutError("Tokenize queued too long")
+        try:
+            with self._lock:
+                tok = self._tokenizer
+            if tok is None:
+                raise RuntimeError("No tokenizer loaded")
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(
+                None, lambda: tok(text, return_tensors="pt")
+            )
+        finally:
+            if acquired and semaphore is not None:
+                semaphore.release()
 
     @property
     def status(self) -> ModelStatus:

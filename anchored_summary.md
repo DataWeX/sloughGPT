@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: cd04d0a chore: remove unused sensor-collection files
+No active task. Last commit: 2b56c7b chore: remove dead code (crates, ipc, dead tests, dead components)
 
 ## Session 2026-07-13 — On-Device Training Pipeline + Storage Integration
 

@@ -419,6 +419,16 @@ class StartupOrchestrator:
         except Exception:
             pass
 
+    async def _shutdown_executor(self):
+        """Gracefully shut down the TrainingExecutor thread pool."""
+        try:
+            from domains.training.executor import _instance
+            if _instance is not None:
+                _instance.shutdown(wait=True)
+                logger.info("TrainingExecutor shut down")
+        except Exception as e:
+            logger.warning("TrainingExecutor shutdown: %s", e)
+
     async def shutdown(self):
         """Clean up on server shutdown — uses lifecycle drain if available."""
         if self._lifecycle is not None:
@@ -434,6 +444,7 @@ class StartupOrchestrator:
         await self._shutdown_wandb()
         await self._shutdown_registry()
         await self._shutdown_pool()
+        await self._shutdown_executor()
 
 
 def _autoload_model(cfg: ServerConfig):
@@ -488,13 +499,20 @@ def _autoload_model(cfg: ServerConfig):
     # Register providers via setup_providers (handles hf-default + inference-engine + default router)
     from domains.models.provider import setup_providers
 
+    # GGUF quantized inference — enabled via MAN_GGUF_MODEL env var
+    gguf_model = os.environ.get("MAN_GGUF_MODEL") or None
+
     setup_providers(
         hf_model=result.model,
         hf_tokenizer=result.tokenizer,
         hf_model_id=result.model_id,
         inference_engine=inference_engine,
         model_registry=registry,
+        gguf_model=gguf_model,
     )
 
-    logger.info("Autoload ok: %s (%s) — KV cache active (ModelServer + InferenceEngine)",
-                cfg.autoload_model, result.model_type)
+    if gguf_model:
+        logger.info("GGUF quantized inference enabled: %s", gguf_model)
+    else:
+        logger.info("Autoload ok: %s (%s) — KV cache active (ModelServer + InferenceEngine)",
+                    cfg.autoload_model, result.model_type)
