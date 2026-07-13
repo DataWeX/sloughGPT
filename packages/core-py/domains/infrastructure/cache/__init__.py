@@ -10,7 +10,13 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from ...__init__ import BaseComponent, ComponentException, ICacheManager
+from ...__init__ import BaseComponent, ComponentException
+
+try:
+    from ...__init__ import ICacheManager
+except ImportError:
+    class ICacheManager:
+        pass
 
 
 @dataclass

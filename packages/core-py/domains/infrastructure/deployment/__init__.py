@@ -12,7 +12,13 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from ...__init__ import BaseComponent, ComponentException, IDeploymentManager
+from ...__init__ import BaseComponent, ComponentException
+
+try:
+    from ...__init__ import IDeploymentManager
+except ImportError:
+    class IDeploymentManager:
+        pass
 
 
 class DeploymentEnvironment(Enum):
