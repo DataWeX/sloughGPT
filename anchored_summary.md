@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 1540ee3 refactor: extract MessageContent + MessageImages from MessageBubble, dedup ModeBar
+No active task. Last commit: 9930220 fix: monitoring page uses trainingController.list() (not listJobs)
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

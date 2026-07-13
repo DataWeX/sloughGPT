@@ -147,13 +147,26 @@ export function TrainingDataCard() {
 
         {/* Quality breakdown */}
         {Object.keys(stats.by_quality).length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {Object.entries(stats.by_quality).sort(([a], [b]) => Number(a) - Number(b)).map(([q, count]) => (
-              <span key={q} className="inline-flex items-center gap-1 rounded-full border border-border/40 px-2 py-0.5 text-[10px] text-muted-foreground/70">
-                {Number(q).toFixed(1)}: {count}
-              </span>
-            ))}
-          </div>
+          <>
+            <div className="flex flex-wrap gap-1">
+              {Object.entries(stats.by_quality).sort(([a], [b]) => Number(a) - Number(b)).map(([q, count]) => (
+                <span key={q} className="inline-flex items-center gap-1 rounded-full border border-border/40 px-2 py-0.5 text-[10px] text-muted-foreground/70">
+                  {Number(q).toFixed(1)}: {count}
+                </span>
+              ))}
+            </div>
+            {stats.total > 0 && (
+              <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
+                {(['-1', '0', '1', '2', '3', '4', '5'] as const).map(q => {
+                  const count = stats.by_quality[q] || 0
+                  if (count === 0) return null
+                  const pct = (count / stats.total) * 100
+                  const color = Number(q) >= 4 ? 'bg-success/70' : Number(q) >= 2 ? 'bg-primary/50' : 'bg-muted-foreground/30'
+                  return <div key={q} className={`${color} transition-all`} style={{ width: `${pct}%` }} />
+                })}
+              </div>
+            )}
+          </>
         )}
 
         {/* Filters */}
