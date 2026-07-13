@@ -42,6 +42,7 @@ try:
         nb_layernorm as _nb_layernorm,
         nb_swiglu as _nb_swiglu,
         nb_softmax as _nb_softmax,
+        nb_swi_glu_mul as _nb_swi_glu_mul,
     )
     _KERNELS_AVAILABLE = True
 except ImportError:
@@ -1786,6 +1787,14 @@ class SloLayerNorm(SloLayer):
         self.bias = zeros((dim,), requires_grad=True)
 
     def forward_numpy(self, x: np.ndarray) -> np.ndarray:
+        if _KERNELS_AVAILABLE:
+            from domains.training.slonet_kernels import fused_layer_norm
+            return fused_layer_norm(
+                x.astype(np.float32),
+                self.weight.data.astype(np.float32),
+                self.bias.data.astype(np.float32),
+                np.float32(self.eps),
+            )
         mean = x.mean(axis=-1, keepdims=True)
         var = x.var(axis=-1, keepdims=True)
         return (x - mean) / np.sqrt(var + self.eps) * self.weight.data + self.bias.data
@@ -2063,12 +2072,36 @@ class SloMultiHeadAttention(SloLayer):
             K_r = np.concatenate([k_cache, K_r], axis=1)
             V_r = np.concatenate([v_cache, V_r], axis=1)
         scale_f = 1.0 / math.sqrt(E)
-        scores = np.einsum("bnhd,bmhd->bhnm", Q_r, K_r) * scale_f
-        if mask is not None:
-            scores = scores + mask
-        attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
-        attn = attn / attn.sum(axis=-1, keepdims=True)
-        out = np.einsum("bhnm,bmhd->bnhd", attn, V_r).reshape(B, N, H * E)
+        if _KERNELS_AVAILABLE and B == 1 and N == 1:
+            # Single-token decode: fused kernel has no causal masking needed
+            from domains.training.slonet_kernels import fused_attention_single, gqa_expand
+            # K_r: (B, seq, K_H, E) → (K_H, seq, E) for fused kernel
+            K_np = K_r[0].transpose(1, 0, 2).astype(np.float32)
+            V_np = V_r[0].transpose(1, 0, 2).astype(np.float32)
+            if K_H < H:
+                K_np = gqa_expand(K_np, H // K_H)
+                V_np = gqa_expand(V_np, H // K_H)
+            q_h = Q_r[0, 0].astype(np.float32)  # (H, E)
+            out_h = fused_attention_single(q_h, K_np, V_np, np.float32(scale_f), H, E)
+            out = out_h.reshape(1, 1, H * E)
+        elif _KERNELS_AVAILABLE and B == 1 and mask is None:
+            # Multi-token prompt: fused kernel applies built-in causal masking
+            from domains.training.slonet_kernels import fused_attention_multi, gqa_expand
+            K_np = K_r[0].transpose(1, 0, 2).astype(np.float32)  # (K_H, seq, E)
+            V_np = V_r[0].transpose(1, 0, 2).astype(np.float32)
+            if K_H < H:
+                K_np = gqa_expand(K_np, H // K_H)
+                V_np = gqa_expand(V_np, H // K_H)
+            q_h = Q_r[0].astype(np.float32)  # (N, H, E) — already correct for fused
+            out_h = fused_attention_multi(q_h, K_np, V_np, np.float32(scale_f), H, E)
+            out = out_h.reshape(1, N, H * E)
+        else:
+            scores = np.einsum("bnhd,bmhd->bhnm", Q_r, K_r) * scale_f
+            if mask is not None:
+                scores = scores + mask
+            attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
+            attn = attn / attn.sum(axis=-1, keepdims=True)
+            out = np.einsum("bhnm,bmhd->bnhd", attn, V_r).reshape(B, N, H * E)
         return self.W_o.forward_numpy(out), (K_r, V_r)
 
     def forward(self, q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None,
@@ -3550,6 +3583,13 @@ class SloTransformer(SloNet):
                 bk = b.attn.W_k.bias.data if b.attn.W_k.use_bias else None
                 bv = b.attn.W_v.bias.data if b.attn.W_v.use_bias else None
                 bqkv = np.concatenate([bq, bk, bv]) if bq is not None else None
+                # FFN: fuse W1+W3 into single weight matrix — saves 1 BLAS call per block
+                w13 = np.concatenate([b.ff.w1.weight.data.T, b.ff.w3.weight.data.T], axis=1)  # (E, 8E)
+                b1 = b.ff.w1.bias.data if b.ff.w1.use_bias else None
+                b3 = b.ff.w3.bias.data if b.ff.w3.use_bias else None
+                # Pre-concatenate biases if both exist
+                b13 = np.concatenate([b1, b3]) if b1 is not None else None
+
                 block_nkv.append(b.attn.n_kv_head)
                 blocks.append({
                     'an_w': b.attn_norm.weight.data,
@@ -3562,12 +3602,10 @@ class SloTransformer(SloNet):
                     'bqkv': bqkv,
                     'wo': b.attn.W_o.weight.data,
                     'bo': b.attn.W_o.bias.data if b.attn.W_o.use_bias else None,
-                    'w1': b.ff.w1.weight.data,
-                    'b1': b.ff.w1.bias.data if b.ff.w1.use_bias else None,
+                    'w13': w13,       # fused W1.T || W3.T  shape (E, 8E)
+                    'b13': b13,       # fused bias or None
                     'w2': b.ff.w2.weight.data,
                     'b2': b.ff.w2.bias.data if b.ff.w2.use_bias else None,
-                    'w3': b.ff.w3.weight.data,
-                    'b3': b.ff.w3.bias.data if b.ff.w3.use_bias else None,
                     'n_heads': b.attn.n_heads,
                     'n_kv_heads': b.attn.n_kv_head,
                     'head_dim': b.attn.head_dim,
@@ -3608,6 +3646,7 @@ class SloTransformer(SloNet):
         # Cache frequently used shapes
         _he = H * E
         _khe = K_H * E
+        _ff_dim = blocks[0]['w13'].shape[1] // 2  # FFN intermediate size
 
         for step in range(max_gen):
             if step == 0:
@@ -3688,18 +3727,17 @@ class SloTransformer(SloNet):
                     if bw['fn_b'] is not None:
                         h = h + bw['fn_b']
 
-                # FFN: w2(act(w1(x)) * w3(x)) — SwiGLU
-                h1 = h @ bw['w1'].T
-                if bw['b1'] is not None:
-                    h1 = h1 + bw['b1']
-                h3 = h @ bw['w3'].T
-                if bw['b3'] is not None:
-                    h3 = h3 + bw['b3']
+                # FFN: fused W13 matmul — 2 matmuls → 1
+                h13 = h @ bw['w13']  # (1, 2*ff_dim) or (seq_len, 2*ff_dim)
+                if bw['b13'] is not None:
+                    h13 = h13 + bw['b13']
+                h1 = h13[..., :_ff_dim]   # gate
+                h3 = h13[..., _ff_dim:]   # up
                 if _use_kernels:
-                    h1 = _nb_swiglu(h1)
+                    h = _nb_swi_glu_mul(h1, h3)
                 else:
-                    h1 = 0.5 * h1 * (1.0 + np.tanh(0.7978845608 * (h1 + 0.044715 * h1**3)))
-                h = h1 * h3
+                    s = 0.5 * h1 * (1.0 + np.tanh(0.7978845608 * (h1 + 0.044715 * h1**3)))
+                    h = s * h3
                 h = h @ bw['w2'].T
                 if bw['b2'] is not None:
                     h = h + bw['b2']

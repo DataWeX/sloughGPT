@@ -13,9 +13,10 @@ Kernels use manual loops because numba does not support:
 
 All kernels are @njit(cache=True) — compiled once, cached to disk.
 
-Fused block kernel processes one full transformer block (LayerNorm + QKV +
-attention + FFN LayerNorm + SwiGLU + FFN) in a single @njit call, eliminating
-Python dispatch overhead for element-wise ops while delegating matmuls to BLAS.
+Note on fused attention: attempts to replace np.einsum with numba manual-loop
+attention were SLOWER (0.71x) because numba does 3 passes over dot products
+(find max, softmax, weighted sum) vs einsum's single-pass C implementation.
+einsum is kept for attention; numba is used for element-wise ops only.
 """
 
 from __future__ import annotations
@@ -151,10 +152,26 @@ def _build_kernels():
             for d in range(emb_dim):
                 x.flat[base + d] += pos_emb.flat[p * emb_dim + d]
 
+    # ---- SwiGLU + element-wise multiply (fused) ---------------------------
+    @njit(cache=True)
+    def nb_swi_glu_mul(h1, h3):
+        """SwiGLU(h1) * h3 — single pass, no temp alloc.
+
+        h1: (..., 4E) gate input
+        h3: (..., 4E) up projection
+        Returns: (..., 4E) = swiglu(h1) * h3
+        """
+        out = np.empty_like(h1)
+        for i in range(h1.size):
+            v = h1.flat[i]
+            s = 0.5 * v * (1.0 + np.tanh(0.7978845608 * (v + 0.044715 * v * v * v)))
+            out.flat[i] = s * h3.flat[i]
+        return out
+
     # ---- Warmup: compile all kernels with tiny inputs ---------------------
     _warmup(eps=np.float32(1e-5), has_bias=True)
 
-    return nb_rmsnorm, nb_layernorm, nb_swiglu, nb_softmax_last_axis, nb_embed, nb_add_pos
+    return nb_rmsnorm, nb_layernorm, nb_swiglu, nb_softmax_last_axis, nb_embed, nb_add_pos, nb_swi_glu_mul
 
 
 def _warmup(eps=np.float32(1e-5), has_bias=True):
@@ -276,17 +293,18 @@ _nb_swiglu = None
 _nb_softmax = None
 _nb_embed = None
 _nb_add_pos = None
+_nb_swi_glu_mul = None
 _kernels_built = False
 
 
 def _ensure_kernels():
     """Build kernels on first call.  Subsequent calls are free."""
-    global _nb_rmsnorm, _nb_layernorm, _nb_swiglu, _nb_softmax, _nb_embed, _nb_add_pos, _kernels_built
+    global _nb_rmsnorm, _nb_layernorm, _nb_swiglu, _nb_softmax, _nb_embed, _nb_add_pos, _nb_swi_glu_mul, _kernels_built
     if _kernels_built:
         return
     if not _check_numba():
         return
-    _nb_rmsnorm, _nb_layernorm, _nb_swiglu, _nb_softmax, _nb_embed, _nb_add_pos = _build_kernels()
+    _nb_rmsnorm, _nb_layernorm, _nb_swiglu, _nb_softmax, _nb_embed, _nb_add_pos, _nb_swi_glu_mul = _build_kernels()
     _kernels_built = True
 
 
@@ -364,6 +382,16 @@ def nb_add_pos(x, pos_emb, pos, seq_len):
     return x
 
 
+def nb_swi_glu_mul(h1, h3):
+    """SwiGLU(h1) * h3 — fused activation + multiply with numba acceleration."""
+    _ensure_kernels()
+    if _nb_swi_glu_mul is not None:
+        return _nb_swi_glu_mul(h1, h3)
+    # Fallback: SwiGLU then multiply
+    s = 0.5 * h1 * (1.0 + np.tanh(0.7978845608 * (h1 + 0.044715 * h1**3)))
+    return s * h3
+
+
 # ---------------------------------------------------------------------------
 #  Fused transformer block kernel — processes one full block in a single @njit
 # ---------------------------------------------------------------------------
@@ -371,6 +399,9 @@ def nb_add_pos(x, pos_emb, pos, seq_len):
 _nb_fused_block = None
 _nb_fused_block_layer_norm = None
 _nb_fused_block_rms_norm = None
+_nb_fused_attention_single = None
+_nb_fused_attention_multi = None
+_nb_gqa_expand = None
 _fused_built = False
 
 
