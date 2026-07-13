@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { systemController, type DetailedHealth, type SystemMetrics, type SystemInfo, type DiskUsage, type GPUInfo, type ExecutorStatus } from '@/lib/system-controller'
+import { trainingController, type TrainingJob } from '@/lib/training-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { benchmarkController } from '@/lib/benchmark-controller'
-import { multimodalController, trainingController } from '@/lib/controllers'
+import { multimodalController } from '@/lib/controllers'
 import type { AutoTrainStatus } from '@/lib/training-controller'
 import dynamicNext from 'next/dynamic'
 
@@ -45,6 +46,7 @@ export default function SystemHealthPage() {
   const [visualStatus, setVisualStatus] = useState<{ visual_loaded: boolean; training: { status: string } } | null>(null)
   const [executorStatus, setExecutorStatus] = useState<ExecutorStatus | null>(null)
   const [autoTrainStatus, setAutoTrainStatus] = useState<AutoTrainStatus | null>(null)
+  const [trainingJobs, setTrainingJobs] = useState<TrainingJob[]>([])
   const MAX_HISTORY = 30
   const recentErrors = useErrorStore(s => s.errors)
   const dismissError = useErrorStore(s => s.dismissError)
@@ -54,7 +56,7 @@ export default function SystemHealthPage() {
     if (showRefreshing) setRefreshing(true)
     setError(null)
     try {
-      const [d, m, i, di, ks, as, bq, bs, dsRes, vs, ex, at] = await Promise.all([
+      const [d, m, i, di, ks, as, bq, bs, dsRes, vs, ex, at, tj] = await Promise.all([
         systemController.getDetailedHealth().catch(() => null),
         systemController.getMetrics().catch(() => null),
         systemController.getInfo().catch(() => null),
@@ -67,6 +69,7 @@ export default function SystemHealthPage() {
         multimodalController.getStatus().catch(() => null),
         systemController.getExecutorStatus().catch(() => null),
         trainingController.getAutoTrainStatus().catch(() => null),
+        trainingController.list().catch(() => []),
       ])
       setDetailed(d)
       setMetrics(m)
@@ -84,6 +87,7 @@ export default function SystemHealthPage() {
       setVisualStatus(null)
       setExecutorStatus(ex)
       setAutoTrainStatus(at)
+      setTrainingJobs(Array.isArray(tj) ? tj : [])
       setLastUpdated(new Date().toLocaleTimeString())
       if (m) {
         setChartHistory(prev => {
@@ -270,6 +274,41 @@ export default function SystemHealthPage() {
               <p className="text-[11px] text-muted-foreground/50 mt-1">
                 {autoTrainStatus.session_count} conversations · {autoTrainStatus.response_log_count} log files · interval {autoTrainStatus.interval_s}s
               </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Training History */}
+        {trainingJobs.length > 0 && (
+          <Card>
+            <CardHeader><CardTitle className="text-base">Training History</CardTitle></CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {trainingJobs.slice(0, 10).map((job) => (
+                  <div key={job.id} className="flex items-center justify-between text-sm py-1 border-b last:border-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${
+                        job.status === 'completed' ? 'bg-success' :
+                        job.status === 'running' ? 'bg-primary animate-pulse' :
+                        job.status === 'failed' ? 'bg-destructive' :
+                        'bg-muted-foreground/50'
+                      }`} />
+                      <span className="truncate">{job.name || job.id}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0 ml-4">
+                      {job.loss != null && <span>loss {job.loss.toFixed(3)}</span>}
+                      {job.epochs_completed != null && <span>ep {job.epochs_completed}</span>}
+                      <span>{job.status}</span>
+                      <span>{new Date(job.created_at).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {trainingJobs.length > 10 && (
+                <p className="text-[11px] text-muted-foreground/50 mt-2">
+                  + {trainingJobs.length - 10} more jobs
+                </p>
+              )}
             </CardContent>
           </Card>
         )}
