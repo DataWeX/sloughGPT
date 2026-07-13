@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useErrorStore, type AppError, type ErrorSeverity } from '@/lib/error-store'
-import { cn } from '@/lib/cn'
+import { useErrorStore, type AppError, type ErrorSeverity } from '../../lib/error-store'
+import { cn } from '../../lib/cn'
 
 function ErrorIcon({ className }: { className?: string }) {
   return (
