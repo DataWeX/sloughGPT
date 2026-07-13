@@ -482,7 +482,7 @@ class RAGSystem:
 
             results.sort(key=lambda x: x["score"], reverse=True)
             return results[:top_k]
-        except:
+        except (ImportError, ValueError, IndexError):
             return self.search(query, top_k)
 
     def search_fuzzy(self, query: str, top_k: int = 5, threshold: float = 0.6) -> List[Dict]:

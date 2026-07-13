@@ -27,6 +27,18 @@ from startup_progress import STARTUP_PHASE
 
 logger = logging.getLogger("man.startup")
 
+# Timeout constants for startup/shutdown hooks (seconds)
+_TIMEOUT_TASK_QUEUE = 10.0
+_TIMEOUT_CONFIG = 5.0
+_TIMEOUT_MODEL_LOAD = 120.0
+_TIMEOUT_WANDB = 30.0
+_TIMEOUT_MULTIMODAL = 30.0
+_TIMEOUT_MODEL_REGISTRY = 10.0
+_TIMEOUT_ROUTERS = 30.0
+_TIMEOUT_STARTUP_TOTAL = 120.0
+_TIMEOUT_SHUTDOWN = 30.0
+_TIMEOUT_REGISTER_GENERATE = 120.0
+
 
 class StartupProfileSelector:
     """Helper to resolve the active startup profile from config or env."""
@@ -103,35 +115,35 @@ class StartupOrchestrator:
             self._lifecycle.register_startup_hook(
                 StartupHook(
                     "task_queue", self._phase_task_queue,
-                    depends_on=[], timeout=10.0, critical=False,
+                    depends_on=[], timeout=_TIMEOUT_TASK_QUEUE, critical=False,
                     profiles=quick_plus,
                 ),
             )
             self._lifecycle.register_startup_hook(
                 StartupHook(
                     "config", self._phase_config,
-                    depends_on=[], timeout=5.0, critical=False,
+                    depends_on=[], timeout=_TIMEOUT_CONFIG, critical=False,
                     profiles=quick_plus,
                 ),
             )
             self._lifecycle.register_startup_hook(
                 StartupHook(
                     "model_load", self._phase2_model_load,
-                    depends_on=[], timeout=120.0, critical=False,
+                    depends_on=[], timeout=_TIMEOUT_MODEL_LOAD, critical=False,
                     profiles=full_only,
                 ),
             )
             self._lifecycle.register_startup_hook(
                 StartupHook(
                     "wandb", self._phase3_wandb,
-                    depends_on=[], timeout=30.0, critical=False,
+                    depends_on=[], timeout=_TIMEOUT_WANDB, critical=False,
                     profiles=full_only,
                 ),
             )
             self._lifecycle.register_startup_hook(
                 StartupHook(
                     "multimodal", self._phase4_multimodal,
-                    depends_on=[], timeout=30.0, critical=False,
+                    depends_on=[], timeout=_TIMEOUT_MULTIMODAL, critical=False,
                     profiles=full_only,
                 ),
             )
@@ -139,30 +151,30 @@ class StartupOrchestrator:
                 StartupHook(
                     "model_registry", self._phase5_model_registry,
                     depends_on=["task_queue", "config"],
-                    timeout=10.0, critical=False,
+                    timeout=_TIMEOUT_MODEL_REGISTRY, critical=False,
                     profiles=quick_plus,
                 ),
             )
             self._lifecycle.register_startup_hook(
                 StartupHook(
                     "routers", self._phase6_routers,
-                    depends_on=["model_registry"], timeout=30.0, critical=True,
+                    depends_on=["model_registry"], timeout=_TIMEOUT_ROUTERS, critical=True,
                     profiles=all_profiles,
                 ),
             )
 
             # Register shutdown hooks
             self._lifecycle.register_shutdown_hook(
-                ShutdownHook("job_cleanup", self._shutdown_jobs, depends_on=[], timeout=10.0),
+                ShutdownHook("job_cleanup", self._shutdown_jobs, depends_on=[], timeout=_TIMEOUT_TASK_QUEUE),
             )
             self._lifecycle.register_shutdown_hook(
-                ShutdownHook("wandb_cancel", self._shutdown_wandb, depends_on=[], timeout=5.0),
+                ShutdownHook("wandb_cancel", self._shutdown_wandb, depends_on=[], timeout=_TIMEOUT_CONFIG),
             )
             self._lifecycle.register_shutdown_hook(
-                ShutdownHook("registry_cleanup", self._shutdown_registry, depends_on=[], timeout=5.0),
+                ShutdownHook("registry_cleanup", self._shutdown_registry, depends_on=[], timeout=_TIMEOUT_CONFIG),
             )
             self._lifecycle.register_shutdown_hook(
-                ShutdownHook("task_queue_shutdown", self._shutdown_task_queue, depends_on=[], timeout=10.0),
+                ShutdownHook("task_queue_shutdown", self._shutdown_task_queue, depends_on=[], timeout=_TIMEOUT_TASK_QUEUE),
             )
             self._lifecycle.register_shutdown_hook(
                 ShutdownHook("pool_shutdown", self._shutdown_pool, depends_on=[], timeout=10.0),
@@ -240,7 +252,7 @@ class StartupOrchestrator:
             logger.info("Phase: autoload disabled (%r)", raw)
             return
 
-        STARTUP_PHASE.update(phase="loading_model", step=4, total=8, message="Loading model weights...")
+        STARTUP_PHASE.update(phase="loading_model", step=4, total=9, message="Loading model weights...")
         logger.info("Phase 4: loading model %s", raw)
         # Run model load synchronously so provider is registered before serving requests
         try:
@@ -256,7 +268,7 @@ class StartupOrchestrator:
 
     async def _phase3_wandb(self):
         """Start W&B metrics server (if available)."""
-        STARTUP_PHASE.update(phase="wandb_server", step=5, total=8, message="Starting W&B metrics server...")
+        STARTUP_PHASE.update(phase="wandb_server", step=5, total=9, message="Starting W&B metrics server...")
         try:
             from domains.ops.wandb_server import start_wandb_server_background
 
@@ -293,7 +305,7 @@ class StartupOrchestrator:
 
     async def _phase4_multimodal(self):
         """Initialize multimodal engine (if available)."""
-        STARTUP_PHASE.update(phase="multimodal", step=6, total=8, message="Initializing multimodal engine...")
+        STARTUP_PHASE.update(phase="multimodal", step=6, total=9, message="Initializing multimodal engine...")
         try:
 
             def _init():
@@ -315,7 +327,7 @@ class StartupOrchestrator:
 
     async def _phase5_model_registry(self):
         """Initialize model registry."""
-        STARTUP_PHASE.update(phase="model_registry", step=7, total=8, message="Initializing model registry...")
+        STARTUP_PHASE.update(phase="model_registry", step=7, total=9, message="Initializing model registry...")
         try:
             from domains.infrastructure.model_registry import get_model_registry
             self._registry = get_model_registry()
@@ -325,7 +337,7 @@ class StartupOrchestrator:
 
     async def _phase6_routers(self):
         """Register all feature routers."""
-        STARTUP_PHASE.update(phase="registering_routers", step=8, total=8, message="Registering routes...")
+        STARTUP_PHASE.update(phase="registering_routers", step=8, total=9, message="Registering routes...")
         try:
             from routers import get_all_routers
             for r in get_all_routers():
@@ -347,7 +359,7 @@ class StartupOrchestrator:
 
     async def _phase_task_queue(self):
         """Initialize the background task queue."""
-        STARTUP_PHASE.update(phase="task_queue", step=2, total=8, message="Initializing task queue...")
+        STARTUP_PHASE.update(phase="task_queue", step=2, total=9, message="Initializing task queue...")
         try:
             from domains.infrastructure.task_queue import TaskQueue, get_task_queue
             self._task_queue = get_task_queue()
@@ -357,7 +369,7 @@ class StartupOrchestrator:
 
     async def _phase_config(self):
         """Validate and warm the config system."""
-        STARTUP_PHASE.update(phase="config", step=3, total=8, message="Validating config...")
+        STARTUP_PHASE.update(phase="config", step=3, total=9, message="Validating config...")
         try:
             from domains.infrastructure.config import Config
             cfg = Config.get_instance()
@@ -368,7 +380,7 @@ class StartupOrchestrator:
 
     async def _phase_ready(self):
         """Mark server as ready — happens after all synchronous phases complete."""
-        STARTUP_PHASE.update(phase="ready", step=9, total=8, message="Server ready")
+        STARTUP_PHASE.update(phase="ready", step=9, total=9, message="Server ready")
         logger.info("Startup complete — server ready for requests")
 
     # ── Shutdown hooks ──

@@ -180,7 +180,7 @@ class ResponseBenchmark:
                     if model and data.get("model") != model:
                         continue
                     responses.append(data)
-                except:
+                except (json.JSONDecodeError, ValueError):
                     continue
 
         responses = responses[-limit:]

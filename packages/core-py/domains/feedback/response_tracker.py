@@ -155,7 +155,7 @@ class ResponseTracker:
                             continue
 
                         responses.append(ResponseLog(**data))
-                    except:
+                    except (json.JSONDecodeError, ValueError, KeyError):
                         continue
 
         return responses[-limit:]
