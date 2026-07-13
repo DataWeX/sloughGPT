@@ -3651,7 +3651,13 @@ class SloTransformer(SloNet):
         E = _first_block.attn.head_dim
         H = _first_block.attn.n_heads
         K_H = _nkv[0]
-        _ff_dim = m_w13[0].shape[1] // 2
+        # Compute _ff_dim from the first block's w1 weight shape (works in both paths)
+        _first_w1 = None
+        for l in self.layers[1:-2]:
+            if isinstance(l, SloTransformerBlock):
+                _first_w1 = l.ff.w1
+                break
+        _ff_dim = _first_w1.weight.shape[0]  # w1 weight: (ff_dim, E), shape[0] = ff_dim
         scale = np.float32(1.0 / math.sqrt(E))
         _clip_max = np.int64(tok_emb_w.shape[0] - 1)
         _pos_clip_max = np.int64(pos_emb_n - 1 if pos_emb_n > 0 else 0)
@@ -3797,7 +3803,10 @@ class SloTransformer(SloNet):
                     x = x + norm_b
 
             # LM head
-            logits = x[:, -1, :] @ lm_w.T
+            if _is_quantized:
+                logits = lm_head_mod.forward_numpy(x[:, -1, :])
+            else:
+                logits = x[:, -1, :] @ lm_w.T
 
             # Inlined greedy sampling (avoids function call + logits.copy + penalty checks)
             if _is_greedy:
