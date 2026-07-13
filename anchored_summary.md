@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 4524904 feat: training data JSONL export + monitoring auto-trainer card + session filter
+No active task. Last commit: 734dcf6 fix: revert chat/page.tsx — c8f8b1f referenced useChatMode without importing it
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

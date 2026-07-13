@@ -3570,7 +3570,6 @@ class SloTransformer(SloNet):
 
         _use_kernels = _KERNELS_AVAILABLE
         _is_greedy = temperature < 1e-6 and top_p is None and repetition_penalty == 1.0
-        _need_sampling = not _is_greedy
 
         # Flatten block weights into parallel lists — eliminates dict hash lookups.
         # Each block is indexed by integer; inner loop uses direct list indexing.
