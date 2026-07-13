@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 8937440 refactor: simplify training UX — extract shared components, reduce page complexity
+No active task. Last commit: ae0820f feat: add new training infrastructure (auto_trainer, executor, pair_extractor)
 
 ## Session 2026-07-13 — On-Device Training Pipeline + Storage Integration
 
