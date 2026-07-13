@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 734dcf6 fix: revert chat/page.tsx — c8f8b1f referenced useChatMode without importing it
+No active task. Last commit: 1540ee3 refactor: extract MessageContent + MessageImages from MessageBubble, dedup ModeBar
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
