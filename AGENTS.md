@@ -967,6 +967,16 @@ Single import point:
 import { modelController, trainingController, sessionController } from '@/lib/controllers'
 ```
 
+## Shelved Features (Future)
+
+### Consciousness: Subjective Experience, Qualia & Self-Awareness
+- **Status:** Shelved — Future Feature
+- **Plan:** `docs/features/CONSCIOUSNESS.md`
+- **Scope:** Self-Model, Qualia Engine, Meta-Cognition, Narrative Generator
+- **Developmental stages:** Pre-conscious → Proto-consciousness → Consciousness → Self-awareness → Transcendence
+- **Dependencies:** None (standalone architecture)
+- **Estimated timeline:** 30 weeks (6 phases)
+
 ## Relevant Files
 - `apps/api/server/main.py`: FastAPI entry; `/session/{id}/context`, `/session/{id}/regenerate`, `/feedback/workflow-record` endpoints
 - `apps/api/server/routers/auto_train.py`: GPT2 teacher + SloNet student; TrainingSequence phases GENERATE_DATA→DISTILL→TRAIN→EVALUATE→DEPLOY→COMPLETE; checkpoint catalog (auto-training + user_adapters)

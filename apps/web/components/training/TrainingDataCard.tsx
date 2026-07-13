@@ -203,6 +203,21 @@ export function TrainingDataCard() {
           </>
         )}
 
+        {/* Quality summary */}
+        {stats.total > 0 && (() => {
+          const high = (stats.by_quality['4'] || 0) + (stats.by_quality['5'] || 0)
+          const mid = (stats.by_quality['2'] || 0) + (stats.by_quality['3'] || 0)
+          const low = (stats.by_quality['-1'] || 0) + (stats.by_quality['0'] || 0) + (stats.by_quality['1'] || 0)
+          const highPct = Math.round((high / stats.total) * 100)
+          return (
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground/60">
+              <span>{highPct}% high quality</span>
+              {stats.synced > 0 && <span>{Math.round((stats.synced / stats.total) * 100)}% synced</span>}
+              {stats.used > 0 && <span>{stats.used} used in training</span>}
+            </div>
+          )
+        })()}
+
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2">
           <Input

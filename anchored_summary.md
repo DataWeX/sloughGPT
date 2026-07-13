@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: cbef49f feat: batch select + bulk delete in TrainingDataCard
+No active task. Last commit: e7b874f feat: auto-train config UI (threshold + interval) in TrainFromSessionsCard
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
