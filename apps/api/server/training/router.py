@@ -2347,6 +2347,8 @@ async def unified_stream(request: Request):
         worker_task = loop.run_in_executor(None, _worker)
         deadline = time.time() + 3600
         try:
+            heartbeat_interval = 10.0
+            last_yield = time.time()
             while True:
                 if time.time() > deadline:
                     logger.error("Unified SSE timed out — no completion in 1 hour")
@@ -2358,8 +2360,17 @@ async def unified_stream(request: Request):
                     worker_task.cancel()
                     logger.info("Client disconnected from unified stream")
                     return
-                event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                remaining = heartbeat_interval - (time.time() - last_yield)
+                if remaining <= 0:
+                    remaining = heartbeat_interval
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=remaining)
+                except asyncio.TimeoutError:
+                    yield ": heartbeat\n\n"
+                    last_yield = time.time()
+                    continue
                 yield event
+                last_yield = time.time()
                 if event.startswith("data: "):
                     try:
                         ev = json.loads(event[6:])
@@ -2372,7 +2383,7 @@ async def unified_stream(request: Request):
             except Exception:
                 pass
         except asyncio.TimeoutError:
-            logger.error("Unified SSE queue timed out — no event for 30s")
-            yield sse_error("unified-train", "TIMEOUT", "No training progress for 30 seconds")
+            logger.error("Unified SSE queue timed out — no event for 60s")
+            yield sse_error("unified-train", "TIMEOUT", "No training progress for 60 seconds")
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
