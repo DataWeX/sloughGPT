@@ -183,6 +183,7 @@ models/**/*.soul
 models/**/*.pt
 models/**/checkpoint-*/
 models/auto-training/
+models/unified-trained/
 
 
 # User data and backups
