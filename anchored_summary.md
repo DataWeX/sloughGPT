@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: f0a666d Merge branch 'fix/server-test-envelopes': envelope-aware assertions in 14 test files
+No active task. Last commit: f50d674 Merge branch 'chore/remove-dead-server-packages'
 
 ## Session 2026-07-13 — On-Device Training Pipeline + Storage Integration
 
