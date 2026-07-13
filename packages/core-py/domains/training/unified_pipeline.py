@@ -399,19 +399,8 @@ class UnifiedTrainingPipeline:
         else:
             self.state.skip_phase(TrainingSequence.GENERATE_DATA, "Skipped by config")
 
-        # --- DISTILL ---
-        if not self.run_config.skip_distill and self.config.distill:
-            self.state.start_phase(TrainingSequence.DISTILL)
-            self._update_progress("distill", message="Running distillation...")
-            self._emit_progress(on_progress)
-            self._run_distill()
-            self.state.complete_phase(TrainingSequence.DISTILL)
-            if not self._is_training:
-                return self._early_exit("Training stopped during distillation")
-        elif self.config.distill:
-            self.state.skip_phase(TrainingSequence.DISTILL, "Skipped by config")
-        else:
-            self.state.skip_phase(TrainingSequence.DISTILL, "Distillation not enabled")
+        # --- DISTILL (not yet implemented — always skip) ---
+        self.state.skip_phase(TrainingSequence.DISTILL, "Distillation not implemented")
 
         # --- TRAIN ---
         if not self.run_config.skip_train:
@@ -599,32 +588,6 @@ class UnifiedTrainingPipeline:
         except Exception as e:
             logger.warning("Data preparation warning (non-fatal): %s", e)
 
-    def _run_distill(self):
-        """DISTILL phase: run knowledge distillation if configured."""
-        if not self.config.distill:
-            return
-        try:
-            from domains.training.distillation import (
-                DistillationTrainer,
-                DistillationConfig,
-            )
-            from domains.training.slonet import Tensor
-
-            teacher = None  # Placeholder — teacher model should be passed externally
-            student = None  # Placeholder — student model should be passed externally
-            if teacher is not None and student is not None:
-                distill_config = DistillationConfig(
-                    temperature=self.config.temperature,
-                    alpha=self.config.distill_alpha,
-                    beta=self.config.distill_beta,
-                )
-                trainer = DistillationTrainer(teacher, student, distill_config)
-                logger.info("Distillation trainer created")
-            else:
-                logger.info("Distillation skipped — no teacher/student models provided")
-        except ImportError:
-            logger.warning("Distillation import failed — skipping phase")
-
     def _run_train(
         self,
         on_progress: Optional[Callable[[TrainingProgress], None]] = None,
@@ -636,8 +599,6 @@ class UnifiedTrainingPipeline:
             return self._train_hf(on_progress)
         elif method == "turbo":
             return self._train_turbo(on_progress)
-        elif method == "distill":
-            return self._train_distill_student(on_progress)
         else:
             return self._train_slonet(on_progress)
 
@@ -744,69 +705,6 @@ class UnifiedTrainingPipeline:
             total_steps=result.get("total_steps", step_counter[0]),
             checkpoint_name=result.get("checkpoint", result.get("checkpoint_name", "")),
             method="turbo",
-            metrics={},
-        )
-
-    def _train_distill_student(
-        self,
-        on_progress: Optional[Callable[[TrainingProgress], None]] = None,
-    ) -> TrainResult:
-        """Train a student model via distillation."""
-        from domains.training.distillation import DistillationTrainer, DistillationConfig
-        from domains.training.slonet import Tensor
-
-        distill_config = DistillationConfig(
-            temperature=self.config.temperature,
-            alpha=self.config.distill_alpha,
-            beta=self.config.distill_beta,
-        )
-
-        teacher = None  # External; passed via trainer_kwargs
-        student = None  # External; passed via trainer_kwargs
-
-        teacher = self.config.trainer_kwargs.get("teacher_model")
-        student = self.config.trainer_kwargs.get("student_model")
-        train_data = self.config.trainer_kwargs.get("train_data")
-
-        if teacher is None or student is None:
-            logger.warning("Distillation requires teacher_model and student_model in trainer_kwargs")
-            return TrainResult(
-                success=False,
-                status="skipped",
-                final_loss=None,
-                total_steps=0,
-                method="distill",
-                metrics={},
-            )
-
-        trainer = DistillationTrainer(teacher, student, distill_config)
-
-        losses = []
-        steps = 0
-        for batch in (train_data or []):
-            inputs, labels = batch
-            losses_dict = trainer.step(inputs, labels)
-            loss_val = losses_dict.get("total_loss", 0.0)
-            losses.append(loss_val)
-            steps += 1
-            self._update_progress(
-                "train",
-                step=steps,
-                loss=loss_val,
-                message=f"Distill step {steps}, loss {loss_val:.4f}",
-            )
-            if on_progress:
-                on_progress(self.progress)
-
-        final_loss = sum(losses) / max(len(losses), 1) if losses else None
-        return TrainResult(
-            success=True,
-            status="completed",
-            final_loss=final_loss,
-            total_steps=steps,
-            model_path=self.config.output_dir,
-            checkpoint_name="",
-            method="distill",
             metrics={},
         )
 

@@ -711,6 +711,8 @@ async def stream(request: Request):
     async def event_generator():
         worker_task = loop.run_in_executor(None, _training_worker)
         deadline = time.time() + 3600  # 1-hour safety timeout
+        heartbeat_interval = 10.0  # Send SSE comment every 10s to keep connection alive
+        last_yield = time.time()
         try:
             while True:
                 if time.time() > deadline:
@@ -724,8 +726,19 @@ async def stream(request: Request):
                     worker_task.cancel()
                     autotrain_logger.info("Client disconnected from auto-train stream")
                     return
-                event = await _asyncio.wait_for(queue.get(), timeout=30.0)
+                # Wait for event or heartbeat timeout
+                remaining = heartbeat_interval - (time.time() - last_yield)
+                if remaining <= 0:
+                    remaining = heartbeat_interval
+                try:
+                    event = await _asyncio.wait_for(queue.get(), timeout=remaining)
+                except _asyncio.TimeoutError:
+                    # No event within heartbeat interval — send SSE comment to keep alive
+                    yield ": heartbeat\n\n"
+                    last_yield = time.time()
+                    continue
                 yield event
+                last_yield = time.time()
                 if event.startswith("data: "):
                     try:
                         ev = json.loads(event[6:])
@@ -744,8 +757,8 @@ async def stream(request: Request):
 
             await worker_task
         except TimeoutError:
-            autotrain_logger.error("Auto-train SSE queue timed out — no event for 30s")
-            yield sse_error("auto-train", "TIMEOUT", "No training progress for 30 seconds")
+            autotrain_logger.error("Auto-train SSE queue timed out — no event for 60s")
+            yield sse_error("auto-train", "TIMEOUT", "No training progress for 60 seconds")
         except Exception:
             pass
 

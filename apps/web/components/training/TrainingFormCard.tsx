@@ -243,7 +243,7 @@ export function TrainingFormCard({
             )}
             <div className="flex items-center gap-3">
               <Button size="sm" disabled={form.canStart} onClick={() => form.startTraining()}>
-                {form.method === 'unified' ? 'Start unified training' : form.method === 'distill' ? (form.inputMode === 'text' && form.textInput.trim() ? 'Train on pasted text' : 'Start') : 'Start'}
+                {form.method === 'unified' ? 'Start auto training' : form.method === 'distill' ? (form.inputMode === 'text' && form.textInput.trim() ? 'Train on pasted text' : 'Start training') : form.method === 'vlm' ? 'Start vision training' : 'Start training'}
               </Button>
               <EstimatedTime
                 method={form.method}
@@ -269,12 +269,12 @@ export function TrainingFormCard({
               <div className="space-y-3 mt-3">
                 <div className="flex items-center gap-4" role="radiogroup" aria-label="Training method">
                   <ToggleGroup type="single" value={form.method} onValueChange={(v) => { if (v) form.setMethod(v as 'distill' | 'finetune' | 'vlm' | 'unified') }}>
-                    <ToggleGroupItem value="distill" className="px-3 py-1.5 rounded-md text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Distill</ToggleGroupItem>
+                    <ToggleGroupItem value="distill" className="px-3 py-1.5 rounded-md text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Train from scratch</ToggleGroupItem>
                     <ToggleGroupItem value="finetune" className="px-3 py-1.5 rounded-md text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Continue training</ToggleGroupItem>
                     <ToggleGroupItem value="vlm" className="px-3 py-1.5 rounded-md text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Vision model</ToggleGroupItem>
                     <ToggleGroupItem value="unified" className="px-3 py-1.5 rounded-md text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Auto</ToggleGroupItem>
                   </ToggleGroup>
-                  {form.method === 'distill' && <span className="text-xs text-muted-foreground/70">A large model teaches a smaller one to copy its style</span>}
+                  {form.method === 'distill' && <span className="text-xs text-muted-foreground/70">Train a small model from text data — no teacher needed</span>}
                   {form.method === 'finetune' && <span className="text-xs text-muted-foreground/70">Continue training an existing model on new data</span>}
                   {form.method === 'vlm' && <span className="text-xs text-muted-foreground/70">Teach the AI to understand images and text</span>}
                   {form.method === 'unified' && <span className="text-xs text-muted-foreground/70">Automatically pick the best method</span>}

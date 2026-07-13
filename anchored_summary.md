@@ -1,7 +1,51 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 6008462 Merge branch 'fix/cognitive-task-cleanup'
+No active task. Last commit: 6c8c6f7 Merge branch 'chore/remove-more-dead-code'
+
+## Session 2026-07-13 — Server-Side Training from Inference Logs
+
+### Problem
+Mobile→server round-trip wasted bandwidth: mobile collected pairs and sent them back, but the server already had every (user_msg, assistant_msg) pair in its session/response logs.
+
+### Solution
+Server trains directly from its own inference logs. Two approaches:
+1. **On-demand**: Mobile calls `POST /mobile/train/from-sessions` — server extracts pairs from session JSON + response log JSONL, trains, returns checkpoint.
+2. **Background auto-train**: `AutoTrainer` monitors new conversations, triggers training when threshold (10) reached.
+
+### Files Created
+- `packages/core-py/domains/training/pair_extractor.py` — `extract_pairs_from_sessions()`, `extract_pairs_from_logs()`, `write_training_text()`, `count_pairs_in_sessions()`, `count_pairs_in_logs()`
+- `packages/core-py/domains/training/auto_trainer.py` — `AutoTrainer` (background thread, threshold, interval, subprocess spawn), `start_auto_trainer_if_enabled()`, `stop_auto_trainer()`
+- `packages/core-py/tests/test_pair_extractor.py` — 21 tests
+- `packages/core-py/tests/test_auto_trainer.py` — 17 tests
+
+### Files Modified
+- `apps/api/server/routers/mobile.py` — Added `POST /mobile/train/from-sessions` + `GET /mobile/train/auto-status` endpoints
+- `apps/api/server/main.py` — Auto-trainer wired into lifespan (start/stop)
+- `apps/mobile/src/services/api-client.ts` — `trainFromSessions()`, `getAutoTrainStatus()`
+- `apps/mobile/src/services/training-collector.ts` — `trainFromSessions()`, `getAutoTrainStatus()`
+- `tests/server/test_mobile_training.py` — 4 new endpoint tests (10→15 total)
+
+### Endpoints
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /mobile/train/from-sessions` | Train from server's own inference logs (no mobile data needed) |
+| `GET /mobile/train/auto-status` | Auto-trainer status + config |
+
+### Env Vars
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `MAN_AUTO_TRAIN` | `0` | Enable background auto-training |
+| `MAN_AUTO_TRAIN_THRESHOLD` | `10` | Conversations before trigger |
+| `MAN_AUTO_TRAIN_INTERVAL` | `300` | Min seconds between trains |
+
+### Test Results
+- 21 pair_extractor: ✅
+- 17 auto_trainer: ✅
+- 15 mobile training endpoints: ✅
+- 15 mobile training-collector: ✅
+- 514 mobile JS: ✅
+- **Total: 68 new tests, all pass**
 
 ## Session 2026-07-13 — On-Device Training Pipeline + Storage Integration
 
