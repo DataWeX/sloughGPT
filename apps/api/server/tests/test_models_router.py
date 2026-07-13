@@ -19,11 +19,16 @@ app.include_router(models_router)
 client = TestClient(app)
 
 
+def _data(resp):
+    """Unwrap the success_response() envelope."""
+    body = resp.json()
+    return body.get("data", body)
+
+
 @pytest.fixture(scope="session")
 def fake_cache_dir():
     """Create a temp HF cache directory with mock blobs for cache-usage test."""
     tmp = Path(tempfile.mkdtemp())
-    # Create a models--gpt2 directory with a blob file
     blob_dir = tmp / "models--gpt2" / "blobs"
     blob_dir.mkdir(parents=True, exist_ok=True)
     blob_file = blob_dir / "abc123"
@@ -74,7 +79,7 @@ class TestListModels:
     def test_list_includes_loaded_model(self, mock_controller):
         resp = client.get("/models")
         assert resp.status_code == 200
-        data = resp.json()
+        data = _data(resp)
         assert len(data) == 4  # 1 loaded + 3 unique HF models (gpt2 deduped)
         loaded = [m for m in data if m["status"] == "loaded"]
         assert len(loaded) == 1
@@ -82,7 +87,7 @@ class TestListModels:
 
     def test_list_includes_hf_models(self, mock_controller):
         resp = client.get("/models")
-        data = resp.json()
+        data = _data(resp)
         available = [m for m in data if m["status"] == "available"]
         assert len(available) == 3  # gpt2-medium, Qwen, gpt2-large
         ids = {m["model_id"] for m in available}
@@ -92,20 +97,20 @@ class TestListModels:
     def test_list_no_loaded_model(self, mock_controller):
         mock_controller.get_current_model.return_value = None
         resp = client.get("/models")
-        data = resp.json()
+        data = _data(resp)
         assert len(data) == 4  # all 4 HF models (none loaded)
         assert all(m["status"] == "available" for m in data)
 
     def test_list_model_has_description(self, mock_controller):
         resp = client.get("/models")
-        data = resp.json()
+        data = _data(resp)
         for m in data:
             assert "description" in m
             assert len(m["description"]) > 5
 
     def test_list_loaded_model_has_vocab_size(self, mock_controller):
         resp = client.get("/models")
-        data = resp.json()
+        data = _data(resp)
         loaded = [m for m in data if m["status"] == "loaded"][0]
         assert loaded["vocab_size"] == 50257
 
@@ -117,7 +122,7 @@ class TestCurrentModel:
     def test_current_returns_loaded(self, mock_controller):
         resp = client.get("/models/current")
         assert resp.status_code == 200
-        data = resp.json()
+        data = _data(resp)
         assert data["model_id"] == "gpt2"
 
     def test_current_none_loaded(self, mock_controller):
@@ -133,10 +138,9 @@ class TestHFModels:
     def test_hf_returns_all(self, mock_controller):
         resp = client.get("/models/hf")
         assert resp.status_code == 200
-        data = resp.json()
-        assert "models" in data
-        assert "q" in data
-        assert len(data["models"]) >= 4
+        data = _data(resp)
+        assert isinstance(data, list)
+        assert len(data) >= 4
 
     def test_hf_with_query(self, mock_controller):
         client.get("/models/hf?q=gpt2")
@@ -144,8 +148,8 @@ class TestHFModels:
 
     def test_hf_model_has_cached_flag(self, mock_controller):
         resp = client.get("/models/hf")
-        data = resp.json()
-        for m in data["models"]:
+        data = _data(resp)
+        for m in data:
             assert "cached" in m
 
 
@@ -157,14 +161,14 @@ class TestCacheUsage:
         with patch("routers.models._hf_cache_dir", fake_cache_dir):
             resp = client.get("/models/cache-usage")
         assert resp.status_code == 200
-        data = resp.json()
+        data = _data(resp)
         assert data["model_count"] == 1
         assert data["total_bytes"] >= 1_000_000
 
     def test_cache_usage_structure(self, mock_controller, fake_cache_dir):
         with patch("routers.models._hf_cache_dir", fake_cache_dir):
             resp = client.get("/models/cache-usage")
-        data = resp.json()
+        data = _data(resp)
         assert "total_bytes" in data
         assert "cache_dir" in data
 
@@ -172,7 +176,7 @@ class TestCacheUsage:
         fake_empty = tempfile.mkdtemp()
         with patch("routers.models._hf_cache_dir", Path(fake_empty)):
             resp = client.get("/models/cache-usage")
-        data = resp.json()
+        data = _data(resp)
         assert data["model_count"] == 0
         assert data["total_bytes"] == 0
 
@@ -184,17 +188,16 @@ class TestExportFormats:
     def test_export_formats(self, mock_controller):
         resp = client.get("/models/export/formats")
         assert resp.status_code == 200
-        data = resp.json()
-        assert "formats" in data
-        assert isinstance(data["formats"], dict)
-        assert "safetensors" in data["formats"]
-        assert "gguf_q4_k_m" in data["formats"]
-        assert "sou" in data["formats"]
+        data = _data(resp)
+        assert isinstance(data, dict)
+        assert "safetensors" in data
+        assert "gguf_q4_k_m" in data
+        assert "sou" in data
 
     def test_export_formats_has_descriptions(self, mock_controller):
         resp = client.get("/models/export/formats")
-        data = resp.json()
-        for key, desc in data["formats"].items():
+        data = _data(resp)
+        for key, desc in data.items():
             assert isinstance(key, str)
             assert isinstance(desc, str)
             assert len(desc) > 5

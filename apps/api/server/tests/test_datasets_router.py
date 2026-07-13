@@ -18,6 +18,14 @@ app.include_router(datasets_router)
 client = TestClient(app)
 
 
+def _data(resp):
+    """Unwrap the success_response() envelope."""
+    body = resp.json()
+    if isinstance(body, list):
+        return body
+    return body.get("data", body)
+
+
 # ── Fixtures ───────────────────────────────────────────────────────────────
 
 SAMPLE_DATASETS = [
@@ -127,7 +135,7 @@ class TestSearch:
     def test_search_returns_results(self, mock_controller):
         resp = client.get("/datasets/search?q=shake")
         assert resp.status_code == 200
-        data = resp.json()
+        data = _data(resp)
         assert data["count"] == 1
 
     def test_search_delegates_to_controller(self, mock_controller):
@@ -187,7 +195,7 @@ class TestDelete:
         mock_controller.delete_dataset.return_value = True
         resp = client.delete("/datasets/shakespeare")
         assert resp.status_code == 200
-        assert resp.json()["status"] == "deleted"
+        assert _data(resp)["status"] == "deleted"
 
     def test_delete_nonexistent(self, mock_controller):
         mock_controller.delete_dataset.return_value = False
@@ -219,7 +227,7 @@ class TestAppendData:
     def test_append_data(self, mock_controller):
         resp = client.post("/datasets/shakespeare/data", json={"data": ["a", "b", "c"]})
         assert resp.status_code == 200
-        assert resp.json()["rows_added"] == 3
+        assert _data(resp)["rows_added"] == 3
 
     def test_append_nonexistent(self, mock_controller):
         mock_controller.add_data.return_value = None

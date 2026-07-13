@@ -21,7 +21,8 @@ def test_regenerate_uses_stored_context():
     messages = [{"role": "user", "content": "Hello"}]
     resp = client.post(f"/session/{session_id}/context", json={"messages": messages})
     assert resp.status_code == 200
-    data = resp.json()
+    body = resp.json()
+    data = body.get("data", body)
     assert data["status"] == "stored"
 
     # Trigger regeneration – model is likely not loaded in the test env, so we expect a model‑not‑loaded error

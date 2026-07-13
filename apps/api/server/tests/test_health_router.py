@@ -19,11 +19,15 @@ client = TestClient(_app)
 class TestHealthRouter:
     """Tests for /health/* endpoints."""
 
+    def _data(self, resp):
+        body = resp.json()
+        return body.get("data", body)
+
     def test_basic_health(self):
         """GET /health returns status, timestamp, model info."""
         resp = client.get('/health')
         assert resp.status_code == 200
-        data = resp.json()
+        data = self._data(resp)
         assert data['status'] in ('healthy', 'degraded', 'unhealthy')
         assert 'timestamp' in data
         assert 'model_loaded' in data
@@ -33,20 +37,20 @@ class TestHealthRouter:
         """GET /health/live returns status: alive."""
         resp = client.get('/health/live')
         assert resp.status_code == 200
-        assert resp.json()['status'] == 'alive'
+        assert self._data(resp)['status'] == 'alive'
 
     def test_readiness(self):
         """GET /health/ready returns status."""
         resp = client.get('/health/ready')
         assert resp.status_code == 200
-        data = resp.json()
+        data = self._data(resp)
         assert 'status' in data
 
     def test_detailed_health_structure(self):
         """GET /health/detailed returns system metrics."""
         resp = client.get('/health/detailed')
         assert resp.status_code == 200
-        data = resp.json()
+        data = self._data(resp)
         assert 'status' in data
         assert 'uptime_seconds' in data
         assert 'timestamp' in data
@@ -61,7 +65,7 @@ class TestHealthRouter:
         """GET /health/startup-progress returns phase."""
         resp = client.get('/health/startup-progress')
         assert resp.status_code == 200
-        data = resp.json()
+        data = self._data(resp)
         assert 'step' in data or 'phase' in data
 
     def test_debug_info(self):

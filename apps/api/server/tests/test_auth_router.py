@@ -245,8 +245,9 @@ class TestVerify:
         resp = client.post("/auth/verify", headers={"Authorization": "Bearer valid-token"})
         assert resp.status_code == 200
         data = resp.json()
-        assert data["valid"] is True
-        assert data["subject"] == "test-user-id"
+        inner = data.get("data", data)
+        assert inner.get("valid") is True
+        assert inner.get("subject") == "test-user-id"
 
     def test_verify_missing_header_returns_401(self):
         resp = client.post("/auth/verify")
