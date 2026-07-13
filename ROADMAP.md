@@ -119,6 +119,11 @@ A fast, lightweight local AI inference engine that runs on any device, with a un
 | Docker deployment | ✅ | 3h | Dockerfile + docker-compose |
 | Rate limiting | ✅ | 2h | RateLimitMiddleware + 8 tests |
 | Prometheus metrics | ✅ | 3h | /metrics + /metrics/prometheus + MetricsCollector + MetricsMiddleware + 11 tests |
+| Shared TrainingExecutor | ✅ | 4h | Shared thread pool, job tracking, cancellation, PGQ integration, 27 tests |
+| Executor API endpoints | ✅ | 2h | GET/POST /system/executor/* + /system/inference-pool, 12 endpoint tests |
+| ModelServer read/write separation | ✅ | 1h | tokenize() with read semaphore, generate() with write semaphore |
+| Health endpoint executor metrics | ✅ | 1h | training_pool block in basic + detailed health |
+| Frontend executor monitoring | ✅ | 2h | Training Pool card with KPIs, cancel/purge controls, 11 controller tests |
 
 ---
 
@@ -127,7 +132,7 @@ A fast, lightweight local AI inference engine that runs on any device, with a un
 |------|----------|------|-------------|
 | React Native app shell | ✅ | 8h | 11 screens, 22 services, navigation, 25 tests |
 | On-device inference (CoreML/Metal) | ✅ | 16h | onnx-inference-service.ts (JS SloNet) + llama-rn-service.ts (native Metal) |
-| Background sensor collection | ✅ | 6h | sensor-collection.ts + /activity router + 2 tests |
+| On-device training (server-assisted) | ✅ | 6h | training-collector.ts + /mobile/train endpoint + chat auto-collection + 15 tests |
 | Offline mode | ✅ | 4h | offline-cache.ts (messages + pending sends) |
 
 ---
@@ -156,3 +161,4 @@ A fast, lightweight local AI inference engine that runs on any device, with a un
 | 2026-07-12 (Prometheus metrics) | 1 | 11 | +200 |
 | 2026-07-12 (Distributed training) | 1 | 11 | +300 |
 | 2026-07-12 (Phase 7 mobile) | 4 | 2 | +400 |
+| 2026-07-13 (parallel execution) | 9 | 50 | +800 |

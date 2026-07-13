@@ -78,6 +78,17 @@ class ThoughtType:
     DECISION = "decision"
 
 
+class Thought:
+    """Represents a cognitive thought."""
+    def __init__(self, thought_id: str, content: str, thought_type: str = "reasoning",
+                 confidence: float = 0.5, metadata: Optional[Dict[str, Any]] = None):
+        self.thought_id = thought_id
+        self.content = content
+        self.thought_type = thought_type
+        self.confidence = confidence
+        self.metadata = metadata or {}
+
+
 class BaseDomain:
     """Base domain class. Every domain extends this."""
     def __init__(self, domain_name: str) -> None:
@@ -101,6 +112,7 @@ __all__ = [
     "IMetacognitiveMonitor",
     "IReasoningEngine",
     "Memory",
+    "Thought",
     "ThoughtType",
     "BaseDomain",
     "DomainException",

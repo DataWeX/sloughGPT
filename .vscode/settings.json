@@ -34,16 +34,11 @@
   "search.exclude": {
     "**/node_modules": true,
     "**/.next": true,
-    "**/target": true,
-    "**/crates/**/target": true
+    "**/target": true
   },
   "vitest.configPath": "apps/web/vitest.config.ts",
   "vitest.rootPath": "apps/web",
   "vitest.nodeEnv": "test",
-  "rust-analyzer.linkedProjects": [
-    "crates/sloughgpt-ipc/Cargo.toml",
-    "crates/sloughgpt-trainer/Cargo.toml"
-  ],
   "terminal.integrated.env.osx": {
     "PYTHONPATH": "${workspaceFolder}/packages/core-py"
   }

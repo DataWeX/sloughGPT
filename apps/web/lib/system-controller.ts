@@ -73,6 +73,35 @@ export interface OutputResponse {
   seq: number
 }
 
+export interface ExecutorJob {
+  job_id: string
+  tree_id: string | null
+  status: string
+  submitted_at: number
+  started_at: number | null
+  completed_at: number | null
+  elapsed_s: number
+  error: string | null
+  cancel_requested: boolean
+  result_keys?: string[]
+  result_size_bytes?: number
+}
+
+export interface ExecutorStatus {
+  initialized: boolean
+  active_jobs: number
+  max_workers: number
+  total_tracked: number
+  jobs: ExecutorJob[]
+}
+
+export interface InferencePoolStatus {
+  initialized: boolean
+  max_workers?: number
+  queue_timeout?: number
+  error?: string
+}
+
 export const systemController = {
   async getMetrics(): Promise<SystemMetrics> {
     return apiGet<SystemMetrics>('/system/metrics', undefined, { silent: true })
@@ -114,5 +143,23 @@ export const systemController = {
         } catch {}
       }
     }
+  },
+
+  async getExecutorStatus(): Promise<ExecutorStatus> {
+    return apiGet<ExecutorStatus>('/system/executor', undefined, { silent: true })
+  },
+
+  async cancelExecutorJob(jobId: string): Promise<{ cancelled: boolean }> {
+    const { apiPost } = await import('./http-client')
+    return apiPost<{ cancelled: boolean }>(`/system/executor/${jobId}/cancel`)
+  },
+
+  async purgeExecutorJobs(maxAgeS: number = 3600): Promise<{ purged: number }> {
+    const { apiPost } = await import('./http-client')
+    return apiPost<{ purged: number }>(`/system/executor/purge?max_age_s=${maxAgeS}`)
+  },
+
+  async getInferencePoolStatus(): Promise<InferencePoolStatus> {
+    return apiGet<InferencePoolStatus>('/system/inference-pool', undefined, { silent: true })
   },
 }

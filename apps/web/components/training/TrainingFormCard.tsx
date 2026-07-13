@@ -3,7 +3,8 @@
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
-import { DatasetImportModal } from '@/components/DatasetImportModal'
+import { DatasetSelector } from '@/components/training/DatasetSelector'
+import { TrainingErrorBanner } from '@/components/training/TrainingStatus'
 import dynamic from 'next/dynamic'
 
 const LossChart = dynamic(() => import('@/components/training/LossChart').then(m => m.LossChart), { ssr: false })
@@ -12,21 +13,11 @@ import { Switch } from '@sloughgpt/strui'
 import { ToggleGroup, ToggleGroupItem } from '@sloughgpt/strui'
 import { modelController } from '@/lib/controllers'
 import { useToastStore } from '@/lib/toast-store'
-import { cn } from '@/lib/cn'
 import type { Dataset } from '@/lib/dataset-controller'
-import type { TrainingFormState, Method } from '@/hooks/useTrainingForm'
+import type { TrainingFormState } from '@/hooks/useTrainingForm'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 import type { UseTrainingSessionReturn } from '@/hooks/useTrainingSession'
 import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
-
-function datasetLabel(ds: Dataset): string {
-  const size = ds.size != null ? `${(ds.size / 1024).toFixed(1)} KB` : ''
-  if (ds.type === 'vlm' && ds.vlm_metadata) {
-    return `${ds.name} (VLM: ${ds.vlm_metadata.image_count} images, ${size})`
-  }
-  const suffix = ds.samples && ds.samples > 0 ? ` (${ds.samples.toLocaleString()} samples, ${size})` : ` (${size})`
-  return `${ds.name}${suffix}`
-}
 
 function EstimatedTime({ method, datasetId, datasets, epochs, batchSize, sampleCount }: {
   method: string; datasetId: string | null; datasets: Dataset[]; epochs: number; batchSize: number; sampleCount?: number
@@ -61,7 +52,7 @@ export function TrainingFormCard({
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Train another way</CardTitle>
+        <CardTitle className="text-base">Train</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
 
@@ -223,49 +214,33 @@ export function TrainingFormCard({
         )}
 
         {session.phase === 'error' && !session.trainingRunning && (
-          <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 space-y-2 mb-4">
-            <p className="text-sm font-medium text-destructive">Training failed</p>
-            {session.message && <p className="text-xs text-muted-foreground">{session.message}</p>}
-            <Button size="sm" variant="ghost" onClick={session.resetTraining}>Try again</Button>
-          </div>
+          <TrainingErrorBanner
+            error={session.message || 'Training failed'}
+            onRetry={session.resetTraining}
+            onDismiss={session.resetTraining}
+          />
         )}
 
         {!session.trainingRunning && !['complete', 'error'].includes(session.phase) && (
           <>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Select value={datasets.selectedDataset} onValueChange={datasets.setSelectedDataset}>
-                  <SelectTrigger className="h-8 text-xs font-mono flex-1 max-w-sm" aria-label="Dataset for fine-tuning">
-                    <SelectValue placeholder="Select a dataset..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {datasets.datasets.map(ds => (
-                      <SelectItem key={ds.id} value={ds.id}>{datasetLabel(ds)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button size="sm" variant="outline" onClick={() => datasets.setImportModalOpen(true)}>+ Import</Button>
-                <DatasetImportModal
-                  open={datasets.importModalOpen}
-                  onOpenChange={datasets.setImportModalOpen}
-                  onImportComplete={(datasetId: string) => {
-                    void datasets.fetchDatasets().then(() => datasets.setSelectedDataset(datasetId))
-                  }}
-                />
-              </div>
-              {datasets.datasetPreview && datasets.datasetPreview.samples.length > 0 && (
-                <div className="rounded-md border border-border/40 bg-muted/30 p-3 text-xs">
-                  <div className="font-medium text-muted-foreground mb-2">
-                    Preview ({datasets.datasetPreview.total_samples} samples total)
-                  </div>
-                  <div className="space-y-1 font-mono text-muted-foreground">
-                    {datasets.datasetPreview.samples.slice(0, 3).map((sample, i) => (
-                      <div key={i} className="truncate">{sample.content}</div>
-                    ))}
-                  </div>
+            <DatasetSelector
+              datasets={datasets}
+              value={datasets.selectedDataset}
+              onChange={datasets.setSelectedDataset}
+              showImport
+            />
+            {datasets.datasetPreview && datasets.datasetPreview.samples.length > 0 && (
+              <div className="rounded-md border border-border/40 bg-muted/30 p-3 text-xs">
+                <div className="font-medium text-muted-foreground mb-2">
+                  Preview ({datasets.datasetPreview.total_samples} samples total)
                 </div>
-              )}
-            </div>
+                <div className="space-y-1 font-mono text-muted-foreground">
+                  {datasets.datasetPreview.samples.slice(0, 3).map((sample, i) => (
+                    <div key={i} className="truncate">{sample.content}</div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-3">
               <Button size="sm" disabled={form.canStart} onClick={() => form.startTraining()}>
                 {form.method === 'unified' ? 'Start unified training' : form.method === 'distill' ? (form.inputMode === 'text' && form.textInput.trim() ? 'Train on pasted text' : 'Start') : 'Start'}

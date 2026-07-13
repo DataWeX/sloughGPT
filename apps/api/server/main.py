@@ -118,7 +118,23 @@ async def lifespan(app_inst: FastAPI):
         profile = os.environ.get("MAN_STARTUP_PROFILE", "full")
         orch = StartupOrchestrator(app_inst, cfg, profile=profile)
         await orch.run()
+
+        # Start auto-trainer if MAN_AUTO_TRAIN=1
+        try:
+            from domains.training.auto_trainer import start_auto_trainer_if_enabled
+            start_auto_trainer_if_enabled()
+        except Exception as e:
+            logger.warning("AutoTrainer startup failed (non-fatal): %s", e)
+
         yield
+
+        # Stop auto-trainer
+        try:
+            from domains.training.auto_trainer import stop_auto_trainer
+            stop_auto_trainer()
+        except Exception:
+            pass
+
         await orch.shutdown()
     except Exception as exc:
         logger.critical("Startup failed: %s", exc, exc_info=True)

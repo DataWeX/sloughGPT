@@ -115,3 +115,107 @@ async def tail_output(n: int = Query(100, ge=1, le=1000)):
     from domains.infrastructure.output_buffer import get_server_buffer
     buf = get_server_buffer()
     return success_response(data={"lines": buf.tail_dicts(n), "size": buf.count, "seq": buf.seq})
+
+
+# ── Training executor ─────────────────────────────────────────────────
+
+@router.get("/executor")
+async def get_executor_status():
+    """Get TrainingExecutor pool status and job list.
+
+    Returns active/max worker counts, total tracked jobs, and metadata
+    for every job (newest first).  Job metadata includes status, timing,
+    tree_id, and error if failed.
+    """
+    from domains.training.executor import _instance
+    if _instance is None:
+        return success_response(data={
+            "initialized": False,
+            "active_jobs": 0,
+            "max_workers": 0,
+            "total_tracked": 0,
+            "jobs": [],
+        })
+    return success_response(data={
+        "initialized": True,
+        "active_jobs": _instance.active_count(),
+        "max_workers": _instance._max_workers,
+        "total_tracked": len(_instance._jobs),
+        "jobs": _instance.list_jobs(),
+    })
+
+
+@router.get("/executor/{job_id}")
+async def get_executor_job(job_id: str):
+    """Get metadata for a single training job by ID."""
+    from domains.training.executor import _instance
+    if _instance is None:
+        return success_response(data={"error": "executor not initialized"})
+    status = _instance.status(job_id)
+    if status is None:
+        return success_response(data={"error": f"job {job_id} not found"})
+    return success_response(data=status)
+
+
+@router.get("/executor/{job_id}/result")
+async def get_executor_job_result(job_id: str):
+    """Get shape/dtype summary for a completed job's trained weights.
+
+    Returns weight names, shapes, dtypes, and byte sizes.
+    Actual arrays are not returned (too large for HTTP).
+    """
+    from domains.training.executor import _instance
+    if _instance is None:
+        return success_response(data={"error": "executor not initialized"})
+    summary = _instance.result_summary(job_id)
+    if summary is None:
+        info = _instance.status(job_id)
+        if info is None:
+            return success_response(data={"error": f"job {job_id} not found"})
+        return success_response(data={"error": "job not completed or has no weight result"})
+    return success_response(data=summary)
+
+
+@router.post("/executor/purge")
+async def purge_executor_jobs(max_age_s: float = Query(3600.0, gt=0)):
+    """Remove completed/failed/cancelled jobs older than max_age_s."""
+    from domains.training.executor import _instance
+    if _instance is None:
+        return success_response(data={"purged": 0})
+    purged = _instance.purge_completed(max_age_s=max_age_s)
+    return success_response(data={"purged": purged})
+
+
+@router.post("/executor/{job_id}/cancel")
+async def cancel_executor_job(job_id: str):
+    """Request cancellation for a training job.
+
+    For queued jobs the future is cancelled outright.  For running jobs
+    a flag is set; the training function must check
+    ``executor.is_cancelled(job_id)`` periodically.
+    """
+    from domains.training.executor import _instance
+    if _instance is None:
+        return success_response(data={"cancelled": False, "reason": "executor not initialized"})
+    cancelled = _instance.cancel(job_id)
+    return success_response(data={"cancelled": cancelled})
+
+
+# ── Inference pool ────────────────────────────────────────────────────
+
+@router.get("/inference-pool")
+async def get_inference_pool_status():
+    """Get InferencePool status."""
+    from infrastructure.inference_pool import InferencePool
+    try:
+        pool = await InferencePool.get_instance()
+        return success_response(data={
+            "initialized": True,
+            "max_workers": pool._max_workers,
+            "queue_timeout": pool._queue_timeout,
+        })
+    except Exception as exc:
+        return success_response(data={
+            "initialized": False,
+            "error": str(exc),
+        })

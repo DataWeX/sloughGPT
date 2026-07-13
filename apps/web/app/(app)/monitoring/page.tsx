@@ -6,7 +6,7 @@ import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
-import { systemController, type DetailedHealth, type SystemMetrics, type SystemInfo, type DiskUsage, type GPUInfo } from '@/lib/system-controller'
+import { systemController, type DetailedHealth, type SystemMetrics, type SystemInfo, type DiskUsage, type GPUInfo, type ExecutorStatus } from '@/lib/system-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { benchmarkController } from '@/lib/benchmark-controller'
 import { multimodalController } from '@/lib/controllers'
@@ -42,6 +42,7 @@ export default function SystemHealthPage() {
   const [dpoStatus, setDpoStatus] = useState<{ status: string; last_run: string | null; accepted_count: number; rejected_count: number; result: any } | null>(null)
   const [dpoRunning, setDpoRunning] = useState(false)
   const [visualStatus, setVisualStatus] = useState<{ visual_loaded: boolean; training: { status: string } } | null>(null)
+  const [executorStatus, setExecutorStatus] = useState<ExecutorStatus | null>(null)
   const MAX_HISTORY = 30
   const recentErrors = useErrorStore(s => s.errors)
   const dismissError = useErrorStore(s => s.dismissError)
@@ -51,7 +52,7 @@ export default function SystemHealthPage() {
     if (showRefreshing) setRefreshing(true)
     setError(null)
     try {
-      const [d, m, i, di, ks, as, bq, bs, dsRes, vs] = await Promise.all([
+      const [d, m, i, di, ks, as, bq, bs, dsRes, vs, ex] = await Promise.all([
         systemController.getDetailedHealth().catch(() => null),
         systemController.getMetrics().catch(() => null),
         systemController.getInfo().catch(() => null),
@@ -62,6 +63,7 @@ export default function SystemHealthPage() {
         benchmarkController.stats().catch(() => null),
         multimodalController.getDPOStatus().catch(() => null),
         multimodalController.getStatus().catch(() => null),
+        systemController.getExecutorStatus().catch(() => null),
       ])
       setDetailed(d)
       setMetrics(m)
@@ -77,6 +79,7 @@ export default function SystemHealthPage() {
       setBenchStats(bs as any)
       setDpoStatus(dsRes as typeof dpoStatus)
       setVisualStatus(null)
+      setExecutorStatus(ex)
       setLastUpdated(new Date().toLocaleTimeString())
       if (m) {
         setChartHistory(prev => {
@@ -233,6 +236,88 @@ export default function SystemHealthPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Training Executor Pool */}
+        {executorStatus && executorStatus.initialized && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center justify-between">
+                <span>Training Pool</span>
+                <div className="flex gap-2">
+                  {executorStatus.total_tracked > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-[11px] h-6"
+                      onClick={async () => {
+                        await systemController.purgeExecutorJobs(3600)
+                        fetchAll()
+                      }}
+                    >
+                      Purge old
+                    </Button>
+                  )}
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <KpiGrid columns={4}>
+                <StatCard
+                  label="Active jobs"
+                  value={executorStatus.active_jobs.toString()}
+                  icon={
+                    <span className={`inline-block w-2 h-2 rounded-full ${executorStatus.active_jobs > 0 ? 'bg-warning' : 'bg-success'}`} />
+                  }
+                />
+                <StatCard label="Max workers" value={executorStatus.max_workers.toString()} />
+                <StatCard label="Total tracked" value={executorStatus.total_tracked.toString()} />
+                <StatCard
+                  label="Queue"
+                  value={executorStatus.jobs.filter(j => j.status === 'queued').length.toString()}
+                />
+              </KpiGrid>
+              {executorStatus.jobs.length > 0 && (
+                <div className="mt-3 text-xs text-muted-foreground space-y-1">
+                  {executorStatus.jobs.slice(0, 5).map(j => {
+                    const displayStatus = j.cancel_requested && j.status === 'running' ? 'cancelling' : j.status
+                    return (
+                    <div key={j.job_id} className="flex items-center gap-2">
+                      <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                        displayStatus === 'running' ? 'bg-warning' :
+                        displayStatus === 'cancelling' ? 'bg-warning animate-pulse' :
+                        displayStatus === 'completed' ? 'bg-success' :
+                        displayStatus === 'failed' ? 'bg-destructive' :
+                        displayStatus === 'cancelled' ? 'bg-muted-foreground/50' :
+                        'bg-muted-foreground/30'
+                      }`} />
+                      <span className="font-mono">{j.job_id}</span>
+                      <span className="text-muted-foreground/60">{displayStatus}</span>
+                      {j.elapsed_s != null && <span>{j.elapsed_s.toFixed(1)}s</span>}
+                      {j.tree_id && <span className="text-muted-foreground/40">tree:{j.tree_id}</span>}
+                      {(j.status === 'running' || j.status === 'queued') && !j.cancel_requested && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-[10px] h-5 text-destructive hover:text-destructive ml-auto"
+                          onClick={async () => {
+                            await systemController.cancelExecutorJob(j.job_id)
+                            fetchAll()
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
+                    )
+                  })}
+                  {executorStatus.jobs.length > 5 && (
+                    <div className="text-muted-foreground/40">+{executorStatus.jobs.length - 5} more</div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Model Quality */}
         {benchQuality && benchQuality.status === 'ok' && (

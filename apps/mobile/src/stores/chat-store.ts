@@ -15,6 +15,7 @@ import {
 import {triggerHaptic} from '../services/haptics';
 import {sounds} from '../services/sounds';
 import {toast} from '../services/toast';
+import {collectPair} from '../services/training-collector';
 import type {Message, Session} from '../types';
 
 interface ChatState {
@@ -240,6 +241,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           await removePendingSend(userMsg.id);
           await triggerHaptic('success');
           sounds.receive();
+          collectPair(content, result.text, sessionId);
           set({streaming: false});
           await get().refreshSessions();
           return;
@@ -353,6 +355,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         await removePendingSend(userMsg.id);
         await triggerHaptic('success');
         sounds.receive();
+        collectPair(content, accumulated, sessionId);
       }
 
       api
