@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 5bf3ed8 perf: SloNet kernel integration + generate optimization + gradient fixes
+No active task. Last commit: 8937440 refactor: simplify training UX — extract shared components, reduce page complexity
 
 ## Session 2026-07-13 — On-Device Training Pipeline + Storage Integration
 
