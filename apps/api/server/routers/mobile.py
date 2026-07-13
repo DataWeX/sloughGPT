@@ -1378,3 +1378,31 @@ async def get_auto_train_status():
 
     trainer = get_auto_trainer()
     return trainer.status()
+
+
+@router.patch("/train/auto-config")
+async def update_auto_train_config(
+    threshold: Optional[int] = Query(None, ge=1, le=100),
+    interval_s: Optional[int] = Query(None, ge=30, le=3600),
+):
+    """
+    Update auto-trainer configuration at runtime.
+
+    Args:
+        threshold: New conversation threshold (1-100).
+        interval_s: New minimum interval between trains in seconds (30-3600).
+
+    Returns:
+        Updated auto-trainer status.
+
+    Side effects:
+        - Modifies AutoTrainer singleton attributes.
+    """
+    from domains.training.auto_trainer import get_auto_trainer
+
+    trainer = get_auto_trainer()
+    if threshold is not None:
+        trainer.threshold = threshold
+    if interval_s is not None:
+        trainer.interval_s = interval_s
+    return trainer.status()

@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 844839a feat: eval report UI + training e2e smoke test
+No active task. Last commit: cbef49f feat: batch select + bulk delete in TrainingDataCard
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

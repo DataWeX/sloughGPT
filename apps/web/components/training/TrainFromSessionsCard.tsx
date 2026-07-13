@@ -16,6 +16,10 @@ export function TrainFromSessionsCard() {
   const [training, setTraining] = useState(false)
   const [showSessions, setShowSessions] = useState(false)
   const [selectedSessions, setSelectedSessions] = useState<Set<string>>(new Set())
+  const [showConfig, setShowConfig] = useState(false)
+  const [configThreshold, setConfigThreshold] = useState<string>('')
+  const [configInterval, setConfigInterval] = useState<string>('')
+  const [savingConfig, setSavingConfig] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const fetchStatus = useCallback(async () => {
@@ -76,6 +80,25 @@ export function TrainFromSessionsCard() {
     }
   }, [addToast, fetchStatus, selectedSessions])
 
+  const handleSaveConfig = useCallback(async () => {
+    setSavingConfig(true)
+    try {
+      const params: { threshold?: number; interval_s?: number } = {}
+      if (configThreshold) params.threshold = parseInt(configThreshold, 10)
+      if (configInterval) params.interval_s = parseInt(configInterval, 10)
+      if (Object.keys(params).length === 0) return
+      await trainingController.updateAutoTrainConfig(params)
+      addToast('Config updated', 'success')
+      setConfigThreshold('')
+      setConfigInterval('')
+      void fetchStatus()
+    } catch {
+      addToast('Failed to update config', 'error')
+    } finally {
+      setSavingConfig(false)
+    }
+  }, [addToast, configThreshold, configInterval, fetchStatus])
+
   if (loading) {
     return (
       <Card>
@@ -119,6 +142,50 @@ export function TrainFromSessionsCard() {
           <span>{status.session_count} conversations</span>
           <span>{status.response_log_count} log files</span>
         </div>
+
+        {/* Config section */}
+        <button
+          className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+          onClick={() => setShowConfig(!showConfig)}
+        >
+          {showConfig ? 'Hide' : 'Configure'} auto-train
+        </button>
+        {showConfig && (
+          <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border/40 p-2">
+            <label className="text-[11px] text-muted-foreground/70">
+              Threshold
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={configThreshold || status.threshold}
+                onChange={e => setConfigThreshold(e.target.value)}
+                className="ml-1 h-6 w-14 rounded border border-border/60 bg-background px-1.5 text-[11px] text-foreground"
+              />
+            </label>
+            <label className="text-[11px] text-muted-foreground/70">
+              Interval (s)
+              <input
+                type="number"
+                min={30}
+                max={3600}
+                step={30}
+                value={configInterval || status.interval_s}
+                onChange={e => setConfigInterval(e.target.value)}
+                className="ml-1 h-6 w-16 rounded border border-border/60 bg-background px-1.5 text-[11px] text-foreground"
+              />
+            </label>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-[11px]"
+              disabled={savingConfig || (!configThreshold && !configInterval)}
+              onClick={() => void handleSaveConfig()}
+            >
+              {savingConfig ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+        )}
 
         {/* Auto-train progress */}
         {status.enabled && (
