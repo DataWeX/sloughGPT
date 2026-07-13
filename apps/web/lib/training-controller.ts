@@ -378,6 +378,20 @@ export const trainingJobsController = {
     return data
   },
 
+  async getEvalHistory(limit: number = 20): Promise<{ results: EvalHistoryEntry[] }> {
+    return apiGet('/lora-eval/history', { limit: String(limit) })
+  },
+
+  async runEval(adapterPath: string = 'data/user_adapters/best_aggregated.npz', soul: string = 'assistant'): Promise<{
+    status: string
+    baseline?: EvalResult
+    with_adapter?: EvalResult
+    delta?: { perplexity_delta: number; bleu_delta: number; throughput_delta: number; verdict: string }
+    report?: string
+  }> {
+    return apiGet('/lora-eval/run', { adapter_path: adapterPath, soul })
+  },
+
   async listTrainingPairs(params?: {
     limit?: number
     offset?: number
@@ -409,6 +423,11 @@ export const trainingJobsController = {
 
   async deleteSyncedPairs(): Promise<{ status: string; count: number }> {
     return apiDelete<{ status: string; count: number }>('/mobile/train/synced')
+  },
+
+  async deletePairsBulk(ids: string[]): Promise<{ status: string; count: number }> {
+    const params = ids.map(id => `ids=${encodeURIComponent(id)}`).join('&')
+    return apiDelete<{ status: string; count: number }>(`/mobile/train/pairs/bulk?${params}`)
   },
 
   async listChatSessions(): Promise<ChatSession[]> {
@@ -551,6 +570,30 @@ export interface ChatSession {
   updated_at: string
   archived?: boolean
   messages?: Array<{ role: string; content: string }>
+}
+
+export interface EvalResult {
+  timestamp: string
+  perplexity: number
+  bleu: number
+  avg_response_len: number
+  inference_time_sec: number
+  tokens_per_sec: number
+  personality_score: number
+  adapter_path?: string | null
+}
+
+export interface EvalHistoryEntry {
+  timestamp: string
+  baseline: EvalResult
+  with_adapter?: EvalResult
+  delta?: {
+    perplexity_delta: number
+    bleu_delta: number
+    throughput_delta: number
+    verdict: string
+  }
+  report?: string
 }
 
 export const trainingController = trainingJobsController

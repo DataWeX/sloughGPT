@@ -23,6 +23,7 @@ import { CheckpointsCard } from '@/components/training/CheckpointsCard'
 import { TrainingFormCard } from '@/components/training/TrainingFormCard'
 import { TrainFromSessionsCard } from '@/components/training/TrainFromSessionsCard'
 import { TrainingDataCard } from '@/components/training/TrainingDataCard'
+import { EvalReportCard } from '@/components/training/EvalReportCard'
 
 export default function TrainingPage() {
   const searchParams = useSearchParams()
@@ -165,6 +166,8 @@ export default function TrainingPage() {
         {activeTab === 'history' && (
           <div className="space-y-4">
             <CheckpointsCard checkpoints={checkpoints} loadingTimedOut={loadingTimedOut} onRetry={() => { setLoadingTimedOut(false); void checkpoints.fetchCheckpoints() }} onContinue={form.startTraining} onTest={() => test.setTestDialogOpen(true)} />
+
+            <EvalReportCard />
 
             <JobHistoryCard allJobs={form.allJobs} checkpoints={checkpoints} loadingTimedOut={loadingTimedOut} onRetry={() => { setLoadingTimedOut(false); void checkpoints.fetchJobs() }} />
           </div>
