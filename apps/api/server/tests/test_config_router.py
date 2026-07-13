@@ -14,6 +14,12 @@ app.include_router(config_router)
 client = TestClient(app)
 
 
+def _data(resp):
+    """Unwrap the success_response() envelope."""
+    body = resp.json()
+    return body.get("data", body)
+
+
 SAMPLE_CONFIG = {
     "temperature": 0.7,
     "max_tokens": 256,
@@ -37,13 +43,13 @@ class TestGetConfig:
     def test_get_generation_config(self, mock_ctrl):
         resp = client.get("/config/generation")
         assert resp.status_code == 200
-        data = resp.json()
+        data = _data(resp)
         assert data["temperature"] == 0.7
         assert data["max_tokens"] == 256
 
     def test_get_all_fields(self, mock_ctrl):
         resp = client.get("/config/generation")
-        data = resp.json()
+        data = _data(resp)
         assert "temperature" in data
         assert "max_tokens" in data
         assert "top_p" in data

@@ -182,18 +182,17 @@ class TestSoulManagerAPI:
         client = get_test_client()
         resp = client.get("/souls")
         assert resp.status_code == 200
-        data = resp.json()
-        assert "souls" in data
-        assert isinstance(data["souls"], list)
-        # current_soul can be None or a string
-        assert "current_soul" in data
+        body = resp.json()
+        data = body.get("data", body)
+        assert isinstance(data, list)
 
     def test_souls_endpoint_soul_has_personality(self):
         from test_support import get_test_client
         client = get_test_client()
         resp = client.get("/souls")
-        data = resp.json()
-        for soul in data["souls"]:
+        body = resp.json()
+        data = body.get("data", body)
+        for soul in data:
             assert "name" in soul
             assert "personality" in soul, f"Slo {soul.get('name')} missing personality"
             assert isinstance(soul["personality"], dict)
@@ -202,7 +201,8 @@ class TestSoulManagerAPI:
         from test_support import get_test_client
         client = get_test_client()
         resp = client.get("/souls")
-        data = resp.json()
-        for soul in data["souls"]:
+        body = resp.json()
+        data = body.get("data", body)
+        for soul in data:
             assert "traits" in soul
             assert isinstance(soul["traits"], list)
