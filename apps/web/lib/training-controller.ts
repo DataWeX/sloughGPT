@@ -349,6 +349,7 @@ export const trainingJobsController = {
     limit?: number
     min_length?: number
     model?: string
+    session_ids?: string[]
   }): Promise<{
     success: boolean
     checkpoint_name: string
@@ -362,6 +363,41 @@ export const trainingJobsController = {
 
   async getAutoTrainStatus(): Promise<AutoTrainStatus> {
     return apiGet<AutoTrainStatus>('/mobile/train/auto-status')
+  },
+
+  // ---------------------------------------------------------------------------
+  // Training data management (MogDB pairs)
+  // ---------------------------------------------------------------------------
+
+  async getTrainingStats(): Promise<TrainingDataStats> {
+    return apiGet<TrainingDataStats>('/mobile/train/stats')
+  },
+
+  async getPendingPairs(limit = 50): Promise<{ pairs: TrainingPair[]; count: number }> {
+    const data = await apiGet<{ pairs: TrainingPair[]; count: number }>('/mobile/train/pending', { limit: String(limit) })
+    return data
+  },
+
+  async getSessionPairs(sessionId: string): Promise<{ pairs: TrainingPair[]; count: number }> {
+    const data = await apiGet<{ pairs: TrainingPair[]; count: number }>(`/mobile/train/session/${encodeURIComponent(sessionId)}`)
+    return data
+  },
+
+  async deletePair(pairId: string): Promise<{ status: string }> {
+    return apiDelete<{ status: string }>(`/mobile/train/pair/${encodeURIComponent(pairId)}`)
+  },
+
+  async updatePairQuality(pairId: string, quality: number): Promise<{ status: string }> {
+    return apiPost<{ status: string }>(`/mobile/train/pair/${encodeURIComponent(pairId)}`, { quality })
+  },
+
+  async deleteSyncedPairs(): Promise<{ status: string; count: number }> {
+    return apiDelete<{ status: string; count: number }>('/mobile/train/synced')
+  },
+
+  async listChatSessions(): Promise<ChatSession[]> {
+    const data = await apiGet<{ data: ChatSession[] } | ChatSession[]>('/chat/sessions')
+    return Array.isArray(data) ? data : (data as any).data || []
   },
 
   // ---------------------------------------------------------------------------
@@ -453,11 +489,33 @@ export interface AutoTrainStatus {
   last_train: string | null
   last_loss: number | null
   last_checkpoint: string | null
-  session_dirs?: string[]
-  response_log_dirs?: string[]
-  min_pairs_per_file?: number
-  max_length?: number
-  model?: string
+  session_count: number
+  response_log_count: number
+}
+
+export interface TrainingDataStats {
+  total: number
+  pending: number
+  synced: number
+  used: number
+  by_quality: Record<string, number>
+}
+
+export interface TrainingPair {
+  id: string
+  user_msg: string
+  assistant_msg: string
+  quality: number
+  session_id: string
+  timestamp: number
+}
+
+export interface ChatSession {
+  id: string
+  name: string
+  updated_at: string
+  archived?: boolean
+  messages?: Array<{ role: string; content: string }>
 }
 
 export const trainingController = trainingJobsController

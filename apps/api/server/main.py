@@ -163,6 +163,18 @@ app.add_middleware(
 from infrastructure.middleware import register_all_middleware  # noqa: E402
 register_all_middleware(app, request_timeout=cfg.request_timeout_seconds)
 
+# Register health/status routes IMMEDIATELY — before lifespan runs.
+# During the 25-40s model loading phase, the frontend must still get
+# real responses from /health, /health/startup-progress, /health/summary
+# instead of connection errors.  These lightweight routers have zero
+# heavy imports (no torch, no transformers).
+from routers.health import router as _health_router
+from routers.status import router as _status_router
+app.include_router(_health_router)
+app.include_router(_status_router)
+# Health/status routes are now registered pre-lifespan.
+# _phase6_routers() skips them by checking existing route prefixes.
+
 # Feature routers are registered by StartupOrchestrator._phase6_routers()
 # during the lifespan context.  Tests that need routes without lifespan
 # should import and register only the specific router they test.

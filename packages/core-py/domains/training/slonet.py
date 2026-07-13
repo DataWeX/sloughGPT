@@ -1163,6 +1163,10 @@ def _sample_from_logits(logits: np.ndarray, temperature: float = 1.0,
     if top_p is not None and top_p < 1.0:
         logits = _apply_top_p(logits, top_p)
 
+    # Fast path: greedy (temp≈0, no penalties, no top_p) → argmax
+    if temperature < 1e-6 and top_p is None:
+        return int(np.argmax(logits[0]))
+
     probs = np.exp(logits - logits.max(axis=-1, keepdims=True))
     probs = probs / (probs.sum(axis=-1, keepdims=True) + 1e-10)
     probs = np.where(np.isfinite(probs), probs, np.zeros_like(probs))

@@ -22,6 +22,7 @@ import { JobHistoryCard } from '@/components/training/JobHistoryCard'
 import { CheckpointsCard } from '@/components/training/CheckpointsCard'
 import { TrainingFormCard } from '@/components/training/TrainingFormCard'
 import { TrainFromSessionsCard } from '@/components/training/TrainFromSessionsCard'
+import { TrainingDataCard } from '@/components/training/TrainingDataCard'
 
 export default function TrainingPage() {
   const searchParams = useSearchParams()
@@ -141,6 +142,8 @@ export default function TrainingPage() {
             />
 
             <TrainFromSessionsCard />
+
+            <TrainingDataCard />
 
             {!session.trainingRunning && !checkpoints.loadingCheckpoints && checkpoints.checkpoints.length === 0 && form.allJobs.length === 0 && (
               <Card className="border-dashed py-8">

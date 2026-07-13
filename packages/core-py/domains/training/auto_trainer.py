@@ -227,6 +227,8 @@ class AutoTrainer:
 
     def status(self) -> Dict[str, Any]:
         """Return current auto-trainer status."""
+        session_count = len(list(_SESSIONS_DIR.glob("*.json"))) if _SESSIONS_DIR.exists() else 0
+        log_count = len(list(_RESPONSE_LOGS_DIR.glob("*.jsonl"))) if _RESPONSE_LOGS_DIR.exists() else 0
         return {
             "enabled": self._thread is not None and self._thread.is_alive(),
             "threshold": self.threshold,
@@ -240,6 +242,8 @@ class AutoTrainer:
             ),
             "last_loss": self._last_train_loss,
             "last_checkpoint": self._last_train_checkpoint,
+            "session_count": session_count,
+            "response_log_count": log_count,
         }
 
 

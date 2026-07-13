@@ -3,10 +3,12 @@ import { useEffect, useRef } from 'react'
 import { useApiMonitor } from '@/lib/api-monitor-store'
 import { apiGet } from '@/lib/http-client'
 
-const POLL_INTERVAL = 8000
+const BASE_POLL_MS = 8000
 const REQUEST_TIMEOUT = 10000
-const MAX_FAILURES = 3
-const RELOAD_DELAY_MS = 1500
+const MAX_FAILURES_BEFORE_RELOAD = 6
+const RELOAD_DELAY_MS = 2000
+const MIN_BACKOFF_MS = 2000
+const MAX_BACKOFF_MS = 30000
 
 interface HealthSummary {
   score: number
@@ -21,10 +23,19 @@ export function useBackendWatcher() {
   const wasOffline = useRef(false)
   const lastScoreStatus = useRef<string | null>(null)
   const failureCount = useRef(0)
+  const consecutiveRateLimits = useRef(0)
 
   useEffect(() => {
     let cancelled = false
     let timer: ReturnType<typeof setTimeout>
+
+    const getPollInterval = () => {
+      // Exponential backoff when failing, capped at MAX_BACKOFF_MS
+      const backoff = failureCount.current > 0
+        ? Math.min(MAX_BACKOFF_MS, MIN_BACKOFF_MS * Math.pow(2, failureCount.current - 1))
+        : 0
+      return BASE_POLL_MS + backoff
+    }
 
     const check = async () => {
       if (cancelled) return
@@ -35,7 +46,10 @@ export function useBackendWatcher() {
           silent: true,
         })
         if (cancelled) return
+
+        // Server responded — reset all failure tracking
         failureCount.current = 0
+        consecutiveRateLimits.current = 0
         setHealthSummary(data as any)
 
         if (wasOffline.current) {
@@ -60,13 +74,31 @@ export function useBackendWatcher() {
           }
           lastScoreStatus.current = data.status
         }
-      } catch {
+      } catch (err: any) {
         if (cancelled) return
-        failureCount.current += 1
-        wasOffline.current = true
-        if (failureCount.current >= MAX_FAILURES) {
-          setStatus('reloading')
-          // Auto-reload after a brief delay to recover from server restart
+
+        // Check if this is a rate limit (429) vs actual server down
+        const isRateLimit = err?.status === 429
+        const isConnectionDown = err?.status === 0 || err?.message === 'Connection unavailable'
+
+        if (isRateLimit) {
+          // Rate limited: back off but don't count as server failure
+          consecutiveRateLimits.current++
+          failureCount.current = Math.max(0, failureCount.current - 1) // decay toward 0
+          setStatus('connected') // server IS responding, just throttled
+        } else if (isConnectionDown) {
+          failureCount.current += 1
+          wasOffline.current = true
+          setStatus(failureCount.current >= MAX_FAILURES_BEFORE_RELOAD ? 'reloading' : 'connecting')
+        } else {
+          // 4xx/5xx — server is up but returning errors
+          failureCount.current += 1
+          wasOffline.current = true
+          setStatus(failureCount.current >= MAX_FAILURES_BEFORE_RELOAD ? 'reloading' : 'connecting')
+        }
+
+        // Only reload after sustained failures — never on rate limit
+        if (failureCount.current >= MAX_FAILURES_BEFORE_RELOAD && !isRateLimit) {
           setTimeout(() => {
             if (!cancelled) window.location.reload()
           }, RELOAD_DELAY_MS)
@@ -74,7 +106,9 @@ export function useBackendWatcher() {
         }
       }
 
-      if (!cancelled) timer = setTimeout(check, POLL_INTERVAL)
+      if (!cancelled) {
+        timer = setTimeout(check, getPollInterval())
+      }
     }
 
     check()

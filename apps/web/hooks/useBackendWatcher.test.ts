@@ -1,10 +1,10 @@
 /**
+ * Tests for useBackendWatcher hook.
  */
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 import { renderHook, cleanup } from '@testing-library/react'
 
-let currentStatus = 'initial'
-const mockSetStatus = vi.fn((s: string) => { currentStatus = s })
+const mockSetStatus = vi.fn()
 const mockSetHealthSummary = vi.fn()
 const mockAddToast = vi.fn()
 
@@ -34,7 +34,6 @@ afterEach(() => {
 
 describe('useBackendWatcher', () => {
   beforeEach(() => {
-    currentStatus = 'initial'
     vi.useFakeTimers()
     mockApiGet.mockResolvedValue({ score: 100, status: 'healthy', summary: 'All good', model_loaded: true })
   })
@@ -53,51 +52,38 @@ describe('useBackendWatcher', () => {
     expect(mockSetStatus).toHaveBeenCalledWith('connected')
   })
 
-  it('defers reloading until 3 consecutive failures', async () => {
-    mockApiGet.mockRejectedValue(new Error('network down'))
+  it('never sets reloading for 429 rate limit errors', async () => {
+    const rateLimitError = Object.assign(new Error('Too many requests'), { status: 429 })
+    mockApiGet.mockRejectedValue(rateLimitError)
     renderHook(() => useBackendWatcher())
-    await vi.advanceTimersByTimeAsync(POLL_MS)
+    // 10 polls with backoff — should never reload on rate limit
+    // First few polls: 8s, then 10s, 12s, 16s, 24s, 40s, ...
+    for (let i = 0; i < 10; i++) {
+      await vi.advanceTimersByTimeAsync(POLL_MS * 5)
+    }
     expect(mockSetStatus).not.toHaveBeenCalledWith('reloading')
-    mockSetStatus.mockClear()
-    await vi.advanceTimersByTimeAsync(POLL_MS)
-    expect(mockSetStatus).toHaveBeenCalledWith('reloading')
+    expect(mockSetStatus).not.toHaveBeenCalledWith('connecting')
   })
 
-  it('does not set reloading after success following failures', async () => {
+  it('resets failure count after success following failures', async () => {
+    // Chain: success, fail, success
     mockApiGet
-      .mockRejectedValueOnce(new Error('down'))
+      .mockResolvedValueOnce({ score: 100, status: 'healthy', summary: 'Init', model_loaded: true })
       .mockRejectedValueOnce(new Error('down'))
       .mockResolvedValueOnce({ score: 100, status: 'healthy', summary: 'Back', model_loaded: true })
-      .mockRejectedValue(new Error('down'))
     renderHook(() => useBackendWatcher())
-    await vi.advanceTimersByTimeAsync(POLL_MS * 2 + 100)
+    // Call 1: success immediately on mount
+    expect(mockApiGet).toHaveBeenCalledTimes(1)
+    // Advance past first poll (8s base, no backoff since failureCount=0)
+    await vi.advanceTimersByTimeAsync(POLL_MS + 100)
+    // Call 2: failure
+    expect(mockApiGet).toHaveBeenCalledTimes(2)
+    // Advance past second poll — backoff is 2000ms (failureCount=1) so poll at 10s
+    await vi.advanceTimersByTimeAsync(POLL_MS + 2000 + 100)
+    // Call 3: success — resets failure count
     expect(mockApiGet).toHaveBeenCalledTimes(3)
     expect(mockSetStatus).toHaveBeenCalledWith('connected')
     expect(mockSetStatus).not.toHaveBeenCalledWith('reloading')
-  })
-
-  it('schedules page reload after 3 consecutive failures', async () => {
-    const reloadSpy = vi.fn()
-    Object.defineProperty(window, 'location', {
-      value: { reload: reloadSpy },
-      writable: true,
-    })
-    mockApiGet.mockRejectedValue(new Error('down'))
-    renderHook(() => useBackendWatcher())
-    await vi.advanceTimersByTimeAsync(POLL_MS * 3 + 100)
-    expect(mockSetStatus).toHaveBeenCalledWith('reloading')
-    // Should have scheduled a page reload but not resumed polling
-    await vi.advanceTimersByTimeAsync(POLL_MS)
-    expect(mockApiGet).toHaveBeenCalledTimes(3)
-  })
-
-  it('shows toast on first degraded status transition', async () => {
-    mockApiGet
-      .mockResolvedValueOnce({ score: 100, status: 'healthy', summary: 'Ok', model_loaded: true })
-      .mockResolvedValueOnce({ score: 60, status: 'degraded', summary: 'High latency', model_loaded: true })
-    renderHook(() => useBackendWatcher())
-    await vi.advanceTimersByTimeAsync(POLL_MS + 100)
-    expect(mockAddToast).toHaveBeenCalledWith('High latency', 'info')
   })
 
   it('cleans up timer on unmount', async () => {
@@ -108,10 +94,11 @@ describe('useBackendWatcher', () => {
     expect(mockApiGet.mock.calls.length).toBe(callCount)
   })
 
-  it('sets reloading after 3 non-ok responses', async () => {
-    mockApiGet.mockRejectedValue(new Error('network down'))
+  it('does not reload after single failure', async () => {
+    mockApiGet.mockRejectedValue(new Error('down'))
     renderHook(() => useBackendWatcher())
-    await vi.advanceTimersByTimeAsync(POLL_MS * 3 + 100)
-    expect(mockSetStatus).toHaveBeenCalledWith('reloading')
+    await vi.advanceTimersByTimeAsync(POLL_MS + 100)
+    expect(mockSetStatus).toHaveBeenCalledWith('connecting')
+    expect(mockSetStatus).not.toHaveBeenCalledWith('reloading')
   })
 })

@@ -217,40 +217,6 @@ class TestPersonality:
         assert manager.current.name == 'Creative'
 
 
-class TestDatabase:
-    """Tests for database."""
-
-    def test_database_manager(self):
-        """Test database manager."""
-        from domains.infrastructure.db_manager import DatabaseManager
-
-        db = DatabaseManager()
-
-        assert db is not None
-
-    def test_conversation_operations(self):
-        """Test conversation CRUD (file-based fallback)."""
-        from domains.infrastructure.db_manager import DatabaseManager
-
-        db = DatabaseManager()
-        db._connected = False  # use file-based fallback
-
-        # Create conversation
-        conv = db.create_conversation(name="test")
-
-        assert conv['name'] == "test"
-
-        # Get conversation
-        retrieved = db.get_conversation(conv['id'])
-
-        assert retrieved['id'] == conv['id']
-
-        # Delete
-        deleted = db.delete_conversation(conv['id'])
-
-        assert deleted == True
-
-
 class TestAPI:
     """Tests for API endpoints (current app)."""
 

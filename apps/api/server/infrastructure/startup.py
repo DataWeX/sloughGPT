@@ -336,12 +336,29 @@ class StartupOrchestrator:
             logger.warning("Phase: model registry failed: %s", e)
 
     async def _phase6_routers(self):
-        """Register all feature routers."""
+        """Register all feature routers.
+
+        Skips any routers already registered before lifespan (e.g.
+        health/status which are needed during model load).
+        """
         STARTUP_PHASE.update(phase="registering_routers", step=8, total=9, message="Registering routes...")
         try:
             from routers import get_all_routers
+            # Collect prefixes already registered (health/status are
+            # registered pre-lifespan in main.py).
+            existing = set()
+            for route in self._app.routes:
+                if hasattr(route, "path") and hasattr(route, "methods"):
+                    existing.add(route.path)
             for r in get_all_routers():
+                # Skip if this router's prefix already has routes
+                prefix = getattr(r, "prefix", "")
+                if prefix and any(p.startswith(prefix) for p in existing):
+                    logger.debug("Skipping already-registered router: %s", prefix)
+                    continue
                 self._app.include_router(r)
+                if prefix:
+                    existing.add(prefix)
             try:
                 from training.router import router as training_router
                 self._app.include_router(training_router)

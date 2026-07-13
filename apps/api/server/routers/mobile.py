@@ -1113,6 +1113,7 @@ class FromSessionsRequest(BaseModel):
     limit: int = Field(default=50, ge=5, le=500)
     min_length: int = Field(default=5, ge=1)
     model: Optional[str] = None
+    session_ids: Optional[list[str]] = None
 
 
 @router.post("/train/from-sessions")
@@ -1148,7 +1149,7 @@ async def train_from_sessions(body: FromSessionsRequest = FromSessionsRequest())
     )
 
     pairs = extract_pairs_from_sessions(
-        limit=body.limit, min_length=body.min_length
+        limit=body.limit, min_length=body.min_length, session_ids=body.session_ids
     )
     if len(pairs) < 5:
         pairs = extract_pairs_from_logs(
@@ -1179,7 +1180,6 @@ async def train_from_sessions(body: FromSessionsRequest = FromSessionsRequest())
     ])
 
     # Spawn training subprocess (same as /train)
-    import json
     repo_root = Path(__file__).resolve().parents[4]
     ts = int(_time.time())
     checkpoint_name = f"sessions_{ts}"
