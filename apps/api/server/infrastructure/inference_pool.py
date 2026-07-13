@@ -41,15 +41,19 @@ class InferencePool:
         self._semaphore = asyncio.Semaphore(max_workers)
         self._queue_timeout = queue_timeout
         self._max_workers = max_workers
+        logger.info("InferencePool created (workers=%d)", max_workers)
 
     @classmethod
     async def get_instance(cls) -> InferencePool:
         if cls._instance is None:
             async with cls._lock:
                 if cls._instance is None:
-                    from config import ServerConfig
-                    cfg = ServerConfig.from_env()
-                    cls._instance = cls(max_workers=cfg.inference_pool_size)
+                    import os
+                    import multiprocessing
+                    # Auto-size to CPU count, capped at 8 to avoid oversubscription
+                    default_workers = min(multiprocessing.cpu_count(), 8)
+                    max_workers = int(os.environ.get("MAN_INFERENCE_POOL_SIZE", default_workers))
+                    cls._instance = cls(max_workers=max_workers)
         return cls._instance
 
     @classmethod

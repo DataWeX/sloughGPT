@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: ae0820f feat: add new training infrastructure (auto_trainer, executor, pair_extractor)
+No active task. Last commit: 901bf3f feat: add mobile training data collection pipeline
 
 ## Session 2026-07-13 — On-Device Training Pipeline + Storage Integration
 

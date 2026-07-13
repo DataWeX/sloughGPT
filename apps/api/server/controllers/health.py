@@ -8,6 +8,22 @@ import psutil
 from datetime import datetime
 
 
+def _get_executor_stats() -> Optional[Dict[str, Any]]:
+    """Get TrainingExecutor pool stats if available."""
+    try:
+        from domains.training.executor import get_training_executor, _instance
+        if _instance is None:
+            return None
+        ex = get_training_executor()
+        return {
+            "active_jobs": ex.active_count(),
+            "max_workers": ex._max_workers,
+            "total_tracked": len(ex._jobs),
+        }
+    except Exception:
+        return None
+
+
 def _get_model_info() -> Tuple[bool, Optional[str]]:
     """Get model info from registry, controller, or server_state."""
     # Check ModelRegistry first (most authoritative)
@@ -164,6 +180,11 @@ class HealthController:
         if quant_info:
             result["quantization"] = quant_info
 
+        # Training executor pool status
+        executor_stats = _get_executor_stats()
+        if executor_stats:
+            result["training_pool"] = executor_stats
+
         return result
 
     def get_detailed_health(self) -> Dict[str, Any]:
@@ -276,6 +297,7 @@ class HealthController:
             "registry": registry_health,
             "quantization": _get_quantization_info(),
             "lifecycle": lifecycle,
+            "training_pool": _get_executor_stats(),
             "status_message": _build_status_message(
                 model_loaded, model_type, current_soul,
                 request_count, error_count, lifecycle,

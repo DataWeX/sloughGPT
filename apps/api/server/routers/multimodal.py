@@ -303,8 +303,9 @@ async def train_video(req: VideoTrainRequest):
                 _VIDEO_TRAINING_STATE["status"] = "error"
                 _VIDEO_TRAINING_STATE["error"] = str(e)
 
-    import threading
-    threading.Thread(target=_run, daemon=True).start()
+    from domains.training.executor import get_training_executor
+    executor = get_training_executor()
+    executor.submit(_run, f"vtrain_{job_id}")
     return success_response(data={"status": "started", "job_id": job_id, "data_path": req.data_path})
 
 

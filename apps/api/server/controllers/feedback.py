@@ -121,9 +121,9 @@ class FeedbackController:
 
         # Trigger HF DPO in background on thumbs-down
         if rating == "thumbs_down":
-            import threading
-            t = threading.Thread(target=_trigger_hf_dpo, daemon=True)
-            t.start()
+            from domains.training.executor import get_training_executor
+            executor = get_training_executor()
+            executor.submit(_trigger_hf_dpo, f"dpo_{feedback_id}")
 
         return {
             "status": "recorded",

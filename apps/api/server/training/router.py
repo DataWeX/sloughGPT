@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 import logging
 import shutil
-import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -43,6 +42,7 @@ from .webhooks import (
     notify_training_event,
 )
 from .job_store import get_job_store
+from domains.training.executor import get_training_executor
 
 logger = logging.getLogger("man")
 
@@ -164,7 +164,7 @@ async def train(request: TrainRequest):
 
     req_snapshot = request.model_dump()
 
-    def train_model() -> None:
+    def train_model(job_id: str) -> None:
         try:
             trainer = SloughGPTTrainer(
                 data_path=data_path_str,
@@ -173,14 +173,26 @@ async def train(request: TrainRequest):
             trainer.train()
             safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
             trainer.save(f"models/{safe_stem}_trained.pt")
+            training_jobs[job_id]["status"] = "completed"
+            training_jobs[job_id]["checkpoint"] = f"models/{safe_stem}_trained.pt"
         except Exception as e:
             logger.exception("Background /train failed: %s", e)
+            training_jobs[job_id]["status"] = "failed"
+            training_jobs[job_id]["error"] = str(e)
 
-    thread = threading.Thread(target=train_model, daemon=True)
-    thread.start()
+    executor = get_training_executor()
+    job_id = f"train_{int(time.time())}"
+    training_jobs[job_id] = {
+        "status": "queued",
+        "data_path": data_path_str,
+        "output_checkpoint_stem": out_stem,
+        "epochs": request.epochs,
+    }
+    executor.submit(train_model, job_id)
 
     out: dict[str, Any] = {
         "status": "started",
+        "job_id": job_id,
         "data_path": data_path_str,
         "output_checkpoint_stem": out_stem,
         "data_source": source_kind,
@@ -488,7 +500,7 @@ async def start_training(request: TrainingRequest):
     out_stem_for_thread = out_stem
     jid = job_id
 
-    def run_training() -> None:
+    def run_training(job_id_: str = jid) -> None:
         from domains.training.train_pipeline import SloughGPTTrainer
         from domains.training.wandb_helpers import create_training_tracker_for_api_job
 
@@ -541,7 +553,7 @@ async def start_training(request: TrainingRequest):
             try:
                 import asyncio
 
-                asyncio.get_event_loop().run_until_complete(
+                asyncio.run(
                     notify_training_event(
                         "training.completed",
                         {
@@ -566,7 +578,7 @@ async def start_training(request: TrainingRequest):
             try:
                 import asyncio
 
-                asyncio.get_event_loop().run_until_complete(
+                asyncio.run(
                     notify_training_event(
                         "training.failed",
                         {
@@ -586,8 +598,8 @@ async def start_training(request: TrainingRequest):
                 except Exception:
                     logger.exception("W&B end_run failed for job %s", jid)
 
-    thread = threading.Thread(target=run_training, daemon=True)
-    thread.start()
+    executor = get_training_executor()
+    executor.submit(run_training, jid)
 
 
 @router.post("/training/hf-start")
@@ -669,7 +681,7 @@ async def start_hf_training(request: HFTrainingRequest):
     data_path = data_path_str
     req = request
 
-    def run_hf_training() -> None:
+    def run_hf_training(job_id_: str = job_id) -> None:
         jid = job_id
         try:
             training_jobs[jid]["status"] = "running"
@@ -806,8 +818,8 @@ async def start_hf_training(request: HFTrainingRequest):
             training_jobs[jid]["error"] = str(exc)
             get_job_store().mark_failed(job_id, str(exc))
 
-    thread = threading.Thread(target=run_hf_training, daemon=True)
-    thread.start()
+    executor = get_training_executor()
+    executor.submit(run_hf_training, job_id)
 
     return {
         "job_id": job_id,
@@ -927,7 +939,7 @@ async def start_visual_training(request: VisualTrainRequest):
     }
     training_jobs[job_id] = job
 
-    def run_visual_training() -> None:
+    def run_visual_training(job_id_: str = job_id) -> None:
         try:
             from domains.training.video_trainer import VideoCaptionTrainer
 
@@ -972,8 +984,8 @@ async def start_visual_training(request: VisualTrainRequest):
                 training_jobs[job_id]["status"] = "failed"
                 training_jobs[job_id]["error"] = str(exc)
 
-    thread = threading.Thread(target=run_visual_training, daemon=True)
-    thread.start()
+    executor = get_training_executor()
+    executor.submit(run_visual_training, job_id)
 
     return {
         "job_id": job_id,
@@ -1031,7 +1043,7 @@ async def start_distillation(request: DistillStartRequest):
     }
     training_jobs[job_id] = job
 
-    def _run_distill():
+    def _run_distill(job_id_: str = job_id):
         """Background thread that runs distillation."""
         try:
             # Load teacher from model registry
@@ -1191,8 +1203,8 @@ async def start_distillation(request: DistillStartRequest):
             training_jobs[job_id]["status"] = "failed"
             training_jobs[job_id]["error"] = str(e)
 
-    thread = threading.Thread(target=_run_distill, daemon=True)
-    thread.start()
+    executor = get_training_executor()
+    executor.submit(_run_distill, job_id)
 
     return {
         "job_id": job_id,
@@ -1272,7 +1284,7 @@ async def quick_train(request: QuickTrainRequest):
 
     from domains.training.hf_finetune import HFFineTuner, GRPOTrainer, RewardFn
 
-    def _run_quick():
+    def _run_quick(job_id_: str = job_id):
         jid = job_id
         try:
             training_jobs[jid]["status"] = "running"
@@ -1376,8 +1388,8 @@ async def quick_train(request: QuickTrainRequest):
                 training_jobs[jid]["error"] = str(exc)
             get_job_store().mark_failed(jid, str(exc))
 
-    thread = threading.Thread(target=_run_quick, daemon=True)
-    thread.start()
+    executor = get_training_executor()
+    executor.submit(_run_quick, job_id)
 
     return {
         "job_id": job_id,
@@ -1453,7 +1465,7 @@ async def train_from_feedback():
         # Update global training controller
         get_training_controller().start(jid, f"Feedback Training {timestamp}")
 
-        def run_feedback_training():
+        def run_feedback_training(job_id_: str = jid):
             try:
                 from domains.training.train_pipeline import SloughGPTTrainer
 
@@ -1497,7 +1509,7 @@ async def train_from_feedback():
                 try:
                     import asyncio
 
-                    asyncio.get_event_loop().run_until_complete(
+                    asyncio.run(
                         notify_training_event(
                             "training.completed",
                             {
@@ -1522,7 +1534,7 @@ async def train_from_feedback():
                 try:
                     import asyncio
 
-                    asyncio.get_event_loop().run_until_complete(
+                    asyncio.run(
                         notify_training_event(
                             "training.failed",
                             {
@@ -1536,8 +1548,8 @@ async def train_from_feedback():
                 except Exception:
                     pass
 
-        thread = threading.Thread(target=run_feedback_training, daemon=True)
-        thread.start()
+        executor = get_training_executor()
+        executor.submit(run_feedback_training, jid)
 
         return {
             "status": "started",
@@ -2092,7 +2104,7 @@ async def recover_job(job_id: str):
     jid = recovery_job_id
     checkpoint_for_recovery = checkpoint_path
 
-    def run_recovery():
+    def run_recovery(job_id_: str = jid):
         try:
             from domains.training.train_pipeline import SloughGPTTrainer
 
@@ -2148,7 +2160,7 @@ async def recover_job(job_id: str):
             try:
                 import asyncio
 
-                asyncio.get_event_loop().run_until_complete(
+                asyncio.run(
                     notify_training_event(
                         "training.completed",
                         {
@@ -2169,8 +2181,8 @@ async def recover_job(job_id: str):
             store.mark_failed(jid, str(e))
             controller.fail()
 
-    thread = threading.Thread(target=run_recovery, daemon=True)
-    thread.start()
+    executor = get_training_executor()
+    executor.submit(run_recovery, jid)
 
     return {
         "status": "recovered",

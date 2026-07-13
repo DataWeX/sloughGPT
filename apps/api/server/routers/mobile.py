@@ -9,7 +9,7 @@ All endpoints prefixed with /mobile.
 import logging
 from typing import Optional, List
 from fastapi import APIRouter, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import httpx
 
 from schemas.common import success_response, error_response
@@ -770,3 +770,490 @@ async def notify_training_complete(request: Request):
 
     result = svc.send_notification(payload=payload, topic="training")
     return result
+
+
+# ── On-Device Training ──────────────────────────────────────────────────────
+
+class TrainingPair(BaseModel):
+    """A single (user, assistant) conversation pair for on-device training."""
+    id: str
+    user_msg: str
+    assistant_msg: str
+    quality: float = 0.0
+    timestamp: int = 0
+    session_id: str = ""
+
+
+class MobileTrainRequest(BaseModel):
+    """Batch of training pairs from the mobile app."""
+    pairs: List[TrainingPair]
+    checkpoint: str
+
+
+class MobileTrainResult(BaseModel):
+    """Result of on-device training triggered by mobile."""
+    success: bool
+    checkpoint_name: str = ""
+    loss: float = 0.0
+    steps: int = 0
+    elapsed_ms: int = 0
+
+
+@router.post("/train")
+async def mobile_train(body: MobileTrainRequest):
+    """
+    Train the SloNet model on conversation pairs from the mobile app.
+
+    Receives (user_msg, assistant_msg) pairs collected on-device,
+    stores them in MogDB, runs a short fine-tune via subprocess
+    (using the venv Python with torch), and returns the new checkpoint.
+
+    Args:
+        body: Batch of training pairs + base checkpoint name.
+
+    Returns:
+        MobileTrainResult with checkpoint name, loss, steps, timing.
+
+    Side effects:
+        - Stores pairs in MogDB training data collection.
+        - Spawns subprocess for HF fine-tuning.
+        - Saves new checkpoint to models/auto-training/.
+    """
+    import json
+    import subprocess
+    import time
+    from pathlib import Path
+    from fastapi import HTTPException
+
+    if len(body.pairs) < 5:
+        raise HTTPException(400, "Need at least 5 training pairs")
+
+    t0 = int(time.time() * 1000)
+
+    # Store pairs in MogDB
+    from domains.training.mobile_training_store import get_training_store
+
+    store = get_training_store()
+    pair_ids = store.add_batch([
+        {
+            "user_msg": p.user_msg,
+            "assistant_msg": p.assistant_msg,
+            "session_id": p.session_id,
+            "quality": p.quality,
+        }
+        for p in body.pairs
+    ])
+
+    # Write training text file
+    repo_root = Path(__file__).resolve().parents[4]
+    train_dir = repo_root / "data" / "mobile_training"
+    train_dir.mkdir(parents=True, exist_ok=True)
+
+    ts = int(time.time())
+    text_file = train_dir / f"mobile_{ts}.txt"
+    with open(text_file, "w") as f:
+        for pair in body.pairs:
+            f.write(f"User: {pair.user_msg}\nAssistant: {pair.assistant_msg}\n\n")
+
+    checkpoint_name = f"mobile_{ts}"
+    output_dir = repo_root / "models" / "auto-training" / checkpoint_name
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Find venv Python with torch
+    venv_python = repo_root / ".venv" / "bin" / "python3"
+    train_script = repo_root / "scripts" / "hf_train.py"
+
+    if not venv_python.exists():
+        raise HTTPException(500, "Training environment not found (.venv missing)")
+
+    try:
+        proc = subprocess.run(
+            [
+                str(venv_python),
+                str(train_script),
+                "--data", str(text_file),
+                "--output", str(output_dir),
+                "--model", "gpt2",
+                "--epochs", "1",
+                "--batch-size", "2",
+                "--lr", "5e-5",
+                "--max-seq-length", "256",
+                "--use-lora",
+                "--lora-rank", "8",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+
+        if proc.returncode != 0:
+            logger.error("Training subprocess failed: %s", proc.stderr[-500:])
+            raise HTTPException(500, f"Training failed: {proc.stderr[-200:]}")
+
+        result = json.loads(proc.stdout.strip().split("\n")[-1])
+
+        if not result.get("success"):
+            raise HTTPException(500, f"Training failed: {result.get('error', 'unknown')}")
+
+        # Mark pairs as used for training
+        store.mark_used(pair_ids)
+        store.mark_synced(pair_ids)
+
+        elapsed = int(time.time() * 1000) - t0
+
+        return MobileTrainResult(
+            success=True,
+            checkpoint_name=checkpoint_name,
+            loss=result.get("loss", 0.0),
+            steps=result.get("steps", 0),
+            elapsed_ms=elapsed,
+        )
+
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504, "Training timed out (300s limit)")
+    except json.JSONDecodeError as e:
+        logger.error("Failed to parse training output: %s", e)
+        raise HTTPException(500, "Training produced invalid output")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Mobile training failed: %s", e)
+        raise HTTPException(500, f"Training failed: {e}")
+
+
+@router.get("/train/stats")
+async def get_training_stats():
+    """
+    Get training data statistics.
+
+    Returns:
+        Total pairs, pending, synced, used counts, and quality breakdown.
+
+    Side effects:
+        - Reads from MogDB training data collection.
+    """
+    from domains.training.mobile_training_store import get_training_store
+
+    store = get_training_store()
+    stats = store.stats()
+    quality_counts = store.quality_breakdown()
+
+    return {
+        "total": stats["total"],
+        "pending": stats["pending"],
+        "synced": stats["synced"],
+        "used": stats["used"],
+        "by_quality": quality_counts,
+    }
+
+
+@router.get("/train/pending")
+async def get_pending_pairs(limit: int = Query(50, ge=1, le=500)):
+    """
+    Get pending (unsynced) training pairs.
+
+    Args:
+        limit: Max pairs to return (default 50, max 500).
+
+    Returns:
+        List of unsynced training pair documents.
+
+    Side effects:
+        - Reads from MogDB training data collection.
+    """
+    from domains.training.mobile_training_store import get_training_store
+
+    store = get_training_store()
+    pairs = store.get_pending_pairs(limit=limit)
+    return {
+        "pairs": [
+            {
+                "id": p.get("_id", ""),
+                "user_msg": p.get("user_msg", ""),
+                "assistant_msg": p.get("assistant_msg", ""),
+                "quality": p.get("quality", 0),
+                "session_id": p.get("session_id", ""),
+                "timestamp": p.get("timestamp", 0),
+            }
+            for p in pairs
+        ],
+        "count": len(pairs),
+    }
+
+
+@router.get("/train/session/{session_id}")
+async def get_session_pairs(session_id: str):
+    """
+    Get all training pairs from a specific session.
+
+    Args:
+        session_id: Chat session identifier.
+
+    Returns:
+        List of training pairs for that session.
+
+    Side effects:
+        - Reads from MogDB training data collection.
+    """
+    from domains.training.mobile_training_store import get_training_store
+
+    store = get_training_store()
+    pairs = store.get_pairs_by_session(session_id)
+    return {
+        "session_id": session_id,
+        "pairs": [
+            {
+                "id": p.get("_id", ""),
+                "user_msg": p.get("user_msg", ""),
+                "assistant_msg": p.get("assistant_msg", ""),
+                "quality": p.get("quality", 0),
+                "timestamp": p.get("timestamp", 0),
+            }
+            for p in pairs
+        ],
+        "count": len(pairs),
+    }
+
+
+class QualityUpdateRequest(BaseModel):
+    """Request body for updating pair quality."""
+    quality: float
+
+
+@router.patch("/train/pair/{pair_id}")
+async def update_pair_quality(pair_id: str, body: QualityUpdateRequest):
+    """
+    Update quality signal on a training pair.
+
+    Args:
+        pair_id: Training pair document ID.
+        body: New quality value.
+
+    Returns:
+        Update status.
+
+    Side effects:
+        - Updates quality field in MogDB training data collection.
+    """
+    from domains.training.mobile_training_store import get_training_store
+
+    store = get_training_store()
+    updated = store.update_quality(pair_id, body.quality)
+    if not updated:
+        from fastapi import HTTPException
+        raise HTTPException(404, "Pair not found")
+    return {"status": "updated", "pair_id": pair_id, "quality": body.quality}
+
+
+@router.delete("/train/pair/{pair_id}")
+async def delete_pair(pair_id: str):
+    """
+    Delete a single training pair.
+
+    Args:
+        pair_id: Training pair document ID.
+
+    Returns:
+        Deletion status.
+
+    Side effects:
+        - Deletes pair from MogDB training data collection.
+    """
+    from domains.training.mobile_training_store import get_training_store
+
+    store = get_training_store()
+    deleted = store.delete_pair(pair_id)
+    if not deleted:
+        from fastapi import HTTPException
+        raise HTTPException(404, "Pair not found")
+    return {"status": "deleted", "pair_id": pair_id}
+
+
+@router.delete("/train/synced")
+async def delete_synced_pairs():
+    """
+    Delete all synced training pairs (already used for training).
+
+    Returns:
+        Count of deleted pairs.
+
+    Side effects:
+        - Deletes all synced pairs from MogDB training data collection.
+    """
+    from domains.training.mobile_training_store import get_training_store
+
+    store = get_training_store()
+    count = store.delete_synced()
+    return {"status": "deleted", "count": count}
+
+
+@router.post("/train/compact")
+async def compact_training_store():
+    """
+    Compact the training data store (reclaim space from deleted records).
+
+    Returns:
+        Remaining document count after compaction.
+
+    Side effects:
+        - Compacts MogDB training data collection journals.
+    """
+    from domains.training.mobile_training_store import get_training_store
+
+    store = get_training_store()
+    count = store.compact()
+    return {"status": "compacted", "count": count}
+
+
+class FromSessionsRequest(BaseModel):
+    """Optional params for training from server sessions."""
+    limit: int = Field(default=50, ge=5, le=500)
+    min_length: int = Field(default=5, ge=1)
+    model: Optional[str] = None
+
+
+@router.post("/train/from-sessions")
+async def train_from_sessions(body: FromSessionsRequest = FromSessionsRequest()):
+    """
+    Train the model from server-side inference logs.
+
+    Extracts (user_msg, assistant_msg) pairs from session JSON files
+    (or response log JSONL files as fallback), writes a training text
+    file, and spawns a subprocess fine-tune. No mobile data needed.
+
+    Args:
+        body: limit (max pairs), min_length (filter tiny messages), model (optional filter).
+
+    Returns:
+        MobileTrainResult with checkpoint name, loss, steps, timing.
+
+    Side effects:
+        - Reads session files from data/chat_sessions/.
+        - Writes training text to data/mobile_training/.
+        - Spawns HF fine-tune subprocess.
+    """
+    import subprocess
+    import time as _time
+    from pathlib import Path
+    from fastapi import HTTPException
+
+    t0 = int(_time.time() * 1000)
+
+    # Extract pairs from server logs
+    from domains.training.pair_extractor import (
+        extract_pairs_from_sessions,
+        extract_pairs_from_logs,
+        write_training_text,
+    )
+
+    pairs = extract_pairs_from_sessions(
+        limit=body.limit, min_length=body.min_length
+    )
+    if len(pairs) < 5:
+        pairs = extract_pairs_from_logs(
+            limit=body.limit, min_length=body.min_length, model=body.model
+        )
+
+    if len(pairs) < 5:
+        raise HTTPException(
+            400,
+            f"Need at least 5 training pairs, found {len(pairs)} in server logs",
+        )
+
+    # Write training text file
+    text_file = write_training_text(pairs)
+
+    # Store pairs in MogDB
+    from domains.training.mobile_training_store import get_training_store
+
+    store = get_training_store()
+    store.add_batch([
+        {
+            "user_msg": p["user_msg"],
+            "assistant_msg": p["assistant_msg"],
+            "session_id": p.get("session_id", ""),
+            "quality": 0,
+        }
+        for p in pairs
+    ])
+
+    # Spawn training subprocess (same as /train)
+    import json
+    repo_root = Path(__file__).resolve().parents[4]
+    ts = int(_time.time())
+    checkpoint_name = f"sessions_{ts}"
+    output_dir = repo_root / "models" / "auto-training" / checkpoint_name
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    venv_python = repo_root / ".venv" / "bin" / "python3"
+    train_script = repo_root / "scripts" / "hf_train.py"
+
+    if not venv_python.exists():
+        raise HTTPException(500, "Training environment not found (.venv missing)")
+
+    try:
+        proc = subprocess.run(
+            [
+                str(venv_python),
+                str(train_script),
+                "--data", str(text_file),
+                "--output", str(output_dir),
+                "--model", "gpt2",
+                "--epochs", "1",
+                "--batch-size", "2",
+                "--lr", "5e-5",
+                "--max-seq-length", "256",
+                "--use-lora",
+                "--lora-rank", "8",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+
+        if proc.returncode != 0:
+            logger.error("Training subprocess failed: %s", proc.stderr[-500:])
+            raise HTTPException(500, f"Training failed: {proc.stderr[-200:]}")
+
+        result = json.loads(proc.stdout.strip().split("\n")[-1])
+
+        if not result.get("success"):
+            raise HTTPException(500, f"Training failed: {result.get('error', 'unknown')}")
+
+        elapsed = int(_time.time() * 1000) - t0
+
+        return MobileTrainResult(
+            success=True,
+            checkpoint_name=checkpoint_name,
+            loss=result.get("loss", 0.0),
+            steps=result.get("steps", 0),
+            elapsed_ms=elapsed,
+        )
+
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504, "Training timed out (300s limit)")
+    except json.JSONDecodeError as e:
+        logger.error("Failed to parse training output: %s", e)
+        raise HTTPException(500, "Training produced invalid output")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Session training failed: %s", e)
+        raise HTTPException(500, f"Training failed: {e}")
+
+
+@router.get("/train/auto-status")
+async def get_auto_train_status():
+    """
+    Get auto-trainer status and configuration.
+
+    Returns:
+        Enabled state, threshold, pending count, last train info.
+
+    Side effects:
+        - None (reads from AutoTrainer singleton).
+    """
+    from domains.training.auto_trainer import get_auto_trainer
+
+    trainer = get_auto_trainer()
+    return trainer.status()
