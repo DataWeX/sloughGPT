@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 901bf3f feat: add mobile training data collection pipeline
+No active task. Last commit: f004be9 fix: backend router and controller updates
 
 ## Session 2026-07-13 — On-Device Training Pipeline + Storage Integration
 

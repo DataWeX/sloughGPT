@@ -256,6 +256,49 @@ class PGQ:
         """Resume the task queue."""
         self._task_queue.resume()
 
+    # ── Training via executor (Point-Graph-Queue integration) ──
+
+    def submit_training(
+        self,
+        fn: Callable[..., Any],
+        job_id: str,
+        tree_id: Optional[str] = None,
+        **kwargs: Any,
+    ) -> str:
+        """Submit a training job through the shared TrainingExecutor.
+
+        Routes the job to a specific ModelTree (``tree_id``) for isolation.
+        Trained weights are automatically compressed into Points and stored
+        in the tree's PointLibrary on completion.
+
+        Args:
+            fn: Training function.  Receives (job_id, tree_id, point_library,
+                is_cancelled, *args, **kwargs).
+            job_id: Unique job identifier.
+            tree_id: ModelTree name.  None uses ``self.name``.
+            **kwargs: Forwarded to the training function.
+
+        Returns:
+            The *job_id* for tracking.
+        """
+        from domains.training.executor import get_training_executor
+
+        tid = tree_id or self.name
+        executor = get_training_executor()
+        return executor.submit_training(
+            fn, job_id, tid, self._library, **kwargs,
+        )
+
+    def training_status(self, job_id: str) -> Optional[dict[str, Any]]:
+        """Get training job status from the executor."""
+        from domains.training.executor import get_training_executor
+        return get_training_executor().status(job_id)
+
+    def cancel_training(self, job_id: str) -> bool:
+        """Cancel a training job via the executor."""
+        from domains.training.executor import get_training_executor
+        return get_training_executor().cancel(job_id)
+
     # ── Search ──
 
     def search(self, query: str) -> List[Point]:

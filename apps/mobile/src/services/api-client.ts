@@ -138,4 +138,20 @@ export const api = {
 
   /** Check server connectivity. */
   syncStatus: <T>() => request<T>('GET', '/mobile/sync/status'),
+
+  /** Trigger on-device training on server with conversation pairs. */
+  mobileTrain: <T>(body: {pairs: any[]; checkpoint: string}) =>
+    request<T>('POST', '/mobile/train', body),
+
+  /** Train from server-side inference logs (no mobile data needed). */
+  trainFromSessions: <T>(body?: {limit?: number; min_length?: number; model?: string}) =>
+    request<T>('POST', '/mobile/train/from-sessions', body || {}),
+
+  /** Get auto-trainer status. */
+  getAutoTrainStatus: <T>() => request<T>('GET', '/mobile/train/auto-status'),
+
+  /** Pull latest weights from a trained checkpoint. */
+  pullWeights: (checkpoint: string) =>
+    fetch(`${'' /* resolved at call site */}/auto-train/checkpoints/${encodeURIComponent(checkpoint)}/export-mobile`)
+      .then(r => r.json()),
 };

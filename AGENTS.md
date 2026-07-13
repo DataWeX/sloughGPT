@@ -336,6 +336,55 @@ Key state variables: `trainingPhase`, `trainingMethod`, `inputMode`, `trainingLo
 - **EventSource reconnect**: Auto-reconnect up to 3 times on connection errors before marking as failed
 - **Disabled Metal accelerator during training**: Metal GPU dispatch overhead was 6x slower than CPU numpy for embed_dim≤128. `train_step()`, `train_batch()`, and `contrastive_step()` now disable the accelerator during the forward/backward pass and restore it afterward. Result: embed_dim=64 training drops from 257ms to 92ms per sample (~3x faster).
 
+### Parallel Execution Architecture
+
+Three shared executor layers replace raw `threading.Thread` spawns:
+
+#### TrainingExecutor (`domains/training/executor.py`)
+- Shared `ThreadPoolExecutor` (default `min(2, cpu_count)` workers, env `MAN_TRAIN_POOL_SIZE`)
+- Per-job tracking via `JobInfo` (status, tree_id, elapsed, cancel flag)
+- `submit_training()` routes jobs to specific ModelTrees (isolation per LLM.md)
+- Auto-stores trained weights as compressed Points in the tree's PointLibrary
+- All 8 training router endpoints use the executor instead of raw threads
+
+#### InferencePool (`apps/api/server/infrastructure/inference_pool.py`)
+- Auto-sizes to `min(cpu_count, 8)` workers (env `MAN_INFERENCE_POOL_SIZE`)
+- Semaphore-based backpressure (max concurrent = pool size)
+- Per-task timeouts and `run_generator()` for streaming
+
+#### ModelServer read/write separation (`domains/infrastructure/model_server.py`)
+- `_get_read_semaphore()` (N=4×max_concurrent) for tokenization/health — concurrent reads
+- `_get_semaphore()` (exclusive) for generation — serialized writes
+- `tokenize()` method uses read semaphore (doesn't block on generation)
+
+### TrainingExecutor → pugqeep integration
+```
+PGQ.submit_training(fn, job_id, tree_id)
+  → TrainingExecutor.submit_training(fn, job_id, tree_id, point_library)
+    → fn(job_id, tree_id, point_library, is_cancelled)
+      → trained weights dict → PointCompressor → PointLibrary.add()
+```
+
+### Executor Observability (API Endpoints)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `GET /system/executor` | GET | Pool metrics + full job list (newest first) |
+| `GET /system/executor/{job_id}` | GET | Single job metadata (status, timing, tree_id, error) |
+| `GET /system/executor/{job_id}/result` | GET | Weight shape/dtype summary (no raw arrays over HTTP) |
+| `POST /system/executor/purge?max_age_s=3600` | POST | Remove old completed/failed/cancelled jobs |
+| `POST /system/executor/{job_id}/cancel` | POST | Cooperative cancellation (flag + future.cancel) |
+| `GET /system/inference-pool` | GET | InferencePool status (workers, queue timeout) |
+| `GET /health` | GET | Includes `training_pool` block (active/max/tracked) |
+
+### Lifespan Shutdown
+Server shutdown sequence (`StartupOrchestrator.shutdown()`):
+1. Task queue stop
+2. Running jobs marked crashed
+3. W&B task cancel
+4. ModelRegistry metrics reset
+5. InferencePool shutdown
+6. **TrainingExecutor shutdown** (waits for in-flight jobs)
+
 ### Training Page (`apps/web/app/(app)/training/page.tsx`)
 The training page is the main user-facing training interface:
 - **"Start training" card** — two input modes (dataset or pasted text), two methods (distill or fine-tune), start button, loss chart during training, success/error states

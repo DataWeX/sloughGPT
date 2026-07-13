@@ -109,3 +109,68 @@ describe('systemController.getOutput', () => {
     expect(apiClient.apiGet).toHaveBeenCalledWith('/system/output?n=50', undefined, { silent: true })
   })
 })
+
+describe('systemController.getExecutorStatus', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('GETs /system/executor and returns pool status', async () => {
+    const mockExecutor = {
+      initialized: true,
+      active_jobs: 1,
+      max_workers: 2,
+      total_tracked: 5,
+      jobs: [
+        { job_id: 'j1', status: 'running', tree_id: 'test', submitted_at: 1, elapsed_s: 2.5, cancel_requested: false },
+      ],
+    }
+    apiClient.apiGet.mockResolvedValue(mockExecutor)
+    const result = await systemController.getExecutorStatus()
+    expect(result.initialized).toBe(true)
+    expect(result.active_jobs).toBe(1)
+    expect(result.jobs).toHaveLength(1)
+    expect(result.jobs[0].job_id).toBe('j1')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/system/executor', undefined, { silent: true })
+  })
+
+  it('returns uninitialized state when executor not created', async () => {
+    apiClient.apiGet.mockResolvedValue({ initialized: false, active_jobs: 0, max_workers: 0, total_tracked: 0, jobs: [] })
+    const result = await systemController.getExecutorStatus()
+    expect(result.initialized).toBe(false)
+  })
+})
+
+describe('systemController.cancelExecutorJob', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('POSTs to /system/executor/{id}/cancel', async () => {
+    const { apiPost } = await import('./http-client')
+    vi.mocked(apiPost).mockResolvedValue({ cancelled: true })
+    const result = await systemController.cancelExecutorJob('j1')
+    expect(result.cancelled).toBe(true)
+    expect(apiPost).toHaveBeenCalledWith('/system/executor/j1/cancel')
+  })
+})
+
+describe('systemController.purgeExecutorJobs', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('POSTs to /system/executor/purge with max_age_s', async () => {
+    const { apiPost } = await import('./http-client')
+    vi.mocked(apiPost).mockResolvedValue({ purged: 3 })
+    const result = await systemController.purgeExecutorJobs(7200)
+    expect(result.purged).toBe(3)
+    expect(apiPost).toHaveBeenCalledWith('/system/executor/purge?max_age_s=7200')
+  })
+})
+
+describe('systemController.getInferencePoolStatus', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('GETs /system/inference-pool', async () => {
+    apiClient.apiGet.mockResolvedValue({ initialized: true, max_workers: 4, queue_timeout: 30 })
+    const result = await systemController.getInferencePoolStatus()
+    expect(result.initialized).toBe(true)
+    expect(result.max_workers).toBe(4)
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/system/inference-pool', undefined, { silent: true })
+  })
+})
