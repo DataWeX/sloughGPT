@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Button } from '@sloughgpt/strui'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { Tabs } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
@@ -13,21 +13,14 @@ import { datasetController } from '@/lib/controllers'
 import { useTrainingForm } from '@/hooks/useTrainingForm'
 import { OutputCard } from '@/components/OutputCard'
 import { TestModelDialog } from '@/components/training/TestModelDialog'
-import { WebhookManager } from '@/components/training/WebhookManager'
+
 import { useTrainingSession } from '@/hooks/useTrainingSession'
 import { useTrainingDatasets } from '@/hooks/useTrainingDatasets'
 import { useTrainingCheckpoints } from '@/hooks/useTrainingCheckpoints'
 import { useTestDialog } from '@/hooks/useTestDialog'
-import { VisualCheckpointsCard } from '@/components/training/VisualCheckpointsCard'
-import { BuildsCard } from '@/components/training/BuildsCard'
 import { JobHistoryCard } from '@/components/training/JobHistoryCard'
 import { CheckpointsCard } from '@/components/training/CheckpointsCard'
-import { QuickTrainCard } from '@/components/training/QuickTrainCard'
 import { TrainingFormCard } from '@/components/training/TrainingFormCard'
-import { TurboTrainCard } from '@/components/training/TurboTrainCard'
-import { FeedbackTrainCard } from '@/components/training/FeedbackTrainCard'
-import { DpoCard } from '@/components/training/DpoCard'
-import { DistillCard } from '@/components/training/DistillCard'
 
 export default function TrainingPage() {
   const searchParams = useSearchParams()
@@ -37,7 +30,6 @@ export default function TrainingPage() {
   const datasets = useTrainingDatasets(addToast)
   const checkpoints = useTrainingCheckpoints()
   const test = useTestDialog()
-
 
   const form = useTrainingForm(datasets, session, checkpoints, addToast)
 
@@ -67,7 +59,6 @@ export default function TrainingPage() {
   useEffect(() => {
     void datasets.fetchDatasets()
     void checkpoints.fetchCheckpoints()
-    void checkpoints.fetchBuilds()
     void checkpoints.fetchJobs()
     const urlDataset = searchParams.get('dataset')
     if (urlDataset) {
@@ -110,8 +101,7 @@ export default function TrainingPage() {
 
   const TABS = [
     { value: 'train', label: 'Train' },
-    { value: 'methods', label: 'Methods' },
-    { value: 'results', label: 'Results', count: checkpoints.checkpoints.length || undefined },
+    { value: 'history', label: 'History', count: checkpoints.checkpoints.length || undefined },
   ]
 
   return (
@@ -141,8 +131,6 @@ export default function TrainingPage() {
         {/* Tab: Train */}
         {activeTab === 'train' && (
           <div className="space-y-4">
-            <QuickTrainCard datasets={datasets} checkpoints={checkpoints} />
-
             <TrainingFormCard
               form={form}
               datasets={datasets}
@@ -167,34 +155,12 @@ export default function TrainingPage() {
           </div>
         )}
 
-        {/* Tab: Methods */}
-        {activeTab === 'methods' && (
-          <div className="space-y-4">
-            <DistillCard datasets={datasets} onComplete={() => { checkpoints.fetchCheckpoints(); checkpoints.fetchBuilds() }} />
-            <TurboTrainCard datasets={datasets} session={session} />
-            <FeedbackTrainCard onComplete={() => { checkpoints.fetchCheckpoints(); checkpoints.fetchJobs() }} />
-            <DpoCard />
-            <VisualCheckpointsCard />
-          </div>
-        )}
-
-        {/* Tab: Results */}
-        {activeTab === 'results' && (
+        {/* Tab: History */}
+        {activeTab === 'history' && (
           <div className="space-y-4">
             <CheckpointsCard checkpoints={checkpoints} loadingTimedOut={loadingTimedOut} onRetry={() => { setLoadingTimedOut(false); void checkpoints.fetchCheckpoints() }} onContinue={form.startTraining} onTest={() => test.setTestDialogOpen(true)} />
 
-            <BuildsCard checkpoints={checkpoints} loadingTimedOut={loadingTimedOut} onRetry={() => { setLoadingTimedOut(false); void checkpoints.fetchBuilds() }} />
-
             <JobHistoryCard allJobs={form.allJobs} checkpoints={checkpoints} loadingTimedOut={loadingTimedOut} onRetry={() => { setLoadingTimedOut(false); void checkpoints.fetchJobs() }} />
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Webhooks</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <WebhookManager />
-              </CardContent>
-            </Card>
           </div>
         )}
       </div>

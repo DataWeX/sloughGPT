@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: c5c9fe9 fix: server stability (MPS block on Intel, watchdog log-only, SessionKVCache)
+No active task. Last commit: 5bf3ed8 perf: SloNet kernel integration + generate optimization + gradient fixes
 
 ## Session 2026-07-13 — On-Device Training Pipeline + Storage Integration
 
