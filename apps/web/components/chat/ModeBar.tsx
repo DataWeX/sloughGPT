@@ -35,6 +35,36 @@ interface ModeBarProps {
   onCreateStyleChange: (style: string) => void
 }
 
+function SubOptionRow({ label, options, value, onChange }: {
+  label: string
+  options: readonly string[]
+  value: string
+  onChange: (v: string) => void
+}) {
+  return (
+    <div className="flex items-center gap-2 ml-2 pl-2 border-l border-border/20">
+      <span className="text-[11px] text-muted-foreground/60">{label}:</span>
+      <div className="flex items-center gap-1" role="group">
+        {options.map(opt => (
+          <button
+            key={opt}
+            onClick={() => onChange(opt)}
+            className={cn(
+              "px-2 py-0.5 rounded text-[11px] transition-all",
+              value === opt
+                ? "bg-foreground/10 text-foreground font-medium"
+                : "text-muted-foreground/50 hover:text-foreground/70 hover:bg-muted/10"
+            )}
+            aria-pressed={value === opt}
+          >
+            {opt}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function ModeBtn({ active, label, icon, onClick }: { active: boolean; label: string; icon: string; onClick: () => void }) {
   return (
     <button
@@ -70,182 +100,17 @@ export function ModeBar({
       <ModeBtn active={mode === 'talk'} label="Talk" icon="🎙️" onClick={() => onModeChange('talk')} />
 
       {mode === 'write' && (
-        <div className="flex items-center gap-2 ml-2 pl-2 border-l border-border/20">
-          <div className="flex items-center gap-1" role="group" aria-label="Writing tone">
-            {TONES.map(t => (
-              <button
-                key={t}
-                onClick={() => onToneChange(t)}
-                className={cn(
-                  "px-2 py-0.5 rounded text-[11px] transition-all",
-                  tone === t
-                    ? "bg-foreground/10 text-foreground font-medium"
-                    : "text-muted-foreground/50 hover:text-foreground/70 hover:bg-muted/10"
-                )}
-                aria-pressed={tone === t}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-          <span className="text-muted-foreground/20">|</span>
-          <div className="flex items-center gap-1" role="group" aria-label="Content type">
-            {TYPES.map(ty => (
-              <button
-                key={ty}
-                onClick={() => onTypeChange(ty)}
-                className={cn(
-                  "px-2 py-0.5 rounded text-[11px] transition-all",
-                  type === ty
-                    ? "bg-foreground/10 text-foreground font-medium"
-                    : "text-muted-foreground/50 hover:text-foreground/70 hover:bg-muted/10"
-                )}
-                aria-pressed={type === ty}
-              >
-                {ty}
-              </button>
-            ))}
-          </div>
-        </div>
+        <>
+          <SubOptionRow label="Tone" options={TONES} value={tone} onChange={onToneChange} />
+          <SubOptionRow label="Type" options={TYPES} value={type} onChange={onTypeChange} />
+        </>
       )}
-
-      {mode === 'decide' && (
-        <div className="flex items-center gap-2 ml-2 pl-2 border-l border-border/20">
-          <span className="text-[11px] text-muted-foreground/60">Output:</span>
-          <div className="flex items-center gap-1" role="group" aria-label="Decision format">
-            {DECIDE_STRUCTURES.map(s => (
-              <button
-                key={s}
-                onClick={() => onDecideStructureChange(s)}
-                className={cn(
-                  "px-2 py-0.5 rounded text-[11px] transition-all",
-                  decideStructure === s
-                    ? "bg-foreground/10 text-foreground font-medium"
-                    : "text-muted-foreground/50 hover:text-foreground/70 hover:bg-muted/10"
-                )}
-                aria-pressed={decideStructure === s}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {mode === 'explain' && (
-        <div className="flex items-center gap-2 ml-2 pl-2 border-l border-border/20">
-          <span className="text-[11px] text-muted-foreground/60">Level:</span>
-          <div className="flex items-center gap-1" role="group" aria-label="Difficulty level">
-            {DIFFICULTIES.map(d => (
-              <button
-                key={d}
-                onClick={() => onDifficultyChange(d)}
-                className={cn(
-                  "px-2 py-0.5 rounded text-[11px] transition-all",
-                  difficulty === d
-                    ? "bg-foreground/10 text-foreground font-medium"
-                    : "text-muted-foreground/50 hover:text-foreground/70 hover:bg-muted/10"
-                )}
-                aria-pressed={difficulty === d}
-              >
-                {d}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {mode === 'translate' && (
-        <div className="flex items-center gap-2 ml-2 pl-2 border-l border-border/20">
-          <span className="text-[11px] text-muted-foreground/60">To:</span>
-          <div className="flex items-center gap-1" role="group" aria-label="Language pair">
-            {LANG_PAIRS.map(p => (
-              <button
-                key={p}
-                onClick={() => onLangPairChange(p)}
-                className={cn(
-                  "px-2 py-0.5 rounded text-[11px] transition-all",
-                  langPair === p
-                    ? "bg-foreground/10 text-foreground font-medium"
-                    : "text-muted-foreground/50 hover:text-foreground/70 hover:bg-muted/10"
-                )}
-                aria-pressed={langPair === p}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {mode === 'brainstorm' && (
-        <div className="flex items-center gap-2 ml-2 pl-2 border-l border-border/20">
-          <span className="text-[11px] text-muted-foreground/60">Topic:</span>
-          <div className="flex items-center gap-1" role="group" aria-label="Brainstorm topic">
-            {BRAINSTORM_TOPICS.map(t => (
-              <button
-                key={t}
-                onClick={() => onBrainstormTopicChange(t)}
-                className={cn(
-                  "px-2 py-0.5 rounded text-[11px] transition-all",
-                  brainstormTopic === t
-                    ? "bg-foreground/10 text-foreground font-medium"
-                    : "text-muted-foreground/50 hover:text-foreground/70 hover:bg-muted/10"
-                )}
-                aria-pressed={brainstormTopic === t}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {mode === 'wellness' && (
-        <div className="flex items-center gap-2 ml-2 pl-2 border-l border-border/20">
-          <span className="text-[11px] text-muted-foreground/60">Type:</span>
-          <div className="flex items-center gap-1" role="group" aria-label="Wellness type">
-            {WELLNESS_TYPES.map(w => (
-              <button
-                key={w}
-                onClick={() => onWellnessTypeChange(w)}
-                className={cn(
-                  "px-2 py-0.5 rounded text-[11px] transition-all",
-                  wellnessType === w
-                    ? "bg-foreground/10 text-foreground font-medium"
-                    : "text-muted-foreground/50 hover:text-foreground/70 hover:bg-muted/10"
-                )}
-                aria-pressed={wellnessType === w}
-              >
-                {w}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {mode === 'create' && (
-        <div className="flex items-center gap-2 ml-2 pl-2 border-l border-border/20">
-          <span className="text-[11px] text-muted-foreground/60">Style:</span>
-          <div className="flex items-center gap-1" role="group" aria-label="Image style">
-            {CREATE_STYLES.map(s => (
-              <button
-                key={s}
-                onClick={() => onCreateStyleChange(s)}
-                className={cn(
-                  "px-2 py-0.5 rounded text-[11px] transition-all",
-                  createStyle === s
-                    ? "bg-foreground/10 text-foreground font-medium"
-                    : "text-muted-foreground/50 hover:text-foreground/70 hover:bg-muted/10"
-                )}
-                aria-pressed={createStyle === s}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {mode === 'decide' && <SubOptionRow label="Output" options={DECIDE_STRUCTURES} value={decideStructure} onChange={onDecideStructureChange} />}
+      {mode === 'explain' && <SubOptionRow label="Level" options={DIFFICULTIES} value={difficulty} onChange={onDifficultyChange} />}
+      {mode === 'translate' && <SubOptionRow label="To" options={LANG_PAIRS} value={langPair} onChange={onLangPairChange} />}
+      {mode === 'brainstorm' && <SubOptionRow label="Topic" options={BRAINSTORM_TOPICS} value={brainstormTopic} onChange={onBrainstormTopicChange} />}
+      {mode === 'wellness' && <SubOptionRow label="Type" options={WELLNESS_TYPES} value={wellnessType} onChange={onWellnessTypeChange} />}
+      {mode === 'create' && <SubOptionRow label="Style" options={CREATE_STYLES} value={createStyle} onChange={onCreateStyleChange} />}
     </div>
   )
 }

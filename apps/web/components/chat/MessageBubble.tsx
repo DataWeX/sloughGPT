@@ -1,12 +1,10 @@
 'use client'
 
-import { memo, useEffect, useState, useRef } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/cn'
-import { Button } from '@sloughgpt/strui'
-import { Markdown } from './Markdown'
-import { Textarea } from '@sloughgpt/strui'
 import { MessageActions } from './MessageActions'
-import { ImageLightbox } from './ImageLightbox'
+import { MessageImages } from './MessageImages'
+import { MessageContent } from './MessageContent'
 import type { ImageAttachment } from './ImageUpload'
 
 export interface MessageBubbleProps {
@@ -43,17 +41,6 @@ function formatTime(date: Date | string): string {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-function highlightText(text: string, query: string): (string | JSX.Element)[] {
-  if (!query) return [text]
-  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const parts = text.split(new RegExp(`(${escaped})`, 'gi'))
-  return parts.map((part, i) =>
-    part.toLowerCase() === query.toLowerCase()
-      ? <mark key={i} className="bg-primary/20 rounded px-0.5 text-inherit">{part}</mark>
-      : part
-  )
-}
-
 export const MessageBubble = memo(function MessageBubble({
   content,
   role,
@@ -77,25 +64,12 @@ export const MessageBubble = memo(function MessageBubble({
   collapsibleLength = 0,
   'aria-live': ariaLive,
 }: MessageBubbleProps) {
-  const [displayContent, setDisplayContent] = useState(content)
   const [isVisible, setIsVisible] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
-  const [editContent, setEditContent] = useState(content)
-  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
-  const [isCollapsed, setIsCollapsed] = useState(true)
   const bubbleRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    setIsVisible(true)
-  }, [])
+  useEffect(() => { setIsVisible(true) }, [])
 
-  useEffect(() => {
-    setDisplayContent(content)
-    setEditContent(content)
-    setIsCollapsed(true)
-  }, [content])
-
-  // Auto-scroll streaming content into view (throttled to ~200ms)
   const lastScrollRef = useRef(0)
   useEffect(() => {
     if (isStreaming && bubbleRef.current) {
@@ -107,23 +81,9 @@ export const MessageBubble = memo(function MessageBubble({
     }
   }, [content, isStreaming])
 
-  const handleEditSave = () => {
-    if (editContent.trim() && onEdit && messageId) {
-      onEdit(messageId, editContent.trim())
-      setIsEditing(false)
-    }
-  }
-
-  const handleEditCancel = () => {
-    setEditContent(content)
-    setIsEditing(false)
-  }
-
-  const hasContent = displayContent && displayContent.trim().length > 0
+  const hasContent = content && content.trim().length > 0
   const showActions = role === 'assistant' && hasContent && !isStreaming && !isError
   const id = messageId || 'msg'
-  const isCollapsible = collapsibleLength > 0 && displayContent.length > collapsibleLength && !isEditing && !isStreaming
-  const visibleContent = isCollapsible && isCollapsed ? displayContent.slice(0, collapsibleLength) : displayContent
 
   return (
     <div
@@ -146,9 +106,7 @@ export const MessageBubble = memo(function MessageBubble({
       }}
       className={cn(
         "group flex flex-col transition-all duration-300 ease-out",
-        isVisible
-          ? "opacity-100 translate-y-0"
-          : "opacity-0 translate-y-3",
+        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3",
         role === 'user' ? 'items-end' : 'items-start'
       )}
     >
@@ -162,7 +120,6 @@ export const MessageBubble = memo(function MessageBubble({
           isError && role === 'assistant' && "ring-1 ring-destructive/40 border-destructive/30"
         )}
       >
-        {/* role indicator */}
         <span className={cn(
           "text-[10px] font-medium tracking-wide uppercase mb-1 block",
           role === 'user' ? 'text-primary-foreground/60 text-right' : 'text-muted-foreground/50'
@@ -180,133 +137,21 @@ export const MessageBubble = memo(function MessageBubble({
           )}
         </span>
 
-        {images && images.length > 0 && (
-          <div className={cn(
-            "flex gap-2 mb-3 flex-wrap",
-            role === 'user' && "flex-row-reverse"
-          )}>
-            {images.map((img) => (
-              <button
-                key={img.id}
-                type="button"
-                onClick={() => setLightboxSrc(img.dataUrl)}
-                className="p-0 border-0 bg-transparent rounded-xl cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40"
-                aria-label={`View ${img.name} full size`}
-              >
-                <img
-                  src={img.dataUrl}
-                  alt={img.name}
-                  className="h-24 w-24 rounded-xl object-cover border border-current/20 shadow-sm hover:shadow-md hover:scale-105 transition-all duration-200"
-                />
-              </button>
-            ))}
-          </div>
-        )}
+        {images && images.length > 0 && <MessageImages images={images} role={role} />}
 
-        {lightboxSrc && (
-          <ImageLightbox
-            src={lightboxSrc}
-            alt="Image preview"
-            onClose={() => setLightboxSrc(null)}
-          />
-        )}
-
-        {hasContent && (
-          role === 'assistant' ? (
-            searchQuery && content.toLowerCase().includes(searchQuery.toLowerCase()) ? (
-              <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">{highlightText(content, searchQuery)}</p>
-            ) : (
-              <article className="leading-relaxed text-sm" aria-label={`${role} message`}>
-                <Markdown content={visibleContent} />
-                {isCollapsible && isCollapsed && (
-                  <span className="text-muted-foreground/40 select-none">…</span>
-                )}
-                {isStreaming && (
-                  <span className="inline-block ml-0.5 animate-pulse text-primary" aria-hidden="true">▊</span>
-                )}
-                {isCollapsible && (
-                  <button
-                    type="button"
-                    onClick={() => setIsCollapsed(!isCollapsed)}
-                    className="block mt-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
-                    aria-expanded={!isCollapsed}
-                  >
-                    {isCollapsed ? `Show more (${displayContent.length - collapsibleLength} more)` : 'Show less'}
-                  </button>
-                )}
-              </article>
-            )
-          ) : isEditing ? (
-            <form
-              className="space-y-2"
-              onSubmit={(e) => {
-                e.preventDefault()
-                handleEditSave()
-              }}
-              aria-label="Edit message form"
-            >
-              <label className="sr-only" htmlFor={`edit-${id}`}>Edit message</label>
-              <Textarea
-                id={`edit-${id}`}
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                className="w-full min-h-[60px] text-sm bg-background text-foreground"
-                rows={3}
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    handleEditCancel()
-                  }
-                }}
-                aria-describedby={`edit-hint-${id}`}
-              />
-              <p id={`edit-hint-${id}`} className="sr-only">Press Enter to save, Escape to cancel</p>
-              <div className="flex justify-end gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleEditCancel}
-                  aria-label="Cancel editing"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  size="sm"
-                  aria-label="Save and resend message"
-                >
-                  Resend
-                </Button>
-              </div>
-            </form>
-          ) : (
-            <div>
-              <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">
-                {searchQuery ? highlightText(visibleContent, searchQuery) : visibleContent}
-              </p>
-              {isCollapsible && isCollapsed && (
-                <span className="text-primary-foreground/50 select-none text-sm">…</span>
-              )}
-              {isCollapsible && (
-                <button
-                  type="button"
-                  onClick={() => setIsCollapsed(!isCollapsed)}
-                  className="mt-1 text-xs font-medium text-primary-foreground/70 hover:text-primary-foreground transition-colors"
-                  aria-expanded={!isCollapsed}
-                >
-                  {isCollapsed ? `Show more (${displayContent.length - collapsibleLength} more)` : 'Show less'}
-                </button>
-              )}
-            </div>
-          )
-        )}
-
-        {!hasContent && role === 'assistant' && (
-          <div className="flex gap-1 items-center h-5" aria-hidden="true">
-            <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce [animation-delay:0ms]" />
-            <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce [animation-delay:150ms]" />
-            <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce [animation-delay:300ms]" />
-          </div>
-        )}
+        <MessageContent
+          content={content}
+          role={role}
+          searchQuery={searchQuery}
+          messageId={messageId}
+          isStreaming={isStreaming}
+          isError={isError}
+          collapsibleLength={collapsibleLength}
+          isEditing={isEditing}
+          onEdit={onEdit}
+          onEditStart={() => setIsEditing(true)}
+          onEditCancel={() => setIsEditing(false)}
+        />
 
         {showTimestamp && (
           <p className={cn(

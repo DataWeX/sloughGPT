@@ -15,6 +15,7 @@ import { useChatModelSettings } from '@/hooks/useChatModelSettings'
 import { useChatKeyboard } from '@/hooks/useChatKeyboard'
 import { useChatBookmarks } from '@/hooks/useChatBookmarks'
 import { useChatMessages } from '@/hooks/useChatMessages'
+import { useChatMode } from '@/hooks/useChatMode'
 import { computeSearchMatches } from '@/lib/chat-utils'
 import type { ChatMessage } from '@/lib/chat-utils'
 import { modelController } from '@/lib/model-controller'
@@ -70,15 +71,6 @@ export default function ChatPage() {
   const model = useChatModelSettings(showToast, refreshHealth)
   const settings = useSettings()
   const [modelDescriptions, setModelDescriptions] = useState<Record<string, string>>({})
-  const [chatMode, setChatMode] = useState<'chat' | 'write' | 'decide' | 'explain' | 'translate' | 'brainstorm' | 'wellness' | 'create' | 'read' | 'talk'>('chat')
-  const [writeTone, setWriteTone] = useState('Friendly')
-  const [writeType, setWriteType] = useState('Email')
-  const [decideStructure, setDecideStructure] = useState('Pros & Cons')
-  const [explainDifficulty, setExplainDifficulty] = useState('Simple')
-  const [translateLangPair, setTranslateLangPair] = useState('EN→ES')
-  const [brainstormTopic, setBrainstormTopic] = useState('Name Ideas')
-  const [wellnessType, setWellnessType] = useState('Sleep Story')
-  const [createStyle, setCreateStyle] = useState('Realistic')
   const [readFileData, setReadFileData] = useState<{ text: string; filename: string; pages: number } | null>(null)
   const [readLoading, setReadLoading] = useState(false)
   const [customSystemPrompt, setCustomSystemPrompt] = useState(() => {

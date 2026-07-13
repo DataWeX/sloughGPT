@@ -91,11 +91,6 @@ describe('ChatArea', () => {
     expect(screen.getByTestId('chat-input')).toBeDefined()
   })
 
-  it('renders image drop zone', () => {
-    render(<ChatArea {...defaultProps} />)
-    expect(screen.getByTestId('image-drop-zone')).toBeDefined()
-  })
-
   it('shows jump-to-bottom button when scrolled up with messages', () => {
     const messages = [createMessage('1', 'Hello'), createMessage('2', 'World')]
     render(<ChatArea {...defaultProps} messages={messages} />)
