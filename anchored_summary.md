@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: c8f8b1f feat: training data API + chat mode hook + monitoring auto-trainer + e2e test
+No active task. Last commit: 4524904 feat: training data JSONL export + monitoring auto-trainer card + session filter
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

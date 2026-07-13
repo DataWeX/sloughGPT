@@ -26,6 +26,8 @@ import { useToastStore } from '@/lib/toast-store'
 import { addGlobalError } from '@/lib/error-store'
 import { useSettings } from '@/lib/store'
 import { apiPost } from '@/lib/http-client'
+import { imagesController } from '@/lib/images-controller'
+import type { ImageStyle } from '@/lib/images-controller'
 import { filesController } from '@/lib/files-controller'
 import { ChatArea, ErrorBanner } from '@/components/chat'
 import { ImageDropZone } from '@/components/chat/ImageDropZone'
@@ -110,6 +112,27 @@ export default function ChatPage() {
     },
     onKnowledgeUpdate: (ctx) => {
       agents.setKnowledgeCtx(prev => ({ ...prev, ...ctx }))
+    },
+  })
+
+  const {
+    chatMode, setChatMode,
+    writeTone, setWriteTone,
+    writeType, setWriteType,
+    decideStructure, setDecideStructure,
+    explainDifficulty, setExplainDifficulty,
+    translateLangPair, setTranslateLangPair,
+    brainstormTopic, setBrainstormTopic,
+    wellnessType, setWellnessType,
+    createStyle, setCreateStyle,
+    handleSend: handleModeSend,
+  } = useChatMode({
+    chat: {
+      input: chat.input,
+      setInput: chat.setInput,
+      sendMessage: chat.sendMessage,
+      setMessages: chat.setMessages,
+      setLoading: chat.setLoading,
     },
   })
 
@@ -298,6 +321,59 @@ export default function ChatPage() {
     try { localStorage.setItem('chat:customSystemPrompt', value) } catch {}
   }, [])
 
+  const handleCreateImage = useCallback(async (prompt: string) => {
+    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: prompt, timestamp: new Date() }
+    const pendingId = (Date.now() + 1).toString()
+    const pendingMsg: ChatMessage = { id: pendingId, role: 'assistant', content: '✨ **Creating your image...**', timestamp: new Date() }
+    chat.setMessages(prev => [...prev, userMsg, pendingMsg])
+    chat.setLoading(true)
+    try {
+      const result = await imagesController.generate(prompt, createStyle.toLowerCase() as ImageStyle)
+      chat.setMessages(prev => prev.map(m =>
+        m.id === pendingId ? { ...m, content: `Here's your ${createStyle.toLowerCase()} image:\n\n![${prompt}](${result.image})` } : m
+      ))
+    } catch (err: any) {
+      chat.setMessages(prev => prev.map(m =>
+        m.id === pendingId ? { ...m, content: `❌ Sorry, I couldn't create that image. ${err?.message || 'Please try again.'}` } : m
+      ))
+    } finally { chat.setLoading(false) }
+  }, [chat, createStyle])
+
+  const handleWriteSend = useCallback(async () => {
+    const input = chat.input.trim()
+    if (!input && chatMode !== 'read') { chat.sendMessage(); return }
+    if (chatMode === 'write') {
+      chat.sendMessage(`Write a ${writeTone.toLowerCase()} ${writeType.toLowerCase()} about: ${input}`)
+      chat.setInput('')
+    } else if (chatMode === 'decide') {
+      chat.sendMessage(`Help me decide using ${decideStructure.toLowerCase()}: ${input}`)
+      chat.setInput('')
+    } else if (chatMode === 'explain') {
+      chat.sendMessage(`Explain this at a ${explainDifficulty.toLowerCase()} level (as if explaining to a ${explainDifficulty.toLowerCase()} learner): ${input}`)
+      chat.setInput('')
+    } else if (chatMode === 'translate') {
+      const [src, tgt] = translateLangPair.split('→')
+      chat.sendMessage(`Translate this from ${src} to ${tgt}: ${input}`)
+      chat.setInput('')
+    } else if (chatMode === 'brainstorm') {
+      chat.sendMessage(`Let's brainstorm ${brainstormTopic.toLowerCase()}. Be creative, give me ideas in a friendly list format: ${input}`)
+      chat.setInput('')
+    } else if (chatMode === 'wellness') {
+      const prompts: Record<string, string> = { 'Sleep Story': 'Tell me a calming sleep story', 'Meditation': 'Guide me through a short meditation', 'Breathing': 'Guide me through a breathing exercise', 'Affirmation': 'Share a positive affirmation' }
+      chat.sendMessage(`Respond in a gentle, soothing tone. ${prompts[wellnessType] || 'Help me feel calm'}: ${input}`)
+      chat.setInput('')
+    } else if (chatMode === 'create') {
+      chat.setInput('')
+      await handleCreateImage(input)
+    } else if (chatMode === 'read') {
+      if (!readFileData) { useToastStore.getState().addToast('Upload a file first, then ask your question', 'info'); return }
+      chat.setInput('')
+      chat.sendMessage(`[I'm asking about the file "${readFileData.filename}"]\n\nHere is the file content:\n${readFileData.text.slice(0, 12000)}\n\n---\n\nMy question: ${input}`)
+    } else {
+      chat.sendMessage()
+    }
+  }, [chatMode, writeTone, writeType, decideStructure, explainDifficulty, translateLangPair, brainstormTopic, wellnessType, readFileData, chat, handleCreateImage])
+
   const handleToggleBookmark = useCallback((messageId: string) => {
     const msg = chat.messages.find(m => m.id === messageId)
     if (!msg) return
@@ -460,7 +536,7 @@ export default function ChatPage() {
               toolEvents={chat.toolEvents}
               value={chat.input}
               onChange={chat.setInput}
-              onSend={handleModeSend}
+              onSend={handleWriteSend}
               onStop={() => {
                 if (chat.loadingRef.current) {
                   chat.loadingRef.current.abort()
