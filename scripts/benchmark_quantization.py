@@ -116,6 +116,7 @@ class QuantizationBenchmark:
         out = model.generate_numpy(
             input_ids, max_new_tokens=max_tokens,
             temperature=temperature,
+            eos_token=-1,  # disable early stopping for benchmarking
         )
         elapsed = time.perf_counter() - t0
         gc.enable()
@@ -364,8 +365,8 @@ class QuantizationBenchmark:
             _, out_nq = self._time_generate(self.model, input_ids, 50)
             _, out_q = self._time_generate(self.quant_model, input_ids, 50)
 
-            gen_nq = out_nq[len(input_ids):]
-            gen_q = out_q[len(input_ids):]
+            gen_nq = out_nq[0, len(input_ids):]
+            gen_q = out_q[0, len(input_ids):]
 
             # Token agreement
             agreement = self._token_agreement(gen_nq, gen_q)
