@@ -4,9 +4,11 @@ FROM node:20-alpine AS base
 FROM base AS deps
 WORKDIR /app
 COPY apps/web/package.json apps/web/package-lock.json* ./apps/web/
-COPY packages/strui ./packages/strui
+COPY packages/strui/package.json packages/strui/package-lock.json* ./packages/strui/
 WORKDIR /app/apps/web
 RUN npm ci
+WORKDIR /app/packages/strui
+RUN npm ci --omit=peer
 
 FROM base AS builder
 WORKDIR /app
