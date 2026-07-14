@@ -798,6 +798,7 @@ class SloNetChatProvider:
                         'n_heads': b.attn.n_heads,
                         'n_kv_heads': b.attn.n_kv_head,
                         'head_dim': b.attn.head_dim,
+                        'rope_inv_freq': b.attn.rope.inv_freq.data if hasattr(b.attn, 'rope') and b.attn.rope is not None else None,
                     })
 
             tok_emb_w = m.layers[0].weight.data
@@ -814,7 +815,20 @@ class SloNetChatProvider:
             E = blocks[0]['head_dim']
             H = blocks[0]['n_heads']
             K_H = blocks[0]['n_kv_heads']
+            E_rope = blocks[0]['head_dim']
             scale = 1.0 / math.sqrt(E)
+
+            # Precompute RoPE cos/sin for all blocks (shared inv_freq)
+            rope_inv_freq = blocks[0].get('rope_inv_freq')
+            rope_cos = None
+            rope_sin = None
+            if rope_inv_freq is not None:
+                max_rope_pos = m.max_seq_len if hasattr(m, 'max_seq_len') else 32768
+                t = _np.arange(max_rope_pos, dtype=_np.float32)
+                freqs = _np.outer(t, rope_inv_freq)
+                emb = _np.concatenate([freqs, freqs], axis=-1)
+                rope_cos = _np.cos(emb).astype(_np.float32)
+                rope_sin = _np.sin(emb).astype(_np.float32)
 
             # Pre-allocate KV cache
             kv_buf_k = [None] * len(blocks)
@@ -847,6 +861,22 @@ class SloNetChatProvider:
                     q = q.reshape(B, seq_len, H, E)
                     k = k.reshape(B, seq_len, K_H, E)
                     v = v.reshape(B, seq_len, K_H, E)
+
+                    # Apply RoPE
+                    if rope_cos is not None and rope_sin is not None:
+                        def _apply_rope(x, start_pos, n_heads_local):
+                            """Apply rotary position embeddings to x[:, :, n_heads_local, E_rope]."""
+                            # x shape: (B, seq_len, n_heads_local, E_rope)
+                            cos = rope_cos[start_pos:start_pos + x.shape[1]]  # (seq_len, E_rope)
+                            sin = rope_sin[start_pos:start_pos + x.shape[1]]
+                            cos = cos[None, :, None, :]  # (1, seq_len, 1, E_rope)
+                            sin = sin[None, :, None, :]
+                            x1 = x[..., :E_rope // 2]
+                            x2 = x[..., E_rope // 2:]
+                            rotated = _np.concatenate([-x2, x1], axis=-1)
+                            return x * cos + rotated * sin
+                        q = _apply_rope(q, pos, H)
+                        k = _apply_rope(k, pos, K_H)
 
                     new_len = kv_len[bi] + seq_len
                     if kv_buf_k[bi] is None or new_len > kv_buf_k[bi].shape[1]:
