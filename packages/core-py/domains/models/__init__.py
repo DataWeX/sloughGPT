@@ -11,7 +11,7 @@ External architectures plug in via **ModelLoader.register** or loaders.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING, Callable
+from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING, Callable
 import logging
 import numpy as np
 
@@ -26,9 +26,6 @@ from domains.training.slonet import (
 )
 
 logger = logging.getLogger("sloughgpt.models")
-
-if TYPE_CHECKING:
-    from domains.core.soul import SloEngine
 
 
 class ModelInterface(ABC):

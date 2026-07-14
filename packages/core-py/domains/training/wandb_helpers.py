@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import asdict, is_dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from domains.infrastructure.config import get_config
 

@@ -32,14 +32,10 @@ import os
 import sys
 import re
 import io
-import json
 import time
-import shutil
 import logging
-import threading
 import subprocess
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Optional
 
 logger = logging.getLogger("man.shell.wm")

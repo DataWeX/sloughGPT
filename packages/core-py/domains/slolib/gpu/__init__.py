@@ -19,8 +19,6 @@ import os
 import sys
 import time
 import math
-import struct
-import weakref
 from typing import Optional, List, Tuple, Any, Dict
 
 import logging

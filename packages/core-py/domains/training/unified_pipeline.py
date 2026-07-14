@@ -22,7 +22,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
 
-from domains.training.trainer_protocol import TrainResult, TrainerProtocol
+from domains.training.trainer_protocol import TrainResult
 from domains.training.sequence import (
     TrainingSequence,
     TrainingSequenceState,

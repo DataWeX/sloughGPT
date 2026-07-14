@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 import logging
 
-from .database import FeedbackDB, get_feedback_db, SimilarPattern
+from .database import get_feedback_db, SimilarPattern
 
 logger = logging.getLogger("man.feedback.meta_weights")
 
