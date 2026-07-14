@@ -15,7 +15,7 @@ concurrency:
 env:
   PYTHON_VERSION: "3.12"
   DOCKER_REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/sloughgpt
+  IMAGE_NAME: datawex/sloughgpt
 
 jobs:
   # ─── Lint (Python) ──────────────────────────────────────────────
