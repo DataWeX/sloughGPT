@@ -7,7 +7,7 @@ import sys
 sys.path.insert(0, "..")
 
 from domains.models import SloughGPTModel
-from domains.training.optimized_trainer import Presets, get_optimal_device
+from domains.training.performance import get_optimal_device
 import torch
 
 def main():

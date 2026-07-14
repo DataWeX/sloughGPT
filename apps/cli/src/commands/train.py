@@ -261,7 +261,7 @@ def cmd_quick(args):
 
     from domains.models import SloughGPTModel
     from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
-    from domains.training.optimized_trainer import get_optimal_device
+    from domains.training.performance import get_optimal_device
 
     printer.header("SloughGPT Quick Start")
 
