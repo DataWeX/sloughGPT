@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: f79a92c feat: SloNet optimizer fallback in training pipeline
+No active task. Last commit: 4730403 fix: use _build_prompt in generate() for consistent message handling
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

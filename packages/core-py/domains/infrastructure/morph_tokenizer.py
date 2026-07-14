@@ -278,8 +278,24 @@ class MorphTokenizer:
                        byte_level=byte_level, byte_fallback=byte_fallback,
                        model_id=model_id)
 
-        # Extract chat template if present
+        # Extract chat template — check tokenizer.json first, then tokenizer_config.json
         chat_tpl = tok_data.get("chat_template")
+        if not chat_tpl:
+            # Check tokenizer_config.json (Qwen, LLaMA, etc. store it there)
+            tok_config_path = model_dir / "tokenizer_config.json"
+            if not tok_config_path.exists() and snapshots.exists():
+                for snap in snapshots.iterdir():
+                    candidate = snap / "tokenizer_config.json"
+                    if candidate.exists():
+                        tok_config_path = candidate
+                        break
+            if tok_config_path.exists():
+                try:
+                    with open(tok_config_path) as f:
+                        tok_config_data = json.load(f)
+                    chat_tpl = tok_config_data.get("chat_template")
+                except Exception:
+                    pass
         if chat_tpl:
             instance._chat_template = chat_tpl
             instance._chat_template_jinja = True
