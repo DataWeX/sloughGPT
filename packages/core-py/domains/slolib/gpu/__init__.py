@@ -1088,11 +1088,11 @@ def benchmark_accelerators() -> Dict[str, Dict[str, Any]]:
         except Exception as e:
             results[name] = {"status": f"error: {e}", "gflops": 0.0}
 
-    print()
+    logger.info("")
     for name, r in sorted(results.items(), key=lambda x: -x[1].get("gflops", 0)):
         bar = "=" * int(r.get("gflops", 0) * 2)
         tier = r.get("tier", "?")
         vram = f"{r['vram_gb']}GB" if r.get("vram_gb") else ""
-        print(f"  {name:<8} {r['gflops']:>6.1f} GF/s {bar:<15} {tier:<6} {vram} [{r['status']}]")
+        logger.info("  %s %6.1f GF/s %s %s %s [%s]", name, r['gflops'], bar, tier, vram, r['status'])
 
     return results

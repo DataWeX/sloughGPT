@@ -312,25 +312,26 @@ class TrainingStatusTracker:
 
     def print_summary(self):
         """Print human-readable summary."""
-        print("=" * 60)
-        print(f"Training Status: {self.report.completion_status.value}")
-        print(f"Progress: {self.report.completion_percentage:.1f}%")
-        print(f"Total Epochs: {self.report.total_epochs}")
-        print(f"Best Loss: {self.report.best_loss:.4f}")
-        print(f"Final Loss: {self.report.final_loss:.4f}")
-        print("-" * 60)
+        logger.info("=" * 60)
+        logger.info("Training Status: %s", self.report.completion_status.value)
+        logger.info("Progress: %.1f%%", self.report.completion_percentage)
+        logger.info("Total Epochs: %s", self.report.total_epochs)
+        logger.info("Best Loss: %.4f", self.report.best_loss)
+        logger.info("Final Loss: %.4f", self.report.final_loss)
+        logger.info("-" * 60)
 
         for stage in [self.report.pretraining, self.report.federated, self.report.rlhf]:
             if stage:
-                print(f"\n{stage.name}:")
-                print(f"  Status: {stage.status.value}")
-                print(f"  Epochs: {stage.epochs_completed}/{stage.total_epochs}")
+                logger.info("")
+                logger.info("%s:", stage.name)
+                logger.info("  Status: %s", stage.status.value)
+                logger.info("  Epochs: %s/%s", stage.epochs_completed, stage.total_epochs)
                 if stage.best_loss > 0:
-                    print(f"  Best Loss: {stage.best_loss:.4f}")
+                    logger.info("  Best Loss: %.4f", stage.best_loss)
                 if stage.error:
-                    print(f"  Error: {stage.error}")
+                    logger.info("  Error: %s", stage.error)
 
-        print("=" * 60)
+        logger.info("=" * 60)
 
 
 # =============================================================================

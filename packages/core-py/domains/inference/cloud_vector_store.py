@@ -29,7 +29,7 @@ async def setup_pinecone(
     from domains.inference.vector_stores.pinecone_store import PineconeVectorStore
     from domains.inference.vector_store import VectorEntry
 
-    print(f"Connecting to Pinecone index: {index}")
+    logger.info("Connecting to Pinecone index: %s", index)
     store = PineconeVectorStore(
         api_key=api_key,
         index_name=index,
@@ -39,7 +39,7 @@ async def setup_pinecone(
 
     connected = await store.connect()
     if connected:
-        print("✓ Connected to Pinecone")
+        logger.info("Connected to Pinecone")
 
         entries = [
             VectorEntry(
@@ -51,36 +51,36 @@ async def setup_pinecone(
         ]
 
         count = await store.upsert(entries)
-        print(f"✓ Upserted {count} test documents")
+        logger.info("Upserted %d test documents", count)
 
         results = await store.query(vector=[0.1] * dimension, top_k=1)
-        print(f"✓ Query returned {len(results)} results")
+        logger.info("Query returned %d results", len(results))
 
         await store.disconnect()
         return True
     else:
-        print("✗ Failed to connect to Pinecone")
+        logger.info("Failed to connect to Pinecone")
         return False
 
 
 async def test_pinecone():
     """Test Pinecone connection."""
-    print("\n" + "="*60)
-    print("TESTING PINECONE VECTOR STORE")
-    print("="*60 + "\n")
+    logger.info("=" * 60)
+    logger.info("TESTING PINECONE VECTOR STORE")
+    logger.info("=" * 60)
 
     api_key = os.getenv("PINECONE_API_KEY")
     if api_key:
         if await setup_pinecone(api_key):
-            print("   ✓ Pinecone: Connected and tested\n")
+            logger.info("   Pinecone: Connected and tested")
     else:
-        print("   ⊘ Pinecone: PINECONE_API_KEY not set")
-        print("\nTo set up Pinecone:")
-        print("   1. Get API key from https://app.pinecone.io")
-        print("   2. export PINECONE_API_KEY='your-api-key'")
-        print("   3. python -m domains.inference.cloud_vector_store --setup")
+        logger.info("   Pinecone: PINECONE_API_KEY not set")
+        logger.info("To set up Pinecone:")
+        logger.info("   1. Get API key from https://app.pinecone.io")
+        logger.info("   2. export PINECONE_API_KEY='your-api-key'")
+        logger.info("   3. python -m domains.inference.cloud_vector_store --setup")
 
-    print("="*60)
+    logger.info("=" * 60)
 
 
 def main():

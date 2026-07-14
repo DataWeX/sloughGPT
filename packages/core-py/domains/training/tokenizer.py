@@ -505,24 +505,24 @@ class SloBPE:
 
     def show_merges(self, top_n: int = 20) -> None:
         """Print the first N learned merges in order."""
-        print(f"Top {top_n} BPE merges (learned order):")
-        print(f"{'#':>4}  {'Left':<12}  {'Right':<12}  {'Token':<20}")
-        print("-" * 52)
+        logger.info("Top %d BPE merges (learned order):", top_n)
+        logger.info("%4s  %-12s  %-12s  %-20s", "#", "Left", "Right", "Token")
+        logger.info("-" * 52)
         for i, (left, right) in enumerate(self.merges[:top_n]):
             token = left + right
-            print(f"{i + 1:>4}  {left:<12}  {right:<12}  {token:<20}")
+            logger.info("%4d  %-12s  %-12s  %-20s", i + 1, left, right, token)
         if len(self.merges) > top_n:
-            print(f"  ... and {len(self.merges) - top_n} more merges")
+            logger.info("  ... and %d more merges", len(self.merges) - top_n)
 
     def show_vocab(self, top_n: int = 30) -> None:
         """Print the first N vocabulary entries."""
-        print(f"Vocabulary (showing {min(top_n, self.vocab_size)} of {self.vocab_size}):")
-        print(f"{'ID':>4}  {'Token':<20}")
-        print("-" * 26)
+        logger.info("Vocabulary (showing %d of %d):", min(top_n, self.vocab_size), self.vocab_size)
+        logger.info("%4s  %-20s", "ID", "Token")
+        logger.info("-" * 26)
         for i, t in enumerate(self.vocab[:top_n]):
             display = t.replace("\n", "\\n").replace("\t", "\\t")
             marker = " [SPECIAL]" if t in self.SPECIAL_TOKENS else ""
-            print(f"{i:>4}  {display:<20}{marker}")
+            logger.info("%4d  %-20s%s", i, display, marker)
 
     # ------------------------------------------------------------------
     # Special token registry
@@ -1442,12 +1442,12 @@ class SloUnigram:
              for tid, t in enumerate(self.vocab)],
             key=lambda x: -x[2],
         )
-        print(f"Top {min(top_n, len(scored))} tokens (by score):")
-        print(f"{'ID':>4}  {'Token':<24}  {'Log-P':<10}")
-        print("-" * 42)
+        logger.info("Top %d tokens (by score):", min(top_n, len(scored)))
+        logger.info("%4s  %-24s  %-10s", "ID", "Token", "Log-P")
+        logger.info("-" * 42)
         for tid, t, lp in scored[:top_n]:
             marker = " [SPECIAL]" if t in self.SPECIAL_TOKENS else ""
-            print(f"{tid:>4}  {t:<24}  {lp:<10.4f}{marker}")
+            logger.info("%4d  %-24s  %.4f%s", tid, t, lp, marker)
 
     # ------------------------------------------------------------------
     # Helpers

@@ -446,18 +446,18 @@ class InferenceBenchmark:
 
     def print_results(self, results: Dict):
         """Print benchmark results."""
-        print("=" * 60)
-        print("INFERENCE BENCHMARK RESULTS")
-        print("=" * 60)
-        print(f"Prompt tokens: {results['prompt_tokens']}")
-        print(f"Generated tokens: {results['generated_tokens']}")
-        print(f"Average latency: {results['avg_latency_ms']:.2f} ms")
-        print(f"P50 latency: {results['p50_latency_ms']:.2f} ms")
-        print(f"P95 latency: {results['p95_latency_ms']:.2f} ms")
-        print(f"P99 latency: {results['p99_latency_ms']:.2f} ms")
-        print(f"Tokens/sec: {results['avg_tokens_per_sec']:.2f}")
-        print(f"Test runs: {results['num_runs']}")
-        print("=" * 60)
+        logger.info("=" * 60)
+        logger.info("INFERENCE BENCHMARK RESULTS")
+        logger.info("=" * 60)
+        logger.info("Prompt tokens: %s", results['prompt_tokens'])
+        logger.info("Generated tokens: %s", results['generated_tokens'])
+        logger.info("Average latency: %.2f ms", results['avg_latency_ms'])
+        logger.info("P50 latency: %.2f ms", results['p50_latency_ms'])
+        logger.info("P95 latency: %.2f ms", results['p95_latency_ms'])
+        logger.info("P99 latency: %.2f ms", results['p99_latency_ms'])
+        logger.info("Tokens/sec: %.2f", results['avg_tokens_per_sec'])
+        logger.info("Test runs: %s", results['num_runs'])
+        logger.info("=" * 60)
 
 
 __all__ = [
