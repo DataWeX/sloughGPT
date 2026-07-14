@@ -1081,12 +1081,12 @@ class ModelServer:
                                 obj.reset()
                             elif hasattr(obj, "clear"):
                                 obj.clear()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("KV cache clear for %s failed: %s", attr, e)
             import gc
             gc.collect()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("KV cache cleanup failed: %s", e)
 
     # --- Lifecycle hooks ---
 
@@ -1559,8 +1559,8 @@ class ModelServer:
                     q.put(token)
             except StopIteration:
                 pass
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Streaming pump generator failed: %s", e)
             finally:
                 q.put(stop_signal)
 

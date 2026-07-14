@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: b6b044f feat: training pause/resume + SloneNet fixes
+No active task. Last commit: b6cdac6 fix: slnc compiler bfloat16 handling + LLaMA weight tying
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
