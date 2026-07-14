@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: b21a83a fix: prevent duplicate SSE complete events + smoother progress
+No active task. Last commit: 4a9a568 chore: add packages/models/ to .gitignore (2.5GB SLNC cache)
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

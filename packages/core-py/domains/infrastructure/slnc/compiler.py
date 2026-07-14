@@ -122,7 +122,6 @@ class SLNCCompiler:
             _find_safetensors,
             load_model_config,
         )
-        from safetensors import safe_open
 
         config = load_model_config(model_id)
         model_dir = _get_model_dir(model_id)
