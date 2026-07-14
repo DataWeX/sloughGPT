@@ -1,5 +1,5 @@
 """
-Tests for the multimodal router — capabilities, training, generation, speech.
+Tests for the multimodal router — status, train, batch, transcribe, generate.
 """
 
 import io
@@ -52,57 +52,86 @@ def _mock_manager():
     return mgr
 
 
-class TestCapabilities:
-    """GET /multimodal/status (consolidated from /capabilities, /learning-progress, /training-report)"""
+def _get_data(resp):
+    """Unwrap {status, data} envelope if present."""
+    body = resp.json()
+    if "data" in body and "status" in body:
+        return body["data"]
+    return body
+
+
+class TestStatus:
+    """GET /multimodal/status — consolidated endpoint"""
 
     @patch(MGR_TARGET)
-    def test_get_capabilities(self, mock_get):
+    def test_get_status(self, mock_get):
         mock_get.return_value = _mock_manager()
         resp = client.get("/multimodal/status")
         assert resp.status_code == 200
-        data = resp.json()["data"]
-        caps = data["engine"]
-        assert "speech_to_text" in caps
-        assert "image_caption" in caps
-        assert caps["status"] == "trained"
-        learning = data["learning"]
-        assert "images_learned" in learning
-        assert "trained" in learning
-        assert learning["images_learned"] == 5
-        assert learning["trained"] is True
-
-
-class TestLearningProgress:
-    """GET /multimodal/status (consolidated)"""
+        data = _get_data(resp)
+        assert "engine" in data
+        assert "learning" in data
+        assert "batch" in data
 
     @patch(MGR_TARGET)
-    def test_get_progress(self, mock_get):
+    def test_status_engine_capabilities(self, mock_get):
         mock_get.return_value = _mock_manager()
         resp = client.get("/multimodal/status")
-        assert resp.status_code == 200
-        data = resp.json()["data"]
+        data = _get_data(resp)
+        engine = data["engine"]
+        assert engine["speech_to_text"] is True
+        assert engine["image_caption"] is True
+        assert engine["speech_model"] == "whisper"
+        assert engine["vision_model"] == "slonet"
+        assert engine["status"] == "trained"
+
+    @patch(MGR_TARGET)
+    def test_status_learning_progress(self, mock_get):
+        mock_get.return_value = _mock_manager()
+        resp = client.get("/multimodal/status")
+        data = _get_data(resp)
         learning = data["learning"]
         assert learning["images_learned"] == 5
         assert learning["trained"] is True
         assert learning["vocab_size"] == 3
         assert learning["replay_buffer_size"] == 42
-
-
-class TestTrainingReport:
-    """GET /multimodal/status (consolidated)"""
+        assert len(learning["caption_history"]) == 3
+        assert learning["unique_captions"] == 3
+        assert learning["diversity_ratio"] == 1.0
+        assert learning["mean_accuracy"] == 0.6
 
     @patch(MGR_TARGET)
-    def test_get_report(self, mock_get):
+    def test_status_training_report(self, mock_get):
         mock_get.return_value = _mock_manager()
         resp = client.get("/multimodal/status")
-        assert resp.status_code == 200
-        data = resp.json()["data"]
+        data = _get_data(resp)
         learning = data["learning"]
         assert learning["images_learned"] == 5
         assert len(learning["caption_history"]) == 3
         assert learning["unique_captions"] == 3
         assert learning["diversity_ratio"] == 1.0
         assert learning["mean_accuracy"] == 0.6
+
+    def test_training_status_idle(self):
+        _background_job["running"] = False
+        _background_job["job_id"] = None
+        _background_job["total"] = 0
+        _background_job["completed"] = 0
+        _background_job["errors"] = 0
+        resp = client.get("/multimodal/status")
+        assert resp.status_code == 200
+        data = _get_data(resp)
+        assert data["batch"]["running"] is False
+        assert data["batch"]["progress_pct"] == 0
+
+    @patch(MGR_TARGET)
+    def test_generation_status(self, mock_get):
+        mock_get.return_value = _mock_manager()
+        resp = client.get("/multimodal/status")
+        assert resp.status_code == 200
+        data = _get_data(resp)
+        assert "engine" in data
+        assert "learning" in data
 
 
 class TestTranscribe:
@@ -117,7 +146,7 @@ class TestTranscribe:
             data={"language": "en"},
         )
         assert resp.status_code == 200
-        data = resp.json()["data"]
+        data = _get_data(resp)
         assert data["text"] == "hello world"
         assert data["confidence"] == 0.9
 
@@ -156,23 +185,6 @@ class TestTrainOnImage:
         assert "image" in resp.json()["detail"].lower()
 
 
-class TestTrainingStatus:
-    """GET /multimodal/status (consolidated from /training-status)"""
-
-    def test_training_status_idle(self):
-        _background_job["running"] = False
-        _background_job["job_id"] = None
-        _background_job["total"] = 0
-        _background_job["completed"] = 0
-        _background_job["errors"] = 0
-        resp = client.get("/multimodal/status")
-        assert resp.status_code == 200
-        data = resp.json()["data"]
-        batch = data["batch"]
-        assert batch["running"] is False
-        assert batch["progress_pct"] == 0
-
-
 class TestGenerateImage:
     """POST /multimodal/generate-image"""
 
@@ -184,14 +196,3 @@ class TestGenerateImage:
             data={"prompt": "a cat", "steps": 5},
         )
         assert resp.status_code in (200, 500)
-
-
-class TestGenerationStatus:
-    """GET /multimodal/status (consolidated from /generation-status)"""
-
-    def test_generation_status(self):
-        resp = client.get("/multimodal/status")
-        assert resp.status_code == 200
-        data = resp.json()["data"]
-        assert "engine" in data
-        assert "learning" in data

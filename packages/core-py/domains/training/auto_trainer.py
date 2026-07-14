@@ -186,18 +186,20 @@ class AutoTrainer:
                     elapsed,
                 )
 
-                # Store pairs in MogDB
+                # Store pairs in MogDB (with quality scoring)
                 try:
                     from domains.training.mobile_training_store import get_training_store
+                    from domains.training.quality_scorer import score_batch
+                    quality_scores = score_batch(pairs)
                     store = get_training_store()
                     store.add_batch([
                         {
                             "user_msg": p["user_msg"],
                             "assistant_msg": p["assistant_msg"],
                             "session_id": p.get("session_id", ""),
-                            "quality": 0,
+                            "quality": quality_scores[i] if i < len(quality_scores) else 0,
                         }
-                        for p in pairs
+                        for i, p in enumerate(pairs)
                     ])
                 except Exception as e:
                     logger.warning("AutoTrainer: failed to store pairs in MogDB: %s", e)
