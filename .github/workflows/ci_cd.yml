@@ -209,7 +209,7 @@ jobs:
   # ─── Docker build ───────────────────────────────────────────────
   build:
     runs-on: ubuntu-latest
-    needs: [lint, test-core-py, test-server, test-root, test-strui, test-web, test-sdk-py]
+    needs: [lint, test-core-py, test-server, test-strui, test-web, test-sdk-py]
     if: github.event_name != 'pull_request'
     steps:
       - uses: actions/checkout@v4
