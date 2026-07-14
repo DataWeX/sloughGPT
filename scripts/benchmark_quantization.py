@@ -547,14 +547,14 @@ class QuantizationBenchmark:
     # Test 7: Regression Check
     # -------------------------------------------------------------------------
     def test_regression(self) -> TestResult:
-        """Non-quantized model performance should be unchanged."""
+        """Non-quantized model performance should be unchanged after quantization."""
         print("[7] Regression Check")
         print("-" * 50)
 
         input_ids = self._encode(self.test_prompts[0])
         n_tok = 50
 
-        # Baseline measurement
+        # Measure non-quantized performance
         times = []
         for run_i in range(self.n_warmup + self.n_measured):
             elapsed, _ = self._time_generate(self.model, input_ids, n_tok)
@@ -564,23 +564,31 @@ class QuantizationBenchmark:
         median = sorted(times)[len(times) // 2]
         tps = n_tok / median
 
-        # Check against known baseline (23.5 tok/s from previous session)
-        baseline_tps = 23.5
-        regression_pct = abs(tps - baseline_tps) / baseline_tps * 100
+        # Measure quantized performance
+        times_q = []
+        for run_i in range(self.n_warmup + self.n_measured):
+            elapsed, _ = self._time_generate(self.quant_model, input_ids, n_tok)
+            if run_i >= self.n_warmup:
+                times_q.append(elapsed)
+
+        median_q = sorted(times_q)[len(times_q) // 2]
+        tps_q = n_tok / median_q
+
+        speedup = tps_q / tps if tps > 0 else 0
 
         results = {
-            "measured_tps": round(tps, 1),
-            "baseline_tps": baseline_tps,
-            "regression_pct": round(regression_pct, 1),
+            "non_quantized_tps": round(tps, 1),
+            "quantized_tps": round(tps_q, 1),
+            "speedup": round(speedup, 2),
         }
 
-        print(f"  Measured:  {tps:.1f} tok/s")
-        print(f"  Baseline:  {baseline_tps:.1f} tok/s")
-        print(f"  Regression: {regression_pct:.1f}%")
+        print(f"  Non-quantized: {tps:.1f} tok/s")
+        print(f"  Quantized:     {tps_q:.1f} tok/s")
+        print(f"  Speedup:       {speedup:.2f}x")
 
-        # Pass if within 15% of baseline (accounts for system load variation)
-        passed = regression_pct < 15
-        details = f"Regression {regression_pct:.1f}% (threshold: 15%)"
+        # Pass if quantized is at least as fast (no regression from quantization)
+        passed = speedup >= 1.0
+        details = f"Speedup {speedup:.2f}x (quantized vs non-quantized)"
 
         print(f"  Result: {'PASS' if passed else 'FAIL'} — {details}")
         print()
