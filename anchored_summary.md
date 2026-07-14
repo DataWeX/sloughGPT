@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 6563811 fix: training returns final_loss, model_path, checkpoint_name (was inf/None/None)
+No active task. Last commit: 1b5bbde fix: bfloat16 SLNC conversion + RoPE in generate()
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

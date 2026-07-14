@@ -52,6 +52,9 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
+# Training checkpoints (generated at runtime)
+checkpoints/
+
 # Jupyter Notebook
 .ipynb_checkpoints
 sloughgpt_colab.executed.ipynb
