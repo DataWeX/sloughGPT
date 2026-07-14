@@ -335,6 +335,7 @@ Key state variables: `trainingPhase`, `trainingMethod`, `inputMode`, `trainingLo
 - **Validation**: Training requires dataset or pasted text; fine-tune requires dataset (not text)
 - **EventSource reconnect**: Auto-reconnect up to 3 times on connection errors before marking as failed
 - **Disabled Metal accelerator during training**: Metal GPU dispatch overhead was 6x slower than CPU numpy for embed_dim≤128. `train_step()`, `train_batch()`, and `contrastive_step()` now disable the accelerator during the forward/backward pass and restore it afterward. Result: embed_dim=64 training drops from 257ms to 92ms per sample (~3x faster).
+- **Torch-free training**: `SloughGPTTrainer` works without PyTorch installed. `_create_optimizer()` uses `SloAdam` instead of `torch.optim.AdamW`; `train_step()` uses `step(params)` and manual grad zeroing; `get_batch()` handles SloNet Tensor float indices. Verified: loss 5.95→4.54 in 100 steps on pure numpy.
 
 ### Parallel Execution Architecture
 
@@ -672,6 +673,12 @@ class ClassName:
 - [x] Fixed autoload to register model with `ModelsController` so health endpoint reports `model_loaded: true`
 - [x] Fixed `/models/hf` returning `"hf/gpt2"` prefixed IDs → now returns clean `"gpt2"`
 - [x] Fixed `/models` duplicate entries (loaded model was appearing in the available list)
+- [x] Fixed training pipeline torch-free path: `_create_optimizer()` now uses `SloAdam` when PyTorch is unavailable (was bare `import torch.nn` that crashed)
+- [x] Fixed `train_step()` for SloAdam API: uses `step(params)` and manual grad zeroing instead of `optimizer.step()` / `zero_grad()` when torch-free
+- [x] Fixed `get_batch()` SloNet Tensor indexing: `torch.randint` returns floats, added `int()` conversion for proper list slicing
+- [x] Fixed `_slonet_progress` SSE callback: now passes `progress_pct`, `total_steps`, `learning_rate` to frontend (were always 0.0)
+- [x] Verified training end-to-end: loss decreases 5.95→4.54 (1.31x) in 100 steps, 2 `.soul` checkpoints saved, SSE streaming works
+- [x] Training pipeline tests: 21/21 unified pipeline tests pass, 144/144 server tests pass
 
 ---
 

@@ -16,11 +16,10 @@ Full ``step_*.pt`` checkpoints embed ``stoi`` / ``itos`` / ``chars`` for fair
 """
 
 import os
-import json
 import logging
 import threading
 from pathlib import Path
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 try:
     import torch
@@ -710,7 +709,6 @@ class SloughGPTTrainer:
             )
 
         import torch.nn as nn
-        from domains.training.slonet import Tensor as SloTensor
         _to_torch = lambda p: p if isinstance(p, torch.Tensor) else nn.Parameter(torch.from_numpy(p.data))
 
         decay_params = []

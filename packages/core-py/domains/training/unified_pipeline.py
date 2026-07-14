@@ -753,6 +753,9 @@ class UnifiedTrainingPipeline:
             step = info.get("global_step") or info.get("step", 0)
             loss = info.get("train_loss") or info.get("loss")
             epoch = info.get("epoch", 0)
+            progress_pct = info.get("progress_percent", 0)
+            total_steps = info.get("steps_per_epoch", 0) * self.config.epochs
+            lr = info.get("learning_rate", 0.0)
             step_counter[0] = step
             safe_loss = TrainingProgress._sanitize(loss)
             if safe_loss is not None:
@@ -765,6 +768,9 @@ class UnifiedTrainingPipeline:
                 metrics={"loss_history": loss_history[-200:]},
                 message=f"Step {step}, loss {safe_loss:.4f}" if safe_loss is not None else f"Step {step}",
             )
+            self.progress.progress_pct = progress_pct
+            self.progress.total_steps = total_steps
+            self.progress.learning_rate = lr
             if on_progress:
                 on_progress(self.progress)
 
