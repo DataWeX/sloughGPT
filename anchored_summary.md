@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 4a9a568 chore: add packages/models/ to .gitignore (2.5GB SLNC cache)
+No active task. Last commit: 598ece0 fix: remove dead safetensors import from compiler
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
