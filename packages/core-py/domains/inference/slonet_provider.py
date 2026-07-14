@@ -427,7 +427,8 @@ class SloNetChatProvider:
         # Auto-detect GQA (n_kv_head < n_head)
         n_kv_head = config.get("num_key_value_heads", n_head)
 
-        # Create SloTransformer
+        # Create SloTransformer — pass HF config's rms_norm_eps to match model exactly
+        hf_eps = config.get("rms_norm_eps", 1e-5)
         model = SloTransformer(
             vocab_size=vocab_size,
             n_embed=n_embed,
@@ -440,6 +441,7 @@ class SloNetChatProvider:
             use_rope=not use_abs_pos,
             rope_base=config.get("rope_theta", 10000.0),
             dropout=0.0,
+            eps=hf_eps,
             tie_weights=True,
             use_abs_pos_emb=use_abs_pos,
             norm_type=norm_type,
