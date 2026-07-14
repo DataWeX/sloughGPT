@@ -537,7 +537,9 @@ def _autoload_model(cfg: ServerConfig):
         hf_model_id=result.model_id,
         inference_engine=inference_engine,
         model_registry=registry,
-        gguf_model=gguf_model,
+        quantize=cfg.quantize_slonet,
+        quant_bits=cfg.quant_bits,
+        quant_mode=cfg.quant_mode,
     )
 
     if gguf_model:

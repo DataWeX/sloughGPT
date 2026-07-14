@@ -111,12 +111,18 @@ class ModelsController:
             logger.info("Loading %s into SloTransformer (pure NumPy)...", model_id)
             try:
                 from domains.models.provider import setup_providers
+                from domains.infrastructure.config import get_config
+                cfg = get_config()
                 setup_providers(
                     None, None,
                     hf_model_id=model_id,
                     slonet_hf_id=model_id,
+                    quantize=cfg.quantize_slonet,
+                    quant_bits=cfg.quant_bits,
+                    quant_mode=cfg.quant_mode,
                 )
-                logger.info("SloNet provider registered: %s", model_id)
+                logger.info("SloNet provider registered: %s (quant=%s)",
+                            model_id, f"int{cfg.quant_bits}" if cfg.quantize_slonet else "none")
             except Exception as e:
                 logger.error("Failed to register SloNet provider for %s: %s", model_id, e)
                 raise
