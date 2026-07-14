@@ -404,7 +404,7 @@ export const trainingJobsController = {
     }
   },
 
-  // Blocking fallback for mobile (non-SSE)
+  // Blocking fallback for mobile (non-SSE) — consumes SSE stream and returns final result
   async trainFromSessions(params?: {
     limit?: number
     min_length?: number
@@ -418,7 +418,22 @@ export const trainingJobsController = {
     elapsed_ms: number
     message?: string
   }> {
-    return apiPost('/mobile/train/from-sessions', params ?? {})
+    let finalResult: Record<string, unknown> = {}
+    for await (const event of this.streamTrainFromSessions(params)) {
+      if (event.status === 'complete') {
+        finalResult = event.data ?? {}
+      } else if (event.status === 'error') {
+        throw new Error(event.message || 'Training failed')
+      }
+    }
+    return {
+      success: !!finalResult.checkpoint_name,
+      checkpoint_name: (finalResult.checkpoint_name as string) ?? '',
+      loss: (finalResult.loss as number) ?? 0,
+      steps: (finalResult.steps as number) ?? 0,
+      elapsed_ms: (finalResult.elapsed_ms as number) ?? 0,
+      message: undefined,
+    }
   },
 
   async getAutoTrainStatus(): Promise<AutoTrainStatus> {
@@ -486,7 +501,7 @@ export const trainingJobsController = {
   },
 
   async updatePairQuality(pairId: string, quality: number): Promise<{ status: string }> {
-    return apiPost<{ status: string }>(`/mobile/train/pair/${encodeURIComponent(pairId)}`, { quality })
+    return apiPatch<{ status: string }>(`/mobile/train/pair/${encodeURIComponent(pairId)}`, { quality })
   },
 
   async deleteSyncedPairs(): Promise<{ status: string; count: number }> {

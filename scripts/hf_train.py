@@ -59,7 +59,8 @@ def main():
             TrainerCallback,
         )
     except ImportError as e:
-        json.dump({"success": False, "error": f"Missing dependency: {e}"}, sys.stdout)
+        sys.stdout.write(json.dumps({"success": False, "error": f"Missing dependency: {e}"}) + "\n")
+        sys.stdout.flush()
         return
 
     # ── Dataset ──────────────────────────────────────────────────────────
@@ -141,7 +142,13 @@ def main():
             bias="none",
         )
         model = get_peft_model(model, lora_config)
-        model.print_trainable_parameters()
+        # Redirect trainable params print to stderr so stdout stays clean for JSON parsing
+        _real_stdout = sys.stdout
+        sys.stdout = sys.stderr
+        try:
+            model.print_trainable_parameters()
+        finally:
+            sys.stdout = _real_stdout
 
     model.to("cpu")
 

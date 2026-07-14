@@ -1370,11 +1370,15 @@ async def train_from_sessions(body: FromSessionsRequest = FromSessionsRequest(),
                 logger.info("Client disconnected from training stream")
                 return
 
-            # Read one line (with timeout via select-like approach)
-            line = await asyncio.wait_for(
-                asyncio.get_event_loop().run_in_executor(None, proc.stdout.readline),
-                timeout=disconnect_check_interval,
-            )
+            try:
+                # Read one line (with timeout for periodic disconnect checks)
+                line = await asyncio.wait_for(
+                    asyncio.get_running_loop().run_in_executor(None, proc.stdout.readline),
+                    timeout=disconnect_check_interval,
+                )
+            except asyncio.TimeoutError:
+                # readline timed out — loop back to check deadline/disconnect
+                continue
 
             if not line:
                 break  # stdout closed — process finished
@@ -1443,9 +1447,6 @@ async def train_from_sessions(body: FromSessionsRequest = FromSessionsRequest(),
             message=f"Training complete — loss={result.get('loss', 0):.4f} steps={result.get('steps', 0)}",
         )
 
-    except asyncio.TimeoutError:
-        # readline timed out — send heartbeat check and continue the loop
-        pass
     except Exception as e:
         logger.error("Session training failed: %s", e)
         yield sse_error("training", "TRAIN", f"Training failed: {e}")
