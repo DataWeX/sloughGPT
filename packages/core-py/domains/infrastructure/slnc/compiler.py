@@ -309,13 +309,19 @@ class SLNCCompiler:
 
         block_layout, non_block_layout, prefix_template = _ARCH_LAYOUTS[arch]
 
-        # Block tensors
+        # Block tensors — include biases if they exist in weights
+        bias_suffixes = [".bias"]
         for layer_idx in range(n_layer):
             prefix = prefix_template.format(i=layer_idx)
             for tensor_name in block_layout:
                 key = prefix + tensor_name
                 if key in weights:
                     result.append((key, weights[key]))
+                # Check for corresponding bias (e.g. q_proj.weight → q_proj.bias)
+                if tensor_name.endswith(".weight"):
+                    bias_key = prefix + tensor_name[:-len(".weight")] + ".bias"
+                    if bias_key in weights:
+                        result.append((bias_key, weights[bias_key]))
 
         # Non-block tensors
         for tensor_name in non_block_layout:
@@ -337,7 +343,7 @@ class SLNCCompiler:
         has_rope = config.get("rope_theta") is not None or config.get("position_embedding_type") == "rope"
 
         if has_rope:
-            # LLaMA/Qwen — no bias, SwiGLU has 3 weight matrices
+            # LLaMA/Qwen — SwiGLU has 3 weight matrices; biases included if present
             shapes = {
                 "input_layernorm.weight": (n_embd,),
                 "self_attn.q_proj.weight": (n_embd, n_embd),
@@ -348,6 +354,16 @@ class SLNCCompiler:
                 "mlp.gate_proj.weight": (n_embd, n_inner),
                 "mlp.up_proj.weight": (n_embd, n_inner),
                 "mlp.down_proj.weight": (n_inner, n_embd),
+            }
+            # Dynamic bias shapes — will be included if present in weights
+            bias_shapes = {
+                "self_attn.q_proj.bias": (n_embd,),
+                "self_attn.k_proj.bias": (n_embd,),
+                "self_attn.v_proj.bias": (n_embd,),
+                "self_attn.o_proj.bias": (n_embd,),
+                "mlp.gate_proj.bias": (n_inner,),
+                "mlp.up_proj.bias": (n_inner,),
+                "mlp.down_proj.bias": (n_embd,),
             }
         else:
             # GPT-2

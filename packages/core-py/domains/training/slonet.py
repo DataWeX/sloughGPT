@@ -1807,7 +1807,7 @@ class SloTransformerBlock(SloLayer):
     def __init__(self, d_model: int, n_heads: int, n_kv_head: Optional[int] = None,
                  dim_ff: int = None, use_rope: bool = False, max_seq_len: int = 2048,
                  rope_base: float = 10000.0, dropout: float = 0.1, eps: float = 1e-5,
-                 norm_type: str = "rms_norm", name=""):
+                 norm_type: str = "rms_norm", activation: str = "gelu", name=""):
         super().__init__(name or f"Transformer{d_model}")
         dim_ff = dim_ff or d_model * 4
         self.d_model = d_model
@@ -1819,7 +1819,7 @@ class SloTransformerBlock(SloLayer):
                                            use_rope=use_rope, max_seq_len=max_seq_len,
                                            rope_base=rope_base, name=name + "_attn")
         self.ff_norm = NormCls(d_model, eps, name + "_ff_norm")
-        self.ff = SloFeedForward(d_model, dim_ff, name=name + "_ff")
+        self.ff = SloFeedForward(d_model, dim_ff, name=name + "_ff", activation=activation)
         self.drop = SloDropout(dropout) if dropout > 0 else None
         self.use_checkpoint = False
         self.soul_traits = {"curiosity": 0.5, "creativity": 0.5, "warmth": 0.5}
@@ -3301,6 +3301,7 @@ class SloTransformer(SloNet):
         intermediate_size: Optional[int] = None,
         use_abs_pos_emb: bool = False,
         norm_type: str = "rms_norm",
+        activation: str = "gelu",
         soul_name: str = "SloTransformer",
         soul_traits: Optional[Dict[str, float]] = None,
     ):
@@ -3315,6 +3316,7 @@ class SloTransformer(SloNet):
                 n_embed, n_head, n_kv_head=n_kv_head,
                 dim_ff=dim_ff, use_rope=use_rope, max_seq_len=max_seq_len,
                 rope_base=rope_base, dropout=0, eps=eps, norm_type=norm_type,
+                activation=activation,
                 name=f"blocks.{i}",
             ))
         NormCls = SloLayerNorm if norm_type == "layer_norm" else SloRMSNorm

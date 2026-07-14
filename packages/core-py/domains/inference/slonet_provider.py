@@ -427,6 +427,10 @@ class SloNetChatProvider:
         # Auto-detect GQA (n_kv_head < n_head)
         n_kv_head = config.get("num_key_value_heads", n_head)
 
+        # Auto-detect activation from config — LLaMA/Qwen/Mistral use SwiGLU (silu)
+        hidden_act = config.get("hidden_act", "gelu")
+        activation = "silu" if hidden_act == "silu" else "gelu"
+
         # Create SloTransformer — pass HF config's rms_norm_eps to match model exactly
         hf_eps = config.get("rms_norm_eps", 1e-5)
         model = SloTransformer(
@@ -445,6 +449,7 @@ class SloNetChatProvider:
             tie_weights=True,
             use_abs_pos_emb=use_abs_pos,
             norm_type=norm_type,
+            activation=activation,
         )
 
         # Load weights directly from mmap (zero copy)
