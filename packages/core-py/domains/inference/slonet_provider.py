@@ -580,6 +580,31 @@ class SloNetChatProvider:
             vision=False, functions=False,
         )
 
+    def _build_prompt(self, messages):
+        """Build prompt from messages using tokenizer's chat template.
+
+        Handles:
+        - List of {role, content} dicts (normal chat)
+        - List of strings (legacy)
+        - String (legacy)
+        - None/empty (empty prompt)
+        """
+        if not messages:
+            return ""
+        # String shortcut
+        if isinstance(messages, str):
+            return messages
+        # List of strings
+        if isinstance(messages, list) and messages and isinstance(messages[0], str):
+            return messages[-1]
+        # List of dicts — use chat template
+        if hasattr(self._tokenizer, 'apply_chat_template'):
+            return self._tokenizer.apply_chat_template(messages)
+        # Fallback: last message content
+        if messages and isinstance(messages[-1], dict):
+            return messages[-1].get("content", "")
+        return ""
+
     def _load_tokenizer(self, model_dir, config):
         """Load tokenizer — MorphTokenizer.from_pretrained handles all parsing."""
         try:
