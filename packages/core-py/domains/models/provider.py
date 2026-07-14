@@ -846,7 +846,10 @@ def discover_checkpoints(checkpoint_dir: str = "models/auto-training") -> List[D
 def setup_providers(hf_model=None, hf_tokenizer=None, hf_model_id: str = "gpt2",
                     inference_engine=None,
                     slonet_hf_id: Optional[str] = None,
-                    model_registry=None) -> None:
+                    model_registry=None,
+                    quantize: bool = False,
+                    quant_bits: int = 8,
+                    quant_mode: str = "symmetric") -> None:
     """Register all model providers and wire up the default router.
 
     Call after the HF model is loaded. Registers:
@@ -883,10 +886,16 @@ def setup_providers(hf_model=None, hf_tokenizer=None, hf_model_id: str = "gpt2",
     if slonet_hf_id:
         try:
             from domains.inference.slonet_provider import SloNetChatProvider
-            slonet_provider = SloNetChatProvider(hf_model_id=slonet_hf_id)
+            slonet_provider = SloNetChatProvider(
+                hf_model_id=slonet_hf_id,
+                quantize=quantize,
+                quant_bits=quant_bits,
+                quant_mode=quant_mode,
+            )
             register_provider("slonet-native", slonet_provider)
             text_provider_name = "slonet-native"
-            logger.info("Registered slonet-native provider: %s", slonet_hf_id)
+            logger.info("Registered slonet-native provider: %s (quant=%s)",
+                        slonet_hf_id, f"int{quant_bits}" if quantize else "none")
         except Exception as e:
             logger.warning("Failed to load slonet-native provider %s: %s", slonet_hf_id, e)
 

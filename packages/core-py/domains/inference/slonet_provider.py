@@ -271,7 +271,9 @@ class SloNetChatProvider:
         hf_model_id: HuggingFace model ID or local path (e.g. 'gpt2', 'Qwen/Qwen2.5-0.5B-Instruct')
     """
 
-    def __init__(self, hf_model_id: str = "gpt2"):
+    def __init__(self, hf_model_id: str = "gpt2", quantize: bool = False,
+                 quant_bits: int = 8, quant_mode: str = "symmetric",
+                 quant_clip: float = 0.999):
         import json as _json
         from pathlib import Path as _Path
         from safetensors.numpy import load_file as _load_file
@@ -280,6 +282,7 @@ class SloNetChatProvider:
         self._hf_model_id = hf_model_id
         self._model_id = hf_model_id
         self._device = "cpu"
+        self._quant_engine = None
 
         # Resolve model directory
         model_dir = _Path(hf_model_id)
@@ -349,11 +352,30 @@ class SloNetChatProvider:
             mapped = convert_hf_to_slonet(sd, n_layer=n_layer, config=config)
             self._model.load_state_dict(mapped)
 
+        # Apply quantization if requested
+        if quantize:
+            from domains.infrastructure.quantization import QuantEngine, walk_slo_linears
+
+            linear_map = walk_slo_linears(self._model)
+            engine = QuantEngine(bits=quant_bits, mode=quant_mode, clip_percentile=quant_clip)
+            quantized_count = 0
+            for name, module in linear_map.items():
+                if "norm" in name:
+                    continue
+                info = engine.quantize(f"{name}.weight", module.weight.data.copy())
+                if info.is_quantized:
+                    module.set_quantized_weight(info)
+                    quantized_count += 1
+            self._quant_engine = engine
+            logger.info("SloNetChatProvider: quantized %d/%d layers to int%d",
+                        quantized_count, len(linear_map), quant_bits)
+
         # Load tokenizer
         self._tokenizer = self._load_tokenizer(model_dir, config)
 
-        logger.info("SloNetChatProvider loaded: %s (embed=%d, layers=%d, heads=%d, rope=%s)",
-                     hf_model_id, n_embed, n_layer, n_head, not use_abs_pos)
+        logger.info("SloNetChatProvider loaded: %s (embed=%d, layers=%d, heads=%d, rope=%s, quant=%s)",
+                     hf_model_id, n_embed, n_layer, n_head, not use_abs_pos,
+                     f"int{quant_bits}" if quantize else "none")
 
     @classmethod
     def from_slnc(

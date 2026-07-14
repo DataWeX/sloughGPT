@@ -52,7 +52,7 @@ class ServerConfig:
     autoload_model: str = "Qwen/Qwen2.5-0.5B-Instruct"
     autoload_device: str = "auto"
     use_slonet: bool = False
-    quantize_slonet: bool = False
+    quantize_slonet: bool = True  # int8 quantization enabled by default
     quant_bits: int = 8
     quant_mode: str = "symmetric"
     quant_clip: float = 0.999
