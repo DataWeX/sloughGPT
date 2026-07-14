@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 565f248 chore: delete dead test_auto_train_unit.py (210 lines) + remove dead check_for_updates() stub
+No active task. Last commit: 85b0149 feat: training pair quality scorer (length, repetition, coherence, language)
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
