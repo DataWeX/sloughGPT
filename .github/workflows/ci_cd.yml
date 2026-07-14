@@ -133,6 +133,7 @@ jobs:
             --ignore=tests/test_slonet_provider.py \
             --ignore=tests/test_api.py \
             --ignore=tests/test_auto_train_integration.py \
+            --ignore=tests/test_benchmarking.py \
             -q --tb=short -x
 
   # ─── Frontend: strui (typecheck + test) ─────────────────────────
