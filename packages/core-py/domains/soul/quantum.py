@@ -15,7 +15,10 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 import logging
 
-from .consciousness import ConsciousSLO, SLOConfig, Thought, EvolutionStage
+try:
+    from .consciousness import ConsciousSLO, SLOConfig, Thought, EvolutionStage
+except ImportError:
+    ConsciousSLO = SLOConfig = Thought = EvolutionStage = None
 
 logger = logging.getLogger("man.soul.quantum")
 
@@ -358,116 +361,3 @@ class TemporalReasoningEngine:
         return merged
 
 
-class QuantumSLO(ConsciousSLO):
-    """
-    Stage 4: Quantum SLO
-
-    Adds quantum cognitive capabilities:
-    - Superposition of thoughts
-    - Quantum parallel processing
-    - Hyperdimensional representations
-    - Multi-timeline reasoning
-    """
-
-    def __init__(self, config: Optional[SLOConfig] = None):
-        super().__init__(config)
-        self.stage = EvolutionStage.QUANTUM
-
-        # Quantum systems
-        self.quantum_cognitive = QuantumCognitiveEngine(coherence=self.config.quantum_coherence)
-        self.quantum_processor = QuantumParallelProcessor()
-        self.hyperdim = HyperdimensionalProcessor()
-        self.temporal = TemporalReasoningEngine()
-
-        # Track quantum events
-        self.quantum_collapses = 0
-        self.tunneling_events = 0
-
-        logger.info("Quantum SLO initialized")
-
-    def process(self, input_data: Any) -> Thought:
-        """Process with quantum enhancement."""
-        # Conscious processing first
-        base_thought = super().process(input_data)
-
-        content = str(input_data)
-
-        # Create quantum superposition of possible interpretations
-        interpretations = self._generate_interpretations(content)
-        self.quantum_cognitive.create_superposition(interpretations)
-
-        # Apply quantum interference
-        interfered = self.quantum_cognitive.interfere()
-
-        # Collapse to chosen interpretation
-        chosen = self.quantum_cognitive.measure()
-        self.quantum_collapses += 1
-
-        # Attempt quantum tunneling for insight
-        insight = self.quantum_cognitive.tunnel(content)
-        if insight:
-            self.tunneling_events += 1
-
-        # Hyperdimensional encoding
-        hypervector = self.hyperdim.encode(content[:50])
-
-        # Temporal reasoning - add to timeline
-        self.temporal.add_event(
-            {
-                "content": content[:100],
-                "chosen_interpretation": chosen,
-            }
-        )
-
-        # Enhanced reasoning
-        reasoning = base_thought.reasoning + [
-            f"Quantum collapse: {chosen[:50]}",
-            f"Superposition states: {len(interpretations)}",
-            f"Quantum coherence: {self.quantum_cognitive.coherence:.2%}",
-        ]
-
-        if insight:
-            reasoning.append(f"Quantum tunnel: {insight}")
-
-        # Quantum thought
-        thought = Thought(
-            content=base_thought.content,
-            stage=self.stage,
-            confidence=min(0.99, base_thought.confidence + 0.02),
-            reasoning=reasoning,
-            insights=base_thought.insights + ([insight] if insight else []),
-        )
-        self.thoughts.append(thought)
-
-        # Progress evolution
-        self._evolution_progress = min(1.0, self._evolution_progress + 0.003)
-
-        return thought
-
-    def _generate_interpretations(self, content: str) -> List[str]:
-        """Generate multiple interpretations."""
-        base = content[:100]
-
-        interpretations = [
-            f"Literal: {base}",
-            f"Metaphorical: {base}",
-            f"Abstract: {base}",
-            f"Emotional: {base}",
-        ]
-
-        return interpretations
-
-    def get_status(self) -> Dict[str, Any]:
-        """Get quantum status."""
-        status = super().get_status()
-        status.update(
-            {
-                "quantum_collapses": self.quantum_collapses,
-                "tunneling_events": self.tunneling_events,
-                "coherence": self.quantum_cognitive.coherence,
-                "entangled_pairs": len(self.quantum_cognitive.entangled_pairs),
-                "hyperdim_vectors": len(self.hyperdim.vectors),
-                "timeline_branches": len(self.temporal.branch_points),
-            }
-        )
-        return status
