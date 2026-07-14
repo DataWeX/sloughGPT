@@ -663,11 +663,7 @@ class SloNetChatProvider:
         import math
         import time
 
-        prompt = ""
-        if messages and isinstance(messages[-1], dict):
-            prompt = messages[-1].get("content", "")
-        elif messages and isinstance(messages[-1], str):
-            prompt = messages[-1]
+        prompt = self._build_prompt(messages)
         token_ids = self._tokenizer.encode(prompt)
         eos_id = self._tokenizer.eos_token_id or 0
         top_k = kwargs.get('top_k')
