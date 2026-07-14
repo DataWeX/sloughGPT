@@ -507,6 +507,8 @@ class SloughGPTTrainer:
         self._train_loss_at_best = 0.0
         self._ema_loss = None  # exponential moving average of train loss
         self._ema_alpha = 0.3  # smoothing factor (0=ignore new, 1=no smoothing)
+        self._last_checkpoint_path = None  # path of last saved checkpoint
+        self._last_train_loss = None  # last raw train loss for fallback
 
         # Setup device
         self.device = self._setup_device()
@@ -804,6 +806,7 @@ class SloughGPTTrainer:
             ema = self._ema_alpha * raw_loss + (1 - self._ema_alpha) * (self._ema_loss or raw_loss)
             if self._ema_loss is None or ema < self._ema_loss:
                 self._ema_loss = ema
+            self._last_train_loss = raw_loss
             metrics = {"loss": self._ema_loss, "raw_loss": raw_loss}
             if self.accumulation_step >= self.config.gradient_accumulation_steps:
                 params = [p for p in model.parameters() if p.grad is not None]
@@ -832,6 +835,7 @@ class SloughGPTTrainer:
         ema = self._ema_alpha * raw_loss + (1 - self._ema_alpha) * (self._ema_loss or raw_loss)
         if self._ema_loss is None or ema < self._ema_loss:
             self._ema_loss = ema
+        self._last_train_loss = raw_loss
         metrics = {"loss": self._ema_loss, "raw_loss": raw_loss}
 
         if self.accumulation_step >= self.config.gradient_accumulation_steps:
@@ -1111,12 +1115,26 @@ class SloughGPTTrainer:
                 )
 
         self._is_training = False
+
+        # final_loss: prefer best eval loss, fall back to last train loss
+        final_loss = self._best_val_loss
+        if final_loss is None or (isinstance(final_loss, float) and final_loss == float("inf")):
+            final_loss = self._last_train_loss
+        checkpoint_name = ""
+        model_path = ""
+        if self._last_checkpoint_path:
+            p = Path(self._last_checkpoint_path)
+            checkpoint_name = p.name
+            model_path = str(p)
+
         return TrainResult(
-            success=self._best_val_loss is not None,
+            success=True,
             best_eval_loss=self._best_val_loss,
             global_step=self.global_step,
-            final_loss=self._best_val_loss,
+            final_loss=final_loss,
             total_steps=self.global_step,
+            model_path=model_path,
+            checkpoint_name=checkpoint_name,
         )
 
     def save_checkpoint(self, metrics: Optional[Dict[str, float]] = None, is_final: bool = False):
@@ -1151,6 +1169,7 @@ class SloughGPTTrainer:
         # Save in .soul format with vocab
         self.save(str(checkpoint_path), format="sou",
                   stoi=self.stoi, itos=self.itos, chars=chars_list)
+        self._last_checkpoint_path = str(checkpoint_path)
 
     def save(self, path: str, format: str = "sou", stoi=None, itos=None, chars=None):
         """Save model in specified format."""
