@@ -18,6 +18,7 @@ Full ``step_*.pt`` checkpoints embed ``stoi`` / ``itos`` / ``chars`` for fair
 import os
 import logging
 import threading
+import time
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
@@ -946,6 +947,7 @@ class SloughGPTTrainer:
         resume_path: Optional[str] = None,
         on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
         cancel_event: Optional[threading.Event] = None,
+        pause_event: Optional[threading.Event] = None,
     ) -> Dict[str, Any]:
         """Full training loop.
 
@@ -962,6 +964,7 @@ class SloughGPTTrainer:
                 with a dict containing at least: ``global_step``, ``epoch`` (1-based),
                 ``epochs``, ``steps_per_epoch``, ``progress_percent`` (0--99 while running),
                 ``train_loss`` (last batch), optional ``eval_loss``, ``learning_rate``.
+            pause_event: Optional threading.Event — if set, training loop sleeps until cleared.
         """
         if resume:
             checkpoint = None
@@ -1039,6 +1042,14 @@ class SloughGPTTrainer:
                 if cancel_event is not None and cancel_event.is_set():
                     logger.info("Training cancelled at step %d", self.global_step)
                     break
+                if pause_event is not None and pause_event.is_set():
+                    logger.info("Training paused at step %d — waiting for resume", self.global_step)
+                    while pause_event.is_set():
+                        if cancel_event is not None and cancel_event.is_set():
+                            break
+                        time.sleep(0.5)
+                    if cancel_event is not None and cancel_event.is_set():
+                        break
 
                 metrics = self.train_step()
                 train_loss += metrics["loss"]

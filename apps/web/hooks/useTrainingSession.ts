@@ -153,9 +153,10 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
     onCheckpointUpdate?: () => void,
   ) => {
+    esRef.current?.close(); esRef.current = null
     trainingJobsController.startAutoTrain(body).then(() => {
       setPhase('TRAINING'); setProgress(0); setLoss(null); setEpoch(0); setTotalEpochs(0)
-      setMessage(''); setLossHistory([]); setEvalResult(null)
+      setMessage(''); setLossHistory([]); setEvalResult(null); setStartTime(Date.now())
       const es = new EventSource(`${PUBLIC_API_URL}/auto-train/stream`)
       esRef.current = es
       es.onmessage = (e) => {
@@ -186,7 +187,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             onCheckpointUpdate?.()
           }
           if (env.status === 'error') { es.close(); esRef.current = null; setPhase('error'); addToast('Training failed', 'error') }
-        } catch { /* ignore */ }
+        } catch (err) { console.error('[training] SSE parse error:', err) }
       }
       let esRetries = 0
       es.onerror = () => {
@@ -322,6 +323,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     },
     addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
   ) => {
+    esRef.current?.close(); esRef.current = null
     setUnifiedModelPath(null); setUnifiedFinalLoss(null); setUnifiedTotalSteps(null); setUnifiedElapsed(null)
     trainingJobsController.startUnified({
       method: config.method,
@@ -341,7 +343,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       skip_deploy: config.skipDeploy,
     }).then(() => {
       setPhase('GENERATE_DATA'); setProgress(0); setLoss(null); setEpoch(0); setTotalEpochs(0)
-      setMessage(''); setLossHistory([]); setEvalResult(null)
+      setMessage(''); setLossHistory([]); setEvalResult(null); setStartTime(Date.now())
       const es = new EventSource(`${PUBLIC_API_URL}/training/unified-stream`)
       esRef.current = es
       es.onmessage = (e) => {
@@ -372,7 +374,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             addToast('Unified training complete', 'success')
           }
           if (env.status === 'error') { es.close(); esRef.current = null; setPhase('error'); addToast(env.message || 'Something went wrong during training', 'error') }
-        } catch { /* ignore */ }
+        } catch (err) { console.error('[training] SSE parse error:', err) }
       }
       let esRetries = 0
       es.onerror = () => {

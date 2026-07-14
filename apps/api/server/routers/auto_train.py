@@ -49,6 +49,7 @@ class AutoTrainState:
 
 state = AutoTrainState()
 _auto_train_cancel_event: Optional[threading.Event] = None
+_auto_train_pause_event: Optional[threading.Event] = None
 from pathlib import Path
 
 class _AutoTrainCancelled(Exception):
@@ -369,19 +370,20 @@ def _load_soul(name: str) -> dict:
         if ckpt_file.suffix == ".soul":
             from domains.inference import load_soul
             soul, _ = load_soul(str(ckpt_file))
+            soul_meta = getattr(soul, 'metadata', {})
             return {
                 "name": ckpt_file.name,
                 "download_url": f"/auto-train/checkpoints/{ckpt_file.name}/download",
                 "soul": _get_soul_name(soul),
-                "loss": getattr(soul, "final_train_loss", None) or soul.metadata.get("avg_loss"),
-                "steps": soul.metadata.get("steps", 0),
-                "epochs": getattr(soul, "epochs_trained", 0) or soul.metadata.get("step", 0),
+                "loss": getattr(soul, "final_train_loss", None) or soul_meta.get("avg_loss"),
+                "steps": soul_meta.get("steps", 0),
+                "epochs": getattr(soul, "epochs_trained", 0) or soul_meta.get("step", 0),
                 "traits": _get_soul_traits(soul),
-                "lineage": soul.lineage,
+                "lineage": getattr(soul, "lineage", "slonet"),
                 "model_type": "slonet",
                 "size_mb": size_mb,
-                "tokenizer_type": soul.metadata.get("tokenizer_type", "char"),
-                "vocab_size": soul.metadata.get("vocab_size", 0),
+                "tokenizer_type": soul_meta.get("tokenizer_type", "char"),
+                "vocab_size": soul_meta.get("vocab_size", 0),
             }
         elif ckpt_file.suffix == ".pt":
             import torch
@@ -427,33 +429,34 @@ def _load_lora_soul(name: str) -> Optional[dict]:
             if not candidate.exists():
                 continue
 
-            try:
-                soul, _ = load_soul(str(candidate))
-                meta = _load_soul_meta(candidate)
-                size_mb = round(candidate.stat().st_size / (1024 * 1024), 2)
-                result = {
-                    "name": candidate.name,
-                    "download_url": f"/auto-train/checkpoints/{candidate.name}/download",
-                    "soul": _get_soul_name(soul),
-                    "loss": soul.metadata.get("avg_loss"),
-                    "steps": soul.metadata.get("steps", 0),
-                    "epochs": 0,
-                    "traits": _get_soul_traits(soul),
-                    "lineage": soul.lineage or "lora-feedback",
-                    "model_type": "lora",
-                    "verdict": soul.metadata.get("eval_verdict"),
-                    "perplexity_delta": soul.metadata.get("perplexity_delta"),
-                    "bleu_delta": soul.metadata.get("bleu_delta"),
-                    "size_mb": size_mb,
-                }
-                if meta:
-                    for k in ("tagline", "description", "born_at", "system_prompt", "tags"):
-                        v = meta.get(k)
-                        if v is not None and v != "":
-                            result[k] = v
-                return result
-            except Exception as e:
-                autotrain_logger.warning("Failed to load LoRA soul %s: %s", candidate, e, extra={"context": {"candidate": str(candidate), "error": str(e)}})
+    try:
+        soul, _ = load_soul(str(candidate))
+        soul_meta = getattr(soul, 'metadata', {})
+        meta = _load_soul_meta(candidate)
+        size_mb = round(candidate.stat().st_size / (1024 * 1024), 2)
+        result = {
+            "name": candidate.name,
+            "download_url": f"/auto-train/checkpoints/{candidate.name}/download",
+            "soul": _get_soul_name(soul),
+            "loss": soul_meta.get("avg_loss"),
+            "steps": soul_meta.get("steps", 0),
+            "epochs": 0,
+            "traits": _get_soul_traits(soul),
+            "lineage": getattr(soul, 'lineage', None) or "lora-feedback",
+            "model_type": "lora",
+            "verdict": soul_meta.get("eval_verdict"),
+            "perplexity_delta": soul_meta.get("perplexity_delta"),
+            "bleu_delta": soul_meta.get("bleu_delta"),
+            "size_mb": size_mb,
+        }
+        if meta:
+            for k in ("tagline", "description", "born_at", "system_prompt", "tags"):
+                v = meta.get(k)
+                if v is not None and v != "":
+                    result[k] = v
+        return result
+    except Exception as e:
+        autotrain_logger.warning("Failed to load LoRA soul %s: %s", candidate, e, extra={"context": {"candidate": str(candidate), "error": str(e)}})
 
     return None
 
@@ -600,6 +603,35 @@ async def stop():
     return {"status": "stopped"}
 
 
+@router.post("/pause")
+async def pause():
+    """Pause the current auto-training run.
+
+    Sets a pause_event that the training loop checks each step, sleeping
+    until the event is cleared by a subsequent ``/resume`` call.
+    """
+    if _auto_train_pause_event is None:
+        return {"success": False, "message": "No active training to pause"}
+    if _auto_train_pause_event.is_set():
+        return {"success": False, "message": "Training is already paused"}
+    _auto_train_pause_event.set()
+    return {"success": True, "message": "Training paused"}
+
+
+@router.post("/resume")
+async def resume():
+    """Resume a paused auto-training run.
+
+    Clears the pause_event so the training loop continues.
+    """
+    if _auto_train_pause_event is None:
+        return {"success": False, "message": "No active training to resume"}
+    if not _auto_train_pause_event.is_set():
+        return {"success": False, "message": "Training is not paused"}
+    _auto_train_pause_event.clear()
+    return {"success": True, "message": "Training resumed"}
+
+
 @router.get("/status")
 async def status():
     """Get training status."""
@@ -629,7 +661,7 @@ async def stream(request: Request):
 
     def _training_worker():
         """Run UnifiedTrainingPipeline in executor thread."""
-        global _auto_train_cancel_event
+        global _auto_train_cancel_event, _auto_train_pause_event
         from domains.training.unified_pipeline import (
             UnifiedTrainingPipeline, UnifiedTrainingConfig,
         )
@@ -659,6 +691,7 @@ async def stream(request: Request):
 
         pipeline = UnifiedTrainingPipeline(cfg)
         _auto_train_cancel_event = threading.Event()
+        _auto_train_pause_event = threading.Event()
 
         def _on_progress(progress):
             if _auto_train_cancel_event is not None and _auto_train_cancel_event.is_set():
@@ -674,7 +707,7 @@ async def stream(request: Request):
 
         try:
             state.running = True
-            result = pipeline.run(on_progress=_on_progress, cancel_event=_auto_train_cancel_event)
+            result = pipeline.run(on_progress=_on_progress, cancel_event=_auto_train_cancel_event, pause_event=_auto_train_pause_event)
 
             if result.get("status") == "completed":
                 ckpt = result.get("checkpoint", "")
@@ -705,6 +738,7 @@ async def stream(request: Request):
             _enqueue(sse_error("auto-train", "FAILED", str(e)))
         finally:
             _auto_train_cancel_event = None
+            _auto_train_pause_event = None
             state.running = False
             try:
                 import state as _srv_state

@@ -3802,8 +3802,8 @@ class SloTransformer(SloNet):
                     if _use_kernels:
                         h = _nb_swi_glu_mul(h1, h3)
                     else:
-                        s = np.float32(0.5) * h1 * (np.float32(1.0) + np.tanh(np.float32(0.7978845608) * (h1 + np.float32(0.044715) * h1**3)))
-                        h = s * h3
+                        # SwiGLU: SiLU(gate) * up
+                        h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
                     h = q_w2[bi].forward_numpy(h)
                 else:
                     h13 = h @ m_w13[bi]
@@ -3814,23 +3814,27 @@ class SloTransformer(SloNet):
                     if _use_kernels:
                         h = _nb_swi_glu_mul(h1, h3)
                     else:
-                        s = np.float32(0.5) * h1 * (np.float32(1.0) + np.tanh(np.float32(0.7978845608) * (h1 + np.float32(0.044715) * h1**3)))
-                        h = s * h3
+                        # SwiGLU: SiLU(gate) * up, where SiLU(x) = x * sigmoid(x)
+                        h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
                     h = h @ m_w2[bi].T
                     if _use_bias_b2:
                         h = h + m_b2[bi]
                 x = x + h
 
-            # Final norm
-            if _use_kernels:
-                x = _nb_layernorm(x, norm_w, norm_b, norm_eps)
-            else:
-                mu = x.mean(axis=-1, keepdims=True)
-                centered = x - mu
-                var = (centered * centered).mean(axis=-1, keepdims=True)
-                x = centered * (norm_w * np.float32(1.0) / np.sqrt(var + norm_eps))
-                if norm_has_bias:
+            # Final norm — auto-detect RMSNorm vs LayerNorm
+            if norm_has_bias:
+                if _use_kernels:
+                    x = _nb_layernorm(x, norm_w, norm_b, norm_eps)
+                else:
+                    mu = x.mean(axis=-1, keepdims=True)
+                    centered = x - mu
+                    var = (centered * centered).mean(axis=-1, keepdims=True)
+                    x = centered * (norm_w * np.float32(1.0) / np.sqrt(var + norm_eps))
                     x = x + norm_b
+            else:
+                # RMSNorm
+                rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + norm_eps)
+                x = x * (norm_w / rms)
 
             # LM head
             if _is_quantized:

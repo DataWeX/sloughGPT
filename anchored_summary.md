@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: e7bff6c fix: add debug logging to critical except Exception: pass blocks
+No active task. Last commit: 7dc02fc docs: add library replacements + proprietary infra section to AGENTS.md
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

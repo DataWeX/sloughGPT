@@ -417,9 +417,9 @@ class SloNetChatProvider:
         has_rope = config.get("rope_theta") is not None or config.get("position_embedding_type") == "rope"
         use_abs_pos = not has_rope
 
-        # Auto-detect norm type
-        has_rms = "model.norm.weight" in config or "model.layers.0.input_layernorm.weight" in config
-        norm_type = "layer_norm" if not has_rms else "rms_norm"
+        # Auto-detect norm type from config
+        has_rms = config.get("rms_norm_eps") is not None
+        norm_type = "rms_norm" if has_rms else "layer_norm"
         # Also check explicit config field
         if config.get("layer_norm_type"):
             norm_type = config["layer_norm_type"]

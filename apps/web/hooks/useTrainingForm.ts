@@ -115,7 +115,9 @@ export function useTrainingForm(
   const canStart = session.trainingRunning ||
     (inputMode === 'dataset' && !datasets.selectedDataset) ||
     (inputMode === 'text' && !textInput.trim()) ||
-    (method === 'finetune' && !selectedModel)
+    (method === 'finetune' && !selectedModel) ||
+    (method === 'vlm' && !datasets.selectedDataset) ||
+    (method === 'unified' && !datasets.selectedDataset)
 
   const startTraining = useCallback(async (checkpointName?: string) => {
     const hasDataset = inputMode === 'dataset' && datasets.selectedDataset

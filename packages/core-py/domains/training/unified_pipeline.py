@@ -244,6 +244,7 @@ class UnifiedTrainingPipeline:
 
     _is_training: bool = False
     _cancel_event: Optional[threading.Event] = None
+    _pause_event: Optional[threading.Event] = None
 
     @property
     def is_training(self) -> bool:
@@ -333,6 +334,7 @@ class UnifiedTrainingPipeline:
         self,
         on_progress: Optional[Callable[[TrainingProgress], None]] = None,
         cancel_event: Optional[threading.Event] = None,
+        pause_event: Optional[threading.Event] = None,
     ) -> TrainResult:
         """Run the full pipeline through all enabled phases.
 
@@ -340,11 +342,13 @@ class UnifiedTrainingPipeline:
             on_progress: Called after each phase transition with current progress.
             cancel_event: Optional threading.Event — if set, pipeline raises
                 ``KeyboardInterrupt`` during the next progress emission to abort.
+            pause_event: Optional threading.Event — if set, training loop sleeps until cleared.
 
         Returns:
             TrainResult with status, model_path, final_loss, total_steps, checkpoint, metrics.
         """
         self._cancel_event = cancel_event
+        self._pause_event = pause_event
         self._start_time = time.time()
         self._is_training = True
         logger.info("Starting unified pipeline: method=%s, data=%s", self._method, self.config.data_path)
@@ -783,6 +787,7 @@ class UnifiedTrainingPipeline:
                 **kwargs,
                 on_progress=_slonet_progress,
                 cancel_event=self._cancel_event,
+                pause_event=self._pause_event,
                 resume=self.config.resume,
                 resume_path=self.config.resume_path,
             )

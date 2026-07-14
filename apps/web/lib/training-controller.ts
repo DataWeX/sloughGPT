@@ -140,7 +140,7 @@ export const trainingJobsController = {
   },
 
   async pauseTraining(): Promise<{ success: boolean }> {
-    return apiPost('/training/control/pause')
+    return apiPost('/auto-train/pause')
   },
 
   async getTrainingLog(): Promise<string[]> {
@@ -151,7 +151,7 @@ export const trainingJobsController = {
   },
 
   async resumeTraining(): Promise<{ success: boolean }> {
-    return apiPost('/training/control/resume')
+    return apiPost('/auto-train/resume')
   },
 
   async stopUnified(): Promise<void> {
