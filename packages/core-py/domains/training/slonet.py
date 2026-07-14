@@ -3886,9 +3886,6 @@ class SloTransformer(SloNet):
         for key, arr in state_dict.items():
             arr = np.array(arr, dtype=np.float32)
             clean = key
-            for old, new in [("tok_emb.", "tok_emb."), ("lm_head.", "lm_head."),
-                             ("norm.", "norm."), ("blocks.", "blocks.")]:
-                pass
             if clean in param_map:
                 p = param_map[clean]
                 if p.data.shape == arr.shape:
@@ -3902,7 +3899,6 @@ class SloTransformer(SloNet):
                     p.data[:min_d] = arr[:min_d]
                     loaded.add(clean)
             else:
-                alt = clean.replace(".weight", ".weight")
                 alt_layer_names = ["tok_emb"]
                 if len(self.layers) > 2 + self.n_layer and isinstance(self.layers[1], SloDropout):
                     alt_layer_names.append("emb_drop")

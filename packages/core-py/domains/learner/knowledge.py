@@ -380,30 +380,6 @@ def _extract_facts_from_text(text: str) -> list[str]:
     return facts
 
 
-def _extract_topics(text: str) -> list[str]:
-    """Extract topic keywords from text using simple heuristics."""
-    if not text:
-        return ["general"]
-
-    # Common topic indicators
-    topic_patterns = {
-        "programming": r'\b(python|javascript|code|function|variable|class|api|bug|deploy)\b',
-        "science": r'\b(experiment|hypothesis|theory|research|study|data|analysis)\b',
-        "technology": r'\b(ai|machine learning|neural|model|algorithm|software|hardware)\b',
-        "history": r'\b(century|war|civilization|ancient|era|dynasty|revolution)\b',
-        "math": r'\b(equation|formula|calculate|proof|theorem|algebra|geometry)\b',
-        "general": r'.*',
-    }
-
-    text_lower = text.lower()
-    topics = []
-    for topic, pattern in topic_patterns.items():
-        if topic != "general" and re.search(pattern, text_lower):
-            topics.append(topic)
-
-    return topics[:3] if topics else ["general"]
-
-
 def _extract_topics(text: str, max_topics: int = 5) -> list[str]:
     """Extract likely topic keywords from text via simple TF-like scoring."""
     words = re.findall(r'[a-zA-Z][a-zA-Z-]{2,}', text.lower())

@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 0844bd5 fix: numpy_forward Qwen2 shape mismatch — transpose_weights for LLaMA/Qwen
+No active task. Last commit: c183f72 Merge branch 'fix/shadows-hardcoded-paths'
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
