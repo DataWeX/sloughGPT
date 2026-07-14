@@ -18,7 +18,7 @@ Usage:
 from __future__ import annotations
 
 import time
-from typing import Optional, Dict, Any, List, Callable
+from typing import Optional, Dict, Any, List, Callable, Tuple
 from dataclasses import dataclass, field
 import logging
 

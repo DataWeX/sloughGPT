@@ -28,7 +28,7 @@ import asyncio
 import json
 import logging
 import struct
-from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -38,6 +38,9 @@ from domains.infrastructure.numpy_forward import forward, forward_cached
 from domains.infrastructure.compression import CompressedWeight, LRUCache
 
 logger = logging.getLogger("man.infrastructure.numpy_engine")
+
+if TYPE_CHECKING:
+    from domains.infrastructure.point_compressor import ModelTree, PointLibrary
 
 
 # ══════════════════════════════════════════════════════════════════════════════

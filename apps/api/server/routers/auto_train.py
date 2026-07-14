@@ -50,6 +50,7 @@ class AutoTrainState:
 state = AutoTrainState()
 _auto_train_cancel_event: Optional[threading.Event] = None
 _auto_train_pause_event: Optional[threading.Event] = None
+_complete_enqueued = [False]  # track if pipeline already sent a complete event
 from pathlib import Path
 
 class _AutoTrainCancelled(Exception):
@@ -692,7 +693,7 @@ async def stream(request: Request):
         pipeline = UnifiedTrainingPipeline(cfg)
         _auto_train_cancel_event = threading.Event()
         _auto_train_pause_event = threading.Event()
-        _complete_enqueued = [False]  # track if pipeline already sent a complete event
+        _complete_enqueued[0] = False
 
         def _on_progress(progress):
             if _auto_train_cancel_event is not None and _auto_train_cancel_event.is_set():

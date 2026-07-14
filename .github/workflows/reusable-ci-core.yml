@@ -41,7 +41,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
           python -m pip install transformers fastapi uvicorn pydantic httpx numpy scipy psutil peft python-multipart
-          python -m pip install pytest pytest-cov pytest-asyncio
+          python -m pip install pytest pytest-cov pytest-asyncio pytest-xdist requests
 
       - name: Core-py tests
         run: |

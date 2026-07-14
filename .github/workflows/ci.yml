@@ -28,6 +28,13 @@ jobs:
         working-directory: apps/web
       - run: npm ci
         working-directory: packages/strui
+      - name: Ensure @sloughgpt/strui symlink
+        run: |
+          if [ ! -L node_modules/@sloughgpt/strui ] && [ ! -d node_modules/@sloughgpt/strui ]; then
+            mkdir -p node_modules/@sloughgpt
+            ln -sfn ../../../../packages/strui node_modules/@sloughgpt/strui
+          fi
+        working-directory: apps/web
       - run: npx tsc --noEmit
         working-directory: apps/web
 
