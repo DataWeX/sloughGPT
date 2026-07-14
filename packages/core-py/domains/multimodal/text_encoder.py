@@ -12,7 +12,7 @@ import logging
 logger = logging.getLogger("man.multimodal.text_encoder")
 
 from domains.training.slonet import (
-    Tensor, SloNet, SloEmbedding, SloTransformerBlock, SloLayerNorm, SloLinear,
+    Tensor, SloEmbedding, SloTransformerBlock, SloLayerNorm, SloLinear,
     SloAdam, tensor as _tensor,
 )
 from domains.multimodal.bpe_tokenizer import BPETokenizer

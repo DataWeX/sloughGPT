@@ -8,7 +8,6 @@ resources (models, datasets, souls, knowledge) as a virtual filesystem.
 
 from __future__ import annotations
 
-import os
 import time
 import json
 import logging

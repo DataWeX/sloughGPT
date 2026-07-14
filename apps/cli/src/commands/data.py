@@ -250,7 +250,7 @@ def cmd_dataset_stats(args):
             try:
                 obj = json.loads(first)
                 printer.key_value("Fields", ", ".join(obj.keys()))
-            except:
+            except (json.JSONDecodeError, ValueError):
                 pass
 
     elif input_txt.exists():

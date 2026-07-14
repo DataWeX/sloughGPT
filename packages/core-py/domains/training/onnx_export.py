@@ -1,7 +1,6 @@
 """ONNX Export Module for SloughGPT."""
 
 import logging
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np

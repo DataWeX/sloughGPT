@@ -17,7 +17,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import httpx
 
-from schemas.common import success_response, error_response
+from schemas.common import success_response
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/mobile", tags=["mobile"])

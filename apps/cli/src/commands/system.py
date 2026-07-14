@@ -60,7 +60,7 @@ def cmd_status(args):
         try:
             r = requests.get("http://localhost:8000/health", timeout=2)
             printer.status("API", "Online" if r.status_code == 200 else "Offline", "ok" if r.status_code == 200 else "error")
-        except:
+        except (requests.RequestException, ConnectionError):
             printer.status("API", "Not running", "error")
 
         models_dir = Path("models")
@@ -123,7 +123,7 @@ def cmd_optimize(args):
     try:
         from flash_attn import flash_attn_func
         printer.status("Flash Attention", "Yes", "ok")
-    except:
+    except ImportError:
         printer.status("Flash Attention", "No (pip install flash-attn)", "warn")
 
     printer.section("Training Optimizations")

@@ -133,7 +133,7 @@ def _generate_cartoon_image(prompt: str, width: int = 512, height: int = 512) ->
     # Text label (simple)
     try:
         font = ImageFont.load_default()
-    except:
+    except Exception:
         font = None
     draw.text((width//2 - 50, height - 50), prompt[:20], fill="#333", font=font)
 

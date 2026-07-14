@@ -86,10 +86,9 @@ class StartupOrchestrator:
         if self._lifecycle is not None:
             return
         try:
-            from domains.infrastructure.event_bus import EventBus, EventPriority
+            from domains.infrastructure.event_bus import EventBus
             from domains.infrastructure.lifecycle import (
                 ALL_PROFILES,
-                LifecycleManager,
                 StartupHook,
                 StartupProfile,
                 ShutdownHook,
@@ -378,7 +377,7 @@ class StartupOrchestrator:
         """Initialize the background task queue."""
         STARTUP_PHASE.update(phase="task_queue", step=2, total=9, message="Initializing task queue...")
         try:
-            from domains.infrastructure.task_queue import TaskQueue, get_task_queue
+            from domains.infrastructure.task_queue import get_task_queue
             self._task_queue = get_task_queue()
             logger.info("Task queue initialized")
         except Exception as e:
@@ -436,8 +435,8 @@ class StartupOrchestrator:
         try:
             from domains.infrastructure.model_registry import get_model_registry
             get_model_registry().reset_metrics()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Registry reset failed during shutdown: %s", e)
 
     async def _shutdown_pool(self):
         """Shut down inference pool."""
@@ -445,8 +444,8 @@ class StartupOrchestrator:
             from infrastructure.inference_pool import InferencePool
             pool = await InferencePool.get_instance()
             await pool.shutdown()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Pool shutdown failed: %s", e)
 
     async def _shutdown_executor(self):
         """Gracefully shut down the TrainingExecutor thread pool."""

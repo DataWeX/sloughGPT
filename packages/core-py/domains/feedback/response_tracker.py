@@ -6,7 +6,6 @@ Stores input/output pairs for offline analysis.
 """
 
 import json
-import time
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
@@ -61,8 +60,6 @@ class ResponseTracker:
     """
 
     def __init__(self, log_dir: str = "data/response_logs"):
-        # Use absolute path from package location
-        import os
         # Navigate from domains/feedback to repo root
         repo_root = Path(__file__).resolve().parents[4]
         self.log_dir = repo_root / log_dir

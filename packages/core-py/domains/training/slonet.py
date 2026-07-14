@@ -2312,7 +2312,7 @@ def _layernorm(x: Tensor, weight: Tensor, bias: Tensor, eps: float = 1e-5) -> Te
     result = None
     if acc is not None and acc.name != "cpu":
         try: result = acc.layer_norm(d, weight.data, bias.data, eps)
-        except Exception: pass
+        except Exception as e: logger.debug("Accelerator layernorm failed, using numpy: %s", e)
     if result is None:
         result = normed * weight.data + bias.data
     out = Tensor(result, requires_grad=x.requires_grad, _children=(x, weight, bias))
@@ -2352,7 +2352,7 @@ def _rmsnorm(x: Tensor, weight: Tensor, eps: float = 1e-5) -> Tensor:
     result = None
     if acc is not None and acc.name != "cpu" and d.size >= _ACCEL_THRESHOLD:
         try: result = acc.rms_norm(d, weight.data, eps)
-        except Exception: pass
+        except Exception as e: logger.debug("Accelerator rmsnorm failed, using numpy: %s", e)
     if result is None:
         result = x_normed * weight.data
 

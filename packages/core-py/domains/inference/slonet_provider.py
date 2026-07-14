@@ -11,7 +11,7 @@ hardcoding — new arch = new ArchConfig instance.
 import logging
 import threading
 from pathlib import Path
-from typing import Optional, List, Dict, Any, AsyncIterator
+from typing import Optional, Dict
 import numpy as np
 
 logger = logging.getLogger("man.inference.slonet_provider")
@@ -139,7 +139,7 @@ def convert_hf_to_slonet(
     Returns:
         Dict mapping SloTransformer canonical names → weight arrays.
     """
-    from domains.infrastructure.arch_config import build_arch, ArchConfig
+    from domains.infrastructure.arch_config import build_arch
 
     # Auto-detect architecture
     if config is None:

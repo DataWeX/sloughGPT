@@ -30,8 +30,6 @@ from __future__ import annotations
 import curses
 import os
 import sys
-import re
-import io
 import time
 import logging
 import subprocess

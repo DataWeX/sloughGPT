@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import logging
 import os
-import ctypes
 from typing import Optional, Tuple, Any
 
 import numpy as np

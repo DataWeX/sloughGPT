@@ -25,7 +25,6 @@ import sys
 import json
 import stat
 import shutil
-import signal
 import logging
 import fnmatch
 import glob

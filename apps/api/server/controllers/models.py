@@ -372,8 +372,8 @@ class ModelsController:
                 from domains.infrastructure.model_registry import get_model_registry
                 registry = get_model_registry()
                 registry.unregister(self._current_model)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Registry unregister failed: %s", e)
 
         if self._hf_model is not None:
             del self._hf_model
@@ -388,8 +388,8 @@ class ModelsController:
             acc = _get_accelerator()
             if acc is not None and hasattr(acc, 'empty_cache'):
                 acc.empty_cache()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Accelerator cache clear failed: %s", e)
 
         import gc
         gc.collect()

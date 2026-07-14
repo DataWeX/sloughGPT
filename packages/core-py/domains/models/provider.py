@@ -557,7 +557,6 @@ class HFModelProvider:
         from threading import Thread
         import queue
         import asyncio
-        import gc
 
         inputs = self._tokenizer(prompt, return_tensors="pt")
         input_ids = inputs["input_ids"]
@@ -818,7 +817,6 @@ def discover_checkpoints(checkpoint_dir: str = "models/auto-training") -> List[D
     Returns list of dicts with ``path``, ``name``, ``steps``, ``vocab_size``.
     Only includes checkpoints with valid stoi/itos vocab.
     """
-    import json
     from pathlib import Path
     results = []
     base = Path(checkpoint_dir)

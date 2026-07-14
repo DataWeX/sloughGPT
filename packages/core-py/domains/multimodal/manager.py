@@ -15,7 +15,6 @@ logger = logging.getLogger("man.multimodal.manager")
 
 from .speech import (
     TranscriptionResult,
-    SpeechRecognizer,
     get_speech_recognizer,
 )
 from .vision import (

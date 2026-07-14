@@ -540,8 +540,6 @@ class PerUserLoRAStore:
 
                 # Export as .soul checkpoint so it appears in model catalog
                 try:
-                    from domains.inference import save_soul
-
                     sou_path = self.store_path / f"{output_name}.soul"
                     evaluator.export_adapter_as_sou(
                         adapter_npz=str(output_path),

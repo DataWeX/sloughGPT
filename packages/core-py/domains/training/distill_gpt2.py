@@ -22,7 +22,7 @@ import numpy as np
 from domains.infrastructure.arch_config import ArchConfig, build_arch
 from domains.infrastructure.numpy_forward import forward_fast, pre_extract_weights
 from domains.training.slonet import (
-    SloAdam, SloTransformer, Tensor, export_to_sou, no_grad, tensor,
+    SloAdam, SloTransformer, export_to_sou, tensor,
 )
 
 logger = logging.getLogger(__name__)
