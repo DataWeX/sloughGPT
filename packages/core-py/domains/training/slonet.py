@@ -3670,6 +3670,23 @@ class SloTransformer(SloNet):
         kv_buf_v = [np.zeros((1, total_len, _nkv[i], E), dtype=np.float32) for i in range(n_blocks)]
         kv_len = [0] * n_blocks
 
+        # RoPE — detect and pre-compute cos/sin cache
+        _use_rope = False
+        _rope_inv_freq = None
+        for l in self.layers[1:-2]:
+            if isinstance(l, SloTransformerBlock) and l.attn.use_rope:
+                _use_rope = True
+                _rope_inv_freq = l.attn.rope.inv_freq.data.copy()
+                break
+        _rope_cos = None
+        _rope_sin = None
+        if _use_rope:
+            t = np.arange(0, total_len, dtype=np.float32)
+            freqs = np.outer(t, _rope_inv_freq)
+            emb = np.concatenate([freqs, freqs], axis=-1)
+            _rope_cos = np.cos(emb).astype(np.float32)
+            _rope_sin = np.sin(emb).astype(np.float32)
+
         causal_mask = np.triu(np.full((self.block_size, self.block_size), -1e9, dtype=np.float32), k=1)
 
         _use_bias_bqkv = m_bqkv[0] is not None
@@ -3723,6 +3740,13 @@ class SloTransformer(SloNet):
                     q = qkv[:, :, :_he].reshape(1, seq_len, H, E)
                     k = qkv[:, :, _he:_he+_khe].reshape(1, seq_len, K_H, E)
                     v = qkv[:, :, _he+_khe:].reshape(1, seq_len, K_H, E)
+
+                # Apply RoPE
+                if _use_rope and _rope_cos is not None:
+                    q_cos = _rope_cos[pos:pos+seq_len]  # (seq_len, head_dim)
+                    q_sin = _rope_sin[pos:pos+seq_len]
+                    q = q * q_cos + np.concatenate([-q[..., E//2:], q[..., :E//2]], axis=-1) * q_sin
+                    k = k * q_cos + np.concatenate([-k[..., E//2:], k[..., :E//2]], axis=-1) * q_sin
 
                 # KV cache
                 new_len = kv_len[bi] + seq_len

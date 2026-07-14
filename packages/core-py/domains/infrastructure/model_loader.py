@@ -177,13 +177,15 @@ class ModelLoader:
         """Try to convert safetensors to .slnc format.
 
         Returns path to new .slnc file, or None if conversion fails.
+        Handles bfloat16 weights by reading raw bytes and converting to float32.
         """
         try:
             from domains.infrastructure.safetensors_loader import (
                 _find_safetensors,
                 load_model_config,
             )
-            from safetensors import safe_open
+            import json as _json
+            import struct
 
             st_path = _find_safetensors(cache_dir)
             if st_path is None:
@@ -192,12 +194,39 @@ class ModelLoader:
             slnc_path = cache_dir / "model.slnc"
             logger.info("Converting %s to .slnc", st_path.name)
 
-            # Load config and weights directly
+            # Load config
             config = load_model_config(model_id)
+
+            # Load weights — handle bfloat16 via raw byte reading
             weights = {}
-            with safe_open(str(st_path), framework="numpy") as f:
-                for key in f.keys():
-                    weights[key] = f.get_tensor(key).astype(np.float32)
+            with open(str(st_path), "rb") as f:
+                header_len = struct.unpack("<Q", f.read(8))[0]
+                header = _json.loads(f.read(header_len))
+                for key, info in header.items():
+                    if key.startswith("__"):
+                        continue
+                    dtype_str = info["dtype"]
+                    offsets = info["data_offsets"]
+                    f.seek(8 + header_len + offsets[0])
+                    raw = f.read(offsets[1] - offsets[0])
+
+                    if dtype_str == "BF16":
+                        # bfloat16 → float32: view as uint16, shift left 16 bits
+                        arr = np.frombuffer(raw, dtype=np.uint16)
+                        f32 = np.zeros(len(arr), dtype=np.float32)
+                        f32.view(np.uint32)[:][:] = arr.astype(np.uint32) << 16
+                        weights[key] = f32.reshape(info["shape"])
+                    elif dtype_str == "F32":
+                        weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
+                    elif dtype_str == "F16":
+                        weights[key] = np.frombuffer(raw, dtype=np.float16).reshape(info["shape"]).astype(np.float32)
+                    elif dtype_str == "I64":
+                        weights[key] = np.frombuffer(raw, dtype=np.int64).reshape(info["shape"])
+                    elif dtype_str == "I32":
+                        weights[key] = np.frombuffer(raw, dtype=np.int32).reshape(info["shape"])
+                    else:
+                        # Try numpy directly
+                        weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
 
             from domains.infrastructure.slnc.compiler import SLNCCompiler
             compiler = SLNCCompiler()

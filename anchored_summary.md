@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 4730403 fix: use _build_prompt in generate() for consistent message handling
+No active task. Last commit: 6563811 fix: training returns final_loss, model_path, checkpoint_name (was inf/None/None)
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
