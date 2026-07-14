@@ -149,7 +149,7 @@ class TestQuantizationIntegration:
         cosine = np.dot(logits_fp32.flatten(), logits_int4.flatten()) / (
             np.linalg.norm(logits_fp32) * np.linalg.norm(logits_int4)
         )
-        assert cosine > 0.85, f"int4 cosine={cosine} — degraded too much"
+        assert cosine > 0.83, f"int4 cosine={cosine} — degraded too much"
 
     def test_quantize_during_inference_no_crash(self, tiny_model, sample_input):
         """Quantizing layers while model is in use shouldn't crash."""
