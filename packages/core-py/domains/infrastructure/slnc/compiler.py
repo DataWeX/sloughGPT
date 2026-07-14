@@ -84,7 +84,9 @@ LLAMA_BLOCK_LAYOUT = [
 
 # Non-block tensors (after all blocks)
 LLAMA_NON_BLOCK_LAYOUT = [
-    "norm.weight",
+    "model.norm.weight",
+    "model.embed_tokens.weight",
+    "model.lm_head.weight",
 ]
 
 # Mapping: architecture detection → block/non-block layouts
@@ -128,11 +130,23 @@ class SLNCCompiler:
         if safetensors_path is None:
             raise FileNotFoundError(f"No .safetensors for {model_id}")
 
-        # Load all weights
+        # Load all weights (handle bfloat16 via raw byte conversion)
         weights = {}
         with safe_open(str(safetensors_path), framework="numpy") as f:
             for key in f.keys():
-                weights[key] = f.get_tensor(key).astype(np.float32)
+                try:
+                    weights[key] = f.get_tensor(key).astype(np.float32)
+                except TypeError:
+                    # bfloat16 not supported by numpy — read raw bytes
+                    slice_obj = f.get_slice(key)
+                    numel = slice_obj.get_numel()
+                    raw = np.frombuffer(bytes(slice_obj.get_data()), dtype=np.uint16)
+                    sign = ((raw >> 15) & 1).astype(np.uint32) << 31
+                    exp = ((raw >> 7) & 0xFF).astype(np.uint32)
+                    mant = (raw & 0x7F).astype(np.uint32)
+                    # bfloat16 biased_exp: stored exp is already correct for float32
+                    out = sign | (exp << 23) | (mant << 16)
+                    weights[key] = out.view(np.float32).reshape(numel)
 
         # Determine output path
         if output is None:
@@ -301,6 +315,10 @@ class SLNCCompiler:
         for tensor_name in non_block_layout:
             if tensor_name in weights:
                 result.append((tensor_name, weights[tensor_name]))
+            elif tensor_name == "model.lm_head.weight":
+                # Weight tying: lm_head shares embed_tokens weight
+                if "model.embed_tokens.weight" in weights:
+                    result.append((tensor_name, weights["model.embed_tokens.weight"]))
 
         return result
 

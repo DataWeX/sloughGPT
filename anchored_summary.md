@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 7dc02fc docs: add library replacements + proprietary infra section to AGENTS.md
+No active task. Last commit: b6b044f feat: training pause/resume + SloneNet fixes
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
