@@ -55,6 +55,9 @@ coverage.xml
 # Training checkpoints (generated at runtime)
 checkpoints/
 
+# Compiled model cache (SLNC weights, 2.5GB+)
+packages/models/
+
 # Jupyter Notebook
 .ipynb_checkpoints
 sloughgpt_colab.executed.ipynb
