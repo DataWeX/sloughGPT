@@ -832,9 +832,9 @@ class SloNetChatProvider:
                     x = x + _np.take(pos_emb_w, _np.clip(p, 0, pos_emb_n - 1), axis=0)
 
                 for bi, bw in enumerate(blocks):
-                    mean = x.mean(axis=-1, keepdims=True)
-                    var = x.var(axis=-1, keepdims=True)
-                    h = (x - mean) / _np.sqrt(var + bw['an_eps']) * bw['an_w']
+                    # RMSNorm: x / sqrt(mean(x^2) + eps) * weight
+                    rms = _np.sqrt(_np.mean(x * x, axis=-1, keepdims=True) + bw['an_eps'])
+                    h = x / rms * bw['an_w']
                     if bw['an_b'] is not None: h = h + bw['an_b']
 
                     q = h @ bw['wq'].T
