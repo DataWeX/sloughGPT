@@ -673,8 +673,8 @@ class LocalBackend(GenerateBackend):
                 if attention_mask is not None:
                     gen_kwargs["attention_mask"] = attention_mask
                 _cpu_fallback = True
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("OOM-to-CPU fallback failed: %s", e)
 
         output = _inference_mode_generate(self._model_ref, gen_kwargs)
 
@@ -682,8 +682,8 @@ class LocalBackend(GenerateBackend):
             try:
                 with self._lock:
                     self._model_ref = self._model_ref.to(self._device)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Model restore to device failed: %s", e)
 
         _mps_empty_cache()
 

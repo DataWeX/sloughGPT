@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 9ef371a fix: skip loss=0.0 from phase transitions in auto-train SSE stream
+No active task. Last commit: 97dff35 chore: remove ~20 unused imports across routers + slonet.py
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
