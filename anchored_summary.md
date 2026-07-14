@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 0aeb6f9 fix: auto-detect activation from HF config + SLNC bias support
+No active task. Last commit: 3175423 fix: slonet provider SLNC-first loading, GQA config, max_new_tokens
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
