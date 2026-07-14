@@ -2724,9 +2724,6 @@ Examples:
         sys.stdout.flush()
         self._print(f"  Font set to: {font_name}")
 
-    def _cmd_export_state(self, args: str = "") -> None:
-        self._print(self._dump_json(self.state.to_dict()))
-
     def _cmd_read(self, args: str = "") -> None:
         """Read a line from stdin into a variable (like bash read).
         Usage: read [-p prompt] VARNAME"""

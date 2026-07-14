@@ -512,9 +512,6 @@ class Tensor:
     def log_softmax(self, dim=-1):
         return log_softmax(self, dim)
 
-    def __len__(self):
-        return self.shape[0] if self.shape else 0
-
     def type(self, dtype):
         dtype_map = {'torch.FloatTensor': np.float32, 'torch.LongTensor': np.int64,
                      'torch.IntTensor': np.int32, 'torch.HalfTensor': np.float16,

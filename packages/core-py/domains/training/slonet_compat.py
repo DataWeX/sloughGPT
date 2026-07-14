@@ -1124,14 +1124,6 @@ def randn_like(tensor_inp, **kw):
 
 
 # — Tensor ops
-def stack(tensors, dim=0):
-    return _stack([_to_tensor(t) for t in tensors], dim=dim)
-
-
-def cat(tensors, dim=0):
-    return _cat([_to_tensor(t) for t in tensors], dim=dim)
-
-
 def where(condition, a, b):
     return _where(_to_tensor(condition), _to_tensor(a), _to_tensor(b))
 
