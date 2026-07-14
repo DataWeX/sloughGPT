@@ -406,13 +406,26 @@ class SloNetChatProvider:
         parser = SLNCParser(slnc_path)
         config = parser.config
 
-        n_embed = config.get("n_embd", 768)
-        n_head = config.get("n_head", 12)
-        n_layer = config.get("n_layer", 12)
+        n_embed = config.get("n_embd", config.get("hidden_size", 768))
+        n_head = config.get("n_head", config.get("num_attention_heads", 12))
+        n_layer = config.get("n_layer", config.get("num_hidden_layers", 12))
         vocab_size = config.get("vocab_size", 50257)
         intermediate_size = config.get("n_inner") or config.get("intermediate_size", n_embed * 4)
-        max_pos = config.get("n_positions", 1024)
-        use_abs_pos = True  # GPT-2 default
+        max_pos = config.get("n_positions", config.get("max_position_embeddings", 1024))
+
+        # Auto-detect positional encoding from config
+        has_rope = config.get("rope_theta") is not None or config.get("position_embedding_type") == "rope"
+        use_abs_pos = not has_rope
+
+        # Auto-detect norm type
+        has_rms = "model.norm.weight" in config or "model.layers.0.input_layernorm.weight" in config
+        norm_type = "layer_norm" if not has_rms else "rms_norm"
+        # Also check explicit config field
+        if config.get("layer_norm_type"):
+            norm_type = config["layer_norm_type"]
+
+        # Auto-detect GQA (n_kv_head < n_head)
+        n_kv_head = config.get("num_key_value_heads", n_head)
 
         # Create SloTransformer
         model = SloTransformer(
@@ -420,14 +433,16 @@ class SloNetChatProvider:
             n_embed=n_embed,
             n_layer=n_layer,
             n_head=n_head,
+            n_kv_head=n_kv_head,
             intermediate_size=intermediate_size,
             block_size=max_pos,
             max_seq_len=max_pos,
             use_rope=not use_abs_pos,
+            rope_base=config.get("rope_theta", 10000.0),
             dropout=0.0,
             tie_weights=True,
             use_abs_pos_emb=use_abs_pos,
-            norm_type=config.get("layer_norm_type", "layer_norm"),
+            norm_type=norm_type,
         )
 
         # Load weights directly from mmap (zero copy)
@@ -605,11 +620,7 @@ class SloNetChatProvider:
                        top_k=None, top_p=None, repetition_penalty=1.0):
         """Synchronous generate with KV cache — called from chat() via to_thread."""
         import numpy as _np
-        prompt = ""
-        if messages and isinstance(messages[-1], dict):
-            prompt = messages[-1].get("content", "")
-        elif messages and isinstance(messages[-1], str):
-            prompt = messages[-1]
+        prompt = self._build_prompt(messages)
         tokens = self._tokenizer.encode(prompt)
         input_ids = _np.array([tokens], dtype=_np.int64)
         result = self._model.generate_numpy(

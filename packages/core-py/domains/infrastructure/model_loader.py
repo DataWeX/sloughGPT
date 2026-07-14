@@ -179,7 +179,12 @@ class ModelLoader:
         Returns path to new .slnc file, or None if conversion fails.
         """
         try:
-            from domains.infrastructure.safetensors_loader import _find_safetensors
+            from domains.infrastructure.safetensors_loader import (
+                _find_safetensors,
+                load_model_config,
+            )
+            from safetensors import safe_open
+
             st_path = _find_safetensors(cache_dir)
             if st_path is None:
                 return None
@@ -187,8 +192,16 @@ class ModelLoader:
             slnc_path = cache_dir / "model.slnc"
             logger.info("Converting %s to .slnc", st_path.name)
 
+            # Load config and weights directly
+            config = load_model_config(model_id)
+            weights = {}
+            with safe_open(str(st_path), framework="numpy") as f:
+                for key in f.keys():
+                    weights[key] = f.get_tensor(key).astype(np.float32)
+
             from domains.infrastructure.slnc.compiler import SLNCCompiler
-            SLNCCompiler.compile(str(st_path), str(slnc_path))
+            compiler = SLNCCompiler()
+            compiler.compile_from_dict(config, weights, str(slnc_path))
 
             logger.info("Converted to .slnc: %s", slnc_path)
             return slnc_path

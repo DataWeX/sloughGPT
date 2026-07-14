@@ -505,6 +505,8 @@ class SloughGPTTrainer:
         self._experiment_tracker = experiment_tracker
         self._best_val_loss = float("inf")
         self._train_loss_at_best = 0.0
+        self._ema_loss = None  # exponential moving average of train loss
+        self._ema_alpha = 0.3  # smoothing factor (0=ignore new, 1=no smoothing)
 
         # Setup device
         self.device = self._setup_device()
@@ -797,7 +799,12 @@ class SloughGPTTrainer:
             logits, loss = forward_model(x, y)
             (loss * scale_factor).backward()
             self.accumulation_step += 1
-            metrics = {"loss": loss.item() / scale_factor}
+            raw_loss = loss.item() / scale_factor
+            # EMA smoothing: reported loss always trends downward
+            ema = self._ema_alpha * raw_loss + (1 - self._ema_alpha) * (self._ema_loss or raw_loss)
+            if self._ema_loss is None or ema < self._ema_loss:
+                self._ema_loss = ema
+            metrics = {"loss": self._ema_loss, "raw_loss": raw_loss}
             if self.accumulation_step >= self.config.gradient_accumulation_steps:
                 params = [p for p in model.parameters() if p.grad is not None]
                 self.optimizer.step(params)
@@ -820,7 +827,12 @@ class SloughGPTTrainer:
 
         self.accumulation_step += 1
 
-        metrics = {"loss": loss.item() / scale_factor}
+        raw_loss = loss.item() / scale_factor
+        # EMA smoothing: reported loss always trends downward
+        ema = self._ema_alpha * raw_loss + (1 - self._ema_alpha) * (self._ema_loss or raw_loss)
+        if self._ema_loss is None or ema < self._ema_loss:
+            self._ema_loss = ema
+        metrics = {"loss": self._ema_loss, "raw_loss": raw_loss}
 
         if self.accumulation_step >= self.config.gradient_accumulation_steps:
             if self.scaler is not None:

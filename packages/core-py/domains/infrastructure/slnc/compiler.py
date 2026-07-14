@@ -69,6 +69,30 @@ GPT2_NON_BLOCK_LAYOUT = [
     "wpe.weight",
 ]
 
+# LLaMA/Qwen/Mistral block tensors in computation order
+LLAMA_BLOCK_LAYOUT = [
+    "input_layernorm.weight",
+    "self_attn.q_proj.weight",
+    "self_attn.k_proj.weight",
+    "self_attn.v_proj.weight",
+    "self_attn.o_proj.weight",
+    "post_attention_layernorm.weight",
+    "mlp.gate_proj.weight",
+    "mlp.up_proj.weight",
+    "mlp.down_proj.weight",
+]
+
+# Non-block tensors (after all blocks)
+LLAMA_NON_BLOCK_LAYOUT = [
+    "norm.weight",
+]
+
+# Mapping: architecture detection → block/non-block layouts
+_ARCH_LAYOUTS = {
+    "gpt2": (GPT2_BLOCK_LAYOUT, GPT2_NON_BLOCK_LAYOUT, "h.{i}."),
+    "llama": (LLAMA_BLOCK_LAYOUT, LLAMA_NON_BLOCK_LAYOUT, "model.layers.{i}."),
+}
+
 
 class SLNCCompiler:
     """Compiles model weights into .slnc format."""
@@ -183,12 +207,12 @@ class SLNCCompiler:
             f.write(struct.pack("<I", FLAGS_DEFAULT))
 
             # Model metadata (64 bytes)
-            n_layer = config.get("n_layer", 0)
-            n_embd = config.get("n_embd", 0)
-            n_head = config.get("n_head", 0)
-            n_inner = config.get("n_inner", n_embd * 4)
+            n_layer = config.get("n_layer", config.get("num_hidden_layers", 0))
+            n_embd = config.get("n_embd", config.get("hidden_size", 0))
+            n_head = config.get("n_head", config.get("num_attention_heads", 0))
+            n_inner = config.get("n_inner", config.get("intermediate_size", n_embd * 4))
             vocab_size = config.get("vocab_size", 0)
-            n_positions = config.get("n_positions", 1024)
+            n_positions = config.get("n_positions", config.get("max_position_embeddings", 1024))
             block_count = n_layer
             block_size = self._compute_block_size(config)
             tensor_count = len(tensor_list)
@@ -250,44 +274,73 @@ class SLNCCompiler:
     def _order_tensors(
         self, config: dict, weights: Dict[str, np.ndarray]
     ) -> List[Tuple[str, np.ndarray]]:
-        """Order tensors in computation order."""
-        n_layer = config.get("n_layer", 12)
+        """Order tensors in computation order. Auto-detects GPT-2 vs LLaMA/Qwen."""
+        n_layer = config.get("n_layer", config.get("num_hidden_layers", 12))
         result = []
+
+        # Detect architecture from weight keys
+        weight_keys = set(weights.keys())
+        if "model.embed_tokens.weight" in weight_keys and "model.layers.0.self_attn.q_proj.weight" in weight_keys:
+            arch = "llama"
+        elif "wte.weight" in weight_keys:
+            arch = "gpt2"
+        else:
+            arch = "gpt2"  # fallback
+
+        block_layout, non_block_layout, prefix_template = _ARCH_LAYOUTS[arch]
 
         # Block tensors
         for layer_idx in range(n_layer):
-            for tensor_name in GPT2_BLOCK_LAYOUT:
-                key = f"h.{layer_idx}.{tensor_name}"
+            prefix = prefix_template.format(i=layer_idx)
+            for tensor_name in block_layout:
+                key = prefix + tensor_name
                 if key in weights:
                     result.append((key, weights[key]))
 
         # Non-block tensors
-        for tensor_name in GPT2_NON_BLOCK_LAYOUT:
+        for tensor_name in non_block_layout:
             if tensor_name in weights:
                 result.append((tensor_name, weights[tensor_name]))
 
         return result
 
     def _compute_block_size(self, config: dict) -> int:
-        """Compute bytes per transformer block."""
-        n_embd = config.get("n_embd", 768)
-        n_inner = config.get("n_inner", n_embd * 4)
+        """Compute bytes per transformer block. Auto-detects GPT-2 vs LLaMA."""
+        n_embd = config.get("n_embd", config.get("hidden_size", 768))
+        n_inner = config.get("n_inner", config.get("intermediate_size", n_embd * 4))
 
-        # GPT-2 block tensors
-        shapes = {
-            "ln_1.weight": (n_embd,),
-            "ln_1.bias": (n_embd,),
-            "attn.c_attn.weight": (n_embd, 3 * n_embd),
-            "attn.c_attn.bias": (3 * n_embd,),
-            "attn.c_proj.weight": (n_embd, n_embd),
-            "attn.c_proj.bias": (n_embd,),
-            "ln_2.weight": (n_embd,),
-            "ln_2.bias": (n_embd,),
-            "mlp.c_fc.weight": (n_embd, n_inner),
-            "mlp.c_fc.bias": (n_inner,),
-            "mlp.c_proj.weight": (n_inner, n_embd),
-            "mlp.c_proj.bias": (n_embd,),
-        }
+        # Detect from config keys
+        has_rope = config.get("rope_theta") is not None or config.get("position_embedding_type") == "rope"
+
+        if has_rope:
+            # LLaMA/Qwen — no bias, SwiGLU has 3 weight matrices
+            shapes = {
+                "input_layernorm.weight": (n_embd,),
+                "self_attn.q_proj.weight": (n_embd, n_embd),
+                "self_attn.k_proj.weight": (n_embd, n_embd),
+                "self_attn.v_proj.weight": (n_embd, n_embd),
+                "self_attn.o_proj.weight": (n_embd, n_embd),
+                "post_attention_layernorm.weight": (n_embd,),
+                "mlp.gate_proj.weight": (n_embd, n_inner),
+                "mlp.up_proj.weight": (n_embd, n_inner),
+                "mlp.down_proj.weight": (n_inner, n_embd),
+            }
+        else:
+            # GPT-2
+            shapes = {
+                "ln_1.weight": (n_embd,),
+                "ln_1.bias": (n_embd,),
+                "attn.c_attn.weight": (n_embd, 3 * n_embd),
+                "attn.c_attn.bias": (3 * n_embd,),
+                "attn.c_proj.weight": (n_embd, n_embd),
+                "attn.c_proj.bias": (n_embd,),
+                "ln_2.weight": (n_embd,),
+                "ln_2.bias": (n_embd,),
+                "mlp.c_fc.weight": (n_embd, n_inner),
+                "mlp.c_fc.bias": (n_inner,),
+                "mlp.c_proj.weight": (n_inner, n_embd),
+                "mlp.c_proj.bias": (n_embd,),
+            }
 
         return sum(int(np.prod(s)) * 4 for s in shapes.values())
 

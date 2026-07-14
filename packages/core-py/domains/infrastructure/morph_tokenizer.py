@@ -206,6 +206,8 @@ class MorphTokenizer:
         self.model_id = model_id
         self._root_cache: Dict[str, str] = {}
         self._morpheme_cache: Dict[str, List[str]] = {}
+        self._chat_template: Optional[str] = None
+        self._chat_template_jinja = False
 
     @classmethod
     def from_pretrained(cls, model_id: str) -> "MorphTokenizer":
@@ -271,15 +273,88 @@ class MorphTokenizer:
 
         logger.info("Loaded tokenizer %s (vocab=%d, merges=%d, byte_level=%s, byte_fallback=%s)",
                      model_id, len(vocab), len(merges), byte_level, byte_fallback)
-        return cls(vocab=vocab, merges=merges, eos_token_id=eos,
-                   byte_level=byte_level, byte_fallback=byte_fallback,
-                   model_id=model_id)
+
+        instance = cls(vocab=vocab, merges=merges, eos_token_id=eos,
+                       byte_level=byte_level, byte_fallback=byte_fallback,
+                       model_id=model_id)
+
+        # Extract chat template if present
+        chat_tpl = tok_data.get("chat_template")
+        if chat_tpl:
+            instance._chat_template = chat_tpl
+            instance._chat_template_jinja = True
+            logger.info("Loaded chat template for %s", model_id)
+
+        return instance
 
     @property
     def vocab_size(self) -> int:
         return len(self.vocab)
 
-    # ── BPE encode ──────────────────────────────────────────────────────
+    
+    # -- Chat template -----------------------------------------------------------
+
+    def apply_chat_template(self, messages):
+        if not messages:
+            return ''
+        if self._chat_template:
+            return self._render_chat_template(messages)
+        parts = []
+        for msg in messages:
+            role = msg.get('role', 'user')
+            c = msg.get('content', '')
+            if role == 'system':
+                parts.append('System: ' + c + chr(10))
+            elif role == 'user':
+                parts.append('User: ' + c + chr(10))
+            elif role == 'assistant':
+                parts.append('Assistant: ' + c + chr(10))
+        parts.append('Assistant:')
+        return ''.join(parts)
+
+    def _render_chat_template(self, messages):
+        template = self._chat_template
+        system_msg = ''
+        conversation = []
+        for msg in messages:
+            role = msg.get('role', 'user')
+            content = msg.get('content', '')
+            if role == 'system':
+                system_msg = content
+            else:
+                conversation.append({'role': role, 'content': content})
+
+        # Qwen/Llama ChatML style
+        ims = chr(60) + '|im_start|' + chr(62)
+        ime = chr(60) + '|im_end|' + chr(62)
+        if 'im_start' in template:
+            parts = []
+            if system_msg:
+                parts.append(ims + 'system' + chr(10) + system_msg + ime + chr(10))
+            for msg in conversation:
+                parts.append(ims + msg['role'] + chr(10) + msg['content'] + ime + chr(10))
+            parts.append(ims + 'assistant' + chr(10))
+            return ''.join(parts)
+
+        # Generic for-loop template
+        if 'for message in messages' in template:
+            rendered = ''
+            for msg in conversation:
+                rendered += msg['role'] + chr(10) + msg['content'] + chr(10)
+            result = rendered + 'assistant' + chr(10)
+            if system_msg:
+                result = 'system' + chr(10) + system_msg + chr(10) + chr(10) + result
+            return result
+
+        # Default ChatML
+        parts = []
+        if system_msg:
+            parts.append(ims + 'system' + chr(10) + system_msg + ime + chr(10))
+        for msg in conversation:
+            parts.append(ims + msg['role'] + chr(10) + msg['content'] + ime + chr(10))
+        parts.append(ims + 'assistant' + chr(10))
+        return ''.join(parts)
+# ── BPE encode ──────────────────────────────────────────────────────
 
     def _bpe_encode(self, text: str) -> List[int]:
         """BPE encode a single word/token (no whitespace splitting)."""

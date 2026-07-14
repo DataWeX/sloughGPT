@@ -524,16 +524,20 @@ def _autoload_model(cfg: ServerConfig):
         except Exception as e:
             logger.warning("Failed to create InferenceEngine: %s", e)
 
-    # Register providers via setup_providers (handles hf-default + inference-engine + default router)
+    # Register providers — SloNet is the primary inference backend
     from domains.models.provider import setup_providers
 
     # GGUF quantized inference — enabled via MAN_GGUF_MODEL env var
     gguf_model = os.environ.get("MAN_GGUF_MODEL") or None
 
+    # Always pass slonet_hf_id so SloNetChatProvider is registered
+    slonet_id = cfg.autoload_model if cfg.autoload_model else None
+
     setup_providers(
         hf_model=result.model,
         hf_tokenizer=result.tokenizer,
         hf_model_id=result.model_id,
+        slonet_hf_id=slonet_id,
         inference_engine=inference_engine,
         model_registry=registry,
         quantize=cfg.quantize_slonet,
