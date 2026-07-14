@@ -512,9 +512,6 @@ class Tensor:
     def log_softmax(self, dim=-1):
         return log_softmax(self, dim)
 
-    def __len__(self):
-        return self.shape[0] if self.shape else 0
-
     def type(self, dtype):
         dtype_map = {'torch.FloatTensor': np.float32, 'torch.LongTensor': np.int64,
                      'torch.IntTensor': np.int32, 'torch.HalfTensor': np.float16,
@@ -2256,22 +2253,6 @@ class SloFeedForward(SloLayer):
 
     def parameters(self) -> List[Tensor]:
         return self.w1.parameters() + self.w2.parameters() + self.w3.parameters()
-
-
-def _maxpool2d(x: Tensor, kernel_size: int, stride: int) -> Tensor:
-    d = x.data
-    n, c, h, w = d.shape
-    out_h = (h - kernel_size) // stride + 1
-    out_w = (w - kernel_size) // stride + 1
-    result = np.full((n, c, out_h, out_w), -1e9, dtype=np.float32)
-    for i in range(n):
-        for ch in range(c):
-            for oh in range(out_h):
-                for ow in range(out_w):
-                    ih = oh * stride
-                    iw = ow * stride
-                    result[i, ch, oh, ow] = d[i, ch, ih:ih+kernel_size, iw:iw+kernel_size].max()
-    return Tensor(result, requires_grad=x.requires_grad, _children=(x,))
 
 
 def _softmax(x: Tensor, dim: int = -1) -> Tensor:

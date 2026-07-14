@@ -125,7 +125,9 @@ class ONNXInferenceEngine:
             self.model.config.pad_token_id = self.tokenizer.pad_token_id
 
         # Export to ONNX
-        export_path = f"/tmp/{self.model_name.replace('/', '_')}_onnx"
+        import tempfile
+        cache_dir = os.path.join(tempfile.gettempdir(), "sloughgpt", "onnx")
+        export_path = os.path.join(cache_dir, self.model_name.replace('/', '_'))
         os.makedirs(export_path, exist_ok=True)
         onnx_path = os.path.join(export_path, "model.onnx")
 

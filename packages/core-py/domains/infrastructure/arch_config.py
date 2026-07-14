@@ -121,7 +121,7 @@ def build_arch(name: str, config: dict, weight_keys: set) -> ArchConfig:
         activation = "swiglu" if has_gate else "gelu"
         attention = "gqa" if n_kv_head < n_head else "mha"
         wm = LLAMA_WEIGHT_MAP
-        transpose = False  # LLaMA safetensors is already (out, in), same as SloLinear
+        transpose = False  # LLaMA safetensors stores (out, in), same as SloLinear
     else:
         # Unknown — try GPT-2 as fallback
         wm = GPT2_WEIGHT_MAP
