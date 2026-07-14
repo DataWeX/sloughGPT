@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 54b4559 fix(ci): resolve all 5 CI failures — ruff F821, pytest-xdist, requests, python-multipart, strui symlink
+No active task. Last commit: 0aeb6f9 fix: auto-detect activation from HF config + SLNC bias support
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

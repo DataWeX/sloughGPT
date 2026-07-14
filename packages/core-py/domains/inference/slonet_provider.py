@@ -271,6 +271,35 @@ class SloNetChatProvider:
         hf_model_id: HuggingFace model ID or local path (e.g. 'gpt2', 'Qwen/Qwen2.5-0.5B-Instruct')
     """
 
+    @staticmethod
+    def _load_safetensors_bf16(path) -> dict:
+        """Load safetensors with bfloat16 support via raw byte reading."""
+        import struct as _struct
+        import json as _json
+        weights = {}
+        with open(str(path), 'rb') as f:
+            header_len = _struct.unpack('<Q', f.read(8))[0]
+            header = _json.loads(f.read(header_len))
+            for key, info in header.items():
+                if key.startswith('__'):
+                    continue
+                dtype_str = info['dtype']
+                offsets = info['data_offsets']
+                f.seek(8 + header_len + offsets[0])
+                raw = f.read(offsets[1] - offsets[0])
+                if dtype_str == 'BF16':
+                    arr = np.frombuffer(raw, dtype=np.uint16)
+                    f32 = np.zeros(len(arr), dtype=np.float32)
+                    f32.view(np.uint32)[:] = arr.astype(np.uint32) << 16
+                    weights[key] = f32.reshape(info['shape'])
+                elif dtype_str == 'F32':
+                    weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info['shape'])
+                elif dtype_str == 'F16':
+                    weights[key] = np.frombuffer(raw, dtype=np.float16).reshape(info['shape']).astype(np.float32)
+                else:
+                    weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info['shape'])
+        return weights
+
     def __init__(self, hf_model_id: str = "gpt2", quantize: bool = False,
                  quant_bits: int = 8, quant_mode: str = "symmetric",
                  quant_clip: float = 0.999):
@@ -315,6 +344,9 @@ class SloNetChatProvider:
 
         # Detect architecture features from weight keys
         from domains.infrastructure.arch_config import build_arch
+        slnc_path = model_dir.parent / "model.slnc" if model_dir.name.startswith("snapshots") else model_dir / "model.slnc"
+        if not slnc_path.exists():
+            slnc_path = Path.home() / ".cache/huggingface/hub" / f"models--{hf_model_id.replace('/', '--')}" / "model.slnc"
         safetensors_path = model_dir / "model.safetensors"
         if not safetensors_path.exists():
             # Try finding any .safetensors file
@@ -322,7 +354,19 @@ class SloNetChatProvider:
                 safetensors_path = f
                 break
 
-        sd = _load_file(str(safetensors_path)) if safetensors_path.exists() else {}
+        # Prefer SLNC (handles bfloat16); fall back to safetensors
+        if slnc_path.exists():
+            from domains.infrastructure.slnc.parser import SLNCParser
+            _parser = SLNCParser(str(slnc_path))
+            sd = _parser.get_weights_dict()
+        elif safetensors_path.exists():
+            try:
+                sd = _load_file(str(safetensors_path))
+            except Exception:
+                # bfloat16 not supported by safetensors.numpy — load raw bytes
+                sd = self._load_safetensors_bf16(safetensors_path)
+        else:
+            sd = {}
         arch = build_arch(
             name=config.get("architectures", ["unknown"])[0],
             config=config,
@@ -332,19 +376,29 @@ class SloNetChatProvider:
         # GPT-2 uses absolute positional embeddings, not RoPE
         use_abs_pos = arch.positional == "absolute"
 
+        # Auto-detect eps and activation from HF config
+        hf_eps = config.get("rms_norm_eps", 1e-5) if arch.norm == "rms_norm" else 1e-5
+        hidden_act = config.get("hidden_act", "gelu")
+        activation = "silu" if hidden_act == "silu" else "gelu"
+        n_kv_head = config.get("num_key_value_heads", n_head)
+
         self._model = SloTransformer(
             vocab_size=vocab_size,
             n_embed=n_embed,
             n_layer=n_layer,
             n_head=n_head,
+            n_kv_head=n_kv_head,
             intermediate_size=intermediate_size,
             block_size=max_pos,
             max_seq_len=max_pos,
             use_rope=not use_abs_pos,
+            rope_base=config.get("rope_theta", 10000.0),
             dropout=0.0,
+            eps=hf_eps,
             tie_weights=True,
             use_abs_pos_emb=use_abs_pos,
             norm_type=arch.norm,
+            activation=activation,
         )
 
         # Load weights
@@ -624,9 +678,12 @@ class SloNetChatProvider:
         raise RuntimeError(f"No tokenizer found for {self._hf_model_id}")
 
     def generate(self, prompt: str, max_tokens: int = 50, temperature: float = 1.0,
-                 top_k: int = None, top_p: float = None, repetition_penalty: float = 1.0) -> str:
+                 top_k: int = None, top_p: float = None, repetition_penalty: float = 1.0,
+                 max_new_tokens: int = None, **kwargs) -> str:
         """Generate text using pure numpy inference (KV cache + inlined ops)."""
         import numpy as _np
+        if max_new_tokens is not None:
+            max_tokens = max_new_tokens
         tokens = self._tokenizer.encode(prompt)
         input_ids = _np.array([tokens], dtype=_np.int64)
         result = self._model.generate_numpy(
