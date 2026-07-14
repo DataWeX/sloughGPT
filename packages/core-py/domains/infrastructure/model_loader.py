@@ -349,7 +349,8 @@ class ModelLoader:
 
             # Run inference via provider
             if result.model_type == "slonet":
-                output = result.provider.generate(test_input, max_new_tokens=10)
+                # SloNetChatProvider.generate() expects a string prompt
+                output = result.provider.generate("Hello", max_new_tokens=10)
             else:
                 # For HF models, use the model directly
                 import torch

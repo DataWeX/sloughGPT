@@ -131,7 +131,7 @@ data/sample.jsonl
 # Data directories (repo root only — do not ignore web/app/(app)/datasets)
 /datasets/
 runs/
-out*
+out/
 
 # Cache directories
 .cache/

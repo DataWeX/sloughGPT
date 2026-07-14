@@ -83,7 +83,7 @@ def test_delete_agent(client):
     app, tc = client
     resp = tc.delete("/agents/testbot")
     assert resp.status_code == 200
-    assert resp.json()["status"] == "deleted"
+    assert resp.json()["data"]["status"] == "deleted"
 
 
 def test_delete_agent_not_found_returns_404(client):

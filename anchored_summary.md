@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 54b4559 fix(ci): resolve all 5 CI failures — ruff F821, pytest-xdist, requests, python-multipart, strui symlink
+No active task. Last commit: 1785169 fix(ci): skip model-dependent tests in CI, fix agents delete assertion
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

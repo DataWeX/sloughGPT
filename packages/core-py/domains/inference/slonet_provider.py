@@ -271,6 +271,35 @@ class SloNetChatProvider:
         hf_model_id: HuggingFace model ID or local path (e.g. 'gpt2', 'Qwen/Qwen2.5-0.5B-Instruct')
     """
 
+    @staticmethod
+    def _load_safetensors_bf16(path) -> dict:
+        """Load safetensors with bfloat16 support via raw byte reading."""
+        import struct as _struct
+        import json as _json
+        weights = {}
+        with open(str(path), 'rb') as f:
+            header_len = _struct.unpack('<Q', f.read(8))[0]
+            header = _json.loads(f.read(header_len))
+            for key, info in header.items():
+                if key.startswith('__'):
+                    continue
+                dtype_str = info['dtype']
+                offsets = info['data_offsets']
+                f.seek(8 + header_len + offsets[0])
+                raw = f.read(offsets[1] - offsets[0])
+                if dtype_str == 'BF16':
+                    arr = np.frombuffer(raw, dtype=np.uint16)
+                    f32 = np.zeros(len(arr), dtype=np.float32)
+                    f32.view(np.uint32)[:] = arr.astype(np.uint32) << 16
+                    weights[key] = f32.reshape(info['shape'])
+                elif dtype_str == 'F32':
+                    weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info['shape'])
+                elif dtype_str == 'F16':
+                    weights[key] = np.frombuffer(raw, dtype=np.float16).reshape(info['shape']).astype(np.float32)
+                else:
+                    weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info['shape'])
+        return weights
+
     def __init__(self, hf_model_id: str = "gpt2", quantize: bool = False,
                  quant_bits: int = 8, quant_mode: str = "symmetric",
                  quant_clip: float = 0.999):
@@ -315,6 +344,9 @@ class SloNetChatProvider:
 
         # Detect architecture features from weight keys
         from domains.infrastructure.arch_config import build_arch
+        slnc_path = model_dir.parent / "model.slnc" if model_dir.name.startswith("snapshots") else model_dir / "model.slnc"
+        if not slnc_path.exists():
+            slnc_path = Path.home() / ".cache/huggingface/hub" / f"models--{hf_model_id.replace('/', '--')}" / "model.slnc"
         safetensors_path = model_dir / "model.safetensors"
         if not safetensors_path.exists():
             # Try finding any .safetensors file
@@ -322,7 +354,19 @@ class SloNetChatProvider:
                 safetensors_path = f
                 break
 
-        sd = _load_file(str(safetensors_path)) if safetensors_path.exists() else {}
+        # Prefer SLNC (handles bfloat16); fall back to safetensors
+        if slnc_path.exists():
+            from domains.infrastructure.slnc.parser import SLNCParser
+            _parser = SLNCParser(str(slnc_path))
+            sd = _parser.get_weights_dict()
+        elif safetensors_path.exists():
+            try:
+                sd = _load_file(str(safetensors_path))
+            except Exception:
+                # bfloat16 not supported by safetensors.numpy — load raw bytes
+                sd = self._load_safetensors_bf16(safetensors_path)
+        else:
+            sd = {}
         arch = build_arch(
             name=config.get("architectures", ["unknown"])[0],
             config=config,
@@ -332,19 +376,29 @@ class SloNetChatProvider:
         # GPT-2 uses absolute positional embeddings, not RoPE
         use_abs_pos = arch.positional == "absolute"
 
+        # Auto-detect eps and activation from HF config
+        hf_eps = config.get("rms_norm_eps", 1e-5) if arch.norm == "rms_norm" else 1e-5
+        hidden_act = config.get("hidden_act", "gelu")
+        activation = "silu" if hidden_act == "silu" else "gelu"
+        n_kv_head = config.get("num_key_value_heads", n_head)
+
         self._model = SloTransformer(
             vocab_size=vocab_size,
             n_embed=n_embed,
             n_layer=n_layer,
             n_head=n_head,
+            n_kv_head=n_kv_head,
             intermediate_size=intermediate_size,
             block_size=max_pos,
             max_seq_len=max_pos,
             use_rope=not use_abs_pos,
+            rope_base=config.get("rope_theta", 10000.0),
             dropout=0.0,
+            eps=hf_eps,
             tie_weights=True,
             use_abs_pos_emb=use_abs_pos,
             norm_type=arch.norm,
+            activation=activation,
         )
 
         # Load weights
@@ -624,9 +678,12 @@ class SloNetChatProvider:
         raise RuntimeError(f"No tokenizer found for {self._hf_model_id}")
 
     def generate(self, prompt: str, max_tokens: int = 50, temperature: float = 1.0,
-                 top_k: int = None, top_p: float = None, repetition_penalty: float = 1.0) -> str:
+                 top_k: int = None, top_p: float = None, repetition_penalty: float = 1.0,
+                 max_new_tokens: int = None, **kwargs) -> str:
         """Generate text using pure numpy inference (KV cache + inlined ops)."""
         import numpy as _np
+        if max_new_tokens is not None:
+            max_tokens = max_new_tokens
         tokens = self._tokenizer.encode(prompt)
         input_ids = _np.array([tokens], dtype=_np.int64)
         result = self._model.generate_numpy(
@@ -741,6 +798,7 @@ class SloNetChatProvider:
                         'n_heads': b.attn.n_heads,
                         'n_kv_heads': b.attn.n_kv_head,
                         'head_dim': b.attn.head_dim,
+                        'rope_inv_freq': b.attn.rope.inv_freq.data if hasattr(b.attn, 'rope') and b.attn.rope is not None else None,
                     })
 
             tok_emb_w = m.layers[0].weight.data
@@ -757,7 +815,20 @@ class SloNetChatProvider:
             E = blocks[0]['head_dim']
             H = blocks[0]['n_heads']
             K_H = blocks[0]['n_kv_heads']
+            E_rope = blocks[0]['head_dim']
             scale = 1.0 / math.sqrt(E)
+
+            # Precompute RoPE cos/sin for all blocks (shared inv_freq)
+            rope_inv_freq = blocks[0].get('rope_inv_freq')
+            rope_cos = None
+            rope_sin = None
+            if rope_inv_freq is not None:
+                max_rope_pos = m.max_seq_len if hasattr(m, 'max_seq_len') else 32768
+                t = _np.arange(max_rope_pos, dtype=_np.float32)
+                freqs = _np.outer(t, rope_inv_freq)
+                emb = _np.concatenate([freqs, freqs], axis=-1)
+                rope_cos = _np.cos(emb).astype(_np.float32)
+                rope_sin = _np.sin(emb).astype(_np.float32)
 
             # Pre-allocate KV cache
             kv_buf_k = [None] * len(blocks)
@@ -775,9 +846,9 @@ class SloNetChatProvider:
                     x = x + _np.take(pos_emb_w, _np.clip(p, 0, pos_emb_n - 1), axis=0)
 
                 for bi, bw in enumerate(blocks):
-                    mean = x.mean(axis=-1, keepdims=True)
-                    var = x.var(axis=-1, keepdims=True)
-                    h = (x - mean) / _np.sqrt(var + bw['an_eps']) * bw['an_w']
+                    # RMSNorm: x / sqrt(mean(x^2) + eps) * weight
+                    rms = _np.sqrt(_np.mean(x * x, axis=-1, keepdims=True) + bw['an_eps'])
+                    h = x / rms * bw['an_w']
                     if bw['an_b'] is not None: h = h + bw['an_b']
 
                     q = h @ bw['wq'].T
@@ -790,6 +861,22 @@ class SloNetChatProvider:
                     q = q.reshape(B, seq_len, H, E)
                     k = k.reshape(B, seq_len, K_H, E)
                     v = v.reshape(B, seq_len, K_H, E)
+
+                    # Apply RoPE
+                    if rope_cos is not None and rope_sin is not None:
+                        def _apply_rope(x, start_pos, n_heads_local):
+                            """Apply rotary position embeddings to x[:, :, n_heads_local, E_rope]."""
+                            # x shape: (B, seq_len, n_heads_local, E_rope)
+                            cos = rope_cos[start_pos:start_pos + x.shape[1]]  # (seq_len, E_rope)
+                            sin = rope_sin[start_pos:start_pos + x.shape[1]]
+                            cos = cos[None, :, None, :]  # (1, seq_len, 1, E_rope)
+                            sin = sin[None, :, None, :]
+                            x1 = x[..., :E_rope // 2]
+                            x2 = x[..., E_rope // 2:]
+                            rotated = _np.concatenate([-x2, x1], axis=-1)
+                            return x * cos + rotated * sin
+                        q = _apply_rope(q, pos, H)
+                        k = _apply_rope(k, pos, K_H)
 
                     new_len = kv_len[bi] + seq_len
                     if kv_buf_k[bi] is None or new_len > kv_buf_k[bi].shape[1]:
@@ -825,23 +912,24 @@ class SloNetChatProvider:
                     if bw['bo'] is not None: ao = ao + bw['bo']
                     x = x + ao
 
-                    mean = x.mean(axis=-1, keepdims=True)
-                    var = x.var(axis=-1, keepdims=True)
-                    h = (x - mean) / _np.sqrt(var + bw['fn_eps']) * bw['fn_w']
+                    # RMSNorm: x / sqrt(mean(x^2) + eps) * weight
+                    rms = _np.sqrt(_np.mean(x * x, axis=-1, keepdims=True) + bw['fn_eps'])
+                    h = x / rms * bw['fn_w']
                     if bw['fn_b'] is not None: h = h + bw['fn_b']
                     h1 = h @ bw['w1'].T
                     if bw['b1'] is not None: h1 = h1 + bw['b1']
                     h3 = h @ bw['w3'].T
                     if bw['b3'] is not None: h3 = h3 + bw['b3']
-                    h1 = 0.5 * h1 * (1.0 + _np.tanh(0.7978845608 * (h1 + 0.044715 * h1**3)))
+                    # SwiGLU: silu(h1) * h3 where silu(x) = x * sigmoid(x)
+                    h1 = h1 * (1.0 / (1.0 + _np.exp(-h1)))
                     h = h1 * h3
                     h = h @ bw['w2'].T
                     if bw['b2'] is not None: h = h + bw['b2']
                     x = x + h
 
-                mean = x.mean(axis=-1, keepdims=True)
-                var = x.var(axis=-1, keepdims=True)
-                x = (x - mean) / _np.sqrt(var + norm_eps) * norm_w
+                # RMSNorm: x / sqrt(mean(x^2) + eps) * weight
+                rms = _np.sqrt(_np.mean(x * x, axis=-1, keepdims=True) + norm_eps)
+                x = x / rms * norm_w
                 if norm_has_bias: x = x + norm_b
                 logits = x[:, -1, :] @ lm_w.T
                 return logits
