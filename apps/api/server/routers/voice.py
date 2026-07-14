@@ -5,7 +5,7 @@ import io
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from schemas.common import success_response

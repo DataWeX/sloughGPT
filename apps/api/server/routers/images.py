@@ -1,6 +1,5 @@
 """Image Generation Router - text-to-image generation with style selection."""
 
-import asyncio
 import base64
 import io
 import logging

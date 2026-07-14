@@ -4,7 +4,7 @@ Companion Router - AI Companion endpoints
 Endpoints to manage and chat with the AI companion.
 """
 import logging
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional, List
 

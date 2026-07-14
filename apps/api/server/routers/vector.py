@@ -35,7 +35,7 @@ async def get_vector_store():
     global _vector_store
     if _vector_store is None:
         try:
-            from domains.inference.vector_store import create_vector_store, VectorStoreType
+            from domains.inference.vector_store import create_vector_store
             kwargs = {"dimension": 384}
             if _vector_store_type == "chromadb":
                 kwargs["persist_directory"] = "data/vector_store"

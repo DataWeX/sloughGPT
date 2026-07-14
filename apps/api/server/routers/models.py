@@ -476,7 +476,7 @@ async def download_qwen_gguf():
     to get the model for llama.rn inference.
     """
     from huggingface_hub import hf_hub_download
-    import tempfile, shutil
+    import shutil
 
     repo_id = "Qwen/Qwen2.5-0.5B-Instruct-GGUF"
     filename = "qwen2.5-0.5b-instruct-q4_k_m.gguf"

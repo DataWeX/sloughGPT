@@ -1,8 +1,8 @@
 """
 Auth Router - JWT token management + login/register/me/logout endpoints
 """
-import uuid, json, os, hashlib, secrets
-from datetime import datetime, timedelta, timezone
+import uuid, json, os, hashlib
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Header, Request, Depends
 from pydantic import BaseModel
 from typing import Optional

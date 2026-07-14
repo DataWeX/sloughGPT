@@ -3,12 +3,6 @@ Health Router - MVC View layer
 """
 from fastapi import APIRouter
 
-from schemas.health import (
-    HealthResponse,
-    DetailedHealthResponse,
-    LivenessResponse,
-    ReadinessResponse
-)
 from controllers.health import get_health_controller
 from startup_progress import STARTUP_PHASE
 from schemas.common import success_response

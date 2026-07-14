@@ -28,7 +28,7 @@ def _check_numba():
     global _NUMBA_AVAILABLE
     if _NUMBA_AVAILABLE is None:
         try:
-            from numba import njit, prange
+            from numba import njit
             _NUMBA_AVAILABLE = True
         except ImportError:
             _NUMBA_AVAILABLE = False
@@ -37,10 +37,7 @@ def _check_numba():
 # Numba-accelerated inference kernels (lazy import, graceful fallback)
 try:
     from domains.training.slonet_kernels import (
-        nb_rmsnorm as _nb_rmsnorm,
         nb_layernorm as _nb_layernorm,
-        nb_swiglu as _nb_swiglu,
-        nb_softmax as _nb_softmax,
         nb_swi_glu_mul as _nb_swi_glu_mul,
     )
     _KERNELS_AVAILABLE = True
@@ -1557,7 +1554,7 @@ class SloLSTM(SloLayer):
         if not _check_numba():
             return self.forward_numpy(x, hidden)
         try:
-            from numba import njit, float32, int64
+            from numba import njit
         except ImportError:
             return self.forward_numpy(x, hidden)
 
@@ -3714,16 +3711,21 @@ class SloTransformer(SloNet):
 
             # --- Transformer blocks (flat tuple indexing) ---
             for bi in range(n_blocks):
-                # Attn norm
-                if _use_kernels:
-                    h = _nb_layernorm(x, n_an_w[bi], n_an_b[bi], n_an_e[bi])
-                else:
-                    mu = x.mean(axis=-1, keepdims=True)
-                    centered = x - mu
-                    var = (centered * centered).mean(axis=-1, keepdims=True)
-                    h = centered * (n_an_w[bi] * np.float32(1.0) / np.sqrt(var + n_an_e[bi]))
-                    if n_an_b[bi] is not None:
+                # Attn norm — auto-detect RMSNorm vs LayerNorm (RMSNorm has no bias)
+                if n_an_b[bi] is not None:
+                    # LayerNorm: h = (x - mean) / sqrt(var + eps) * weight + bias
+                    if _use_kernels:
+                        h = _nb_layernorm(x, n_an_w[bi], n_an_b[bi], n_an_e[bi])
+                    else:
+                        mu = x.mean(axis=-1, keepdims=True)
+                        centered = x - mu
+                        var = (centered * centered).mean(axis=-1, keepdims=True)
+                        h = centered * (n_an_w[bi] * np.float32(1.0) / np.sqrt(var + n_an_e[bi]))
                         h = h + n_an_b[bi]
+                else:
+                    # RMSNorm: h = x * weight / sqrt(mean(x^2) + eps)
+                    rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + n_an_e[bi])
+                    h = x * (n_an_w[bi] / rms)
 
                 # QKV projection
                 if _is_quantized:
@@ -3741,12 +3743,12 @@ class SloTransformer(SloNet):
                     k = qkv[:, :, _he:_he+_khe].reshape(1, seq_len, K_H, E)
                     v = qkv[:, :, _he+_khe:].reshape(1, seq_len, K_H, E)
 
-                # Apply RoPE
+                # Apply RoPE — q/k shape: (1, seq_len, H, E), cos/sin: (seq_len, E) → (1, seq_len, 1, E)
                 if _use_rope and _rope_cos is not None:
-                    q_cos = _rope_cos[pos:pos+seq_len]  # (seq_len, head_dim)
-                    q_sin = _rope_sin[pos:pos+seq_len]
-                    q = q * q_cos + np.concatenate([-q[..., E//2:], q[..., :E//2]], axis=-1) * q_sin
-                    k = k * q_cos + np.concatenate([-k[..., E//2:], k[..., :E//2]], axis=-1) * q_sin
+                    _rope_cs = _rope_cos[pos:pos+seq_len].reshape(1, seq_len, 1, E)
+                    _rope_sn = _rope_sin[pos:pos+seq_len].reshape(1, seq_len, 1, E)
+                    q = q * _rope_cs + np.concatenate([-q[..., E//2:], q[..., :E//2]], axis=-1) * _rope_sn
+                    k = k * _rope_cs + np.concatenate([-k[..., E//2:], k[..., :E//2]], axis=-1) * _rope_sn
 
                 # KV cache
                 new_len = kv_len[bi] + seq_len
@@ -3777,16 +3779,21 @@ class SloTransformer(SloNet):
                         ao = ao + m_bo[bi]
                 x = x + ao
 
-                # FFN norm
-                if _use_kernels:
-                    h = _nb_layernorm(x, n_fn_w[bi], n_fn_b[bi], n_fn_e[bi])
-                else:
-                    mu = x.mean(axis=-1, keepdims=True)
-                    centered = x - mu
-                    var = (centered * centered).mean(axis=-1, keepdims=True)
-                    h = centered * (n_fn_w[bi] * np.float32(1.0) / np.sqrt(var + n_fn_e[bi]))
-                    if n_fn_b[bi] is not None:
+                # FFN norm — auto-detect RMSNorm vs LayerNorm
+                if n_fn_b[bi] is not None:
+                    # LayerNorm
+                    if _use_kernels:
+                        h = _nb_layernorm(x, n_fn_w[bi], n_fn_b[bi], n_fn_e[bi])
+                    else:
+                        mu = x.mean(axis=-1, keepdims=True)
+                        centered = x - mu
+                        var = (centered * centered).mean(axis=-1, keepdims=True)
+                        h = centered * (n_fn_w[bi] * np.float32(1.0) / np.sqrt(var + n_fn_e[bi]))
                         h = h + n_fn_b[bi]
+                else:
+                    # RMSNorm
+                    rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + n_fn_e[bi])
+                    h = x * (n_fn_w[bi] / rms)
 
                 # FFN
                 if _is_quantized:

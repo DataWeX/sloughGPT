@@ -3,7 +3,7 @@ Config Router - MVC View layer
 """
 from fastapi import APIRouter
 
-from schemas.config import GenerationConfig, ConfigUpdate
+from schemas.config import ConfigUpdate
 from controllers.config import get_config_controller
 from schemas.common import success_response
 

@@ -4,7 +4,7 @@ Inference Router - Chat and text generation endpoints
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
-from typing import Optional, List, AsyncIterator, Any
+from typing import Optional, List, AsyncIterator
 from pathlib import Path
 import json
 import logging
@@ -14,7 +14,7 @@ try:
 except ImportError:
     torch = None
 
-from schemas.common import success_response, error_response
+from schemas.common import success_response
 
 logger = logging.getLogger("man.inference")
 

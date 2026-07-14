@@ -6,10 +6,8 @@ This router just exposes manager methods as HTTP endpoints.
 """
 
 import urllib.request
-from pathlib import Path
-from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from domains.training.tokenizer_manager import get_tokenizer_manager

@@ -4,7 +4,7 @@ Feedback Router - MVC View layer
 from fastapi import APIRouter, HTTPException, Request
 
 from schemas.feedback import FeedbackRequest, FeedbackResponse, FeedbackStats, ConversationCreate, ConversationUpdate, ConversationResponse
-from schemas.common import success_response, error_response
+from schemas.common import success_response
 from controllers.feedback import get_feedback_controller
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])

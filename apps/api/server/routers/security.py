@@ -1,7 +1,7 @@
 """
 Security Router - Audit logs and API key management
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from typing import Optional
 
 from schemas.common import success_response

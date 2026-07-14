@@ -4,7 +4,6 @@ Migration target for inline /meta-weights/* endpoints from main.py.
 """
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
-from typing import Optional
 
 from schemas.common import success_response
 

@@ -9,7 +9,7 @@ import json
 
 from schemas.datasets import (
     DatasetInfo, DatasetCreate, DatasetUpdate, DatasetDataRequest,
-    DatasetStats, DatasetListResponse, SearchResponse,
+    DatasetStats, DatasetListResponse,
     GitHubImportRequest, HuggingFaceImportRequest, URLImportRequest,
     LocalImportRequest, KaggleImportRequest, CSVImportRequest,
     BatchImportRequest, ISBNImportRequest, ImportResponse,
