@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 8c212f9 fix(ci): untrack OutputCard/OutputPanel from .gitignore, fix model_loader test input
+No active task. Last commit: 1785169 fix(ci): skip model-dependent tests in CI, fix agents delete assertion
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

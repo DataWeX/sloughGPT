@@ -882,23 +882,24 @@ class SloNetChatProvider:
                     if bw['bo'] is not None: ao = ao + bw['bo']
                     x = x + ao
 
-                    mean = x.mean(axis=-1, keepdims=True)
-                    var = x.var(axis=-1, keepdims=True)
-                    h = (x - mean) / _np.sqrt(var + bw['fn_eps']) * bw['fn_w']
+                    # RMSNorm: x / sqrt(mean(x^2) + eps) * weight
+                    rms = _np.sqrt(_np.mean(x * x, axis=-1, keepdims=True) + bw['fn_eps'])
+                    h = x / rms * bw['fn_w']
                     if bw['fn_b'] is not None: h = h + bw['fn_b']
                     h1 = h @ bw['w1'].T
                     if bw['b1'] is not None: h1 = h1 + bw['b1']
                     h3 = h @ bw['w3'].T
                     if bw['b3'] is not None: h3 = h3 + bw['b3']
-                    h1 = 0.5 * h1 * (1.0 + _np.tanh(0.7978845608 * (h1 + 0.044715 * h1**3)))
+                    # SwiGLU: silu(h1) * h3 where silu(x) = x * sigmoid(x)
+                    h1 = h1 * (1.0 / (1.0 + _np.exp(-h1)))
                     h = h1 * h3
                     h = h @ bw['w2'].T
                     if bw['b2'] is not None: h = h + bw['b2']
                     x = x + h
 
-                mean = x.mean(axis=-1, keepdims=True)
-                var = x.var(axis=-1, keepdims=True)
-                x = (x - mean) / _np.sqrt(var + norm_eps) * norm_w
+                # RMSNorm: x / sqrt(mean(x^2) + eps) * weight
+                rms = _np.sqrt(_np.mean(x * x, axis=-1, keepdims=True) + norm_eps)
+                x = x / rms * norm_w
                 if norm_has_bias: x = x + norm_b
                 logits = x[:, -1, :] @ lm_w.T
                 return logits
