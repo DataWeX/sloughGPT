@@ -664,8 +664,12 @@ async def stream(request: Request):
             if _auto_train_cancel_event is not None and _auto_train_cancel_event.is_set():
                 raise _AutoTrainCancelled("Training cancelled by user")
             sse = progress.to_sse_event(stream_name="auto-train")
+            data = sse.get("data", {})
+            # Don't emit loss=0.0 from phase transitions — only emit real loss values
+            if data.get("loss") == 0.0 and data.get("step", 0) == 0:
+                data = {k: v for k, v in data.items() if k != "loss"}
             _enqueue(sse_event("auto-train", sse.get("phase", "PROGRESS"),
-                               sse.get("status", "working"), data=sse.get("data"),
+                               sse.get("status", "working"), data=data,
                                meta=sse.get("meta", {})))
 
         try:
