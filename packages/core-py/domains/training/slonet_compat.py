@@ -17,7 +17,6 @@ to::
 Everything works identically without PyTorch installed.
 """
 
-from typing import Any
 import math
 
 import numpy as np

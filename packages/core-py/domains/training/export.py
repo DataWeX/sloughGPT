@@ -105,7 +105,7 @@ import logging
 import os
 import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any, List, TYPE_CHECKING, Union
+from typing import Optional, Dict, Any, List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     import torch.nn as Module
