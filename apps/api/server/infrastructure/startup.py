@@ -229,7 +229,7 @@ class StartupOrchestrator:
 
         # Run sequential phases via lifecycle manager
         if self._lifecycle is not None:
-            ok = await self._lifecycle.start(timeout=120.0, profile=profile_enum)
+            ok = await self._lifecycle.start(timeout=180.0, profile=profile_enum)
             if not ok:
                 logger.warning("Lifecycle startup incomplete — continuing anyway")
         else:
