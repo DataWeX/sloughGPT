@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 85b0149 feat: training pair quality scorer (length, repetition, coherence, language)
+No active task. Last commit: 6ad21e7 feat: training pair quality scorer — algorithmic 0-5 scoring for (user, assistant) pairs
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

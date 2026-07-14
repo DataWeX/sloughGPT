@@ -114,9 +114,9 @@ class TestHFTrainingRequestSchema:
         req = HFTrainingRequest(model="gpt2", dataset="shakespeare")
         assert req.model == "gpt2"
         assert req.dataset == "shakespeare"
-        assert req.epochs == 1
+        assert req.epochs == 3
         assert req.batch_size == 4
-        assert req.learning_rate == 5e-5
+        assert req.learning_rate == 2e-4
         assert req.use_lora is False
         assert req.lora_rank == 8
         assert req.lora_alpha == 16
