@@ -19,13 +19,8 @@ from __future__ import annotations
 
 import os
 import time
-import math
-import warnings
-from typing import Optional, Dict, Any, List, Tuple, Callable
+from typing import Optional, Dict, Any, List, Callable
 from dataclasses import dataclass, field
-from domains.training.trainer_protocol import TrainResult
-from contextlib import contextmanager
-from functools import lru_cache
 import logging
 
 from domains.training.slonet_compat import torch

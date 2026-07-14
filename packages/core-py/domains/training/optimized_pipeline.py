@@ -19,16 +19,13 @@ Optimizations:
 - Pipeline parallelism (large models)
 """
 
-import asyncio
 import copy
 import gc
 import os
-import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type
+from typing import Any, Dict, List, Optional
 import logging
-import threading
 
 from domains.training.slonet_compat import torch
 F = torch.F

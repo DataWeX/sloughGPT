@@ -14,12 +14,9 @@ Char-LM checkpoint vocabulary on native ``SloughGPTTrainer`` ``step_*.pt`` (and 
 ``cli.py eval``) lives in ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
 """
 
-import os
-import time
-import math
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Any, Callable
+from typing import Dict, Any
 
 from domains.training.slonet_compat import torch
 DataLoader = torch.utils.data.DataLoader

@@ -1,7 +1,5 @@
 /** Query system types — composable, generic request management for the web UI. */
 
-import type { DependencyList } from 'react'
-
 /** Serializable query key — string or array (serialized to cache key). */
 export type QueryKey = string | readonly unknown[]
 

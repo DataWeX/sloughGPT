@@ -12,7 +12,7 @@ import uuid
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 import numpy as np
 

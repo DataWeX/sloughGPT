@@ -6,7 +6,7 @@
  *   const stats = await userAdaptersController.list()
  */
 
-import { apiGet, apiPost, apiDelete } from './http-client'
+import { apiGet, apiPost } from './http-client'
 
 export interface UserAdapterStats {
   total_users: number

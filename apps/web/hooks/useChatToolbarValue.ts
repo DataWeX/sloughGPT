@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, type MutableRefObject } from 'react'
+import { useMemo } from 'react'
 import type { ChatToolbarContextValue } from '@/contexts/ChatToolbarContext'
 import type { useChatUI } from './useChatUI'
 import type { useChatVision } from './useChatVision'
@@ -10,7 +10,6 @@ import type { useChatLocalEngine } from './useChatLocalEngine'
 import type { useChatModelSettings } from './useChatModelSettings'
 import type { useChatMessages } from './useChatMessages'
 import type { ApiHealthSnapshot } from './useApiHealth'
-import type { Conversation } from '@/lib/session-controller'
 import { datasetController } from '@/lib/dataset-controller'
 
 interface UseChatToolbarValueConfig {

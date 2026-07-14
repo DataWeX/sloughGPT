@@ -13,6 +13,7 @@ import subprocess
 import time as _time
 from typing import Optional, List
 from fastapi import APIRouter, Query, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import httpx
 
@@ -1236,29 +1237,31 @@ class FromSessionsRequest(BaseModel):
 
 
 @router.post("/train/from-sessions")
-async def train_from_sessions(body: FromSessionsRequest = FromSessionsRequest()):
+async def train_from_sessions(body: FromSessionsRequest = FromSessionsRequest(), request: Request = None):
     """
-    Train the model from server-side inference logs.
+    Train the model from server-side inference logs (SSE streaming).
 
-    Extracts (user_msg, assistant_msg) pairs from session JSON files
-    (or response log JSONL files as fallback), writes a training text
-    file, and spawns a subprocess fine-tune. No mobile data needed.
+    Extracts (user_msg, assistant_msg) pairs from session JSON files,
+    writes a training text file, and spawns a subprocess fine-tune.
+    Streams progress as SSE events in real-time.
+
+    SSE phases: GENERATE_DATA → TRAIN → COMPLETE | ERROR
 
     Args:
         body: limit (max pairs), min_length (filter tiny messages), model (optional filter).
 
-    Returns:
-        MobileTrainResult with checkpoint name, loss, steps, timing.
+    Yields:
+        SSE events with training progress (step, loss, epoch, progress_pct).
 
     Side effects:
         - Reads session files from data/chat_sessions/.
         - Writes training text to data/mobile_training/.
-        - Spawns HF fine-tune subprocess.
+        - Spawns HF fine-tune subprocess (non-blocking Popen).
     """
     from pathlib import Path
-    from fastapi import HTTPException
+    from domains.api.sse_envelope import sse_event, sse_error, sse_complete
 
-    t0 = int(_time.time() * 1000)
+    t0 = _time.time()
 
     # Extract pairs from server logs
     from domains.training.pair_extractor import (
@@ -1276,10 +1279,16 @@ async def train_from_sessions(body: FromSessionsRequest = FromSessionsRequest())
         )
 
     if len(pairs) < 5:
-        raise HTTPException(
-            400,
-            f"Need at least 5 training pairs, found {len(pairs)} in server logs",
-        )
+        yield sse_error("training", "GENERATE_DATA",
+                         f"Need at least 5 training pairs, found {len(pairs)} in server logs")
+        return
+
+    # Emit GENERATE_DATA phase
+    yield sse_event(
+        stream="training", phase="GENERATE_DATA", status="working",
+        data={"pairs": len(pairs)},
+        message=f"Extracted {len(pairs)} training pairs",
+    )
 
     # Write training text file
     text_file = write_training_text(pairs)
@@ -1298,7 +1307,7 @@ async def train_from_sessions(body: FromSessionsRequest = FromSessionsRequest())
         for p in pairs
     ])
 
-    # Spawn training subprocess (same as /train)
+    # Prepare subprocess
     repo_root = Path(__file__).resolve().parents[4]
     ts = int(_time.time())
     checkpoint_name = f"sessions_{ts}"
@@ -1309,58 +1318,138 @@ async def train_from_sessions(body: FromSessionsRequest = FromSessionsRequest())
     train_script = repo_root / "scripts" / "hf_train.py"
 
     if not venv_python.exists():
-        raise HTTPException(500, "Training environment not found (.venv missing)")
+        yield sse_error("training", "TRAIN", "Training environment not found (.venv missing)")
+        return
+
+    # Launch subprocess with streaming stdout
+    cmd = [
+        str(venv_python),
+        str(train_script),
+        "--stream",
+        "--data", str(text_file),
+        "--output", str(output_dir),
+        "--model", "gpt2",
+        "--epochs", "1",
+        "--batch-size", "2",
+        "--lr", "5e-5",
+        "--max-seq-length", "256",
+        "--use-lora",
+        "--lora-rank", "8",
+    ]
 
     try:
-        proc = await asyncio.to_thread(
-            subprocess.run,
-            [
-                str(venv_python),
-                str(train_script),
-                "--data", str(text_file),
-                "--output", str(output_dir),
-                "--model", "gpt2",
-                "--epochs", "1",
-                "--batch-size", "2",
-                "--lr", "5e-5",
-                "--max-seq-length", "256",
-                "--use-lora",
-                "--lora-rank", "8",
-            ],
-            capture_output=True,
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=300,
+            bufsize=1,
         )
+    except Exception as e:
+        logger.error("Failed to start training subprocess: %s", e)
+        yield sse_error("training", "TRAIN", f"Failed to start training: {e}")
+        return
+
+    # Stream stdout lines as SSE events
+    deadline = _time.time() + 600  # 10-minute hard timeout
+    disconnect_check_interval = 5.0  # Check disconnect every 5s while waiting for lines
+    result = None
+
+    try:
+        while True:
+            if _time.time() > deadline:
+                proc.kill()
+                yield sse_error("training", "TRAIN", "Training timed out (10 min)")
+                return
+
+            # Check client disconnect periodically
+            if request and await request.is_disconnected():
+                proc.kill()
+                logger.info("Client disconnected from training stream")
+                return
+
+            # Read one line (with timeout via select-like approach)
+            line = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(None, proc.stdout.readline),
+                timeout=disconnect_check_interval,
+            )
+
+            if not line:
+                break  # stdout closed — process finished
+
+            line = line.strip()
+            if not line:
+                continue
+
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            phase = event.get("phase", "TRAIN")
+            status = event.get("status", "working")
+
+            # Check if this is the final result
+            if event.get("success") is not None or phase == "COMPLETE":
+                result = event
+                break
+
+            # Forward progress event as SSE
+            elapsed_ms = round((_time.time() - t0) * 1000)
+            yield sse_event(
+                stream="training", phase=phase, status="working",
+                data={
+                    "step": event.get("step"),
+                    "loss": event.get("loss"),
+                    "epoch": event.get("epoch"),
+                    "progress_pct": event.get("progress_pct"),
+                    "total_steps": event.get("total_steps"),
+                },
+                meta={"elapsed_ms": elapsed_ms, "checkpoint": checkpoint_name},
+                message=event.get("message", ""),
+            )
+
+        # Wait for process to finish
+        proc.wait(timeout=30)
 
         if proc.returncode != 0:
-            logger.error("Training subprocess failed: %s", proc.stderr[-500:])
-            raise HTTPException(500, f"Training failed: {proc.stderr[-200:]}")
+            stderr_tail = proc.stderr.read()[-500:] if proc.stderr else ""
+            logger.error("Training subprocess failed (rc=%d): %s", proc.returncode, stderr_tail)
+            yield sse_error("training", "TRAIN", f"Training failed (exit code {proc.returncode})")
+            return
 
-        result = json.loads(proc.stdout.strip().split("\n")[-1])
+        # Parse final result if not already captured from stdout
+        if result is None:
+            # Try reading any remaining stderr for errors
+            stderr_tail = proc.stderr.read()[-500:] if proc.stderr else ""
+            yield sse_error("training", "TRAIN",
+                            f"Training produced no result output. stderr: {stderr_tail[:200]}")
+            return
 
-        if not result.get("success"):
-            raise HTTPException(500, f"Training failed: {result.get('error', 'unknown')}")
+        elapsed_ms = round((_time.time() - t0) * 1000)
 
-        elapsed = int(_time.time() * 1000) - t0
-
-        return MobileTrainResult(
-            success=True,
-            checkpoint_name=checkpoint_name,
-            loss=result.get("loss", 0.0),
-            steps=result.get("steps", 0),
-            elapsed_ms=elapsed,
+        yield sse_complete(
+            stream="training", phase="COMPLETE",
+            data={
+                "checkpoint_name": checkpoint_name,
+                "loss": result.get("loss", 0.0),
+                "steps": result.get("steps", 0),
+                "elapsed_ms": elapsed_ms,
+                "model_path": result.get("model_path", ""),
+            },
+            meta={"elapsed_ms": elapsed_ms},
+            message=f"Training complete — loss={result.get('loss', 0):.4f} steps={result.get('steps', 0)}",
         )
 
-    except subprocess.TimeoutExpired:
-        raise HTTPException(504, "Training timed out (300s limit)")
-    except json.JSONDecodeError as e:
-        logger.error("Failed to parse training output: %s", e)
-        raise HTTPException(500, "Training produced invalid output")
-    except HTTPException:
-        raise
+    except asyncio.TimeoutError:
+        # readline timed out — send heartbeat check and continue the loop
+        pass
     except Exception as e:
         logger.error("Session training failed: %s", e)
-        raise HTTPException(500, f"Training failed: {e}")
+        yield sse_error("training", "TRAIN", f"Training failed: {e}")
+    finally:
+        if proc.poll() is None:
+            proc.kill()
 
 
 @router.get("/train/auto-status")

@@ -6,7 +6,7 @@
  *   const result = await generateController.generate({ prompt: 'Hello' })
  */
 
-import { apiGet, apiPost } from './http-client'
+import { apiPost } from './http-client'
 
 export interface GenerateRequest {
   prompt: string

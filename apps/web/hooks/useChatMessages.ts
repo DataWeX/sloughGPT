@@ -9,7 +9,6 @@ import {
   type ChatMessage, type ImageAttachment, type ChatSession,
 } from '@/lib/chat-utils'
 import { getErrorInfo } from '@/components/chat/ErrorBanner'
-import type { Conversation } from '@/lib/session-controller'
 import { chatController } from '@/lib/chat-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { multimodalController } from '@/lib/multimodal-controller'

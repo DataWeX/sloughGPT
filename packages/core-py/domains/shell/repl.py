@@ -35,10 +35,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from .kernel import DaitRuntime, ProcessState
+from .kernel import DaitRuntime
 from .commands import ShellCommands
 from .state import ShellState
-from .window_manager import WindowManager, get_window_manager
 
 _EM = "\u2014"  # em dash
 logger = logging.getLogger("man.shell.repl")

@@ -8,8 +8,8 @@ Implements proper EWC with:
 - Task importance weighting
 """
 
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, Optional, Tuple
 import numpy as np
 
 import logging

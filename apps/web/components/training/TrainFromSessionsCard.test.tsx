@@ -10,6 +10,7 @@ vi.mock('@/lib/controllers', () => ({
   trainingController: {
     getAutoTrainStatus: vi.fn(),
     trainFromSessions: vi.fn(),
+    streamTrainFromSessions: vi.fn(),
     listChatSessions: vi.fn(),
   },
 }))
@@ -23,6 +24,7 @@ import { trainingController } from '@/lib/controllers'
 
 const mockGetAutoTrainStatus = vi.mocked(trainingController.getAutoTrainStatus)
 const mockTrainFromSessions = vi.mocked(trainingController.trainFromSessions)
+const mockStreamTrainFromSessions = vi.mocked(trainingController.streamTrainFromSessions)
 const mockListSessions = vi.mocked(trainingController.listChatSessions)
 
 beforeEach(() => {
@@ -106,14 +108,13 @@ describe('TrainFromSessionsCard', () => {
     })
   })
 
-  it('calls trainFromSessions on button click', async () => {
-    mockTrainFromSessions.mockResolvedValue({
-      success: true,
-      checkpoint_name: 'sessions_999',
-      loss: 1.5,
-      steps: 10,
-      elapsed_ms: 5000,
-    })
+  it('calls streamTrainFromSessions on button click', async () => {
+    async function* mockStream() {
+      yield { stream: 'training', phase: 'GENERATE_DATA', status: 'working', data: { pairs: 10 }, meta: {}, message: 'Extracted 10 pairs' }
+      yield { stream: 'training', phase: 'TRAIN', status: 'working', data: { step: 5, loss: 1.5, epoch: 0.5, progress_pct: 50, total_steps: 10 }, meta: { elapsed_ms: 2000 }, message: '' }
+      yield { stream: 'training', phase: 'COMPLETE', status: 'complete', data: { checkpoint_name: 'sessions_999', loss: 1.5, steps: 10, elapsed_ms: 5000 }, meta: { elapsed_ms: 5000 }, message: 'Done' }
+    }
+    mockStreamTrainFromSessions.mockReturnValue(mockStream())
 
     const user = userEvent.setup()
     render(<TrainFromSessionsCard />)
@@ -125,7 +126,7 @@ describe('TrainFromSessionsCard', () => {
     await user.click(screen.getByText('Train from conversations'))
 
     await waitFor(() => {
-      expect(mockTrainFromSessions).toHaveBeenCalledWith({ limit: 50, min_length: 5, session_ids: undefined })
+      expect(mockStreamTrainFromSessions).toHaveBeenCalledWith({ limit: 50, min_length: 5, session_ids: undefined })
       expect(mockAddToast).toHaveBeenCalledWith(
         expect.stringContaining('Trained from all sessions'),
         'success'
@@ -134,7 +135,10 @@ describe('TrainFromSessionsCard', () => {
   })
 
   it('shows error toast on training failure', async () => {
-    mockTrainFromSessions.mockRejectedValue(new Error('Not enough data'))
+    async function* mockStream() {
+      yield { stream: 'training', phase: 'GENERATE_DATA', status: 'error', data: { error: 'Not enough data' }, meta: {}, message: 'Error: Not enough data' }
+    }
+    mockStreamTrainFromSessions.mockReturnValue(mockStream())
 
     const user = userEvent.setup()
     render(<TrainFromSessionsCard />)

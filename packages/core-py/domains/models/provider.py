@@ -20,7 +20,7 @@ HFModelProvider wraps a HuggingFace model+tokenizer as a ModelProvider.
 
 import asyncio
 from typing import Protocol, AsyncIterator, Optional, List, Dict, Any, runtime_checkable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import logging
 
 from domains.inference.prompt_formatter import PromptFormatter

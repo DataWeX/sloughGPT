@@ -11,13 +11,10 @@ from __future__ import annotations
 import os
 import time
 import json
-import signal
 import logging
 import threading
-from pathlib import Path
-from datetime import datetime
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 logger = logging.getLogger("man.shell.kernel")
 

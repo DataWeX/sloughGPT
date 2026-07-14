@@ -9,10 +9,9 @@ Generates speech waveforms from text using:
 All implemented in pure NumPy - no external dependencies.
 """
 
-from typing import Optional, List, Tuple
+from typing import Tuple
 import numpy as np
 import logging
-from pathlib import Path
 
 logger = logging.getLogger("man.multimodal.tts")
 

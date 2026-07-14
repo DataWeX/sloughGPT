@@ -11,7 +11,7 @@ Optional PyTorch components (only if torch is installed):
 """
 
 import logging
-from typing import Optional, Tuple, List
+from typing import Optional
 from dataclasses import dataclass
 
 try:

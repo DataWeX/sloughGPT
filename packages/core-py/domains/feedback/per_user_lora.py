@@ -8,7 +8,6 @@ Each user gets their own lightweight LoRA adapter that:
 - Allows personalization without retraining base model
 """
 
-import json
 import sqlite3
 import numpy as np
 import threading

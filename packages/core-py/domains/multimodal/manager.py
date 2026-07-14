@@ -7,7 +7,7 @@ user-provided image data. No external downloads.
 """
 
 from typing import Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import logging
 import numpy as np
 

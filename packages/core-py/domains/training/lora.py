@@ -9,7 +9,7 @@ All operations use SloNet Tensor / SloLayer.
 import math
 import logging
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List
 from enum import Enum
 
 import numpy as np

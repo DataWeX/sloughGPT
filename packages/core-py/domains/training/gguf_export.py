@@ -7,7 +7,7 @@ Auto-detects model architecture from tensor names.
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Callable
+from typing import Any, Dict, List, Optional, Tuple
 
 from domains.training.slonet_compat import torch
 nn = torch.nn

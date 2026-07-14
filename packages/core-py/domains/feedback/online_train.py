@@ -6,7 +6,7 @@ that can update model weights in seconds (not minutes/hours).
 """
 
 import numpy as np
-from typing import Optional, Dict, Any, Callable
+from typing import Optional, Dict, Any
 from dataclasses import dataclass
 import logging
 import threading

@@ -5,7 +5,7 @@ Transforms tokenized text into embeddings for conditioning the diffusion model.
 Uses a simple transformer encoder with the BPE tokenizer.
 """
 
-from typing import List, Optional, Tuple
+from typing import List
 import numpy as np
 import logging
 

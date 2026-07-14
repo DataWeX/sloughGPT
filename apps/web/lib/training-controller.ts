@@ -342,9 +342,69 @@ export const trainingJobsController = {
   },
 
   // ---------------------------------------------------------------------------
-  // Train from server conversation logs
+  // Train from server conversation logs (SSE streaming)
   // ---------------------------------------------------------------------------
 
+  async *streamTrainFromSessions(params?: {
+    limit?: number
+    min_length?: number
+    model?: string
+    session_ids?: string[]
+  }): AsyncGenerator<{
+    stream: string
+    phase: string
+    status: string
+    data: Record<string, unknown>
+    meta: Record<string, unknown>
+    message: string
+  }> {
+    const { PUBLIC_API_URL } = await import('./config')
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (token) headers['Authorization'] = `Bearer ${token}`
+
+    const res = await fetch(`${PUBLIC_API_URL}/mobile/train/from-sessions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(params ?? {}),
+    })
+
+    if (!res.ok || !res.body) {
+      const text = await res.text().catch(() => '')
+      throw new Error(`Training request failed (${res.status}): ${text.slice(0, 200)}`)
+    }
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const event = JSON.parse(line.slice(6))
+            yield event
+            if (event.status === 'complete' || event.status === 'error') return
+          } catch { /* skip malformed */ }
+        }
+      }
+    }
+
+    // Drain remaining buffer
+    if (buffer.startsWith('data: ')) {
+      try {
+        const event = JSON.parse(buffer.slice(6))
+        yield event
+      } catch { /* skip */ }
+    }
+  },
+
+  // Blocking fallback for mobile (non-SSE)
   async trainFromSessions(params?: {
     limit?: number
     min_length?: number

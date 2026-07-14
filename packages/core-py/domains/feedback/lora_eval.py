@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
 logger = logging.getLogger("man.lora_eval")
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass

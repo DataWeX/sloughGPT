@@ -8,6 +8,16 @@ import { trainingController } from '@/lib/controllers'
 import { useToastStore } from '@/lib/toast-store'
 import type { AutoTrainStatus, ChatSession } from '@/lib/training-controller'
 
+interface TrainProgress {
+  step: number | null
+  loss: number | null
+  epoch: number | null
+  progress_pct: number
+  total_steps: number | null
+  phase: string
+  message: string
+}
+
 export function TrainFromSessionsCard() {
   const addToast = useToastStore(s => s.addToast)
   const [status, setStatus] = useState<AutoTrainStatus | null>(null)
@@ -21,6 +31,7 @@ export function TrainFromSessionsCard() {
   const [configInterval, setConfigInterval] = useState<string>('')
   const [savingConfig, setSavingConfig] = useState(false)
   const [lastResult, setLastResult] = useState<{ loss: number; steps: number; elapsed_ms: number; checkpoint: string } | null>(null)
+  const [progress, setProgress] = useState<TrainProgress | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const startTimeRef = useRef<number>(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -64,30 +75,67 @@ export function TrainFromSessionsCard() {
   const handleTrainFromSessions = useCallback(async () => {
     setTraining(true)
     setLastResult(null)
+    setProgress(null)
     startTimeRef.current = Date.now()
     setElapsed(0)
     timerRef.current = setInterval(() => {
       setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000))
     }, 1000)
+
     try {
       const sessionIds = selectedSessions.size > 0 ? Array.from(selectedSessions) : undefined
-      const result = await trainingController.trainFromSessions({
+
+      for await (const event of trainingController.streamTrainFromSessions({
         limit: 50,
         min_length: 5,
         session_ids: sessionIds,
-      })
-      setLastResult({
-        loss: result.loss,
-        steps: result.steps,
-        elapsed_ms: result.elapsed_ms,
-        checkpoint: result.checkpoint_name || '',
-      })
-      const label = sessionIds ? `${sessionIds.length} sessions` : 'all sessions'
-      addToast(
-        `Trained from ${label} — loss ${result.loss.toFixed(4)}, ${result.steps} steps`,
-        'success'
-      )
-      void fetchStatus()
+      })) {
+        if (event.status === 'error') {
+          const errorMsg = (event.data as { error?: string })?.error || event.message || 'Training failed'
+          addToast(errorMsg, 'error')
+          break
+        }
+
+        if (event.status === 'complete') {
+          const d = event.data as { checkpoint_name?: string; loss?: number; steps?: number; elapsed_ms?: number }
+          setLastResult({
+            loss: d.loss ?? 0,
+            steps: d.steps ?? 0,
+            elapsed_ms: d.elapsed_ms ?? 0,
+            checkpoint: d.checkpoint_name ?? '',
+          })
+          const label = sessionIds ? `${sessionIds.length} sessions` : 'all sessions'
+          addToast(
+            `Trained from ${label} — loss ${(d.loss ?? 0).toFixed(4)}, ${d.steps ?? 0} steps`,
+            'success'
+          )
+          void fetchStatus()
+          break
+        }
+
+        // Update live progress from TRAIN phase events
+        if (event.phase === 'TRAIN' && event.status === 'working') {
+          const d = event.data as { step?: number; loss?: number; epoch?: number; progress_pct?: number; total_steps?: number }
+          setProgress({
+            step: d.step ?? null,
+            loss: d.loss ?? null,
+            epoch: d.epoch ?? null,
+            progress_pct: d.progress_pct ?? 0,
+            total_steps: d.total_steps ?? null,
+            phase: event.phase,
+            message: event.message,
+          })
+        }
+
+        // GENERATE_DATA phase
+        if (event.phase === 'GENERATE_DATA') {
+          setProgress(prev => ({
+            ...(prev ?? { step: null, loss: null, epoch: null, progress_pct: 0, total_steps: null, phase: '', message: '' }),
+            phase: 'GENERATE_DATA',
+            message: event.message,
+          }))
+        }
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Training failed'
       addToast(msg, 'error')
@@ -273,14 +321,51 @@ export function TrainFromSessionsCard() {
           </div>
         )}
 
-        {/* Training progress */}
+        {/* Live training progress (SSE) */}
         {training && (
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-            <span className="relative flex h-2 w-2 shrink-0">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-            </span>
-            <span>Training in progress — {elapsed}s elapsed</span>
+          <div className="space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-2">
+            <div className="flex items-center gap-2 text-[11px]">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+              </span>
+              <span className="text-foreground font-medium">
+                {progress?.phase === 'GENERATE_DATA' ? 'Extracting pairs...' : 'Training in progress'}
+              </span>
+              <span className="text-muted-foreground/50 ml-auto">{elapsed}s</span>
+            </div>
+
+            {/* Progress bar */}
+            {progress && progress.progress_pct > 0 && (
+              <div className="space-y-1">
+                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary/70 transition-all duration-300 rounded-full"
+                    style={{ width: `${progress.progress_pct}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] text-muted-foreground/60">
+                  <span>
+                    step {progress.step ?? '—'}
+                    {progress.total_steps != null && <> / {progress.total_steps}</>}
+                  </span>
+                  <span>{progress.progress_pct}%</span>
+                </div>
+              </div>
+            )}
+
+            {/* Live loss */}
+            {progress?.loss != null && (
+              <div className="flex gap-4 text-[10px] text-muted-foreground/60">
+                <span>loss {progress.loss.toFixed(4)}</span>
+                {progress.epoch != null && <span>epoch {progress.epoch}</span>}
+              </div>
+            )}
+
+            {/* Phase message */}
+            {progress?.message && (
+              <p className="text-[10px] text-muted-foreground/50 truncate">{progress.message}</p>
+            )}
           </div>
         )}
 

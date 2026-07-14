@@ -5,7 +5,7 @@ Operates in the VAE latent space (64x7x7) rather than pixel space.
 Text conditioning via cross-attention with text embeddings.
 """
 
-from typing import Optional, List, Tuple
+from typing import Optional, Tuple
 import numpy as np
 import logging
 import math

@@ -17,7 +17,7 @@ import time
 import logging
 import threading
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 
 logger = logging.getLogger("man.model_health")

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { trainingJobsController, modelController } from '@/lib/controllers'
+import { trainingJobsController } from '@/lib/controllers'
 import type { Checkpoint } from '@/lib/souls-controller'
 import type { TrainingBuild, TrainingJob } from '@/lib/training-controller'
 
