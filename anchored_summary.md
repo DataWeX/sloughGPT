@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: bf89910 Merge pull request #51 from DataWeX/fix/ci-final-two
+No active task. Last commit: 40a9db1 fix(docker): install strui deps in web Dockerfile
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
