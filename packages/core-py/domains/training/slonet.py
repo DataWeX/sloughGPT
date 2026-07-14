@@ -3885,19 +3885,18 @@ class SloTransformer(SloNet):
         loaded, missing = set(), []
         for key, arr in state_dict.items():
             arr = np.array(arr, dtype=np.float32)
-            clean = key
-            if clean in param_map:
-                p = param_map[clean]
+            if key in param_map:
+                p = param_map[key]
                 if p.data.shape == arr.shape:
                     p.data[:] = arr
-                    loaded.add(clean)
+                    loaded.add(key)
                 elif p.data.ndim == 2 and arr.ndim == 2 and p.data.shape[1] == arr.shape[1]:
                     p.data[:arr.shape[0]] = arr[:p.data.shape[0]]
-                    loaded.add(clean)
+                    loaded.add(key)
                 elif p.data.ndim == 1 and arr.ndim == 1:
                     min_d = min(p.data.shape[0], arr.shape[0])
                     p.data[:min_d] = arr[:min_d]
-                    loaded.add(clean)
+                    loaded.add(key)
             else:
                 alt_layer_names = ["tok_emb"]
                 if len(self.layers) > 2 + self.n_layer and isinstance(self.layers[1], SloDropout):
@@ -3905,10 +3904,10 @@ class SloTransformer(SloNet):
                 alt_layer_names += [f"blocks.{i}" for i in range(self.n_layer)] + ["norm", "lm_head"]
                 for lname, layer in zip(alt_layer_names, self.layers):
                     if isinstance(layer, SloLinear) and not isinstance(layer, type(None)):
-                        if clean.endswith(".weight") and clean.replace(".weight", "") == lname:
+                        if key.endswith(".weight") and key.replace(".weight", "") == lname:
                             arr_2d = arr.reshape(layer.weight.data.shape)
                             layer.weight.data[:] = arr_2d
-                            loaded.add(clean)
+                            loaded.add(key)
         if strict and len(loaded) < len(state_dict):
             missing = [k for k in state_dict if k not in loaded]
         return missing

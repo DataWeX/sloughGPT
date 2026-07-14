@@ -250,9 +250,7 @@ class FeedbackWorkflowManager:
         rolls back the weights and logs the rejection.
         Uses gradient clipping and cosine LR scheduling for stable updates.
         """
-        import logging
         import numpy as np
-        logger = logging.getLogger("man.feedback")
 
         net = getattr(self, '_model', None)
         tok = getattr(self, '_tokenizer', None)
@@ -370,9 +368,7 @@ class FeedbackWorkflowManager:
         rejected probability down. Quality guard prevents degradation.
         Uses gradient clipping and cosine LR scheduling for stable updates.
         """
-        import logging
         import numpy as np
-        logger = logging.getLogger("man.feedback")
 
         net = getattr(self, '_model', None)
         tok = getattr(self, '_tokenizer', None)
@@ -477,8 +473,6 @@ class FeedbackWorkflowManager:
         workflow stats. Errors are caught and logged so the scheduler never
         crashes.
         """
-        import logging
-        logger = logging.getLogger("man.feedback")
         try:
             # Use defaults: top‑k 10, min_feedback_count 5, run_eval=True
             result = self.lora_store.aggregate_best_adapters()
@@ -490,10 +484,8 @@ class FeedbackWorkflowManager:
 
     def _maybe_train_user_adapter(self, user_id: str):
         """Train a per-user adapter using accumulated feedback."""
-        import logging
         import numpy as np
         from pathlib import Path
-        logger = logging.getLogger("man.feedback")
 
         net = getattr(self, '_model', None)
         tok = getattr(self, '_tokenizer', None)
@@ -620,8 +612,6 @@ class FeedbackWorkflowManager:
         frequently. Errors are caught and logged – the scheduler must never
         abort the workflow.
         """
-        import logging
-        logger = logging.getLogger("man.feedback")
         now = time.time()
         # Aggregation
         if now - self._last_aggregate_time >= self.config.aggregate_interval_minutes * 60:
@@ -690,8 +680,6 @@ class FeedbackWorkflowManager:
         accumulated. Delegates to the same `_maybe_dpo_train` logic that is
         also triggered on individual thumbs‑down events.
         """
-        import logging
-        logger = logging.getLogger("man.feedback")
         try:
             self._maybe_dpo_train()
             self._stats["dpo_train_steps"] = self._stats.get("dpo_train_steps", 0) + 1
