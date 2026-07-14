@@ -15,17 +15,6 @@ from .core import (
     CreativeIdea,
     ReasoningChain,
 )
-from .knowledge_graph import KnowledgeGraph, KnowledgeNode, KnowledgeEdge, RelationType, Confidence
-
-# RAG exports (canonical location)
-from .rag import (
-    ProductionRAG,
-    BM25Indexer,
-    TextChunk,
-    RetrievalResult,
-    HybridRetriever,
-    HallucinationDetector,
-)
 
 __all__ = [
     "CognitiveDomain",
@@ -36,16 +25,4 @@ __all__ = [
     "ThoughtProcess",
     "CreativeIdea",
     "ReasoningChain",
-    "KnowledgeGraph",
-    "KnowledgeNode",
-    "KnowledgeEdge",
-    "RelationType",
-    "Confidence",
-    # RAG
-    "ProductionRAG",
-    "BM25Indexer",
-    "TextChunk",
-    "RetrievalResult",
-    "HybridRetriever",
-    "HallucinationDetector",
 ]

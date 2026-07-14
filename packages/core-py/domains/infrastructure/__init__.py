@@ -11,8 +11,6 @@ Provides:
   - EventBus — typed async pub/sub
   - TaskQueue, InProcessTaskQueue — async priority queue
   - LifecycleManager — ordered startup/shutdown with health gates
-
-RAGEngine is at domains.cognitive.rag (deprecated here).
 """
 from .anchor_store import MeaningTags, get_default_meaning_tags
 from .embedding_service import EmbeddingService, get_embedding_service
@@ -27,21 +25,10 @@ from .lifecycle import (
     get_lifecycle_manager,
 )
 
-# Lazy import for deprecated rag module
-def __getattr__(name):
-    if name in ("RAGEngine", "SLOKnowledgeGraph"):
-        import warnings
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            from .rag import RAGEngine, SLOKnowledgeGraph
-        return RAGEngine if name == "RAGEngine" else SLOKnowledgeGraph
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
 __all__ = [
     "MeaningTags", "get_default_meaning_tags",
     "EmbeddingService", "get_embedding_service",
     "TruthLabeler", "get_truth_labeler",
     "TruthMaintainer", "get_truth_maintainer",
     "SpacedRepetitionScheduler",
-    "RAGEngine", "SLOKnowledgeGraph",
 ]
