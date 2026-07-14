@@ -15,9 +15,7 @@ from .core import (
     CreativeIdea,
     ReasoningChain,
 )
-from .spaced_repetition import SpacedRepetitionScheduler, LearningItem, Difficulty, MemoryStrength
 from .knowledge_graph import KnowledgeGraph, KnowledgeNode, KnowledgeEdge, RelationType, Confidence
-from .metacognition_impl import Metacognition, SelfAssessment, Contradiction, ContradictionType
 
 # RAG exports (canonical location)
 from .rag import (
@@ -38,19 +36,11 @@ __all__ = [
     "ThoughtProcess",
     "CreativeIdea",
     "ReasoningChain",
-    "SpacedRepetitionScheduler",
-    "LearningItem",
-    "Difficulty",
-    "MemoryStrength",
     "KnowledgeGraph",
     "KnowledgeNode",
     "KnowledgeEdge",
     "RelationType",
     "Confidence",
-    "Metacognition",
-    "SelfAssessment",
-    "Contradiction",
-    "ContradictionType",
     # RAG
     "ProductionRAG",
     "BM25Indexer",

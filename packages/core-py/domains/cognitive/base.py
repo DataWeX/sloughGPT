@@ -87,12 +87,7 @@ class CognitiveDomain(BaseDomain):
             raise CognitiveException(f"Shutdown failed: {e}")
 
     async def _initialize_memory_manager(self) -> None:
-        """Initialize memory manager"""
-        from .memory import MemoryManager
-
-        self.memory_manager = MemoryManager()
-        await self.memory_manager.initialize()
-        self.components["memory_manager"] = self.memory_manager
+        """Initialize memory manager (disabled — memory submodule removed)"""
 
     async def _initialize_reasoning_engine(self) -> None:
         """Initialize reasoning engine"""
