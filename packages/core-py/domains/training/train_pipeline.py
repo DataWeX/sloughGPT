@@ -1074,7 +1074,10 @@ class SloughGPTTrainer:
                         )
 
                 if is_main and on_progress:
-                    if self.global_step == 1 or self.global_step % self.config.log_interval == 0:
+                    # Emit progress: every step for first 20 steps (smooth start),
+                    # then every 5 steps (smooth chart without flooding SSE)
+                    emit_interval = 1 if self.global_step <= 20 else 5
+                    if self.global_step == 1 or self.global_step % emit_interval == 0:
                         _emit_progress(
                             steps_per_epoch=steps_per_epoch, train_loss=float(metrics["loss"])
                         )

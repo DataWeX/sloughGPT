@@ -692,12 +692,16 @@ async def stream(request: Request):
         pipeline = UnifiedTrainingPipeline(cfg)
         _auto_train_cancel_event = threading.Event()
         _auto_train_pause_event = threading.Event()
+        _complete_enqueued = [False]  # track if pipeline already sent a complete event
 
         def _on_progress(progress):
             if _auto_train_cancel_event is not None and _auto_train_cancel_event.is_set():
                 raise _AutoTrainCancelled("Training cancelled by user")
             sse = progress.to_sse_event(stream_name="auto-train")
             data = sse.get("data", {})
+            # Track if pipeline emitted a complete event
+            if sse.get("status") in ("complete", "error"):
+                _complete_enqueued[0] = True
             # Don't emit loss=0.0 from phase transitions — only emit real loss values
             if data.get("loss") == 0.0 and data.get("step", 0) == 0:
                 data = {k: v for k, v in data.items() if k != "loss"}
@@ -718,12 +722,12 @@ async def stream(request: Request):
                     ckpt, fl, ts, extra={"context": {"checkpoint": ckpt, "final_loss": fl, "steps": ts}},
                 )
                 _enforce_checkpoint_budget()
-                # If the pipeline didn't emit a "complete" SSE event (e.g. _early_exit
-                # passed None for on_progress), send one now so the SSE consumer unblocks.
-                epochs = result.get("epochs")
-                _enqueue(sse_complete("auto-train",
-                    data={"checkpoint": ckpt, "final_loss": fl, "total_steps": ts, "epochs": epochs},
-                    message=f"Training complete — checkpoint={ckpt} loss={fl} steps={ts}"))
+                # Only send complete event if the pipeline didn't already emit one
+                if not _complete_enqueued[0]:
+                    epochs = result.get("epochs")
+                    _enqueue(sse_complete("auto-train",
+                        data={"checkpoint": ckpt, "final_loss": fl, "total_steps": ts, "epochs": epochs},
+                        message=f"Training complete — checkpoint={ckpt} loss={fl} steps={ts}"))
             elif result.get("cancelled"):
                 autotrain_logger.info("Auto-train cancelled by user", extra={"context": {"action": "cancel"}})
                 _enqueue(sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled"))
@@ -761,7 +765,10 @@ async def stream(request: Request):
                 if await request.is_disconnected():
                     if _auto_train_cancel_event is not None:
                         _auto_train_cancel_event.set()
+                    if _auto_train_pause_event is not None and _auto_train_pause_event.is_set():
+                        _auto_train_pause_event.clear()
                     worker_task.cancel()
+                    state.running = False
                     autotrain_logger.info("Client disconnected from auto-train stream")
                     return
                 # Wait for event or heartbeat timeout
@@ -797,8 +804,10 @@ async def stream(request: Request):
         except TimeoutError:
             autotrain_logger.error("Auto-train SSE queue timed out — no event for 60s")
             yield sse_error("auto-train", "TIMEOUT", "No training progress for 60 seconds")
-        except Exception:
-            pass
+        except Exception as e:
+            autotrain_logger.error("Auto-train SSE stream error: %s", e)
+            if not _complete_enqueued[0]:
+                yield sse_error("auto-train", "FAILED", str(e))
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
