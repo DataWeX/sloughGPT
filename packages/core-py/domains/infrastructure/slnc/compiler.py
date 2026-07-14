@@ -130,23 +130,30 @@ class SLNCCompiler:
         if safetensors_path is None:
             raise FileNotFoundError(f"No .safetensors for {model_id}")
 
-        # Load all weights (handle bfloat16 via raw byte conversion)
+        # Load all weights — read raw bytes to handle bfloat16
+        import json as _json
         weights = {}
-        with safe_open(str(safetensors_path), framework="numpy") as f:
-            for key in f.keys():
-                try:
-                    weights[key] = f.get_tensor(key).astype(np.float32)
-                except TypeError:
-                    # bfloat16 not supported by numpy — read raw bytes
-                    slice_obj = f.get_slice(key)
-                    numel = slice_obj.get_numel()
-                    raw = np.frombuffer(bytes(slice_obj.get_data()), dtype=np.uint16)
-                    sign = ((raw >> 15) & 1).astype(np.uint32) << 31
-                    exp = ((raw >> 7) & 0xFF).astype(np.uint32)
-                    mant = (raw & 0x7F).astype(np.uint32)
-                    # bfloat16 biased_exp: stored exp is already correct for float32
-                    out = sign | (exp << 23) | (mant << 16)
-                    weights[key] = out.view(np.float32).reshape(numel)
+        with open(str(safetensors_path), "rb") as f:
+            header_len = struct.unpack("<Q", f.read(8))[0]
+            header = _json.loads(f.read(header_len))
+            for key, info in header.items():
+                if key.startswith("__"):
+                    continue
+                dtype_str = info["dtype"]
+                offsets = info["data_offsets"]
+                f.seek(8 + header_len + offsets[0])
+                raw = f.read(offsets[1] - offsets[0])
+                if dtype_str == "BF16":
+                    arr = np.frombuffer(raw, dtype=np.uint16)
+                    f32 = np.zeros(len(arr), dtype=np.float32)
+                    f32.view(np.uint32)[:][:] = arr.astype(np.uint32) << 16
+                    weights[key] = f32.reshape(info["shape"])
+                elif dtype_str == "F32":
+                    weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
+                elif dtype_str == "F16":
+                    weights[key] = np.frombuffer(raw, dtype=np.float16).reshape(info["shape"]).astype(np.float32)
+                else:
+                    weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
 
         # Determine output path
         if output is None:
