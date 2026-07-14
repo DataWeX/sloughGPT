@@ -700,15 +700,21 @@ class SloughGPTTrainer:
         )
         logger.info("Mixed precision: %s", self.mixed_precision_dtype)
 
-    def _create_optimizer(self) -> torch.optim.Optimizer:
+    def _create_optimizer(self):
         """Create optimizer with weight decay."""
-        decay_params = []
-        no_decay_params = []
+        if not _TRAINING_TORCH_AVAILABLE:
+            from domains.training.slonet import SloAdam
+            return SloAdam(
+                lr=self.config.learning_rate,
+                weight_decay=self.config.weight_decay,
+            )
 
         import torch.nn as nn
         from domains.training.slonet import Tensor as SloTensor
         _to_torch = lambda p: p if isinstance(p, torch.Tensor) else nn.Parameter(torch.from_numpy(p.data))
 
+        decay_params = []
+        no_decay_params = []
         for n, p in self.model.named_parameters():
             pt = _to_torch(p)
             if "bias" in n or "norm" in n:
@@ -774,8 +780,9 @@ class SloughGPTTrainer:
             )
 
         idx = torch.randint(0, len(data) - block_size, (batch_size,))
-        x = torch.stack([data[i : i + block_size] for i in idx])
-        y = torch.stack([data[i + 1 : i + block_size + 1] for i in idx])
+        idx_list = [int(i) for i in (idx.tolist() if hasattr(idx, 'tolist') else idx)]
+        x = torch.stack([data[i : i + block_size] for i in idx_list])
+        y = torch.stack([data[i + 1 : i + block_size + 1] for i in idx_list])
         return x.to(self.device, non_blocking=True), y.to(self.device, non_blocking=True)
 
     def train_step(self) -> Dict[str, float]:
@@ -787,6 +794,21 @@ class SloughGPTTrainer:
         scale_factor = 1.0 / self.config.gradient_accumulation_steps
 
         forward_model = self._compiled_model if self._compiled_model else model
+
+        if not _TRAINING_TORCH_AVAILABLE:
+            logits, loss = forward_model(x, y)
+            (loss * scale_factor).backward()
+            self.accumulation_step += 1
+            metrics = {"loss": loss.item() / scale_factor}
+            if self.accumulation_step >= self.config.gradient_accumulation_steps:
+                params = [p for p in model.parameters() if p.grad is not None]
+                self.optimizer.step(params)
+                for p in model.parameters():
+                    p.grad = None
+                if self.scheduler is not None:
+                    self.scheduler.step()
+                self.accumulation_step = 0
+            return metrics
 
         if self.scaler is not None:
             with torch.cuda.amp.autocast(dtype=self.mixed_precision_dtype):
