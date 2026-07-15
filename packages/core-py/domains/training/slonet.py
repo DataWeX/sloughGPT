@@ -1200,10 +1200,13 @@ class SloLayer:
 
 
 class SloLinear(SloLayer):
-    def __init__(self, in_f, out_f, name="", bias=True):
+    def __init__(self, in_f, out_f, name="", bias=True, _lazy=False):
         super().__init__(name or f"Lin_{in_f}x{out_f}")
-        s = math.sqrt(2.0/(in_f+out_f))
-        self.weight = randn((out_f, in_f), requires_grad=True); self.weight.data *= s
+        if _lazy:
+            self.weight = Tensor(np.zeros((out_f, in_f), dtype=np.float32), requires_grad=True, _copy=False)
+        else:
+            s = math.sqrt(2.0/(in_f+out_f))
+            self.weight = randn((out_f, in_f), requires_grad=True); self.weight.data *= s
         self.use_bias = bias
         if bias:
             self.bias = zeros((out_f,), requires_grad=True)
@@ -1359,10 +1362,13 @@ class SloDropout(SloLayer):
 
 
 class SloEmbedding(SloLayer):
-    def __init__(self, num_emb, emb_dim, name=""):
+    def __init__(self, num_emb, emb_dim, name="", _lazy=False):
         super().__init__(name or f"Emb_{num_emb}x{emb_dim}")
-        self.weight = randn((num_emb, emb_dim), requires_grad=True)
-        self.weight.data *= math.sqrt(1.0/emb_dim)
+        if _lazy:
+            self.weight = Tensor(np.zeros((num_emb, emb_dim), dtype=np.float32), requires_grad=True, _copy=False)
+        else:
+            self.weight = randn((num_emb, emb_dim), requires_grad=True)
+            self.weight.data *= math.sqrt(1.0/emb_dim)
         self.num_embeddings = num_emb; self.embedding_dim = emb_dim
         self.soul_traits = {"curiosity": 0.5, "warmth": 0.5}
 
@@ -1807,7 +1813,7 @@ class SloTransformerBlock(SloLayer):
     def __init__(self, d_model: int, n_heads: int, n_kv_head: Optional[int] = None,
                  dim_ff: int = None, use_rope: bool = False, max_seq_len: int = 2048,
                  rope_base: float = 10000.0, dropout: float = 0.1, eps: float = 1e-5,
-                 norm_type: str = "rms_norm", activation: str = "gelu", name=""):
+                 norm_type: str = "rms_norm", activation: str = "gelu", name="", _lazy=False):
         super().__init__(name or f"Transformer{d_model}")
         dim_ff = dim_ff or d_model * 4
         self.d_model = d_model
@@ -1817,9 +1823,9 @@ class SloTransformerBlock(SloLayer):
         self.attn_norm = NormCls(d_model, eps, name + "_attn_norm")
         self.attn = SloMultiHeadAttention(d_model, n_heads, n_kv_head=n_kv_head,
                                            use_rope=use_rope, max_seq_len=max_seq_len,
-                                           rope_base=rope_base, name=name + "_attn")
+                                           rope_base=rope_base, name=name + "_attn", _lazy=_lazy)
         self.ff_norm = NormCls(d_model, eps, name + "_ff_norm")
-        self.ff = SloFeedForward(d_model, dim_ff, name=name + "_ff", activation=activation)
+        self.ff = SloFeedForward(d_model, dim_ff, name=name + "_ff", activation=activation, _lazy=_lazy)
         self.drop = SloDropout(dropout) if dropout > 0 else None
         self.use_checkpoint = False
         self.soul_traits = {"curiosity": 0.5, "creativity": 0.5, "warmth": 0.5}
@@ -1950,7 +1956,7 @@ def _apply_rope_t(Q: Tensor, K: Tensor, cos: np.ndarray, sin: np.ndarray) -> Tup
 
 class SloMultiHeadAttention(SloLayer):
     def __init__(self, d_model: int, n_heads: int, n_kv_head: Optional[int] = None,
-                 use_rope: bool = False, max_seq_len: int = 2048, rope_base: float = 10000.0, name=""):
+                 use_rope: bool = False, max_seq_len: int = 2048, rope_base: float = 10000.0, name="", _lazy=False):
         super().__init__(name or f"MHA{d_model}x{n_heads}")
         self.d_model = d_model
         self.n_heads = n_heads
@@ -1959,10 +1965,10 @@ class SloMultiHeadAttention(SloLayer):
         self.n_rep = self.n_heads // self.n_kv_head
         self.use_rope = use_rope
         kv_dim = self.n_kv_head * self.head_dim
-        self.W_q = SloLinear(d_model, n_heads * self.head_dim, name=name + "_q")
-        self.W_k = SloLinear(d_model, kv_dim, name=name + "_k")
-        self.W_v = SloLinear(d_model, kv_dim, name=name + "_v")
-        self.W_o = SloLinear(d_model, d_model, name=name + "_o")
+        self.W_q = SloLinear(d_model, n_heads * self.head_dim, name=name + "_q", _lazy=_lazy)
+        self.W_k = SloLinear(d_model, kv_dim, name=name + "_k", _lazy=_lazy)
+        self.W_v = SloLinear(d_model, kv_dim, name=name + "_v", _lazy=_lazy)
+        self.W_o = SloLinear(d_model, d_model, name=name + "_o", _lazy=_lazy)
         if use_rope:
             self.rope = SloRotaryEmbedding(self.head_dim, max_seq_len, rope_base, name + "_rope")
         self.soul_traits = {"curiosity": 0.5}
@@ -2231,11 +2237,11 @@ class SloCrossAttention(SloLayer):
 
 
 class SloFeedForward(SloLayer):
-    def __init__(self, d_model: int, dim_ff: int, name="", activation: str = "gelu"):
+    def __init__(self, d_model: int, dim_ff: int, name="", activation: str = "gelu", _lazy=False):
         super().__init__(name or f"FF{d_model}")
-        self.w1 = SloLinear(d_model, dim_ff, name=name + "_w1")
-        self.w2 = SloLinear(dim_ff, d_model, name=name + "_w2")
-        self.w3 = SloLinear(d_model, dim_ff, name=name + "_w3")
+        self.w1 = SloLinear(d_model, dim_ff, name=name + "_w1", _lazy=_lazy)
+        self.w2 = SloLinear(dim_ff, d_model, name=name + "_w2", _lazy=_lazy)
+        self.w3 = SloLinear(d_model, dim_ff, name=name + "_w3", _lazy=_lazy)
         self.act_name = activation
         if activation == "silu":
             self.act = silu
@@ -3304,11 +3310,12 @@ class SloTransformer(SloNet):
         activation: str = "gelu",
         soul_name: str = "SloTransformer",
         soul_traits: Optional[Dict[str, float]] = None,
+        _lazy: bool = False,
     ):
         dim_ff = intermediate_size or int(n_embed * 8 // 3)
         dim_ff = ((dim_ff + 63) // 64) * 64
         layers = []
-        layers.append(SloEmbedding(vocab_size, n_embed, "tok_emb"))
+        layers.append(SloEmbedding(vocab_size, n_embed, "tok_emb", _lazy=_lazy))
         if dropout > 0:
             layers.append(SloDropout(dropout, "emb_drop"))
         for i in range(n_layer):
@@ -3317,11 +3324,11 @@ class SloTransformer(SloNet):
                 dim_ff=dim_ff, use_rope=use_rope, max_seq_len=max_seq_len,
                 rope_base=rope_base, dropout=0, eps=eps, norm_type=norm_type,
                 activation=activation,
-                name=f"blocks.{i}",
+                name=f"blocks.{i}", _lazy=_lazy,
             ))
         NormCls = SloLayerNorm if norm_type == "layer_norm" else SloRMSNorm
         layers.append(NormCls(n_embed, eps, "norm"))
-        layers.append(SloLinear(n_embed, vocab_size, "lm_head"))
+        layers.append(SloLinear(n_embed, vocab_size, "lm_head", _lazy=_lazy))
         super().__init__(
             layers=layers,
             soul_name=soul_name,
@@ -3352,9 +3359,9 @@ class SloTransformer(SloNet):
         # Absolute positional embedding (GPT-2 style, optional)
         self.pos_emb: Optional[SloEmbedding] = None
         if use_abs_pos_emb:
-            self.pos_emb = SloEmbedding(max_seq_len, n_embed, "pos_emb")
+            self.pos_emb = SloEmbedding(max_seq_len, n_embed, "pos_emb", _lazy=_lazy)
 
-        if tie_weights:
+        if tie_weights and not _lazy:
             self.layers[-1].weight.data[:] = self.layers[0].weight.data.copy()
 
     @property

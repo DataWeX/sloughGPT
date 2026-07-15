@@ -71,11 +71,14 @@ class QuantizationBenchmark:
         ]
 
     def _load_model(self):
-        """Load GPT-2 via SloNetChatProvider path."""
+        """Load model via SloNetChatProvider.from_slnc path."""
         from domains.inference.slonet_provider import SloNetChatProvider
+        from domains.infrastructure.safetensors_loader import _get_model_dir
         print(f"  Loading {self.model_name}...")
         t0 = time.perf_counter()
-        provider = SloNetChatProvider(self.model_name)
+        cache_dir = _get_model_dir(self.model_name)
+        slnc_path = cache_dir / "model.slnc"
+        provider = SloNetChatProvider.from_slnc(str(slnc_path), model_id=self.model_name)
         load_time = time.perf_counter() - t0
         print(f"  Loaded in {load_time:.1f}s")
         return provider._model, load_time
@@ -106,7 +109,10 @@ class QuantizationBenchmark:
     def _encode(self, text: str) -> np.ndarray:
         """Encode text to token IDs using the model's tokenizer."""
         from domains.inference.slonet_provider import SloNetChatProvider
-        provider = SloNetChatProvider(self.model_name)
+        from domains.infrastructure.safetensors_loader import _get_model_dir
+        cache_dir = _get_model_dir(self.model_name)
+        slnc_path = cache_dir / "model.slnc"
+        provider = SloNetChatProvider.from_slnc(str(slnc_path), model_id=self.model_name)
         tokenizer = provider._tokenizer
         ids = tokenizer.encode(text)
         return np.array(ids, dtype=np.int64).flatten()
@@ -383,7 +389,10 @@ class QuantizationBenchmark:
             # Decode both for comparison
             try:
                 from domains.inference.slonet_provider import SloNetChatProvider
-                provider = SloNetChatProvider(self.model_name)
+                from domains.infrastructure.safetensors_loader import _get_model_dir
+                cache_dir = _get_model_dir(self.model_name)
+                slnc_path = cache_dir / "model.slnc"
+                provider = SloNetChatProvider.from_slnc(str(slnc_path), model_id=self.model_name)
                 tok = provider._tokenizer
                 text_nq = tok.decode(gen_nq.tolist())
                 text_q = tok.decode(gen_q.tolist())

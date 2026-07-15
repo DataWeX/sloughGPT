@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 40a9db1 fix(docker): install strui deps in web Dockerfile
+No active task. Last commit: 03e2ae2 fix(test): widen int4 quantization cosine threshold (flaky test)
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

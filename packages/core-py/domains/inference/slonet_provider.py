@@ -303,133 +303,37 @@ class SloNetChatProvider:
     def __init__(self, hf_model_id: str = "gpt2", quantize: bool = False,
                  quant_bits: int = 8, quant_mode: str = "symmetric",
                  quant_clip: float = 0.999):
-        import json as _json
+        """Deprecated: use SloNetChatProvider.from_slnc() instead.
+
+        This shim resolves the .slnc path from the HuggingFace model ID
+        and delegates to from_slnc(). Will be removed in a future version.
+        """
+        import warnings
+        warnings.warn(
+            "SloNetChatProvider(hf_model_id=...) is deprecated. "
+            "Use SloNetChatProvider.from_slnc(slnc_path, model_id=...) instead.",
+            DeprecationWarning, stacklevel=2,
+        )
         from pathlib import Path as _Path
-        from safetensors.numpy import load_file as _load_file
-        from domains.training.slonet import SloTransformer
+        from domains.infrastructure.safetensors_loader import _get_model_dir
 
-        self._hf_model_id = hf_model_id
-        self._model_id = hf_model_id
-        self._device = "cpu"
-        self._quant_engine = None
-
-        # Resolve model directory
-        model_dir = _Path(hf_model_id)
-        if not model_dir.exists():
-            cache_dir = _Path.home() / ".cache/huggingface/hub"
-            model_dir = cache_dir / f"models--{hf_model_id.replace('/', '--')}"
-            if model_dir.exists():
-                snapshots = model_dir / "snapshots"
-                if snapshots.exists():
-                    snaps = sorted(snapshots.iterdir())
-                    if snaps:
-                        model_dir = snaps[-1]
-
-        # Load config
-        config_path = model_dir / "config.json"
-        config = {}
-        if config_path.exists():
-            with open(config_path) as f:
-                config = _json.load(f)
-
-        n_embed = config.get("n_embd") or config.get("hidden_size", 768)
-        n_head = config.get("n_head") or config.get("num_attention_heads", 12)
-        n_layer = config.get("n_layer") or config.get("num_hidden_layers", 12)
-        vocab_size = config.get("vocab_size", 50257)
-        intermediate_size = config.get("n_inner") or config.get("intermediate_size")
-        if intermediate_size is None:
-            # GPT-2 and many models: FFN is 4× hidden size
-            intermediate_size = n_embed * 4
-        max_pos = config.get("n_positions") or config.get("max_position_embeddings", 1024)
-
-        # Detect architecture features from weight keys
-        from domains.infrastructure.arch_config import build_arch
-        slnc_path = model_dir.parent / "model.slnc" if model_dir.name.startswith("snapshots") else model_dir / "model.slnc"
+        model_dir = _get_model_dir(hf_model_id)
+        slnc_path = model_dir / "model.slnc"
         if not slnc_path.exists():
-            slnc_path = Path.home() / ".cache/huggingface/hub" / f"models--{hf_model_id.replace('/', '--')}" / "model.slnc"
-        safetensors_path = model_dir / "model.safetensors"
-        if not safetensors_path.exists():
-            # Try finding any .safetensors file
-            for f in model_dir.glob("*.safetensors"):
-                safetensors_path = f
-                break
+            raise FileNotFoundError(
+                f"No .slnc file for {hf_model_id}. "
+                "Run the server once to auto-convert from safetensors."
+            )
 
-        # Prefer SLNC (handles bfloat16); fall back to safetensors
-        if slnc_path.exists():
-            from domains.infrastructure.slnc.parser import SLNCParser
-            _parser = SLNCParser(str(slnc_path))
-            sd = _parser.get_weights_dict()
-        elif safetensors_path.exists():
-            try:
-                sd = _load_file(str(safetensors_path))
-            except Exception:
-                # bfloat16 not supported by safetensors.numpy — load raw bytes
-                sd = self._load_safetensors_bf16(safetensors_path)
-        else:
-            sd = {}
-        arch = build_arch(
-            name=config.get("architectures", ["unknown"])[0],
-            config=config,
-            weight_keys=set(sd.keys()),
+        instance = self.from_slnc(
+            str(slnc_path),
+            model_id=hf_model_id,
+            quantize=quantize,
+            quant_bits=quant_bits,
+            quant_mode=quant_mode,
+            quant_clip=quant_clip,
         )
-
-        # GPT-2 uses absolute positional embeddings, not RoPE
-        use_abs_pos = arch.positional == "absolute"
-
-        # Auto-detect eps and activation from HF config
-        hf_eps = config.get("rms_norm_eps", 1e-5) if arch.norm == "rms_norm" else 1e-5
-        hidden_act = config.get("hidden_act", "gelu")
-        activation = "silu" if hidden_act == "silu" else "gelu"
-        n_kv_head = config.get("num_key_value_heads", n_head)
-
-        self._model = SloTransformer(
-            vocab_size=vocab_size,
-            n_embed=n_embed,
-            n_layer=n_layer,
-            n_head=n_head,
-            n_kv_head=n_kv_head,
-            intermediate_size=intermediate_size,
-            block_size=max_pos,
-            max_seq_len=max_pos,
-            use_rope=not use_abs_pos,
-            rope_base=config.get("rope_theta", 10000.0),
-            dropout=0.0,
-            eps=hf_eps,
-            tie_weights=True,
-            use_abs_pos_emb=use_abs_pos,
-            norm_type=arch.norm,
-            activation=activation,
-        )
-
-        # Load weights
-        if sd:
-            mapped = convert_hf_to_slonet(sd, n_layer=n_layer, config=config)
-            self._model.load_state_dict(mapped)
-
-        # Apply quantization if requested
-        if quantize:
-            from domains.infrastructure.quantization import QuantEngine, walk_slo_linears
-
-            linear_map = walk_slo_linears(self._model)
-            engine = QuantEngine(bits=quant_bits, mode=quant_mode, clip_percentile=quant_clip)
-            quantized_count = 0
-            for name, module in linear_map.items():
-                if "norm" in name:
-                    continue
-                info = engine.quantize(f"{name}.weight", module.weight.data.copy())
-                if info.is_quantized:
-                    module.set_quantized_weight(info)
-                    quantized_count += 1
-            self._quant_engine = engine
-            logger.info("SloNetChatProvider: quantized %d/%d layers to int%d",
-                        quantized_count, len(linear_map), quant_bits)
-
-        # Load tokenizer
-        self._tokenizer = self._load_tokenizer(model_dir, config)
-
-        logger.info("SloNetChatProvider loaded: %s (embed=%d, layers=%d, heads=%d, rope=%s, quant=%s)",
-                     hf_model_id, n_embed, n_layer, n_head, not use_abs_pos,
-                     f"int{quant_bits}" if quantize else "none")
+        self.__dict__.update(instance.__dict__)
 
     @classmethod
     def from_slnc(
@@ -504,6 +408,7 @@ class SloNetChatProvider:
             use_abs_pos_emb=use_abs_pos,
             norm_type=norm_type,
             activation=activation,
+            _lazy=True,
         )
 
         # Load weights directly from mmap (zero copy)

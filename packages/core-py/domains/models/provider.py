@@ -884,8 +884,14 @@ def setup_providers(hf_model=None, hf_tokenizer=None, hf_model_id: str = "gpt2",
     if slonet_hf_id:
         try:
             from domains.inference.slonet_provider import SloNetChatProvider
-            slonet_provider = SloNetChatProvider(
-                hf_model_id=slonet_hf_id,
+            from domains.infrastructure.safetensors_loader import _get_model_dir
+            _cache_dir = _get_model_dir(slonet_hf_id)
+            _slnc = _cache_dir / "model.slnc"
+            if not _slnc.exists():
+                raise FileNotFoundError(f"No .slnc file for {slonet_hf_id} at {_slnc}")
+            slonet_provider = SloNetChatProvider.from_slnc(
+                str(_slnc),
+                model_id=slonet_hf_id,
                 quantize=quantize,
                 quant_bits=quant_bits,
                 quant_mode=quant_mode,

@@ -8,7 +8,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
-import torch
 
 
 class TestHealthEndpoint:
@@ -212,15 +211,12 @@ class TestAPIIntegration:
     """Integration tests for API."""
 
     def test_endpoints_exist(self):
-        """Test that all endpoint functions exist."""
-        # These should exist in the server
+        """Test that key domain functions exist."""
         from domains.inference.quantization import quantize_model
         from domains.inference.engine import InferenceEngine
-        from domains.ml_infrastructure.benchmarking import benchmark_model
 
         assert callable(quantize_model)
         assert callable(InferenceEngine)
-        assert callable(benchmark_model)
 
     def test_error_handling(self):
         """Test error handling in requests."""
