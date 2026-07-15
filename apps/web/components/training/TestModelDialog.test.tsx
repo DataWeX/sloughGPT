@@ -5,7 +5,7 @@ import { TestModelDialog } from './TestModelDialog'
 
 describe('TestModelDialog', () => {
   const base = {
-    open: true, prompt: '', output: '', loading: false,
+    open: true, prompt: '', result: null, loading: false,
     onClose: vi.fn(), onPromptChange: vi.fn(), onGenerate: vi.fn(), onClear: vi.fn(),
   }
 
@@ -67,15 +67,30 @@ describe('TestModelDialog', () => {
     expect(base.onClear).toHaveBeenCalled()
   })
 
-  it('shows output section when output present', () => {
-    const { container } = render(<TestModelDialog {...base} output="generated text" />)
+  it('shows output section when result has response', () => {
+    const result = { prompt: 'hi', response: 'generated text', model: 'gpt2', tokens_generated: 3, error: '' }
+    const { container } = render(<TestModelDialog {...base} result={result} />)
     expect(container.textContent).toContain('generated text')
     expect(container.textContent).toContain('Output')
   })
 
-  it('does not show output section when output empty', () => {
-    const { container } = render(<TestModelDialog {...base} output="" />)
+  it('does not show output section when result is null', () => {
+    const { container } = render(<TestModelDialog {...base} result={null} />)
     expect(container.textContent).not.toContain('Output')
+  })
+
+  it('shows error section when result has error', () => {
+    const result = { prompt: 'hi', response: '', model: '', tokens_generated: 0, error: 'model not loaded' }
+    const { container } = render(<TestModelDialog {...base} result={result} />)
+    expect(container.textContent).toContain('model not loaded')
+    expect(container.textContent).toContain('Error')
+  })
+
+  it('shows model and token info', () => {
+    const result = { prompt: 'hi', response: 'hello', model: 'gpt2', tokens_generated: 5, error: '' }
+    const { container } = render(<TestModelDialog {...base} result={result} />)
+    expect(container.textContent).toContain('Model: gpt2')
+    expect(container.textContent).toContain('Tokens: 5')
   })
 
   it('calls onClose on backdrop click', () => {

@@ -2,17 +2,21 @@
 
 Each collection manages an in-memory document map backed by an append-only
 JSONL journal. Writes are journaled immediately; reads come from memory.
+Supports MongoDB-style update operators ($set, $unset, $inc, $push, $pull,
+$addToSet) with dot-notation for nested fields.
 """
 
 import json
 import logging
 import os
 import threading
+import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 
 from .document import Document
-from .query import match_document
+from .index import Index
+from .query import _get_field, match_document
 
 logger = logging.getLogger("man.mogdb")
 
@@ -36,6 +40,7 @@ class Collection:
         self._journal_path = db_path / f"{name}.journal.jsonl"
         self._compacted_path = db_path / f"{name}.mogdb"
         self._dirty: bool = False
+        self._indexes: Dict[str, Index] = {}
 
         self._load()
 
@@ -93,6 +98,49 @@ class Collection:
         return len(entries)
 
     # ------------------------------------------------------------------
+    # indexing
+    # ------------------------------------------------------------------
+
+    def create_index(self, field: str, unique: bool = False) -> Index:
+        """Create an index on *field*. Returns the Index object.
+
+        Existing documents are indexed. Duplicate values raise ValueError
+        if ``unique=True``.
+        """
+        if field in self._indexes:
+            return self._indexes[field]
+        idx = Index(field, unique=unique)
+        self._indexes[field] = idx
+        with self._lock:
+            for doc in self._docs.values():
+                val = _get_field(doc, field)
+                idx.add(doc.id, val)
+        return idx
+
+    def drop_index(self, field: str) -> None:
+        """Drop the index on *field*."""
+        self._indexes.pop(field, None)
+
+    def _index_insert(self, doc: Document) -> None:
+        """Update all indexes after an insert."""
+        for field, idx in self._indexes.items():
+            val = _get_field(doc, field)
+            idx.add(doc.id, val)
+
+    def _index_update(self, doc: Document, old_vals: Dict[str, Any]) -> None:
+        """Update all indexes after an update."""
+        for field, idx in self._indexes.items():
+            old_val = old_vals.get(field)
+            new_val = _get_field(doc, field)
+            idx.update(doc.id, old_val, new_val)
+
+    def _index_remove(self, doc: Document) -> None:
+        """Update all indexes after a delete."""
+        for field, idx in self._indexes.items():
+            val = _get_field(doc, field)
+            idx.remove(doc.id, val)
+
+    # ------------------------------------------------------------------
     # CRUD
     # ------------------------------------------------------------------
 
@@ -101,14 +149,20 @@ class Collection:
         d = Document(doc)
         with self._lock:
             self._docs[d.id] = d
+            self._index_insert(d)
             self._journal("insert", dict(d))
         return d.id
 
     def insert_many(self, docs: List[Dict[str, Any]]) -> List[str]:
         """Insert multiple documents. Returns their ``_id``s."""
         ids: List[str] = []
-        for doc in docs:
-            ids.append(self.insert_one(doc))
+        with self._lock:
+            for doc in docs:
+                d = Document(doc)
+                self._docs[d.id] = d
+                self._index_insert(d)
+                ids.append(d.id)
+                self._journal("insert", dict(d))
         return ids
 
     def find(
@@ -176,15 +230,18 @@ class Collection:
     ) -> int:
         """Update the first document matching *query*.
 
-        Supports ``$set`` and ``$unset`` operators.
+        Supports ``$set``, ``$unset``, ``$inc``, ``$push``, ``$pull``,
+        ``$addToSet``, and ``$mul`` operators.
         Returns the number of modified documents (0 or 1).
         """
         with self._lock:
             for doc in self._docs.values():
                 if not match_document(doc, query):
                     continue
+                old_vals = {f: _get_field(doc, f) for f in self._indexes}
                 self._apply_update(doc, update)
-                doc["_updated"] = __import__("time").time()
+                doc["_updated"] = time.time()
+                self._index_update(doc, old_vals)
                 self._journal("update", {"_id": doc.id, "update": update})
                 return 1
         return 0
@@ -200,8 +257,10 @@ class Collection:
             for doc in self._docs.values():
                 if not match_document(doc, query):
                     continue
+                old_vals = {f: _get_field(doc, f) for f in self._indexes}
                 self._apply_update(doc, update)
-                doc["_updated"] = __import__("time").time()
+                doc["_updated"] = time.time()
+                self._index_update(doc, old_vals)
                 count += 1
             if count:
                 self._journal("update_many", {"query": query, "update": update})
@@ -212,6 +271,7 @@ class Collection:
         with self._lock:
             for doc_id, doc in list(self._docs.items()):
                 if match_document(doc, query):
+                    self._index_remove(doc)
                     del self._docs[doc_id]
                     self._journal("delete", {"_id": doc_id})
                     return 1
@@ -223,6 +283,7 @@ class Collection:
         with self._lock:
             for doc_id, doc in list(self._docs.items()):
                 if match_document(doc, query):
+                    self._index_remove(doc)
                     del self._docs[doc_id]
                     count += 1
             if count:
@@ -233,22 +294,92 @@ class Collection:
         """Remove all documents and journal files."""
         with self._lock:
             self._docs.clear()
+            for idx in self._indexes.values():
+                idx.clear()
             self._dirty = False
             for p in [self._journal_path, self._compacted_path]:
                 if p.exists():
                     p.unlink()
 
     # ------------------------------------------------------------------
-    # helpers
+    # update operators
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _apply_update(doc: Document, update: Dict[str, Any]) -> None:
+    def _set_nested(doc: Document, path: str, value: Any) -> None:
+        """Set a value at a dot-separated path, creating intermediate dicts."""
+        parts = path.split(".")
+        current = doc
+        for part in parts[:-1]:
+            if part not in current or not isinstance(current[part], dict):
+                current[part] = {}
+            current = current[part]
+        current[parts[-1]] = value
+
+    @staticmethod
+    def _unset_nested(doc: Document, path: str) -> None:
+        """Remove a value at a dot-separated path."""
+        parts = path.split(".")
+        current = doc
+        for part in parts[:-1]:
+            if not isinstance(current, dict) or part not in current:
+                return
+            current = current[part]
+        if isinstance(current, dict):
+            current.pop(parts[-1], None)
+
+    @classmethod
+    def _apply_update(cls, doc: Document, update: Dict[str, Any]) -> None:
+        """Apply MongoDB-style update operators to a document.
+
+        Supports: $set, $unset, $inc, $push, $pull, $addToSet, $mul.
+        """
         for op, data in update.items():
             if op == "$set":
                 if isinstance(data, dict):
-                    doc.update(data)
+                    for path, value in data.items():
+                        cls._set_nested(doc, path, value)
             elif op == "$unset":
                 if isinstance(data, dict):
-                    for key in data:
-                        doc.pop(key, None)
+                    for path in data:
+                        cls._unset_nested(doc, path)
+            elif op == "$inc":
+                if isinstance(data, dict):
+                    for path, value in data.items():
+                        current = _get_field(doc, path)
+                        if current is None:
+                            current = 0
+                        if isinstance(current, (int, float)) and isinstance(value, (int, float)):
+                            cls._set_nested(doc, path, current + value)
+            elif op == "$mul":
+                if isinstance(data, dict):
+                    for path, value in data.items():
+                        current = _get_field(doc, path)
+                        if current is None:
+                            current = 0
+                        if isinstance(current, (int, float)) and isinstance(value, (int, float)):
+                            cls._set_nested(doc, path, current * value)
+            elif op == "$push":
+                if isinstance(data, dict):
+                    for path, value in data.items():
+                        current = _get_field(doc, path)
+                        if not isinstance(current, list):
+                            current = []
+                        current.append(value)
+                        cls._set_nested(doc, path, current)
+            elif op == "$pull":
+                if isinstance(data, dict):
+                    for path, value in data.items():
+                        current = _get_field(doc, path)
+                        if isinstance(current, list):
+                            current = [x for x in current if x != value]
+                            cls._set_nested(doc, path, current)
+            elif op == "$addToSet":
+                if isinstance(data, dict):
+                    for path, value in data.items():
+                        current = _get_field(doc, path)
+                        if not isinstance(current, list):
+                            current = []
+                        if value not in current:
+                            current.append(value)
+                            cls._set_nested(doc, path, current)

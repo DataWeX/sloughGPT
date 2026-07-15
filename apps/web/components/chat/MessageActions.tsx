@@ -168,7 +168,7 @@ export function MessageActions({ content, messageId, role, onCopy, onRegenerate,
           variant="ghost"
           size="icon-sm"
           onClick={handleCopy}
-          className={cn('transition-all duration-200', copied && 'text-success scale-110')}
+          className="p-2"
           aria-label={copied ? "Copied" : "Copy message"}
           aria-pressed={copied}
         >
@@ -181,7 +181,7 @@ export function MessageActions({ content, messageId, role, onCopy, onRegenerate,
           variant="ghost"
           size="icon-sm"
           onClick={onRegenerate}
-          aria-label="Regenerate response"
+          className="p-2"
         >
           <IconRefresh className="h-3.5 w-3.5" />
         </Button>
@@ -192,7 +192,7 @@ export function MessageActions({ content, messageId, role, onCopy, onRegenerate,
           variant="ghost"
           size="icon-sm"
           onClick={handleThumbsUp}
-          className={cn('transition-all duration-200', thumbsUp && 'text-success')}
+          className="p-2"
           aria-label="Mark as helpful"
           aria-pressed={thumbsUp}
         >
@@ -205,7 +205,7 @@ export function MessageActions({ content, messageId, role, onCopy, onRegenerate,
           variant="ghost"
           size="icon-sm"
           onClick={handleThumbsDown}
-          className={cn('transition-all duration-200', thumbsDown && 'text-destructive/80')}
+          className="p-2"
           aria-label="Mark as unhelpful"
           aria-pressed={thumbsDown}
         >
@@ -218,7 +218,7 @@ export function MessageActions({ content, messageId, role, onCopy, onRegenerate,
           variant="ghost"
           size="icon-sm"
           onClick={() => onBookmark(messageId)}
-          className={cn('transition-all duration-200', isBookmarked && 'text-amber-500')}
+          className="p-2"
           aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark message'}
         >
           <IconStar className={cn('h-3.5 w-3.5', isBookmarked && 'fill-current')} />
@@ -230,7 +230,7 @@ export function MessageActions({ content, messageId, role, onCopy, onRegenerate,
           variant="ghost"
           size="icon-sm"
           onClick={handleSpeak}
-          className={cn('transition-all duration-200', speaking && 'text-primary')}
+          className="p-2"
           aria-label={speaking ? 'Stop reading aloud' : 'Read aloud'}
         >
           {speaking ? (
@@ -262,7 +262,7 @@ export function MessageActions({ content, messageId, role, onCopy, onRegenerate,
           size="icon-sm"
           onClick={() => onDelete(messageId)}
           aria-label="Delete message"
-          className="hover:text-destructive text-muted-foreground"
+          className="hover:text-destructive text-muted-foreground p-2"
         >
           <IconTrash className="h-3.5 w-3.5" />
         </Button>

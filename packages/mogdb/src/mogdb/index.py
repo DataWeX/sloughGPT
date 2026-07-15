@@ -77,6 +77,15 @@ class SortedIndex:
             (v, i) for v, i in self._entries if not (v == field_value and i == doc_id)
         ]
 
+    def update(self, doc_id: str, old_value: Any, new_value: Any) -> None:
+        """Update an entry: remove old, add new."""
+        self.remove(doc_id, old_value)
+        self.add(doc_id, new_value)
+
+    def clear(self) -> None:
+        """Remove all entries."""
+        self._entries.clear()
+
     def range(self, gte: Any = None, lte: Any = None) -> List[str]:
         """Return doc IDs where field is in [gte, lte]."""
         if gte is None and lte is None:

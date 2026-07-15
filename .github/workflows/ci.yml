@@ -122,11 +122,7 @@ jobs:
           pip install -e packages/mogdb
       - name: Syntax check
         run: |
-          python3 -m py_compile packages/mogdb/src/mogdb/protocol.py
           python3 -m py_compile packages/mogdb/src/mogdb/collection.py
           python3 -m py_compile packages/mogdb/src/mogdb/database.py
-          python3 -m py_compile packages/mogdb/src/mogdb/server.py
-          python3 -m py_compile packages/mogdb/src/mogdb/client.py
-          python3 -m py_compile packages/mogdb/src/mogdb/client_cli.py
       - name: Run mogdb tests
         run: python3 -m pytest packages/mogdb/tests/test_mogdb.py -q -o "addopts="

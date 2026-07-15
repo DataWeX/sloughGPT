@@ -22,7 +22,7 @@ class Document(Dict[str, Any]):
     """A dict subclass representing a single MogDB document.
 
     Every document has a reserved ``_id`` field (auto-generated if missing)
-    and an internal ``_created`` timestamp.
+    and ``_created`` / ``_updated`` timestamps.
     """
 
     def __init__(self, *args: Any, **kwargs: Any):
@@ -31,7 +31,8 @@ class Document(Dict[str, Any]):
             self["_id"] = ObjectId()
         if "_created" not in self:
             self["_created"] = time.time()
-        self["_updated"] = time.time()
+        if "_updated" not in self:
+            self["_updated"] = time.time()
 
     @property
     def id(self) -> str:

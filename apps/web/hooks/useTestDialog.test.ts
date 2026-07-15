@@ -17,7 +17,7 @@ describe('useTestDialog', () => {
     const { result } = renderHook(() => useTestDialog())
     expect(result.current.testDialogOpen).toBe(false)
     expect(result.current.testPrompt).toBe('')
-    expect(result.current.testOutput).toBe('')
+    expect(result.current.testResult).toBeNull()
     expect(result.current.testLoading).toBe(false)
   })
 
@@ -27,17 +27,14 @@ describe('useTestDialog', () => {
     expect(result.current.testDialogOpen).toBe(true)
     act(() => result.current.setTestPrompt('hi'))
     expect(result.current.testPrompt).toBe('hi')
-    act(() => result.current.setTestOutput('hello'))
-    expect(result.current.testOutput).toBe('hello')
   })
 
-  it('clearTest resets prompt and output', () => {
+  it('clearTest resets prompt and result', () => {
     const { result } = renderHook(() => useTestDialog())
     act(() => result.current.setTestPrompt('hi'))
-    act(() => result.current.setTestOutput('hello'))
     act(() => result.current.clearTest())
     expect(result.current.testPrompt).toBe('')
-    expect(result.current.testOutput).toBe('')
+    expect(result.current.testResult).toBeNull()
   })
 
   it('handleTestModel does nothing when prompt is empty', async () => {
@@ -46,13 +43,19 @@ describe('useTestDialog', () => {
     expect(mockFetch).not.toHaveBeenCalled()
   })
 
-  it('handleTestModel calls /inference/generate and sets output', async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ text: 'hello world' }) })
+  it('handleTestModel calls /inference/generate and sets structured result', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ text: 'hello world', model: 'gpt2', tokens_generated: 3 }) })
     const { result } = renderHook(() => useTestDialog())
     act(() => result.current.setTestPrompt('hi'))
     await act(async () => { await result.current.handleTestModel() })
     expect(mockFetch).toHaveBeenCalledTimes(1)
-    expect(result.current.testOutput).toBe('hello world')
+    expect(result.current.testResult).toEqual({
+      prompt: 'hi',
+      response: 'hello world',
+      model: 'gpt2',
+      tokens_generated: 3,
+      error: '',
+    })
   })
 
   it('handleTestModel shows error when fetch fails', async () => {
@@ -60,14 +63,26 @@ describe('useTestDialog', () => {
     const { result } = renderHook(() => useTestDialog())
     act(() => result.current.setTestPrompt('hi'))
     await act(async () => { await result.current.handleTestModel() })
-    expect(result.current.testOutput).toBe('Error: network down')
+    expect(result.current.testResult).toEqual({
+      prompt: 'hi',
+      response: '',
+      model: '',
+      tokens_generated: 0,
+      error: 'network down',
+    })
   })
 
   it('handleTestModel shows error when response not ok', async () => {
-    mockFetch.mockResolvedValue({ ok: false })
+    mockFetch.mockResolvedValue({ ok: false, json: () => Promise.resolve({ detail: 'model not loaded' }) })
     const { result } = renderHook(() => useTestDialog())
     act(() => result.current.setTestPrompt('hi'))
     await act(async () => { await result.current.handleTestModel() })
-    expect(result.current.testOutput).toBe('Error: Inference failed')
+    expect(result.current.testResult).toEqual({
+      prompt: 'hi',
+      response: '',
+      model: '',
+      tokens_generated: 0,
+      error: 'model not loaded',
+    })
   })
 })

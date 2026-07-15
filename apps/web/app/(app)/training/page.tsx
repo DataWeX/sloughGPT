@@ -182,7 +182,7 @@ export default function TrainingPage() {
       <TestModelDialog
         open={test.testDialogOpen}
         prompt={test.testPrompt}
-        output={test.testOutput}
+        result={test.testResult}
         loading={test.testLoading}
         onClose={() => test.setTestDialogOpen(false)}
         onPromptChange={test.setTestPrompt}

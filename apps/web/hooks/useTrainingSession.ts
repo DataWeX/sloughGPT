@@ -158,11 +158,21 @@ export function useTrainingSession(): UseTrainingSessionReturn {
               return prev.length > 200 ? prev.slice(-200) : [...prev, { step, loss: env.data.loss }]
             })
           }
+          if (env.data?.eval_loss != null) {
+            setLossHistory(prev => {
+              const step = env.data?.step ?? prev.length
+              return prev.length > 200 ? prev.slice(-200) : [...prev, { step, loss: env.data.eval_loss, isEval: true }]
+            })
+          }
           if (env.data?.progress != null) setProgress(env.data.progress)
           if (env.meta?.epoch != null) setEpoch(env.meta.epoch)
           if (env.meta?.total_epochs != null) setTotalEpochs(env.meta.total_epochs)
           if (env.message) setMessage(env.message)
           if (env.data?.eval_report) setEvalResult(env.data.eval_report)
+          if (env.data?.done && env.data?.done_reason?.startsWith('early_stopping:')) {
+            const n = env.data.done_reason.split(':')[1]
+            addToast(`Early stopping: no improvement for ${n} evals`, 'info')
+          }
           if (env.status === 'complete') {
             es.close(); esRef.current = null
             if (env.data?.checkpoint) setDistillCheckpoint(env.data.checkpoint)

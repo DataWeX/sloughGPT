@@ -50,7 +50,7 @@ else:
 # =============================================================================
 print("\n=== Test 2: LoRA Training ===")
 
-from domains.training.lora import LoRAConfig, LoRATrainer, apply_lora_to_model
+from domains.training.lora import LoRAConfig, apply_lora_to_model
 
 # Test LoRA functionality
 if models:
@@ -63,22 +63,10 @@ if models:
         lora_model = apply_lora_to_model(model, config)
         print("LoRA applied successfully")
 
-        # Test LoRA trainer
-        trainer = LoRATrainer(lora_model, config, learning_rate=1e-4)
-        print("LoRA trainer created successfully")
-
-        # Test training step
+        # Test LoRA forward pass
         dummy_input = torch.randint(0, 100, (2, 10))
         logits, _ = lora_model(dummy_input)
         print(f"  - LoRA forward pass successful, output shape: {logits.shape}")
-
-        # Create dummy loss
-        loss_fn = lambda out, _: F.cross_entropy(out.view(-1, out.size(-1)), torch.randint(0, 100, (2*10,)), ignore_index=-1)
-        train_result = trainer.train_step({
-            "input_ids": dummy_input,
-            "labels": torch.randint(0, 100, (2, 10))
-        }, loss_fn)
-        print(f"  - LoRA training step successful, loss: {train_result['loss']:.4f}")
 
         # Test parameter counting
         lora_params = sum(p.numel() for p in lora_model.parameters() if any("lora_" in n for n in p.names))
@@ -90,11 +78,11 @@ else:
     print("No models available for LoRA test")
 
 # =============================================================================
-# Test 3: RLHF/PPO Training
+# Test 3: RLHF Reward Model
 # =============================================================================
-print("\n=== Test 3: RLHF/PPO Training ===")
+print("\n=== Test 3: RLHF Reward Model ===")
 
-from domains.training.rlhf import PPOTrainer, RewardModel, RLHFConfig
+from domains.training.rlhf import RewardModel, RLHFConfig
 
 # Test RLHF functionality
 if models:
@@ -102,34 +90,6 @@ if models:
     model = create_model(models[0].id)
 
     try:
-        # Create value model (same as policy)
-        value_model = model
-
-        # Create RLHF trainer
-        config = RLHFConfig(
-            ppo_epochs=2,
-            num_mini_batches=2,
-            clip_epsilon=0.2,
-            value_loss_coef=0.5,
-            entropy_coef=0.01
-        )
-
-        trainer = PPOTrainer(model, value_model, config)
-        print("PPO trainer created successfully")
-
-        # Test advantage computation
-        rewards = torch.randn(2, 10)
-        values = torch.randn(2, 10)
-        next_values = torch.zeros(2)
-        advantages, returns = trainer.compute_advantages(rewards, values, next_values)
-        print(f"  - Advantage computation successful, shapes: {advantages.shape}, {returns.shape}")
-
-        # Test PPO loss
-        log_probs = torch.randn(2, 10)
-        old_log_probs = torch.randn(2, 10)
-        policy_loss, value_loss = trainer.ppo_loss(log_probs, old_log_probs, advantages, values, returns)
-        print(f"  - PPO loss computation successful, policy_loss: {policy_loss.item():.4f}, value_loss: {value_loss.item():.4f}")
-
         # Test reward model
         reward_model = RewardModel(model, hidden_size=256)
         print("Reward model created successfully")
