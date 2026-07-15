@@ -277,13 +277,11 @@ async def generate(req: GenerateRequest) -> GenerateResponse:
     """Non-streaming generation — returns complete text response."""
     from domains.models.provider import get_provider
     from startup_progress import STARTUP_PHASE
+    import state as _gen_state
 
     # Check if model is ready before processing
-    if STARTUP_PHASE.get("phase") != "ready":
-        raise HTTPException(
-            status_code=503,
-            detail=f"Model still loading (phase: {STARTUP_PHASE.get('phase', 'unknown')}). Please wait."
-        )
+    if STARTUP_PHASE.get("phase") != "ready" or _gen_state.model is None:
+        raise HTTPException(status_code=503, detail="Model still loading — please wait.")
 
     provider = get_provider("default")
     if provider is None:
@@ -314,15 +312,12 @@ async def generate(req: GenerateRequest) -> GenerateResponse:
 async def generate_stream(req: GenerateRequest, request: Request) -> StreamingResponse:
     """Streaming generation — yields tokens as SSE."""
     from startup_progress import STARTUP_PHASE
+    import state as _stream_state
 
     # Check if model is ready before processing
-    if STARTUP_PHASE.get("phase") != "ready":
+    if STARTUP_PHASE.get("phase") != "ready" or _stream_state.model is None:
         async def error_stream() -> AsyncIterator[str]:
-            yield sse_error(
-                "generate",
-                "IDLE",
-                f"Model still loading (phase: {STARTUP_PHASE.get('phase', 'unknown')}). Please wait."
-            )
+            yield sse_error("generate", "IDLE", "Model still loading — please wait.")
         return StreamingResponse(error_stream(), media_type="text/event-stream")
 
     async def generate() -> AsyncIterator[str]:
@@ -491,13 +486,15 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
     from startup_progress import STARTUP_PHASE
 
     # Check if model is ready before processing
-    if STARTUP_PHASE.get("phase") != "ready":
+    import state as _check_state
+    if STARTUP_PHASE.get("phase") != "ready" or _check_state.model is None:
+        phase = STARTUP_PHASE.get("phase", "unknown")
+        if phase == "ready":
+            msg = "Model still loading — please wait."
+        else:
+            msg = f"Server starting (phase: {phase}). Please wait."
         async def error_stream() -> AsyncIterator[str]:
-            yield sse_error(
-                "chat",
-                "IDLE",
-                f"Model still loading (phase: {STARTUP_PHASE.get('phase', 'unknown')}). Please wait."
-            )
+            yield sse_error("chat", "IDLE", msg)
         return StreamingResponse(error_stream(), media_type="text/event-stream")
 
     async def generate() -> AsyncIterator[str]:
@@ -910,13 +907,11 @@ async def chat(req: ChatRequest) -> ChatResponse:
     """Non-streaming chat using ChatDomain."""
     from domains import get_chat_domain
     from startup_progress import STARTUP_PHASE
+    import state as _chat_state
 
     # Check if model is ready before processing
-    if STARTUP_PHASE.get("phase") != "ready":
-        raise HTTPException(
-            status_code=503,
-            detail=f"Model still loading (phase: {STARTUP_PHASE.get('phase', 'unknown')}). Please wait."
-        )
+    if STARTUP_PHASE.get("phase") != "ready" or _chat_state.model is None:
+        raise HTTPException(status_code=503, detail="Model still loading — please wait.")
 
     user_msg = _extract_user_message(req.messages)
     if not user_msg:

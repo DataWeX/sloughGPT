@@ -26,7 +26,7 @@ export interface RequestOptions {
 const RETRYABLE_STATUSES = new Set([408, 429, 502, 503, 504])
 const MAX_RETRIES = 2
 const BASE_DELAY = 500
-const DEFAULT_TIMEOUT_MS = 15_000
+const DEFAULT_TIMEOUT_MS = 30_000
 
 async function request<T>(
   method: string,

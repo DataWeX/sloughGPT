@@ -241,7 +241,13 @@ class StartupOrchestrator:
         await self._phase_ready()
 
     async def _phase2_model_load(self):
-        """Start background model load."""
+        """Start model load as a background task (non-blocking).
+
+        The model load takes ~45s. Previously this blocked the entire startup
+        lifecycle, preventing routers from registering. Now we fire-and-forget
+        so routers register immediately and the server accepts requests.
+        Requests that need the model get a "model still loading" response.
+        """
         import asyncio
         from config import ServerConfig
 
@@ -253,12 +259,57 @@ class StartupOrchestrator:
             return
 
         STARTUP_PHASE.update(phase="loading_model", step=4, total=9, message="Loading model weights...")
-        logger.info("Phase 4: loading model %s", raw, extra={"tag": "START"})
-        # Run model load synchronously so provider is registered before serving requests
-        try:
-            await asyncio.to_thread(_autoload_model, cfg)
-        except Exception as e:
-            logger.error("Model load failed: %s", e, exc_info=True, extra={"tag": "START"})
+        logger.info("Phase 4: loading model %s (background)", raw, extra={"tag": "START"})
+
+        def _load_and_register():
+            """Load model then register with registry/providers."""
+            try:
+                _autoload_model(cfg)
+            except Exception as e:
+                logger.error("Model load failed: %s", e, exc_info=True, extra={"tag": "START"})
+                return
+
+            # After model is loaded, register with registry + providers
+            try:
+                import state as server_state
+                from domains.infrastructure.model_registry import get_model_registry
+                from domains.models.provider import setup_providers
+
+                registry = get_model_registry()
+                if server_state.model is not None and server_state.tokenizer is not None:
+                    registry.register(
+                        server_state.model_type, server_state.model, server_state.tokenizer,
+                        make_default=True, generate_timeout=120.0,
+                    )
+
+                inference_engine = None
+                if server_state.model is not None and server_state.tokenizer is not None:
+                    try:
+                        from domains.inference.engine import InferenceEngine
+                        inference_engine = InferenceEngine(
+                            model=server_state.model, tokenizer=server_state.tokenizer, device="cpu",
+                        )
+                    except Exception as e:
+                        logger.warning("Failed to create InferenceEngine: %s", e, extra={"tag": "START"})
+
+                slonet_id = cfg.autoload_model if cfg.autoload_model else None
+                setup_providers(
+                    hf_model=server_state.model,
+                    hf_tokenizer=server_state.tokenizer,
+                    hf_model_id=server_state.model_type,
+                    slonet_hf_id=slonet_id,
+                    inference_engine=inference_engine,
+                    model_registry=registry,
+                    quantize=cfg.quantize_slonet,
+                    quant_bits=cfg.quant_bits,
+                    quant_mode=cfg.quant_mode,
+                )
+                logger.info("Model loaded + providers registered: %s", server_state.model_type, extra={"tag": "START"})
+            except Exception as e:
+                logger.error("Post-load registration failed: %s", e, exc_info=True, extra={"tag": "START"})
+
+        # Fire-and-forget: model loads in background while routers register
+        asyncio.create_task(asyncio.to_thread(_load_and_register))
 
     def _on_model_load_done(self, task: asyncio.Task):
         try:
@@ -478,7 +529,7 @@ class StartupOrchestrator:
 
 
 def _autoload_model(cfg: ServerConfig):
-    """Background model loader — uses unified ModelLoader."""
+    """Load model weights into server_state. Registration handled by caller."""
     import state as server_state
 
     if server_state.model is not None:
@@ -506,49 +557,4 @@ def _autoload_model(cfg: ServerConfig):
     if result.tokenizer is not None:
         server_state.tokenizer = result.tokenizer
 
-    # Register with ModelRegistry (creates ModelServer with SessionKVCache)
-    from domains.infrastructure.model_registry import get_model_registry
-    registry = get_model_registry()
-    if result.model is not None and result.tokenizer is not None:
-        registry.register(
-            result.model_id, result.model, result.tokenizer,
-            make_default=True, generate_timeout=120.0,
-        )
-
-    # Create InferenceEngine for KV-cache-powered generation
-    inference_engine = None
-    if result.model is not None and result.tokenizer is not None and result.model_type != "slonet":
-        try:
-            from domains.inference.engine import InferenceEngine
-            inference_engine = InferenceEngine(
-                model=result.model, tokenizer=result.tokenizer, device="cpu",
-            )
-        except Exception as e:
-            logger.warning("Failed to create InferenceEngine: %s", e, extra={"tag": "START"})
-
-    # Register providers — SloNet is the primary inference backend
-    from domains.models.provider import setup_providers
-
-    # GGUF quantized inference — enabled via MAN_GGUF_MODEL env var
-    gguf_model = os.environ.get("MAN_GGUF_MODEL") or None
-
-    # Always pass slonet_hf_id so SloNetChatProvider is registered
-    slonet_id = cfg.autoload_model if cfg.autoload_model else None
-
-    setup_providers(
-        hf_model=result.model,
-        hf_tokenizer=result.tokenizer,
-        hf_model_id=result.model_id,
-        slonet_hf_id=slonet_id,
-        inference_engine=inference_engine,
-        model_registry=registry,
-        quantize=cfg.quantize_slonet,
-        quant_bits=cfg.quant_bits,
-        quant_mode=cfg.quant_mode,
-    )
-
-    if gguf_model:
-        logger.info("GGUF quantized inference enabled: %s", gguf_model, extra={"tag": "START"})
-    else:
-        logger.info("Autoload ok: %s (%s) — KV cache active (ModelServer + InferenceEngine)",
-                    cfg.autoload_model, result.model_type, extra={"tag": "START"})
+    logger.info("Autoload ok: %s (%s)", cfg.autoload_model, result.model_type, extra={"tag": "START"})

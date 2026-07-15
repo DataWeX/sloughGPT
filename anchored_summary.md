@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: c94fe14 feat: revise training UI and server router, remove obsolete tests (post torch fix)
+No active task. Last commit: 4bd8440 fix(test): update useBackendWatcher test for new diagnostic tracking
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

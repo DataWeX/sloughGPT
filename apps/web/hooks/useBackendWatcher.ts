@@ -4,8 +4,8 @@ import { useApiMonitor } from '@/lib/api-monitor-store'
 import { apiGet } from '@/lib/http-client'
 
 const BASE_POLL_MS = 8000
-const REQUEST_TIMEOUT = 10000
-const MAX_FAILURES_BEFORE_RELOAD = 6
+const REQUEST_TIMEOUT = 20000
+const MAX_FAILURES_BEFORE_RELOAD = 4
 const RELOAD_DELAY_MS = 2000
 const MIN_BACKOFF_MS = 2000
 const MAX_BACKOFF_MS = 30000
