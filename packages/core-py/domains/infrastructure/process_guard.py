@@ -192,12 +192,13 @@ class ProcessGuard:
                     self.worker_id,
                     self._restart_count + 1,
                     self.max_restarts,
+                    extra={"tag": "INFRA"},
                 )
                 for cb in self._crash_callbacks:
                     try:
                         cb(self.worker_id)
                     except Exception:
-                        logger.exception("ProcessGuard crash callback failed")
+                        logger.exception("ProcessGuard crash callback failed", extra={"tag": "INFRA"})
                 time.sleep(self.restart_delay)
                 self._launch_worker()
                 self._restart_count += 1
@@ -205,7 +206,7 @@ class ProcessGuard:
                     try:
                         cb(self.worker_id)
                     except Exception:
-                        logger.exception("ProcessGuard restart callback failed")
+                        logger.exception("ProcessGuard restart callback failed", extra={"tag": "INFRA"})
 
 
 def create_model_guard(

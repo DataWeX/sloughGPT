@@ -146,10 +146,10 @@ class OnlineLoRAUpdater:
                 self._stats["average_update_ms"] * (self._stats["total_updates"] - 1) + elapsed
             ) / self._stats["total_updates"]
 
-            logger.info("Updated with %d samples in %.1fms", len(feedback_batch), elapsed)
+            logger.info("Updated with %d samples in %.1fms", len(feedback_batch), elapsed, extra={"tag": "INFRA"})
 
         except Exception as e:
-            logger.error("Update failed: %s", e)
+            logger.error("Update failed: %s", e, extra={"tag": "INFRA"})
         finally:
             self._is_updating = False
 

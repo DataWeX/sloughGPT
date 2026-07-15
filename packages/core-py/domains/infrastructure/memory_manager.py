@@ -155,6 +155,7 @@ class WeightManager:
             self._hot_budget // (1024 * 1024),
             self._warm_budget // (1024 * 1024),
             compression.value,
+            extra={"tag": "INFRA"},
         )
 
     def load_from_slnc(self, path: str):
@@ -183,6 +184,7 @@ class WeightManager:
             len(self._metadata),
             path,
             sum(e.nbytes for e in self._metadata.values()) / 1e6,
+            extra={"tag": "INFRA"},
         )
 
     # ══════════════════════════════════════════════════════════════════════════════
@@ -229,11 +231,13 @@ class WeightManager:
         logger.info(
             "WeightManager.quantize_all: %d quantized, %d skipped (bits=%d, mode=%s)",
             quantized_count, skipped_count, bits, mode,
+            extra={"tag": "INFRA"},
         )
         if summary.get("tensors", 0) > 0:
             logger.info(
                 "  avg_mse=%.6f, avg_cosine=%.4f, worst=%s",
                 summary["avg_mse"], summary["avg_cosine_sim"], summary["worst_tensor"],
+                extra={"tag": "INFRA"},
             )
 
     def quantize_tensor(self, name: str, bits: int = 8, mode: str = "symmetric") -> TensorInfo:

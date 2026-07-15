@@ -276,7 +276,7 @@ class InitSystem:
                     if name not in self._managers:
                         self._managers[name] = ServiceManager(ServiceDef(name=name, **data))
                 except Exception as e:
-                    logger.warning("Failed to load service %s: %e", f.name, e)
+                    logger.warning("Failed to load service %s: %e", f.name, e, extra={"tag": "INFRA"})
 
     def boot(self, target_runlevel: int = 3, shell_run: Callable[[str], str] | None = None) -> str:
         """

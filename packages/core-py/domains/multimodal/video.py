@@ -104,14 +104,14 @@ class VideoProcessor:
         try:
             import cv2
         except ImportError:
-            logger.warning("cv2 not installed, falling back to placeholder frames")
+            logger.warning("cv2 not installed, falling back to placeholder frames", extra={"tag": "MODEL"})
             n = num_frames or self.max_frames
             return [np.random.randn(224, 224, 3).astype(np.float32) for _ in range(n)]
 
         num_frames = num_frames or self.max_frames
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
-            logger.warning("Cannot open video: %s, falling back to placeholder frames", video_path)
+            logger.warning("Cannot open video: %s, falling back to placeholder frames", video_path, extra={"tag": "MODEL"})
             return [np.random.randn(224, 224, 3).astype(np.float32) for _ in range(num_frames)]
 
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))

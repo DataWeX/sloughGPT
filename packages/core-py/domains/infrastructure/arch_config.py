@@ -145,5 +145,6 @@ def build_arch(name: str, config: dict, weight_keys: set) -> ArchConfig:
     )
 
     logger.info("ArchConfig: %s (norm=%s, pos=%s, act=%s, attn=%s, layers=%d, heads=%d/%d)",
-                name, norm, positional, activation, attention, n_layers, n_head, n_kv_head)
+                name, norm, positional, activation, attention, n_layers, n_head, n_kv_head,
+                extra={"tag": "INFRA"})
     return arch

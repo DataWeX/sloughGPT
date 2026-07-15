@@ -22,7 +22,8 @@ try:
         get_cache_dir,
     )
 except ImportError:
-    logger.warning("downcraft not available — cache completeness checks disabled")
+    logger.warning("downcraft not available — cache completeness checks disabled",
+        extra={"tag": "INFRA"})
     def is_download_complete(model_id: str) -> bool:
         return False
     def get_cache_dir(model_id: str) -> str:

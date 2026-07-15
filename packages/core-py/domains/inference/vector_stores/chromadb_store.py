@@ -34,7 +34,7 @@ class ChromaDBVectorStore(VectorStore):
         except ImportError:
             raise ImportError("pip install chromadb")
         except Exception as e:
-            logger.error("ChromaDB connection failed: %s", e)
+            logger.error("ChromaDB connection failed: %s", e, extra={"tag": "INF"})
             return False
 
     async def disconnect(self) -> None:

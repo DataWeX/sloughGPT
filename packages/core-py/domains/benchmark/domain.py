@@ -66,7 +66,7 @@ class BenchmarkDomain:
                     else:
                         responses.append(data)
                 except Exception as exc:
-                    logger.warning("Failed to load %s: %s", f.name, exc)
+                    logger.warning("Failed to load %s: %s", f.name, exc, extra={"tag": "BENCH"})
         return responses
 
     def get_stats(self) -> dict:
@@ -129,4 +129,4 @@ class BenchmarkDomain:
             import shutil
             shutil.rmtree(self._responses_dir)
             self._responses_dir.mkdir(parents=True, exist_ok=True)
-            logger.info("Cleared benchmark response history")
+            logger.info("Cleared benchmark response history", extra={"tag": "BENCH"})

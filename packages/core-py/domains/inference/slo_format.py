@@ -595,13 +595,14 @@ def save_soul(
                                 arr = np.asarray(v, dtype=np.float32)
                             params.append((k, arr))
                         except (TypeError, ValueError) as e:
-                            logger.warning("Skipping state_dict key %s: %s", k, e)
+                            logger.warning("Skipping state_dict key %s: %s", k, e, extra={"tag": "INF"})
                             continue
                     if len(params) == 0 and len(state) > 0:
                         logger.error(
                             "save_soul: wrote 0 params out of %d state_dict keys — "
                             "checkpoint will be unusable. Model type: %s",
                             len(state), type(model).__name__,
+                            extra={"tag": "INF"},
                         )
                     f.write(struct.pack("<I", len(params)))
                     for key, arr in params:

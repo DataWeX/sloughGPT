@@ -125,7 +125,7 @@ try:
     if HAS_AVX2:
         _c_matmul = matmul_int8_c
         _c_matmul_int4 = matmul_int4_c
-        logger.info("Using AVX2 int8 + int4 GEMM (quant_core)")
+        logger.info("Using AVX2 int8 + int4 GEMM (quant_core)", extra={"tag": "INFRA"})
 except Exception:
     pass
 
@@ -294,7 +294,7 @@ class QuantEngine:
 
         logger.info(
             "QuantEngine: bits=%d, mode=%s, clip=%.3f, error_threshold=%.3f",
-            bits, mode, clip_percentile or 0.0, skip_quantize_if_error_above,
+            bits, mode, clip_percentile or 0.0, skip_quantize_if_error_above, extra={"tag": "INFRA"}
         )
 
     def should_skip(self, name: str) -> bool:
@@ -358,7 +358,7 @@ class QuantEngine:
         if relative_mse > self._error_threshold:
             logger.warning(
                 "QuantEngine: skipping %s — rel_mse %.4f > threshold %.4f (var=%.6f)",
-                name, relative_mse, self._error_threshold, var,
+                name, relative_mse, self._error_threshold, var, extra={"tag": "INFRA"}
             )
             return TensorInfo(name=name, array=arr)
 
@@ -524,13 +524,13 @@ class QuantEngine:
         """Save quantization metadata to JSON file."""
         report = {name: meta.to_dict() for name, meta in self._error_report.items()}
         Path(path).write_text(json.dumps(report, indent=2))
-        logger.info("QuantEngine: saved metadata for %d tensors to %s", len(report), path)
+        logger.info("QuantEngine: saved metadata for %d tensors to %s", len(report), path, extra={"tag": "INFRA"})
 
     def load_metadata(self, path: str):
         """Load quantization metadata from JSON file."""
         raw = json.loads(Path(path).read_text())
         self._error_report = {name: QuantMeta.from_dict(d) for name, d in raw.items()}
-        logger.info("QuantEngine: loaded metadata for %d tensors from %s", len(self._error_report), path)
+        logger.info("QuantEngine: loaded metadata for %d tensors from %s", len(self._error_report), path, extra={"tag": "INFRA"})
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -670,7 +670,7 @@ def quantize_state_dict(
             summary["tensors"],
             summary["avg_mse"],
             summary["avg_cosine_sim"],
-            summary["worst_tensor"],
+            summary["worst_tensor"], extra={"tag": "INFRA"}
         )
 
     return result

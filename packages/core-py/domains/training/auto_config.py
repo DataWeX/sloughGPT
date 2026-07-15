@@ -252,6 +252,7 @@ def auto_configure(
     logger.info(
         "Auto-config: dataset=%s, method=%s, model=%s, epochs=%d, rl=%s",
         dataset, method, model, epochs, rl_post_train,
+        extra={"tag": "TRAIN"},
     )
 
     return config

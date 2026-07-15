@@ -77,7 +77,8 @@ class StartupProfile(str, Enum):
         try:
             return cls(raw)
         except ValueError:
-            logger.warning("Unknown startup profile %r — falling back to full", raw)
+            logger.warning("Unknown startup profile %r — falling back to full", raw,
+                extra={"tag": "INFRA"})
             return cls.FULL
 
 
@@ -161,6 +162,7 @@ def _topological_sort(hooks: list[StartupHook]) -> list[StartupHook]:
         logger.warning(
             "Dependency cycle detected: %d hooks unordered",
             len(remaining),
+            extra={"tag": "INFRA"},
         )
     return ordered
 
@@ -255,7 +257,8 @@ class LifecycleManager:
         """Set the phase and emit an event."""
         old = self._phase
         self._phase = phase
-        logger.info("Lifecycle: %s → %s", old.value, phase.value)
+        logger.info("Lifecycle: %s → %s", old.value, phase.value,
+            extra={"tag": "INFRA"})
         if self._event_bus is not None:
             await self._event_bus.emit(
                 EVT_PHASE_CHANGED,
@@ -268,14 +271,16 @@ class LifecycleManager:
     def register_startup_hook(self, hook: StartupHook) -> None:
         """Register a startup hook (duplicate names are silently skipped)."""
         if any(h.name == hook.name for h in self._startup_hooks):
-            logger.warning("Duplicate startup hook: %s — skipping", hook.name)
+            logger.warning("Duplicate startup hook: %s — skipping", hook.name,
+                extra={"tag": "INFRA"})
             return
         self._startup_hooks.append(hook)
 
     def register_shutdown_hook(self, hook: ShutdownHook) -> None:
         """Register a shutdown hook (duplicate names silently skipped)."""
         if any(h.name == hook.name for h in self._shutdown_hooks):
-            logger.warning("Duplicate shutdown hook: %s — skipping", hook.name)
+            logger.warning("Duplicate shutdown hook: %s — skipping", hook.name,
+                extra={"tag": "INFRA"})
             return
         self._shutdown_hooks.append(hook)
 
@@ -322,7 +327,8 @@ class LifecycleManager:
                     )
                 return True
             await asyncio.sleep(poll_interval)
-        logger.warning("Health gates not ready after %.0fs", timeout)
+        logger.warning("Health gates not ready after %.0fs", timeout,
+            extra={"tag": "INFRA"})
         return False
 
     # ── In-flight task tracking (for graceful drain) ──
@@ -369,7 +375,8 @@ class LifecycleManager:
         """
         if self._in_flight_count == 0:
             return True
-        logger.info("Draining: waiting for %d in-flight tasks", self._in_flight_count)
+        logger.info("Draining: waiting for %d in-flight tasks", self._in_flight_count,
+            extra={"tag": "INFRA"})
         try:
             await asyncio.wait_for(self._drain_event.wait(), timeout=timeout)
             return True
@@ -378,6 +385,7 @@ class LifecycleManager:
                 "Drain timeout after %.0fs with %d tasks still in-flight",
                 timeout,
                 self._in_flight_count,
+                extra={"tag": "INFRA"},
             )
             return False
 
@@ -414,7 +422,8 @@ class LifecycleManager:
         async with self._lock:
             if self._phase != LifecyclePhase.INIT:
                 logger.warning(
-                    "start() called in phase %s — ignoring", self._phase.value
+                    "start() called in phase %s — ignoring", self._phase.value,
+                    extra={"tag": "INFRA"},
                 )
                 return self._phase == LifecyclePhase.RUNNING
 
@@ -436,13 +445,15 @@ class LifecycleManager:
                 elapsed = time.time() - started
                 results.append(_HookResult(name=hook.name, success=True, elapsed=elapsed))
                 self._emit_sync(EVT_HOOK_COMPLETED, {"hook": hook.name, "elapsed": round(elapsed, 3)})
-                logger.info("Startup hook %s completed in %.2fs", hook.name, elapsed)
+                logger.info("Startup hook %s completed in %.2fs", hook.name, elapsed,
+                    extra={"tag": "INFRA"})
             except asyncio.TimeoutError:
                 elapsed = time.time() - started
                 error = f"timed out after {hook.timeout:.0f}s"
                 results.append(_HookResult(name=hook.name, success=False, elapsed=elapsed, error=error))
                 self._emit_sync(EVT_HOOK_FAILED, {"hook": hook.name, "error": error, "elapsed": round(elapsed, 3)})
-                logger.error("Startup hook %s %s", hook.name, error)
+                logger.error("Startup hook %s %s", hook.name, error,
+                    extra={"tag": "INFRA"})
                 if hook.critical:
                     all_ok = False
                     break
@@ -451,7 +462,7 @@ class LifecycleManager:
                 error = str(exc)
                 results.append(_HookResult(name=hook.name, success=False, elapsed=elapsed, error=error))
                 self._emit_sync(EVT_HOOK_FAILED, {"hook": hook.name, "error": error, "elapsed": round(elapsed, 3)})
-                logger.exception("Startup hook %s failed: %s", hook.name, error)
+                logger.exception("Startup hook %s failed: %s", hook.name, error, extra={"tag": "INFRA"})
                 if hook.critical:
                     all_ok = False
                     break
@@ -486,7 +497,8 @@ class LifecycleManager:
         async with self._lock:
             if self._phase not in (LifecyclePhase.RUNNING, LifecyclePhase.CRASHED):
                 logger.warning(
-                    "shutdown() called in phase %s — ignoring", self._phase.value
+                    "shutdown() called in phase %s — ignoring", self._phase.value,
+                    extra={"tag": "INFRA"},
                 )
                 return self._phase == LifecyclePhase.STOPPED
             await self._set_phase(LifecyclePhase.DRAINING)
@@ -515,7 +527,8 @@ class LifecycleManager:
                 await asyncio.wait_for(hook.handler(), timeout=min(hook.timeout, remaining_timeout))
                 elapsed = time.time() - started
                 results.append(_HookResult(name=hook.name, success=True, elapsed=elapsed))
-                logger.info("Shutdown hook %s completed in %.2fs", hook.name, elapsed)
+                logger.info("Shutdown hook %s completed in %.2fs", hook.name, elapsed,
+                    extra={"tag": "INFRA"})
             except asyncio.TimeoutError:
                 elapsed = time.time() - started
                 results.append(
@@ -526,7 +539,7 @@ class LifecycleManager:
                 results.append(
                     _HookResult(name=hook.name, success=False, elapsed=elapsed, error=str(exc))
                 )
-                logger.exception("Shutdown hook %s failed", hook.name)
+                logger.exception("Shutdown hook %s failed", hook.name, extra={"tag": "INFRA"})
 
         self._last_shutdown_results = results
         async with self._lock:
@@ -558,7 +571,7 @@ class LifecycleManager:
             try:
                 self._event_bus.emit_sync(event, data, source="lifecycle")
             except Exception:
-                logger.exception("Failed to emit lifecycle event %s", event)
+                logger.exception("Failed to emit lifecycle event %s", event, extra={"tag": "INFRA"})
 
     def get_results(self) -> dict[str, Any]:
         """Return a summary snapshot of the current lifecycle state."""

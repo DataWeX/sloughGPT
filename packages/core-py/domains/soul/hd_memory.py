@@ -57,7 +57,7 @@ class HDMemoryStore:
                 self._initialize_role_vectors()
                 self._initialized = True
             except Exception as e:
-                logger.error(f"Failed to initialize HyperdimensionalProcessor: {e}")
+                logger.error(f"Failed to initialize HyperdimensionalProcessor: {e}", extra={"tag": "MODEL"})
                 raise
         return self._hyperdim
 

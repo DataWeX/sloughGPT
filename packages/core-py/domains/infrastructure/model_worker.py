@@ -67,7 +67,8 @@ def _worker_main(
         for p in extra_sys_paths:
             if p not in sys.path:
                 sys.path.insert(0, p)
-    logger.info("Worker[%s]: started (pid=%d)", worker_id, os.getpid())
+    logger.info("Worker[%s]: started (pid=%d)", worker_id, os.getpid(),
+        extra={"tag": "INFRA"})
 
     model = None
     tokenizer = None
@@ -84,14 +85,16 @@ def _worker_main(
         if isinstance(model, (list, tuple)) and len(model) == 2:
             model, tokenizer = model
 
-        logger.info("Worker[%s]: model loaded (type=%s)", worker_id, type(model).__name__)
+        logger.info("Worker[%s]: model loaded (type=%s)", worker_id, type(model).__name__,
+            extra={"tag": "INFRA"})
 
         # If the model has a .tokenizer or ._tokenizer attr, extract it
         if tokenizer is None:
             tokenizer = getattr(model, "tokenizer", None) or getattr(model, "_tokenizer", None)
 
     except Exception as e:
-        logger.error("Worker[%s]: model load failed: %s", worker_id, e)
+        logger.error("Worker[%s]: model load failed: %s", worker_id, e,
+            extra={"tag": "INFRA"})
         resp_q.put_nowait(("error", f"Model load failed: {e}"))
         hb_q.put_nowait(("dead", os.getpid()))
         return
@@ -215,7 +218,8 @@ def _worker_main(
             continue
 
         if cmd == "stop":
-            logger.info("Worker[%s]: stop requested", worker_id)
+            logger.info("Worker[%s]: stop requested", worker_id,
+                extra={"tag": "INFRA"})
             break
 
         if cmd == "generate":
@@ -225,16 +229,19 @@ def _worker_main(
                 try:
                     resp_q.put_nowait(("result", result))
                 except Exception as put_e:
-                    logger.error("Worker[%s]: resp_q.put_nowait failed: %s", worker_id, put_e)
+                    logger.error("Worker[%s]: resp_q.put_nowait failed: %s", worker_id, put_e,
+                        extra={"tag": "INFRA"})
                     resp_q.put_nowait(("error", f"put failed: {put_e}"))
                 requests_served += 1
             except Exception as e:
                 tb = traceback.format_exc()
-                logger.error("Worker[%s]: generate error: %s\n%s", worker_id, e, tb)
+                logger.error("Worker[%s]: generate error: %s\n%s", worker_id, e, tb,
+                    extra={"tag": "INFRA"})
                 try:
                     resp_q.put_nowait(("error", f"{type(e).__name__}: {e}"))
                 except Exception:
-                    logger.error("Worker[%s]: failed to send error response", worker_id)
+                    logger.error("Worker[%s]: failed to send error response", worker_id,
+                        extra={"tag": "INFRA"})
 
         if cmd == "generate_stream":
             try:
@@ -243,18 +250,21 @@ def _worker_main(
                 requests_served += 1
             except Exception as e:
                 tb = traceback.format_exc()
-                logger.error("Worker[%s]: generate_stream error: %s\n%s", worker_id, e, tb)
+                logger.error("Worker[%s]: generate_stream error: %s\n%s", worker_id, e, tb,
+                    extra={"tag": "INFRA"})
                 try:
                     resp_q.put_nowait(("error", f"{type(e).__name__}: {e}"))
                 except Exception:
-                    logger.error("Worker[%s]: failed to send error response", worker_id)
+                    logger.error("Worker[%s]: failed to send error response", worker_id,
+                        extra={"tag": "INFRA"})
 
     # Cleanup
     del model
     del tokenizer
     gc.collect()
     hb_q.put_nowait(("dead", os.getpid()))
-    logger.info("Worker[%s]: stopped", worker_id)
+    logger.info("Worker[%s]: stopped", worker_id,
+        extra={"tag": "INFRA"})
 
 
 class ModelWorkerProcess:
@@ -298,7 +308,8 @@ class ModelWorkerProcess:
     def start(self) -> None:
         """Launch the worker subprocess."""
         if self._process is not None and self._process.is_alive():
-            logger.warning("Worker[%s]: already running", self.worker_id)
+            logger.warning("Worker[%s]: already running", self.worker_id,
+                extra={"tag": "INFRA"})
             return
 
         self._req_q = mp.Queue()
@@ -351,7 +362,8 @@ class ModelWorkerProcess:
             )
 
         logger.info(
-            "Worker[%s]: ready (pid=%d)", self.worker_id, self._process.pid
+            "Worker[%s]: ready (pid=%d)", self.worker_id, self._process.pid,
+            extra={"tag": "INFRA"},
         )
 
     def stop(self, timeout: float = 10.0) -> None:
@@ -364,12 +376,14 @@ class ModelWorkerProcess:
             pass
         self._process.join(timeout=timeout)
         if self._process.is_alive():
-            logger.warning("Worker[%s]: killing unresponsive process", self.worker_id)
+            logger.warning("Worker[%s]: killing unresponsive process", self.worker_id,
+                extra={"tag": "INFRA"})
             self._process.kill()
             self._process.join(timeout=5)
         self._health.alive = False
         self._cleanup_queues()
-        logger.info("Worker[%s]: stopped", self.worker_id)
+        logger.info("Worker[%s]: stopped", self.worker_id,
+            extra={"tag": "INFRA"})
 
     def _cleanup_queues(self) -> None:
         for q_name in ("_req_q", "_resp_q", "_hb_q"):
@@ -491,7 +505,8 @@ class ModelWorkerProcess:
                 self._health.errors += 1
                 raise RuntimeError(f"Worker generate error: {data}")
             else:
-                logger.warning("Worker[%s]: unknown response type: %s", self.worker_id, msg)
+                logger.warning("Worker[%s]: unknown response type: %s", self.worker_id, msg,
+                    extra={"tag": "INFRA"})
                 continue
 
         self._health.errors += 1
@@ -565,7 +580,8 @@ class ModelWorkerProcess:
                 raise RuntimeError(f"Worker generate_stream error: {data}")
             else:
                 logger.warning(
-                    "Worker[%s]: unknown response type: %s", self.worker_id, msg
+                    "Worker[%s]: unknown response type: %s", self.worker_id, msg,
+                    extra={"tag": "INFRA"},
                 )
                 continue
 

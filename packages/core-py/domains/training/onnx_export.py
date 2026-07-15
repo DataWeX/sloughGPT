@@ -215,9 +215,11 @@ def export_sloughgpt_to_onnx(model: nn.Module, output_path: str, example_input=N
             opset_version=config.opset_version,
             do_constant_folding=True,
         )
-        logger.info(f"Exported ONNX: {output_path}")
+        logger.info(f"Exported ONNX: {output_path}",
+            extra={"tag": "TRAIN"},)
     except Exception as e:
-        logger.warning(f"ONNX export failed ({e}), creating placeholder file")
+        logger.warning(f"ONNX export failed ({e}), creating placeholder file",
+            extra={"tag": "TRAIN"},)
         # Write minimal placeholder so file size > 0
         with open(output_path, "wb") as f:
             f.write(b"ONNX")

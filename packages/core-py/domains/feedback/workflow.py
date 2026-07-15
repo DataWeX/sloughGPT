@@ -255,7 +255,7 @@ class FeedbackWorkflowManager:
         net = getattr(self, '_model', None)
         tok = getattr(self, '_tokenizer', None)
         if net is None or tok is None:
-            logger.debug("Auto-train skipped: no model set")
+            logger.debug("Auto-train skipped: no model set", extra={"tag": "INFRA"})
             return
 
         try:
@@ -330,7 +330,7 @@ class FeedbackWorkflowManager:
                     self._last_rollback_time = time.time()
                     logger.warning(
                         f"Auto-train rejected: PPL increased {ppl_delta:+.1f}% "
-                        f"({before_ppl:.1f} → {after_ppl:.1f})"
+                        f"({before_ppl:.1f} → {after_ppl:.1f})", extra={"tag": "INFRA"}
                     )
 
             self._stats["auto_train_steps"] += 1
@@ -339,13 +339,13 @@ class FeedbackWorkflowManager:
                 self._stats["auto_train_rejected"] += 1
                 logger.info(
                     f"Auto-train rolled back (quality guard): loss={avg_loss:.4f}, "
-                    f"ppl_delta={ppl_delta:+.1f}%"
+                    f"ppl_delta={ppl_delta:+.1f}%", extra={"tag": "INFRA"}
                 )
             else:
                 logger.info(
                     f"Auto-trained on feedback: {steps} steps, loss={avg_loss:.4f}, "
                     f"ppl={after_ppl:.1f if after_ppl else '?'} "
-                    f"({ppl_delta:+.1f}% vs before)" if ppl_delta else ""
+                    f"({ppl_delta:+.1f}% vs before)" if ppl_delta else "", extra={"tag": "INFRA"}
                 )
 
             try:
@@ -355,7 +355,7 @@ class FeedbackWorkflowManager:
             except Exception:
                 pass
         except Exception as e:
-            logger.warning(f"Auto-train skipped: {e}")
+            logger.warning(f"Auto-train skipped: {e}", extra={"tag": "INFRA"})
 
     def _maybe_dpo_train(self):
         """Run DPO preference learning on mixed-feedback pairs.
@@ -448,22 +448,22 @@ class FeedbackWorkflowManager:
                     self._last_rollback_time = time.time()
                     logger.warning(
                         f"DPO train rejected: PPL increased {ppl_delta:+.1f}% "
-                        f"({before_ppl:.1f} → {after_ppl:.1f})"
+                        f"({before_ppl:.1f} → {after_ppl:.1f})", extra={"tag": "INFRA"}
                     )
 
             self._stats["dpo_train_steps"] = self._stats.get("dpo_train_steps", 0) + 1
             if rejected:
                 self._stats["dpo_train_rejected"] = self._stats.get("dpo_train_rejected", 0) + 1
                 logger.info(
-                    f"DPO train rolled back: loss={avg_loss:.4f}, ppl_delta={ppl_delta:+.1f}%"
+                    f"DPO train rolled back: loss={avg_loss:.4f}, ppl_delta={ppl_delta:+.1f}%", extra={"tag": "INFRA"}
                 )
             else:
                 logger.info(
                     f"DPO trained on {len(pairs)} pairs: {steps} steps, loss={avg_loss:.4f}, "
-                    f"ppl={after_ppl:.1f if after_ppl else '?'}"
+                    f"ppl={after_ppl:.1f if after_ppl else '?'}", extra={"tag": "INFRA"}
                 )
         except Exception as e:
-            logger.warning(f"DPO train skipped: {e}")
+            logger.warning(f"DPO train skipped: {e}", extra={"tag": "INFRA"})
 
     def _do_aggregate(self) -> None:
         """Run adapter aggregation and log the result.
@@ -478,9 +478,9 @@ class FeedbackWorkflowManager:
             result = self.lora_store.aggregate_best_adapters()
             self._stats.setdefault("aggregations_performed", 0)
             self._stats["aggregations_performed"] += 1
-            logger.info("[Workflow] Adapter aggregation completed: %s", result)
+            logger.info("[Workflow] Adapter aggregation completed: %s", result, extra={"tag": "INFRA"})
         except Exception as e:
-            logger.error("[Workflow] Adapter aggregation failed: %s", e)
+            logger.error("[Workflow] Adapter aggregation failed: %s", e, extra={"tag": "INFRA"})
 
     def _maybe_train_user_adapter(self, user_id: str):
         """Train a per-user adapter using accumulated feedback."""
@@ -566,7 +566,7 @@ class FeedbackWorkflowManager:
                     rejected = True
                     self._last_rollback_time = time.time()
                     logger.warning(
-                        f"User adapter rejected: PPL increased {ppl_delta:+.1f}%"
+                        f"User adapter rejected: PPL increased {ppl_delta:+.1f}%", extra={"tag": "INFRA"}
                     )
 
             adapter_path = Path("data/user_adapters") / f"{user_id}_adapter.npz"
@@ -596,10 +596,10 @@ class FeedbackWorkflowManager:
 
             logger.info(
                 f"User adapter {'rejected' if rejected else 'trained'} for {user_id}: "
-                f"{steps} steps, loss={avg_loss:.4f}"
+                f"{steps} steps, loss={avg_loss:.4f}", extra={"tag": "INFRA"}
             )
         except Exception as e:
-            logger.warning(f"User adapter training skipped: {e}")
+            logger.warning(f"User adapter training skipped: {e}", extra={"tag": "INFRA"})
 
     def run_scheduled_tasks(self):
         """Execute periodic tasks based on configured intervals.
@@ -619,28 +619,28 @@ class FeedbackWorkflowManager:
                 self._do_aggregate()
                 self._last_aggregate_time = now
             except Exception as e:
-                logger.error("[Workflow] Scheduled aggregation failed: %s", e)
+                logger.error("[Workflow] Scheduled aggregation failed: %s", e, extra={"tag": "INFRA"})
         # Pruning
         if now - self._last_prune_time >= self.config.prune_interval_minutes * 60:
             try:
                 self._do_prune()
                 self._last_prune_time = now
             except Exception as e:
-                logger.error("[Workflow] Scheduled pruning failed: %s", e)
+                logger.error("[Workflow] Scheduled pruning failed: %s", e, extra={"tag": "INFRA"})
         # Export
         if now - self._last_export_time >= self.config.export_interval_hours * 3600:
             try:
                 self._do_export()
                 self._last_export_time = now
             except Exception as e:
-                logger.error("[Workflow] Scheduled export failed: %s", e)
+                logger.error("[Workflow] Scheduled export failed: %s", e, extra={"tag": "INFRA"})
         # DPO training
         if now - self._last_dpo_time >= self.config.auto_dpo_interval_minutes * 60:
             try:
                 self._do_dpo()
                 self._last_dpo_time = now
             except Exception as e:
-                logger.error("[Workflow] Scheduled DPO failed: %s", e)
+                logger.error("[Workflow] Scheduled DPO failed: %s", e, extra={"tag": "INFRA"})
 
     def _do_prune(self):
         """Perform pruning task."""
@@ -651,9 +651,9 @@ class FeedbackWorkflowManager:
             )
             if deleted:
                 self._stats["prunes_performed"] += 1
-                logger.info("Pruned %d adapters", len(deleted))
+                logger.info("Pruned %d adapters", len(deleted), extra={"tag": "INFRA"})
         except Exception as e:
-            logger.warning("Prune error: %s", e)
+            logger.warning("Prune error: %s", e, extra={"tag": "INFRA"})
 
 
     def _do_export(self):
@@ -669,9 +669,9 @@ class FeedbackWorkflowManager:
 
             self.db.export_feedback_jsonl(str(filepath))
             self._stats["exports_performed"] += 1
-            logger.info("Exported training data to %s", filepath)
+            logger.info("Exported training data to %s", filepath, extra={"tag": "INFRA"})
         except Exception as e:
-            logger.warning("Export error: %s", e)
+            logger.warning("Export error: %s", e, extra={"tag": "INFRA"})
 
     def _do_dpo(self):
         """Run scheduled DPO preference learning on mixed-feedback pairs.
@@ -684,7 +684,7 @@ class FeedbackWorkflowManager:
             self._maybe_dpo_train()
             self._stats["dpo_train_steps"] = self._stats.get("dpo_train_steps", 0) + 1
         except Exception as e:
-            logger.error("[Workflow] Scheduled DPO failed: %s", e)
+            logger.error("[Workflow] Scheduled DPO failed: %s", e, extra={"tag": "INFRA"})
 
     def _health_check(self):
         """Perform health check and run scheduled tasks."""
@@ -694,7 +694,7 @@ class FeedbackWorkflowManager:
             self._stats["workflow_runs"] += 1
             self._last_health_check = time.time()
         except Exception as e:
-            logger.warning("Health check error: %s", e)
+            logger.warning("Health check error: %s", e, extra={"tag": "INFRA"})
 
     def start(self):
         """Start the automated workflow in background threads."""
@@ -712,12 +712,12 @@ class FeedbackWorkflowManager:
         self._scheduler_thread = threading.Thread(target=scheduler_loop, daemon=True)
         self._scheduler_thread.start()
 
-        logger.info("Started automated feedback workflow")
+        logger.info("Started automated feedback workflow", extra={"tag": "INFRA"})
 
     def stop(self):
         """Stop the automated workflow."""
         self._running = False
-        logger.info("Stopped automated feedback workflow")
+        logger.info("Stopped automated feedback workflow", extra={"tag": "INFRA"})
 
     def get_status(self) -> Dict[str, Any]:
         """Get current workflow status and statistics."""

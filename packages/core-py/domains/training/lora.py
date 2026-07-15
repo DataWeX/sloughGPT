@@ -298,7 +298,8 @@ def apply_lora_to_model(model, config: Optional[LoRAConfig] = None,
             for part in parts[:-1]:
                 parent = getattr(parent, part)
             setattr(parent, parts[-1], new_lora)
-            logger.info(f"Applied LoRA to {name}")
+            logger.info(f"Applied LoRA to {name}",
+                extra={"tag": "TRAIN"},)
 
     return model
 
@@ -326,37 +327,19 @@ def print_lora_summary(model):
     """Print LoRA parameter summary."""
     lora_params = get_lora_parameters(model)
     total = sum(p.data.size if hasattr(p, 'data') else 1 for p in lora_params.values())
-    logger.info(f"LoRA parameters: {len(lora_params)} tensors, {total:,} total parameters")
+    logger.info(f"LoRA parameters: {len(lora_params)} tensors, {total:,} total parameters",
+        extra={"tag": "TRAIN"},)
     param_counts = {}
     for name, p in lora_params.items():
         key = name.split(".")[-1].split("_")[0]
         sz = p.data.size if hasattr(p, 'data') else 1
         param_counts[key] = param_counts.get(key, 0) + sz
     for k, v in param_counts.items():
-        logger.info(f"  {k}: {v:,} parameters")
+        logger.info(f"  {k}: {v:,} parameters",
+            extra={"tag": "TRAIN"},)
 
 
 # =============================================================================
-# LoRATrainer  — SloNet native
-# =============================================================================
-
-
-class LoRATrainer:
-    """Trainer for LoRA models using SloAdam."""
-
-    def __init__(self, model, config: Optional[LoRAConfig] = None, lr: float = 1e-4):
-        self.model = model
-        self.config = config or LoRAConfig()
-        self.lora_params = list(model.parameters()) if hasattr(model, 'parameters') else []
-        self.optimizer = SloAdam(lr=lr)
-
-    def step(self, loss):
-        loss.backward()
-        self.optimizer.step(self.lora_params)
-        for p in self.lora_params:
-            if hasattr(p, 'grad'):
-                p.grad = None
-
 
 __all__ = [
     "LoRAType",
@@ -367,5 +350,4 @@ __all__ = [
     "get_lora_parameters",
     "count_lora_parameters",
     "print_lora_summary",
-    "LoRATrainer",
 ]

@@ -69,22 +69,26 @@ class CacheManager(BaseComponent, ICacheManager):
     async def initialize(self) -> None:
         """Initialize cache manager"""
         try:
-            self.logger.info("Initializing Cache Manager...")
+            self.logger.info("Initializing Cache Manager...",
+                extra={"tag": "INFRA"})
 
             # Start cleanup task
             self.cleanup_task = asyncio.create_task(self._cleanup_loop())
 
             self.is_initialized = True
-            self.logger.info("Cache Manager initialized successfully")
+            self.logger.info("Cache Manager initialized successfully",
+                extra={"tag": "INFRA"})
 
         except Exception as e:
-            self.logger.error(f"Failed to initialize Cache Manager: {e}")
+            self.logger.error(f"Failed to initialize Cache Manager: {e}",
+                extra={"tag": "INFRA"})
             raise ComponentException(f"Cache Manager initialization failed: {e}")
 
     async def shutdown(self) -> None:
         """Shutdown cache manager"""
         try:
-            self.logger.info("Shutting down Cache Manager...")
+            self.logger.info("Shutting down Cache Manager...",
+                extra={"tag": "INFRA"})
 
             # Cancel cleanup task
             if self.cleanup_task:
@@ -95,10 +99,12 @@ class CacheManager(BaseComponent, ICacheManager):
                     pass
 
             self.is_initialized = False
-            self.logger.info("Cache Manager shutdown successfully")
+            self.logger.info("Cache Manager shutdown successfully",
+                extra={"tag": "INFRA"})
 
         except Exception as e:
-            self.logger.error(f"Failed to shutdown Cache Manager: {e}")
+            self.logger.error(f"Failed to shutdown Cache Manager: {e}",
+                extra={"tag": "INFRA"})
             raise ComponentException(f"Cache Manager shutdown failed: {e}")
 
     async def get(self, key: str) -> Optional[Any]:
@@ -125,7 +131,8 @@ class CacheManager(BaseComponent, ICacheManager):
             return entry.value
 
         except Exception as e:
-            self.logger.error(f"Failed to get cache key {key}: {e}")
+            self.logger.error(f"Failed to get cache key {key}: {e}",
+                extra={"tag": "INFRA"})
             self.stats["misses"] += 1
             return None
 
@@ -152,7 +159,8 @@ class CacheManager(BaseComponent, ICacheManager):
             return True
 
         except Exception as e:
-            self.logger.error(f"Failed to set cache key {key}: {e}")
+            self.logger.error(f"Failed to set cache key {key}: {e}",
+                extra={"tag": "INFRA"})
             return False
 
     async def delete(self, key: str) -> bool:
@@ -166,18 +174,21 @@ class CacheManager(BaseComponent, ICacheManager):
             return False
 
         except Exception as e:
-            self.logger.error(f"Failed to delete cache key {key}: {e}")
+            self.logger.error(f"Failed to delete cache key {key}: {e}",
+                extra={"tag": "INFRA"})
             return False
 
     async def clear(self) -> bool:
         """Clear all cache"""
         try:
             self.cache.clear()
-            self.logger.info("Cache cleared")
+            self.logger.info("Cache cleared",
+                extra={"tag": "INFRA"})
             return True
 
         except Exception as e:
-            self.logger.error(f"Failed to clear cache: {e}")
+            self.logger.error(f"Failed to clear cache: {e}",
+                extra={"tag": "INFRA"})
             return False
 
     async def get_cache_statistics(self) -> Dict[str, Any]:
@@ -219,7 +230,8 @@ class CacheManager(BaseComponent, ICacheManager):
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                self.logger.error(f"Cache cleanup error: {e}")
+                self.logger.error(f"Cache cleanup error: {e}",
+                    extra={"tag": "INFRA"})
                 await asyncio.sleep(60)
 
     async def _cleanup_expired_entries(self) -> None:

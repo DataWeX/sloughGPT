@@ -78,7 +78,7 @@ def load_model_weights(
     if slnc_path.exists():
         return _load_from_slnc(slnc_path, dtype)
 
-    logger.info("Loading %s from %s", model_id, safetensors_path.name)
+    logger.info("Loading %s from %s", model_id, safetensors_path.name, extra={"tag": "INFRA"})
 
     weights = {}
     with safe_open(str(safetensors_path), framework="numpy") as f:
@@ -97,7 +97,7 @@ def load_model_weights(
                 else:
                     weights[key] = np.asarray(arr).astype(dtype)
 
-    logger.info("Loaded %d parameters from %s", len(weights), model_id)
+    logger.info("Loaded %d parameters from %s", len(weights), model_id, extra={"tag": "INFRA"})
 
     # Auto-convert to .slnc for faster future loads
     _try_convert_to_slnc(model_id, safetensors_path, weights)
@@ -109,7 +109,7 @@ def _load_from_slnc(slnc_path: Path, dtype: np.dtype) -> Dict[str, np.ndarray]:
     """Load weights from .slnc memory-mapped format."""
     from domains.infrastructure.slnc.parser import SLNCParser
 
-    logger.info("Loading from .slnc cache: %s (memory-mapped)", slnc_path.name)
+    logger.info("Loading from .slnc cache: %s (memory-mapped)", slnc_path.name, extra={"tag": "INFRA"})
     parser = SLNCParser(str(slnc_path))
     weights = parser.get_weights_dict()
 
@@ -118,7 +118,7 @@ def _load_from_slnc(slnc_path: Path, dtype: np.dtype) -> Dict[str, np.ndarray]:
     for key, arr in weights.items():
         result[key] = arr.astype(dtype) if arr.dtype != dtype else arr
 
-    logger.info("Loaded %d parameters from .slnc: %s", len(result), slnc_path.name)
+    logger.info("Loaded %d parameters from .slnc: %s", len(result), slnc_path.name, extra={"tag": "INFRA"})
     return result
 
 
@@ -137,11 +137,11 @@ def _try_convert_to_slnc(
         slnc_path = safetensors_path.with_suffix(".slnc")
         config = load_model_config(model_id)
 
-        logger.info("Auto-converting %s to .slnc format...", model_id)
+        logger.info("Auto-converting %s to .slnc format...", model_id, extra={"tag": "INFRA"})
         compiler = SLNCCompiler()
         compiler.compile_from_dict(config, weights, str(slnc_path))
         logger.info("SLNC conversion complete: %s (%.1f MB)",
-                     slnc_path.name, slnc_path.stat().st_size / 1024 / 1024)
+                     slnc_path.name, slnc_path.stat().st_size / 1024 / 1024, extra={"tag": "INFRA"})
     except Exception as e:
         # Non-critical — just log and continue
         logger.debug("SLNC auto-conversion skipped for %s: %s", model_id, e)

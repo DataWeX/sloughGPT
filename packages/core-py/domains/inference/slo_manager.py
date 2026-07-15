@@ -62,7 +62,7 @@ class SloManager:
         self._souls_cache.clear()
 
         if not self.slos_dir.exists():
-            logger.warning(f"Slos directory not found: {self.slos_dir}")
+            logger.warning(f"Slos directory not found: {self.slos_dir}", extra={"tag": "SOUL"})
             return
 
         # Find personality profiles (.slo) and checkpoint files (.soul)
@@ -94,7 +94,9 @@ class SloManager:
                         except Exception as e:
                             logger.debug(f"Failed to parse soul profile {soul_path}: {e}")
 
-        logger.info(f"Found {len(self._souls_cache)} souls")
+        if not hasattr(self, '_scanned'):
+            logger.info(f"Found {len(self._souls_cache)} souls", extra={"tag": "SOUL"})
+            self._scanned = True
 
     def _parse_soul_info(self, sou_path: str) -> Optional[SloInfo]:
         """Parse soul file for metadata.
@@ -167,7 +169,7 @@ class SloManager:
                 name = self._preference_file.read_text().strip()
                 if name in self._souls_cache:
                     self._current_soul = name
-                    logger.info(f"Restored soul preference: {name}")
+                    logger.info(f"Restored soul preference: {name}", extra={"tag": "SOUL"})
             except Exception:
                 pass
 
@@ -214,7 +216,7 @@ class SloManager:
         soul = self._souls_cache[name]
         soul.loaded_at = os.times().elapsed
 
-        logger.info(f"Switched to soul: {name}")
+        logger.info(f"Switched to soul: {name}", extra={"tag": "SOUL"})
 
         return {
             "success": True,

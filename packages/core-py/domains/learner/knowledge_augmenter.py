@@ -102,6 +102,6 @@ def enrich_with_knowledge(
                     "topics": [],
                 }
         except Exception as e:
-            logger.warning(f"Live web search failed: {e}")
+            logger.warning(f"Live web search failed: {e}", extra={"tag": "INF"})
 
     return {"facts": [], "source": "none", "topics": []}

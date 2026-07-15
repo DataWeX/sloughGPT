@@ -311,26 +311,26 @@ class TrainingStatusTracker:
 
     def print_summary(self):
         """Print human-readable summary."""
-        logger.info("=" * 60)
-        logger.info("Training Status: %s", self.report.completion_status.value)
-        logger.info("Progress: %.1f%%", self.report.completion_percentage)
-        logger.info("Total Epochs: %s", self.report.total_epochs)
-        logger.info("Best Loss: %.4f", self.report.best_loss)
-        logger.info("Final Loss: %.4f", self.report.final_loss)
-        logger.info("-" * 60)
+        logger.info("=" * 60, extra={"tag": "TRAIN"})
+        logger.info("Training Status: %s", self.report.completion_status.value, extra={"tag": "TRAIN"})
+        logger.info("Progress: %.1f%%", self.report.completion_percentage, extra={"tag": "TRAIN"})
+        logger.info("Total Epochs: %s", self.report.total_epochs, extra={"tag": "TRAIN"})
+        logger.info("Best Loss: %.4f", self.report.best_loss, extra={"tag": "TRAIN"})
+        logger.info("Final Loss: %.4f", self.report.final_loss, extra={"tag": "TRAIN"})
+        logger.info("-" * 60, extra={"tag": "TRAIN"})
 
         for stage in [self.report.pretraining, self.report.federated, self.report.rlhf]:
             if stage:
-                logger.info("")
-                logger.info("%s:", stage.name)
-                logger.info("  Status: %s", stage.status.value)
-                logger.info("  Epochs: %s/%s", stage.epochs_completed, stage.total_epochs)
+                logger.info("", extra={"tag": "TRAIN"})
+                logger.info("%s:", stage.name, extra={"tag": "TRAIN"})
+                logger.info("  Status: %s", stage.status.value, extra={"tag": "TRAIN"})
+                logger.info("  Epochs: %s/%s", stage.epochs_completed, stage.total_epochs, extra={"tag": "TRAIN"})
                 if stage.best_loss > 0:
-                    logger.info("  Best Loss: %.4f", stage.best_loss)
+                    logger.info("  Best Loss: %.4f", stage.best_loss, extra={"tag": "TRAIN"})
                 if stage.error:
-                    logger.info("  Error: %s", stage.error)
+                    logger.info("  Error: %s", stage.error, extra={"tag": "TRAIN"})
 
-        logger.info("=" * 60)
+        logger.info("=" * 60, extra={"tag": "TRAIN"})
 
 
 # =============================================================================
@@ -460,7 +460,7 @@ class CheckpointManager:
             try:
                 optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
             except Exception as e:
-                logger.warning("Could not load optimizer state: %s", e)
+                logger.warning("Could not load optimizer state: %s", e, extra={"tag": "TRAIN"})
 
         # Restore training status
         if "training_status" in checkpoint:

@@ -72,7 +72,8 @@ class ExperimentTracker:
         elif self.config.backend == TrackerBackend.COMET:
             self._init_comet()
         else:
-            logger.info("No tracking backend selected")
+            logger.info("No tracking backend selected",
+                extra={"tag": "TRAIN"},)
 
     def _init_mlflow(self):
         """Initialize MLflow."""
@@ -82,9 +83,11 @@ class ExperimentTracker:
             mlflow.set_tracking_uri(self.config.tracking_uri)
             mlflow.set_experiment(self.config.experiment_name)
             self._client = mlflow
-            logger.info(f"MLflow initialized: {self.config.tracking_uri}")
+            logger.info(f"MLflow initialized: {self.config.tracking_uri}",
+                extra={"tag": "TRAIN"},)
         except ImportError:
-            logger.warning("MLflow not installed: pip install mlflow")
+            logger.warning("MLflow not installed: pip install mlflow",
+                extra={"tag": "TRAIN"},)
 
     def _init_wandb(self):
         """Initialize Weights & Biases."""
@@ -113,9 +116,11 @@ class ExperimentTracker:
 
             wandb.init(**kwargs)
             self._client = wandb
-            logger.info("WandB initialized: project=%s", kwargs.get("project"))
+            logger.info("WandB initialized: project=%s", kwargs.get("project"),
+                extra={"tag": "TRAIN"},)
         except ImportError:
-            logger.warning("WandB not installed: pip install wandb")
+            logger.warning("WandB not installed: pip install wandb",
+                extra={"tag": "TRAIN"},)
 
     def _init_comet(self):
         """Initialize Comet.ml."""
@@ -127,9 +132,11 @@ class ExperimentTracker:
                 api_key=self.config.api_key,
             )
             self._client = experiment
-            logger.info(f"Comet initialized: {self.config.project}")
+            logger.info(f"Comet initialized: {self.config.project}",
+                extra={"tag": "TRAIN"},)
         except ImportError:
-            logger.warning("Comet not installed: pip install comet-ml")
+            logger.warning("Comet not installed: pip install comet-ml",
+                extra={"tag": "TRAIN"},)
 
     def start_run(self, run_name: Optional[str] = None):
         """Start a new run."""

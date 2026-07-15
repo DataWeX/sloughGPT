@@ -151,7 +151,8 @@ def convert_hf_to_slonet(
     )
 
     logger.info("convert_hf_to_slonet: arch=%s (norm=%s, pos=%s, act=%s, attn=%s, transpose=%s)",
-                arch.name, arch.norm, arch.positional, arch.activation, arch.attention, arch.transpose_weights)
+                arch.name, arch.norm, arch.positional, arch.activation, arch.attention, arch.transpose_weights,
+                extra={"tag": "INF"})
 
     result = {}
     W = arch.weight_map
@@ -255,7 +256,7 @@ def convert_hf_to_slonet(
     if "lm_head.weight" not in result and "tok_emb.weight" in result:
         result["lm_head.weight"] = result["tok_emb.weight"]
 
-    logger.info("convert_hf_to_slonet: mapped %d keys (arch=%s)", len(result), arch.name)
+    logger.info("convert_hf_to_slonet: mapped %d keys (arch=%s)", len(result), arch.name, extra={"tag": "INF"})
     return result
 
 
@@ -462,6 +463,7 @@ class SloNetChatProvider:
                 logger.info(
                     "SloNetChatProvider.from_slnc: loaded quant metadata (%d tensors) from %s",
                     len(param_names), quant_meta_path,
+                    extra={"tag": "INF"},
                 )
 
                 quantized_count = 0
@@ -502,6 +504,7 @@ class SloNetChatProvider:
                 "SloNetChatProvider.from_slnc: quantized %d/%d tensors (bits=%d, mode=%s, avg_cosine=%.4f)",
                 quantized_count, len(linear_map), quant_bits, quant_mode,
                 summary.get("avg_cosine_sim", 0.0),
+                extra={"tag": "INF"},
             )
 
         # Load tokenizer
@@ -510,7 +513,7 @@ class SloNetChatProvider:
         )
 
         logger.info("SloNetChatProvider.from_slnc: %s, %d layers",
-                     slnc_path, n_layer)
+                     slnc_path, n_layer, extra={"tag": "INF"})
 
         return instance
 
@@ -578,7 +581,7 @@ class SloNetChatProvider:
             # from_pretrained reads tokenizer.json and parses vocab+merges correctly
             return MorphTokenizer.from_pretrained(self._hf_model_id)
         except Exception as e:
-            logger.warning("MorphTokenizer load failed: %s", e)
+            logger.warning("MorphTokenizer load failed: %s", e, extra={"tag": "INF"})
 
         raise RuntimeError(f"No tokenizer found for {self._hf_model_id}")
 
@@ -916,7 +919,7 @@ class SloNetChatProvider:
             elapsed = time.monotonic() - gen_start
             if elapsed > _GENERATION_TIMEOUT_S:
                 cancel_event.set() if cancel_event else None
-                logger.warning("Streaming generation timed out after %.0fs", elapsed)
+                logger.warning("Streaming generation timed out after %.0fs", elapsed, extra={"tag": "INF"})
                 yield "\n\n[Generation timed out after {:.0f}s]".format(elapsed)
                 return
 

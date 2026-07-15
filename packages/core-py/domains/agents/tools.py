@@ -114,7 +114,7 @@ class ToolRegistry:
 
     def register(self, spec: ToolSpec) -> None:
         self._tools[spec.name] = spec
-        logger.info("Registered tool: %s", spec.name)
+        logger.info("Registered tool: %s", spec.name, extra={"tag": "MODEL"})
 
     def get(self, name: str) -> Optional[ToolSpec]:
         return self._tools.get(name)

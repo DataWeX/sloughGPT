@@ -106,7 +106,8 @@ def prepare_data(data_path, block_size=128):
                 all_texts.append((text, target_len))
                 total_len += target_len
             else:
-                logger.warning("dataset %s not found, skipping", ds_name)
+                logger.warning("dataset %s not found, skipping", ds_name,
+                    extra={"tag": "TRAIN"},)
 
         if not all_texts:
             raise ValueError("No valid datasets found")
@@ -115,7 +116,8 @@ def prepare_data(data_path, block_size=128):
         for text_chunk, target_len in all_texts:
             text += text_chunk[:target_len]
 
-        logger.info("Combined %d datasets: %d chars", len(datasets_with_ratios), total_len)
+        logger.info("Combined %d datasets: %d chars", len(datasets_with_ratios), total_len,
+            extra={"tag": "TRAIN"},)
 
     elif isinstance(data_path, list):
         datasets = data_path
@@ -125,7 +127,8 @@ def prepare_data(data_path, block_size=128):
             if path.exists():
                 texts.append(path.read_text(encoding="utf-8"))
             else:
-                logger.warning("dataset %s not found, skipping", ds_name)
+                logger.warning("dataset %s not found, skipping", ds_name,
+                    extra={"tag": "TRAIN"},)
         text = "".join(texts)
 
     else:
@@ -140,7 +143,8 @@ def prepare_data(data_path, block_size=128):
     itos = {i: c for i, c in enumerate(chars)}
     data = torch.tensor([stoi[c] for c in text], dtype=torch.long)
 
-    logger.info("Data: %d tokens, %d chars", len(data), len(chars))
+    logger.info("Data: %d tokens, %d chars", len(data), len(chars),
+        extra={"tag": "TRAIN"},)
     return data, len(chars), stoi, itos
 
 
@@ -202,6 +206,9 @@ class TrainerConfig:
     # Logging
     log_interval: int = 10
     eval_interval: int = 100
+
+    # Early stopping
+    early_stopping_patience: int = 0  # 0 = disabled; stop if no improvement for N evals
 
     # Device
     device: str = "auto"
@@ -307,7 +314,8 @@ class CheckpointManager:
 
         except Exception as exc:
             # Fallback to .pt if .soul export fails
-            logger.warning("Soul export failed, falling back to .pt: %s", exc)
+            logger.warning("Soul export failed, falling back to .pt: %s", exc,
+                extra={"tag": "TRAIN"},)
             model_path = self.checkpoint_dir / f"step_{step}.pt"
 
             save_dict = {
@@ -329,13 +337,15 @@ class CheckpointManager:
                 try:
                     save_dict["optimizer_state_dict"] = optimizer.state_dict()
                 except Exception as exc:
-                    logger.warning("Could not serialize optimizer state: %s", exc)
+                    logger.warning("Could not serialize optimizer state: %s", exc,
+                        extra={"tag": "TRAIN"},)
 
             if scheduler is not None:
                 try:
                     save_dict["scheduler_state_dict"] = scheduler.state_dict()
                 except Exception as exc:
-                    logger.warning("Could not serialize scheduler state: %s", exc)
+                    logger.warning("Could not serialize scheduler state: %s", exc,
+                        extra={"tag": "TRAIN"},)
 
             if stoi is not None:
                 save_dict["stoi"] = stoi
@@ -350,7 +360,8 @@ class CheckpointManager:
 
         self.checkpoints.append({"step": step, "path": str(model_path), "metrics": metrics})
 
-        logger.info(f"Checkpoint saved: {model_path} (step={step}, loss={metric_value:.4f})")
+        logger.info(f"Checkpoint saved: {model_path} (step={step}, loss={metric_value:.4f})",
+            extra={"tag": "TRAIN"},)
 
         self._cleanup_old_checkpoints()
         return str(model_path)
@@ -360,7 +371,8 @@ class CheckpointManager:
         """Load a training checkpoint from an explicit path (.pt file)."""
         p = Path(path).expanduser()
         if not p.is_file():
-            logger.warning("Checkpoint file not found: %s", p)
+            logger.warning("Checkpoint file not found: %s", p,
+                extra={"tag": "TRAIN"},)
             return None
         return torch_load_checkpoint(str(p), map_location=map_location)
 
@@ -510,6 +522,9 @@ class SloughGPTTrainer:
         self._ema_alpha = 0.3  # smoothing factor (0=ignore new, 1=no smoothing)
         self._last_checkpoint_path = None  # path of last saved checkpoint
         self._last_train_loss = None  # last raw train loss for fallback
+        self._patience_counter = 0  # early stopping: evals since last improvement
+        self._best_model_path = None  # path to best checkpoint
+        self._early_stopped = False  # True if early stopping triggered
 
         # Setup device
         self.device = self._setup_device()
@@ -528,7 +543,8 @@ class SloughGPTTrainer:
         self._y_batch: Optional[torch.Tensor] = None
         self._batch_allocated = False
 
-        logger.info("Using device: %s", self.device)
+        logger.info("Using device: %s", self.device,
+            extra={"tag": "TRAIN"},)
 
         # Prepare data — prefer corpus-derived vocab unless caller sets ``vocab_size`` (legacy path)
         # or supplies a full ``TrainerConfig`` (advanced; caller must match data).
@@ -570,7 +586,8 @@ class SloughGPTTrainer:
         self.global_step = 0
         self.current_epoch = 0
 
-        logger.info("Train: %d, Val: %d", len(self.train_data), len(self.val_data))
+        logger.info("Train: %d, Val: %d", len(self.train_data), len(self.val_data),
+            extra={"tag": "TRAIN"},)
 
     def _setup_device(self) -> str:
         """Setup training device."""
@@ -589,7 +606,8 @@ class SloughGPTTrainer:
 
     def _create_model(self):
         """Create and setup the model."""
-        logger.info("=== Creating Model ===")
+        logger.info("=== Creating Model ===",
+            extra={"tag": "TRAIN"},)
         self.model = SloughGPTModel(
             vocab_size=self.vocab_size,
             n_embed=self.config.n_embed,
@@ -599,12 +617,15 @@ class SloughGPTTrainer:
             dropout=self.config.dropout,
         ).to(self.device)
 
-        logger.info("Model: SloughGPTModel (RoPE, SwiGLU, RMSNorm, SDPA)")
-        logger.info("Base model params: %d", self.model.num_parameters())
+        logger.info("Model: SloughGPTModel (RoPE, SwiGLU, RMSNorm, SDPA)",
+            extra={"tag": "TRAIN"},)
+        logger.info("Base model params: %d", self.model.num_parameters(),
+            extra={"tag": "TRAIN"},)
 
         # Apply LoRA
         if self.config.use_lora:
-            logger.info("=== Applying LoRA ===")
+            logger.info("=== Applying LoRA ===",
+                extra={"tag": "TRAIN"},)
             lora_config = LoRAConfig(
                 rank=self.config.lora_rank,
                 alpha=self.config.lora_alpha,
@@ -613,25 +634,30 @@ class SloughGPTTrainer:
             self.model = apply_lora_to_model(self.model, config=lora_config)
             lora_params = sum(p.numel() for n, p in self.model.named_parameters() if "lora_" in n)
             total = sum(p.numel() for p in self.model.parameters())
-            logger.info("LoRA params: %d (%.1f%%)", lora_params, 100 * lora_params / total)
+            logger.info("LoRA params: %d (%.1f%%)", lora_params, 100 * lora_params / total,
+                extra={"tag": "TRAIN"},)
 
         # Apply channels-last memory format for GPU
         if self.config.use_channels_last and self.device == "cuda":
             self.model = self.model.to(memory_format=torch.channels_last)
-            logger.info("Using channels_last memory format")
+            logger.info("Using channels_last memory format",
+                extra={"tag": "TRAIN"},)
 
         # Apply torch.compile for PyTorch 2.0+
         if self.config.use_compile and hasattr(torch, "compile") and self.device == "cuda":
-            logger.info("Compiling model with mode: %s", self.config.compile_mode)
+            logger.info("Compiling model with mode: %s", self.config.compile_mode,
+                extra={"tag": "TRAIN"},)
             try:
                 self._compiled_model = torch.compile(
                     self.model,
                     mode=self.config.compile_mode,
                     fullgraph=False,
                 )
-                logger.info("Model compiled successfully")
+                logger.info("Model compiled successfully",
+                    extra={"tag": "TRAIN"},)
             except Exception as e:
-                logger.warning("torch.compile failed: %s", e)
+                logger.warning("torch.compile failed: %s", e,
+                    extra={"tag": "TRAIN"},)
                 self._compiled_model = None
 
         # Setup DDP
@@ -651,9 +677,11 @@ class SloughGPTTrainer:
                     device_ids=[self.config.local_rank] if torch.cuda.is_available() else None,
                     find_unused_parameters=False,
                 )
-                logger.info(f"DDP: rank={self.config.rank}, world_size={self.config.world_size}")
+                logger.info(f"DDP: rank={self.config.rank}, world_size={self.config.world_size}",
+                    extra={"tag": "TRAIN"},)
         except Exception as e:
-            logger.error(f"Failed to setup distributed: {e}")
+            logger.error(f"Failed to setup distributed: {e}",
+                extra={"tag": "TRAIN"},)
             self.config.use_distributed = False
             self.config.use_fsdp = False
             self.ddp_model = None
@@ -680,16 +708,21 @@ class SloughGPTTrainer:
             total_params = sum(p.numel() for p in self.model.parameters())
             logger.info(
                 f"FSDP: rank={self.config.rank}, world_size={self.config.world_size}, "
-                f"strategy={self.config.sharding_strategy}, params={total_params:,}"
+                f"strategy={self.config.sharding_strategy}, params={total_params:,}",
+                extra={"tag": "TRAIN"},
             )
         except ImportError:
-            logger.warning("FSDP not available. Requires PyTorch 2.0+ with distributed support.")
-            logger.warning("Falling back to DDP.")
+            logger.warning("FSDP not available. Requires PyTorch 2.0+ with distributed support.",
+                extra={"tag": "TRAIN"},)
+            logger.warning("Falling back to DDP.",
+                extra={"tag": "TRAIN"},)
             self.config.use_fsdp = False
             self._setup_distributed()
         except Exception as e:
-            logger.error(f"Failed to setup FSDP: {e}")
-            logger.warning("Falling back to DDP.")
+            logger.error(f"Failed to setup FSDP: {e}",
+                extra={"tag": "TRAIN"},)
+            logger.warning("Falling back to DDP.",
+                extra={"tag": "TRAIN"},)
             self.config.use_fsdp = False
             self._setup_distributed()
 
@@ -702,7 +735,8 @@ class SloughGPTTrainer:
         self.mixed_precision_dtype = (
             torch.bfloat16 if self.config.mixed_precision_dtype == "bf16" else torch.float16
         )
-        logger.info("Mixed precision: %s", self.mixed_precision_dtype)
+        logger.info("Mixed precision: %s", self.mixed_precision_dtype,
+            extra={"tag": "TRAIN"},)
 
     def _create_optimizer(self):
         """Create optimizer with weight decay."""
@@ -811,6 +845,21 @@ class SloughGPTTrainer:
             metrics = {"loss": self._ema_loss, "raw_loss": raw_loss}
             if self.accumulation_step >= self.config.gradient_accumulation_steps:
                 params = [p for p in model.parameters() if p.grad is not None]
+                # Clip gradients for SloNet path (numpy arrays, not torch tensors)
+                if self.config.max_grad_norm > 0 and params:
+                    import numpy as _np
+                    total_norm = 0.0
+                    for p in params:
+                        if p.grad is not None:
+                            g = p.grad.data if hasattr(p.grad, 'data') else p.grad
+                            total_norm += float(_np.sum(g ** 2))
+                    total_norm = total_norm ** 0.5
+                    clip_coef = self.config.max_grad_norm / (total_norm + 1e-6)
+                    if clip_coef < 1.0:
+                        for p in params:
+                            if p.grad is not None:
+                                g = p.grad.data if hasattr(p.grad, 'data') else p.grad
+                                g *= clip_coef
                 self.optimizer.step(params)
                 for p in model.parameters():
                     p.grad = None
@@ -864,7 +913,6 @@ class SloughGPTTrainer:
 
         return metrics
 
-    @torch.no_grad()
     def evaluate(self, num_batches: int = 50) -> Dict[str, float]:
         """Evaluate the model with optimizations."""
         model = self.training_model
@@ -874,11 +922,12 @@ class SloughGPTTrainer:
         total_loss = 0.0
         steps = 0
 
-        for _ in range(num_batches):
-            x, y = self.get_batch("val")
-            _, loss = eval_model(x, y)
-            total_loss += loss.item()
-            steps += 1
+        with torch.no_grad():
+            for _ in range(num_batches):
+                x, y = self.get_batch("val")
+                _, loss = eval_model(x, y)
+                total_loss += loss.item()
+                steps += 1
 
         avg_loss = total_loss / max(steps, 1)
         return {"eval_loss": avg_loss, "eval_ppl": torch.exp(torch.tensor(avg_loss)).item()}
@@ -890,13 +939,15 @@ class SloughGPTTrainer:
         try:
             self.model.load_state_dict(state, strict=True)
         except RuntimeError as exc:
-            logger.warning("Strict state_dict load failed (%s); retrying with strict=False", exc)
+            logger.warning("Strict state_dict load failed (%s); retrying with strict=False", exc,
+                extra={"tag": "TRAIN"},)
             incomp = self.model.load_state_dict(state, strict=False)
             if incomp.missing_keys or incomp.unexpected_keys:
                 logger.warning(
                     "Partial load: missing=%s unexpected=%s",
                     incomp.missing_keys,
                     incomp.unexpected_keys,
+                    extra={"tag": "TRAIN"},
                 )
 
         opt = normalized.get("optimizer_state_dict")
@@ -904,14 +955,16 @@ class SloughGPTTrainer:
             try:
                 self.optimizer.load_state_dict(opt)
             except Exception as exc:
-                logger.warning("Could not load optimizer_state_dict (fresh optimizer): %s", exc)
+                logger.warning("Could not load optimizer_state_dict (fresh optimizer): %s", exc,
+                    extra={"tag": "TRAIN"},)
 
         sched = normalized.get("scheduler_state_dict")
         if self.scheduler is not None and isinstance(sched, dict) and sched:
             try:
                 self.scheduler.load_state_dict(sched)
             except Exception as exc:
-                logger.warning("Could not load scheduler_state_dict (fresh LR schedule): %s", exc)
+                logger.warning("Could not load scheduler_state_dict (fresh LR schedule): %s", exc,
+                    extra={"tag": "TRAIN"},)
 
         if self.scaler is not None:
             sc = normalized.get("scaler_state_dict")
@@ -919,7 +972,8 @@ class SloughGPTTrainer:
                 try:
                     self.scaler.load_state_dict(sc)
                 except Exception as exc:
-                    logger.warning("Could not load scaler_state_dict: %s", exc)
+                    logger.warning("Could not load scaler_state_dict: %s", exc,
+                        extra={"tag": "TRAIN"},)
 
         self.global_step = int(normalized.get("step", 0))
         self.current_epoch = int(normalized.get("epoch", 0))
@@ -931,7 +985,8 @@ class SloughGPTTrainer:
             self.itos = it
             self.vocab_size = len(st)
 
-        logger.info("Resumed from step %s epoch %s", self.global_step, self.current_epoch)
+        logger.info("Resumed from step %s epoch %s", self.global_step, self.current_epoch,
+            extra={"tag": "TRAIN"},)
 
     def _progress_denominator(self, steps_per_epoch: int) -> int:
         """Estimated total optimizer steps for UI progress (caps ``max_steps`` vs epoch budget)."""
@@ -978,8 +1033,10 @@ class SloughGPTTrainer:
         is_main = not self.config.use_distributed or self.config.rank == 0
 
         if is_main:
-            logger.info(f"Training config: {self.config}")
-            logger.info(f"Total parameters: {sum(p.numel() for p in self.model.parameters()):,}")
+            logger.info(f"Training config: {self.config}",
+                extra={"tag": "TRAIN"},)
+            logger.info(f"Total parameters: {sum(p.numel() for p in self.model.parameters()):,}",
+                extra={"tag": "TRAIN"},)
             if self._experiment_tracker is not None:
                 n_params = sum(p.numel() for p in self.model.parameters())
                 self._experiment_tracker.log_metrics(
@@ -992,11 +1049,13 @@ class SloughGPTTrainer:
             steps_per_epoch: int,
             train_loss: Optional[float] = None,
             eval_loss: Optional[float] = None,
+            done: bool = False,
+            done_reason: Optional[str] = None,
         ) -> None:
             if not is_main or on_progress is None:
                 return
             denom = self._progress_denominator(steps_per_epoch)
-            pct = min(99, int(100 * self.global_step / denom))
+            pct = 100 if done else min(99, int(100 * self.global_step / denom))
             lr = self.scheduler.get_last_lr()[0] if self.scheduler else self.config.learning_rate
             try:
                 on_progress(
@@ -1009,21 +1068,25 @@ class SloughGPTTrainer:
                         "train_loss": train_loss,
                         "eval_loss": eval_loss,
                         "learning_rate": float(lr),
+                        "done": done,
+                        "done_reason": done_reason,
                     }
                 )
             except Exception:
-                logger.exception("on_progress callback failed")
+                logger.exception("on_progress callback failed", extra={"tag": "TRAIN"})
 
         self._is_training = True
         for epoch in range(self.current_epoch, self.config.epochs):
             self.current_epoch = epoch
 
             if not self._is_training:
-                logger.info("Training stopped at epoch %d", epoch)
+                logger.info("Training stopped at epoch %d", epoch,
+                    extra={"tag": "TRAIN"},)
                 break
 
             if is_main:
-                logger.info(f"\nEpoch {epoch + 1}/{self.config.epochs}")
+                logger.info(f"\nEpoch {epoch + 1}/{self.config.epochs}",
+                    extra={"tag": "TRAIN"},)
 
             model = self.training_model
             model.train()
@@ -1040,10 +1103,12 @@ class SloughGPTTrainer:
                 if self.config.max_steps and self.global_step >= self.config.max_steps:
                     break
                 if cancel_event is not None and cancel_event.is_set():
-                    logger.info("Training cancelled at step %d", self.global_step)
+                    logger.info("Training cancelled at step %d", self.global_step,
+                        extra={"tag": "TRAIN"},)
                     break
                 if pause_event is not None and pause_event.is_set():
-                    logger.info("Training paused at step %d — waiting for resume", self.global_step)
+                    logger.info("Training paused at step %d — waiting for resume", self.global_step,
+                        extra={"tag": "TRAIN"},)
                     while pause_event.is_set():
                         if cancel_event is not None and cancel_event.is_set():
                             break
@@ -1062,7 +1127,8 @@ class SloughGPTTrainer:
                         else self.config.learning_rate
                     )
                     logger.info(
-                        f"Step {self.global_step} | Loss: {metrics['loss']:.4f} | LR: {lr:.2e}"
+                        f"Step {self.global_step} | Loss: {metrics['loss']:.4f} | LR: {lr:.2e}",
+                        extra={"tag": "TRAIN"},
                     )
                     if self._experiment_tracker is not None:
                         self._experiment_tracker.log_metrics(
@@ -1088,7 +1154,8 @@ class SloughGPTTrainer:
                     if is_main:
                         logger.info(
                             f"Eval | Loss: {eval_metrics['eval_loss']:.4f} | "
-                            f"PPL: {eval_metrics['eval_ppl']:.2f}"
+                            f"PPL: {eval_metrics['eval_ppl']:.2f}",
+                            extra={"tag": "TRAIN"},
                         )
                         if self._experiment_tracker is not None:
                             self._experiment_tracker.log_metrics(
@@ -1101,7 +1168,33 @@ class SloughGPTTrainer:
 
                         if eval_metrics["eval_loss"] < self._best_val_loss:
                             self._best_val_loss = eval_metrics["eval_loss"]
+                            self._patience_counter = 0
                             self.save_checkpoint(eval_metrics)
+                            self._best_model_path = self._last_checkpoint_path
+                        else:
+                            self._patience_counter += 1
+
+                        # Early stopping
+                        if (
+                            self.config.early_stopping_patience > 0
+                            and self._patience_counter >= self.config.early_stopping_patience
+                        ):
+                            logger.info(
+                                "Early stopping: no improvement for %d evals",
+                                self._patience_counter,
+                                extra={"tag": "TRAIN"},
+                            )
+                            self._early_stopped = True
+                            self._is_training = False
+                            if on_progress:
+                                _emit_progress(
+                                    steps_per_epoch=steps_per_epoch,
+                                    train_loss=float(metrics["loss"]),
+                                    eval_loss=float(eval_metrics["eval_loss"]),
+                                    done=True,
+                                    done_reason=f"early_stopping:{self._patience_counter}",
+                                )
+                            break
 
                     if is_main and on_progress:
                         _emit_progress(
@@ -1117,7 +1210,7 @@ class SloughGPTTrainer:
             if self.config.max_steps and self.global_step >= self.config.max_steps:
                 break
 
-        if is_main:
+        if is_main and not self._early_stopped:
             self.save_checkpoint({"loss": 0.0}, is_final=True)
             if self._experiment_tracker is not None:
                 self._experiment_tracker.log_metrics(
@@ -1136,8 +1229,10 @@ class SloughGPTTrainer:
             final_loss = self._last_train_loss
         checkpoint_name = ""
         model_path = ""
-        if self._last_checkpoint_path:
-            p = Path(self._last_checkpoint_path)
+        # Prefer best model path (set on eval improvement) over last checkpoint
+        best = self._best_model_path or self._last_checkpoint_path
+        if best:
+            p = Path(best)
             checkpoint_name = p.name
             model_path = str(p)
 
@@ -1147,7 +1242,8 @@ class SloughGPTTrainer:
             global_step=self.global_step,
             final_loss=final_loss,
             total_steps=self.global_step,
-            model_path=model_path,
+            epochs_completed=self.current_epoch + 1,
+            model_path=self._best_model_path or model_path,
             checkpoint_name=checkpoint_name,
         )
 
@@ -1247,7 +1343,8 @@ class SloughGPTTrainer:
             output_path = path + ".safetensors"
             export_to_safetensors(self.model, output_path, metadata)
 
-        logger.info("Model saved to %s (%s)", output_path, format)
+        logger.info("Model saved to %s (%s)", output_path, format,
+            extra={"tag": "TRAIN"},)
 
     def generate(self, prompt: str, max_tokens: int = 200, temperature: float = 0.8) -> str:
         """Generate text."""

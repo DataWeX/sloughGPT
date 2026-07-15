@@ -191,7 +191,8 @@ class TaskQueue:
             self._pending.append(task.id)
             self._sort_pending()
             logger.info("TaskQueue[%s]: retrying %s (attempt %d)",
-                       self.name, task_id, task.retries)
+                       self.name, task_id, task.retries,
+                       extra={"tag": "INFRA"})
         else:
             self._completed.append(task_id)
 
@@ -318,7 +319,8 @@ class TaskQueue:
         try:
             self.save()
         except Exception as e:
-            logger.warning("TaskQueue[%s]: persist failed: %s", self.name, e)
+            logger.warning("TaskQueue[%s]: persist failed: %s", self.name, e,
+                extra={"tag": "INFRA"})
 
     def _notify_callbacks(self, task: Task) -> None:
         """Notify completion callbacks."""
@@ -326,4 +328,5 @@ class TaskQueue:
             try:
                 cb(task)
             except Exception as e:
-                logger.warning("TaskQueue[%s]: callback error: %s", self.name, e)
+                logger.warning("TaskQueue[%s]: callback error: %s", self.name, e,
+                    extra={"tag": "INFRA"})

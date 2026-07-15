@@ -97,18 +97,22 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
     async def initialize(self) -> None:
         """Initialize deployment manager"""
         try:
-            self.logger.info("Initializing Deployment Manager...")
+            self.logger.info("Initializing Deployment Manager...",
+                extra={"tag": "INFRA"})
             self.is_initialized = True
-            self.logger.info("Deployment Manager initialized successfully")
+            self.logger.info("Deployment Manager initialized successfully",
+                extra={"tag": "INFRA"})
 
         except Exception as e:
-            self.logger.error(f"Failed to initialize Deployment Manager: {e}")
+            self.logger.error(f"Failed to initialize Deployment Manager: {e}",
+                extra={"tag": "INFRA"})
             raise ComponentException(f"Deployment Manager initialization failed: {e}")
 
     async def shutdown(self) -> None:
         """Shutdown deployment manager"""
         try:
-            self.logger.info("Shutting down Deployment Manager...")
+            self.logger.info("Shutting down Deployment Manager...",
+                extra={"tag": "INFRA"})
 
             # Cancel active deployments
             for deployment_id, task in self.active_deployments.items():
@@ -119,15 +123,18 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
                     pass
 
             self.is_initialized = False
-            self.logger.info("Deployment Manager shutdown successfully")
+            self.logger.info("Deployment Manager shutdown successfully",
+                extra={"tag": "INFRA"})
 
         except Exception as e:
-            self.logger.error(f"Failed to shutdown Deployment Manager: {e}")
+            self.logger.error(f"Failed to shutdown Deployment Manager: {e}",
+                extra={"tag": "INFRA"})
             raise ComponentException(f"Deployment Manager shutdown failed: {e}")
 
     async def scale(self, service_id: str, replicas: int) -> bool:
         """Scale a service"""
-        self.logger.info(f"Scaling service {service_id} to {replicas} replicas")
+        self.logger.info(f"Scaling service {service_id} to {replicas} replicas",
+            extra={"tag": "INFRA"})
         return True
 
     async def deploy(self, config: Dict[str, Any], environment: str) -> str:
@@ -154,11 +161,13 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
             task = asyncio.create_task(self._execute_deployment(deployment))
             self.active_deployments[deployment_id] = task
 
-            self.logger.info(f"Started deployment {deployment_id} to {environment}")
+            self.logger.info(f"Started deployment {deployment_id} to {environment}",
+                extra={"tag": "INFRA"})
             return deployment_id
 
         except Exception as e:
-            self.logger.error(f"Failed to start deployment: {e}")
+            self.logger.error(f"Failed to start deployment: {e}",
+                extra={"tag": "INFRA"})
             raise ComponentException(f"Deployment start failed: {e}")
 
     async def get_deployment_status(self, deployment_id: str) -> Dict[str, Any]:
@@ -203,11 +212,13 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
 
             self.stats["rolled_back_deployments"] += 1
 
-            self.logger.info(f"Rolled back deployment {deployment_id}")
+            self.logger.info(f"Rolled back deployment {deployment_id}",
+                extra={"tag": "INFRA"})
             return True
 
         except Exception as e:
-            self.logger.error(f"Failed to rollback deployment {deployment_id}: {e}")
+            self.logger.error(f"Failed to rollback deployment {deployment_id}: {e}",
+                extra={"tag": "INFRA"})
             raise ComponentException(f"Rollback failed: {e}")
 
     async def get_deployment_history(
@@ -262,7 +273,8 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
             deployment.completed_at = time.time()
             self.stats["successful_deployments"] += 1
 
-            self.logger.info(f"Deployment {deployment.deployment_id} completed successfully")
+            self.logger.info(f"Deployment {deployment.deployment_id} completed successfully",
+                extra={"tag": "INFRA"})
 
         except Exception as e:
             # Mark as failed
@@ -271,7 +283,8 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
             deployment.error_message = str(e)
             self.stats["failed_deployments"] += 1
 
-            self.logger.error(f"Deployment {deployment.deployment_id} failed: {e}")
+            self.logger.error(f"Deployment {deployment.deployment_id} failed: {e}",
+                extra={"tag": "INFRA"})
 
         finally:
             # Remove from active deployments
@@ -281,17 +294,20 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
     async def _wait_for_approval(self, deployment: Deployment) -> None:
         """Wait for deployment approval"""
         # Placeholder for approval process
-        self.logger.info(f"Deployment {deployment.deployment_id} requires approval")
+        self.logger.info(f"Deployment {deployment.deployment_id} requires approval",
+            extra={"tag": "INFRA"})
         await asyncio.sleep(1)  # Simulate approval wait
 
     async def _prepare_deployment(self, deployment: Deployment) -> None:
         """Prepare deployment environment"""
-        self.logger.info(f"Preparing deployment {deployment.deployment_id}")
+        self.logger.info(f"Preparing deployment {deployment.deployment_id}",
+            extra={"tag": "INFRA"})
         await asyncio.sleep(2)  # Simulate preparation
 
     async def _deploy_application(self, deployment: Deployment) -> None:
         """Deploy the application"""
-        self.logger.info(f"Deploying application for {deployment.deployment_id}")
+        self.logger.info(f"Deploying application for {deployment.deployment_id}",
+            extra={"tag": "INFRA"})
         await asyncio.sleep(5)  # Simulate deployment
 
     async def _run_health_checks(self, deployment: Deployment) -> None:
@@ -299,7 +315,8 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
         env_config = self.environment_configs[deployment.environment]
         timeout = env_config["health_check_timeout"]
 
-        self.logger.info(f"Running health checks for {deployment.deployment_id}")
+        self.logger.info(f"Running health checks for {deployment.deployment_id}",
+            extra={"tag": "INFRA"})
         await asyncio.sleep(min(timeout, 10))  # Simulate health checks
 
 

@@ -716,18 +716,21 @@ def detect_architecture(state_dict: Dict[str, torch.Tensor]) -> Optional[TensorM
 
     max_score = max(scores.values())
     if max_score == 0:
-        logger.warning("Could not detect architecture, defaulting to SloughGPT")
+        logger.warning("Could not detect architecture, defaulting to SloughGPT",
+            extra={"tag": "TRAIN"},)
         return SloughGPTMapping()
 
     detected = max(scores, key=scores.get)
-    logger.info(f"Detected architecture: {detected} (score: {max_score})")
+    logger.info(f"Detected architecture: {detected} (score: {max_score})",
+        extra={"tag": "TRAIN"},)
     return ARCHITECTURE_MAPPINGS.get(detected, SloughGPTMapping())
 
 
 def register_architecture(name: str, mapping: TensorMapping) -> None:
     """Register a custom architecture mapping."""
     ARCHITECTURE_MAPPINGS[name] = mapping
-    logger.info(f"Registered custom architecture: {name}")
+    logger.info(f"Registered custom architecture: {name}",
+        extra={"tag": "TRAIN"},)
 
 
 def get_tensor_mapping(model: nn.Module) -> Dict[str, str]:
@@ -883,7 +886,8 @@ def export_to_gguf(
     writer.write_tensors_to_file()
     writer.flush()
 
-    logger.info(f"Exported GGUF ({mapping.name}): {output_path}")
+    logger.info(f"Exported GGUF ({mapping.name}): {output_path}",
+        extra={"tag": "TRAIN"},)
     return output_path
 
 
@@ -911,7 +915,8 @@ def quantize_gguf(input_path: str, output_path: str, quantization: str = "Q4_K_M
 
         llama_quantize = shutil.which("llama-quantize")
         if llama_quantize is None:
-            logger.warning("llama-quantize not found. Install llama.cpp")
+            logger.warning("llama-quantize not found. Install llama.cpp",
+                extra={"tag": "TRAIN"},)
             return input_path
 
         result = subprocess.run(
@@ -919,13 +924,16 @@ def quantize_gguf(input_path: str, output_path: str, quantization: str = "Q4_K_M
             capture_output=True, text=True
         )
         if result.returncode == 0:
-            logger.info(f"Quantized: {input_path} -> {output_path}")
+            logger.info(f"Quantized: {input_path} -> {output_path}",
+                extra={"tag": "TRAIN"},)
             return output_path
         else:
-            logger.error(f"Quantization failed: {result.stderr}")
+            logger.error(f"Quantization failed: {result.stderr}",
+                extra={"tag": "TRAIN"},)
             return input_path
     except Exception as e:
-        logger.error(f"Quantization error: {e}")
+        logger.error(f"Quantization error: {e}",
+            extra={"tag": "TRAIN"},)
         return input_path
 
 

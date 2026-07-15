@@ -272,7 +272,8 @@ class MorphTokenizer:
             eos = post["end_token_id"]
 
         logger.info("Loaded tokenizer %s (vocab=%d, merges=%d, byte_level=%s, byte_fallback=%s)",
-                     model_id, len(vocab), len(merges), byte_level, byte_fallback)
+                     model_id, len(vocab), len(merges), byte_level, byte_fallback,
+                     extra={"tag": "INFRA"})
 
         instance = cls(vocab=vocab, merges=merges, eos_token_id=eos,
                        byte_level=byte_level, byte_fallback=byte_fallback,
@@ -299,7 +300,8 @@ class MorphTokenizer:
         if chat_tpl:
             instance._chat_template = chat_tpl
             instance._chat_template_jinja = True
-            logger.info("Loaded chat template for %s", model_id)
+            logger.info("Loaded chat template for %s", model_id,
+                extra={"tag": "INFRA"})
 
         return instance
 

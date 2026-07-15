@@ -98,7 +98,7 @@ async def start_wandb_server_background(
     try:
         import wandb  # noqa: F401
     except ImportError:
-        logger.warning("wandb not installed; set MAN_WANDB_SERVER=0 or pip install wandb")
+        logger.warning("wandb not installed; set MAN_WANDB_SERVER=0 or pip install wandb", extra={"tag": "INFRA"})
         return None
 
     interval = float(get_config().tracking.wandb_server_interval)

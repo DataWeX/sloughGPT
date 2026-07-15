@@ -54,7 +54,8 @@ def hf_model_loader(
             model.resize_token_embeddings(len(tokenizer))
             model.generation_config.pad_token_id = tokenizer.pad_token_id
 
-    logger.info("hf_model_loader[%s]: loaded (device=%s)", model_id, resolved_device)
+    logger.info("hf_model_loader[%s]: loaded (device=%s)", model_id, resolved_device,
+        extra={"tag": "INFRA"})
     return model, tokenizer
 
 

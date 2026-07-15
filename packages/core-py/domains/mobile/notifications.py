@@ -65,13 +65,13 @@ class PushNotificationService:
                 for token_str, device_data in data.items():
                     self._devices[token_str] = DeviceToken(**device_data)
         except Exception as e:
-            logger.warning(f"Failed to load devices: {e}")
+            logger.warning(f"Failed to load devices: {e}", extra={"tag": "MODEL"})
 
         try:
             if _HISTORY_FILE.exists():
                 self._history = json.loads(_HISTORY_FILE.read_text())
         except Exception as e:
-            logger.warning(f"Failed to load notification history: {e}")
+            logger.warning(f"Failed to load notification history: {e}", extra={"tag": "MODEL"})
 
     def _save_devices(self):
         """Persist devices to disk."""
@@ -79,14 +79,14 @@ class PushNotificationService:
             data = {k: asdict(v) for k, v in self._devices.items()}
             _DEVICES_FILE.write_text(json.dumps(data, indent=2))
         except Exception as e:
-            logger.warning(f"Failed to save devices: {e}")
+            logger.warning(f"Failed to save devices: {e}", extra={"tag": "MODEL"})
 
     def _save_history(self):
         """Persist notification history to disk."""
         try:
             _HISTORY_FILE.write_text(json.dumps(self._history[-200:], indent=2))
         except Exception as e:
-            logger.warning(f"Failed to save history: {e}")
+            logger.warning(f"Failed to save history: {e}", extra={"tag": "MODEL"})
 
     def register_device(
         self,
@@ -125,7 +125,7 @@ class PushNotificationService:
         self._devices[token] = device
         self._save_devices()
 
-        logger.info(f"Registered device: {token[:20]}... ({platform})")
+        logger.info(f"Registered device: {token[:20]}... ({platform})", extra={"tag": "MODEL"})
         return {"status": "registered", "token": token[:20] + "..."}
 
     def unregister_device(self, token: str) -> bool:
@@ -228,10 +228,10 @@ class PushNotificationService:
         except ImportError:
             # httpx not installed — log the notification
             sent_count = len(messages)
-            logger.info(f"Notification (httpx unavailable, logged): {payload.title} → {len(messages)} devices")
+            logger.info(f"Notification (httpx unavailable, logged): {payload.title} → {len(messages)} devices", extra={"tag": "MODEL"})
         except Exception as e:
             errors.append(str(e))
-            logger.error(f"Failed to send notifications: {e}")
+            logger.error(f"Failed to send notifications: {e}", extra={"tag": "MODEL"})
 
         # Record in history
         record = {

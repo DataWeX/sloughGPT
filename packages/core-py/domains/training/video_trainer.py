@@ -103,7 +103,8 @@ class VideoCaptionTrainer:
         self._vocab["<EOS>"] = len(self._vocab)
         self._rev_vocab = {v: k for k, v in self._vocab.items()}
         self.decoder.vocab_size = max(1, len(self._vocab))
-        logger.info("Built vocab: %d tokens", len(self._vocab))
+        logger.info("Built vocab: %d tokens", len(self._vocab),
+            extra={"tag": "TRAIN"},)
 
     def encode_text(self, text: str) -> List[int]:
         """Encode text to token IDs."""
@@ -137,10 +138,12 @@ class VideoCaptionTrainer:
                     continue
                 entry = json.loads(line)
                 if "video_path" not in entry or "caption" not in entry:
-                    logger.warning("Skipping entry missing video_path or caption: %s", line[:80])
+                    logger.warning("Skipping entry missing video_path or caption: %s", line[:80],
+                        extra={"tag": "TRAIN"},)
                     continue
                 entries.append(entry)
-        logger.info("Loaded %d video-caption pairs from %s", len(entries), data_path)
+        logger.info("Loaded %d video-caption pairs from %s", len(entries), data_path,
+            extra={"tag": "TRAIN"},)
         return entries
 
     def _extract_frames(self, video_path: str) -> Optional[np.ndarray]:
@@ -157,7 +160,8 @@ class VideoCaptionTrainer:
             stacked = np.stack(frames, axis=0)  # (N, 224, 224, 3)
             return stacked.reshape(1, *stacked.shape)  # (1, N, 224, 224, 3)
         except Exception as e:
-            logger.warning("Failed to extract frames from %s: %s", video_path, e)
+            logger.warning("Failed to extract frames from %s: %s", video_path, e,
+                extra={"tag": "TRAIN"},)
             return None
 
     def _encode_video(self, frames_np: np.ndarray) -> Tensor:
@@ -224,7 +228,8 @@ class VideoCaptionTrainer:
         output_dir = Path(output_dir) if output_dir else DEFAULT_OUTPUT_DIR
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        logger.info("Starting video training: %d entries, %d epochs", len(entries), epochs)
+        logger.info("Starting video training: %d entries, %d epochs", len(entries), epochs,
+            extra={"tag": "TRAIN"},)
         t0 = time.time()
 
         for epoch in range(epochs):
@@ -241,7 +246,8 @@ class VideoCaptionTrainer:
                 for entry in batch:
                     frames = self._extract_frames(entry["video_path"])
                     if frames is None:
-                        logger.warning("Skipping video: %s", entry["video_path"])
+                        logger.warning("Skipping video: %s", entry["video_path"],
+                            extra={"tag": "TRAIN"},)
                         continue
 
                     video_embed = self._encode_video(frames)
@@ -279,10 +285,12 @@ class VideoCaptionTrainer:
                         "Epoch %d/%d step %d/%d loss=%.4f (%.1fs)",
                         epoch + 1, epochs, step, total_steps, avg_loss,
                         time.time() - t0,
+                        extra={"tag": "TRAIN"},
                     )
 
             epoch_avg = np.mean(epoch_losses) if epoch_losses else float("inf")
-            logger.info("Epoch %d/%d complete — avg loss: %.4f", epoch + 1, epochs, epoch_avg)
+            logger.info("Epoch %d/%d complete — avg loss: %.4f", epoch + 1, epochs, epoch_avg,
+                extra={"tag": "TRAIN"},)
 
             if epoch_avg < best_loss:
                 best_loss = epoch_avg
@@ -305,7 +313,8 @@ class VideoCaptionTrainer:
 
         self._save_checkpoint(output_dir / "checkpoints", "final", epochs, step, best_loss)
 
-        logger.info("Video training complete in %.1fs: %s", elapsed, result["status"])
+        logger.info("Video training complete in %.1fs: %s", elapsed, result["status"],
+            extra={"tag": "TRAIN"},)
         return result
 
     def _all_params(self):
@@ -343,7 +352,8 @@ class VideoCaptionTrainer:
                 "max_frames": self.max_frames,
             }, f)
 
-        logger.info("Checkpoint saved: %s (loss=%.4f, step=%d)", ckpt_path, loss, step)
+        logger.info("Checkpoint saved: %s (loss=%.4f, step=%d)", ckpt_path, loss, step,
+            extra={"tag": "TRAIN"},)
 
     def load_checkpoint(self, path: str):
         """Load training checkpoint."""
@@ -366,7 +376,8 @@ class VideoCaptionTrainer:
                 p.data = ckpt[key].copy()
 
         self._trained = True
-        logger.info("Checkpoint loaded: %s (%d params)", path, len(params))
+        logger.info("Checkpoint loaded: %s (%d params)", path, len(params),
+            extra={"tag": "TRAIN"},)
 
     def generate(self, video_path: str, max_len: int = 50, temperature: float = 0.8) -> str:
         """Generate a caption for a video.

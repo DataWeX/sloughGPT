@@ -443,7 +443,7 @@ class Agent:
                 return result
             return str(result)
         except Exception as e:
-            logger.warning("Inference failed: %s", e)
+            logger.warning("Inference failed: %s", e, extra={"tag": "MODEL"})
             return self._compose_response(request, [])
 
     def _get_session(
@@ -536,7 +536,7 @@ class Agent:
                 if isinstance(item, dict) and "tool" in item
             ]
         except Exception as e:
-            logger.warning("LLM planning failed: %s", e)
+            logger.warning("LLM planning failed: %s", e, extra={"tag": "MODEL"})
             return self._plan_with_keywords(request)
 
     def _compose_response(

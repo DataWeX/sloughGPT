@@ -459,12 +459,14 @@ def distill_gpt2_to_slo(
         (trained_model, metadata_dict)
     """
     config = config or DistillConfig()
-    logger.info("Loading GPT-2 teacher...")
+    logger.info("Loading GPT-2 teacher...",
+        extra={"tag": "TRAIN"},)
     rw, teacher_arch, tok_vocab = _load_gpt2_numpy()
     stoi = tok_vocab["stoi"]
     itos = tok_vocab["itos"]
     vocab_size = tok_vocab["vocab_size"]
-    logger.info("Teacher loaded: %d vocab, %d layers", vocab_size, teacher_arch.n_layers)
+    logger.info("Teacher loaded: %d vocab, %d layers", vocab_size, teacher_arch.n_layers,
+        extra={"tag": "TRAIN"},)
 
     # Create or resume student
     start_epoch = 0
@@ -472,7 +474,8 @@ def distill_gpt2_to_slo(
     best_loss = float("inf")
 
     if config.resume_checkpoint and Path(config.resume_checkpoint).exists():
-        logger.info("Resuming from checkpoint: %s", config.resume_checkpoint)
+        logger.info("Resuming from checkpoint: %s", config.resume_checkpoint,
+            extra={"tag": "TRAIN"},)
         from domains.training.slonet import import_from_sou
         student = import_from_sou(config.resume_checkpoint)
 
@@ -483,10 +486,12 @@ def distill_gpt2_to_slo(
             start_step = meta.get("step", config.resume_step)
             best_loss = meta.get("best_loss", float("inf"))
             logger.info("Resumed at epoch %d, step %d, best_loss=%.4f",
-                        start_epoch, start_step, best_loss)
+                        start_epoch, start_step, best_loss,
+                        extra={"tag": "TRAIN"})
     else:
         logger.info("Creating student: n_embed=%d, n_layer=%d, n_head=%d",
-                    config.n_embed, config.n_layer, config.n_head)
+                    config.n_embed, config.n_layer, config.n_head,
+                    extra={"tag": "TRAIN"})
         student = SloTransformer(
             vocab_size=vocab_size,
             n_embed=config.n_embed,
@@ -504,7 +509,8 @@ def distill_gpt2_to_slo(
 
     # Dataset
     dataset = TextDataset(text, config.block_size, stoi)
-    logger.info("Dataset: %d chars, %d samples", len(text), len(dataset))
+    logger.info("Dataset: %d chars, %d samples", len(text), len(dataset),
+        extra={"tag": "TRAIN"},)
     optimizer = SloAdam(lr=config.lr)
     rng = np.random.default_rng(42)
 
@@ -515,11 +521,13 @@ def distill_gpt2_to_slo(
     # Build teacher token map for fast lookup
     # Teacher: forward_fast needs token_ids as a list
     logger.info("Starting distillation: %d epochs, %d total steps (starting at epoch %d, step %d)",
-                config.epochs, total_steps, start_epoch, start_step)
+                config.epochs, total_steps, start_epoch, start_step,
+                extra={"tag": "TRAIN"})
 
     for epoch in range(start_epoch, config.epochs):
         if cancel_event and cancel_event.is_set():
-            logger.info("Training cancelled")
+            logger.info("Training cancelled",
+                extra={"tag": "TRAIN"},)
             break
 
         epoch_loss = 0.0
@@ -591,7 +599,8 @@ def distill_gpt2_to_slo(
             if step % config.log_interval == 0:
                 avg = epoch_loss / epoch_steps
                 logger.info("step %d/%d loss=%.4f (hard=%.4f soft=%.4f)",
-                            step, total_steps, total_loss, hard_loss, soft_loss)
+                            step, total_steps, total_loss, hard_loss, soft_loss,
+                            extra={"tag": "TRAIN"})
                 if on_step:
                     on_step(step, total_loss, epoch)
 
@@ -600,13 +609,15 @@ def distill_gpt2_to_slo(
                 avg_loss = epoch_loss / epoch_steps
                 if avg_loss < best_loss:
                     best_loss = avg_loss
-                    logger.info("New best loss: %.4f", best_loss)
+                    logger.info("New best loss: %.4f", best_loss,
+                        extra={"tag": "TRAIN"},)
 
         if cancel_event and cancel_event.is_set():
             break
 
         avg_epoch = epoch_loss / max(epoch_steps, 1)
-        logger.info("Epoch %d/%d avg_loss=%.4f", epoch + 1, config.epochs, avg_epoch)
+        logger.info("Epoch %d/%d avg_loss=%.4f", epoch + 1, config.epochs, avg_epoch,
+            extra={"tag": "TRAIN"},)
 
     # Save checkpoint
     ckpt_dir = Path(config.checkpoint_dir)
@@ -629,7 +640,8 @@ def distill_gpt2_to_slo(
     )
 
     # Run evaluation
-    logger.info("Running evaluation...")
+    logger.info("Running evaluation...",
+        extra={"tag": "TRAIN"},)
     evaluator = DistillEvaluator(
         teacher_rw=rw,
         teacher_arch=teacher_arch,
@@ -657,8 +669,10 @@ def distill_gpt2_to_slo(
         "bleu_vs_teacher": str(eval_result.bleu_vs_teacher),
     }
 
-    logger.info("Distillation complete. Checkpoint: %s", ckpt_path)
-    logger.info("Eval: perplexity=%.2f, bleu=%.1f%%", eval_result.perplexity, eval_result.bleu_vs_teacher)
+    logger.info("Distillation complete. Checkpoint: %s", ckpt_path,
+        extra={"tag": "TRAIN"},)
+    logger.info("Eval: perplexity=%.2f, bleu=%.1f%%", eval_result.perplexity, eval_result.bleu_vs_teacher,
+        extra={"tag": "TRAIN"},)
     return student, metadata
 
 

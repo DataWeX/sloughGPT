@@ -94,7 +94,8 @@ class MobileTrainingStore:
                 model=p.get("model", ""),
             )
             ids.append(doc_id)
-        logger.info("inserted %d training pairs", len(ids))
+        logger.info("inserted %d training pairs", len(ids),
+            extra={"tag": "TRAIN"},)
         return ids
 
     def get_pair(self, pair_id: str) -> Optional[Dict[str, Any]]:

@@ -75,8 +75,10 @@ class HuggingFaceLocalLoader:
             "HF_CACHE_DIR", str(Path.home() / ".cache" / "huggingface")
         )
 
-        logger.info("Loading model: %s", self.config.model)
-        logger.info("Device: %s", self.config.device)
+        logger.info("Loading model: %s", self.config.model,
+            extra={"tag": "TRAIN"},)
+        logger.info("Device: %s", self.config.device,
+            extra={"tag": "TRAIN"},)
 
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.config.model,
@@ -112,7 +114,8 @@ class HuggingFaceLocalLoader:
                 self.model = self.model.to(self.config.device)
 
         self.model.eval()
-        logger.info("Model loaded successfully!")
+        logger.info("Model loaded successfully!",
+            extra={"tag": "TRAIN"},)
 
     def generate(
         self,
@@ -195,10 +198,12 @@ class HuggingFaceLocalClient(HuggingFaceLocalLoader):
 def download_model(model: str, cache_dir: Optional[str] = None) -> str:
     """Download a model without loading it."""
     cache_dir = cache_dir or os.getenv("HF_CACHE_DIR", str(Path.home() / ".cache" / "huggingface"))
-    logger.info("Downloading %s...", model)
+    logger.info("Downloading %s...", model,
+        extra={"tag": "TRAIN"},)
     AutoTokenizer.from_pretrained(model, cache_dir=cache_dir)
     AutoModelForCausalLM.from_pretrained(model, cache_dir=cache_dir)
-    logger.info("Downloaded to %s", cache_dir)
+    logger.info("Downloaded to %s", cache_dir,
+        extra={"tag": "TRAIN"},)
     return cache_dir
 
 

@@ -136,6 +136,7 @@ class EventBus:
                     "Event handler failed for %s on %s",
                     getattr(sub.handler, "__name__", "?"),
                     event,
+                    extra={"tag": "INFRA"},
                 )
             if sub.once:
                 self.off(event, sub.handler)
@@ -168,12 +169,14 @@ class EventBus:
                         "Ignored async handler %s on %s in sync emit",
                         getattr(sub.handler, "__name__", "?"),
                         event,
+                        extra={"tag": "INFRA"},
                     )
             except Exception:
                 logger.exception(
                     "Sync handler failed for %s on %s",
                     getattr(sub.handler, "__name__", "?"),
                     event,
+                    extra={"tag": "INFRA"},
                 )
             if sub.once:
                 self.off(event, sub.handler)
@@ -206,7 +209,7 @@ class EventBus:
                         import warnings
                         warnings.warn("async handler passed to sync replay()")
                 except Exception:
-                    logger.exception("Replay handler failed for %s", evt.name)
+                    logger.exception("Replay handler failed for %s", evt.name, extra={"tag": "INFRA"})
         return past
 
     def _store_history(self, event: str, evt: Event):

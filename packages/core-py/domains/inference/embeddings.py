@@ -128,7 +128,7 @@ class SentenceTransformerEmbedder(BaseEmbedder):
         try:
             from sentence_transformers import SentenceTransformer
             self.model = SentenceTransformer(model, device=device)
-            logger.info("Loaded sentence-transformers: %s on %s", model, device)
+            logger.info("Loaded sentence-transformers: %s on %s", model, device, extra={"tag": "INF"})
         except ImportError:
             raise ImportError(
                 "pip install sentence-transformers\n"
@@ -285,7 +285,7 @@ class Embedder:
                 model_name = model or "sentence-transformers/all-MiniLM-L6-v2"
                 self._impl = SentenceTransformerEmbedder(model_name, **kwargs)
             except ImportError:
-                logger.warning("sentence-transformers not available, using in-memory")
+                logger.warning("sentence-transformers not available, using in-memory", extra={"tag": "INF"})
                 self._impl = InMemoryEmbedder(dimension=dimension)
 
         elif provider == "openai":

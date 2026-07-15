@@ -226,12 +226,14 @@ def convert_to_slnc(
         models_dir.mkdir(exist_ok=True)
         output_path = str(models_dir / f"{model_id.replace('/', '_')}.slnc")
 
-    logger.info("Converting %s → %s", model_id, output_path)
+    logger.info("Converting %s → %s", model_id, output_path,
+        extra={"tag": "INFRA"})
     logger.info(
         "Layout: %d layers, %d bytes/block, %d non-block tensors",
         config["n_layer"],
         layout["block_size"],
         len(layout["non_block_tensors"]),
+        extra={"tag": "INFRA"},
     )
 
     # Load source weights
@@ -301,6 +303,7 @@ def convert_to_slnc(
         total_size / 1e6,
         config["n_layer"],
         layout["block_size"],
+        extra={"tag": "INFRA"},
     )
     return output_path
 

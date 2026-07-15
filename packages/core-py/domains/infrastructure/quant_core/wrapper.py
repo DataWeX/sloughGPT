@@ -54,7 +54,8 @@ def _build_one(name: str) -> bool:
     dylib = _DYLIBS[name]
     try:
         if not os.path.exists(src):
-            logger.warning("quant_core: source not found: %s", src)
+            logger.warning("quant_core: source not found: %s", src,
+                extra={"tag": "INFRA"})
             return False
         result = subprocess.run(
             ["gcc", "-O3", "-mavx2", "-shared", "-fPIC",
@@ -65,15 +66,19 @@ def _build_one(name: str) -> bool:
             logger.warning(
                 "quant_core: %s compilation failed (stderr):\n%s",
                 name, result.stderr,
+                extra={"tag": "INFRA"},
             )
             return False
-        logger.info("quant_core: compiled %s", dylib)
+        logger.info("quant_core: compiled %s", dylib,
+            extra={"tag": "INFRA"})
         return True
     except FileNotFoundError:
-        logger.warning("quant_core: gcc/clang not found — using numpy fallback")
+        logger.warning("quant_core: gcc/clang not found — using numpy fallback",
+            extra={"tag": "INFRA"})
         return False
     except Exception as exc:
-        logger.warning("quant_core: %s build error (%s) — using numpy fallback", name, exc)
+        logger.warning("quant_core: %s build error (%s) — using numpy fallback", name, exc,
+            extra={"tag": "INFRA"})
         return False
 
 
@@ -116,7 +121,8 @@ def _load_lib():
         _LIB.matmul_int8.restype = None
         has_int8 = True
     except Exception as exc:
-        logger.warning("quant_core: int8 lib load failed (%s)", exc)
+        logger.warning("quant_core: int8 lib load failed (%s)", exc,
+            extra={"tag": "INFRA"})
         has_int8 = False
 
     # Load int4 library (separate dylib)
@@ -136,11 +142,13 @@ def _load_lib():
         _LIB.matmul_int4 = _lib4.matmul_int4
         has_int4 = True
     except Exception as exc:
-        logger.info("quant_core: matmul_int4 not available (%s)", exc)
+        logger.info("quant_core: matmul_int4 not available (%s)", exc,
+            extra={"tag": "INFRA"})
 
     if has_int4 or has_int8:
         return True
-    logger.warning("quant_core: no library loaded")
+    logger.warning("quant_core: no library loaded",
+        extra={"tag": "INFRA"})
     return False
 
 
@@ -235,8 +243,11 @@ def _fallback_int4(A: np.ndarray, B_packed: np.ndarray, K: int) -> np.ndarray:
 HAS_AVX2 = _load_lib()
 if HAS_AVX2:
     if hasattr(_LIB, "matmul_int4"):
-        logger.info("quant_core: AVX2 int8 + int4 GEMM loaded")
+        logger.info("quant_core: AVX2 int8 + int4 GEMM loaded",
+            extra={"tag": "INFRA"})
     else:
-        logger.info("quant_core: AVX2 int8 GEMM loaded")
+        logger.info("quant_core: AVX2 int8 GEMM loaded",
+            extra={"tag": "INFRA"})
 else:
-    logger.info("quant_core: using numpy fallback for all quantized GEMM")
+    logger.info("quant_core: using numpy fallback for all quantized GEMM",
+        extra={"tag": "INFRA"})

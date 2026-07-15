@@ -505,24 +505,33 @@ class SloBPE:
 
     def show_merges(self, top_n: int = 20) -> None:
         """Print the first N learned merges in order."""
-        logger.info("Top %d BPE merges (learned order):", top_n)
-        logger.info("%4s  %-12s  %-12s  %-20s", "#", "Left", "Right", "Token")
-        logger.info("-" * 52)
+        logger.info("Top %d BPE merges (learned order):", top_n,
+            extra={"tag": "TRAIN"},)
+        logger.info("%4s  %-12s  %-12s  %-20s", "#", "Left", "Right", "Token",
+            extra={"tag": "TRAIN"},)
+        logger.info("-" * 52,
+            extra={"tag": "TRAIN"},)
         for i, (left, right) in enumerate(self.merges[:top_n]):
             token = left + right
-            logger.info("%4d  %-12s  %-12s  %-20s", i + 1, left, right, token)
+            logger.info("%4d  %-12s  %-12s  %-20s", i + 1, left, right, token,
+                extra={"tag": "TRAIN"},)
         if len(self.merges) > top_n:
-            logger.info("  ... and %d more merges", len(self.merges) - top_n)
+            logger.info("  ... and %d more merges", len(self.merges) - top_n,
+                extra={"tag": "TRAIN"},)
 
     def show_vocab(self, top_n: int = 30) -> None:
         """Print the first N vocabulary entries."""
-        logger.info("Vocabulary (showing %d of %d):", min(top_n, self.vocab_size), self.vocab_size)
-        logger.info("%4s  %-20s", "ID", "Token")
-        logger.info("-" * 26)
+        logger.info("Vocabulary (showing %d of %d):", min(top_n, self.vocab_size), self.vocab_size,
+            extra={"tag": "TRAIN"},)
+        logger.info("%4s  %-20s", "ID", "Token",
+            extra={"tag": "TRAIN"},)
+        logger.info("-" * 26,
+            extra={"tag": "TRAIN"},)
         for i, t in enumerate(self.vocab[:top_n]):
             display = t.replace("\n", "\\n").replace("\t", "\\t")
             marker = " [SPECIAL]" if t in self.SPECIAL_TOKENS else ""
-            logger.info("%4d  %-20s%s", i, display, marker)
+            logger.info("%4d  %-20s%s", i, display, marker,
+                extra={"tag": "TRAIN"},)
 
     # ------------------------------------------------------------------
     # Special token registry
@@ -1442,12 +1451,16 @@ class SloUnigram:
              for tid, t in enumerate(self.vocab)],
             key=lambda x: -x[2],
         )
-        logger.info("Top %d tokens (by score):", min(top_n, len(scored)))
-        logger.info("%4s  %-24s  %-10s", "ID", "Token", "Log-P")
-        logger.info("-" * 42)
+        logger.info("Top %d tokens (by score):", min(top_n, len(scored)),
+            extra={"tag": "TRAIN"},)
+        logger.info("%4s  %-24s  %-10s", "ID", "Token", "Log-P",
+            extra={"tag": "TRAIN"},)
+        logger.info("-" * 42,
+            extra={"tag": "TRAIN"},)
         for tid, t, lp in scored[:top_n]:
             marker = " [SPECIAL]" if t in self.SPECIAL_TOKENS else ""
-            logger.info("%4d  %-24s  %.4f%s", tid, t, lp, marker)
+            logger.info("%4d  %-24s  %.4f%s", tid, t, lp, marker,
+                extra={"tag": "TRAIN"},)
 
     # ------------------------------------------------------------------
     # Helpers

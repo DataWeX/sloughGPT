@@ -99,7 +99,8 @@ class WorkerPool:
             asyncio.create_task(self._worker_loop(i))
             for i in range(self.num_workers)
         ]
-        logger.info("Worker pool started with %d workers", self.num_workers)
+        logger.info("Worker pool started with %d workers", self.num_workers,
+            extra={"tag": "INFRA"})
 
     async def stop(self, timeout: float = 5.0):
         self._running = False
@@ -111,7 +112,8 @@ class WorkerPool:
             for p in pending:
                 p.cancel()
         self._workers.clear()
-        logger.info("Worker pool stopped")
+        logger.info("Worker pool stopped",
+            extra={"tag": "INFRA"})
 
     async def _worker_loop(self, worker_id: int):
         while self._running:
@@ -124,7 +126,7 @@ class WorkerPool:
                 if self._handler:
                     await self._handler(task)
             except Exception:
-                logger.exception("Worker %d handler failed for task %s", worker_id, task.id)
+                logger.exception("Worker %d handler failed for task %s", worker_id, task.id, extra={"tag": "INFRA"})
             finally:
                 self.queue.task_done()
 
@@ -193,7 +195,8 @@ class TaskQueue:
     async def start(self):
         await self._pool.start()
         self._dispatcher_task = asyncio.create_task(self._dispatch_loop())
-        logger.info("TaskQueue started with %d workers", self._pool.num_workers)
+        logger.info("TaskQueue started with %d workers", self._pool.num_workers,
+            extra={"tag": "INFRA"})
 
     async def stop(self, timeout: float = 5.0):
         self._stop_event.set()
@@ -202,7 +205,8 @@ class TaskQueue:
         for task in list(self._running.values()):
             task.cancel_event.set()
         await self._pool.stop(timeout=timeout)
-        logger.info("TaskQueue stopped")
+        logger.info("TaskQueue stopped",
+            extra={"tag": "INFRA"})
 
     # ── SSE subscriptions ──
 
@@ -441,6 +445,7 @@ class InProcessTaskQueue(TaskQueue):
                     logger.warning(
                         "Task %s attempt %d failed: %s — retrying",
                         task.id, attempt + 1, e,
+                        extra={"tag": "INFRA"},
                     )
                     await asyncio.sleep(0.2 * (attempt + 1))
                 else:

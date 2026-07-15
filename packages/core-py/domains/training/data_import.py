@@ -63,7 +63,8 @@ class RepoImporter:
         target = self.cache_dir / repo_name
 
         if target.exists():
-            logger.info(f"Repo already exists: {target}")
+            logger.info(f"Repo already exists: {target}",
+                extra={"tag": "TRAIN"},)
             return target
 
         cmd = ["git", "clone", url, str(target)]
@@ -72,7 +73,8 @@ class RepoImporter:
         if depth:
             cmd.extend(["--depth", str(depth)])
 
-        logger.info(f"Cloning {url}...")
+        logger.info(f"Cloning {url}...",
+            extra={"tag": "TRAIN"},)
         subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         return target
@@ -424,7 +426,8 @@ class RepoImporter:
                 json.loads(sample)
                 return "json"
             except Exception:
-                logger.warning("Failed to parse JSON for sample", exc_info=True)
+                logger.warning("Failed to parse JSON for sample", exc_info=True,
+                    extra={"tag": "TRAIN"},)
 
         # YAML patterns
         yaml_indicators = ["---\n", ": ", "\n  ", "\n    "]
@@ -562,7 +565,8 @@ class RepoImporter:
                 output_path=output_path,
             )
         except Exception as e:
-            logger.error(f"Failed to import from GitHub: {e}")
+            logger.error(f"Failed to import from GitHub: {e}",
+                extra={"tag": "TRAIN"},)
             return ImportResult(
                 success=False,
                 name=dataset_name,
@@ -618,7 +622,8 @@ class BooksSearch:
                     if r.get("title")
                 ]
         except Exception as e:
-            logger.error(f"Books search failed: {e}")
+            logger.error(f"Books search failed: {e}",
+                extra={"tag": "TRAIN"},)
             return []
 
 
@@ -639,7 +644,8 @@ class HuggingFaceImporter:
     def search_datasets(self, query: str, limit: int = 10) -> List[Dict]:
         """Search HuggingFace datasets."""
         if not self._hf_available:
-            logger.warning("HuggingFace not available. Install: pip install huggingface_hub")
+            logger.warning("HuggingFace not available. Install: pip install huggingface_hub",
+                extra={"tag": "TRAIN"},)
             return []
 
         from huggingface_hub import HfApi
@@ -650,7 +656,8 @@ class HuggingFaceImporter:
             datasets = api.list_datasets(search=query, limit=limit)
             return [{"id": ds.id, "downloads": getattr(ds, "downloads", 0) or 0} for ds in datasets]
         except Exception as e:
-            logger.error(f"Search failed: {e}")
+            logger.error(f"Search failed: {e}",
+                extra={"tag": "TRAIN"},)
             return []
 
     def download_dataset(
@@ -678,14 +685,16 @@ class HuggingFaceImporter:
             output_path = Path(output_dir) / name
             output_path.mkdir(parents=True, exist_ok=True)
 
-            logger.info(f"Downloading {dataset_id}...")
+            logger.info(f"Downloading {dataset_id}...",
+                extra={"tag": "TRAIN"},)
 
             # Handle datasets with subsets/config
             try:
                 dataset = load_dataset(dataset_id, trust_remote_code=True)
             except Exception as config_err:
                 # Try with default config for datasets with subsets
-                logger.warning(f"Full load failed, trying default config: {config_err}")
+                logger.warning(f"Full load failed, trying default config: {config_err}",
+                    extra={"tag": "TRAIN"},)
                 dataset = load_dataset(dataset_id, split="train", trust_remote_code=True)
 
             # Handle both DatasetDict and Dataset
@@ -722,7 +731,8 @@ class HuggingFaceImporter:
                 output_path=str(corpus_file),
             )
         except Exception as e:
-            logger.error(f"Download failed: {e}")
+            logger.error(f"Download failed: {e}",
+                extra={"tag": "TRAIN"},)
             return ImportResult(
                 success=False,
                 name=name or dataset_id,
@@ -782,7 +792,8 @@ class URLImporter:
                 output_path=str(corpus_file),
             )
         except Exception as e:
-            logger.error(f"URL import failed: {e}")
+            logger.error(f"URL import failed: {e}",
+                extra={"tag": "TRAIN"},)
             return ImportResult(
                 success=False,
                 name=dataset_name,
@@ -834,7 +845,8 @@ class GitHubSearch:
                     for r in data.get("items", [])
                 ]
         except Exception as e:
-            logger.error(f"GitHub search failed: {e}")
+            logger.error(f"GitHub search failed: {e}",
+                extra={"tag": "TRAIN"},)
             return []
 
 
@@ -865,7 +877,8 @@ class ISBNImporter:
         books = self._books_search.search(isbn, limit=1)
         if not books:
             error_msg = f"Book not found for ISBN: {isbn}"
-            logger.error(error_msg)
+            logger.error(error_msg,
+                extra={"tag": "TRAIN"},)
             return ImportResult(
                 success=False,
                 name=name,
@@ -956,7 +969,8 @@ class ISBNImporter:
                 data = json.loads(response.read().decode())
                 items = data.get("results", [])
                 if not items:
-                    logger.info(f"No Gutendex results for: {title}")
+                    logger.info(f"No Gutendex results for: {title}",
+                        extra={"tag": "TRAIN"},)
                     return None
 
                 gutenberg_id = items[0]["id"]
@@ -964,10 +978,12 @@ class ISBNImporter:
                 text_req = urllib.request.Request(text_url, headers={"User-Agent": "SloughGPT/1.0"})
                 with urllib.request.urlopen(text_req, timeout=60) as text_resp:
                     text = text_resp.read().decode("utf-8", errors="replace")
-                    logger.info(f"Downloaded {len(text)} chars from Gutenberg #{gutenberg_id}")
+                    logger.info(f"Downloaded {len(text)} chars from Gutenberg #{gutenberg_id}",
+                        extra={"tag": "TRAIN"},)
                     return text
         except Exception as e:
-            logger.warning(f"Gutenberg fetch failed for '{title}': {e}")
+            logger.warning(f"Gutenberg fetch failed for '{title}': {e}",
+                extra={"tag": "TRAIN"},)
             return None
 
 

@@ -172,6 +172,7 @@ class MultiAgentOrchestrator:
             logger.info(
                 "Executing level %d (%d tasks in parallel)",
                 level_idx, len(task_ids),
+                extra={"tag": "MODEL"},
             )
             with ThreadPoolExecutor(max_workers=len(task_ids)) as pool:
                 future_map = {}
@@ -216,6 +217,7 @@ class MultiAgentOrchestrator:
             logger.info(
                 "Executing level %d (%d tasks in parallel via asyncio)",
                 level_idx, len(task_ids),
+                extra={"tag": "MODEL"},
             )
 
             async def run_task(tid: str) -> None:

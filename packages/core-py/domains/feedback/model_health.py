@@ -84,7 +84,7 @@ class ModelHealthMonitor:
         try:
             self.db_path.write_text(json.dumps(self._history[-200:], indent=2))
         except Exception as e:
-            logger.warning(f"Failed to save health history: {e}")
+            logger.warning(f"Failed to save health history: {e}", extra={"tag": "INFRA"})
 
     def run_benchmark(self) -> Optional[HealthSnapshot]:
         """Run model on the benchmark corpus and compute average perplexity.
@@ -150,7 +150,7 @@ class ModelHealthMonitor:
 
             return snapshot
         except Exception as e:
-            logger.warning(f"Health benchmark failed: {e}")
+            logger.warning(f"Health benchmark failed: {e}", extra={"tag": "INFRA"})
             return None
 
     def get_trend(self, window: int = 20) -> Dict[str, Any]:
@@ -229,7 +229,7 @@ class ModelHealthMonitor:
                 self.run_benchmark()
                 drift = self.detect_drift()
                 if drift.get("drifted"):
-                    logger.warning(drift["message"])
+                    logger.warning(drift["message"], extra={"tag": "INFRA"})
                 time.sleep(interval_seconds)
 
         thread = threading.Thread(target=_loop, daemon=True, name="health-monitor")

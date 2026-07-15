@@ -87,11 +87,12 @@ class ModelRegistry:
         # Clean up old server if replacing
         if old is not None and old is not server:
             old.set_status(ModelStatus.UNLOADED)
-            logger.info("ModelRegistry: replaced model '%s'", model_id)
+            logger.info("ModelRegistry: replaced model '%s'", model_id, extra={"tag": "MODEL"})
 
         logger.info(
             "ModelRegistry: registered '%s' (device=%s, timeout=%ss, concurrent=%d)",
             model_id, server._device, generate_timeout, max_concurrent,
+            extra={"tag": "MODEL"},
         )
         return server
 
@@ -118,6 +119,7 @@ class ModelRegistry:
         logger.info(
             "ModelRegistry: registered engine '%s' (make_default=%s)",
             engine_id, make_default,
+            extra={"tag": "MODEL"},
         )
 
     def unregister(self, model_id: str) -> bool:
@@ -129,7 +131,7 @@ class ModelRegistry:
             server.set_status(ModelStatus.UNLOADED)
             if self._default_id == model_id:
                 self._default_id = next(iter(self._servers)) if self._servers else None
-        logger.info("ModelRegistry: unregistered '%s'", model_id)
+        logger.info("ModelRegistry: unregistered '%s'", model_id, extra={"tag": "MODEL"})
         return True
 
     # --- Access ---

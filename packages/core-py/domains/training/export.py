@@ -642,7 +642,8 @@ def export_to_torchscript(
         traced = torch.jit.script(model)
 
     traced.save(output_path)
-    logger.info(f"Exported TorchScript: {output_path}")
+    logger.info(f"Exported TorchScript: {output_path}",
+        extra={"tag": "TRAIN"},)
     return output_path
 
 
@@ -734,10 +735,12 @@ def export_to_onnx(
             config=config,
             seq_len=seq_len,
         )
-        logger.info(f"Exported ONNX: {output_path}")
+        logger.info(f"Exported ONNX: {output_path}",
+            extra={"tag": "TRAIN"},)
         return result
     except Exception as e:
-        logger.warning(f"Advanced ONNX export failed: {e}, using basic export")
+        logger.warning(f"Advanced ONNX export failed: {e}, using basic export",
+            extra={"tag": "TRAIN"},)
 
         if example_input is None:
             example_input = torch.zeros(1, seq_len, dtype=torch.long)
@@ -753,7 +756,8 @@ def export_to_onnx(
             opset_version=opset_version,
             do_constant_folding=True,
         )
-        logger.info(f"Exported ONNX (basic): {output_path}")
+        logger.info(f"Exported ONNX (basic): {output_path}",
+            extra={"tag": "TRAIN"},)
         return output_path
 
 
@@ -873,8 +877,10 @@ def export_to_safetensors(
     with open(meta_path, "w") as f:
         json.dump(meta, f, indent=2, default=str)
 
-    logger.info(f"Exported SafeTensors: {output_path}")
-    logger.info(f"  Metadata: {meta_path}")
+    logger.info(f"Exported SafeTensors: {output_path}",
+        extra={"tag": "TRAIN"},)
+    logger.info(f"  Metadata: {meta_path}",
+        extra={"tag": "TRAIN"},)
     return output_path
 
 
@@ -970,7 +976,8 @@ def export_to_gguf(
         tokenizer=tokenizer,
         config=config,
     )
-    logger.info(f"Exported GGUF: {output_path} ({quantization})")
+    logger.info(f"Exported GGUF: {output_path} ({quantization})",
+        extra={"tag": "TRAIN"},)
     return result
 
 
@@ -1000,7 +1007,8 @@ def export_to_gguf_fp16(
     """
     from domains.training.gguf_export import export_to_gguf_fp16 as gguf_fp16_export
     result = gguf_fp16_export(model, output_path, tokenizer)
-    logger.info(f"Exported GGUF FP16: {output_path}")
+    logger.info(f"Exported GGUF FP16: {output_path}",
+        extra={"tag": "TRAIN"},)
     return result
 
 
@@ -1028,7 +1036,8 @@ def export_to_gguf_q4_k_m(
     """
     from domains.training.gguf_export import export_to_gguf_q4_k_m as gguf_q4_k_m_export
     result = gguf_q4_k_m_export(model, output_path, tokenizer)
-    logger.info(f"Exported GGUF Q4_K_M: {output_path}")
+    logger.info(f"Exported GGUF Q4_K_M: {output_path}",
+        extra={"tag": "TRAIN"},)
     return result
 
 
@@ -1061,7 +1070,8 @@ def export_to_torch(
         "metadata": metadata or {"format": "torch"},
     }
     torch.save(checkpoint, output_path)
-    logger.info(f"Exported PyTorch: {output_path}")
+    logger.info(f"Exported PyTorch: {output_path}",
+        extra={"tag": "TRAIN"},)
     return output_path
 
 
@@ -1095,7 +1105,8 @@ def export_to_sou(
         soul_profile=soul_profile,
         weights_only=weights_only,
     )
-    logger.info(f"Exported Slo Unit: {output_path}")
+    logger.info(f"Exported Slo Unit: {output_path}",
+        extra={"tag": "TRAIN"},)
     return output_path
 
 
@@ -1160,7 +1171,8 @@ def export_all_formats(
         export_to_gguf(model, output, "Q4_K_M", tokenizer)
         results["gguf_q4_k_m"] = output
     except ImportError as e:
-        logger.warning(f"GGUF export skipped: {e}")
+        logger.warning(f"GGUF export skipped: {e}",
+            extra={"tag": "TRAIN"},)
 
     output = _replace_ext(config.output_path, ".soul")
     export_to_sou(model, output, soul_profile=config.metadata)
@@ -1295,7 +1307,8 @@ def export_model(
             elif fmt == "torchscript":
                 output = _replace_ext(config.output_path, ".torchscript.pt")
                 if example_input is None:
-                    logger.warning("example_input required for TorchScript export")
+                    logger.warning("example_input required for TorchScript export",
+                        extra={"tag": "TRAIN"},)
                     continue
                 export_to_torchscript(model, output, example_input)
                 results["torchscript"] = output
@@ -1331,7 +1344,8 @@ def export_model(
                 export_all_formats(config, model, tokenizer, example_input, results)
 
         except Exception as e:
-            logger.error(f"Export failed for format '{fmt}': {e}")
+            logger.error(f"Export failed for format '{fmt}': {e}",
+                extra={"tag": "TRAIN"},)
 
     if tokenizer and config.include_tokenizer:
         tokenizer_path = Path(config.output_path).parent / "tokenizer"

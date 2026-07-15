@@ -103,12 +103,12 @@ class ModelLoader:
             if not cfg.model.use_flash_attention:
                 return {}
             if not torch.cuda.is_available():
-                logger.info("Flash attention requested but no CUDA device — skipping")
+                logger.info("Flash attention requested but no CUDA device — skipping", extra={"tag": "MODEL"})
                 return {}
             if not hasattr(torch.nn.functional, "scaled_dot_product_attention"):
-                logger.info("Flash attention requested but torch SDPA not available — skipping")
+                logger.info("Flash attention requested but torch SDPA not available — skipping", extra={"tag": "MODEL"})
                 return {}
-            logger.info("Using flash attention 2 for %s", cfg.model.name)
+            logger.info("Using flash attention 2 for %s", cfg.model.name, extra={"tag": "MODEL"})
             return {"attn_implementation": "flash_attention_2"}
         except Exception as e:
             logger.debug("Flash attention detection failed: %s", e)
@@ -139,7 +139,7 @@ class ModelLoader:
             if slnc_path is None:
                 return None
 
-        logger.info("Loading SloNet model from %s", slnc_path)
+        logger.info("Loading SloNet model from %s", slnc_path, extra={"tag": "MODEL"})
         try:
             from domains.inference.slonet_provider import SloNetChatProvider
 
@@ -165,7 +165,7 @@ class ModelLoader:
                 },
             )
         except Exception as e:
-            logger.warning("SloNet load failed: %s", e)
+            logger.warning("SloNet load failed: %s", e, extra={"tag": "MODEL"})
             return LoadResult(
                 success=False,
                 model_id=model_id,
@@ -192,7 +192,7 @@ class ModelLoader:
                 return None
 
             slnc_path = cache_dir / "model.slnc"
-            logger.info("Converting %s to .slnc", st_path.name)
+            logger.info("Converting %s to .slnc", st_path.name, extra={"tag": "MODEL"})
 
             # Load config
             config = load_model_config(model_id)
@@ -232,10 +232,10 @@ class ModelLoader:
             compiler = SLNCCompiler()
             compiler.compile_from_dict(config, weights, str(slnc_path))
 
-            logger.info("Converted to .slnc: %s", slnc_path)
+            logger.info("Converted to .slnc: %s", slnc_path, extra={"tag": "MODEL"})
             return slnc_path
         except Exception as e:
-            logger.warning("SloNet conversion failed: %s", e)
+            logger.warning("SloNet conversion failed: %s", e, extra={"tag": "MODEL"})
             return None
 
     def _try_load_hf(
@@ -250,7 +250,7 @@ class ModelLoader:
 
         Returns LoadResult with HFModelProvider.
         """
-        logger.info("Loading HuggingFace model: %s", model_id)
+        logger.info("Loading HuggingFace model: %s", model_id, extra={"tag": "MODEL"})
         try:
             import torch
             from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -312,7 +312,7 @@ class ModelLoader:
                 },
             )
         except Exception as e:
-            logger.warning("HuggingFace load failed: %s", e)
+            logger.warning("HuggingFace load failed: %s", e, extra={"tag": "MODEL"})
             return LoadResult(
                 success=False,
                 model_id=model_id,
@@ -371,10 +371,10 @@ class ModelLoader:
                 return False
 
             result.metrics["verified"] = True
-            logger.info("Model verification passed: %s", result.model_id)
+            logger.info("Model verification passed: %s", result.model_id, extra={"tag": "MODEL"})
             return True
         except Exception as e:
-            logger.warning("Model verification failed: %s", e)
+            logger.warning("Model verification failed: %s", e, extra={"tag": "MODEL"})
             result.metrics["verified"] = False
             return False
 
@@ -409,9 +409,10 @@ class ModelLoader:
 
             provider._quant_engine = engine
             logger.info("Quantized %d/%d layers in %s",
-                       quantized_count, len(linear_layers), provider._model_id)
+                       quantized_count, len(linear_layers), provider._model_id,
+                       extra={"tag": "MODEL"})
         except Exception as e:
-            logger.warning("HF quantization failed: %s", e)
+            logger.warning("HF quantization failed: %s", e, extra={"tag": "MODEL"})
 
     def walk_hf_linears(self, model: Any) -> Dict[str, Any]:
         """Find all nn.Linear layers in a HuggingFace model.

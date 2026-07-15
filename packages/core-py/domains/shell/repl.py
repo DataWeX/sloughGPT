@@ -160,7 +160,7 @@ class ShellREPL:
                     else:
                         out = self._execute_single(cmds[0][0], "")
                 except Exception as e:
-                    logger.warning("rc line %d: %s", line_no, e)
+                    logger.warning("rc line %d: %s", line_no, e, extra={"tag": "INFRA"})
 
     def _render_prompt(self) -> str:
         """Expand PS1 escapes: \\h=host, \\w=cwd, \\t=time, \\u=user, \\s=shell, \\#=cmd count."""

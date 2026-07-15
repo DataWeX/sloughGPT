@@ -56,7 +56,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
     async def initialize(self) -> None:
         """Initialize the cognitive processor"""
         try:
-            self.logger.info("Initializing Cognitive Processor...")
+            self.logger.info("Initializing Cognitive Processor...", extra={"tag": "COG"})
 
             # Initialize components if not already initialized
             if self.memory_manager and hasattr(self.memory_manager, "initialize"):
@@ -72,16 +72,16 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             self.processing_task = asyncio.create_task(self._processing_loop())
 
             self.is_initialized = True
-            self.logger.info("Cognitive Processor initialized successfully")
+            self.logger.info("Cognitive Processor initialized successfully", extra={"tag": "COG"})
 
         except Exception as e:
-            self.logger.error(f"Failed to initialize Cognitive Processor: {e}")
+            self.logger.error(f"Failed to initialize Cognitive Processor: {e}", extra={"tag": "COG"})
             raise ComponentException(f"Cognitive Processor initialization failed: {e}")
 
     async def shutdown(self) -> None:
         """Shutdown the cognitive processor"""
         try:
-            self.logger.info("Shutting down Cognitive Processor...")
+            self.logger.info("Shutting down Cognitive Processor...", extra={"tag": "COG"})
 
             # Stop processing
             self.is_processing = False
@@ -105,10 +105,10 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
                 await self.memory_manager.shutdown()
 
             self.is_initialized = False
-            self.logger.info("Cognitive Processor shutdown successfully")
+            self.logger.info("Cognitive Processor shutdown successfully", extra={"tag": "COG"})
 
         except Exception as e:
-            self.logger.error(f"Failed to shutdown Cognitive Processor: {e}")
+            self.logger.error(f"Failed to shutdown Cognitive Processor: {e}", extra={"tag": "COG"})
             raise ComponentException(f"Cognitive Processor shutdown failed: {e}")
 
     async def process_thought(self, thought: Thought) -> Thought:
@@ -152,7 +152,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             return thought
 
         except Exception as e:
-            self.logger.error(f"Failed to process thought: {e}")
+            self.logger.error(f"Failed to process thought: {e}", extra={"tag": "COG"})
             self._update_processing_stats(0, False)
             raise ComponentException(f"Thought processing failed: {e}")
 
@@ -166,7 +166,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             return "monitoring_unavailable"
 
         except Exception as e:
-            self.logger.error(f"Failed to get cognitive state: {e}")
+            self.logger.error(f"Failed to get cognitive state: {e}", extra={"tag": "COG"})
             return "error"
 
     async def set_cognitive_state(self, state: str) -> None:
@@ -174,7 +174,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
         try:
             # This would interface with the metacognitive monitor
             # to adjust cognitive parameters based on desired state
-            self.logger.info(f"Cognitive state change requested: {state}")
+            self.logger.info(f"Cognitive state change requested: {state}", extra={"tag": "COG"})
 
             if self.metacognitive_monitor:
                 # Adjust monitoring level based on state
@@ -186,7 +186,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
                     await self.metacognitive_monitor.set_monitoring_level("adaptive")
 
         except Exception as e:
-            self.logger.error(f"Failed to set cognitive state: {e}")
+            self.logger.error(f"Failed to set cognitive state: {e}", extra={"tag": "COG"})
             raise ComponentException(f"Cognitive state setting failed: {e}")
 
     # Private methods
@@ -219,7 +219,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             return memory_context
 
         except Exception as e:
-            self.logger.error(f"Memory retrieval failed: {e}")
+            self.logger.error(f"Memory retrieval failed: {e}", extra={"tag": "COG"})
             return {}
 
     async def _apply_reasoning(
@@ -249,7 +249,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             }
 
         except Exception as e:
-            self.logger.error(f"Reasoning application failed: {e}")
+            self.logger.error(f"Reasoning application failed: {e}", extra={"tag": "COG"})
             return {}
 
     async def _store_thought_memory(self, thought: Thought) -> None:
@@ -279,7 +279,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             self.logger.debug(f"Stored thought as memory: {memory_id}")
 
         except Exception as e:
-            self.logger.error(f"Thought memory storage failed: {e}")
+            self.logger.error(f"Thought memory storage failed: {e}", extra={"tag": "COG"})
 
     async def _calculate_thought_importance(self, thought: Thought) -> float:
         """Calculate importance score for thought storage"""
@@ -345,7 +345,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                self.logger.error(f"Processing loop error: {e}")
+                self.logger.error(f"Processing loop error: {e}", extra={"tag": "COG"})
                 await asyncio.sleep(0.1)
 
     # Public API methods
@@ -380,7 +380,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
                 processed_thought = await self.process_thought(thought)
                 processed_thoughts.append(processed_thought)
             except Exception as e:
-                self.logger.error(f"Failed to process thought in batch: {e}")
+                self.logger.error(f"Failed to process thought in batch: {e}", extra={"tag": "COG"})
                 # Add original thought if processing failed
                 processed_thoughts.append(thought)
 
@@ -402,7 +402,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
                 )
                 assessment["metacognitive_report"] = metacognitive_report
             except Exception as e:
-                self.logger.error(f"Failed to get metacognitive report: {e}")
+                self.logger.error(f"Failed to get metacognitive report: {e}", extra={"tag": "COG"})
 
         # Add memory statistics if available
         if self.memory_manager:
@@ -410,6 +410,6 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
                 memory_stats = await self.memory_manager.get_memory_statistics()
                 assessment["memory_statistics"] = memory_stats
             except Exception as e:
-                self.logger.error(f"Failed to get memory statistics: {e}")
+                self.logger.error(f"Failed to get memory statistics: {e}", extra={"tag": "COG"})
 
         return assessment

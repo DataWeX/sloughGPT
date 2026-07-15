@@ -85,13 +85,15 @@ def _load_weights(model_id: str) -> Tuple[dict, dict]:
         with safe_open(str(safetensors_path), framework="numpy") as f:
             for key in f.keys():
                 weights[key] = f.get_tensor(key)
-        logger.info("Loaded %d weights from %s (mmap)", len(weights), model_id)
+        logger.info("Loaded %d weights from %s (mmap)", len(weights), model_id,
+            extra={"tag": "INFRA"})
         return config, weights
     except Exception:
         pass
 
     # bfloat16 fallback
-    logger.info("bfloat16 fallback for %s", model_id)
+    logger.info("bfloat16 fallback for %s", model_id,
+        extra={"tag": "INFRA"})
     with open(safetensors_path, "rb") as f:
         header_len_bytes = f.read(8)
         header_len = struct.unpack("<Q", header_len_bytes)[0]
@@ -117,7 +119,8 @@ def _load_weights(model_id: str) -> Tuple[dict, dict]:
             elif "float32" in dtype_str.lower() or dtype_str == "F32":
                 weights[key] = np.frombuffer(raw_bytes, dtype=np.float32).reshape(shape)
 
-    logger.info("Loaded %d weights from %s (bfloat16 fallback)", len(weights), model_id)
+    logger.info("Loaded %d weights from %s (bfloat16 fallback)", len(weights), model_id,
+        extra={"tag": "INFRA"})
     return config, weights
 
 
@@ -255,6 +258,7 @@ class NumpyEngine:
             sum(w.size for w in weights.values()),
             compress,
             self._total_raw_bytes / max(self._total_compressed_bytes, 1),
+            extra={"tag": "INFRA"},
         )
 
     def _compress_weights(self, weights: Dict[str, np.ndarray]):
@@ -463,7 +467,8 @@ class NumpyEngine:
         engine._parser = parser
 
         logger.info("NumpyEngine.from_slnc: %s, %d layers",
-                     slnc_path, config.get("n_layer", 0))
+                     slnc_path, config.get("n_layer", 0),
+                     extra={"tag": "INFRA"})
 
         return engine
 

@@ -76,9 +76,9 @@ class ServerSpeechRecognizer:
                 f"openai/{self.model_name}"
             )
             self._model.eval()
-            logger.info(f"Loaded whisper model: {self.model_name}")
+            logger.info(f"Loaded whisper model: {self.model_name}", extra={"tag": "MODEL"})
         except Exception as e:
-            logger.warning(f"Could not load whisper: {e}")
+            logger.warning(f"Could not load whisper: {e}", extra={"tag": "MODEL"})
             self._model = None
 
     def recognize(self, audio_data: bytes, language: str = "en") -> TranscriptionResult:
@@ -124,7 +124,7 @@ class ServerSpeechRecognizer:
                 language=language,
             )
         except Exception as e:
-            logger.error(f"Speech recognition error: {e}")
+            logger.error(f"Speech recognition error: {e}", extra={"tag": "MODEL"})
             return TranscriptionResult(
                 text="",
                 confidence=0.0,

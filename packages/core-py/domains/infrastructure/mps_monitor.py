@@ -64,7 +64,7 @@ class MPSMemoryMonitor:
                 self._locked_to_cpu = True
                 logger.warning(
                     "MPS memory at %.0f%% — forcing CPU for next generations",
-                    usage * 100,
+                    usage * 100, extra={"tag": "INFRA"}
                 )
                 self._clear_mps_cache()
                 return "cpu"
@@ -73,7 +73,7 @@ class MPSMemoryMonitor:
                 logger.warning(
                     "MPS memory at %.0f%% — next generation will use CPU (threshold: %.0f%%)",
                     usage * 100,
-                    self._warn_threshold * 100,
+                    self._warn_threshold * 100, extra={"tag": "INFRA"}
                 )
                 self._locked_to_cpu = True
                 return "cpu"
@@ -81,7 +81,7 @@ class MPSMemoryMonitor:
             if usage < self._safe_threshold and self._locked_to_cpu:
                 logger.info(
                     "MPS memory dropped to %.0f%% — re-enabling MPS",
-                    usage * 100,
+                    usage * 100, extra={"tag": "INFRA"}
                 )
                 self._locked_to_cpu = False
 
@@ -104,7 +104,7 @@ class MPSMemoryMonitor:
             usage = self._get_mps_usage()
             self._last_usage = usage
             if usage >= 0.35:
-                logger.warning("MPS mid-generation at %.0f%% — clearing cache", usage * 100)
+                logger.warning("MPS mid-generation at %.0f%% — clearing cache", usage * 100, extra={"tag": "INFRA"})
                 self._clear_mps_cache()
                 usage = self._get_mps_usage()
                 if usage >= 0.35:
@@ -127,14 +127,14 @@ class MPSMemoryMonitor:
         """Manually lock to CPU (e.g. after OOM error)."""
         with self._lock:
             self._locked_to_cpu = True
-            logger.info("MPS manually locked to CPU")
+            logger.info("MPS manually locked to CPU", extra={"tag": "INFRA"})
 
     def reset(self):
         """Reset CPU lock — allows MPS to be used again."""
         with self._lock:
             self._locked_to_cpu = False
             self._last_usage = 0.0
-            logger.info("MPS monitor reset — MPS re-enabled")
+            logger.info("MPS monitor reset — MPS re-enabled", extra={"tag": "INFRA"})
 
     def _get_mps_usage(self) -> float:
         """
@@ -160,7 +160,7 @@ class MPSMemoryMonitor:
             gc.collect()
             if ml_mps.is_available():
                 ml_mps.empty_cache()
-                logger.info("MPS cache cleared (numpy backend)")
+                logger.info("MPS cache cleared (numpy backend)", extra={"tag": "INFRA"})
         except Exception:
             pass
 

@@ -165,9 +165,9 @@ class InferenceEngine:
         if compile_mode and hasattr(torch, "compile"):
             try:
                 self._compiled_forward = torch.compile(self.model, mode=compile_mode)
-                logger.info("Model compiled with mode: %s", compile_mode)
+                logger.info("Model compiled with mode: %s", compile_mode, extra={"tag": "INF"})
             except Exception as e:
-                logger.warning("Compilation failed: %s", e)
+                logger.warning("Compilation failed: %s", e, extra={"tag": "INF"})
 
         self._lock = threading.Lock()
         self._active_requests: Dict[str, GenerationRequest] = {}
@@ -386,7 +386,7 @@ class InferenceEngine:
                 monitor = get_mps_monitor()
                 usage = monitor.get_usage()
                 if usage > 0.25:
-                    logger.warning("MPS at %.0f%% — clearing cache before generation", usage * 100)
+                    logger.warning("MPS at %.0f%% — clearing cache before generation", usage * 100, extra={"tag": "INF"})
                     monitor._clear_mps_cache()
             except Exception:
                 pass
@@ -406,7 +406,7 @@ class InferenceEngine:
                         from domains.infrastructure.mps_monitor import get_mps_monitor
                         monitor = get_mps_monitor()
                         if not monitor.check_mid_generation():
-                            logger.warning("MPS near capacity at token %d — yielding remaining tokens", step)
+                            logger.warning("MPS near capacity at token %d — yielding remaining tokens", step, extra={"tag": "INF"})
                             for t in generated:
                                 yield self.decode([t])
                             return
@@ -553,7 +553,7 @@ def create_engine(
     if device == "auto":
         device = auto_device()
 
-    logger.info("Loading %s on %s...", model_name, device)
+    logger.info("Loading %s on %s...", model_name, device, extra={"tag": "INF"})
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     # Ensure we have a distinct pad token. The default HF tokenizers set ``pad_token``
@@ -578,7 +578,7 @@ def create_engine(
         max_batch_size=max_batch_size,
     )
 
-    logger.info("Engine ready: %s", engine.get_stats())
+    logger.info("Engine ready: %s", engine.get_stats(), extra={"tag": "INF"})
     return engine
 
 

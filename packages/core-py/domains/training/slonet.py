@@ -57,6 +57,10 @@ class no_grad:
     Usage::
         with no_grad():
             y = model(x)   # no graph built
+
+        @no_grad()
+        def forward(x):
+            return model(x)
     """
     def __enter__(self):
         global _NO_GRAD
@@ -67,6 +71,15 @@ class no_grad:
     def __exit__(self, *args):
         global _NO_GRAD
         _NO_GRAD = False
+
+    def __call__(self, func):
+        """Support @no_grad() as a decorator."""
+        import functools
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            with self:
+                return func(*args, **kwargs)
+        return wrapper
 
 
 def _broadcast_back(g: np.ndarray, shape: tuple) -> np.ndarray:
@@ -1011,8 +1024,8 @@ class _NoGrad:
         return wrapper
 
 
-def no_grad():
-    return _NoGrad()
+# no_grad is the class defined at the top of this module (line 50).
+# The function below was shadowing it with a no-op — removed.
 
 
 def is_cuda(x: Tensor) -> bool:
@@ -3229,7 +3242,7 @@ def _load_pytorch_zip_weights(zip_data: bytes) -> Dict[str, np.ndarray]:
         from domains.infrastructure.pt_loader import load_pt_bytes as _load_pt
         return _load_pt(zip_data)
     except Exception as e:
-        logger.warning("_load_pytorch_zip_weights failed: %s: %s", type(e).__name__, e)
+        logger.warning("_load_pytorch_zip_weights failed: %s: %s", type(e).__name__, e, extra={"tag": "TRAIN"})
         return {}
 
 
@@ -3241,7 +3254,7 @@ def souls_from_directory(dir_path) -> List[SloNet]:
         try:
             souls.append(import_from_sou(str(p)))
         except Exception as exc:
-            _log.warning("Failed to load soul %s: %s", p.name, exc)
+            _log.warning("Failed to load soul %s: %s", p.name, exc, extra={"tag": "TRAIN"})
     return souls
 
 

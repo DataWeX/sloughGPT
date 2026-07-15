@@ -336,7 +336,8 @@ class LoRAModelWrapper(nn.Module):
         self.trainable_params = sum(v.numel() for v in self.lora_params())
         self.frozen_params = self.total_params - self.trainable_params
 
-        logger.info(f"LoRA: {self.trainable_params:,} trainable / {self.total_params:,} total")
+        logger.info(f"LoRA: {self.trainable_params:,} trainable / {self.total_params:,} total",
+            extra={"tag": "TRAIN"},)
 
     def _apply_lora(self, target_modules: List[str], dropout: float):
         """Apply LoRA to target modules."""
@@ -421,8 +422,6 @@ __all__ = [
     "LoRAModelWrapper",
     "OptimizedFederatedTrainer",
 ]
-
-
 
 
 # =============================================================================
@@ -643,9 +642,11 @@ class OptimizedPipeline:
                     self.model,
                     mode=self.config.optimization.compile_mode,
                 )
-                logger.info("Model compiled with torch.compile")
+                logger.info("Model compiled with torch.compile",
+                    extra={"tag": "TRAIN"},)
             except Exception as e:
-                logger.warning(f"Model compilation failed: {e}")
+                logger.warning(f"Model compilation failed: {e}",
+                    extra={"tag": "TRAIN"},)
 
     async def train_full_pipeline(self) -> Dict[str, Any]:
         """Run full optimized training pipeline."""
@@ -654,14 +655,18 @@ class OptimizedPipeline:
         self.trainer.start()
 
         # Stage 1: Pre-training
-        logger.info("=" * 60)
-        logger.info("STAGE 1: OPTIMIZED PRE-TRAINING")
-        logger.info("=" * 60)
+        logger.info("=" * 60,
+            extra={"tag": "TRAIN"},)
+        logger.info("STAGE 1: OPTIMIZED PRE-TRAINING",
+            extra={"tag": "TRAIN"},)
+        logger.info("=" * 60,
+            extra={"tag": "TRAIN"},)
 
         for epoch in range(self.config.pretrain_epochs):
             self.trainer.epoch = epoch
             metrics = self.trainer.train_epoch()
-            logger.info(f"Epoch {epoch}: loss={metrics['loss']:.4f}")
+            logger.info(f"Epoch {epoch}: loss={metrics['loss']:.4f}",
+                extra={"tag": "TRAIN"},)
 
             # Save checkpoint
             if (epoch + 1) % 3 == 0:
@@ -671,22 +676,29 @@ class OptimizedPipeline:
 
         # Stage 2: Federated
         if self.config.federated_rounds > 0:
-            logger.info("=" * 60)
-            logger.info("STAGE 2: OPTIMIZED FEDERATED LEARNING")
-            logger.info("=" * 60)
+            logger.info("=" * 60,
+                extra={"tag": "TRAIN"},)
+            logger.info("STAGE 2: OPTIMIZED FEDERATED LEARNING",
+                extra={"tag": "TRAIN"},)
+            logger.info("=" * 60,
+                extra={"tag": "TRAIN"},)
 
             for round_idx in range(self.config.federated_rounds):
                 result = await self.federated_trainer.federated_round(
                     self.train_data,
                     compression=self.config.optimization.gradient_compression,
                 )
-                logger.info(f"Federated Round {round_idx}: {result}")
+                logger.info(f"Federated Round {round_idx}: {result}",
+                    extra={"tag": "TRAIN"},)
 
         # Stage 3: RLHF
         if self.config.rlhf_epochs > 0:
-            logger.info("=" * 60)
-            logger.info("STAGE 3: RLHF ALIGNMENT")
-            logger.info("=" * 60)
+            logger.info("=" * 60,
+                extra={"tag": "TRAIN"},)
+            logger.info("STAGE 3: RLHF ALIGNMENT",
+                extra={"tag": "TRAIN"},)
+            logger.info("=" * 60,
+                extra={"tag": "TRAIN"},)
             # RLHF training would go here
 
         self.trainer.end()
@@ -701,9 +713,11 @@ class OptimizedPipeline:
                 "step": self.trainer.step,
                 "epoch": self.trainer.epoch,
             }, filename)
-            logger.info(f"Checkpoint saved: {filename}")
+            logger.info(f"Checkpoint saved: {filename}",
+                extra={"tag": "TRAIN"},)
         except Exception as e:
-            logger.warning(f"Failed to save checkpoint: {e}")
+            logger.warning(f"Failed to save checkpoint: {e}",
+                extra={"tag": "TRAIN"},)
 
 
 # =============================================================================

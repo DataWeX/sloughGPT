@@ -110,7 +110,7 @@ class MigrationRunner:
                     data["_schema_version"] = m.version
                     logger.debug("Migration v%d applied: %s", m.version, m.description)
                 except Exception:
-                    logger.exception("Migration v%d failed: %s", m.version, m.description)
+                    logger.exception("Migration v%d failed: %s", m.version, m.description, extra={"tag": "INFRA"})
                     raise
         return data
 
@@ -213,7 +213,7 @@ class FileRepository(Generic[T]):
             self._cache_set(key, obj)
             return obj
         except Exception:
-            logger.exception("Failed to read %s", path)
+            logger.exception("Failed to read %s", path, extra={"tag": "INFRA"})
             return None
 
     def list(self) -> list[T]:
@@ -235,7 +235,7 @@ class FileRepository(Generic[T]):
             self._cache_set(key, obj)
             return True
         except Exception:
-            logger.exception("Failed to save %s", key)
+            logger.exception("Failed to save %s", key, extra={"tag": "INFRA"})
             return False
 
     def delete(self, key: str) -> bool:
@@ -246,7 +246,7 @@ class FileRepository(Generic[T]):
             self.invalidate(key)
             return True
         except Exception:
-            logger.exception("Failed to delete %s", key)
+            logger.exception("Failed to delete %s", key, extra={"tag": "INFRA"})
             return False
 
     def search(self, query: str, fields: list[str] | None = None) -> list[T]:

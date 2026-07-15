@@ -52,7 +52,8 @@ class ModelQueue:
             tree = ModelTree(tc.name, lib, n_clusters=tc.n_clusters)
 
         self._trees[name] = tree
-        logger.info("ModelQueue: added tree '%s'", name)
+        logger.info("ModelQueue: added tree '%s'", name,
+            extra={"tag": "INFRA"})
         return tree
 
     def get_tree(self, name: str) -> Optional[ModelTree]:
@@ -61,7 +62,8 @@ class ModelQueue:
     def remove_tree(self, name: str) -> bool:
         if name in self._trees:
             del self._trees[name]
-            logger.info("ModelQueue: removed tree '%s'", name)
+            logger.info("ModelQueue: removed tree '%s'", name,
+                extra={"tag": "INFRA"})
             return True
         return False
 

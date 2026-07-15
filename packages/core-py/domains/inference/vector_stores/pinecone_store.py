@@ -72,7 +72,7 @@ class PineconeVectorStore(VectorStore):
         except ImportError:
             raise ImportError("pip install pinecone-client")
         except Exception as e:
-            logger.error("Pinecone connection failed: %s", e)
+            logger.error("Pinecone connection failed: %s", e, extra={"tag": "INF"})
             return False
 
     async def disconnect(self) -> None:

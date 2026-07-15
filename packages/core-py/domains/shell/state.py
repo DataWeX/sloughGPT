@@ -43,7 +43,7 @@ class ShellState:
                 logger.debug("Loaded shell state (%d entries, %d aliases, %d env vars)",
                              len(self.history), len(self.aliases), len(self.env))
             except Exception as e:
-                logger.warning("Failed to load shell state: %s", e)
+                logger.warning("Failed to load shell state: %s", e, extra={"tag": "INFRA"})
 
     def save(self) -> None:
         _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -56,7 +56,7 @@ class ShellState:
                 "first_run": self.first_run,
             }, indent=2))
         except Exception as e:
-            logger.warning("Failed to save shell state: %s", e)
+            logger.warning("Failed to save shell state: %s", e, extra={"tag": "INFRA"})
 
     def add_history(self, line: str) -> None:
         if line and (not self.history or self.history[-1] != line):

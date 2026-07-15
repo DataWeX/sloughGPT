@@ -229,7 +229,8 @@ class EwcContinualLearner:
         - Current parameter values
         - Fisher Information diagonal
         """
-        logger.info("Saving snapshot for task: %s", task_name)
+        logger.info("Saving snapshot for task: %s", task_name,
+            extra={"tag": "TRAIN"},)
 
         # Store current parameters
         parameters = {}
@@ -276,9 +277,12 @@ class EwcContinualLearner:
         )
 
         self.task_snapshots[task_id] = snapshot
-        logger.info("  Parameters: %d", len(parameters))
-        logger.info("  Fisher elements: %d", sum(t.numel() for t in fisher.values()))
-        logger.info("  Optimal loss: %.4f", optimal_loss)
+        logger.info("  Parameters: %d", len(parameters),
+            extra={"tag": "TRAIN"},)
+        logger.info("  Fisher elements: %d", sum(t.numel() for t in fisher.values()),
+            extra={"tag": "TRAIN"},)
+        logger.info("  Optimal loss: %.4f", optimal_loss,
+            extra={"tag": "TRAIN"},)
 
         return snapshot
 

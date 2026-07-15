@@ -191,7 +191,7 @@ class LoRAEvaluator:
             self._model.to(self._device)
             self._model.eval()
         except Exception as e:
-            logger.warning("Could not load model: %s", e)
+            logger.warning("Could not load model: %s", e, extra={"tag": "INFRA"})
             self._model = None
 
     def _generate(self, prompt: str, adapter_path: Optional[str] = None, max_tokens: int = 50) -> Tuple[str, float, float]:
@@ -596,7 +596,7 @@ class LoRAEvaluator:
         )
 
         save_soul(net, output_sou)
-        logger.info("Exported .soul checkpoint: %s", output_sou)
+        logger.info("Exported .soul checkpoint: %s", output_sou, extra={"tag": "INFRA"})
         return output_sou
 
     def get_history(self, limit: int = 20) -> List[EvalResult]:

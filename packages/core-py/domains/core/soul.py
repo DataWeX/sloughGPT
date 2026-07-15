@@ -151,7 +151,7 @@ class SloEngine:
         self._init_cognitive()
         self._init_hd_memory()
 
-        logger.info(f"SloEngine initialized: soul={self._soul.name}, device={device}")
+        logger.info(f"SloEngine initialized: soul={self._soul.name}, device={device}", extra={"tag": "MODEL"})
 
     def _init_cognitive(self):
         """Lazy-load cognitive components."""
@@ -247,11 +247,11 @@ class SloEngine:
             try:
                 from domains.training.tokenizer import SloBPE
                 self._tokenizer = SloBPE.from_dict(tok_config)
-                logger.info(f"BPE tokenizer loaded from soul metadata (vocab={self._tokenizer.vocab_size})")
+                logger.info(f"BPE tokenizer loaded from soul metadata (vocab={self._tokenizer.vocab_size})", extra={"tag": "MODEL"})
             except Exception as e:
-                logger.warning(f"Failed to load BPE tokenizer from soul: {e}")
+                logger.warning(f"Failed to load BPE tokenizer from soul: {e}", extra={"tag": "MODEL"})
 
-        logger.info(f"Loaded soul: {soul.name} from {sou_path}")
+        logger.info(f"Loaded soul: {soul.name} from {sou_path}", extra={"tag": "MODEL"})
         return soul
 
     def load_model(self, model_path: str, **kwargs) -> "SloEngine":
@@ -267,7 +267,7 @@ class SloEngine:
                 system_prompt=f"You are a helpful AI assistant.",
             )
 
-        logger.info(f"Loaded model: {model_path}")
+        logger.info(f"Loaded model: {model_path}", extra={"tag": "MODEL"})
         return self
 
     def set_soul(self, soul: SloProfile) -> "SloEngine":
@@ -659,7 +659,7 @@ class SloEngine:
 
             except Exception as e:
                 import traceback as _tb
-                logger.error(f"Generation failed: {e}\n{_tb.format_exc()}")
+                logger.error(f"Generation failed: {e}\n{_tb.format_exc()}", extra={"tag": "MODEL"})
                 generated_text = f"[Error: {e}]"
 
         self._session_history.append({"role": "user", "content": prompt})
@@ -825,7 +825,7 @@ class SloEngine:
         with open(meta_path, "w") as f:
             json.dump(self._soul.to_dict(), f, indent=2, default=str)
 
-        logger.info(f"Saved soul to {output_path}")
+        logger.info(f"Saved soul to {output_path}", extra={"tag": "MODEL"})
         return output_path
 
     def get_stats(self) -> Dict[str, Any]:
@@ -1463,7 +1463,7 @@ class SloEngine:
         mgr.train(texts, vocab_size=vocab_size, min_frequency=2, lowercase=True, algo=algo, **algo_kwargs)
         tok = mgr.get_tokenizer()
         self._tokenizer = tok
-        logger.info(f"{algo} tokenizer trained: vocab={tok.vocab_size}")
+        logger.info(f"{algo} tokenizer trained: vocab={tok.vocab_size}", extra={"tag": "MODEL"})
 
         # 2. Create SloNet with matching vocab
         traits = {}
@@ -1481,7 +1481,7 @@ class SloEngine:
             lineage="soulengine-learned",
         )
         self._model = net
-        logger.info(f"SloNet created: vocab={tok.vocab_size}")
+        logger.info(f"SloNet created: vocab={tok.vocab_size}", extra={"tag": "MODEL"})
 
         # 3. Training loop
         optimizer = SloAdam(lr=learning_rate)
@@ -1541,7 +1541,8 @@ class SloEngine:
 
         logger.info(
             f"Training complete: {step} steps, loss={avg_loss:.4f}, "
-            f"{elapsed:.1f}s, tokens/sec={step/elapsed:.0f}"
+            f"{elapsed:.1f}s, tokens/sec={step/elapsed:.0f}",
+            extra={"tag": "MODEL"},
         )
 
         return {

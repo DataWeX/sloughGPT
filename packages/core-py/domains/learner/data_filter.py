@@ -168,7 +168,7 @@ def _load_config() -> dict:
         try:
             return json.loads(FILTER_CONFIG_PATH.read_text())
         except Exception as e:
-            logger.warning(f"Failed to load filter config: {e}")
+            logger.warning(f"Failed to load filter config: {e}", extra={"tag": "INF"})
     return dict(DEFAULT_CONFIG)
 
 
@@ -211,7 +211,7 @@ class DataFilter:
     def update_config(self, **kwargs):
         self.config.update(kwargs)
         _save_config(self.config)
-        logger.info(f"Filter config updated: {kwargs}")
+        logger.info(f"Filter config updated: {kwargs}", extra={"tag": "INF"})
 
     def get_config(self) -> dict:
         return dict(self.config)

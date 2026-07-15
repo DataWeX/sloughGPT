@@ -102,7 +102,8 @@ class DatasetManager:
 
     def register_dataset(self, config: DatasetConfig) -> None:
         self.datasets[config.name] = config
-        self.logger.info(f"Registered: {config.name} ({config.dataset_type.value})")
+        self.logger.info(f"Registered: {config.name} ({config.dataset_type.value})",
+            extra={"tag": "TRAIN"},)
 
     def list_by_type(self, dtype: DatasetType) -> List[DatasetConfig]:
         """List all datasets of a given type."""
@@ -148,7 +149,8 @@ class DatasetManager:
 
         base = Path(directory)
         if not base.exists():
-            self.logger.warning(f"Directory not found: {directory}")
+            self.logger.warning(f"Directory not found: {directory}",
+                extra={"tag": "TRAIN"},)
             return 0
 
         count = 0
@@ -176,7 +178,8 @@ class DatasetManager:
             )
             self.datasets[entry.name] = config
             count += 1
-            self.logger.info(f"  [{dtype.value:>12}] {entry.name} ({files[0].name})")
+            self.logger.info(f"  [{dtype.value:>12}] {entry.name} ({files[0].name})",
+                extra={"tag": "TRAIN"},)
 
         return count
 
@@ -276,7 +279,8 @@ class TrainingPipeline:
         return self
 
     async def run(self, train_data: Iterator[Any]) -> Dict[str, Any]:
-        self.logger.info(f"Running pipeline: {self.config.name}")
+        self.logger.info(f"Running pipeline: {self.config.name}",
+            extra={"tag": "TRAIN"},)
         results = {"epochs": 0, "stages": []}
 
         for epoch in range(self.config.epochs):
@@ -320,7 +324,8 @@ class ModelManager:
 
     def register_model(self, config: ModelConfig) -> None:
         self.models[config.name] = config
-        self.logger.info(f"Registered model: {config.name}")
+        self.logger.info(f"Registered model: {config.name}",
+            extra={"tag": "TRAIN"},)
 
     def create_model(self, name: str) -> Dict[str, Any]:
         config = self.models.get(name)

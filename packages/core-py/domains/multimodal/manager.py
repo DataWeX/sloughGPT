@@ -76,7 +76,7 @@ class MultimodalManager:
         """
         self._speech_server_mode = speech_server
 
-        logger.info(f"Initializing multimodal (speech_server={speech_server}, vision={vision_model})")
+        logger.info(f"Initializing multimodal (speech_server={speech_server}, vision={vision_model})", extra={"tag": "MODEL"})
 
         if speech_server:
             self._speech_recognizer = get_speech_recognizer(use_server=True)
@@ -89,9 +89,9 @@ class MultimodalManager:
                 try:
                     self._multimodal_engine = MultimodalEngine.load()
                     self._learning_count = self._count_trained_images()
-                    logger.info(f"Loaded saved multimodal engine ({self._learning_count} images)")
+                    logger.info(f"Loaded saved multimodal engine ({self._learning_count} images)", extra={"tag": "MODEL"})
                 except Exception as e:
-                    logger.warning(f"Failed to load saved engine: {e}")
+                    logger.warning(f"Failed to load saved engine: {e}", extra={"tag": "MODEL"})
                     self._multimodal_engine = None
 
             if self._multimodal_engine is None:
@@ -112,7 +112,7 @@ class MultimodalManager:
             t.start()
 
         self._initialized = True
-        logger.info("Multimodal initialized")
+        logger.info("Multimodal initialized", extra={"tag": "MODEL"})
 
     def _count_trained_images(self) -> int:
         """Estimate training count from saved state."""
@@ -254,7 +254,7 @@ class MultimodalManager:
         images, captions = self._gen_synthetic_data(samples)
         n = len(images)
         logger.info("Pretraining on %d synthetic image-caption pairs (%d epochs, batch_size=%d)",
-                     n, epochs, batch_size)
+                     n, epochs, batch_size, extra={"tag": "MODEL"})
 
         # Build vocab from our captions
         engine.text.build_vocab(captions)
@@ -290,11 +290,11 @@ class MultimodalManager:
             avg_loss = epoch_loss / max(steps, 1)
             final_loss = avg_loss
             if (ep + 1) % 5 == 0 or ep == 0:
-                logger.info("  Pretrain epoch %d/%d — loss: %.4f", ep + 1, epochs, avg_loss)
+                logger.info("  Pretrain epoch %d/%d — loss: %.4f", ep + 1, epochs, avg_loss, extra={"tag": "MODEL"})
 
                 sample_input = images[:1]
                 result = engine.generate(sample_input, max_len=16, temperature=0.5)
-                logger.info("    Sample: %s → %s", captions[0][:30], result.text.strip()[:40])
+                logger.info("    Sample: %s → %s", captions[0][:30], result.text.strip()[:40], extra={"tag": "MODEL"})
 
         # Fill replay buffer with training data
         for i in range(min(samples, len(images))):
@@ -302,7 +302,7 @@ class MultimodalManager:
 
         engine._trained = True
         engine.save(extra_meta={"images_learned": self._learning_count})
-        logger.info("Pretrain complete — final loss: %.4f, engine saved", final_loss)
+        logger.info("Pretrain complete — final loss: %.4f, engine saved", final_loss, extra={"tag": "MODEL"})
         return final_loss
 
     def caption_image(
@@ -391,7 +391,7 @@ class MultimodalManager:
                         "last_caption": raw_text,
                     })
                 except Exception as save_err:
-                    logger.warning(f"Auto-save failed: {save_err}")
+                    logger.warning(f"Auto-save failed: {save_err}", extra={"tag": "MODEL"})
 
             confidence = min(float(np.mean(np.abs(embed.data))) * 2.0, 1.0)
 
@@ -402,7 +402,7 @@ class MultimodalManager:
                 accuracy=accuracy,
             )
         except Exception as e:
-            logger.error(f"MultimodalEngine caption error: {e}")
+            logger.error(f"MultimodalEngine caption error: {e}", extra={"tag": "MODEL"})
             return ImageCaption(text="[caption failed]", confidence=0.0, tags=["error"])
 
     def train_on_path(self, path: str) -> ImageCaption:

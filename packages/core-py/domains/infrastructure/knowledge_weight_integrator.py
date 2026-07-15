@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from domains.training.slonet_compat import torch
-from peft import LoraConfig, get_peft_model, PeftModel, TaskType
 
 logger = logging.getLogger("man.infrastructure.knowledge_weight_integrator")
 
@@ -26,6 +25,30 @@ _MANIFEST_PATH = _ADAPTER_DIR / "manifest.json"
 _lock = threading.Lock()
 _trained_fact_count: int = 0
 _last_trained: Optional[float] = None
+
+# Lazy imports for peft (optional dependency)
+_LoraConfig = None
+_get_peft_model = None
+_PeftModel = None
+_TaskType = None
+
+
+def _import_peft():
+    """Lazy-import peft modules. Returns True if available."""
+    global _LoraConfig, _get_peft_model, _PeftModel, _TaskType
+    if _LoraConfig is not None:
+        return True
+    try:
+        from peft import LoraConfig, get_peft_model, PeftModel, TaskType
+        _LoraConfig = LoraConfig
+        _get_peft_model = get_peft_model
+        _PeftModel = PeftModel
+        _TaskType = TaskType
+        return True
+    except ImportError:
+        logger.warning("peft not installed — knowledge adapter training unavailable",
+            extra={"tag": "INFRA"})
+        return False
 
 
 def _format_facts_as_text(facts: List[Dict[str, Any]], max_items: int = 500) -> List[str]:
@@ -93,6 +116,9 @@ def train_knowledge_adapter(
     if not texts:
         return {"status": "no_facts", "fact_count": 0}
 
+    if not _import_peft():
+        return {"status": "peft_not_installed", "fact_count": len(texts)}
+
     if model is None:
         try:
             from domains.models.provider import get_provider_manager
@@ -110,8 +136,8 @@ def train_knowledge_adapter(
     model.train()
 
     # Configure LoRA
-    lora_config = LoraConfig(
-        task_type=TaskType.CAUSAL_LM,
+    lora_config = _LoraConfig(
+        task_type=_TaskType.CAUSAL_LM,
         r=lora_rank,
         lora_alpha=lora_rank * 2,
         target_modules=["q_proj", "v_proj"],
@@ -119,7 +145,7 @@ def train_knowledge_adapter(
         bias="none",
     )
 
-    peft_model = get_peft_model(model, lora_config)
+    peft_model = _get_peft_model(model, lora_config)
     peft_model.print_trainable_parameters()
 
     optimizer = torch.optim.AdamW(peft_model.parameters(), lr=learning_rate)
@@ -144,7 +170,8 @@ def train_knowledge_adapter(
             torch.nn.utils.clip_grad_norm_(peft_model.parameters(), 1.0)
             optimizer.step()
             epoch_loss += loss.item()
-        logger.info(f"Knowledge adapter epoch {epoch + 1}/{num_epochs}: loss={epoch_loss / max(len(texts), 1):.4f}")
+        logger.info(f"Knowledge adapter epoch {epoch + 1}/{num_epochs}: loss={epoch_loss / max(len(texts), 1):.4f}",
+            extra={"tag": "INFRA"})
 
     # Save adapter
     final_path = Path(save_path or str(_ADAPTER_PATH))
@@ -172,7 +199,8 @@ def train_knowledge_adapter(
         _trained_fact_count = len(texts)
         _last_trained = time.time()
 
-    logger.info(f"Knowledge adapter trained in {elapsed:.1f}s on {len(texts)} facts")
+    logger.info(f"Knowledge adapter trained in {elapsed:.1f}s on {len(texts)} facts",
+        extra={"tag": "INFRA"})
 
     peft_model.to("cpu")
     model.to(device)
@@ -205,20 +233,29 @@ def load_knowledge_adapter(
     """
     path = Path(adapter_path or str(_ADAPTER_PATH))
     if not (path / "adapter_config.json").exists():
-        logger.info("No knowledge adapter found at %s", path)
+        logger.info("No knowledge adapter found at %s", path,
+            extra={"tag": "INFRA"})
+        return model
+
+    if not _import_peft():
+        logger.warning("peft not installed — cannot load knowledge adapter",
+            extra={"tag": "INFRA"})
         return model
 
     try:
-        peft_model = PeftModel.from_pretrained(model, str(path))
+        peft_model = _PeftModel.from_pretrained(model, str(path))
         peft_model.to(device)
         if merge:
             merged = peft_model.merge_and_unload()
-            logger.info("Knowledge adapter merged into model")
+            logger.info("Knowledge adapter merged into model",
+                extra={"tag": "INFRA"})
             return merged
-        logger.info("Knowledge adapter loaded (unmerged)")
+        logger.info("Knowledge adapter loaded (unmerged)",
+            extra={"tag": "INFRA"})
         return peft_model
     except Exception as e:
-        logger.warning("Failed to load knowledge adapter: %s", e)
+        logger.warning("Failed to load knowledge adapter: %s", e,
+            extra={"tag": "INFRA"})
         return model
 
 

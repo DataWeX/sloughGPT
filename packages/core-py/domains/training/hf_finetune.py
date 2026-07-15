@@ -208,6 +208,7 @@ class HFFineTuner:
             self.device,
             self.use_lora,
             self.lora_rank,
+            extra={"tag": "TRAIN"},
         )
 
         tokenizer = AutoTokenizer.from_pretrained(self.model_name, trust_remote_code=True)
@@ -236,13 +237,15 @@ class HFFineTuner:
 
         model.to(self.device)
 
-        logger.info("Loading dataset from %s", self.data_path)
+        logger.info("Loading dataset from %s", self.data_path,
+            extra={"tag": "TRAIN"},)
         dataset = TextFileDataset(
             file_path=self.data_path,
             tokenizer=tokenizer,
             max_length=self.max_seq_length,
         )
-        logger.info("Dataset has %d examples", len(dataset))
+        logger.info("Dataset has %d examples", len(dataset),
+            extra={"tag": "TRAIN"},)
 
         data_collator = DataCollatorForLanguageModeling(
             tokenizer=tokenizer,
@@ -318,7 +321,8 @@ class HFFineTuner:
             callbacks=[progress_cb],
         )
 
-        logger.info("Starting training for %d epochs", self.epochs)
+        logger.info("Starting training for %d epochs", self.epochs,
+            extra={"tag": "TRAIN"},)
         self._is_training = True
         try:
             train_result = trainer.train()
@@ -348,6 +352,7 @@ class HFFineTuner:
         logger.info(
             "Training complete. Loss=%s, steps=%d, saved to %s",
             final_loss, final_step, save_path,
+            extra={"tag": "TRAIN"},
         )
 
         return TrainResult(
@@ -416,17 +421,20 @@ def merge_lora_adapter(
     if not base_model_name:
         raise ValueError("adapter_config.json missing base_model_name_or_path")
 
-    logger.info("Loading base model: %s", base_model_name)
+    logger.info("Loading base model: %s", base_model_name,
+        extra={"tag": "TRAIN"},)
     base_model = AutoModelForCausalLM.from_pretrained(
         base_model_name,
         dtype=torch.float32,
         trust_remote_code=True,
     )
 
-    logger.info("Loading LoRA adapter from: %s", adapter_path)
+    logger.info("Loading LoRA adapter from: %s", adapter_path,
+        extra={"tag": "TRAIN"},)
     model = PeftModel.from_pretrained(base_model, adapter_path)
 
-    logger.info("Merging LoRA weights into base model...")
+    logger.info("Merging LoRA weights into base model...",
+        extra={"tag": "TRAIN"},)
     merged_model = model.merge_and_unload()
 
     if output_path is None:
@@ -435,7 +443,8 @@ def merge_lora_adapter(
     out = Path(output_path)
     out.mkdir(parents=True, exist_ok=True)
 
-    logger.info("Saving merged model to: %s", output_path)
+    logger.info("Saving merged model to: %s", output_path,
+        extra={"tag": "TRAIN"},)
     merged_model.save_pretrained(output_path)
 
     # Save tokenizer too
@@ -456,9 +465,11 @@ def merge_lora_adapter(
             raise ValueError("hub_model_id is required when push_to_hub=True")
         merged_model.push_to_hub(hub_model_id)
         tokenizer.push_to_hub(hub_model_id)
-        logger.info("Pushed merged model to Hub: %s", hub_model_id)
+        logger.info("Pushed merged model to Hub: %s", hub_model_id,
+            extra={"tag": "TRAIN"},)
 
-    logger.info("LoRA merge complete: %s", output_path)
+    logger.info("LoRA merge complete: %s", output_path,
+        extra={"tag": "TRAIN"},)
     return str(out.resolve())
 
 
@@ -662,6 +673,7 @@ class GRPOTrainer:
             "GRPO: loading model %s on %s (generations=%d, lr=%.2e, kl=%.2f)",
             self.model_name, self.device, self.num_generations,
             self.learning_rate, self.kl_coef,
+            extra={"tag": "TRAIN"},
         )
 
         tokenizer = AutoTokenizer.from_pretrained(self.model_name, trust_remote_code=True)
@@ -698,7 +710,8 @@ class GRPOTrainer:
         ref_model.eval()
 
         prompts = self._load_prompts()
-        logger.info("Loaded %d prompts from %s", len(prompts), self.prompts_path)
+        logger.info("Loaded %d prompts from %s", len(prompts), self.prompts_path,
+            extra={"tag": "TRAIN"},)
 
         optimizer = torch.optim.Adam(model.parameters(), lr=self.learning_rate)
 
@@ -720,7 +733,8 @@ class GRPOTrainer:
                     batch_prompts = prompts[batch_start:batch_start + self.batch_size]
 
                     if not self._is_training:
-                        logger.info("GRPO training stopped early")
+                        logger.info("GRPO training stopped early",
+                            extra={"tag": "TRAIN"},)
                         break
 
                     for prompt in batch_prompts:
@@ -803,6 +817,7 @@ class GRPOTrainer:
             logger.info(
                 "GRPO epoch %d/%d: avg_reward=%.4f, avg_loss=%.4f",
                 epoch + 1, self.epochs, avg_reward, avg_loss,
+                extra={"tag": "TRAIN"},
             )
 
             # Save model
@@ -817,6 +832,7 @@ class GRPOTrainer:
             logger.info(
                 "GRPO complete. final_reward=%.4f, final_loss=%.4f, saved to %s",
                 final_reward, final_loss, save_path,
+                extra={"tag": "TRAIN"},
             )
 
             return TrainResult(

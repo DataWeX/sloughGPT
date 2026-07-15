@@ -58,14 +58,16 @@ class HealthWatchdog:
         self._running = True
         self._thread = threading.Thread(target=self._run, daemon=True, name="health-watchdog")
         self._thread.start()
-        logger.info("Health watchdog started (interval=%ds, max_failures=%d)", poll_interval, max_failures)
+        logger.info("Health watchdog started (interval=%ds, max_failures=%d)", poll_interval, max_failures,
+            extra={"tag": "INFRA"})
 
     def stop(self):
         """Stop the watchdog."""
         self._running = False
         if self._thread:
             self._thread.join(timeout=5)
-        logger.info("Health watchdog stopped")
+        logger.info("Health watchdog stopped",
+            extra={"tag": "INFRA"})
 
     def _run(self):
         """Main watchdog loop."""
@@ -91,15 +93,18 @@ class HealthWatchdog:
                             "Health check failed (%d/%d consecutive)",
                             self._consecutive_failures,
                             self._max_failures,
+                            extra={"tag": "INFRA"},
                         )
 
                         if self._consecutive_failures >= self._max_failures:
-                            logger.error("Server unhealthy — triggering recovery")
+                            logger.error("Server unhealthy — triggering recovery",
+                                extra={"tag": "INFRA"})
                             self._consecutive_failures = 0
                             self._trigger_recovery()
 
             except Exception as e:
-                logger.error("Watchdog error: %s", e)
+                logger.error("Watchdog error: %s", e,
+                    extra={"tag": "INFRA"})
 
             # Sleep in small increments so we can stop quickly
             for _ in range(self._poll_interval * 10):
@@ -110,20 +115,25 @@ class HealthWatchdog:
     def _trigger_recovery(self):
         """Attempt to recover the server."""
         if not self._recovery_fn:
-            logger.warning("No recovery function set — cannot recover")
+            logger.warning("No recovery function set — cannot recover",
+                extra={"tag": "INFRA"})
             return
 
         try:
-            logger.info("Running recovery procedure...")
+            logger.info("Running recovery procedure...",
+                extra={"tag": "INFRA"})
             result = self._recovery_fn()
             if result:
-                logger.info("Recovery successful")
+                logger.info("Recovery successful",
+                    extra={"tag": "INFRA"})
                 if self._on_recovery:
                     self._on_recovery()
             else:
-                logger.error("Recovery failed")
+                logger.error("Recovery failed",
+                    extra={"tag": "INFRA"})
         except Exception as e:
-            logger.error("Recovery procedure crashed: %s", e)
+            logger.error("Recovery procedure crashed: %s", e,
+                extra={"tag": "INFRA"})
 
 
 _watchdog: Optional[HealthWatchdog] = None

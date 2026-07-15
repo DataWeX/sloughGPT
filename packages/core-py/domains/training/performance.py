@@ -174,11 +174,13 @@ class CUDAGraphManager:
                 logits.copy_(logits)
 
             self.graphs[key] = g
-            logger.info(f"Captured CUDA graph for shape {key}")
+            logger.info(f"Captured CUDA graph for shape {key}",
+                extra={"tag": "TRAIN"},)
             return True
 
         except Exception as e:
-            logger.warning(f"CUDA graph capture failed: {e}")
+            logger.warning(f"CUDA graph capture failed: {e}",
+                extra={"tag": "TRAIN"},)
             self._enabled = False
             return False
 
@@ -454,9 +456,11 @@ class OptimizedInferenceEngine:
                     mode=self.config.compile_mode,
                     fullgraph=self.config.compile_mode == "max-autotune",
                 )
-                logger.info(f"Model compiled with mode: {self.config.compile_mode}")
+                logger.info(f"Model compiled with mode: {self.config.compile_mode}",
+                    extra={"tag": "TRAIN"},)
             except Exception as e:
-                logger.warning(f"torch.compile failed: {e}")
+                logger.warning(f"torch.compile failed: {e}",
+                    extra={"tag": "TRAIN"},)
                 self._compiled_model = None
 
     @torch.no_grad()
@@ -562,9 +566,11 @@ def optimize_model_for_inference(
     if use_compile and hasattr(torch, "compile") and device == "cuda":
         try:
             model = torch.compile(model, mode="default")
-            logger.info("Model compiled for inference")
+            logger.info("Model compiled for inference",
+                extra={"tag": "TRAIN"},)
         except Exception as e:
-            logger.warning(f"compile failed: {e}")
+            logger.warning(f"compile failed: {e}",
+                extra={"tag": "TRAIN"},)
 
     return model
 

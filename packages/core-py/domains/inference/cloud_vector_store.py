@@ -29,7 +29,7 @@ async def setup_pinecone(
     from domains.inference.vector_stores.pinecone_store import PineconeVectorStore
     from domains.inference.vector_store import VectorEntry
 
-    logger.info("Connecting to Pinecone index: %s", index)
+    logger.info("Connecting to Pinecone index: %s", index, extra={"tag": "INF"})
     store = PineconeVectorStore(
         api_key=api_key,
         index_name=index,
@@ -39,7 +39,7 @@ async def setup_pinecone(
 
     connected = await store.connect()
     if connected:
-        logger.info("Connected to Pinecone")
+        logger.info("Connected to Pinecone", extra={"tag": "INF"})
 
         entries = [
             VectorEntry(
@@ -51,36 +51,36 @@ async def setup_pinecone(
         ]
 
         count = await store.upsert(entries)
-        logger.info("Upserted %d test documents", count)
+        logger.info("Upserted %d test documents", count, extra={"tag": "INF"})
 
         results = await store.query(vector=[0.1] * dimension, top_k=1)
-        logger.info("Query returned %d results", len(results))
+        logger.info("Query returned %d results", len(results), extra={"tag": "INF"})
 
         await store.disconnect()
         return True
     else:
-        logger.info("Failed to connect to Pinecone")
+        logger.info("Failed to connect to Pinecone", extra={"tag": "INF"})
         return False
 
 
 async def test_pinecone():
     """Test Pinecone connection."""
-    logger.info("=" * 60)
-    logger.info("TESTING PINECONE VECTOR STORE")
-    logger.info("=" * 60)
+    logger.info("=" * 60, extra={"tag": "INF"})
+    logger.info("TESTING PINECONE VECTOR STORE", extra={"tag": "INF"})
+    logger.info("=" * 60, extra={"tag": "INF"})
 
     api_key = os.getenv("PINECONE_API_KEY")
     if api_key:
         if await setup_pinecone(api_key):
-            logger.info("   Pinecone: Connected and tested")
+            logger.info("   Pinecone: Connected and tested", extra={"tag": "INF"})
     else:
-        logger.info("   Pinecone: PINECONE_API_KEY not set")
-        logger.info("To set up Pinecone:")
-        logger.info("   1. Get API key from https://app.pinecone.io")
-        logger.info("   2. export PINECONE_API_KEY='your-api-key'")
-        logger.info("   3. python -m domains.inference.cloud_vector_store --setup")
+        logger.info("   Pinecone: PINECONE_API_KEY not set", extra={"tag": "INF"})
+        logger.info("To set up Pinecone:", extra={"tag": "INF"})
+        logger.info("   1. Get API key from https://app.pinecone.io", extra={"tag": "INF"})
+        logger.info("   2. export PINECONE_API_KEY='your-api-key'", extra={"tag": "INF"})
+        logger.info("   3. python -m domains.inference.cloud_vector_store --setup", extra={"tag": "INF"})
 
-    logger.info("=" * 60)
+    logger.info("=" * 60, extra={"tag": "INF"})
 
 
 def main():

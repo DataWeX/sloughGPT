@@ -41,7 +41,7 @@ class AtomicRef:
             try:
                 listener(old, value)
             except Exception as e:
-                logger.warning("AtomicRef[%s] listener failed: %s", self._name, e)
+                logger.warning("AtomicRef[%s] listener failed: %s", self._name, e, extra={"tag": "INFRA"})
 
     def swap(self, fn: Callable[[T], T]) -> T:
         """Atomically apply a function to the current value and return the new value."""
@@ -54,7 +54,7 @@ class AtomicRef:
             try:
                 listener(old, new)
             except Exception as e:
-                logger.warning("AtomicRef[%s] listener failed: %s", self._name, e)
+                logger.warning("AtomicRef[%s] listener failed: %s", self._name, e, extra={"tag": "INFRA"})
         return new
 
     @property

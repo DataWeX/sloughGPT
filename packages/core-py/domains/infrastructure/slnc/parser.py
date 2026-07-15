@@ -69,6 +69,7 @@ class SLNCParser:
             len(self._tensor_map),
             self._n_layer,
             self._file_size / 1e6,
+            extra={"tag": "INFRA"},
         )
 
     def _parse_header(self):
@@ -195,7 +196,8 @@ class SLNCParser:
             data = self._mm[offset:offset + nbytes]
             actual_crc = zlib.crc32(data) & 0xFFFFFFFF
             if actual_crc != expected_crc:
-                logger.error("Checksum mismatch: %s (expected %x, got %x)", name, expected_crc, actual_crc)
+                logger.error("Checksum mismatch: %s (expected %x, got %x)", name, expected_crc, actual_crc,
+                    extra={"tag": "INFRA"})
                 return False
         return True
 

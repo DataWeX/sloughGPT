@@ -238,7 +238,7 @@ class PerUserLoRAStore:
                         max_age_days=7,
                     )
                     self._last_prune_count = total_users - len(deleted)
-                    logger.info("Auto-pruned %d low-quality adapters", len(deleted))
+                    logger.info("Auto-pruned %d low-quality adapters", len(deleted), extra={"tag": "INFRA"})
 
             # Auto-aggregate: if we have enough quality adapters
             quality_adapters = self.get_quality_adapters(
@@ -253,10 +253,10 @@ class PerUserLoRAStore:
                     )
                     if "error" not in result:
                         self._last_aggregate_count = len(quality_adapters)
-                        logger.info("Auto-aggregated %d adapters", result.get('user_count', 0))
+                        logger.info("Auto-aggregated %d adapters", result.get('user_count', 0), extra={"tag": "INFRA"})
 
         except Exception as e:
-            logger.error("Auto-manage error: %s", e)
+            logger.error("Auto-manage error: %s", e, extra={"tag": "INFRA"})
 
     def _save_adapter(self, adapter: UserAdapter):
         """Save adapter weights to disk."""
@@ -536,7 +536,7 @@ class PerUserLoRAStore:
                 report_path = self.store_path / f"{output_name}_eval.txt"
                 with open(report_path, "w") as f:
                     f.write(evaluator.compare_with_report(baseline, with_adapter))
-                logger.info("Eval report saved: %s", report_path)
+                logger.info("Eval report saved: %s", report_path, extra={"tag": "INFRA"})
 
                 # Export as .soul checkpoint so it appears in model catalog
                 try:
@@ -548,12 +548,12 @@ class PerUserLoRAStore:
                         output_sou=str(sou_path),
                     )
                     result["sou_checkpoint"] = str(sou_path)
-                    logger.info(".soul checkpoint exported: %s", sou_path)
+                    logger.info(".soul checkpoint exported: %s", sou_path, extra={"tag": "INFRA"})
                 except Exception as e2:
-                    logger.warning(".soul export skipped: %s", e2)
+                    logger.warning(".soul export skipped: %s", e2, extra={"tag": "INFRA"})
 
             except Exception as e:
-                logger.warning("Eval skipped: %s", e, exc_info=True)
+                logger.warning("Eval skipped: %s", e, exc_info=True, extra={"tag": "INFRA"})
                 result["eval"] = {"error": str(e)}
 
         return result

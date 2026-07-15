@@ -68,11 +68,11 @@ class MetaWeightManager:
                 self._embed_model = SentenceTransformer("all-MiniLM-L6-v2")
                 self.embedding_dim = 384
                 logger.info(
-                    "MetaWeightManager: Using sentence-transformers embeddings (dim=%d)", self.embedding_dim
+                    "MetaWeightManager: Using sentence-transformers embeddings (dim=%d)", self.embedding_dim, extra={"tag": "INFRA"}
                 )
             except ImportError:
                 logger.warning(
-                    "MetaWeightManager: sentence-transformers not available, using simple embeddings"
+                    "MetaWeightManager: sentence-transformers not available, using simple embeddings", extra={"tag": "INFRA"}
                 )
                 self._embed_model = "simple"
         return self._embed_model
@@ -94,7 +94,7 @@ class MetaWeightManager:
                 embedding = embedding[0]
             return embedding.astype(np.float32)
         except Exception as e:
-            logger.warning("Embedding error: %s, falling back to simple", e)
+            logger.warning("Embedding error: %s, falling back to simple", e, extra={"tag": "INFRA"})
             return self._simple_embed(text)
 
     def _simple_embed(self, text: str) -> np.ndarray:
@@ -216,7 +216,7 @@ class MetaWeightManager:
                 self._weight_history = self._weight_history[-50:]
 
         except Exception as e:
-            logger.warning("MetaWeightManager: %s", e)
+            logger.warning("MetaWeightManager: %s", e, extra={"tag": "INFRA"})
 
         return weights
 
@@ -280,7 +280,7 @@ class MetaWeightManager:
                 repetition_delta=0.02,
             )
         except Exception as e:
-            logger.warning("Could not update user meta-weights: %s", e)
+            logger.warning("Could not update user meta-weights: %s", e, extra={"tag": "INFRA"})
 
         return feedback_id
 

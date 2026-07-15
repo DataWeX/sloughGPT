@@ -99,12 +99,12 @@ class ModelLoader:
     @classmethod
     def register(cls, name: str, model_class: type):
         cls._registry[name] = model_class
-        logger.info(f"Registered model backend: {name}")
+        logger.info(f"Registered model backend: {name}", extra={"tag": "MODEL"})
 
     @classmethod
     def register_loader(cls, suffix: str, loader_func: Callable):
         cls._loader_funcs[suffix] = loader_func
-        logger.info(f"Registered loader for: {suffix}")
+        logger.info(f"Registered loader for: {suffix}", extra={"tag": "MODEL"})
 
     @classmethod
     def load(cls, path: str, device: str = "cpu", **kwargs) -> ModelInterface:
@@ -205,7 +205,7 @@ class ModelLoader:
     def _load_huggingface(cls, model_id: str, device: str, **kwargs) -> ModelInterface:
         try:
             from transformers import AutoModelForCausalLM, AutoConfig
-            logger.info(f"Loading from HuggingFace: {model_id}")
+            logger.info(f"Loading from HuggingFace: {model_id}", extra={"tag": "MODEL"})
             config = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
             model = AutoModelForCausalLM.from_pretrained(
                 model_id, config=config, trust_remote_code=True,

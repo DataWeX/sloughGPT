@@ -192,7 +192,7 @@ class VisionProcessor:
                 mgr.initialize(vision_model="slonet")
             return get_provider(self._provider_name) is not None
         except Exception as e:
-            logger.warning(f"Failed to init multimodal: {e}")
+            logger.warning(f"Failed to init multimodal: {e}", extra={"tag": "MODEL"})
             return False
 
     async def _caption(self, img_data: str) -> str:
@@ -217,7 +217,7 @@ class VisionProcessor:
             mgr = get_multimodal_manager()
             return mgr.caption_image(img).text
         except Exception as e:
-            logger.warning(f"Caption failed: {e}")
+            logger.warning(f"Caption failed: {e}", extra={"tag": "MODEL"})
             return "[image]"
 
     async def process(self, messages: list) -> list:
@@ -225,14 +225,14 @@ class VisionProcessor:
         if not images:
             return messages
         if not self._ensure_provider():
-            logger.warning("Vision provider unavailable, keeping images as-is")
+            logger.warning("Vision provider unavailable, keeping images as-is", extra={"tag": "MODEL"})
             return messages
 
         captions = []
         for i, img in enumerate(images):
             cap = await self._caption(img)
             captions.append(cap)
-            logger.info(f"Image {i+1} captioned: {cap[:60]}")
+            logger.info(f"Image {i+1} captioned: {cap[:60]}", extra={"tag": "MODEL"})
 
         caption_block = "\n".join(f"[Image: {c}]" for c in captions)
 
@@ -361,7 +361,7 @@ class SloTransformerProvider:
             try:
                 out = await loop.run_in_executor(None, _gen)
             except Exception as e:
-                logger.warning(f"SloTransformer generation error: {e}")
+                logger.warning(f"SloTransformer generation error: {e}", extra={"tag": "MODEL"})
                 break
             if out is None:
                 break
@@ -465,6 +465,7 @@ class SloTransformerProvider:
             "Loaded SloTransformer from %s (vocab=%d, "
             "n_embed=%d, n_layer=%d, n_head=%d)",
             path, vocab, n_embed, n_layer, n_head,
+            extra={"tag": "MODEL"},
         )
         return cls(model, stoi, itos, model_id_str=model_id_str)
 
@@ -765,7 +766,7 @@ class InferenceEngineProvider:
                 top_k=kwargs.get("top_k", 40),
                 session_id=session_id,
             )
-            text = result.get("text", "")
+            text = self._formatter.clean_response(result.get("text", ""))
             try:
                 from domains.infrastructure.metrics import get_metrics_collector
                 get_metrics_collector().record_inference(_time.monotonic() - t0, tokens=result.get("tokens_generated", 0))
@@ -877,7 +878,7 @@ def setup_providers(hf_model=None, hf_tokenizer=None, hf_model_id: str = "gpt2",
             model_server=model_server,
         )
         register_provider("hf-default", hf_provider)
-        logger.info("Registered hf-default provider: %s (model_server=%s)", hf_model_id, model_server is not None)
+        logger.info("Registered hf-default provider: %s (model_server=%s)", hf_model_id, model_server is not None, extra={"tag": "MODEL"})
 
     text_provider_name = "hf-default" if hf_model is not None else None
 
@@ -899,9 +900,9 @@ def setup_providers(hf_model=None, hf_tokenizer=None, hf_model_id: str = "gpt2",
             register_provider("slonet-native", slonet_provider)
             text_provider_name = "slonet-native"
             logger.info("Registered slonet-native provider: %s (quant=%s)",
-                        slonet_hf_id, f"int{quant_bits}" if quantize else "none")
+                        slonet_hf_id, f"int{quant_bits}" if quantize else "none", extra={"tag": "MODEL"})
         except Exception as e:
-            logger.warning("Failed to load slonet-native provider %s: %s", slonet_hf_id, e)
+            logger.warning("Failed to load slonet-native provider %s: %s", slonet_hf_id, e, extra={"tag": "MODEL"})
 
     if inference_engine is not None:
         try:
@@ -921,10 +922,10 @@ def setup_providers(hf_model=None, hf_tokenizer=None, hf_model_id: str = "gpt2",
                 model_registry.register_engine(
                     "inference-engine", ie_provider, make_default=False,
                 )
-                logger.info("Registered inference-engine in ModelRegistry")
-            logger.info("Registered inference-engine provider")
+                logger.info("Registered inference-engine in ModelRegistry", extra={"tag": "MODEL"})
+            logger.info("Registered inference-engine provider", extra={"tag": "MODEL"})
         except Exception as e:
-            logger.warning("Failed to register inference-engine provider: %s", e)
+            logger.warning("Failed to register inference-engine provider: %s", e, extra={"tag": "MODEL"})
 
     router = ProviderRouter()
     router.add_processor(VisionProcessor("multimodal"))
@@ -940,9 +941,9 @@ def setup_providers(hf_model=None, hf_tokenizer=None, hf_model_id: str = "gpt2",
         register_provider("default", router)
         logger.info("Registered default provider router (processors=%s, text=%s)",
                     [type(p).__name__ for p in router._processors],
-                    text_provider_name)
+                    text_provider_name, extra={"tag": "MODEL"})
     else:
-        logger.info("SloNet provider active as default — skipping ProviderRouter override")
+        logger.info("SloNet provider active as default — skipping ProviderRouter override", extra={"tag": "MODEL"})
 
 
 # =============================================================================
@@ -1105,7 +1106,7 @@ class ProviderRouter:
             try:
                 msgs = await processor.process(msgs)
             except Exception as e:
-                logger.warning(f"Processor {type(processor).__name__} failed: {e}")
+                logger.warning(f"Processor {type(processor).__name__} failed: {e}", extra={"tag": "MODEL"})
 
         if not self._text_name:
             yield "no text provider configured"
@@ -1132,12 +1133,12 @@ class ProviderRouter:
                 break
 
             tool_name, tool_arg, match_text = match
-            logger.info(f"Tool call detected: {tool_name}({tool_arg[:40]})")
+            logger.info(f"Tool call detected: {tool_name}({tool_arg[:40]})", extra={"tag": "MODEL"})
             yield f"\n[Running tool: {tool_name}...]\n"
 
             # Execute the tool
             tool_result = await self._execute_tool(tool_name, tool_arg)
-            logger.info(f"Tool result: {tool_result[:60] if tool_result else 'empty'}")
+            logger.info(f"Tool result: {tool_result[:60] if tool_result else 'empty'}", extra={"tag": "MODEL"})
 
             # Append result as a system message and continue
             msgs.append({"role": "assistant", "content": generated.replace(match_text, "").strip()})
@@ -1182,7 +1183,7 @@ class ProviderRouter:
             except Exception as e:
                 return f"[tool error: {e}]"
 
-        logger.warning(f"Unknown tool: {tool_name}")
+        logger.warning(f"Unknown tool: {tool_name}", extra={"tag": "MODEL"})
         return f"[unknown tool: {tool_name}]"
 
     async def chat(

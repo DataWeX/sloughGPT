@@ -154,6 +154,7 @@ class TrainingExecutor:
         logger.info(
             "Submitted training job %s tree=%s (pool=%d/%d)",
             job_id, tree_id or "-", self._running(), self._max_workers,
+            extra={"tag": "TRAIN"},
         )
         return job_id
 
@@ -204,9 +205,10 @@ class TrainingExecutor:
                     logger.info(
                         "Stored %d trained Points in library for tree %s",
                         len(result), tree_id,
+                        extra={"tag": "TRAIN"},
                     )
                 except Exception as e:
-                    logger.warning("Failed to store trained Points: %s", e)
+                    logger.warning("Failed to store trained Points: %s", e, extra={"tag": "TRAIN"})
             return result
 
         return self.submit(
@@ -292,10 +294,10 @@ class TrainingExecutor:
             if cancelled:
                 info.status = JobStatus.CANCELLED
                 info.completed_at = time.time()
-                logger.info("Cancelled queued job %s", job_id)
+                logger.info("Cancelled queued job %s", job_id, extra={"tag": "TRAIN"})
                 return True
             # Job is already running — flag is set, function must check is_cancelled()
-            logger.info("Cancellation requested for running job %s (must check is_cancelled())", job_id)
+            logger.info("Cancellation requested for running job %s (must check is_cancelled())", job_id, extra={"tag": "TRAIN"})
             return True
         return False
 
@@ -319,7 +321,7 @@ class TrainingExecutor:
                 del self._jobs[jid]
                 purged += 1
         if purged:
-            logger.info("Purged %d old training jobs", purged)
+            logger.info("Purged %d old training jobs", purged, extra={"tag": "TRAIN"})
         return purged
 
     # ── Shutdown ──────────────────────────────────────────────────────
@@ -327,7 +329,7 @@ class TrainingExecutor:
     def shutdown(self, wait: bool = True) -> None:
         """Shut down the underlying thread pool."""
         self._executor.shutdown(wait=wait, cancel_futures=not wait)
-        logger.info("TrainingExecutor shut down (workers=%d)", self._max_workers)
+        logger.info("TrainingExecutor shut down (workers=%d)", self._max_workers, extra={"tag": "TRAIN"})
 
     # ── Internals ─────────────────────────────────────────────────────
 
@@ -360,5 +362,5 @@ def get_training_executor() -> TrainingExecutor:
         default_workers = min(2, multiprocessing.cpu_count())
         max_workers = int(os.environ.get("MAN_TRAIN_POOL_SIZE", default_workers))
         _instance = TrainingExecutor(max_workers=max_workers)
-        logger.info("TrainingExecutor created (workers=%d)", max_workers)
+        logger.info("TrainingExecutor created (workers=%d)", max_workers, extra={"tag": "TRAIN"})
         return _instance

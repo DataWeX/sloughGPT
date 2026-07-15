@@ -179,7 +179,8 @@ class SLNCCompiler:
         Returns:
             Path to created .slnc file
         """
-        logger.info("Compiling %s (%d tensors)", output, len(weights))
+        logger.info("Compiling %s (%d tensors)", output, len(weights),
+            extra={"tag": "INFRA"})
 
         # Build tensor list in computation order
         tensor_list = self._order_tensors(config, weights)
@@ -288,6 +289,7 @@ class SLNCCompiler:
             len(tensor_list),
             total_size / 1e6,
             block_count,
+            extra={"tag": "INFRA"},
         )
         return output
 

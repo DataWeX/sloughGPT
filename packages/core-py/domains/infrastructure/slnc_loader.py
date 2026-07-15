@@ -63,6 +63,7 @@ class SLNCLoader:
             self._n_layer,
             self._block_size,
             len(self._tensor_map),
+            extra={"tag": "INFRA"},
         )
 
     def _parse_header(self):

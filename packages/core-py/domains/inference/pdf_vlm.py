@@ -46,10 +46,10 @@ class PDFVLMProcessor:
                 result.append(buf.getvalue())
             return result
         except ImportError:
-            logger.warning("pdf2image not installed, using text-only fallback")
+            logger.warning("pdf2image not installed, using text-only fallback", extra={"tag": "INF"})
             return []
         except Exception as e:
-            logger.warning("PDF page rendering failed: %s", e)
+            logger.warning("PDF page rendering failed: %s", e, extra={"tag": "INF"})
             return []
 
     def _extract_text(self, pdf_path: str) -> str:
@@ -65,7 +65,7 @@ class PDFVLMProcessor:
             doc.close()
             return text
         except ImportError:
-            logger.warning("PyMuPDF not installed, trying pypdf...")
+            logger.warning("PyMuPDF not installed, trying pypdf...", extra={"tag": "INF"})
         try:
             import PyPDF2
             with open(pdf_path, "rb") as f:
@@ -77,10 +77,10 @@ class PDFVLMProcessor:
                     text += page.extract_text()
             return text
         except ImportError:
-            logger.warning("PyPDF2 not installed either")
+            logger.warning("PyPDF2 not installed either", extra={"tag": "INF"})
             return ""
         except Exception as e:
-            logger.warning("PDF text extraction failed: %s", e)
+            logger.warning("PDF text extraction failed: %s", e, extra={"tag": "INF"})
             return ""
 
     def analyze(
@@ -111,7 +111,7 @@ class PDFVLMProcessor:
                     )
                     return result.get("text", "No analysis generated.")
             except Exception as e:
-                logger.warning("VLM PDF analysis failed: %s", e)
+                logger.warning("VLM PDF analysis failed: %s", e, extra={"tag": "INF"})
 
         # Fallback: text-only
         try:
@@ -120,7 +120,7 @@ class PDFVLMProcessor:
                 return "Could not extract text from this PDF."
             return f"PDF text content ({len(text)} chars):\n\n{text[:3000]}..."
         except Exception as e:
-            logger.warning("PDF text extraction failed: %s", e)
+            logger.warning("PDF text extraction failed: %s", e, extra={"tag": "INF"})
             return f"Could not analyze PDF: {e}"
 
     def analyze_pages(
@@ -155,7 +155,7 @@ class PDFVLMProcessor:
                     })
                 return results
             except Exception as e:
-                logger.warning("VLM per-page analysis failed: %s", e)
+                logger.warning("VLM per-page analysis failed: %s", e, extra={"tag": "INF"})
 
         # Fallback
         text = self._extract_text(pdf_path)

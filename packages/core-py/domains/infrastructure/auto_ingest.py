@@ -261,7 +261,8 @@ class AutoIngester:
             await store.connect()
             return store
         except ImportError:
-            logger.warning("Vector store not available. Running in dry-run mode.")
+            logger.warning("Vector store not available. Running in dry-run mode.",
+                extra={"tag": "INFRA"})
             return None
 
     def build_metadata(self, chunk: FileChunk) -> Dict[str, Any]:
@@ -287,7 +288,8 @@ class AutoIngester:
         all_chunks: List[FileChunk] = []
 
         # Scan and chunk
-        logger.info("Scanning %s...", self.root)
+        logger.info("Scanning %s...", self.root,
+            extra={"tag": "INFRA"})
         for path, content in self.scanner.iter_files():
             self.stats["files_scanned"] += 1
             try:
@@ -297,14 +299,17 @@ class AutoIngester:
             except Exception:
                 self.stats["errors"] += 1
 
-        logger.info("  %d files, %d chunks", self.stats['files_scanned'], self.stats['chunks_created'])
+        logger.info("  %d files, %d chunks", self.stats['files_scanned'], self.stats['chunks_created'],
+            extra={"tag": "INFRA"})
 
         if dry_run or not store:
-            logger.info("  Dry run — not writing to vector store")
+            logger.info("  Dry run — not writing to vector store",
+                extra={"tag": "INFRA"})
             return self.stats
 
         # Upsert to vector store
-        logger.info("  Ingesting to %s...", self.provider)
+        logger.info("  Ingesting to %s...", self.provider,
+            extra={"tag": "INFRA"})
         from domains.inference.vector_store import VectorEntry
 
         entries = []
@@ -321,7 +326,8 @@ class AutoIngester:
         count = await store.upsert(entries)
         self.stats["files_ingested"] = count
 
-        logger.info("  %d chunks ingested", count)
+        logger.info("  %d chunks ingested", count,
+            extra={"tag": "INFRA"})
         return self.stats
 
     async def ingest_single_file(self, file_path: str) -> int:

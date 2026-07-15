@@ -133,7 +133,7 @@ class FileIndex:
                     stats["chunks_total"] += n
                     stats["by_ext"][ext] += n
 
-        logger.info("Indexed %d files, %d chunks", stats["files_indexed"], stats["chunks_total"])
+        logger.info("Indexed %d files, %d chunks", stats["files_indexed"], stats["chunks_total"], extra={"tag": "LEARN"})
         return stats
 
     def search(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
@@ -617,7 +617,7 @@ class BulkProcessor:
                 else:
                     self._skipped += 1
             except Exception as e:
-                logger.warning("Bulk ingest error at %d: %s", i, e)
+                logger.warning("Bulk ingest error at %d: %s", i, e, extra={"tag": "LEARN"})
                 self._errors += 1
 
         return self.get_report()

@@ -112,7 +112,7 @@ class ONNXInferenceEngine:
                 "transformers not installed. Install with: pip install transformers"
             )
 
-        logger.info(f"Loading {self.model_name} for ONNX Runtime...")
+        logger.info(f"Loading {self.model_name} for ONNX Runtime...", extra={"tag": "INF"})
         t0 = time.time()
 
         # Load PyTorch model first
@@ -132,7 +132,7 @@ class ONNXInferenceEngine:
         onnx_path = os.path.join(export_path, "model.onnx")
 
         if not os.path.exists(onnx_path):
-            logger.info("Exporting to ONNX format (first time, takes a minute)...")
+            logger.info("Exporting to ONNX format (first time, takes a minute)...", extra={"tag": "INF"})
             self._export_to_onnx(onnx_path)
 
         # Create ONNX Runtime session
@@ -145,8 +145,8 @@ class ONNXInferenceEngine:
 
         self.session = ort.InferenceSession(onnx_path, sess_options, providers=providers)
 
-        logger.info(f"Model loaded in {time.time() - t0:.1f}s")
-        logger.info(f"Using: %s (%s)", self.execution_provider, self.device)
+        logger.info(f"Model loaded in {time.time() - t0:.1f}s", extra={"tag": "INF"})
+        logger.info(f"Using: %s (%s)", self.execution_provider, self.device, extra={"tag": "INF"})
 
     def _export_to_onnx(self, output_path: str):
         """Export PyTorch model to ONNX format."""
@@ -176,7 +176,7 @@ class ONNXInferenceEngine:
             opset_version=14,
             do_constant_folding=True,
         )
-        logger.info("Exported ONNX model to %s", output_path)
+        logger.info("Exported ONNX model to %s", output_path, extra={"tag": "INF"})
 
     def generate(
         self,

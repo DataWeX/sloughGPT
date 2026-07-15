@@ -28,7 +28,8 @@ try:
         list_model_files,
     )
 except ImportError:
-    logger.warning("downcraft not available — download management disabled")
+    logger.warning("downcraft not available — download management disabled",
+        extra={"tag": "INFRA"})
     sg_downloader = None
     sg_state = None
     def get_cache_dir(model_id: str) -> str:
@@ -154,7 +155,8 @@ def cleanup_incomplete(model_id: str) -> bool:
     cache_dir = _cache_dir(model_id)
     if not cache_dir.exists():
         return False
-    logger.warning("Removing incomplete cache for %s: %s", model_id, cache_dir)
+    logger.warning("Removing incomplete cache for %s: %s", model_id, cache_dir,
+        extra={"tag": "INFRA"})
     shutil.rmtree(str(cache_dir), ignore_errors=True)
     # Also clean persistent state
     if sg_state is not None:
@@ -360,7 +362,8 @@ class DownloadManager:
         )
         self._notify_callbacks(model_id)
 
-        logger.info("Downloaded %s in %.1fs → %s", model_id, elapsed, cache_dir)
+        logger.info("Downloaded %s in %.1fs → %s", model_id, elapsed, cache_dir,
+            extra={"tag": "INFRA"})
         return {
             "status": "complete",
             "model_id": model_id,

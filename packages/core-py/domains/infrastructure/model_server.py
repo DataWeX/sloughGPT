@@ -161,10 +161,10 @@ def _torch_compile_model(model, model_id: str) -> Any:
         pass
     try:
         compiled = torch.compile(model, backend="aot_eager" if _is_intel_mac() else "inductor")
-        logger.info("torch.compile applied to %s", model_id)
+        logger.info("torch.compile applied to %s", model_id, extra={"tag": "MODEL"})
         return compiled
     except Exception as e:
-        logger.warning("torch.compile failed for %s: %s", model_id, e)
+        logger.warning("torch.compile failed for %s: %s", model_id, e, extra={"tag": "MODEL"})
         return model
 
 
@@ -1003,7 +1003,7 @@ class ModelServer:
                 loop.close()
             with self._warmup_lock:
                 self._warmup_completed = True
-            logger.info("ModelServer[%s]: warmup completed", self.model_id)
+            logger.info("ModelServer[%s]: warmup completed", self.model_id, extra={"tag": "MODEL"})
             # Apply torch.compile after warmup (enhances JIT cache)
             if not self._compiled and self._model_ref is not None:
                 compiled = _torch_compile_model(self._model_ref, self.model_id)
@@ -1015,7 +1015,11 @@ class ModelServer:
         except Exception as e:
             with self._warmup_lock:
                 self._warmup_error = f"{type(e).__name__}: {e}"
-            logger.warning("ModelServer[%s]: warmup failed: %s", self.model_id, e)
+            # Don't warn for expected failures (missing torch on CPU-only, etc.)
+            if "No module named" in str(e):
+                logger.debug("ModelServer[%s]: warmup skipped: %s", self.model_id, e)
+            else:
+                logger.warning("ModelServer[%s]: warmup failed: %s", self.model_id, e, extra={"tag": "MODEL"})
 
     def _check_device(self) -> None:
         if self._model_ref is None:
@@ -1062,7 +1066,7 @@ class ModelServer:
         if self._local_backend is not None:
             self._local_backend._model_ref = None
         self._device = "guard"
-        logger.info("ModelServer[%s]: dropped in-memory model ref (guard mode)", self.model_id)
+        logger.info("ModelServer[%s]: dropped in-memory model ref (guard mode)", self.model_id, extra={"tag": "MODEL"})
 
     def _cleanup_kv_cache(self) -> None:
         """Clear any KV cache tensors the model may have accumulated."""
@@ -1236,7 +1240,7 @@ class ModelServer:
             try:
                 hook()
             except Exception as e:
-                logger.warning("Pre-gen hook failed: %s", e)
+                logger.warning("Pre-gen hook failed: %s", e, extra={"tag": "MODEL"})
 
         # Acquire semaphore (serialize concurrent access)
         acquired = False
@@ -1312,7 +1316,7 @@ class ModelServer:
                 try:
                     hook()
                 except Exception as e:
-                    logger.warning("Post-gen hook failed: %s", e)
+                    logger.warning("Post-gen hook failed: %s", e, extra={"tag": "MODEL"})
 
     def _generate_sync(
         self,
@@ -1415,7 +1419,7 @@ class ModelServer:
             try:
                 hook()
             except Exception as e:
-                logger.warning("Pre-gen hook failed: %s", e)
+                logger.warning("Pre-gen hook failed: %s", e, extra={"tag": "MODEL"})
 
         # Select backend (guard if alive, else local)
         backend = self._select_backend()
@@ -1512,7 +1516,7 @@ class ModelServer:
 
         except GeneratorExit:
             aborted = True
-            logger.info("generate_stream[%s]: client disconnected mid-stream", self.model_id)
+            logger.info("generate_stream[%s]: client disconnected mid-stream", self.model_id, extra={"tag": "MODEL"})
             if cancel_event is not None:
                 cancel_event.set()
             return
@@ -1538,9 +1542,9 @@ class ModelServer:
                 try:
                     hook()
                 except Exception as e:
-                    logger.warning("Post-gen hook failed: %s", e)
+                    logger.warning("Post-gen hook failed: %s", e, extra={"tag": "MODEL"})
             if aborted:
-                logger.info("generate_stream[%s]: cleaned up after abort", self.model_id)
+                logger.info("generate_stream[%s]: cleaned up after abort", self.model_id, extra={"tag": "MODEL"})
 
     @staticmethod
     def _wrap_generator_as_streamer(gen):
@@ -1581,7 +1585,7 @@ class ModelServer:
             try:
                 hook(error)
             except Exception as e:
-                logger.warning("Error hook failed: %s", e)
+                logger.warning("Error hook failed: %s", e, extra={"tag": "MODEL"})
 
     # --- Model swap (hot-reload) ---
 
@@ -1602,7 +1606,7 @@ class ModelServer:
         gc.collect()
         self._check_device()
         self.set_status(ModelStatus.READY)
-        logger.info("ModelServer[%s]: model swapped", self.model_id)
+        logger.info("ModelServer[%s]: model swapped", self.model_id, extra={"tag": "MODEL"})
         # Re-warmup with new model
         with self._warmup_lock:
             self._warmup_completed = False

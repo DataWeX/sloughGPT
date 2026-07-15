@@ -42,7 +42,8 @@ def extract_pairs_from_sessions(
         Deduplicated by content hash. Newest first.
     """
     if not _SESSIONS_DIR.exists():
-        logger.info("Sessions directory not found: %s", _SESSIONS_DIR)
+        logger.info("Sessions directory not found: %s", _SESSIONS_DIR,
+            extra={"tag": "TRAIN"},)
         return []
 
     seen_hashes: set = set()
@@ -63,7 +64,8 @@ def extract_pairs_from_sessions(
         try:
             data = json.loads(sf.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError) as e:
-            logger.warning("Failed to read session %s: %s", sid, e)
+            logger.warning("Failed to read session %s: %s", sid, e,
+                extra={"tag": "TRAIN"},)
             continue
 
         messages = data.get("messages", [])
@@ -102,7 +104,8 @@ def extract_pairs_from_sessions(
         if len(pairs) >= limit:
             break
 
-    logger.info("Extracted %d pairs from %d session files", len(pairs), len(session_files))
+    logger.info("Extracted %d pairs from %d session files", len(pairs), len(session_files),
+        extra={"tag": "TRAIN"},)
     return pairs
 
 
@@ -126,7 +129,8 @@ def extract_pairs_from_logs(
         Newest first (file order).
     """
     if not _RESPONSE_LOGS_DIR.exists():
-        logger.info("Response logs directory not found: %s", _RESPONSE_LOGS_DIR)
+        logger.info("Response logs directory not found: %s", _RESPONSE_LOGS_DIR,
+            extra={"tag": "TRAIN"},)
         return []
 
     seen_hashes: set = set()
@@ -176,13 +180,15 @@ def extract_pairs_from_logs(
                         "model": entry.get("model", ""),
                     })
         except OSError as e:
-            logger.warning("Failed to read log %s: %s", lf, e)
+            logger.warning("Failed to read log %s: %s", lf, e,
+                extra={"tag": "TRAIN"},)
             continue
 
         if len(pairs) >= limit:
             break
 
-    logger.info("Extracted %d pairs from %d log files", len(pairs), len(log_files))
+    logger.info("Extracted %d pairs from %d log files", len(pairs), len(log_files),
+        extra={"tag": "TRAIN"},)
     return pairs
 
 
@@ -212,7 +218,8 @@ def write_training_text(
         for pair in pairs:
             f.write(f"User: {pair['user_msg']}\nAssistant: {pair['assistant_msg']}\n\n")
 
-    logger.info("Wrote %d pairs to %s", len(pairs), text_file)
+    logger.info("Wrote %d pairs to %s", len(pairs), text_file,
+        extra={"tag": "TRAIN"},)
     return text_file
 
 

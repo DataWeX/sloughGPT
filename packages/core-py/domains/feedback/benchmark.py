@@ -169,7 +169,7 @@ class ResponseBenchmark:
         log_file = self.cache_dir / f"responses_{datetime.now().strftime('%Y%m%d')}.jsonl"
 
         if not log_file.exists():
-            logger.warning(f"No log file: {log_file}")
+            logger.warning(f"No log file: {log_file}", extra={"tag": "INFRA"})
             return self.run([], model or "unknown")
 
         responses = []

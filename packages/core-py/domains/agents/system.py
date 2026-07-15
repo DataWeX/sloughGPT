@@ -131,7 +131,7 @@ class AgentSystem:
             "avatar": avatar or name[0] if name else "A",
         }
         _agent_repo.save(agent_id, data)
-        logger.info(f"Created agent: {agent_id}")
+        logger.info(f"Created agent: {agent_id}", extra={"tag": "MODEL"})
         return {"id": agent_id, **data}
 
     def update(self, agent_id: str, **kwargs) -> Optional[dict]:
@@ -142,7 +142,7 @@ class AgentSystem:
             if value is not None and key in ("name", "description", "instructions", "tools", "avatar"):
                 data[key] = value
         _agent_repo.save(agent_id, data)
-        logger.info(f"Updated agent: {agent_id}")
+        logger.info(f"Updated agent: {agent_id}", extra={"tag": "MODEL"})
         return {"id": agent_id, **data}
 
     def delete(self, agent_id: str) -> bool:

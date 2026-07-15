@@ -224,7 +224,7 @@ class MogDBVectorStore(VectorStore):
                 metadata=doc.get("metadata", {}),
             )
             self._entries[entry.id] = entry
-        logger.info("MogDBVectorStore loaded %d entries from %s", len(self._entries), self._path)
+        logger.info("MogDBVectorStore loaded %d entries from %s", len(self._entries), self._path, extra={"tag": "INF"})
         return True
 
     async def disconnect(self) -> None:
@@ -380,6 +380,7 @@ def _load_embed_model() -> Any:
             logger.warning(
                 "Embed model skipped: only %.0f MB available (need %d MB)",
                 avail_mb, _EMBED_MIN_MEMORY_MB,
+                extra={"tag": "INF"},
             )
             _EMBED_LOAD_FAILED = True
             return None
@@ -392,19 +393,20 @@ def _load_embed_model() -> Any:
     except ImportError:
         logger.info(
             "sentence-transformers not installed; using n-gram embedder. "
-            "Install with: pip install sentence-transformers"
+            "Install with: pip install sentence-transformers",
+            extra={"tag": "INF"},
         )
         _EMBED_LOAD_FAILED = True
         return None
 
     # Load model on CPU (auto-downloads on first run)
     try:
-        logger.info("Loading embedding model %s (device=cpu)...", _EMBED_MODEL_NAME)
+        logger.info("Loading embedding model %s (device=cpu)...", _EMBED_MODEL_NAME, extra={"tag": "INF"})
         _embed_model = SentenceTransformer(_EMBED_MODEL_NAME, device="cpu")
-        logger.info("Embedding model loaded (%d-dimensional, device=cpu)", _EMBED_DIM)
+        logger.info("Embedding model loaded (%d-dimensional, device=cpu)", _EMBED_DIM, extra={"tag": "INF"})
         return _embed_model
     except Exception as exc:
-        logger.warning("Failed to load embedding model: %s — using n-gram fallback", exc)
+        logger.warning("Failed to load embedding model: %s — using n-gram fallback", exc, extra={"tag": "INF"})
         _EMBED_LOAD_FAILED = True
         return None
 

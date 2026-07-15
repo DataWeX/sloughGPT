@@ -446,18 +446,18 @@ class InferenceBenchmark:
 
     def print_results(self, results: Dict):
         """Print benchmark results."""
-        logger.info("=" * 60)
-        logger.info("INFERENCE BENCHMARK RESULTS")
-        logger.info("=" * 60)
-        logger.info("Prompt tokens: %s", results['prompt_tokens'])
-        logger.info("Generated tokens: %s", results['generated_tokens'])
-        logger.info("Average latency: %.2f ms", results['avg_latency_ms'])
-        logger.info("P50 latency: %.2f ms", results['p50_latency_ms'])
-        logger.info("P95 latency: %.2f ms", results['p95_latency_ms'])
-        logger.info("P99 latency: %.2f ms", results['p99_latency_ms'])
-        logger.info("Tokens/sec: %.2f", results['avg_tokens_per_sec'])
-        logger.info("Test runs: %s", results['num_runs'])
-        logger.info("=" * 60)
+        logger.info("=" * 60, extra={"tag": "INF"})
+        logger.info("INFERENCE BENCHMARK RESULTS", extra={"tag": "INF"})
+        logger.info("=" * 60, extra={"tag": "INF"})
+        logger.info("Prompt tokens: %s", results['prompt_tokens'], extra={"tag": "INF"})
+        logger.info("Generated tokens: %s", results['generated_tokens'], extra={"tag": "INF"})
+        logger.info("Average latency: %.2f ms", results['avg_latency_ms'], extra={"tag": "INF"})
+        logger.info("P50 latency: %.2f ms", results['p50_latency_ms'], extra={"tag": "INF"})
+        logger.info("P95 latency: %.2f ms", results['p95_latency_ms'], extra={"tag": "INF"})
+        logger.info("P99 latency: %.2f ms", results['p99_latency_ms'], extra={"tag": "INF"})
+        logger.info("Tokens/sec: %.2f", results['avg_tokens_per_sec'], extra={"tag": "INF"})
+        logger.info("Test runs: %s", results['num_runs'], extra={"tag": "INF"})
+        logger.info("=" * 60, extra={"tag": "INF"})
 
 
 __all__ = [

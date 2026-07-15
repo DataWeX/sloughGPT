@@ -230,12 +230,12 @@ class HFDPOTrainer:
             return {"status": "skipped", "reason": f"Only {len(pairs)} pair(s), need >=2"}
 
         pairs = pairs[:max_pairs]
-        logger.info("DPO: training on %d pairs", len(pairs))
+        logger.info("DPO: training on %d pairs", len(pairs), extra={"tag": "INFRA"})
 
         # Benchmark before
         before_ppl = self._compute_ppl(_BENCHMARK_PROMPTS)
         snapshot = self._take_snapshot()
-        logger.info("DPO: before PPL = %.2f", before_ppl)
+        logger.info("DPO: before PPL = %.2f", before_ppl, extra={"tag": "INFRA"})
 
         # Optimizer — only step on trainable (LoRA) params
         trainable_params = [p for p in self.model.parameters() if p.requires_grad]
@@ -269,7 +269,7 @@ class HFDPOTrainer:
                 ).input_ids.to(self.device)
 
                 if ids.shape[1] < 4:
-                    logger.debug("  Skipping %s: too short (%d tokens)", label, ids.shape[1])
+                    logger.debug("  Skipping %s: too short (%d tokens)", label, ids.shape[1], extra={"tag": "INFRA"})
                     continue
 
                 seq_len = ids.shape[1] - 1
@@ -311,12 +311,12 @@ class HFDPOTrainer:
                 ppl_delta = ((current_ppl - before_ppl) / before_ppl) * 100
                 logger.info(
                     "  DPO checkpoint %d/%d: PPL=%.2f (delta=%+.1f%%)",
-                    pair_idx + 1, len(pairs), current_ppl, ppl_delta,
+                    pair_idx + 1, len(pairs), current_ppl, ppl_delta, extra={"tag": "INFRA"}
                 )
                 if ppl_delta > 5.0:
                     self._restore_snapshot(snapshot)
                     self.rejected_count += 1
-                    logger.warning("DPO rejected at pair %d: PPL +%.1f%%", pair_idx + 1, ppl_delta)
+                    logger.warning("DPO rejected at pair %d: PPL +%.1f%%", pair_idx + 1, ppl_delta, extra={"tag": "INFRA"})
                     return {
                         "status": "rejected",
                         "steps": self.steps,
@@ -336,7 +336,7 @@ class HFDPOTrainer:
         if ppl_delta > 5.0:
             self._restore_snapshot(snapshot)
             self.rejected_count += 1
-            logger.warning("DPO final check rejected: PPL +%.1f%%", ppl_delta)
+            logger.warning("DPO final check rejected: PPL +%.1f%%", ppl_delta, extra={"tag": "INFRA"})
             return {
                 "status": "rejected",
                 "steps": self.steps,
@@ -359,7 +359,7 @@ class HFDPOTrainer:
         logger.info(
             "DPO accepted: %d steps, loss=%.4f, PPL %.2f → %.2f (%.1f%%)",
             result["steps"], result["avg_loss"],
-            result["ppl_before"], result["ppl_after"], result["ppl_delta_pct"],
+            result["ppl_before"], result["ppl_after"], result["ppl_delta_pct"], extra={"tag": "INFRA"}
         )
         return result
 

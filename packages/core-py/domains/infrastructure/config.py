@@ -166,7 +166,8 @@ def _apply_env_overrides(config: AppConfig) -> AppConfig:
         target = current
         for part in parts[:-1]:
             if part not in target:
-                logger.warning("Unknown config key: %s (from env %s)", dot_path, _ENV_PREFIX + dot_path.upper().replace(".", _SEPARATOR))
+                logger.warning("Unknown config key: %s (from env %s)", dot_path, _ENV_PREFIX + dot_path.upper().replace(".", _SEPARATOR),
+                    extra={"tag": "INFRA"})
                 break
             target = target[part]
         else:
@@ -183,9 +184,11 @@ def _apply_env_overrides(config: AppConfig) -> AppConfig:
                     else:
                         target[leaf] = value
                 except (ValueError, TypeError):
-                    logger.warning("Cannot coerce %s=%s to %s", dot_path, value, expected_type.__name__)
+                    logger.warning("Cannot coerce %s=%s to %s", dot_path, value, expected_type.__name__,
+                        extra={"tag": "INFRA"})
             else:
-                logger.warning("Unknown config key: %s (from env %s)", dot_path, _ENV_PREFIX + dot_path.upper().replace(".", _SEPARATOR))
+                logger.warning("Unknown config key: %s (from env %s)", dot_path, _ENV_PREFIX + dot_path.upper().replace(".", _SEPARATOR),
+                    extra={"tag": "INFRA"})
 
     return AppConfig.model_validate(current)
 
@@ -200,7 +203,8 @@ def _load_yaml(path: Path) -> dict[str, Any]:
                 if isinstance(data, dict):
                     return data
     except Exception:
-        logger.warning("Failed to load config file: %s", path)
+        logger.warning("Failed to load config file: %s", path,
+            extra={"tag": "INFRA"})
     return {}
 
 
@@ -261,7 +265,7 @@ class ConfigManager:
             try:
                 cb(new_config, old_config)
             except Exception:
-                logger.exception("Config reload callback failed")
+                logger.exception("Config reload callback failed", extra={"tag": "INFRA"})
 
         try:
             from domains.infrastructure.event_bus import get_event_bus
@@ -278,7 +282,8 @@ class ConfigManager:
                 # No running event loop — use asyncio.run() so async handlers are awaited
                 asyncio.run(bus.emit("config.changed", payload, source="config_manager"))
         except Exception:
-            logger.warning("Could not emit config.changed event")
+            logger.warning("Could not emit config.changed event",
+                extra={"tag": "INFRA"})
 
         return new_config
 

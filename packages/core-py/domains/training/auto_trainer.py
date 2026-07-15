@@ -67,6 +67,7 @@ class AutoTrainer:
         logger.info(
             "AutoTrainer started (threshold=%d, interval=%ds)",
             self.threshold, self.interval_s,
+            extra={"tag": "TRAIN"},
         )
 
     def stop(self) -> None:
@@ -74,7 +75,8 @@ class AutoTrainer:
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=5)
-        logger.info("AutoTrainer stopped")
+        logger.info("AutoTrainer stopped",
+            extra={"tag": "TRAIN"},)
 
     def _loop(self) -> None:
         """Main monitoring loop — polls every 30s."""
@@ -82,7 +84,8 @@ class AutoTrainer:
             try:
                 self._check_and_train()
             except Exception as e:
-                logger.error("AutoTrainer error: %s", e, exc_info=True)
+                logger.error("AutoTrainer error: %s", e, exc_info=True,
+                    extra={"tag": "TRAIN"},)
             self._stop_event.wait(30)
 
     def _check_and_train(self) -> None:
@@ -123,11 +126,13 @@ class AutoTrainer:
             logger.info(
                 "AutoTrainer: only %d pairs found (need 5), skipping",
                 len(pairs),
+                extra={"tag": "TRAIN"},
             )
             self._conversation_count = 0
             return False
 
-        logger.info("AutoTrainer: found %d pairs, starting training", len(pairs))
+        logger.info("AutoTrainer: found %d pairs, starting training", len(pairs),
+            extra={"tag": "TRAIN"},)
 
         # Write text file
         text_file = write_training_text(pairs)
@@ -141,7 +146,8 @@ class AutoTrainer:
         train_script = _REPO_ROOT / "scripts" / "hf_train.py"
 
         if not venv_python.exists():
-            logger.error("AutoTrainer: .venv Python not found")
+            logger.error("AutoTrainer: .venv Python not found",
+                extra={"tag": "TRAIN"},)
             return False
 
         t0 = time.time()
@@ -166,7 +172,8 @@ class AutoTrainer:
             )
 
             if proc.returncode != 0:
-                logger.error("AutoTrainer subprocess failed: %s", proc.stderr[-500:])
+                logger.error("AutoTrainer subprocess failed: %s", proc.stderr[-500:],
+                    extra={"tag": "TRAIN"},)
                 return False
 
             result = json.loads(proc.stdout.strip().split("\n")[-1])
@@ -184,6 +191,7 @@ class AutoTrainer:
                     result.get("loss", 0),
                     result.get("steps", 0),
                     elapsed,
+                    extra={"tag": "TRAIN"},
                 )
 
                 # Store pairs in MogDB (with quality scoring)
@@ -202,18 +210,22 @@ class AutoTrainer:
                         for i, p in enumerate(pairs)
                     ])
                 except Exception as e:
-                    logger.warning("AutoTrainer: failed to store pairs in MogDB: %s", e)
+                    logger.warning("AutoTrainer: failed to store pairs in MogDB: %s", e,
+                        extra={"tag": "TRAIN"},)
 
                 return True
             else:
-                logger.error("AutoTrainer training failed: %s", result.get("error"))
+                logger.error("AutoTrainer training failed: %s", result.get("error"),
+                    extra={"tag": "TRAIN"},)
                 return False
 
         except subprocess.TimeoutExpired:
-            logger.error("AutoTrainer: training timed out (300s)")
+            logger.error("AutoTrainer: training timed out (300s)",
+                extra={"tag": "TRAIN"},)
             return False
         except Exception as e:
-            logger.error("AutoTrainer: training error: %s", e)
+            logger.error("AutoTrainer: training error: %s", e,
+                extra={"tag": "TRAIN"},)
             return False
 
     @staticmethod

@@ -82,14 +82,14 @@ class Kernel:
     def boot(self) -> None:
         self._running = True
         self._init_process = self.spawn("kernel", "kernel-init")
-        logger.info("Kernel booted (pid=%d)", self._init_process.pid)
+        logger.info("Kernel booted (pid=%d)", self._init_process.pid, extra={"tag": "INFRA"})
 
     def shutdown(self) -> None:
         self._running = False
         for proc in list(self._processes.values()):
             if proc.state == ProcessState.RUNNING:
                 proc.state = ProcessState.STOPPED
-        logger.info("Kernel shut down")
+        logger.info("Kernel shut down", extra={"tag": "INFRA"})
 
     @property
     def uptime(self) -> float:

@@ -166,7 +166,7 @@ def _build_bpe_tokenizer(texts: List[str], vocab_size: int = 2048):
             return padded
         return bpe, encode_fn
     except Exception as e:
-        logger.warning("BPE tokenizer failed (%s), falling back to whitespace", e)
+        logger.warning("BPE tokenizer failed (%s), falling back to whitespace", e, extra={"tag": "INFRA"})
         return None, None
 
 
@@ -415,10 +415,10 @@ def train_embedder(
     rng = np.random.RandomState(42)
 
     # 1. Build tokenizer — prefer BPE, fall back to whitespace
-    logger.info("Building tokenizer from %d texts", len(texts))
+    logger.info("Building tokenizer from %d texts", len(texts), extra={"tag": "INFRA"})
     bpe, encode_fn = _build_bpe_tokenizer(texts, vocab_size)
     if bpe is not None:
-        logger.info("Using BPE tokenizer (vocab=%d)", len(bpe.vocab))
+        logger.info("Using BPE tokenizer (vocab=%d)", len(bpe.vocab), extra={"tag": "INFRA"})
         actual_vocab = len(bpe.vocab)
         vocab = bpe.vocab
         itos = bpe.itos
@@ -426,21 +426,21 @@ def train_embedder(
         vocab, itos = _build_vocab(texts, vocab_size)
         actual_vocab = len(vocab)
         encode_fn = None
-        logger.info("Using whitespace tokenizer (vocab=%d)", actual_vocab)
+        logger.info("Using whitespace tokenizer (vocab=%d)", actual_vocab, extra={"tag": "INFRA"})
 
     # 2. Build encoder
     encoder = _build_encoder(actual_vocab, embed_dim, max_seq_len, n_heads, n_layers)
     optimizer = SloAdam(lr=lr)
     params = encoder.parameters()
-    logger.info("Encoder params: %d tensors", len(params))
+    logger.info("Encoder params: %d tensors", len(params), extra={"tag": "INFRA"})
 
     # 2b. Load meaning tags (the stars — fixed semantic reference points)
     from domains.infrastructure.anchor_store import MeaningTags, get_default_meaning_tags
     meaning_tags = get_default_meaning_tags(dimension=embed_dim)
-    logger.info("Loaded %d meaning tags: %s", len(meaning_tags.names()), meaning_tags.names())
+    logger.info("Loaded %d meaning tags: %s", len(meaning_tags.names()), meaning_tags.names(), extra={"tag": "INFRA"})
 
     # 3. Training loop
-    logger.info("Training embedder: %d texts, %d epochs, batch_size=%d", len(texts), epochs, batch_size)
+    logger.info("Training embedder: %d texts, %d epochs, batch_size=%d", len(texts), epochs, batch_size, extra={"tag": "INFRA"})
     rng_train = np.random.RandomState(123)
     losses = []
     refine_stats = []
@@ -543,7 +543,7 @@ def train_embedder(
         refined = meaning_tags.refine(texts, all_norm, lr=0.1, min_samples=max(3, len(texts) // 10))
         if refined:
             refine_stats.append({"epoch": epoch + 1, "refined": refined})
-            logger.info("Epoch %d refine: %s", epoch + 1, {k: v for k, v in refined.items()})
+            logger.info("Epoch %d refine: %s", epoch + 1, {k: v for k, v in refined.items()}, extra={"tag": "INFRA"})
 
         # Step B: Correct misclassified texts via TruthMaintainer
         from domains.infrastructure.truth_maintainer import get_truth_maintainer
@@ -561,18 +561,18 @@ def train_embedder(
                 )
                 maintain_stats.append({"epoch": epoch + 1, "misclassified": len(misclassified), "corrected": len(queries), "loss": corr_loss})
                 logger.info("Epoch %d maintain: %d misclassified → %d corrected (loss=%.4f)",
-                           epoch + 1, len(misclassified), len(queries), corr_loss)
+                           epoch + 1, len(misclassified), len(queries), corr_loss, extra={"tag": "INFRA"})
 
         if progress_callback:
             progress_callback(epoch + 1, avg_loss, epochs)
 
         if (epoch + 1) % 5 == 0 or epoch == 0:
-            logger.info("Epoch %d/%d — loss: %.4f (constraint: %.4f)", epoch + 1, epochs, avg_loss, avg_constraint)
+            logger.info("Epoch %d/%d — loss: %.4f (constraint: %.4f)", epoch + 1, epochs, avg_loss, avg_constraint, extra={"tag": "INFRA"})
 
     # 4. Save checkpoint
     out_path = save_path or str(_EMBEDDER_PATH)
     _save_checkpoint(out_path, encoder, vocab, itos, embed_dim, max_seq_len, n_heads, n_layers, bpe=bpe)
-    logger.info("Saved embedder to %s", out_path)
+    logger.info("Saved embedder to %s", out_path, extra={"tag": "INFRA"})
 
     return {
         "epochs": epochs,
@@ -670,9 +670,9 @@ def _save_checkpoint(
         bpe_save_path = str(path).replace(".sou", "-bpe.json")
         try:
             bpe.save(bpe_save_path)
-            logger.info("Saved BPE tokenizer to %s", bpe_save_path)
+            logger.info("Saved BPE tokenizer to %s", bpe_save_path, extra={"tag": "INFRA"})
         except Exception as e:
-            logger.warning("Failed to save BPE tokenizer: %s", e)
+            logger.warning("Failed to save BPE tokenizer: %s", e, extra={"tag": "INFRA"})
 
 
 class SloTextEmbedder:
@@ -758,7 +758,7 @@ class SloTextEmbedder:
                 bpe_path = path.replace(".sou", "-bpe.json")
                 if os.path.exists(bpe_path):
                     bpe_tokenizer = BPETokenizer.load(bpe_path)
-                    logger.info("Loaded BPE tokenizer from %s", bpe_path)
+                    logger.info("Loaded BPE tokenizer from %s", bpe_path, extra={"tag": "INFRA"})
             except Exception:
                 pass
 
@@ -794,7 +794,7 @@ class SloTextEmbedder:
                             enc_params[param_idx].data = arr
                     param_idx += 1
 
-            logger.info("Loaded SloTextEmbedder from %s (embed_dim=%d)", path, embed_dim)
+            logger.info("Loaded SloTextEmbedder from %s (embed_dim=%d)", path, embed_dim, extra={"tag": "INFRA"})
             encode_fn = None
             if bpe_tokenizer is not None:
                 def encode_fn(text: str, max_len: int) -> np.ndarray:
@@ -808,7 +808,7 @@ class SloTextEmbedder:
             return embedder
 
         except Exception as e:
-            logger.warning("Failed to load SloTextEmbedder: %s", e)
+            logger.warning("Failed to load SloTextEmbedder: %s", e, extra={"tag": "INFRA"})
             return None
 
     def embed(self, text: str) -> List[float]:
