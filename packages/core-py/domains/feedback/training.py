@@ -14,7 +14,7 @@ from typing import List, Dict, Optional
 from dataclasses import dataclass
 import logging
 
-logger = logging.getLogger("man.feedback.training")
+logger = logging.getLogger("slo.feedback.training")
 
 
 @dataclass

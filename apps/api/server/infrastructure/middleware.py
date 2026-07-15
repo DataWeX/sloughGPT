@@ -23,10 +23,10 @@ from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-logger = logging.getLogger("man.middleware")
+logger = logging.getLogger("slo.middleware")
 
 # Default server-side request timeout (seconds).
-# Override via env var MAN_REQUEST_TIMEOUT in main.py.
+# Override via env var SLO_REQUEST_TIMEOUT in main.py.
 REQUEST_TIMEOUT_SECONDS = 60.0
 
 # Paths that are always slow during cold start — suppress SLOW log for these

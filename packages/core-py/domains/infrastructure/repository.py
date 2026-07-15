@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Generic, Optional, Protocol, TypeVar, runtime_checkable
 
-logger = logging.getLogger("man.repository")
+logger = logging.getLogger("slo.repository")
 
 T = TypeVar("T")
 

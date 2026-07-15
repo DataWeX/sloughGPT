@@ -24,7 +24,7 @@ import sys
 
 import numpy as np
 
-logger = logging.getLogger("man.quant_core")
+logger = logging.getLogger("slo.quant_core")
 
 # ── Paths ──────────────────────────────────────────────────────────
 

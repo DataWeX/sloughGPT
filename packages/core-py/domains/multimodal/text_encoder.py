@@ -9,7 +9,7 @@ from typing import List
 import numpy as np
 import logging
 
-logger = logging.getLogger("man.multimodal.text_encoder")
+logger = logging.getLogger("slo.multimodal.text_encoder")
 
 from domains.training.slonet import (
     Tensor, SloEmbedding, SloTransformerBlock, SloLayerNorm, SloLinear,

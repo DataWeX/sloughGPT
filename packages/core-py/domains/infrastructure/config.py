@@ -11,8 +11,8 @@ Usage:
     cfg.log_level           # "INFO"
 
 Env overrides use double-underscore for nesting:
-    MAN_MODEL__NAME=gpt2    overrides config.model.name
-    MAN_SERVER__PORT=9000   overrides config.server.port
+    SLO_MODEL__NAME=gpt2    overrides config.model.name
+    SLO_SERVER__PORT=9000   overrides config.server.port
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-logger = logging.getLogger("man.config")
+logger = logging.getLogger("slo.config")
 
 # ── Nested Config Models ──
 
@@ -111,12 +111,12 @@ class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-_ENV_PREFIX = "MAN_"
+_ENV_PREFIX = "SLO_"
 _SEPARATOR = "__"
 
 
 def _env_to_key(env_name: str) -> str:
-    """MAN_MODEL__NAME → model.name"""
+    """SLO_MODEL__NAME → model.name"""
     rest = env_name[len(_ENV_PREFIX):]
     parts = rest.lower().split(_SEPARATOR)
     return ".".join(parts)
@@ -125,20 +125,20 @@ def _env_to_key(env_name: str) -> str:
 # Env vars consumed by external systems (ServerConfig, etc.) — silently ignored.
 _SKIP_ENV_KEYS: frozenset[str] = frozenset({
     # ServerConfig (apps/api/server/config.py) — not in infrastructure AppConfig schema
-    "MAN_ENABLE_PROCESS_GUARD",
-    "MAN_AUTOLOAD_MODEL",
-    "MAN_AUTOLOAD_DEVICE",
-    "MAN_USE_SLONET",
-    "MAN_STARTUP_PROFILE",
-    "MAN_RELOAD",
-    "MAN_GUARD_MEMORY_LIMIT_MB",
-    "MAN_GUARD_MAX_RESTARTS",
-    "MAN_GUARD_RESTART_DELAY",
+    "SLO_ENABLE_PROCESS_GUARD",
+    "SLO_AUTOLOAD_MODEL",
+    "SLO_AUTOLOAD_DEVICE",
+    "SLO_USE_SLONET",
+    "SLO_STARTUP_PROFILE",
+    "SLO_RELOAD",
+    "SLO_GUARD_MEMORY_LIMIT_MB",
+    "SLO_GUARD_MAX_RESTARTS",
+    "SLO_GUARD_RESTART_DELAY",
     # Server feature flags consumed directly in main.py lifecycle
-    "MAN_HEALTH_MONITOR",
-    "MAN_WATCHDOG",
-    "MAN_WEB",
-    "MAN_AUTO_WORKFLOW",
+    "SLO_HEALTH_MONITOR",
+    "SLO_WATCHDOG",
+    "SLO_WEB",
+    "SLO_AUTO_WORKFLOW",
 })
 
 
@@ -150,7 +150,7 @@ def _apply_env_overrides(config: AppConfig) -> AppConfig:
             continue
         if key in _SKIP_ENV_KEYS:
             continue
-        if key.startswith("MAN_RATE_LIMIT__"):
+        if key.startswith("SLO_RATE_LIMIT__"):
             continue
         if key == _ENV_PREFIX.rstrip("_"):
             continue
@@ -240,8 +240,8 @@ class ConfigManager:
         yaml_data = _load_yaml(self._config_dir / "defaults.yaml")
         merged = _deep_merge(defaults, yaml_data)
 
-        # Load profile override (MAN_ENV or MAN_PROFILE)
-        profile = os.environ.get("MAN_ENV") or os.environ.get("MAN_PROFILE") or ""
+        # Load profile override (SLO_ENV or SLO_PROFILE)
+        profile = os.environ.get("SLO_ENV") or os.environ.get("SLO_PROFILE") or ""
         if profile:
             profile_data = _load_yaml(self._config_dir / f"{profile}.yaml")
             merged = _deep_merge(merged, profile_data)

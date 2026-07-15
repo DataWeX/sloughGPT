@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger("man.shell.commands")
+logger = logging.getLogger("slo.shell.commands")
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 

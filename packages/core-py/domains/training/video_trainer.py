@@ -29,7 +29,7 @@ from domains.training.slonet import (
     zeros, ones,
 )
 
-logger = logging.getLogger("man.video_trainer")
+logger = logging.getLogger("slo.video_trainer")
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "models" / "video-training"

@@ -65,7 +65,7 @@ LORA_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_CHECKPOINT_DISK_MB = 500  # Global checkpoint disk budget
 
-autotrain_logger = logging.getLogger("man.autotrain")
+autotrain_logger = logging.getLogger("slo.autotrain")
 autotrain_logger.setLevel(logging.INFO)
 # Log handler is now the unified ServerOutputBuffer (wired via init_server_io)
 

@@ -10,7 +10,7 @@ from typing import Any, Callable, Dict, Optional
 
 from domains.infrastructure.config import get_config
 
-logger = logging.getLogger("man.wandb.server")
+logger = logging.getLogger("slo.wandb.server")
 
 _inference_lock = threading.Lock()
 _inference_total = 0
@@ -87,7 +87,7 @@ async def start_wandb_server_background(
     *,
     extra_metrics: Optional[Callable[[], Dict[str, Any]]] = None,
 ) -> Optional[asyncio.Task]:
-    """Start periodic W&B logging when ``MAN_WANDB_SERVER`` is set. Returns task or ``None``.
+    """Start periodic W&B logging when ``SLO_WANDB_SERVER`` is set. Returns task or ``None``.
 
     ``extra_metrics`` is called in a worker thread each flush (e.g. psutil host snapshot aligned with ``GET /info``).
     """
@@ -98,7 +98,7 @@ async def start_wandb_server_background(
     try:
         import wandb  # noqa: F401
     except ImportError:
-        logger.warning("wandb not installed; set MAN_WANDB_SERVER=0 or pip install wandb", extra={"tag": "INFRA"})
+        logger.warning("wandb not installed; set SLO_WANDB_SERVER=0 or pip install wandb", extra={"tag": "INFRA"})
         return None
 
     interval = float(get_config().tracking.wandb_server_interval)

@@ -43,7 +43,7 @@ except (ImportError, ModuleNotFoundError):
     ModelLoader = None  # type: ignore[assignment]
 
 
-logger = logging.getLogger("man.core.soul")
+logger = logging.getLogger("slo.core.soul")
 
 
 @dataclass

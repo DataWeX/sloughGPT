@@ -40,7 +40,7 @@ from typing import Any, Optional, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
-logger = logging.getLogger("man.infrastructure.model_server")
+logger = logging.getLogger("slo.infrastructure.model_server")
 
 
 class SessionKVCache:

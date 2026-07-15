@@ -25,7 +25,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-logger = logging.getLogger("man.shell.vm")
+logger = logging.getLogger("slo.shell.vm")
 
 
 # ── Constants ──────────────────────────────────────────────────────────────

@@ -10,7 +10,7 @@ from typing import Tuple, Optional
 import numpy as np
 import logging
 
-logger = logging.getLogger("man.multimodal.vae")
+logger = logging.getLogger("slo.multimodal.vae")
 
 from domains.training.slonet import (
     Tensor, SloNet, SloConv2D, SloLinear,

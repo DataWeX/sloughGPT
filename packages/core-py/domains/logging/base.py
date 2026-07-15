@@ -134,7 +134,7 @@ class LogRecord:
     Attributes:
         level:      Severity of the message.
         message:    Human-readable text.
-        logger:     Logical logger name (e.g. ``"man.api.inference"``).
+        logger:     Logical logger name (e.g. ``"slo.api.inference"``).
         timestamp:  Unix timestamp (seconds) of when the record was created.
         context:    Arbitrary key-value metadata (request_id, model name, etc.).
         exception:  Captured exception info as ``"Type: message"`` or ``None``.
@@ -143,7 +143,7 @@ class LogRecord:
     """
     level: LogLevel
     message: str
-    logger: str = "man"
+    logger: str = "slo"
     timestamp: float = field(default_factory=time.time)
     context: Dict[str, Any] = field(default_factory=dict)
     exception: Optional[str] = None
@@ -162,14 +162,14 @@ class Logger(ABC):
     only if you need a different call signature.
 
     Parameters:
-        name:     Logger name, typically ``"man.<domain>"``.
+        name:     Logger name, typically ``"slo.<domain>"``.
         level:    Minimum level to emit (below this is silently dropped).
         context:  Default context attached to every record.
     """
 
     def __init__(
         self,
-        name: str = "man",
+        name: str = "slo",
         level: LogLevel = LogLevel.INFO,
         context: Optional[Dict[str, Any]] = None,
     ) -> None:
@@ -269,7 +269,7 @@ class Logger(ABC):
 
         Usage::
 
-            log = Logger("man.api")
+            log = Logger("slo.api")
             log.tag("REQ").info("handling request")  # → [REQ] handling request
         """
         return TaggedLogger(parent=self, tag=tag)
@@ -284,7 +284,7 @@ class Logger(ABC):
 
         Example::
 
-            log = ConsoleLogger("man.api")
+            log = ConsoleLogger("slo.api")
             inference_log = log.child("inference")
             inference_log.info("generating")  # [api.inference] generating
         """

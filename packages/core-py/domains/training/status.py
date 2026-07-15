@@ -20,7 +20,7 @@ import numpy as np
 
 from domains.training.slonet_compat import torch
 
-logger = logging.getLogger("man.training.status")
+logger = logging.getLogger("slo.training.status")
 
 
 class TrainingStage(Enum):

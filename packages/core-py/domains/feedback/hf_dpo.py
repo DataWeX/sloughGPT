@@ -33,7 +33,7 @@ except ImportError:
     _HF_DPO_AVAILABLE = False
 from typing import Union
 
-logger = logging.getLogger("man.hf_dpo")
+logger = logging.getLogger("slo.hf_dpo")
 
 
 @dataclass

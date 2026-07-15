@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set
 from dataclasses import dataclass
 
-logger = logging.getLogger("man.data_import")
+logger = logging.getLogger("slo.data_import")
 
 DEFAULT_IGNORES: Set[str] = {
     ".git",

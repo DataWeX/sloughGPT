@@ -14,7 +14,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 
-logger = logging.getLogger("man.training.pair_extractor")
+logger = logging.getLogger("slo.training.pair_extractor")
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _SESSIONS_DIR = _REPO_ROOT / "data" / "chat_sessions"

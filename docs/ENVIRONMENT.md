@@ -6,12 +6,12 @@ Complete reference for all environment variables used in SloughGPT.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `MAN_API_KEY` | Yes | - | API key for authentication |
-| `MAN_JWT_SECRET` | Yes | - | Secret for JWT token signing |
-| `MAN_ENV` | No | `development` | Environment mode |
-| `MAN_HOST` | No | `0.0.0.0` | Server host |
-| `MAN_PORT` | No | `8000` | Server port |
-| `MAN_RELOAD` | No | `false` | Enable auto-reload on file changes |
+| `SLO_API_KEY` | Yes | - | API key for authentication |
+| `SLO_JWT_SECRET` | Yes | - | Secret for JWT token signing |
+| `SLO_ENV` | No | `development` | Environment mode |
+| `SLO_HOST` | No | `0.0.0.0` | Server host |
+| `SLO_PORT` | No | `8000` | Server port |
+| `SLO_RELOAD` | No | `false` | Enable auto-reload on file changes |
 
 **Legacy names:** older docs and images used a typo (`SLAUGHGPT_*`). The server still accepts `SLAUGHGPT_API_KEY`, `SLAUGHGPT_JWT_SECRET`, and `SLAUGHGPT_API_KEYS` if the `MAN_*` counterparts are unset. Prefer `MAN_*` for new deployments.
 
@@ -19,7 +19,7 @@ Complete reference for all environment variables used in SloughGPT.
 
 ## Authentication
 
-### MAN_API_KEY
+### SLO_API_KEY
 **Required in production**
 
 API key for authenticating requests.
@@ -29,19 +29,19 @@ API key for authenticating requests.
 openssl rand -hex 32
 
 # Set in .env
-MAN_API_KEY=your-generated-key-here
+SLO_API_KEY=your-generated-key-here
 ```
 
-### MAN_API_KEYS
+### SLO_API_KEYS
 **Optional**
 
 Comma-separated list of multiple valid API keys.
 
 ```bash
-MAN_API_KEYS=key1,key2,key3
+SLO_API_KEYS=key1,key2,key3
 ```
 
-### MAN_JWT_SECRET
+### SLO_JWT_SECRET
 **Required in production**
 
 Secret key for signing JWT tokens.
@@ -51,69 +51,69 @@ Secret key for signing JWT tokens.
 openssl rand -hex 64
 
 # Set in .env
-MAN_JWT_SECRET=your-64-character-secret
+SLO_JWT_SECRET=your-64-character-secret
 ```
 
 ---
 
 ## Server Configuration
 
-### MAN_ENV
+### SLO_ENV
 **Optional**
 
 Environment mode.
 
 ```bash
-MAN_ENV=development  # or production
+SLO_ENV=development  # or production
 ```
 
-### MAN_HOST
+### SLO_HOST
 **Optional**
 
 Server bind address.
 
 ```bash
-MAN_HOST=0.0.0.0  # Default
+SLO_HOST=0.0.0.0  # Default
 ```
 
-### MAN_PORT
+### SLO_PORT
 **Optional**
 
 Server port.
 
 ```bash
-MAN_PORT=8000  # Default
+SLO_PORT=8000  # Default
 ```
 
-### MAN_RELOAD
+### SLO_RELOAD
 **Optional**
 
 Enable uvicorn auto-reload on Python file changes.
 
 ```bash
-MAN_RELOAD=true  # Default: false
+SLO_RELOAD=true  # Default: false
 ```
 
 ---
 
 ## Logging
 
-### MAN_LOG_LEVEL
+### SLO_LOG_LEVEL
 **Optional**
 
 Minimum log level for server output.
 
 ```bash
-MAN_LOG_LEVEL=INFO   # DEBUG, INFO, WARNING, ERROR, CRITICAL
+SLO_LOG_LEVEL=INFO   # DEBUG, INFO, WARNING, ERROR, CRITICAL
 ```
 
-### MAN_LOG_FORMAT
+### SLO_LOG_FORMAT
 **Optional**
 
 Output format for logs. Use `json` for structured logging (log aggregation, ELK stack, Datadog).
 
 ```bash
-MAN_LOG_FORMAT=human  # "human" (colored terminal) or "json" (structured JSON lines)
+SLO_LOG_FORMAT=human  # "human" (colored terminal) or "json" (structured JSON lines)
 ```
 
 JSON output example:
@@ -173,8 +173,8 @@ The following environment variable names are accepted as fallbacks:
 
 | Legacy Name | Modern Name |
 |-------------|-------------|
-| `SLAUGHGPT_API_KEY` | `MAN_API_KEY` |
-| `SLAUGHGPT_JWT_SECRET` | `MAN_JWT_SECRET` |
-| `SLAUGHGPT_API_KEYS` | `MAN_API_KEYS` |
+| `SLAUGHGPT_API_KEY` | `SLO_API_KEY` |
+| `SLAUGHGPT_JWT_SECRET` | `SLO_JWT_SECRET` |
+| `SLAUGHGPT_API_KEYS` | `SLO_API_KEYS` |
 
 These are read from `settings.py` if the `MAN_*` variant is unset. New deployments should use only `MAN_*` names.

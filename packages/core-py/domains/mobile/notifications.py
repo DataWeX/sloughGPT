@@ -12,7 +12,7 @@ from pathlib import Path
 from dataclasses import dataclass, field, asdict
 import json
 
-logger = logging.getLogger("man.mobile.notifications")
+logger = logging.getLogger("slo.mobile.notifications")
 
 _NOTIFICATIONS_DIR = Path(__file__).parent.parent.parent.parent / "data" / "mobile_notifications"
 _NOTIFICATIONS_DIR.mkdir(parents=True, exist_ok=True)

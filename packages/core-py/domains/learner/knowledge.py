@@ -32,7 +32,7 @@ from dataclasses import dataclass, field, asdict
 
 import numpy as np
 
-logger = logging.getLogger("man.learner.knowledge")
+logger = logging.getLogger("slo.learner.knowledge")
 KNOWLEDGE_DIR = Path("data/knowledge")
 KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)
 

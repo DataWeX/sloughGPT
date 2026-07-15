@@ -17,7 +17,7 @@ from typing import Dict, Optional, Any, List
 from dataclasses import dataclass
 import logging
 
-logger = logging.getLogger("man.feedback.per_user_lora")
+logger = logging.getLogger("slo.feedback.per_user_lora")
 
 
 @dataclass

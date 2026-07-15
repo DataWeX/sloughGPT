@@ -9,7 +9,7 @@ Usage::
 
     from domains.logging import WebLogger, LogLevel
 
-    log = WebLogger("man.web.chat")
+    log = WebLogger("slo.web.chat")
     log.info("message sent", session_id="abc123")
     log.error("stream failed", exception="AbortError: timeout")
 
@@ -44,7 +44,7 @@ class WebLogger(Logger):
     In Node.js / SSR, writes to ``stderr`` as JSON lines.
 
     Parameters:
-        name:      Logger name (e.g. ``"man.web.chat"``).
+        name:      Logger name (e.g. ``"slo.web.chat"``).
         level:     Minimum severity to emit.
         console:   Browser/console object to write to (default: ``console``).
         writable:  Writable stream for SSR (default: ``sys.stderr``).
@@ -53,7 +53,7 @@ class WebLogger(Logger):
 
     def __init__(
         self,
-        name: str = "man.web",
+        name: str = "slo.web",
         level: LogLevel = LogLevel.INFO,
         context: Optional[Dict[str, Any]] = None,
         console: Any = None,

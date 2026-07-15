@@ -47,7 +47,7 @@ import numpy as np
 
 from domains.infrastructure.quantization import TensorInfo, QuantEngine, QuantMeta
 
-logger = logging.getLogger("man.infrastructure.memory_manager")
+logger = logging.getLogger("slo.infrastructure.memory_manager")
 
 
 class Tier(Enum):

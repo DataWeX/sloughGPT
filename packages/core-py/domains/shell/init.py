@@ -21,7 +21,7 @@ from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-logger = logging.getLogger("man.shell.init")
+logger = logging.getLogger("slo.shell.init")
 
 
 # ── Constants ──────────────────────────────────────────────────────────────

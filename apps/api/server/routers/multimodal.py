@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from domains.multimodal import get_multimodal_manager
 from schemas.common import success_response
 
-logger = logging.getLogger("man.routers.multimodal")
+logger = logging.getLogger("slo.routers.multimodal")
 
 router = APIRouter(prefix="/multimodal", tags=["multimodal"])
 

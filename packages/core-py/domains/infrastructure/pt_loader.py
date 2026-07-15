@@ -21,7 +21,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 
-logger = logging.getLogger("man.infrastructure.pt_loader")
+logger = logging.getLogger("slo.infrastructure.pt_loader")
 
 
 def _parse_pickle_ops(pkl_data: bytes) -> list:

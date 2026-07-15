@@ -18,7 +18,7 @@ import numpy as np
 
 from .point import Point
 
-logger = logging.getLogger("man.pugqeep")
+logger = logging.getLogger("slo.pugqeep")
 
 
 class Store(Protocol):

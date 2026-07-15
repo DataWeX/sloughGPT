@@ -29,7 +29,7 @@ from domains.infrastructure.slnc_format import (
     HEADER_FIXED_SIZE,
 )
 
-logger = logging.getLogger("man.infrastructure.slnc_loader")
+logger = logging.getLogger("slo.infrastructure.slnc_loader")
 
 
 class SLNCLoader:

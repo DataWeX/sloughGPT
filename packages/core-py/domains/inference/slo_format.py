@@ -15,7 +15,7 @@ import math
 import struct
 import logging
 
-logger = logging.getLogger("man.inference.slo_format")
+logger = logging.getLogger("slo.inference.slo_format")
 import hashlib
 import datetime
 import numpy as np

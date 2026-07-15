@@ -97,7 +97,7 @@ class DatasetManager:
     """
 
     def __init__(self) -> None:
-        self.logger = logging.getLogger("man.training.datasets")
+        self.logger = logging.getLogger("slo.training.datasets")
         self.datasets: Dict[str, DatasetConfig] = {}
 
     def register_dataset(self, config: DatasetConfig) -> None:
@@ -207,7 +207,7 @@ class DataPreprocessor:
     """Unified preprocessing pipeline."""
 
     def __init__(self) -> None:
-        self.logger = logging.getLogger("man.training.preprocessing")
+        self.logger = logging.getLogger("slo.training.preprocessing")
         self.steps: List[Dict[str, Any]] = []
 
     def add_cleaning(self, text_field: str = "text", lowercase: bool = True) -> "DataPreprocessor":
@@ -268,7 +268,7 @@ class TrainingPipeline:
     """Unified training pipeline."""
 
     def __init__(self, config: PipelineConfig) -> None:
-        self.logger = logging.getLogger("man.training.pipelines")
+        self.logger = logging.getLogger("slo.training.pipelines")
         self.config = config
         self.stages: List[Dict[str, Any]] = []
 
@@ -319,7 +319,7 @@ class ModelManager:
     """Unified model manager."""
 
     def __init__(self) -> None:
-        self.logger = logging.getLogger("man.training.models")
+        self.logger = logging.getLogger("slo.training.models")
         self.models: Dict[str, ModelConfig] = {}
 
     def register_model(self, config: ModelConfig) -> None:

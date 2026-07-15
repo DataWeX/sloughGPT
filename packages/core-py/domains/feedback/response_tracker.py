@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import logging
 
-logger = logging.getLogger("man.response_tracker")
+logger = logging.getLogger("slo.response_tracker")
 
 
 @dataclass

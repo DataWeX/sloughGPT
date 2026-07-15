@@ -59,42 +59,42 @@ class TestConfigModels:
 
 class TestEnvOverrides:
     def test_env_override_model_name(self, monkeypatch):
-        monkeypatch.setenv("MAN_MODEL__NAME", "gpt2")
+        monkeypatch.setenv("SLO_MODEL__NAME", "gpt2")
         cfg = AppConfig()
         from domains.infrastructure.config import _apply_env_overrides
         cfg = _apply_env_overrides(cfg)
         assert cfg.model.name == "gpt2"
 
     def test_env_override_int(self, monkeypatch):
-        monkeypatch.setenv("MAN_SERVER__PORT", "9000")
+        monkeypatch.setenv("SLO_SERVER__PORT", "9000")
         cfg = AppConfig()
         from domains.infrastructure.config import _apply_env_overrides
         cfg = _apply_env_overrides(cfg)
         assert cfg.server.port == 9000
 
     def test_env_override_float(self, monkeypatch):
-        monkeypatch.setenv("MAN_MODEL__TEMPERATURE", "0.5")
+        monkeypatch.setenv("SLO_MODEL__TEMPERATURE", "0.5")
         cfg = AppConfig()
         from domains.infrastructure.config import _apply_env_overrides
         cfg = _apply_env_overrides(cfg)
         assert cfg.model.temperature == 0.5
 
     def test_env_override_bool(self, monkeypatch):
-        monkeypatch.setenv("MAN_MODEL__AUTOLOAD", "false")
+        monkeypatch.setenv("SLO_MODEL__AUTOLOAD", "false")
         cfg = AppConfig()
         from domains.infrastructure.config import _apply_env_overrides
         cfg = _apply_env_overrides(cfg)
         assert cfg.model.autoload is False
 
     def test_env_override_bool_true(self, monkeypatch):
-        monkeypatch.setenv("MAN_FEATURES__WATCHDOG", "1")
+        monkeypatch.setenv("SLO_FEATURES__WATCHDOG", "1")
         cfg = AppConfig()
         from domains.infrastructure.config import _apply_env_overrides
         cfg = _apply_env_overrides(cfg)
         assert cfg.features.watchdog is True
 
     def test_env_override_unknown_key_warns(self, monkeypatch):
-        monkeypatch.setenv("MAN_UNKNOWN__KEY", "value")
+        monkeypatch.setenv("SLO_UNKNOWN__KEY", "value")
         cfg = AppConfig()
         from domains.infrastructure.config import _apply_env_overrides
         # Should not raise
@@ -119,12 +119,12 @@ class TestConfigManager:
     def test_reload_returns_updated(self, tmp_path):
         mgr = ConfigManager(config_dir=str(tmp_path))
         old = mgr.config
-        os.environ["MAN_MODEL__NAME"] = "gpt2-test"
+        os.environ["SLO_MODEL__NAME"] = "gpt2-test"
         try:
             new = mgr.reload()
             assert new.model.name == "gpt2-test"
         finally:
-            del os.environ["MAN_MODEL__NAME"]
+            del os.environ["SLO_MODEL__NAME"]
 
     def test_reload_callbacks_fired(self, tmp_path):
         mgr = ConfigManager(config_dir=str(tmp_path))
@@ -134,13 +134,13 @@ class TestConfigManager:
             results.append((new_cfg.model.name, old_cfg.model.name))
 
         mgr.on_reload(cb)
-        os.environ["MAN_MODEL__NAME"] = "gpt2-cb"
+        os.environ["SLO_MODEL__NAME"] = "gpt2-cb"
         try:
             mgr.reload()
             assert len(results) == 1
             assert results[0][0] == "gpt2-cb"
         finally:
-            del os.environ["MAN_MODEL__NAME"]
+            del os.environ["SLO_MODEL__NAME"]
 
     def test_yaml_override(self, tmp_path):
         yaml_file = tmp_path / "defaults.yaml"
@@ -152,7 +152,7 @@ class TestConfigManager:
     def test_env_overrides_yaml(self, tmp_path, monkeypatch):
         yaml_file = tmp_path / "defaults.yaml"
         yaml_file.write_text("model:\n  name: yaml-model\n  temperature: 0.3\n")
-        monkeypatch.setenv("MAN_MODEL__NAME", "env-beats-yaml")
+        monkeypatch.setenv("SLO_MODEL__NAME", "env-beats-yaml")
         mgr = ConfigManager(config_dir=str(tmp_path))
         assert mgr.config.model.name == "env-beats-yaml"
         assert mgr.config.model.temperature == 0.3
@@ -162,7 +162,7 @@ class TestConfigManager:
         defaults.write_text("server:\n  port: 8000\n  log_level: INFO\n")
         profile = tmp_path / "prod.yaml"
         profile.write_text("server:\n  port: 443\n")
-        monkeypatch.setenv("MAN_ENV", "prod")
+        monkeypatch.setenv("SLO_ENV", "prod")
         mgr = ConfigManager(config_dir=str(tmp_path))
         assert mgr.config.server.port == 443
         assert mgr.config.server.log_level == "INFO"
@@ -196,14 +196,14 @@ class TestSingleton:
 
 class TestEdgeCases:
     def test_empty_env_no_crash(self, monkeypatch):
-        monkeypatch.setenv("MAN_", "")
+        monkeypatch.setenv("SLO_", "")
         cfg = AppConfig()
         from domains.infrastructure.config import _apply_env_overrides
         cfg = _apply_env_overrides(cfg)  # Should not crash
         assert cfg.model.name == "Qwen/Qwen2.5-0.5B-Instruct"
 
     def test_type_coercion_failure_falls_back(self, monkeypatch):
-        monkeypatch.setenv("MAN_SERVER__PORT", "not-a-number")
+        monkeypatch.setenv("SLO_SERVER__PORT", "not-a-number")
         cfg = AppConfig()
         from domains.infrastructure.config import _apply_env_overrides
         cfg = _apply_env_overrides(cfg)

@@ -14,7 +14,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-logger = logging.getLogger("man.infrastructure.model_size")
+logger = logging.getLogger("slo.infrastructure.model_size")
 
 try:
     from downcraft.hf_hub import (

@@ -143,11 +143,11 @@ kubectl scale deployment sloughgpt-api --replicas=3
 
 ```bash
 # Set in .env
-MAN_JWT_SECRET=your-64-char-secret
+SLO_JWT_SECRET=your-64-char-secret
 
 # Or use API keys
-MAN_API_KEY=your-api-key
-MAN_API_KEYS=key1,key2
+SLO_API_KEY=your-api-key
+SLO_API_KEYS=key1,key2
 ```
 
 ## Monitoring
@@ -202,8 +202,8 @@ nvidia-smi
 
 ## Production Checklist
 
-- [ ] Set secure MAN_JWT_SECRET
-- [ ] Configure API keys (MAN_API_KEY)
+- [ ] Set secure SLO_JWT_SECRET
+- [ ] Configure API keys (SLO_API_KEY)
 - [ ] Enable HTTPS/SSL
 - [ ] Setup monitoring
 - [ ] Configure backups

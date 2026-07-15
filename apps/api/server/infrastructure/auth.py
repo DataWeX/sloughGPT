@@ -20,7 +20,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from config import ServerConfig
 
-logger = logging.getLogger("man.auth")
+logger = logging.getLogger("slo.auth")
 
 _security = HTTPBearer(auto_error=False)
 

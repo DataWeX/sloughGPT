@@ -11,7 +11,7 @@ import hashlib
 import logging
 import mimetypes
 
-logger = logging.getLogger("man.auto_ingest")
+logger = logging.getLogger("slo.auto_ingest")
 
 DEFAULT_IGNORE_DIRS = {
     '.git', '__pycache__', 'node_modules', '.venv', 'venv', '.env',

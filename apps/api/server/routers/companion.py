@@ -10,7 +10,7 @@ from typing import Optional, List
 
 from schemas.common import success_response
 
-logger = logging.getLogger("man.routers.companion")
+logger = logging.getLogger("slo.routers.companion")
 
 router = APIRouter(prefix="/companion", tags=["companion"])
 

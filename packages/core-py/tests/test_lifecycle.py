@@ -537,27 +537,27 @@ class TestStartupProfile:
         assert StartupProfile.MINIMAL.value == "minimal"
 
     def test_from_env_default(self, monkeypatch):
-        monkeypatch.delenv("MAN_STARTUP_PROFILE", raising=False)
+        monkeypatch.delenv("SLO_STARTUP_PROFILE", raising=False)
         assert StartupProfile.from_env() == StartupProfile.FULL
 
     def test_from_env_full(self, monkeypatch):
-        monkeypatch.setenv("MAN_STARTUP_PROFILE", "full")
+        monkeypatch.setenv("SLO_STARTUP_PROFILE", "full")
         assert StartupProfile.from_env() == StartupProfile.FULL
 
     def test_from_env_quick(self, monkeypatch):
-        monkeypatch.setenv("MAN_STARTUP_PROFILE", "quick")
+        monkeypatch.setenv("SLO_STARTUP_PROFILE", "quick")
         assert StartupProfile.from_env() == StartupProfile.QUICK
 
     def test_from_env_minimal(self, monkeypatch):
-        monkeypatch.setenv("MAN_STARTUP_PROFILE", "minimal")
+        monkeypatch.setenv("SLO_STARTUP_PROFILE", "minimal")
         assert StartupProfile.from_env() == StartupProfile.MINIMAL
 
     def test_from_env_case_insensitive(self, monkeypatch):
-        monkeypatch.setenv("MAN_STARTUP_PROFILE", "QUICK")
+        monkeypatch.setenv("SLO_STARTUP_PROFILE", "QUICK")
         assert StartupProfile.from_env() == StartupProfile.QUICK
 
     def test_from_env_unknown_falls_back(self, monkeypatch):
-        monkeypatch.setenv("MAN_STARTUP_PROFILE", "turbo")
+        monkeypatch.setenv("SLO_STARTUP_PROFILE", "turbo")
         assert StartupProfile.from_env() == StartupProfile.FULL
 
     def test_all_profiles_includes_all(self):
@@ -631,7 +631,7 @@ async def test_profile_minimal_skips_ai():
 
 @pytest.mark.asyncio
 async def test_profile_defaults_to_env(mgr, monkeypatch):
-    monkeypatch.setenv("MAN_STARTUP_PROFILE", "quick")
+    monkeypatch.setenv("SLO_STARTUP_PROFILE", "quick")
     ran: list[str] = []
 
     async def make(name: str):

@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-logger = logging.getLogger("man.training.auto_config")
+logger = logging.getLogger("slo.training.auto_config")
 
 
 @dataclass

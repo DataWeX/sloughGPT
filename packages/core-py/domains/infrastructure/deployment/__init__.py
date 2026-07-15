@@ -59,7 +59,7 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
 
     def __init__(self) -> None:
         super().__init__("deployment_manager")
-        self.logger = logging.getLogger(f"man.{self.component_name}")
+        self.logger = logging.getLogger(f"slo.{self.component_name}")
 
         # Deployment tracking
         self.deployments: Dict[str, Deployment] = {}

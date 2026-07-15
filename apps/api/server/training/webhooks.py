@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import httpx
 
-logger = logging.getLogger("man.webhooks")
+logger = logging.getLogger("slo.webhooks")
 
 
 @dataclass

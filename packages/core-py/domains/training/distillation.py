@@ -16,7 +16,7 @@ from domains.training.slonet import (
     Tensor, SloLinear, no_grad, SloAdam,
 )
 
-logger = logging.getLogger("man.distillation")
+logger = logging.getLogger("slo.distillation")
 
 
 ArrayLike = Union[Tensor, np.ndarray]

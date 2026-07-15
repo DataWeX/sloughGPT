@@ -24,7 +24,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-logger = logging.getLogger("man.exception_handlers")
+logger = logging.getLogger("slo.exception_handlers")
 
 
 def _error_response(

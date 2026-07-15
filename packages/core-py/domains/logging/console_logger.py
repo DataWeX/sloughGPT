@@ -23,7 +23,7 @@ Usage::
 
     from domains.logging import ConsoleLogger, LogLevel
 
-    log = ConsoleLogger("man.api", level=LogLevel.DEBUG)
+    log = ConsoleLogger("slo.api", level=LogLevel.DEBUG)
     log.info("server started", port=8000)
     log.error("model load failed", exception="RuntimeError: OOM")
 
@@ -31,7 +31,7 @@ Usage::
     log.tag("MODEL").info("loaded", model="gpt2")
 
     # JSON mode
-    log = ConsoleLogger("man.api", level=LogLevel.DEBUG, format="json")
+    log = ConsoleLogger("slo.api", level=LogLevel.DEBUG, format="json")
 """
 
 from __future__ import annotations
@@ -118,7 +118,7 @@ class ConsoleLogger(Logger):
     Pass ``stream=sys.stdout`` to redirect.
 
     Parameters:
-        name:    Logger name (e.g. ``"man.api"``).
+        name:    Logger name (e.g. ``"slo.api"``).
         level:   Minimum severity to emit.
         stream:  Output stream (default ``sys.stderr``).
         colors:  Enable ANSI color output (default: auto-detect TTY).
@@ -128,7 +128,7 @@ class ConsoleLogger(Logger):
 
     def __init__(
         self,
-        name: str = "man",
+        name: str = "slo",
         level: LogLevel = LogLevel.INFO,
         stream: Optional[TextIO] = None,
         colors: Optional[bool] = None,

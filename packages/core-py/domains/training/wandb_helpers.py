@@ -58,7 +58,7 @@ def create_training_tracker_for_api_job(
     data_path: str,
     hyperparams: Dict[str, Any],
 ):
-    """Start a W&B run for a ``POST /training/start`` job when ``MAN_WANDB_TRAINING`` is set.
+    """Start a W&B run for a ``POST /training/start`` job when ``SLO_WANDB_TRAINING`` is set.
 
     Returns ``None`` if disabled, wandb is missing, or init fails.
     """
@@ -95,7 +95,7 @@ def create_training_tracker_for_api_job(
     except Exception:
         import logging
 
-        logging.getLogger("man.tracking").warning(
+        logging.getLogger("slo.tracking").warning(
             "W&B training tracker could not be started; continuing without experiment logging",
             exc_info=True,
         )

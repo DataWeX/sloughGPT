@@ -17,7 +17,7 @@ from typing import Optional, List, Dict, Any, Tuple, Callable
 from pathlib import Path
 import logging
 
-logger = logging.getLogger("man.slonet")
+logger = logging.getLogger("slo.slonet")
 
 # Lazy GPU acceleration — import on demand, never at module load
 _ACCELERATOR = None

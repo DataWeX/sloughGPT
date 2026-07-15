@@ -30,7 +30,7 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
-logger = logging.getLogger("man.lora_eval")
+logger = logging.getLogger("slo.lora_eval")
 from dataclasses import dataclass
 
 

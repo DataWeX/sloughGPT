@@ -16,7 +16,7 @@ import logging
 
 from domains.training.slonet_compat import torch, nn, F
 
-logger = logging.getLogger("man.ewc")
+logger = logging.getLogger("slo.ewc")
 
 
 @dataclass

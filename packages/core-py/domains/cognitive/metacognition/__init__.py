@@ -84,7 +84,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
 
     def __init__(self) -> None:
         super().__init__("metacognitive_monitor")
-        self.logger = logging.getLogger(f"man.{self.component_name}")
+        self.logger = logging.getLogger(f"slo.{self.component_name}")
 
         # Monitoring state
         self.monitoring_level = MetacognitiveLevel.BASIC

@@ -8,7 +8,7 @@ Usage::
 
     from domains.logging import CLILogger, LogLevel
 
-    log = CLILogger("man.cli")
+    log = CLILogger("slo.cli")
     log.info("model loaded", model="gpt2", params="124M")
     log.success("training complete", loss="0.42")
 """
@@ -73,14 +73,14 @@ class CLILogger(Logger):
     ``success()``, ``step()``, ``header()``, ``section()``, ``table()``.
 
     Parameters:
-        name:    Logger name (e.g. ``"man.cli"``).
+        name:    Logger name (e.g. ``"slo.cli"``).
         level:   Minimum severity to emit.
         context: Default context attached to every record.
     """
 
     def __init__(
         self,
-        name: str = "man.cli",
+        name: str = "slo.cli",
         level: LogLevel = LogLevel.INFO,
         context: Optional[Dict[str, Any]] = None,
     ) -> None:

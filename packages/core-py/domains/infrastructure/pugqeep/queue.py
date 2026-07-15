@@ -23,7 +23,7 @@ from .library import PointLibrary
 from .model_tree import ModelTree
 from .dedup import PointDeduplicator
 
-logger = logging.getLogger("man.pdqeep")
+logger = logging.getLogger("slo.pdqeep")
 
 
 class ModelQueue:

@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Awaitable, Callable, Optional
 
-logger = logging.getLogger("man.task_queue")
+logger = logging.getLogger("slo.task_queue")
 
 
 class TaskStatus(str, Enum):

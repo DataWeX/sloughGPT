@@ -118,7 +118,7 @@ def _int4_numpy_fallback(A: np.ndarray, B_packed: np.ndarray, K: int) -> np.ndar
 _c_matmul = _numpy_fallback
 _c_matmul_int4 = _int4_numpy_fallback
 
-logger = logging.getLogger("man.infrastructure.quantization")
+logger = logging.getLogger("slo.infrastructure.quantization")
 
 try:
     from domains.infrastructure.quant_core.wrapper import matmul_int8_c, matmul_int4_c, HAS_AVX2

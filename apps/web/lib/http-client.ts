@@ -118,6 +118,13 @@ async function request<T>(
 
       const kind = isTimeout ? 'timeout' : isConnRefused ? 'connection_refused' : 'unknown'
 
+      // Only report after retries exhausted (don't flood on each retry)
+      if (retries < MAX_RETRIES) {
+        retries++
+        await new Promise(r => setTimeout(r, BASE_DELAY * Math.pow(2, retries - 1)))
+        continue
+      }
+
       if (!opts?.silent) {
         const apiErr = new ApiError(message, status)
         import('./error-store').then(({ useErrorStore }) => {
@@ -126,7 +133,6 @@ async function request<T>(
             title: 'Connection Error',
           })
         })
-        // Report diagnostic to api-monitor-store
         import('./api-monitor-store').then(({ useApiMonitor }) => {
           useApiMonitor.getState().addFailure({
             endpoint: url,
@@ -139,11 +145,6 @@ async function request<T>(
         })
       }
 
-      if (retries < MAX_RETRIES) {
-        retries++
-        await new Promise(r => setTimeout(r, BASE_DELAY * Math.pow(2, retries - 1)))
-        continue
-      }
       throw new ApiError(message, status)
     }
   }

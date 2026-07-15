@@ -40,7 +40,7 @@ from .state import ShellState
 from .window_manager import get_window_manager
 
 _EM = "\u2014"  # em dash
-logger = logging.getLogger("man.shell.repl")
+logger = logging.getLogger("slo.shell.repl")
 
 # ── ANSI color constants (disabled via NO_COLOR env var) ─────────────
 

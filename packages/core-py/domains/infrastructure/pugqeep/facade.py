@@ -42,7 +42,7 @@ from .dedup import PointDeduplicator, PointLibrarySync
 from .queue import ModelQueue
 from .task_queue import TaskQueue, Task, TaskStatus, TaskPriority
 
-logger = logging.getLogger("man.pugqeep")
+logger = logging.getLogger("slo.pugqeep")
 
 
 class PGQ:

@@ -23,7 +23,7 @@ import logging
 import numpy as np
 import time
 
-logger = logging.getLogger("man.onnx_engine")
+logger = logging.getLogger("slo.onnx_engine")
 
 
 class ONNXRuntimeError(Exception):

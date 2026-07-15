@@ -34,7 +34,7 @@ import numpy as np
 
 from domains.infrastructure.config import get_config
 
-logger = logging.getLogger("man.embeddings")
+logger = logging.getLogger("slo.embeddings")
 
 
 class EmbeddingProvider(Enum):

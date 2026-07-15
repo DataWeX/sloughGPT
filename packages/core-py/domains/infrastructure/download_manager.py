@@ -17,7 +17,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-logger = logging.getLogger("man.infrastructure.download_manager")
+logger = logging.getLogger("slo.infrastructure.download_manager")
 
 try:
     from downcraft import downloader as sg_downloader

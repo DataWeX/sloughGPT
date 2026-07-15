@@ -9,7 +9,7 @@ Usage::
 
     from domains.logging import ShellLogger, LogLevel
 
-    log = ShellLogger("man.shell")
+    log = ShellLogger("slo.shell")
     log.info("model loaded", model="gpt2")
     log.error("command failed", exception="FileNotFoundError")
 """
@@ -64,7 +64,7 @@ class ShellLogger(Logger):
     Respects ``NO_COLOR`` env var.
 
     Parameters:
-        name:    Logger name (e.g. ``"man.shell.repl"``).
+        name:    Logger name (e.g. ``"slo.shell.repl"``).
         level:   Minimum severity to emit.
         stream:  Output stream (default ``sys.stdout``).
         colors:  Enable ANSI color output (default: auto-detect).
@@ -73,7 +73,7 @@ class ShellLogger(Logger):
 
     def __init__(
         self,
-        name: str = "man.shell",
+        name: str = "slo.shell",
         level: LogLevel = LogLevel.INFO,
         stream: Optional[TextIO] = None,
         colors: Optional[bool] = None,

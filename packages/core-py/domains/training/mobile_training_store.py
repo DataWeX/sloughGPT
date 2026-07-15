@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-logger = logging.getLogger("man.training.mobile_store")
+logger = logging.getLogger("slo.training.mobile_store")
 
 # Singleton
 _store = None

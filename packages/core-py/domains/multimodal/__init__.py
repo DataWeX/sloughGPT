@@ -25,7 +25,7 @@ except ImportError:
     nn = None
     F = None
 
-logger = logging.getLogger("man.multimodal")
+logger = logging.getLogger("slo.multimodal")
 
 
 @dataclass

@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from schemas.common import success_response
 
-logger = logging.getLogger("man.routers.files")
+logger = logging.getLogger("slo.routers.files")
 router = APIRouter(prefix="/files", tags=["files"])
 
 UPLOADS_DIR = Path(__file__).resolve().parents[4] / "data" / "uploads"

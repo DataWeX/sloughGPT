@@ -22,7 +22,7 @@ from domains.infrastructure.ml_types import auto_device, no_grad as ml_no_grad
 
 from domains.errors import require_non_empty_prompt
 
-logger = logging.getLogger("man.engine")
+logger = logging.getLogger("slo.engine")
 
 
 @dataclass

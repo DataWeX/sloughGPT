@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import logging
 
-logger = logging.getLogger("man.benchmark")
+logger = logging.getLogger("slo.benchmark")
 
 
 @dataclass

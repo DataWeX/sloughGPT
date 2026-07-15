@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-logger = logging.getLogger("man.inference.vector_store")
+logger = logging.getLogger("slo.inference.vector_store")
 
 # Prompt injection detection patterns
 _INJECTION_PATTERNS: list[str] = [

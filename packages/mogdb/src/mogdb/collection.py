@@ -18,7 +18,7 @@ from .document import Document
 from .index import Index
 from .query import _get_field, match_document
 
-logger = logging.getLogger("man.mogdb")
+logger = logging.getLogger("slo.mogdb")
 
 
 class Collection:

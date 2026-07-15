@@ -51,8 +51,8 @@ docker build -f infra/docker/Dockerfile -t sloughgpt/api:latest .
 docker run -d \
   --name sloughgpt-api \
   -p 8000:8000 \
-  -e MAN_API_KEY=your-key \
-  -e MAN_JWT_SECRET=your-secret \
+  -e SLO_API_KEY=your-key \
+  -e SLO_JWT_SECRET=your-secret \
   -v ./models:/app/models \
   sloughgpt/api:latest
 ```

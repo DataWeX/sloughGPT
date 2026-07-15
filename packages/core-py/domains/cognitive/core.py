@@ -80,7 +80,7 @@ class CognitiveCore:
 
     def __init__(self, db_path: str = "slo_cognitive_core.db"):
         self.db_path = db_path
-        self.logger = logging.getLogger("man.cognitive_core")
+        self.logger = logging.getLogger("slo.cognitive_core")
         self.thought_history: List[ThoughtProcess] = []
         self.ideas: List[CreativeIdea] = []
         self.reasoning_chains: List[ReasoningChain] = []

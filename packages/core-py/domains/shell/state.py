@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger("man.shell.state")
+logger = logging.getLogger("slo.shell.state")
 
 _CONFIG_DIR = Path.home() / ".config" / "sloughgpt"
 _STATE_FILE = _CONFIG_DIR / "shell_state.json"

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass
 
-logger = logging.getLogger("man.benchmark")
+logger = logging.getLogger("slo.benchmark")
 
 _RESPONSES_DIR = Path(__file__).resolve().parents[3] / "data" / "logged_responses"
 

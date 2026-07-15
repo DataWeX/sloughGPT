@@ -13,13 +13,13 @@ Centralizes environment tweaks that prevent common hangs and surprises:
 
 Environment (API / import-time, read before ``import torch``):
 
-* ``MAN_SKIP_TORCH_ENV`` — if set (non-empty), do nothing in
+* ``SLO_SKIP_TORCH_ENV`` — if set (non-empty), do nothing in
   ``apply_api_process_torch_env``.
-* ``MAN_API_ENABLE_MPS`` — on macOS, allow MPS (default: unset → MPS
+* ``SLO_API_ENABLE_MPS`` — on macOS, allow MPS (default: unset → MPS
   disabled for API process only).
 * ``PYTORCH_DISABLE_MPS`` / ``CUDA_VISIBLE_DEVICES`` — if already set, we do
   not override (you own the process).
-* ``MAN_USE_TORCH_SHIM`` — if set (non-empty), replace ``torch`` with
+* ``SLO_USE_TORCH_SHIM`` — if set (non-empty), replace ``torch`` with
   the numpy-backed shim in ``domains/training/torch/``. No GPU, no downloads.
   For inference-only deployments or when PyTorch is not installed.
 
@@ -46,18 +46,18 @@ def apply_api_process_torch_env() -> None:
     Safe to call multiple times; applies at most once per process.
     """
     global _api_torch_env_applied
-    if os.environ.get("MAN_SKIP_TORCH_ENV"):
+    if os.environ.get("SLO_SKIP_TORCH_ENV"):
         return
     if _api_torch_env_applied:
         return
     _api_torch_env_applied = True
 
-    if os.environ.get("MAN_USE_TORCH_SHIM"):
+    if os.environ.get("SLO_USE_TORCH_SHIM"):
         _inject_torch_shim()
 
     if os.environ.get("PYTORCH_DISABLE_MPS") is not None:
         pass
-    elif sys.platform == "darwin" and not os.environ.get("MAN_API_ENABLE_MPS"):
+    elif sys.platform == "darwin" and not os.environ.get("SLO_API_ENABLE_MPS"):
         os.environ.setdefault("PYTORCH_DISABLE_MPS", "1")
 
 

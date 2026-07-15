@@ -30,7 +30,7 @@ import logging
 from . import ToolCapability
 from ..shell.commands import ShellCommands
 
-logger = logging.getLogger("man.agents.multi")
+logger = logging.getLogger("slo.agents.multi")
 
 
 # ── Agent definitions ─────────────────────────────────────────────────

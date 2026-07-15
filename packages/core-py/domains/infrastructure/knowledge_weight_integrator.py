@@ -15,7 +15,7 @@ from typing import Optional, List, Dict, Any
 
 from domains.training.slonet_compat import torch
 
-logger = logging.getLogger("man.infrastructure.knowledge_weight_integrator")
+logger = logging.getLogger("slo.infrastructure.knowledge_weight_integrator")
 
 _ADAPTER_DIR = Path("data/knowledge_adapter")
 _ADAPTER_DIR.mkdir(parents=True, exist_ok=True)

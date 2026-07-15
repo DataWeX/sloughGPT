@@ -20,7 +20,7 @@ try:
 except ImportError:
     ConsciousSLO = SLOConfig = Thought = EvolutionStage = None
 
-logger = logging.getLogger("man.soul.quantum")
+logger = logging.getLogger("slo.soul.quantum")
 
 
 class QuantumState:
@@ -359,5 +359,3 @@ class TemporalReasoningEngine:
         # Sort by timestamp
         merged.sort(key=lambda x: x.get("timestamp", ""))
         return merged
-
-

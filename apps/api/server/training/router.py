@@ -45,7 +45,7 @@ from .webhooks import (
 from .job_store import get_job_store
 from domains.training.executor import get_training_executor
 
-logger = logging.getLogger("man")
+logger = logging.getLogger("slo")
 
 router = APIRouter(tags=["training"])
 

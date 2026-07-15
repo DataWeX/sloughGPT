@@ -15,8 +15,8 @@ _server_dir = str(Path(__file__).resolve().parents[1])
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
-os.environ.setdefault("MAN_AUTO_WORKFLOW", "false")
-os.environ.setdefault("MAN_AUTOLOAD_MODEL", "")
+os.environ.setdefault("SLO_AUTO_WORKFLOW", "false")
+os.environ.setdefault("SLO_AUTOLOAD_MODEL", "")
 
 
 def _ensure_routers_registered():

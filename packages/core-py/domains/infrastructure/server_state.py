@@ -13,7 +13,7 @@ from typing import Any, Optional, Callable, TypeVar
 import time
 import logging
 
-logger = logging.getLogger("man.infrastructure.server_state")
+logger = logging.getLogger("slo.infrastructure.server_state")
 
 T = TypeVar("T")
 

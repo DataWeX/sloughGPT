@@ -16,7 +16,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
-logger = logging.getLogger("man.infrastructure.safetensors_loader")
+logger = logging.getLogger("slo.infrastructure.safetensors_loader")
 
 
 def _get_model_dir(model_id: str) -> Path:

@@ -20,7 +20,7 @@ from .point import Point
 from .compressor import PointCompressor
 from .library import PointLibrary
 
-logger = logging.getLogger("man.pugqeep")
+logger = logging.getLogger("slo.pugqeep")
 
 
 class ModelTree:

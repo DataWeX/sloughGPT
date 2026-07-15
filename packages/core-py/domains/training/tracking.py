@@ -11,7 +11,7 @@ from enum import Enum
 
 from domains.infrastructure.config import get_config
 
-logger = logging.getLogger("man.tracking")
+logger = logging.getLogger("slo.tracking")
 
 
 class TrackerBackend(Enum):

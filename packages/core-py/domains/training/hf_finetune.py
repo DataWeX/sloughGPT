@@ -32,7 +32,7 @@ try:
 except ImportError:
     _HF_FINETUNE_AVAILABLE = False
 
-logger = logging.getLogger("man.hf_finetune")
+logger = logging.getLogger("slo.hf_finetune")
 
 
 _DatasetBase = Dataset if _HF_FINETUNE_AVAILABLE else object

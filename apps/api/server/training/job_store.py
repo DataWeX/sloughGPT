@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime
 import logging
 
-logger = logging.getLogger("man.job_store")
+logger = logging.getLogger("slo.job_store")
 
 
 class JobStore:

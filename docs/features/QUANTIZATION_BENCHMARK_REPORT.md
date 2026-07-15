@@ -144,9 +144,9 @@ quant_bits: int = 8
 quant_mode: str = "symmetric"
 
 # Environment variables
-MAN_QUANTIZE=1          # Enable quantization
-MAN_QUANT_BITS=8        # 8 or 4
-MAN_QUANT_MODE=symmetric
+SLO_QUANTIZE=1          # Enable quantization
+SLO_QUANT_BITS=8        # 8 or 4
+SLO_QUANT_MODE=symmetric
 ```
 
 ---

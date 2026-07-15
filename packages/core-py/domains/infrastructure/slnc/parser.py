@@ -33,7 +33,7 @@ from domains.infrastructure.slnc.spec import (
     code_to_dtype,
 )
 
-logger = logging.getLogger("man.infrastructure.slnc.parser")
+logger = logging.getLogger("slo.infrastructure.slnc.parser")
 
 
 class SLNCParser:

@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from domains.training.slonet_compat import torch
 nn = torch.nn
 
-logger = logging.getLogger("man.gguf_export")
+logger = logging.getLogger("slo.gguf_export")
 
 QUANTIZATION_TYPES = {
     "F32": "32-bit float (full precision)",

@@ -23,7 +23,7 @@ from domains.training.checkpoint_utils import (
     torch_load_checkpoint,
 )
 
-logger = logging.getLogger("man.lm_eval")
+logger = logging.getLogger("slo.lm_eval")
 
 
 def _resolve_stoi(bundle: Dict[str, Any], eval_text: str) -> Tuple[Dict[str, int], List[str]]:

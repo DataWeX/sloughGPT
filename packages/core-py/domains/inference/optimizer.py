@@ -19,7 +19,7 @@ from domains.training.slonet_compat import torch
 F = torch.F
 import logging
 
-logger = logging.getLogger("man.optimizer")
+logger = logging.getLogger("slo.optimizer")
 
 
 def _is_float32(t):

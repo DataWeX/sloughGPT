@@ -14,7 +14,7 @@ from domains.api.sse_envelope import sse_event, sse_complete, sse_error
 
 from schemas.common import success_response
 
-logger = logging.getLogger("man.routers.agents")
+logger = logging.getLogger("slo.routers.agents")
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 

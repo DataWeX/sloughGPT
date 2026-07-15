@@ -38,7 +38,7 @@ from domains.infrastructure.slnc.spec import (
     _align,
 )
 
-logger = logging.getLogger("man.infrastructure.slnc.compiler")
+logger = logging.getLogger("slo.infrastructure.slnc.compiler")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

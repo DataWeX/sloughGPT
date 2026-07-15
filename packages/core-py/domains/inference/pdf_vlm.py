@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-logger = logging.getLogger("man.pdf_vlm")
+logger = logging.getLogger("slo.pdf_vlm")
 
 
 class PDFVLMProcessor:

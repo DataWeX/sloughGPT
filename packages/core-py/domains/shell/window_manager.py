@@ -36,7 +36,7 @@ import subprocess
 from datetime import datetime
 from typing import Any, Optional
 
-logger = logging.getLogger("man.shell.wm")
+logger = logging.getLogger("slo.shell.wm")
 
 # ── Colour pairs ──────────────────────────────────────────────────────
 

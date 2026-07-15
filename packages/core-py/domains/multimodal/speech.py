@@ -8,7 +8,7 @@ from typing import Optional, Protocol
 from dataclasses import dataclass
 import logging
 
-logger = logging.getLogger("man.speech")
+logger = logging.getLogger("slo.speech")
 
 
 @dataclass

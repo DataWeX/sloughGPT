@@ -25,7 +25,7 @@ import textwrap
 from dataclasses import dataclass, field
 from typing import Any, Callable, Coroutine, Dict, List, Optional
 
-logger = logging.getLogger("man.tools")
+logger = logging.getLogger("slo.tools")
 
 
 @dataclass

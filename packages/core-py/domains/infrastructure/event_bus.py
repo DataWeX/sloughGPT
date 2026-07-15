@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Awaitable, Callable, Optional, Union
 
-logger = logging.getLogger("man.event_bus")
+logger = logging.getLogger("slo.event_bus")
 
 
 class EventPriority(int, Enum):

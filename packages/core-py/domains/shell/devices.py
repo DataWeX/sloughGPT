@@ -19,7 +19,7 @@ import string
 import logging
 from typing import Any, Callable
 
-logger = logging.getLogger("man.shell.devices")
+logger = logging.getLogger("slo.shell.devices")
 
 
 # ── Device Base ────────────────────────────────────────────────────────────

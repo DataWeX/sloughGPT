@@ -16,7 +16,7 @@ from typing import Dict, List, Optional
 from .point import Point
 from .library import PointLibrary
 
-logger = logging.getLogger("man.pdqeep")
+logger = logging.getLogger("slo.pdqeep")
 
 
 class PointDeduplicator:

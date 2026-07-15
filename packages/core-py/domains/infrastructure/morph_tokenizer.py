@@ -22,7 +22,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-logger = logging.getLogger("man.infrastructure.morph_tokenizer")
+logger = logging.getLogger("slo.infrastructure.morph_tokenizer")
 
 
 # ── English morphology rules ─────────────────────────────────────────────────
@@ -309,7 +309,7 @@ class MorphTokenizer:
     def vocab_size(self) -> int:
         return len(self.vocab)
 
-    
+
     # -- Chat template -----------------------------------------------------------
 
     def apply_chat_template(self, messages):

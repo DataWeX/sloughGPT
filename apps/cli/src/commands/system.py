@@ -194,8 +194,8 @@ def cmd_config_validate(args):
     with open(env_file, "r") as f:
         content = f.read()
 
-    required_vars = ["MAN_API_KEY", "MAN_JWT_SECRET"]
-    security_vars = ["MAN_API_KEY", "MAN_JWT_SECRET", "JWT_SECRET_KEY"]
+    required_vars = ["SLO_API_KEY", "SLO_JWT_SECRET"]
+    security_vars = ["SLO_API_KEY", "SLO_JWT_SECRET", "JWT_SECRET_KEY"]
 
     for var in required_vars:
         if var not in content:
@@ -237,11 +237,11 @@ def cmd_config_generate(args):
 
     if args.type in ["api-key", "all"]:
         api_key = secrets.token_urlsafe(32)
-        printer.command(f"MAN_API_KEY={api_key}")
+        printer.command(f"SLO_API_KEY={api_key}")
 
     if args.type in ["jwt-secret", "all"]:
         jwt_secret = secrets.token_urlsafe(64)
-        printer.command(f"MAN_JWT_SECRET={jwt_secret}")
+        printer.command(f"SLO_JWT_SECRET={jwt_secret}")
 
     if args.type == "all":
         encryption_key = secrets.token_hex(32)

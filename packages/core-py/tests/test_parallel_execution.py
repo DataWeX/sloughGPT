@@ -226,7 +226,7 @@ class TestInferencePoolDynamic:
         from apps.api.server.infrastructure.inference_pool import InferencePool
 
         InferencePool._instance = None
-        with patch.dict("os.environ", {"MAN_INFERENCE_POOL_SIZE": "3"}):
+        with patch.dict("os.environ", {"SLO_INFERENCE_POOL_SIZE": "3"}):
             pool = await InferencePool.get_instance()
             assert pool._max_workers == 3
         await pool.shutdown()

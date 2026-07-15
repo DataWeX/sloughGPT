@@ -40,7 +40,7 @@ try:
 except ImportError:
     from typing_extensions import Self
 
-logger = logging.getLogger("man.lifecycle")
+logger = logging.getLogger("slo.lifecycle")
 
 
 class LifecyclePhase(str, Enum):
@@ -72,8 +72,8 @@ class StartupProfile(str, Enum):
 
     @classmethod
     def from_env(cls) -> Self:
-        """Read profile from ``MAN_STARTUP_PROFILE`` env var (default ``full``)."""
-        raw = os.environ.get("MAN_STARTUP_PROFILE", "full").strip().lower()
+        """Read profile from ``SLO_STARTUP_PROFILE`` env var (default ``full``)."""
+        raw = os.environ.get("SLO_STARTUP_PROFILE", "full").strip().lower()
         try:
             return cls(raw)
         except ValueError:

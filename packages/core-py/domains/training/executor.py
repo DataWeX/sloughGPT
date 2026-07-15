@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Optional
 
-logger = logging.getLogger("man.training.executor")
+logger = logging.getLogger("slo.training.executor")
 
 
 class JobStatus(str, Enum):
@@ -360,7 +360,7 @@ def get_training_executor() -> TrainingExecutor:
         import os
         import multiprocessing
         default_workers = min(2, multiprocessing.cpu_count())
-        max_workers = int(os.environ.get("MAN_TRAIN_POOL_SIZE", default_workers))
+        max_workers = int(os.environ.get("SLO_TRAIN_POOL_SIZE", default_workers))
         _instance = TrainingExecutor(max_workers=max_workers)
         logger.info("TrainingExecutor created (workers=%d)", max_workers, extra={"tag": "TRAIN"})
         return _instance

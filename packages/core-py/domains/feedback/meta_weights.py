@@ -14,7 +14,7 @@ import logging
 
 from .database import get_feedback_db, SimilarPattern
 
-logger = logging.getLogger("man.feedback.meta_weights")
+logger = logging.getLogger("slo.feedback.meta_weights")
 
 
 @dataclass

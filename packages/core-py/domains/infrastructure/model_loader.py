@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional, Protocol
 
 import numpy as np
 
-logger = logging.getLogger("man.infrastructure.model_loader")
+logger = logging.getLogger("slo.infrastructure.model_loader")
 
 
 @dataclass

@@ -259,7 +259,7 @@ def _cmd_api_only(args):
     model = getattr(args, "model", None) or os.environ.get("SLOUGHGT_MODEL_PATH", "")
     if model:
         env["SLOUGHGT_MODEL_PATH"] = model
-    for k in ("MAN_AUTOLOAD_MODEL", "MAN_API_PORT", "HF_TOKEN"):
+    for k in ("SLO_AUTOLOAD_MODEL", "SLO_API_PORT", "HF_TOKEN"):
         if k in os.environ:
             env[k] = os.environ[k]
 
@@ -358,7 +358,7 @@ def _cmd_api_and_web(args):
     if model:
         env["SLOUGHGT_MODEL_PATH"] = model
     # Pass through training-relevant env vars
-    for k in ("MAN_AUTOLOAD_MODEL", "MAN_API_PORT", "HF_TOKEN"):
+    for k in ("SLO_AUTOLOAD_MODEL", "SLO_API_PORT", "HF_TOKEN"):
         if k in os.environ:
             env[k] = os.environ[k]
 

@@ -63,7 +63,7 @@ def get_global() -> Logger:
     """Get the global default logger.  Creates a ConsoleLogger if none set."""
     global _global_logger
     if _global_logger is None:
-        _global_logger = ConsoleLogger("man")
+        _global_logger = ConsoleLogger("slo")
     return _global_logger
 
 
@@ -83,7 +83,7 @@ _INTERFACE_MAP = {
 
 def get_logger(
     interface: str = "api",
-    name: str = "man",
+    name: str = "slo",
     level: LogLevel = LogLevel.INFO,
     **kwargs,
 ) -> Logger:
@@ -93,7 +93,7 @@ def get_logger(
         interface: One of ``"api"``, ``"cli"``, ``"shell"``, ``"web"``
                    (or aliases: ``"server"``, ``"console"``, ``"repl"``,
                    ``"browser"``).
-        name:      Logger name (e.g. ``"man.api.inference"``).
+        name:      Logger name (e.g. ``"slo.api.inference"``).
         level:     Minimum log level.
         **kwargs:  Passed to the logger constructor.
 

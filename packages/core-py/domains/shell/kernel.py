@@ -16,7 +16,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-logger = logging.getLogger("man.shell.kernel")
+logger = logging.getLogger("slo.shell.kernel")
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 

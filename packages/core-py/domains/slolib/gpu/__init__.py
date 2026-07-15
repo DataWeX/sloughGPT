@@ -24,7 +24,7 @@ from typing import Optional, List, Tuple, Any, Dict
 import logging
 import numpy as np
 
-logger = logging.getLogger("man.gpu")
+logger = logging.getLogger("slo.gpu")
 
 
 # =============================================================================

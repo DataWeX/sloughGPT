@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional, Protocol, Tuple
 
 import numpy as np
 
-logger = logging.getLogger("man.pugqeep")
+logger = logging.getLogger("slo.pugqeep")
 
 
 class EvictionPolicy(Enum):

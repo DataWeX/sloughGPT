@@ -18,7 +18,7 @@ import numpy as np
 from .point import Point
 from .compressor import PointCompressor
 
-logger = logging.getLogger("man.pdqeep")
+logger = logging.getLogger("slo.pdqeep")
 
 
 class PointLibrary:

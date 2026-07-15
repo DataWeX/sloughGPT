@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 import logging
 
-logger = logging.getLogger("man.soul_manager")
+logger = logging.getLogger("slo.soul_manager")
 
 
 @dataclass

@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 import logging
 
-logger = logging.getLogger("man.cloud_vector_store")
+logger = logging.getLogger("slo.cloud_vector_store")
 
 
 async def setup_pinecone(

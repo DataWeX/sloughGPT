@@ -15,7 +15,7 @@ except ImportError:
     AutoTokenizer = None  # type: ignore
     AutoModelForCausalLM = None  # type: ignore
 
-logger = logging.getLogger("man.hf_loader")
+logger = logging.getLogger("slo.hf_loader")
 
 
 @dataclass

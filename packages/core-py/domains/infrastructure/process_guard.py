@@ -12,7 +12,7 @@ import threading
 import os
 from typing import Any, Optional, Callable, Generator
 
-logger = logging.getLogger("man.infrastructure.process_guard")
+logger = logging.getLogger("slo.infrastructure.process_guard")
 
 
 class ProcessGuard:

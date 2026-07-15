@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass
 import logging
 
-logger = logging.getLogger("man.hd_memory")
+logger = logging.getLogger("slo.hd_memory")
 
 
 @dataclass

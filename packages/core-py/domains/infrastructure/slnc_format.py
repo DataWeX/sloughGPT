@@ -37,7 +37,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-logger = logging.getLogger("man.infrastructure.slnc_format")
+logger = logging.getLogger("slo.infrastructure.slnc_format")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Format constants

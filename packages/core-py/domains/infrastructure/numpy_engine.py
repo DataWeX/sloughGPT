@@ -37,7 +37,7 @@ from domains.infrastructure.numpy_ops import softmax, to_float32
 from domains.infrastructure.numpy_forward import forward, forward_cached
 from domains.infrastructure.compression import CompressedWeight, LRUCache
 
-logger = logging.getLogger("man.infrastructure.numpy_engine")
+logger = logging.getLogger("slo.infrastructure.numpy_engine")
 
 if TYPE_CHECKING:
     from domains.infrastructure.point_compressor import ModelTree, PointLibrary

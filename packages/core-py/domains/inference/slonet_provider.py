@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Optional, Dict
 import numpy as np
 
-logger = logging.getLogger("man.inference.slonet_provider")
+logger = logging.getLogger("slo.inference.slonet_provider")
 
 # Lazy import to avoid circular dependency
 _SloLayerNorm = None

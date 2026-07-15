@@ -6,9 +6,9 @@ training when a threshold is reached. Eliminates the mobile→server
 round-trip by training directly from server inference logs.
 
 Env vars:
-    MAN_AUTO_TRAIN=1         Enable auto-training (default: 0)
-    MAN_AUTO_TRAIN_THRESHOLD  Conversations before trigger (default: 10)
-    MAN_AUTO_TRAIN_INTERVAL   Min seconds between trains (default: 300)
+    SLO_AUTO_TRAIN=1         Enable auto-training (default: 0)
+    SLO_AUTO_TRAIN_THRESHOLD  Conversations before trigger (default: 10)
+    SLO_AUTO_TRAIN_INTERVAL   Min seconds between trains (default: 300)
 """
 
 import json
@@ -20,7 +20,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-logger = logging.getLogger("man.training.auto_trainer")
+logger = logging.getLogger("slo.training.auto_trainer")
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _SESSIONS_DIR = _REPO_ROOT / "data" / "chat_sessions"
@@ -270,15 +270,15 @@ def get_auto_trainer() -> AutoTrainer:
     global _auto_trainer
     if _auto_trainer is None:
         _auto_trainer = AutoTrainer(
-            threshold=int(os.environ.get("MAN_AUTO_TRAIN_THRESHOLD", "10")),
-            interval_s=int(os.environ.get("MAN_AUTO_TRAIN_INTERVAL", "300")),
+            threshold=int(os.environ.get("SLO_AUTO_TRAIN_THRESHOLD", "10")),
+            interval_s=int(os.environ.get("SLO_AUTO_TRAIN_INTERVAL", "300")),
         )
     return _auto_trainer
 
 
 def start_auto_trainer_if_enabled() -> Optional[AutoTrainer]:
-    """Start auto-trainer if MAN_AUTO_TRAIN=1. Returns the trainer or None."""
-    if os.environ.get("MAN_AUTO_TRAIN", "0") != "1":
+    """Start auto-trainer if SLO_AUTO_TRAIN=1. Returns the trainer or None."""
+    if os.environ.get("SLO_AUTO_TRAIN", "0") != "1":
         return None
     trainer = get_auto_trainer()
     trainer.start()

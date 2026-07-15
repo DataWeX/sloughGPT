@@ -111,7 +111,7 @@ if TYPE_CHECKING:
 
 from dataclasses import dataclass, field, asdict
 
-logger = logging.getLogger("man.export")
+logger = logging.getLogger("slo.export")
 
 
 @dataclass

@@ -16,7 +16,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from .advanced import ThoughtStep, ReasoningResult, ReasoningMode
 
-logger = logging.getLogger("man.cognitive.reasoning.deep")
+logger = logging.getLogger("slo.cognitive.reasoning.deep")
 
 
 # =============================================================================

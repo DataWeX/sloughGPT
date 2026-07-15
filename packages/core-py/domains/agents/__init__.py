@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from contextlib import contextmanager
 
-logger = logging.getLogger("man.agents")
+logger = logging.getLogger("slo.agents")
 
 
 # ============ Security & Safety ============

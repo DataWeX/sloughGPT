@@ -13,7 +13,7 @@ from typing import Tuple
 import numpy as np
 import logging
 
-logger = logging.getLogger("man.multimodal.tts")
+logger = logging.getLogger("slo.multimodal.tts")
 
 from domains.training.slonet import (
     Tensor, SloNet, SloEmbedding, SloLSTM, SloLinear, SloLayerNorm,

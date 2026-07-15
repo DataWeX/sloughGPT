@@ -10,7 +10,7 @@ except ImportError:
     from domains.training.slonet_compat import torch
 nn = torch.nn
 
-logger = logging.getLogger("man.onnx_export")
+logger = logging.getLogger("slo.onnx_export")
 
 
 class ONNXExportConfig:

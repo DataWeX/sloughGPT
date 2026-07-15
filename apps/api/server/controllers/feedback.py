@@ -8,7 +8,7 @@ import json
 import uuid
 import logging
 
-logger = logging.getLogger("man.controllers.feedback")
+logger = logging.getLogger("slo.controllers.feedback")
 
 
 def _trigger_hf_dpo():

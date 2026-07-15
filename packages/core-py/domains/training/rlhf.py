@@ -16,7 +16,7 @@ from enum import Enum
 
 from domains.training.slonet_compat import torch, nn, F
 
-logger = logging.getLogger("man.rlhf")
+logger = logging.getLogger("slo.rlhf")
 
 
 class RLHFMetric(Enum):

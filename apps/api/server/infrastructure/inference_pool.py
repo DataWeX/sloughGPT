@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from contextlib import asynccontextmanager
 from typing import Any, Callable, Optional
 
-logger = logging.getLogger("man.infrastructure.inference_pool")
+logger = logging.getLogger("slo.infrastructure.inference_pool")
 
 
 class InferencePool:
@@ -52,7 +52,7 @@ class InferencePool:
                     import multiprocessing
                     # Auto-size to CPU count, capped at 8 to avoid oversubscription
                     default_workers = min(multiprocessing.cpu_count(), 8)
-                    max_workers = int(os.environ.get("MAN_INFERENCE_POOL_SIZE", default_workers))
+                    max_workers = int(os.environ.get("SLO_INFERENCE_POOL_SIZE", default_workers))
                     cls._instance = cls(max_workers=max_workers)
         return cls._instance
 

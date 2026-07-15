@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 import logging
 
-logger = logging.getLogger("man.shell.vfs")
+logger = logging.getLogger("slo.shell.vfs")
 
 
 class VFSEntry:

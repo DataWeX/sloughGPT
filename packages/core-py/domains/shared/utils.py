@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 import logging
 
-logger = logging.getLogger("man.shared")
+logger = logging.getLogger("slo.shared")
 
 
 def generate_id(prefix: str = "") -> str:

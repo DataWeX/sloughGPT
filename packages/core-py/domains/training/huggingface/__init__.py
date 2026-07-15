@@ -39,7 +39,7 @@ from .model_map import (
 
 import logging
 
-logger = logging.getLogger("man.huggingface")
+logger = logging.getLogger("slo.huggingface")
 
 MODEL_REGISTRY = HF_MODELS  # legacy alias (not every call site needs the training registry)
 

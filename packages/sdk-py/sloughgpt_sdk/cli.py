@@ -39,12 +39,12 @@ def main():
 
     parser.add_argument(
         "--url", "-u",
-        default=os.environ.get("MAN_API_URL", "http://localhost:8000"),
+        default=os.environ.get("SLO_API_URL", "http://localhost:8000"),
         help="API base URL"
     )
     parser.add_argument(
         "--api-key", "-k",
-        default=os.environ.get("MAN_API_KEY"),
+        default=os.environ.get("SLO_API_KEY"),
         help="API key for authentication"
     )
     parser.add_argument(

@@ -13,7 +13,7 @@ from typing import Dict, List, Optional
 
 from .collection import Collection
 
-logger = logging.getLogger("man.mogdb")
+logger = logging.getLogger("slo.mogdb")
 
 
 class MogDB:

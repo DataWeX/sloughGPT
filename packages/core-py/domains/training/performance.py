@@ -28,7 +28,7 @@ Dataset = torch.utils.data.Dataset
 F = torch.F
 nn = torch.nn
 
-logger = logging.getLogger("man.performance")
+logger = logging.getLogger("slo.performance")
 
 
 @dataclass

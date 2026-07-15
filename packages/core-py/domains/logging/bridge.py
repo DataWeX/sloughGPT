@@ -1,7 +1,7 @@
 """
 BridgeHandler — routes Python ``logging`` calls through a ``Logger`` instance.
 
-Allows the rest of the codebase (which uses ``logging.getLogger("man.xxx")``)
+Allows the rest of the codebase (which uses ``logging.getLogger("slo.xxx")``)
 to output through the new OOP logger hierarchy without changing every call site.
 
 Supports passing ``error_code`` and ``tag`` via ``extra``::
@@ -14,12 +14,12 @@ Usage::
     import logging
     from domains.logging import ConsoleLogger, BridgeHandler
 
-    log = ConsoleLogger("man", level=LogLevel.DEBUG)
+    log = ConsoleLogger("slo", level=LogLevel.DEBUG)
     handler = BridgeHandler(log)
     logging.root.addHandler(handler)
     logging.root.setLevel(logging.DEBUG)
 
-    # Now all logging.getLogger("man.xxx").info(...) routes through ConsoleLogger
+    # Now all logging.getLogger("slo.xxx").info(...) routes through ConsoleLogger
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ _LEVEL_MAP = {
 class BridgeHandler(logging.Handler):
     """A ``logging.Handler`` that delegates to a ``Logger`` instance.
 
-    This lets any module using ``logging.getLogger("man.xxx")`` output
+    This lets any module using ``logging.getLogger("slo.xxx")`` output
     through the new OOP logger hierarchy.
 
     Supports ``extra`` dict keys:

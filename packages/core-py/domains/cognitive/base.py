@@ -26,7 +26,7 @@ class CognitiveDomain(BaseDomain):
 
     def __init__(self) -> None:
         super().__init__("cognitive")
-        self.logger = logging.getLogger(f"man.{self.domain_name}")
+        self.logger = logging.getLogger(f"slo.{self.domain_name}")
 
         # Core components
         self.memory_manager: Optional[IMemoryManager] = None

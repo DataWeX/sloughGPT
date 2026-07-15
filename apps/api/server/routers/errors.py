@@ -24,7 +24,7 @@ from pydantic import BaseModel
 
 from schemas.common import success_response
 
-logger = logging.getLogger("man.errors")
+logger = logging.getLogger("slo.errors")
 
 router = APIRouter(prefix="/errors", tags=["errors"])
 

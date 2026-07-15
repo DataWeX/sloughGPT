@@ -16,7 +16,7 @@ Usage::
 import logging
 from typing import Any
 
-logger = logging.getLogger("man.infrastructure.hf_model_worker")
+logger = logging.getLogger("slo.infrastructure.hf_model_worker")
 
 
 def hf_model_loader(

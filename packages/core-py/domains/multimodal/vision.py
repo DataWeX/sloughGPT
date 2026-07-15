@@ -9,7 +9,7 @@ from typing import List
 from dataclasses import dataclass
 import logging
 
-logger = logging.getLogger("man.vision")
+logger = logging.getLogger("slo.vision")
 
 from domains.training.slonet import (
     Tensor, SloNet, SloConv2D, SloBatchNorm2D, SloMaxPool2D,

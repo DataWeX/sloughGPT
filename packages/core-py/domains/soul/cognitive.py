@@ -31,7 +31,7 @@ try:
 except ImportError:
     RAGEngine = SpacedRepetitionScheduler = SLOKnowledgeGraph = None
 
-logger = logging.getLogger("man.soul.cognitive")
+logger = logging.getLogger("slo.soul.cognitive")
 
 
 class SentimentAnalyzer:

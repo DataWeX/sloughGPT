@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 6a991c2 Revert "chore: remove unused ErrorPanel from AppLayout"
+No active task. Last commit: 6d0e9cd fix: stability audit — watchdog health check, thread error propagation, circuit breaker
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

@@ -10,7 +10,7 @@ import numpy as np
 import logging
 from pathlib import Path
 
-logger = logging.getLogger("man.multimodal.video")
+logger = logging.getLogger("slo.multimodal.video")
 
 from domains.training.slonet import (
     Tensor, SloNet, SloLinear, SloLayerNorm, SloTransformerBlock,

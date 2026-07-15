@@ -26,7 +26,7 @@ import logging
 from domains.inference.prompt_formatter import PromptFormatter
 from domains.training.slonet_compat import torch
 
-logger = logging.getLogger("man.models.provider")
+logger = logging.getLogger("slo.models.provider")
 
 
 @dataclass

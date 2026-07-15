@@ -12,7 +12,7 @@ import logging
 import threading
 import time
 
-logger = logging.getLogger("man.online_train")
+logger = logging.getLogger("slo.online_train")
 
 
 @dataclass

@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 
-logger = logging.getLogger("man.model_health")
+logger = logging.getLogger("slo.model_health")
 
 BENCHMARK_CORPUS = [
     "the quick brown fox jumps over the lazy dog",

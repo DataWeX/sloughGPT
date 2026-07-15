@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from schemas.common import success_response
 
-logger = logging.getLogger("man.routers.voice")
+logger = logging.getLogger("slo.routers.voice")
 router = APIRouter(prefix="/voice", tags=["voice"])
 
 

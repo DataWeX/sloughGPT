@@ -62,7 +62,7 @@ class TestLogRecord:
         r = LogRecord(level=LogLevel.INFO, message="hello")
         assert r.level == LogLevel.INFO
         assert r.message == "hello"
-        assert r.logger == "man"
+        assert r.logger == "slo"
         assert r.context == {}
         assert r.exception is None
         assert r.timestamp > 0
@@ -125,14 +125,14 @@ class TestLoggerABC:
         assert "ValueError: bad" in log.records[0].exception
 
     def test_child_logger(self):
-        parent = _MemoryLogger(name="man.api")
+        parent = _MemoryLogger(name="slo.api")
         child = parent.child("inference")
         child.info("generating")
         assert len(parent.records) == 1
-        assert parent.records[0].logger == "man.api.inference"
+        assert parent.records[0].logger == "slo.api.inference"
 
     def test_child_inherits_level(self):
-        parent = _MemoryLogger(name="man", level=LogLevel.WARNING)
+        parent = _MemoryLogger(name="slo", level=LogLevel.WARNING)
         child = parent.child("sub")
         child.info("should not emit")
         assert len(parent.records) == 0
@@ -148,8 +148,8 @@ class TestLoggerABC:
         assert len(log.records) == 1
 
     def test_repr(self):
-        log = _MemoryLogger(name="man.test", level=LogLevel.ERROR)
-        assert "man.test" in repr(log)
+        log = _MemoryLogger(name="slo.test", level=LogLevel.ERROR)
+        assert "slo.test" in repr(log)
         assert "error" in repr(log)
 
 
@@ -160,16 +160,16 @@ class TestLoggerABC:
 class TestConsoleLogger:
     def test_emit_writes_to_stream(self):
         stream = io.StringIO()
-        log = ConsoleLogger("man.test", level=LogLevel.DEBUG, stream=stream, colors=False)
+        log = ConsoleLogger("slo.test", level=LogLevel.DEBUG, stream=stream, colors=False)
         log.info("hello world")
         output = stream.getvalue()
         assert "hello world" in output
-        assert "man.test" in output
+        assert "slo.test" in output
         assert "INF" in output
 
     def test_colors_disabled_no_ansi(self):
         stream = io.StringIO()
-        log = ConsoleLogger("man.test", stream=stream, colors=False)
+        log = ConsoleLogger("slo.test", stream=stream, colors=False)
         log.warning("careful")
         output = stream.getvalue()
         # No ANSI escape codes when colors=False
@@ -177,7 +177,7 @@ class TestConsoleLogger:
 
     def test_exception_in_output(self):
         stream = io.StringIO()
-        log = ConsoleLogger("man.test", stream=stream, colors=False)
+        log = ConsoleLogger("slo.test", stream=stream, colors=False)
         log.error("boom", exception="RuntimeError: OOM")
         output = stream.getvalue()
         assert "boom" in output
@@ -186,7 +186,7 @@ class TestConsoleLogger:
 
     def test_context_in_output(self):
         stream = io.StringIO()
-        log = ConsoleLogger("man.test", stream=stream, colors=False)
+        log = ConsoleLogger("slo.test", stream=stream, colors=False)
         log.info("started", port=8000)
         output = stream.getvalue()
         assert "port=8000" in output
@@ -199,11 +199,11 @@ class TestConsoleLogger:
 class TestShellLogger:
     def test_emit_writes_to_stream(self):
         stream = io.StringIO()
-        log = ShellLogger("man.shell", level=LogLevel.DEBUG, stream=stream, colors=False)
+        log = ShellLogger("slo.shell", level=LogLevel.DEBUG, stream=stream, colors=False)
         log.info("test message")
         output = stream.getvalue()
         assert "test message" in output
-        assert "man.shell" in output
+        assert "slo.shell" in output
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -212,7 +212,7 @@ class TestShellLogger:
 
 class TestWebLogger:
     def test_record_to_dict(self):
-        log = WebLogger("man.web")
+        log = WebLogger("slo.web")
         r = LogRecord(level=LogLevel.INFO, message="test", context={"k": "v"})
         d = log._record_to_dict(r)
         assert d["level"] == "info"
@@ -220,7 +220,7 @@ class TestWebLogger:
         assert d["context"]["k"] == "v"
 
     def test_to_json_and_back(self):
-        log = WebLogger("man.web")
+        log = WebLogger("slo.web")
         r = LogRecord(level=LogLevel.WARNING, message="hello", context={"a": 1})
         raw = log.to_json(r)
         r2 = log.from_json(raw)
@@ -230,7 +230,7 @@ class TestWebLogger:
 
     def test_emit_with_console(self):
         mock_console = MagicMock()
-        log = WebLogger("man.web", console=mock_console)
+        log = WebLogger("slo.web", console=mock_console)
         log.info("browser test")
         mock_console.log.assert_called_once()
         args = mock_console.log.call_args[0]
@@ -238,7 +238,7 @@ class TestWebLogger:
 
     def test_emit_with_writable(self):
         stream = io.StringIO()
-        log = WebLogger("man.web", writable=stream)
+        log = WebLogger("slo.web", writable=stream)
         log.error("ssr error")
         output = stream.getvalue()
         data = json.loads(output)
@@ -252,25 +252,25 @@ class TestWebLogger:
 
 class TestBridgeHandler:
     def test_routes_standard_logging_to_our_logger(self):
-        mem = _MemoryLogger(name="man")
+        mem = _MemoryLogger(name="slo")
         handler = BridgeHandler(mem)
 
-        std_logger = logging.getLogger("man.test.bridge")
+        std_logger = logging.getLogger("slo.test.bridge")
         std_logger.addHandler(handler)
         std_logger.setLevel(logging.DEBUG)
 
         std_logger.info("from standard logging")
         assert len(mem.records) == 1
         assert mem.records[0].message == "from standard logging"
-        assert mem.records[0].logger == "man.test.bridge"
+        assert mem.records[0].logger == "slo.test.bridge"
 
         std_logger.removeHandler(handler)
 
     def test_exception_captured(self):
-        mem = _MemoryLogger(name="man")
+        mem = _MemoryLogger(name="slo")
         handler = BridgeHandler(mem)
 
-        std_logger = logging.getLogger("man.test.exc")
+        std_logger = logging.getLogger("slo.test.exc")
         std_logger.addHandler(handler)
         std_logger.setLevel(logging.DEBUG)
 
@@ -291,19 +291,19 @@ class TestBridgeHandler:
 
 class TestFactory:
     def test_get_logger_api(self):
-        log = get_logger("api", name="man.test")
+        log = get_logger("api", name="slo.test")
         assert isinstance(log, ConsoleLogger)
 
     def test_get_logger_cli(self):
-        log = get_logger("cli", name="man.test")
+        log = get_logger("cli", name="slo.test")
         assert isinstance(log, CLILogger)
 
     def test_get_logger_shell(self):
-        log = get_logger("shell", name="man.test")
+        log = get_logger("shell", name="slo.test")
         assert isinstance(log, ShellLogger)
 
     def test_get_logger_web(self):
-        log = get_logger("web", name="man.test")
+        log = get_logger("web", name="slo.test")
         assert isinstance(log, WebLogger)
 
     def test_get_logger_aliases(self):

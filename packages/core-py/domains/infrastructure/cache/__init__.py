@@ -36,7 +36,7 @@ class CacheManager(BaseComponent, ICacheManager):
 
     def __init__(self) -> None:
         super().__init__("cache_manager")
-        self.logger = logging.getLogger(f"man.{self.component_name}")
+        self.logger = logging.getLogger(f"slo.{self.component_name}")
 
         # Cache storage
         self.cache: Dict[str, CacheEntry] = {}

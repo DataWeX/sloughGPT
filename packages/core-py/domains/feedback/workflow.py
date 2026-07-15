@@ -15,7 +15,7 @@ from typing import Optional, Dict, Any
 from dataclasses import dataclass
 import logging
 
-logger = logging.getLogger("man.feedback")
+logger = logging.getLogger("slo.feedback")
 
 from .database import FeedbackDB, get_feedback_db
 from .meta_weights import MetaWeightManager, get_meta_weight_manager

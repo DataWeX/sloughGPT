@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Set
 import logging
 
-logger = logging.getLogger("man.tokenizer")
+logger = logging.getLogger("slo.tokenizer")
 
 
 # GPT-2 style regex pre-tokenization.

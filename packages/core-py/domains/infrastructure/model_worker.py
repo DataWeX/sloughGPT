@@ -32,7 +32,7 @@ import threading
 from typing import Any, Optional, Callable, Generator
 from dataclasses import dataclass, field
 
-logger = logging.getLogger("man.infrastructure.model_worker")
+logger = logging.getLogger("slo.infrastructure.model_worker")
 
 _ctx = mp.get_context("spawn")  # spawn avoids fork-safety issues with torch
 

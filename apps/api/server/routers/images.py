@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from schemas.common import success_response
 
-logger = logging.getLogger("man.routers.images")
+logger = logging.getLogger("slo.routers.images")
 router = APIRouter(prefix="/images", tags=["images"])
 
 

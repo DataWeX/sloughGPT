@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from domains.inference.vector_store import VectorEntry, VectorStore, QueryResult
 
-logger = logging.getLogger("man.inference.vector_stores.chromadb")
+logger = logging.getLogger("slo.inference.vector_stores.chromadb")
 
 
 class ChromaDBVectorStore(VectorStore):

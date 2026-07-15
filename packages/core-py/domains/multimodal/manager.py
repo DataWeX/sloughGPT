@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import logging
 import numpy as np
 
-logger = logging.getLogger("man.multimodal.manager")
+logger = logging.getLogger("slo.multimodal.manager")
 
 from .speech import (
     TranscriptionResult,
