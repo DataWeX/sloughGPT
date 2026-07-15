@@ -1,7 +1,7 @@
 """
 Centralized server configuration from environment.
 
-Canonical prefixes are ``MAN_*`` (matching the project name SloughGPT).
+Canonical prefixes are ``SLO_*`` (matching the project name SloughGPT).
 The misspelled ``SLAUGHGPT_*`` vars are still read as fallbacks for existing deployments.
 """
 
@@ -20,7 +20,7 @@ def _parse_api_key_list(raw: str) -> frozenset[str]:
 from typing import Optional
 
 def _getenv_prefer_canonical(canonical: str, legacy_typo: str) -> Optional[str]:
-    """Prefer ``MAN_*``; if unset or blank, use legacy ``SLAUGHGPT_*`` (historical typo)."""
+    """Prefer ``SLO_*``; if unset or blank, use legacy ``SLAUGHGPT_*`` (historical typo)."""
     v = os.getenv(canonical)
     if v is not None and str(v).strip() != "":
         return str(v)
