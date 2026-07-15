@@ -25,7 +25,7 @@ from fastapi import FastAPI
 from config import ServerConfig
 from startup_progress import STARTUP_PHASE
 
-logger = logging.getLogger("man.startup")
+logger = logging.getLogger("slo.startup")
 
 # Timeout constants for startup/shutdown hooks (seconds)
 _TIMEOUT_TASK_QUEUE = 10.0
@@ -46,7 +46,7 @@ class StartupProfileSelector:
     @staticmethod
     def resolve(config: ServerConfig) -> str:
         """Return profile name: env var > config attribute > default."""
-        raw = os.environ.get("MAN_STARTUP_PROFILE", "")
+        raw = os.environ.get("SLO_STARTUP_PROFILE", "")
         if raw:
             return raw.strip().lower()
         if hasattr(config, "startup_profile"):
@@ -309,7 +309,8 @@ class StartupOrchestrator:
                 logger.error("Post-load registration failed: %s", e, exc_info=True, extra={"tag": "START"})
 
         # Fire-and-forget: model loads in background while routers register
-        asyncio.create_task(asyncio.to_thread(_load_and_register))
+        task = asyncio.create_task(asyncio.to_thread(_load_and_register))
+        task.add_done_callback(self._on_model_load_done)
 
     def _on_model_load_done(self, task: asyncio.Task):
         try:

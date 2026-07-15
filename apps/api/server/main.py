@@ -63,9 +63,9 @@ warnings.filterwarnings("ignore", message=".*NotOpenSSLWarning.*")
 # ── Structured logging ───────────────────────────────────────────────
 from domains.logging import ConsoleLogger, BridgeHandler, set_global, LogLevel  # noqa: E402
 
-_log_level_name = os.environ.get("MAN_LOG_LEVEL", "INFO").upper()
+_log_level_name = os.environ.get("SLO_LOG_LEVEL", "INFO").upper()
 _log_level = getattr(LogLevel, _log_level_name, LogLevel.INFO)
-_log_format = os.environ.get("MAN_LOG_FORMAT", "human").lower()  # "human" or "json"
+_log_format = os.environ.get("SLO_LOG_FORMAT", "human").lower()  # "human" or "json"
 
 _console_logger = ConsoleLogger("man", level=_log_level, format=_log_format)
 set_global(_console_logger)
@@ -75,7 +75,7 @@ _bridge.setLevel(getattr(logging, _log_level_name, logging.INFO))
 logging.root.addHandler(_bridge)
 logging.root.setLevel(getattr(logging, _log_level_name, logging.INFO))
 
-logger = logging.getLogger("man")
+logger = logging.getLogger("slo")
 
 # Log bridge → output buffer (for SSE streaming via /system/stream)
 try:
@@ -129,11 +129,11 @@ async def lifespan(app_inst: FastAPI):
         import os
         from infrastructure.startup import StartupOrchestrator
 
-        profile = os.environ.get("MAN_STARTUP_PROFILE", "full")
+        profile = os.environ.get("SLO_STARTUP_PROFILE", "full")
         orch = StartupOrchestrator(app_inst, cfg, profile=profile)
         await orch.run()
 
-        # Start auto-trainer if MAN_AUTO_TRAIN=1
+        # Start auto-trainer if SLO_AUTO_TRAIN=1
         try:
             from domains.training.auto_trainer import start_auto_trainer_if_enabled
             start_auto_trainer_if_enabled()
@@ -381,7 +381,7 @@ def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> 
 
         # Optionally wrap in ProcessGuard for crash isolation
         process_guard = None
-        if os.environ.get("MAN_ENABLE_PROCESS_GUARD", "").lower() in ("1", "true", "yes"):
+        if os.environ.get("SLO_ENABLE_PROCESS_GUARD", "").lower() in ("1", "true", "yes"):
             try:
                 from domains.infrastructure.process_guard import create_model_guard
                 process_guard = create_model_guard(
@@ -463,9 +463,9 @@ def _start_feedback_workflow() -> None:
     try:
         from domains.feedback import get_feedback_workflow
 
-        auto_start = os.environ.get("MAN_AUTO_WORKFLOW", "true").lower() == "true"
+        auto_start = os.environ.get("SLO_AUTO_WORKFLOW", "true").lower() == "true"
         if not auto_start:
-            logger.info("MAN_AUTO_WORKFLOW is false; skipping workflow startup", extra={"tag": "START"})
+            logger.info("SLO_AUTO_WORKFLOW is false; skipping workflow startup", extra={"tag": "START"})
             return
 
         workflow = get_feedback_workflow()
@@ -481,12 +481,12 @@ def _start_health_monitor() -> None:
     try:
         from domains.feedback.model_health import get_health_monitor
 
-        enabled = os.environ.get("MAN_HEALTH_MONITOR", "true").lower() == "true"
+        enabled = os.environ.get("SLO_HEALTH_MONITOR", "true").lower() == "true"
         if not enabled:
-            logger.info("MAN_HEALTH_MONITOR is false; skipping health monitor startup", extra={"tag": "START"})
+            logger.info("SLO_HEALTH_MONITOR is false; skipping health monitor startup", extra={"tag": "START"})
             return
 
-        interval = int(os.environ.get("MAN_HEALTH_INTERVAL", "300"))
+        interval = int(os.environ.get("SLO_HEALTH_INTERVAL", "300"))
         monitor = get_health_monitor()
         thread = monitor.start_auto_monitoring(interval_seconds=interval)
         thread.name = "health-monitor"
@@ -503,9 +503,9 @@ def _start_watchdog() -> None:
     try:
         from domains.infrastructure.watchdog import get_watchdog
 
-        enabled = os.environ.get("MAN_WATCHDOG", "true").lower() == "true"
+        enabled = os.environ.get("SLO_WATCHDOG", "true").lower() == "true"
         if not enabled:
-            logger.info("MAN_WATCHDOG is false; skipping watchdog startup", extra={"tag": "START"})
+            logger.info("SLO_WATCHDOG is false; skipping watchdog startup", extra={"tag": "START"})
             return
 
         import time
@@ -516,25 +516,28 @@ def _start_watchdog() -> None:
         watchdog = get_watchdog()
 
         def _check_health() -> bool:
-            """Quick health check — model loaded and providers registered."""
+            """Quick health check — model loaded, provider registered, circuit breaker healthy."""
             try:
                 if time.time() - _startup_time < _WATCHDOG_GRACE_SECS:
                     return True
                 if server_state.training_active:
                     return True
-                if server_state.model is None:
-                    from domains.models.provider import get_provider
-
-                    default = get_provider("default")
-                    if default is not None:
-                        return True
-                    if os.environ.get("MAN_AUTOLOAD_MODEL", ""):
+                from domains.models.provider import get_provider
+                router = get_provider("default")
+                if router is None:
+                    if os.environ.get("SLO_AUTOLOAD_MODEL", ""):
                         return False
                     return True
-                from domains.models.provider import get_provider
-
-                router = get_provider("default")
-                return router is not None
+                # Check if the underlying ModelServer's circuit breaker is open
+                server = getattr(router, '_server', None)
+                if server is not None:
+                    cb = getattr(server, '_circuit_breaker', None)
+                    if cb is not None and cb.state.value == "open":
+                        return False
+                    status = getattr(server, '_status', None)
+                    if status is not None and status.value == "error":
+                        return False
+                return True
             except Exception:
                 return False
 

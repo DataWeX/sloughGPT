@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: c13fec8 fix: non-blocking model load + resilient frontend startup
+No active task. Last commit: 6a991c2 Revert "chore: remove unused ErrorPanel from AppLayout"
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

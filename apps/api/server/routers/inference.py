@@ -16,7 +16,7 @@ except ImportError:
 
 from schemas.common import success_response
 
-logger = logging.getLogger("man.inference")
+logger = logging.getLogger("slo.inference")
 
 try:
     from domains.api.sse_envelope import sse_event as _sse_event, sse_token, sse_error
@@ -741,6 +741,8 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                     skip_special_tokens=True,
                 )
 
+                _thread_error = [None]
+
                 def run_generation():
                     try:
                         with torch.no_grad():
@@ -753,8 +755,8 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                                 streamer=streamer,
                             )
                     except Exception as e:
+                        _thread_error[0] = e
                         logger.error("HF model.generate error: %s", e, exc_info=True, extra={"tag": "INF", "context": {"session_id": session_id, "error": str(e)}})
-                        raise
 
                 thread = Thread(target=run_generation)
                 thread.start()
@@ -763,6 +765,9 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                 try:
                     try:
                         while thread.is_alive() or not streamer.text_queue.empty():
+                            if _thread_error[0] is not None:
+                                yield sse_error("chat", "ERROR", f"Generation failed: {_thread_error[0]}")
+                                return
                             if await request.is_disconnected():
                                 cancel_event.set()
                                 logger.info("Client disconnected from chat stream (fallback, request)", extra={"tag": "INF", "context": {"session_id": session_id}})
@@ -912,6 +917,20 @@ async def chat(req: ChatRequest) -> ChatResponse:
     # Check if model is ready before processing
     if STARTUP_PHASE.get("phase") != "ready" or _chat_state.model is None:
         raise HTTPException(status_code=503, detail="Model still loading — please wait.")
+
+    # Check if circuit breaker is open (model failing repeatedly)
+    try:
+        from domains.models.provider import get_provider
+        _router = get_provider("default")
+        _server = getattr(_router, '_server', None)
+        if _server is not None:
+            _cb = getattr(_server, '_circuit_breaker', None)
+            if _cb is not None and _cb.state.value == "open":
+                raise HTTPException(status_code=503, detail="Model is degraded — circuit breaker open. Please wait or reload the model.")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
 
     user_msg = _extract_user_message(req.messages)
     if not user_msg:
