@@ -6,11 +6,14 @@ Classes:
     LogRecord        — immutable log event dataclass
     Logger           — abstract base class (ABC)
     ChildLogger      — delegates emit() to parent
+    TaggedLogger     — attaches type tags to every record
     ConsoleLogger    — colored terminal output (API server)
     CLILogger        — Rich-powered output (CLI commands)
     ShellLogger      — ANSI output (interactive REPL)
     WebLogger        — structured JSON (browser / SSR)
     BridgeHandler    — routes Python logging.getLogger() through our Logger
+    ErrorCode        — structured error codes (E_AUTH_*, E_MODEL_*, etc.)
+    LogTag           — type tags (REQ, MODEL, AUTH, etc.)
 
 Factory:
     get_logger()     — create a logger by interface name
@@ -20,7 +23,7 @@ Factory:
 
 from typing import Optional
 
-from .base import Logger, LogLevel, LogRecord, ChildLogger
+from .base import Logger, LogLevel, LogRecord, ChildLogger, TaggedLogger, ErrorCode, LogTag
 from .console_logger import ConsoleLogger
 from .cli_logger import CLILogger
 from .shell_logger import ShellLogger
@@ -32,6 +35,9 @@ __all__ = [
     "LogRecord",
     "Logger",
     "ChildLogger",
+    "TaggedLogger",
+    "ErrorCode",
+    "LogTag",
     "ConsoleLogger",
     "CLILogger",
     "ShellLogger",

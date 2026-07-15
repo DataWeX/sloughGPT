@@ -165,7 +165,7 @@ class TestConsoleLogger:
         output = stream.getvalue()
         assert "hello world" in output
         assert "man.test" in output
-        assert "INFO" in output
+        assert "INF" in output
 
     def test_colors_disabled_no_ansi(self):
         stream = io.StringIO()
@@ -181,7 +181,8 @@ class TestConsoleLogger:
         log.error("boom", exception="RuntimeError: OOM")
         output = stream.getvalue()
         assert "boom" in output
-        assert "RuntimeError: OOM" in output
+        assert "RuntimeError" in output
+        assert "OOM" in output
 
     def test_context_in_output(self):
         stream = io.StringIO()

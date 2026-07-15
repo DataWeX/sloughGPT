@@ -96,6 +96,77 @@ MAN_RELOAD=true  # Default: false
 
 ---
 
+## Logging
+
+### MAN_LOG_LEVEL
+**Optional**
+
+Minimum log level for server output.
+
+```bash
+MAN_LOG_LEVEL=INFO   # DEBUG, INFO, WARNING, ERROR, CRITICAL
+```
+
+### MAN_LOG_FORMAT
+**Optional**
+
+Output format for logs. Use `json` for structured logging (log aggregation, ELK stack, Datadog).
+
+```bash
+MAN_LOG_FORMAT=human  # "human" (colored terminal) or "json" (structured JSON lines)
+```
+
+JSON output example:
+```json
+{"ts":"2026-07-15T03:33:03.454Z","level":"INFO","logger":"man.api","msg":"Server started","tag":"START","ctx":{"port":8000}}
+```
+
+### Type Tags
+
+Every log line includes a category tag for quick visual scanning:
+
+| Tag | Category | Example |
+|-----|----------|---------|
+| `[START]` | Server startup, config | `Phase 4: loading model` |
+| `[MODEL]` | Model loading, providers | `Registered hf-default: Qwen2.5-0.5B` |
+| `[SOUL]` | Soul management, personality | `Found 7 souls` |
+| `[REQ]` | HTTP requests, timing | `GET /chat 200 (0.34s)` |
+| `[INF]` | Inference, streaming, knowledge | `Client disconnected` |
+| `[TRAIN]` | Training pipeline | `Auto-train configured` |
+| `[INFRA]` | Infrastructure, deployment | `RateLimitMiddleware registered` |
+| `[AUTH]` | Authentication | `Token expiring` |
+
+### Error Codes
+
+Structured error codes for programmatic handling:
+
+| Code | Category | Description |
+|------|----------|-------------|
+| `E_AUTH_MISSING` | Auth | No API key provided |
+| `E_AUTH_EXPIRED` | Auth | Token expired |
+| `E_AUTH_INVALID` | Auth | Invalid token |
+| `E_AUTH_FORBIDDEN` | Auth | Insufficient permissions |
+| `E_MODEL_LOAD` | Model | Failed to load model |
+| `E_MODEL_OOM` | Model | Out of memory |
+| `E_MODEL_TIMEOUT` | Model | Inference timeout |
+| `E_MODEL_CRASH` | Model | Model crashed |
+| `E_MODEL_WARMUP` | Model | Warmup failed |
+| `E_INF_TOKENIZER` | Inference | Tokenizer error |
+| `E_INF_GENERATION` | Inference | Generation failed |
+| `E_INF_CACHE` | Inference | Cache error |
+| `E_INFRA_STARTUP` | Infra | Startup failed |
+| `E_INFRA_TIMEOUT` | Infra | Request timeout |
+| `E_INFRA_REGISTRY` | Infra | Registry error |
+| `E_INFRA_PROVIDER` | Infra | Provider error |
+| `E_VAL_REQUEST` | Validation | Invalid request |
+| `E_VAL_FIELD` | Validation | Invalid field |
+| `E_TRAIN_DATA` | Training | Data error |
+| `E_TRAIN_CRASH` | Training | Training crashed |
+| `E_TRAIN_CHECKPOINT` | Training | Checkpoint error |
+| `E_DOMAIN` | Domain | Business logic error |
+
+---
+
 ## Legacy / Deprecated
 
 The following environment variable names are accepted as fallbacks:

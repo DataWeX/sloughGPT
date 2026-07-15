@@ -4,6 +4,11 @@ BridgeHandler — routes Python ``logging`` calls through a ``Logger`` instance.
 Allows the rest of the codebase (which uses ``logging.getLogger("man.xxx")``)
 to output through the new OOP logger hierarchy without changing every call site.
 
+Supports passing ``error_code`` and ``tag`` via ``extra``::
+
+    logger.error("Model OOM", extra={"error_code": "E_MODEL_OOM", "tag": "MODEL"})
+    logger.info("loaded", extra={"context": {"model": "gpt2"}})
+
 Usage::
 
     import logging
@@ -42,6 +47,11 @@ class BridgeHandler(logging.Handler):
     This lets any module using ``logging.getLogger("man.xxx")`` output
     through the new OOP logger hierarchy.
 
+    Supports ``extra`` dict keys:
+        - ``context``: dict merged into the record's context
+        - ``error_code``: str error code (e.g. ``"E_MODEL_OOM"``)
+        - ``tag``: str type tag (e.g. ``"MODEL"``, ``"REQ"``)
+
     Parameters:
         logger: The ``Logger`` instance to delegate to.
     """
@@ -54,12 +64,19 @@ class BridgeHandler(logging.Handler):
         """Convert a standard ``logging.LogRecord`` and emit via our Logger."""
         level = _LEVEL_MAP.get(record.levelno, LogLevel.INFO)
 
-        # Build context from standard logging attributes
+        # Build context from standard logging attributes (skip noisy path/lineno
+        # at INFO+ — only useful for DEBUG-level tracing)
         ctx = {}
-        if hasattr(record, "pathname"):
-            ctx["path"] = record.pathname
-        if hasattr(record, "lineno"):
-            ctx["line"] = record.lineno
+        if level < LogLevel.INFO:
+            if hasattr(record, "pathname"):
+                ctx["path"] = record.pathname
+            if hasattr(record, "lineno"):
+                ctx["line"] = record.lineno
+
+        # Merge context from extra dict
+        extra_ctx = getattr(record, "context", None)
+        if isinstance(extra_ctx, dict):
+            ctx.update(extra_ctx)
 
         # Capture exception if present
         exception = None
@@ -67,6 +84,10 @@ class BridgeHandler(logging.Handler):
             exception = f"{type(record.exc_info[1]).__name__}: {record.exc_info[1]}"
         elif record.exc_text:
             exception = record.exc_text
+
+        # Extract error_code and tag from extra
+        error_code = getattr(record, "error_code", None)
+        tag = getattr(record, "tag", None)
 
         # Create and emit our LogRecord
         from .base import LogRecord
@@ -77,5 +98,7 @@ class BridgeHandler(logging.Handler):
             timestamp=record.created,
             context=ctx,
             exception=exception,
+            error_code=error_code,
+            tag=tag,
         )
         self._logger.emit(log_record)
