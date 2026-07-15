@@ -133,7 +133,12 @@ async def log_errors(batch: ErrorBatch, request: Request):
         _error_buffer.append(error_record)
         _error_count_since_clear += 1
         _persist_to_disk(error_record)
-        logger.error(
+
+        # Downgrade extension errors to DEBUG (crypto wallet noise)
+        is_extension = any(x in (entry.url or "") for x in ("chrome-extension://", "moz-extension://", "extension://"))
+        is_vague = entry.message in ("error", "Script error.", "Non-Error promise rejection")
+        log_fn = logger.debug if (is_extension or is_vague) else logger.error
+        log_fn(
             "CLIENT ERROR [%s] %s | %s:%s %s",
             error_record["id"],
             entry.message[:120],

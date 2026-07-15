@@ -39,15 +39,15 @@ class _TTSBackend:
             )
             self._model_id = model_id
             self._loaded = True
-            logger.info(f"TTS model loaded: {model_id}")
+            logger.info(f"TTS model loaded: {model_id}", extra={"tag": "MODEL"})
             return True
         except ImportError:
             self._error = "transformers not available"
-            logger.warning("TTS: transformers not installed")
+            logger.warning("TTS: transformers not installed", extra={"tag": "MODEL"})
             return False
         except Exception as e:
             self._error = str(e)
-            logger.warning(f"TTS: failed to load model: {e}")
+            logger.warning(f"TTS: failed to load model: {e}", extra={"tag": "MODEL"})
             return False
 
     def generate(self, text: str) -> bytes:
@@ -122,7 +122,7 @@ async def text_to_speech(request: TTSRequest):
                 backend="hf-model",
             )
     except Exception as e:
-        logger.warning(f"TTS generation failed, falling back to browser: {e}")
+        logger.warning(f"TTS generation failed, falling back to browser: {e}", extra={"tag": "MODEL"})
 
     # Fallback: tell frontend to use browser speechSynthesis
     return TTSResponse(

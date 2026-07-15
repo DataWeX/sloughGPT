@@ -65,8 +65,9 @@ from domains.logging import ConsoleLogger, BridgeHandler, set_global, LogLevel  
 
 _log_level_name = os.environ.get("MAN_LOG_LEVEL", "INFO").upper()
 _log_level = getattr(LogLevel, _log_level_name, LogLevel.INFO)
+_log_format = os.environ.get("MAN_LOG_FORMAT", "human").lower()  # "human" or "json"
 
-_console_logger = ConsoleLogger("man", level=_log_level)
+_console_logger = ConsoleLogger("man", level=_log_level, format=_log_format)
 set_global(_console_logger)
 
 _bridge = BridgeHandler(_console_logger)
@@ -82,6 +83,17 @@ except Exception:
     pass
 
 logger = logging.getLogger("man")
+
+# ── Filter client-side extension errors ────────────────────────────────
+class _ClientExtensionFilter(logging.Filter):
+    """Suppress noisy client errors from browser extensions (crypto wallets, etc.)."""
+    _PATTERNS = ("CLIENT ERROR", "0 0", "chrome-extension://", "moz-extension://")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(p in msg for p in self._PATTERNS)
+
+logging.root.addFilter(_ClientExtensionFilter())
 
 
 # ── Config ──────────────────────────────────────────────────────────
@@ -102,9 +114,10 @@ try:
         _new_cfg.server.host,
         _new_cfg.server.port,
         {k: v for k, v in _new_cfg.features.model_dump().items() if not k.startswith("_")},
+        extra={"tag": "START"},
     )
 except Exception as exc:
-    logger.warning("New config system unavailable: %s", exc)
+    logger.warning("New config system unavailable: %s", exc, extra={"tag": "START"})
 
 
 # ── Lifespan ────────────────────────────────────────────────────────
@@ -124,7 +137,7 @@ async def lifespan(app_inst: FastAPI):
             from domains.training.auto_trainer import start_auto_trainer_if_enabled
             start_auto_trainer_if_enabled()
         except Exception as e:
-            logger.warning("AutoTrainer startup failed (non-fatal): %s", e)
+            logger.warning("AutoTrainer startup failed (non-fatal): %s", e, extra={"tag": "START"})
 
         yield
 
@@ -241,10 +254,10 @@ def load_model(model_path: Optional[str] = None):
         if model_path is None or not Path(model_path).exists():
             server_state.model = None
             server_state.model_type = "demo"
-            logger.info("No model found, demo mode active")
+            logger.info("No model found, demo mode active", extra={"tag": "START"})
             return
 
-        logger.info("Loading model", extra={"context": {"model_path": model_path}})
+        logger.info("Loading model", extra={"context": {"model_path": model_path}, "tag": "START"})
         ckpt = torch.load(model_path, map_location="cpu", weights_only=False)
 
         if isinstance(ckpt, dict):
@@ -257,18 +270,18 @@ def load_model(model_path: Optional[str] = None):
                     "itos": ckpt["itos"],
                     "vocab_size": len(ckpt["chars"]),
                 }
-                logger.info("Tokenizer loaded", extra={"context": {"char_count": len(ckpt['chars'])}})
+                logger.info("Tokenizer loaded", extra={"context": {"char_count": len(ckpt['chars'])}, "tag": "START"})
             else:
                 server_state.tokenizer = None
-            logger.info("Model loaded", extra={"context": {"param_count": len(ckpt.get('model', {}))}})
+            logger.info("Model loaded", extra={"context": {"param_count": len(ckpt.get('model', {}))}, "tag": "START"})
         else:
             server_state.model = ckpt
             server_state.model_type = "sloughgpt_finetuned"
             server_state.tokenizer = None
-            logger.info("Model loaded successfully", extra={"context": {"model_path": model_path}})
+            logger.info("Model loaded successfully", extra={"context": {"model_path": model_path}, "tag": "START"})
 
     except Exception as e:
-        logger.warning("Failed to load model", extra={"context": {"error": str(e)}})
+        logger.warning("Failed to load model", extra={"context": {"error": str(e)}, "tag": "START"})
         import traceback
         traceback.print_exc()
         server_state.model = None
@@ -336,7 +349,7 @@ def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> 
         result = ctrl.load_model(request.model_id, request.device or "auto", use_slonet=use_slonet)
 
         if result.get("status") == "error":
-            logger.warning("Failed to load model %s: %s", request.model_id, result.get("error"))
+            logger.warning("Failed to load model %s: %s", request.model_id, result.get("error"), extra={"tag": "START"})
             return result
 
         if use_slonet:
@@ -361,9 +374,9 @@ def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> 
             if status.get("adapter_exists"):
                 model = load_knowledge_adapter(model, device="cpu", merge=True)
                 server_state.model = model
-                logger.info("Knowledge adapter merged (%d facts)", status.get("fact_count", 0))
+                logger.info("Knowledge adapter merged (%d facts)", status.get("fact_count", 0), extra={"tag": "START"})
         except Exception as e:
-            logger.warning("Knowledge adapter load skipped: %s", e)
+            logger.warning("Knowledge adapter load skipped: %s", e, extra={"tag": "START"})
 
         # Optionally wrap in ProcessGuard for crash isolation
         process_guard = None
@@ -377,9 +390,9 @@ def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> 
                     restart_delay=2.0,
                     memory_limit_mb=4096,
                 )
-                logger.info("_load_hf_model_core: ProcessGuard started for %s", request.model_id)
+                logger.info("_load_hf_model_core: ProcessGuard started for %s", request.model_id, extra={"tag": "START"})
             except Exception as e:
-                logger.warning("_load_hf_model_core: ProcessGuard init failed (without): %s", e)
+                logger.warning("_load_hf_model_core: ProcessGuard init failed (without): %s", e, extra={"tag": "START"})
 
         # Register with ModelRegistry
         try:
@@ -404,7 +417,7 @@ def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> 
                 model_server=model_server,
             )
             register_provider("hf-default", provider)
-            logger.info("hf-default provider re-registered with ModelServer: %s", request.model_id)
+            logger.info("hf-default provider re-registered with ModelServer: %s", request.model_id, extra={"tag": "START"})
 
             # Wire default provider router — but don't override SloNet if already active.
             # SloNet is registered by auto_train as "default"; replacing it would
@@ -417,11 +430,11 @@ def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> 
                 router.add_processor(VisionProcessor("multimodal"))
                 router.set_text_provider("hf-default")
                 register_provider("default", router)
-                logger.info("Default provider router registered with VisionProcessor")
+                logger.info("Default provider router registered with VisionProcessor", extra={"tag": "START"})
             else:
-                logger.info("SloNet provider active — keeping as default (skipping HF override)")
+                logger.info("SloNet provider active — keeping as default (skipping HF override)", extra={"tag": "START"})
         except Exception as e:
-            logger.warning("Failed to register with ModelRegistry: %s", e)
+            logger.warning("Failed to register with ModelRegistry: %s", e, extra={"tag": "START"})
 
         effective = _inference_engine_device_str(model)
         return {
@@ -433,7 +446,7 @@ def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> 
             "model_type": server_state.model_type or request.model_id,
         }
     except Exception as e:
-        logger.error("_load_hf_model_core failed: %s", e, exc_info=True)
+        logger.error("_load_hf_model_core failed: %s", e, exc_info=True, extra={"tag": "START"})
         return {"status": "error", "error": str(e)}
 
 
@@ -451,15 +464,15 @@ def _start_feedback_workflow() -> None:
 
         auto_start = os.environ.get("MAN_AUTO_WORKFLOW", "true").lower() == "true"
         if not auto_start:
-            logger.info("MAN_AUTO_WORKFLOW is false; skipping workflow startup")
+            logger.info("MAN_AUTO_WORKFLOW is false; skipping workflow startup", extra={"tag": "START"})
             return
 
         workflow = get_feedback_workflow()
         if not workflow._running:
             workflow.start()
-            logger.info("Feedback workflow started automatically")
+            logger.info("Feedback workflow started automatically", extra={"tag": "START"})
     except Exception as e:
-        logger.warning("Failed to start feedback workflow", extra={"context": {"error": str(e)}})
+        logger.warning("Failed to start feedback workflow", extra={"context": {"error": str(e)}, "tag": "START"})
 
 
 def _start_health_monitor() -> None:
@@ -469,7 +482,7 @@ def _start_health_monitor() -> None:
 
         enabled = os.environ.get("MAN_HEALTH_MONITOR", "true").lower() == "true"
         if not enabled:
-            logger.info("MAN_HEALTH_MONITOR is false; skipping health monitor startup")
+            logger.info("MAN_HEALTH_MONITOR is false; skipping health monitor startup", extra={"tag": "START"})
             return
 
         interval = int(os.environ.get("MAN_HEALTH_INTERVAL", "300"))
@@ -478,10 +491,10 @@ def _start_health_monitor() -> None:
         thread.name = "health-monitor"
         logger.info(
             "Model health monitor started",
-            extra={"context": {"interval_seconds": interval}},
+            extra={"context": {"interval_seconds": interval}, "tag": "START"},
         )
     except Exception as e:
-        logger.warning("Failed to start health monitor", extra={"context": {"error": str(e)}})
+        logger.warning("Failed to start health monitor", extra={"context": {"error": str(e)}, "tag": "START"})
 
 
 def _start_watchdog() -> None:
@@ -491,7 +504,7 @@ def _start_watchdog() -> None:
 
         enabled = os.environ.get("MAN_WATCHDOG", "true").lower() == "true"
         if not enabled:
-            logger.info("MAN_WATCHDOG is false; skipping watchdog startup")
+            logger.info("MAN_WATCHDOG is false; skipping watchdog startup", extra={"tag": "START"})
             return
 
         import time
@@ -533,15 +546,16 @@ def _start_watchdog() -> None:
                 "Watchdog detected %d consecutive health failures. "
                 "Manual recovery required — model inference may be degraded.",
                 watchdog._consecutive_failures,
+                extra={"tag": "START"},
             )
             return False
 
         watchdog.set_health_check_fn(_check_health)
         watchdog.set_recovery_fn(_recover)
         watchdog.start(poll_interval=15, max_failures=3)
-        logger.info("Health watchdog started (poll=15s, max_failures=3, recovery=log-only)")
+        logger.info("Health watchdog started (poll=15s, max_failures=3, recovery=log-only)", extra={"tag": "START"})
     except Exception as e:
-        logger.warning("Failed to start watchdog: %s", e)
+        logger.warning("Failed to start watchdog: %s", e, extra={"tag": "START"})
 
 
 # ── Entry point ─────────────────────────────────────────────────────
@@ -613,14 +627,14 @@ if __name__ == "__main__":
         for pid in orphans:
             if pid and pid != str(os.getpid()):
                 os.kill(int(pid), 9)
-                logger.warning("Killed orphan process %s on port %d", pid, bind_port)
+                logger.warning("Killed orphan process %s on port %d", pid, bind_port, extra={"tag": "START"})
     except Exception:
         pass
 
     _start_feedback_workflow()
     _start_health_monitor()
     _start_watchdog()
-    logger.info("Starting SloughGPT server", extra={"context": {"port": bind_port, "reload": args.reload}})
+    logger.info("Starting SloughGPT server", extra={"context": {"port": bind_port, "reload": args.reload}, "tag": "START"})
 
     # Optional web frontend
     web_proc = None
@@ -674,7 +688,7 @@ if __name__ == "__main__":
     try:
         uvicorn.run(**uvicorn_kw)
     except KeyboardInterrupt:
-        logger.info("Interrupted by user")
+        logger.info("Interrupted by user", extra={"tag": "START"})
     except Exception as e:
         logger.critical("Server crashed: %s", e, exc_info=True)
         sys.exit(1)

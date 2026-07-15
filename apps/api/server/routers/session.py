@@ -180,7 +180,7 @@ async def regenerate_session(session_id: str, request: Request) -> StreamingResp
                     session_id=session_id,
                 ):
                     if await request.is_disconnected():
-                        logger.info("Client disconnected from regenerate stream (request)", extra={"context": {"session_id": session_id}})
+                        logger.info("Client disconnected from regenerate stream (request)", extra={"tag": "REQ", "context": {"session_id": session_id}})
                         return
                     if token:
                         full_response += token
@@ -189,12 +189,12 @@ async def regenerate_session(session_id: str, request: Request) -> StreamingResp
             except GeneratorExit:
                 return
             except Exception as e:
-                logger.error("Regenerate stream error: %s", e, exc_info=True)
+                logger.error("Regenerate stream error: %s", e, exc_info=True, extra={"tag": "REQ"})
                 yield sse_error("chat", "REGENERATE", f"Generation failed: {e}")
                 return
 
         except Exception as e:
-            logger.error("Regenerate error: %s", e, exc_info=True)
+            logger.error("Regenerate error: %s", e, exc_info=True, extra={"tag": "REQ"})
             yield sse_error("chat", "REGENERATE", str(e))
 
     return StreamingResponse(generate(), media_type="text/event-stream")

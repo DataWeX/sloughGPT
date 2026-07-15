@@ -334,7 +334,7 @@ def _extract_text(content: bytes, ext: str) -> tuple[str, int]:
         else:
             return content.decode("utf-8", errors="replace"), 1
     except ImportError as e:
-        logger.warning("Text extraction import failed: %s", e)
+        logger.warning("Text extraction import failed: %s", e, extra={"tag": "INFRA"})
         return content.decode("utf-8", errors="replace"), 1
 
 

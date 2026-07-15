@@ -33,7 +33,7 @@ async def _internal_get(request: Request, path: str):
                 return resp.json()
             return None
         except Exception as e:
-            logger.warning(f"Internal GET {path} failed: {e}")
+            logger.warning(f"Internal GET {path} failed: {e}", extra={"tag": "REQ"})
             return None
 
 
@@ -47,7 +47,7 @@ async def _internal_post(request: Request, path: str, body: dict = None):
                 return resp.json()
             return None
         except Exception as e:
-            logger.warning(f"Internal POST {path} failed: {e}")
+            logger.warning(f"Internal POST {path} failed: {e}", extra={"tag": "REQ"})
             return None
 
 
@@ -61,7 +61,7 @@ async def _internal_patch(request: Request, path: str, body: dict = None):
                 return resp.json()
             return None
         except Exception as e:
-            logger.warning(f"Internal PATCH {path} failed: {e}")
+            logger.warning(f"Internal PATCH {path} failed: {e}", extra={"tag": "REQ"})
             return None
 
 
@@ -75,7 +75,7 @@ async def _internal_delete(request: Request, path: str):
                 return resp.json()
             return None
         except Exception as e:
-            logger.warning(f"Internal DELETE {path} failed: {e}")
+            logger.warning(f"Internal DELETE {path} failed: {e}", extra={"tag": "REQ"})
             return None
 
 
@@ -891,7 +891,7 @@ async def mobile_train(body: MobileTrainRequest):
         )
 
         if proc.returncode != 0:
-            logger.error("Training subprocess failed: %s", proc.stderr[-500:])
+            logger.error("Training subprocess failed: %s", proc.stderr[-500:], extra={"tag": "REQ"})
             raise HTTPException(500, f"Training failed: {proc.stderr[-200:]}")
 
         result = json.loads(proc.stdout.strip().split("\n")[-1])
@@ -916,12 +916,12 @@ async def mobile_train(body: MobileTrainRequest):
     except subprocess.TimeoutExpired:
         raise HTTPException(504, "Training timed out (300s limit)")
     except json.JSONDecodeError as e:
-        logger.error("Failed to parse training output: %s", e)
+        logger.error("Failed to parse training output: %s", e, extra={"tag": "REQ"})
         raise HTTPException(500, "Training produced invalid output")
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Mobile training failed: %s", e)
+        logger.error("Mobile training failed: %s", e, extra={"tag": "REQ"})
         raise HTTPException(500, f"Training failed: {e}")
 
 
@@ -1348,7 +1348,7 @@ async def train_from_sessions(body: FromSessionsRequest = FromSessionsRequest(),
             bufsize=1,
         )
     except Exception as e:
-        logger.error("Failed to start training subprocess: %s", e)
+        logger.error("Failed to start training subprocess: %s", e, extra={"tag": "REQ"})
         yield sse_error("training", "TRAIN", f"Failed to start training: {e}")
         return
 
@@ -1367,7 +1367,7 @@ async def train_from_sessions(body: FromSessionsRequest = FromSessionsRequest(),
             # Check client disconnect periodically
             if request and await request.is_disconnected():
                 proc.kill()
-                logger.info("Client disconnected from training stream")
+                logger.info("Client disconnected from training stream", extra={"tag": "REQ"})
                 return
 
             try:
@@ -1420,7 +1420,7 @@ async def train_from_sessions(body: FromSessionsRequest = FromSessionsRequest(),
 
         if proc.returncode != 0:
             stderr_tail = proc.stderr.read()[-500:] if proc.stderr else ""
-            logger.error("Training subprocess failed (rc=%d): %s", proc.returncode, stderr_tail)
+            logger.error("Training subprocess failed (rc=%d): %s", proc.returncode, stderr_tail, extra={"tag": "REQ"})
             yield sse_error("training", "TRAIN", f"Training failed (exit code {proc.returncode})")
             return
 
@@ -1448,7 +1448,7 @@ async def train_from_sessions(body: FromSessionsRequest = FromSessionsRequest(),
         )
 
     except Exception as e:
-        logger.error("Session training failed: %s", e)
+        logger.error("Session training failed: %s", e, extra={"tag": "REQ"})
         yield sse_error("training", "TRAIN", f"Training failed: {e}")
     finally:
         if proc.poll() is None:

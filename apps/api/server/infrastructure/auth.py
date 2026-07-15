@@ -195,7 +195,7 @@ class AuditLogger:
         if self._handler:
             self._handler.emit(logging.LogRecord("audit", logging.INFO, "", 0, line, (), None))
         else:
-            logger.info("AUDIT: %s", line)
+            logger.info("AUDIT: %s", line, extra={"tag": "AUTH"})
 
 
 # Singleton instances

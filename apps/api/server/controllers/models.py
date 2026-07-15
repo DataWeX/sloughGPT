@@ -6,9 +6,16 @@ from datetime import datetime
 from pathlib import Path
 import logging
 import time
+import threading
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+# ── HF Hub API cache (avoids repeated unreachable API calls) ─────────
+_HF_CACHE_TTL = 300  # 5 minutes
+_hf_models_cache: Optional[List[Dict[str, Any]]] = None
+_hf_cache_timestamp: float = 0.0
+_hf_cache_lock = threading.Lock()
 
 
 class ModelsController:
@@ -108,7 +115,7 @@ class ModelsController:
         server_state.model_type = model_id
 
         if use_slonet:
-            logger.info("Loading %s into SloTransformer (pure NumPy)...", model_id)
+            logger.info("Loading %s into SloTransformer (pure NumPy)...", model_id, extra={"tag": "MODEL"})
             try:
                 from domains.models.provider import setup_providers
                 from domains.infrastructure.config import get_config
@@ -122,9 +129,9 @@ class ModelsController:
                     quant_mode=cfg.quant_mode,
                 )
                 logger.info("SloNet provider registered: %s (quant=%s)",
-                            model_id, f"int{cfg.quant_bits}" if cfg.quantize_slonet else "none")
+                            model_id, f"int{cfg.quant_bits}" if cfg.quantize_slonet else "none", extra={"tag": "MODEL"})
             except Exception as e:
-                logger.error("Failed to register SloNet provider for %s: %s", model_id, e)
+                logger.error("Failed to register SloNet provider for %s: %s", model_id, e, extra={"tag": "MODEL"})
                 raise
 
             return {
@@ -179,7 +186,7 @@ class ModelsController:
                     make_default=True,
                     generate_timeout=120.0,
                 )
-                logger.info("Registered model in ModelRegistry: %s", model_id)
+                logger.info("Registered model in ModelRegistry: %s", model_id, extra={"tag": "MODEL"})
 
             # Create InferenceEngine for the new model (requires torch model object)
             inference_engine = None
@@ -192,7 +199,7 @@ class ModelsController:
                         device=actual_device,
                     )
                 except Exception as e:
-                    logger.warning("Failed to create InferenceEngine: %s", e)
+                    logger.warning("Failed to create InferenceEngine: %s", e, extra={"tag": "MODEL"})
 
             # Register all providers via setup_providers
             try:
@@ -203,9 +210,9 @@ class ModelsController:
                     inference_engine=inference_engine,
                     model_registry=model_registry,
                 )
-                logger.info("Updated providers for: %s (text=inference-engine)", model_id)
+                logger.info("Updated providers for: %s (text=inference-engine)", model_id, extra={"tag": "MODEL"})
             except Exception as e:
-                logger.warning("Failed to set up model providers: %s", e)
+                logger.warning("Failed to set up model providers: %s", e, extra={"tag": "MODEL"})
 
             # Push the new engine into ChatDomain so streaming chat uses it.
             try:
@@ -216,7 +223,7 @@ class ModelsController:
                 else:
                     cd.set_engine(None)
             except Exception as e:
-                logger.warning("Failed to inject engine into ChatDomain: %s", e)
+                logger.warning("Failed to inject engine into ChatDomain: %s", e, extra={"tag": "MODEL"})
 
             return {
                 "model_id": model_id,
@@ -226,7 +233,7 @@ class ModelsController:
                 "tokenizer_type": type(tokenizer).__name__,
             }
         except Exception as e:
-            logger.error(f"Failed to load HF model {model_id}: {e}")
+            logger.error(f"Failed to load HF model {model_id}: {e}", extra={"tag": "MODEL"})
             raise
 
     def _load_gguf_model(self, model_path: str, device: str) -> Dict[str, Any]:
@@ -234,7 +241,7 @@ class ModelsController:
         try:
             from llama_cpp import Llama
 
-            logger.info(f"Loading GGUF model: {model_path}")
+            logger.info(f"Loading GGUF model: {model_path}", extra={"tag": "MODEL"})
 
             # Determine device for llama.cpp
             if device == "mps" or device == "cuda":
@@ -258,7 +265,7 @@ class ModelsController:
                 "n_ctx": 4096,
             }
         except Exception as e:
-            logger.error(f"Failed to load GGUF model {model_path}: {e}")
+            logger.error(f"Failed to load GGUF model {model_path}: {e}", extra={"tag": "MODEL"})
             raise
 
     def load_model(self, model_id: str, device: str = "auto", quantize: Optional[str] = None,
@@ -286,7 +293,7 @@ class ModelsController:
                 "loaded_at": self._loaded_at.isoformat(),
             }
         except Exception as e:
-            logger.warning("HF load failed for %s, trying local path: %s", model_id, e)
+            logger.warning("HF load failed for %s, trying local path: %s", model_id, e, extra={"tag": "MODEL"})
 
         # Try local model
         model_path = self._find_model_path(model_id)
@@ -440,7 +447,16 @@ class ModelsController:
 
         Returns list of dicts with model_id, parameters (approx), vocab_size.
         Falls back to curated list if the API is unreachable.
+        Results are cached for 5 minutes to avoid repeated API calls.
         """
+        global _hf_models_cache, _hf_cache_timestamp
+
+        # Return cached result if fresh (no query filter — cache is for full list)
+        if q is None:
+            with _hf_cache_lock:
+                if _hf_models_cache is not None and (time.monotonic() - _hf_cache_timestamp) < _HF_CACHE_TTL:
+                    return _hf_models_cache
+
         import os
         token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
         headers = {"Authorization": f"Bearer {token}"} if token else {}
@@ -455,7 +471,7 @@ class ModelsController:
                 "direction": -1,
                 "limit": 50,
             }
-            resp = requests.get(url, params=params, headers=headers, timeout=10)
+            resp = requests.get(url, params=params, headers=headers, timeout=5)
             if resp.status_code == 200:
                 data = resp.json()
                 models = []
@@ -474,9 +490,19 @@ class ModelsController:
                         "vocab_size": vocab_size,
                     })
                 if models:
+                    if q is None:
+                        with _hf_cache_lock:
+                            _hf_models_cache = models
+                            _hf_cache_timestamp = time.monotonic()
                     return models
         except Exception:
-            logger.warning("HF Hub API unreachable, using curated model list")
+            logger.debug("HF Hub API unreachable, using cached or curated model list")
+
+        # Return cached if available (even if stale)
+        if q is None:
+            with _hf_cache_lock:
+                if _hf_models_cache is not None:
+                    return _hf_models_cache
 
         # Fallback: curated list sorted by capability (chat-tuned first)
         curated = [
@@ -494,7 +520,12 @@ class ModelsController:
         ]
         if q:
             return [{"model_id": m, "parameters": p, "vocab_size": v} for m, p, v in curated if q.lower() in m.lower()]
-        return [{"model_id": m, "parameters": p, "vocab_size": v} for m, p, v in curated]
+        result = [{"model_id": m, "parameters": p, "vocab_size": v} for m, p, v in curated]
+        if q is None:
+            with _hf_cache_lock:
+                _hf_models_cache = result
+                _hf_cache_timestamp = time.monotonic()
+        return result
 
     @staticmethod
     def _estimate_params(model_id: str) -> int:

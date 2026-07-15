@@ -252,7 +252,7 @@ async def orchestrate_agents(req: OrchestrateRequest, request: Request):
                     if isinstance(ev, str):
                         yield ev
                     elif isinstance(ev, Exception):
-                        logger.warning("Task exception: %s", ev)
+                        logger.warning("Task exception: %s", ev, extra={"tag": "MODEL"})
 
                 if await request.is_disconnected():
                     return
@@ -280,7 +280,7 @@ async def orchestrate_agents(req: OrchestrateRequest, request: Request):
             )
 
         except Exception as e:
-            logger.exception("Orchestration error")
+            logger.exception("Orchestration error", extra={"tag": "MODEL"})
             yield sse_error(
                 stream="agent-orchestrate",
                 phase="ERROR",

@@ -177,7 +177,7 @@ async def train(request: TrainRequest):
             training_jobs[job_id]["status"] = "completed"
             training_jobs[job_id]["checkpoint"] = f"models/{safe_stem}_trained.pt"
         except Exception as e:
-            logger.exception("Background /train failed: %s", e)
+            logger.exception("Background /train failed: %s", e, extra={"tag": "TRAIN"})
             training_jobs[job_id]["status"] = "failed"
             training_jobs[job_id]["error"] = str(e)
 
@@ -494,7 +494,7 @@ async def start_training(request: TrainingRequest):
 
         asyncio.create_task(notify_async())
     except Exception as e:
-        logger.debug("Training webhook notification failed: %s", e)
+        logger.debug("Training webhook notification failed: %s", e, extra={"tag": "TRAIN"})
 
     req_snapshot = request.model_dump()
     data_path_for_thread = data_path_str
@@ -567,9 +567,9 @@ async def start_training(request: TrainingRequest):
                     )
                 )
             except Exception as e:
-                logger.debug("Training completion webhook failed: %s", e)
+                logger.debug("Training completion webhook failed: %s", e, extra={"tag": "TRAIN"})
         except Exception as e:
-            logger.exception("Training job %s failed", jid)
+            logger.exception("Training job %s failed", jid, extra={"tag": "TRAIN"})
             training_jobs[jid]["status"] = "failed"
             training_jobs[jid]["error"] = str(e)
             training_jobs[jid]["progress"] = 0
@@ -597,7 +597,7 @@ async def start_training(request: TrainingRequest):
                 try:
                     tracker.end_run()
                 except Exception:
-                    logger.exception("W&B end_run failed for job %s", jid)
+                    logger.exception("W&B end_run failed for job %s", jid, extra={"tag": "TRAIN"})
 
     executor = get_training_executor()
     executor.submit(run_training, jid)
@@ -813,7 +813,7 @@ async def start_hf_training(request: HFTrainingRequest):
             get_job_store().mark_completed(jid, checkpoint_path=model_path)
 
         except Exception as exc:
-            logger.exception("HF fine-tune job %s failed", job_id)
+            logger.exception("HF fine-tune job %s failed", job_id, extra={"tag": "TRAIN"})
             if jid in training_jobs:
                 training_jobs[jid]["status"] = "failed"
             training_jobs[jid]["error"] = str(exc)
@@ -897,7 +897,7 @@ async def merge_lora_adapter(request: MergeLoRARequest):
     except ImportError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error("LoRA merge failed: %s", e)
+        logger.error("LoRA merge failed: %s", e, extra={"tag": "TRAIN"})
         raise HTTPException(status_code=500, detail=f"Merge failed: {e}")
 
 
@@ -980,7 +980,7 @@ async def start_visual_training(request: VisualTrainRequest):
             training_jobs[job_id]["checkpoint"] = str(ckpt_path)
 
         except Exception as exc:
-            logger.exception("Visual training job %s failed", job_id)
+            logger.exception("Visual training job %s failed", job_id, extra={"tag": "TRAIN"})
             if job_id in training_jobs:
                 training_jobs[job_id]["status"] = "failed"
                 training_jobs[job_id]["error"] = str(exc)
@@ -1197,10 +1197,10 @@ async def start_distillation(request: DistillStartRequest):
                     for i, v in enumerate(epoch_losses)
                 ],
             })
-            logger.info("Distillation complete: %s loss=%.4f", ckpt_path, epoch_losses[-1] if epoch_losses else 0)
+            logger.info("Distillation complete: %s loss=%.4f", ckpt_path, epoch_losses[-1] if epoch_losses else 0, extra={"tag": "TRAIN"})
 
         except Exception as e:
-            logger.exception("Distillation job %s failed", job_id)
+            logger.exception("Distillation job %s failed", job_id, extra={"tag": "TRAIN"})
             training_jobs[job_id]["status"] = "failed"
             training_jobs[job_id]["error"] = str(e)
 
@@ -1383,7 +1383,7 @@ async def quick_train(request: QuickTrainRequest):
             get_job_store().mark_completed(jid, checkpoint_path=model_path)
 
         except Exception as exc:
-            logger.exception("Quick train job %s failed", jid)
+            logger.exception("Quick train job %s failed", jid, extra={"tag": "TRAIN"})
             if jid in training_jobs:
                 training_jobs[jid]["status"] = "failed"
                 training_jobs[jid]["error"] = str(exc)
@@ -1523,10 +1523,10 @@ async def train_from_feedback():
                         )
                     )
                 except Exception as e:
-                    logger.debug("Feedback training webhook failed: %s", e)
+                    logger.debug("Feedback training webhook failed: %s", e, extra={"tag": "TRAIN"})
 
             except Exception as e:
-                logger.exception("Feedback training job %s failed", jid)
+                logger.exception("Feedback training job %s failed", jid, extra={"tag": "TRAIN"})
                 training_jobs[jid]["status"] = "failed"
                 training_jobs[jid]["error"] = str(e)
                 get_training_controller().fail(str(e))
@@ -1561,7 +1561,7 @@ async def train_from_feedback():
         }
 
     except Exception as e:
-        logger.exception("Failed to start feedback training")
+        logger.exception("Failed to start feedback training", extra={"tag": "TRAIN"})
         raise HTTPException(status_code=500, detail=str(e))
 
     return None
@@ -1637,7 +1637,7 @@ async def control_pause_training():
 
     # Notify the training job if it's listening
     if result["success"]:
-        logger.info("Training pause requested")
+        logger.info("Training pause requested", extra={"tag": "TRAIN"})
 
     return result
 
@@ -1653,7 +1653,7 @@ async def control_resume_training():
     result = controller.resume()
 
     if result["success"]:
-        logger.info("Training resumed")
+        logger.info("Training resumed", extra={"tag": "TRAIN"})
 
     return result
 
@@ -1673,7 +1673,7 @@ async def control_stop_training():
         for jid, job in training_jobs.items():
             if job.get("status") == "running":
                 job["status"] = "stopping"
-        logger.info("Training stop requested")
+        logger.info("Training stop requested", extra={"tag": "TRAIN"})
 
     return result
 
@@ -1991,7 +1991,7 @@ async def list_builds():
                 "finished_at": ckpt.get("finished_at", ""),
             })
     except Exception:
-        logger.debug("Visual checkpoints not available", exc_info=True)
+        logger.debug("Visual checkpoints not available", exc_info=True, extra={"tag": "TRAIN"})
 
     return {"builds": builds}
 
@@ -2176,7 +2176,7 @@ async def recover_job(job_id: str):
                 pass
 
         except Exception as e:
-            logger.error("Recovery failed: %s", e)
+            logger.error("Recovery failed: %s", e, extra={"tag": "TRAIN"})
             training_jobs[jid]["status"] = "failed"
             training_jobs[jid]["error"] = str(e)
             store.mark_failed(jid, str(e))

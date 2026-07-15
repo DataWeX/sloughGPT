@@ -325,7 +325,7 @@ async def generate_image(
         )
 
     except Exception as e:
-        logger.error(f"Image generation failed: {e}")
+        logger.error(f"Image generation failed: {e}", extra={"tag": "MODEL"})
         raise HTTPException(status_code=500, detail=f"Failed to generate image: {e}")
 
 

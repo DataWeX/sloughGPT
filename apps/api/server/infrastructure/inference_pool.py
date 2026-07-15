@@ -41,7 +41,7 @@ class InferencePool:
         self._semaphore = asyncio.Semaphore(max_workers)
         self._queue_timeout = queue_timeout
         self._max_workers = max_workers
-        logger.info("InferencePool created (workers=%d)", max_workers)
+        logger.info("InferencePool created (workers=%d)", max_workers, extra={"tag": "INFRA"})
 
     @classmethod
     async def get_instance(cls) -> InferencePool:
@@ -93,7 +93,7 @@ class InferencePool:
                 timeout=timeout or self._queue_timeout,
             )
         except asyncio.TimeoutError:
-            logger.warning("InferencePool task timed out (fn=%s)", getattr(fn, "__name__", str(fn)))
+            logger.warning("InferencePool task timed out (fn=%s)", getattr(fn, "__name__", str(fn)), extra={"tag": "INFRA"})
             raise TimeoutError("Inference task timed out")
         finally:
             self._semaphore.release()
@@ -156,7 +156,7 @@ class InferencePool:
 
     async def shutdown(self):
         self._executor.shutdown(wait=True, cancel_futures=False)
-        logger.info("InferencePool shut down (workers=%d)", self._max_workers)
+        logger.info("InferencePool shut down (workers=%d)", self._max_workers, extra={"tag": "INFRA"})
 
 
 _SENTINEL = object()

@@ -51,7 +51,6 @@ state = AutoTrainState()
 _auto_train_cancel_event: Optional[threading.Event] = None
 _auto_train_pause_event: Optional[threading.Event] = None
 _complete_enqueued = [False]  # track if pipeline already sent a complete event
-from pathlib import Path
 
 class _AutoTrainCancelled(Exception):
     """Raised inside the auto-train worker thread when user requests cancel."""
@@ -109,13 +108,14 @@ def _enforce_checkpoint_budget():
             meta = Path(str(f) + ".meta.json")
             if meta.exists():
                 meta.unlink()
-            autotrain_logger.info("Pruned old checkpoint: %s (%.1f KB)", f.name, size / 1024)
+            autotrain_logger.info("Pruned old checkpoint: %s (%.1f KB)", f.name, size / 1024, extra={"tag": "TRAIN"})
         autotrain_logger.info(
             "Checkpoint budget enforced: freed %.1f MB (budget %d MB)",
             freed / 1024 / 1024, MAX_CHECKPOINT_DISK_MB,
+            extra={"tag": "TRAIN"},
         )
     except Exception as e:
-        autotrain_logger.warning("Checkpoint budget enforcement failed: %s", e)
+        autotrain_logger.warning("Checkpoint budget enforcement failed: %s", e, extra={"tag": "TRAIN"})
 
 
 def _parse_subtitle_text(text: str) -> list:
@@ -175,7 +175,7 @@ class StartRequest(BaseModel):
     source_text: Optional[str] = Field(default=None, description="Custom training text (SRT, plain, or lines). If provided, train on this instead of generating from teacher.")
     checkpoint_name: Optional[str] = Field(default=None, description="Load existing checkpoint and continue training")
     dataset_id: Optional[str] = Field(default=None, description="Dataset ID from /datasets to train on")
-    algo: str = Field(default="bpe", description="Tokenization algorithm: 'bpe' (SloBPE) or 'unigram' (SloUnigram)")
+    early_stopping_patience: int = Field(default=0, ge=0, le=100, description="Stop if no eval improvement for N evaluations (0 = disabled)")
 
 
 class TurboStartRequest(BaseModel):
@@ -197,6 +197,28 @@ class TurboStartRequest(BaseModel):
     dim_feedforward: Optional[int] = Field(default=None, description="Deprecated: ignored")
     max_src_len: Optional[int] = Field(default=None, description="Deprecated: ignored")
     max_tgt_len: Optional[int] = Field(default=None, description="Deprecated: use block_size")
+
+
+def _resolve_dataset_path(dataset_id: str) -> str:
+    """Resolve a dataset ID to a file path, checking common file names.
+
+    Args:
+        dataset_id: Dataset directory name under REPO_ROOT/datasets/
+
+    Returns:
+        File path string if found, empty string otherwise.
+    """
+    ds_candidate = REPO_ROOT / "datasets" / dataset_id
+    if not ds_candidate.exists():
+        return ""
+    for name in ("corpus.jsonl", "input.txt", "train.txt", "text.txt"):
+        candidate = ds_candidate / name
+        if candidate.exists():
+            return str(candidate)
+    txt_files = list(ds_candidate.glob("*.txt"))
+    if txt_files:
+        return str(txt_files[0])
+    return ""
 
 
 def _build_soul_prompt(soul_name: str) -> str:
@@ -240,7 +262,7 @@ def _get_soul_traits(soul) -> dict:
     return {}
 
 
-SOU_MAGIC = b"\x00SL\x0E"
+SOU_MAGIC = b"SOUL"
 
 def _read_slo_json_header(path: Path) -> dict:
     """Read only the JSON metadata header from a .soul file without loading full weights."""
@@ -411,7 +433,7 @@ def _load_soul(name: str) -> dict:
                 pass
             return result
     except Exception as e:
-        autotrain_logger.warning("Failed to load %s: %s", ckpt_file, e, extra={"context": {"checkpoint": str(ckpt_file), "error": str(e)}})
+        autotrain_logger.warning("Failed to load %s: %s", ckpt_file, e, extra={"tag": "TRAIN", "context": {"checkpoint": str(ckpt_file), "error": str(e)}})
 
     return {"name": ckpt_file.name, "soul": "unknown", "size_mb": size_mb}
 
@@ -420,15 +442,21 @@ def _load_lora_soul(name: str) -> Optional[dict]:
     """Load soul metadata from a LoRA .soul checkpoint in the user_adapters directory."""
     from domains.inference import load_soul
 
+    candidate = None
     for lora_dir in (LORA_DIR, CHECKPOINTS_DIR):
         for ext in ("", ".soul"):
             if not name.endswith(".soul"):
-                candidate = lora_dir / (name + ext)
+                path = lora_dir / (name + ext)
             else:
-                candidate = lora_dir / name
+                path = lora_dir / name
+            if path.exists():
+                candidate = path
+                break
+        if candidate is not None:
+            break
 
-            if not candidate.exists():
-                continue
+    if candidate is None:
+        return None
 
     try:
         soul, _ = load_soul(str(candidate))
@@ -457,7 +485,7 @@ def _load_lora_soul(name: str) -> Optional[dict]:
                     result[k] = v
         return result
     except Exception as e:
-        autotrain_logger.warning("Failed to load LoRA soul %s: %s", candidate, e, extra={"context": {"candidate": str(candidate), "error": str(e)}})
+        autotrain_logger.warning("Failed to load LoRA soul %s: %s", candidate, e, extra={"tag": "TRAIN", "context": {"candidate": str(candidate), "error": str(e)}})
 
     return None
 
@@ -490,16 +518,9 @@ async def start(req: StartRequest):
             tmp.parent.mkdir(parents=True, exist_ok=True)
             tmp.write_text("\n".join(source_lines), encoding="utf-8")
             data_path = str(tmp)
-            autotrain_logger.info("Wrote %d source lines to %s", len(source_lines), tmp, extra={"context": {"source_lines": len(source_lines), "path": str(tmp)}})
+            autotrain_logger.info("Wrote %d source lines to %s", len(source_lines), tmp, extra={"tag": "TRAIN", "context": {"source_lines": len(source_lines), "path": str(tmp)}})
     elif req.dataset_id:
-        ds_candidate = REPO_ROOT / "datasets" / req.dataset_id
-        if ds_candidate.exists():
-            # Try common dataset file names
-            for name in ("corpus.jsonl", "input.txt", "train.txt", "text.txt"):
-                candidate = ds_candidate / name
-                if candidate.exists():
-                    data_path = str(candidate)
-                    break
+        data_path = _resolve_dataset_path(req.dataset_id)
 
     resume = getattr(req, "resume", False)
     resume_path = getattr(req, "resume_path", "")
@@ -510,11 +531,11 @@ async def start(req: StartRequest):
         if ckpt_pt.exists():
             resume = True
             resume_path = str(ckpt_pt)
-            autotrain_logger.info("Auto-resume from %s", resume_path, extra={"context": {"checkpoint": resume_path}})
+            autotrain_logger.info("Auto-resume from %s", resume_path, extra={"tag": "TRAIN", "context": {"checkpoint": resume_path}})
         elif ckpt_soul.exists():
             resume = True
             resume_path = str(ckpt_soul)
-            autotrain_logger.info("Auto-resume from %s", resume_path, extra={"context": {"checkpoint": resume_path}})
+            autotrain_logger.info("Auto-resume from %s", resume_path, extra={"tag": "TRAIN", "context": {"checkpoint": resume_path}})
 
     state.config = {
         "epochs": req.epochs,
@@ -522,15 +543,15 @@ async def start(req: StartRequest):
         "batch_size": req.batch_size,
         "data_path": data_path,
         "checkpoint_name": req.checkpoint_name or "",
-        "algo": req.algo,
         "soul_name": req.soul_name,
         "resume": resume,
         "resume_path": resume_path,
+        "early_stopping_patience": req.early_stopping_patience,
     }
     state.running = True
     import state as _srv_state
     _srv_state.training_active = True
-    autotrain_logger.info("Auto-train configured: data_path=%s epochs=%d", data_path, req.epochs)
+    autotrain_logger.info("Auto-train configured: data_path=%s epochs=%d", data_path, req.epochs, extra={"tag": "TRAIN"})
     return {"status": "ready", "data_path": data_path, "epochs": req.epochs, "config": state.config}
 
 
@@ -550,15 +571,7 @@ async def start_turbo(req: TurboStartRequest):
 
         data_path = req.data_path
         if not data_path and req.dataset_id:
-            ds_candidate = REPO_ROOT / "datasets" / req.dataset_id
-            if ds_candidate.exists():
-                corp = ds_candidate / "corpus.jsonl"
-                if corp.exists():
-                    data_path = str(corp)
-                else:
-                    txt_files = list(ds_candidate.glob("*.txt"))
-                    if txt_files:
-                        data_path = str(txt_files[0])
+            data_path = _resolve_dataset_path(req.dataset_id)
 
         if not data_path:
             return {"status": "error", "message": "No data_path or dataset_id provided"}
@@ -584,13 +597,13 @@ async def start_turbo(req: TurboStartRequest):
             checkpoint_dir=str(output_dir),
         )
 
-        autotrain_logger.info("Starting SloughGPTTrainer with method=%s data=%s", req.method, data_path)
+        autotrain_logger.info("Starting SloughGPTTrainer with method=%s data=%s", req.method, data_path, extra={"tag": "TRAIN"})
         result = trainer.train()
-        autotrain_logger.info("SloughGPTTrainer result: %s", result)
+        autotrain_logger.info("SloughGPTTrainer result: %s", result, extra={"tag": "TRAIN"})
 
         return result
     except Exception as e:
-        autotrain_logger.error("SloughGPTTrainer failed: %s", e)
+        autotrain_logger.error("SloughGPTTrainer failed: %s", e, extra={"tag": "TRAIN"})
         return {"status": "error", "message": str(e)}
 
 
@@ -663,15 +676,14 @@ async def stream(request: Request):
     def _training_worker():
         """Run SloughGPTTrainer in executor thread."""
         global _auto_train_cancel_event, _auto_train_pause_event
-        from domains.training.train_pipeline import SloughGPTTrainer
+        from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
 
         data_path = state.config.get("data_path", "")
         output_dir = Path(CHECKPOINTS_DIR)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        trainer = SloughGPTTrainer(
-            data_path=data_path,
-            vocab_size=state.config.get("vocab_size", 0),
+        trainer_config = TrainerConfig(
+            vocab_size=0,  # let prepare_data() determine from actual charset
             n_embed=state.config.get("n_embed", 64),
             n_layer=state.config.get("n_layer", 2),
             n_head=state.config.get("n_head", 4),
@@ -679,8 +691,14 @@ async def stream(request: Request):
             dropout=state.config.get("dropout", 0.1),
             batch_size=state.config.get("batch_size", 32),
             epochs=state.config.get("epochs", 10),
-            lr=state.config.get("learning_rate", 0.001),
+            learning_rate=state.config.get("learning_rate", 0.001),
             checkpoint_dir=str(output_dir),
+            early_stopping_patience=state.config.get("early_stopping_patience", 0),
+        )
+
+        trainer = SloughGPTTrainer(
+            data_path=data_path,
+            config=trainer_config,
         )
 
         _auto_train_cancel_event = threading.Event()
@@ -696,9 +714,15 @@ async def stream(request: Request):
                 data={
                     "progress": info.get("progress_percent", 0),
                     "loss": loss,
-                    "epoch": info.get("epoch", 0),
+                    "eval_loss": info.get("eval_loss"),
                     "step": info.get("global_step", 0),
                     "learning_rate": info.get("learning_rate", 0),
+                    "done": info.get("done", False),
+                    "done_reason": info.get("done_reason"),
+                },
+                meta={
+                    "epoch": info.get("epoch", 0),
+                    "total_epochs": info.get("epochs", 0),
                 },
             ))
 
@@ -717,26 +741,25 @@ async def stream(request: Request):
                 ckpt = result.get("checkpoint", "")
                 fl = result.get("final_loss")
                 ts = result.get("total_steps", 0)
+                best_path = result.get("model_path", "")
+                epochs = result.get("epochs_completed", 0)
                 autotrain_logger.info(
-                    "Auto-train complete: checkpoint=%s final_loss=%s steps=%d",
-                    ckpt, fl, ts, extra={"context": {"checkpoint": ckpt, "final_loss": fl, "steps": ts}},
+                    "Auto-train complete: checkpoint=%s final_loss=%s steps=%d epochs=%d best=%s",
+                    ckpt, fl, ts, epochs, best_path, extra={"tag": "TRAIN", "context": {"checkpoint": ckpt, "final_loss": fl, "steps": ts, "epochs": epochs, "best_model_path": best_path}},
                 )
                 _enforce_checkpoint_budget()
                 _enqueue(sse_complete("auto-train",
-                    data={"checkpoint": ckpt, "final_loss": fl, "total_steps": ts},
+                    data={"checkpoint": ckpt, "final_loss": fl, "total_steps": ts, "epochs": epochs, "best_model_path": best_path},
                     message=f"Training complete — checkpoint={ckpt} loss={fl} steps={ts}"))
-            elif result.get("cancelled"):
-                autotrain_logger.info("Auto-train cancelled by user", extra={"context": {"action": "cancel"}})
-                _enqueue(sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled"))
             else:
-                autotrain_logger.warning("Auto-train result: %s", result.get("status"))
+                autotrain_logger.warning("Auto-train result: %s", result.get("status"), extra={"tag": "TRAIN"})
                 _enqueue(sse_error("auto-train", result.get("status", "FAILED"), result.get("error", "Unknown error")))
 
         except _AutoTrainCancelled:
-            autotrain_logger.info("Auto-train cancelled by user", extra={"context": {"action": "cancel"}})
+            autotrain_logger.info("Auto-train cancelled by user", extra={"tag": "TRAIN", "context": {"action": "cancel"}})
             _enqueue(sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled"))
         except Exception as e:
-            autotrain_logger.error("Training worker error: %s", e, extra={"context": {"error": str(e)}})
+            autotrain_logger.error("Training worker error: %s", e, extra={"tag": "TRAIN", "context": {"error": str(e)}})
             _enqueue(sse_error("auto-train", "FAILED", str(e)))
         finally:
             _auto_train_cancel_event = None
@@ -756,7 +779,7 @@ async def stream(request: Request):
         try:
             while True:
                 if time.time() > deadline:
-                    autotrain_logger.error("Auto-train SSE timed out after 1 hour — no completion event received")
+                    autotrain_logger.error("Auto-train SSE timed out after 1 hour — no completion event received", extra={"tag": "TRAIN"})
                     yield sse_error("auto-train", "TIMEOUT", "Training SSE stream timed out")
                     return
                 # Check for disconnect before each queue wait
@@ -767,7 +790,7 @@ async def stream(request: Request):
                         _auto_train_pause_event.clear()
                     worker_task.cancel()
                     state.running = False
-                    autotrain_logger.info("Client disconnected from auto-train stream")
+                    autotrain_logger.info("Client disconnected from auto-train stream", extra={"tag": "TRAIN"})
                     return
                 # Wait for event or heartbeat timeout
                 remaining = heartbeat_interval - (time.time() - last_yield)
@@ -800,10 +823,10 @@ async def stream(request: Request):
 
             await worker_task
         except TimeoutError:
-            autotrain_logger.error("Auto-train SSE queue timed out — no event for 60s")
+            autotrain_logger.error("Auto-train SSE queue timed out — no event for 60s", extra={"tag": "TRAIN"})
             yield sse_error("auto-train", "TIMEOUT", "No training progress for 60 seconds")
         except Exception as e:
-            autotrain_logger.error("Auto-train SSE stream error: %s", e)
+            autotrain_logger.error("Auto-train SSE stream error: %s", e, extra={"tag": "TRAIN"})
             if not _complete_enqueued[0]:
                 yield sse_error("auto-train", "FAILED", str(e))
 
@@ -930,7 +953,7 @@ async def load_checkpoint(name: str):
         autotrain_logger.info(
             "Loaded checkpoint %s as provider (vocab=%d, params=%d)",
             cp.name, len(stoi), soul_net.num_parameters(),
-            extra={"context": {"checkpoint": cp.name, "vocab_size": len(stoi), "params": soul_net.num_parameters()}},
+            extra={"tag": "TRAIN", "context": {"checkpoint": cp.name, "vocab_size": len(stoi), "params": soul_net.num_parameters()}},
         )
 
         return success_response(data={
@@ -946,7 +969,7 @@ async def load_checkpoint(name: str):
         }, message="loaded")
     except Exception as e:
         import traceback
-        autotrain_logger.error("Failed to load checkpoint %s: %s", cp.name, e, extra={"context": {"checkpoint": cp.name, "error": str(e), "traceback": traceback.format_exc()}})
+        autotrain_logger.error("Failed to load checkpoint %s: %s", cp.name, e, extra={"tag": "TRAIN", "context": {"checkpoint": cp.name, "error": str(e), "traceback": traceback.format_exc()}})
         return error_response(message=str(e), data={"name": cp.name})
 
 

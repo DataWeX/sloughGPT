@@ -188,9 +188,10 @@ class StartupOrchestrator:
                 profile_enum.value,
                 len(self._lifecycle._startup_hooks),
                 len(self._lifecycle._shutdown_hooks),
+                extra={"tag": "START"},
             )
         except Exception as exc:
-            logger.warning("LifecycleManager init skipped: %s", exc)
+            logger.warning("LifecycleManager init skipped: %s", exc, extra={"tag": "START"})
 
     @property
     def lifecycle(self):
@@ -231,7 +232,7 @@ class StartupOrchestrator:
         if self._lifecycle is not None:
             ok = await self._lifecycle.start(timeout=180.0, profile=profile_enum)
             if not ok:
-                logger.warning("Lifecycle startup incomplete — continuing anyway")
+                logger.warning("Lifecycle startup incomplete — continuing anyway", extra={"tag": "START"})
         else:
             # Fallback: run phases directly
             self._phase5_model_registry()
@@ -248,22 +249,22 @@ class StartupOrchestrator:
 
         raw = cfg.autoload_model
         if not raw or raw.lower() in ("false", "0", "none", "no", "off", "disable"):
-            logger.info("Phase: autoload disabled (%r)", raw)
+            logger.info("Phase: autoload disabled (%r)", raw, extra={"tag": "START"})
             return
 
         STARTUP_PHASE.update(phase="loading_model", step=4, total=9, message="Loading model weights...")
-        logger.info("Phase 4: loading model %s", raw)
+        logger.info("Phase 4: loading model %s", raw, extra={"tag": "START"})
         # Run model load synchronously so provider is registered before serving requests
         try:
             await asyncio.to_thread(_autoload_model, cfg)
         except Exception as e:
-            logger.error("Model load failed: %s", e, exc_info=True)
+            logger.error("Model load failed: %s", e, exc_info=True, extra={"tag": "START"})
 
     def _on_model_load_done(self, task: asyncio.Task):
         try:
             task.result()
         except Exception as e:
-            logger.error("Model load task failed: %s", e, exc_info=True)
+            logger.error("Model load task failed: %s", e, exc_info=True, extra={"tag": "START"})
 
     async def _phase3_wandb(self):
         """Start W&B metrics server (if available)."""
@@ -294,13 +295,13 @@ class StartupOrchestrator:
                     self._wandb_task = await start_wandb_server_background(
                         _NoopMetrics(), extra_metrics=_extra_metrics,
                     )
-                    logger.info("Phase: W&B metrics server started")
+                    logger.info("Phase: W&B metrics server started", extra={"tag": "START"})
                 except Exception as e:
-                    logger.warning("Phase: W&B server skipped: %s", e)
+                    logger.warning("Phase: W&B server skipped: %s", e, extra={"tag": "START"})
 
             asyncio.create_task(_start())
         except Exception as e:
-            logger.warning("Phase: W&B unavailable: %s", e)
+            logger.warning("Phase: W&B unavailable: %s", e, extra={"tag": "START"})
 
     async def _phase4_multimodal(self):
         """Initialize multimodal engine (if available)."""
@@ -316,13 +317,13 @@ class StartupOrchestrator:
                     else:
                         from domains.multimodal import get_multimodal_manager
                         get_multimodal_manager().initialize(vision_model="slonet")
-                    logger.info("Phase 4/6: multimodal initialized")
+                    logger.info("Phase 4/6: multimodal initialized", extra={"tag": "START"})
                 except Exception as e:
-                    logger.warning("Phase 4/6: multimodal skipped: %s", e)
+                    logger.warning("Phase 4/6: multimodal skipped: %s", e, extra={"tag": "START"})
 
             asyncio.create_task(asyncio.to_thread(_init))
         except Exception as e:
-            logger.warning("Phase 4/6: multimodal init failed: %s", e)
+            logger.warning("Phase 4/6: multimodal init failed: %s", e, extra={"tag": "START"})
 
     async def _phase5_model_registry(self):
         """Initialize model registry."""
@@ -330,9 +331,9 @@ class StartupOrchestrator:
         try:
             from domains.infrastructure.model_registry import get_model_registry
             self._registry = get_model_registry()
-            logger.info("Phase: model registry initialized")
+            logger.info("Phase: model registry initialized", extra={"tag": "START"})
         except Exception as e:
-            logger.warning("Phase: model registry failed: %s", e)
+            logger.warning("Phase: model registry failed: %s", e, extra={"tag": "START"})
 
     async def _phase6_routers(self):
         """Register all feature routers.
@@ -362,15 +363,16 @@ class StartupOrchestrator:
                 from training.router import router as training_router
                 self._app.include_router(training_router)
             except Exception as exc:
-                logger.warning("Phase: training router failed: %s", exc)
+                logger.warning("Phase: training router failed: %s", exc, extra={"tag": "START"})
             logger.info(
                 "Phase: all routers registered (%d routes)",
                 len(self._app.routes),
+                extra={"tag": "START"},
             )
             self._routers_registered = True
         except Exception as e:
             self._routers_registered = False
-            logger.error("Phase: router registration failed: %s", e)
+            logger.error("Phase: router registration failed: %s", e, extra={"tag": "START"})
             raise
 
     async def _phase_task_queue(self):
@@ -379,9 +381,9 @@ class StartupOrchestrator:
         try:
             from domains.infrastructure.task_queue import get_task_queue
             self._task_queue = get_task_queue()
-            logger.info("Task queue initialized")
+            logger.info("Task queue initialized", extra={"tag": "START"})
         except Exception as e:
-            logger.warning("Task queue init failed: %s", e)
+            logger.warning("Task queue init failed: %s", e, extra={"tag": "START"})
 
     async def _phase_config(self):
         """Validate and warm the config system."""
@@ -390,14 +392,14 @@ class StartupOrchestrator:
             from domains.infrastructure.config import Config
             cfg = Config.get_instance()
             _ = cfg.get("app.name", "sloughgpt")
-            logger.info("Config system validated")
+            logger.info("Config system validated", extra={"tag": "START"})
         except Exception as e:
-            logger.warning("Config system init: %s", e)
+            logger.warning("Config system init: %s", e, extra={"tag": "START"})
 
     async def _phase_ready(self):
         """Mark server as ready — happens after all synchronous phases complete."""
         STARTUP_PHASE.update(phase="ready", step=9, total=9, message="Server ready")
-        logger.info("Startup complete — server ready for requests")
+        logger.info("Startup complete — server ready for requests", extra={"tag": "START"})
 
     # ── Shutdown hooks ──
 
@@ -406,9 +408,9 @@ class StartupOrchestrator:
         if self._task_queue is not None:
             try:
                 await self._task_queue.stop()
-                logger.info("Task queue stopped")
+                logger.info("Task queue stopped", extra={"tag": "START"})
             except Exception as e:
-                logger.warning("Task queue shutdown: %s", e)
+                logger.warning("Task queue shutdown: %s", e, extra={"tag": "START"})
 
     async def _shutdown_jobs(self):
         """Mark running training jobs as crashed on shutdown."""
@@ -417,9 +419,9 @@ class StartupOrchestrator:
             store = get_job_store()
             for job in store.list(status="running"):
                 store.mark_crashed(job["id"])
-                logger.info("Marked job %s as interrupted on shutdown", job["id"])
+                logger.info("Marked job %s as interrupted on shutdown", job["id"], extra={"tag": "START"})
         except Exception as e:
-            logger.warning("Shutdown job cleanup: %s", e)
+            logger.warning("Shutdown job cleanup: %s", e, extra={"tag": "START"})
 
     async def _shutdown_wandb(self):
         """Cancel W&B server task."""
@@ -453,9 +455,9 @@ class StartupOrchestrator:
             from domains.training.executor import _instance
             if _instance is not None:
                 _instance.shutdown(wait=True)
-                logger.info("TrainingExecutor shut down")
+                logger.info("TrainingExecutor shut down", extra={"tag": "START"})
         except Exception as e:
-            logger.warning("TrainingExecutor shutdown: %s", e)
+                logger.warning("TrainingExecutor shutdown: %s", e, extra={"tag": "START"})
 
     async def shutdown(self):
         """Clean up on server shutdown — uses lifecycle drain if available."""
@@ -464,7 +466,7 @@ class StartupOrchestrator:
                 await self._lifecycle.shutdown(timeout=30.0)
                 return
             except Exception as e:
-                logger.warning("Lifecycle shutdown error: %s", e)
+                logger.warning("Lifecycle shutdown error: %s", e, extra={"tag": "START"})
 
         # Fallback: direct cleanup
         await self._shutdown_task_queue()
@@ -495,7 +497,7 @@ def _autoload_model(cfg: ServerConfig):
     )
 
     if not result.success:
-        logger.warning("Autoload failed: %s", result.error)
+        logger.warning("Autoload failed: %s", result.error, extra={"tag": "START"})
         return
 
     # Store model references in server state
@@ -522,7 +524,7 @@ def _autoload_model(cfg: ServerConfig):
                 model=result.model, tokenizer=result.tokenizer, device="cpu",
             )
         except Exception as e:
-            logger.warning("Failed to create InferenceEngine: %s", e)
+            logger.warning("Failed to create InferenceEngine: %s", e, extra={"tag": "START"})
 
     # Register providers — SloNet is the primary inference backend
     from domains.models.provider import setup_providers
@@ -546,7 +548,7 @@ def _autoload_model(cfg: ServerConfig):
     )
 
     if gguf_model:
-        logger.info("GGUF quantized inference enabled: %s", gguf_model)
+        logger.info("GGUF quantized inference enabled: %s", gguf_model, extra={"tag": "START"})
     else:
         logger.info("Autoload ok: %s (%s) — KV cache active (ModelServer + InferenceEngine)",
-                    cfg.autoload_model, result.model_type)
+                    cfg.autoload_model, result.model_type, extra={"tag": "START"})

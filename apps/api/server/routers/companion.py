@@ -134,7 +134,7 @@ async def chat(req: ChatRequest):
             error_msg = "No model loaded"
     except Exception as e:
         error_msg = str(e)
-        logger.warning("Companion chat failed: %s", e, extra={"context": {"error": str(e)}})
+        logger.warning("Companion chat failed: %s", e, extra={"tag": "MODEL", "context": {"error": str(e)}})
 
     if not response_text and error_msg:
         response_text = f"[Error: {error_msg}]"

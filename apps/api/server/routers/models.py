@@ -215,7 +215,7 @@ async def list_hf_models(q: Optional[str] = None):
         try:
             return is_model_cached(model_id)
         except Exception as exc:
-            logger.error("is_model_cached(%s) failed: %s", model_id, exc)
+            logger.error("is_model_cached(%s) failed: %s", model_id, exc, extra={"tag": "MODEL"})
             return False
 
     def _cache_model_id(cache_dir_name: str) -> Optional[str]:
@@ -357,7 +357,7 @@ async def _run_download(model_id: str, total_bytes_hint: int):
         try:
             ctrl.load_model(model_id)
         except Exception as e:
-            logger.warning("Auto-load after download failed for %s: %s", model_id, e)
+            logger.warning("Auto-load after download failed for %s: %s", model_id, e, extra={"tag": "MODEL"})
 
 
 @router.get("/download/{model_id:path}")
@@ -486,14 +486,14 @@ async def download_qwen_gguf():
     cached_path = cache_dir / filename
 
     if cached_path.exists():
-        logger.info("Serving cached GGUF: %s", cached_path)
+        logger.info("Serving cached GGUF: %s", cached_path, extra={"tag": "MODEL"})
         return FileResponse(str(cached_path), media_type="application/octet-stream", filename=filename)
 
-    logger.info("Downloading Qwen GGUF from HuggingFace Hub (this may take a while)...")
+    logger.info("Downloading Qwen GGUF from HuggingFace Hub (this may take a while)...", extra={"tag": "MODEL"})
     try:
         downloaded = hf_hub_download(repo_id=repo_id, filename=filename, cache_dir=str(cache_dir))
         shutil.copy2(downloaded, cached_path)
-        logger.info("GGUF downloaded and cached: %s", cached_path)
+        logger.info("GGUF downloaded and cached: %s", cached_path, extra={"tag": "MODEL"})
         return FileResponse(str(cached_path), media_type="application/octet-stream", filename=filename)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Failed to download GGUF model: {e}")
@@ -506,7 +506,7 @@ async def visual_model_load(model_dir: str = "", model_id: str = ""):
     ``model_dir`` — path to the model directory on disk.
     ``model_id``  — HuggingFace model identifier (used when `model_dir` is empty).
     """
-    logger.info("Visual model load requested: dir=%s, id=%s", model_dir, model_id)
+    logger.info("Visual model load requested: dir=%s, id=%s", model_dir, model_id, extra={"tag": "MODEL"})
     ctrl = get_models_controller()
     if model_dir:
         result = ctrl.load_model_path(model_dir)

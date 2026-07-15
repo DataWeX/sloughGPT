@@ -159,7 +159,7 @@ def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 
         from domains.learner.knowledge_augmenter import enrich_with_knowledge
         return enrich_with_knowledge(user_msg, auto_search=auto_search, max_facts=max_facts)
     except Exception as e:
-        logger.warning("Knowledge enrichment failed: %s", e, extra={"context": {"error": str(e)}})
+        logger.warning("Knowledge enrichment failed: %s", e, extra={"tag": "INF", "context": {"error": str(e)}})
         return {"facts": [], "source": "none", "topics": []}
 
 
@@ -345,7 +345,7 @@ async def generate_stream(req: GenerateRequest, request: Request) -> StreamingRe
                 repetition_penalty=req.repetition_penalty,
             ):
                 if await request.is_disconnected():
-                    logger.info("Client disconnected from generate stream")
+                    logger.info("Client disconnected from generate stream", extra={"tag": "INF"})
                     return
                 if token:
                     token_count += 1
@@ -481,7 +481,7 @@ async def list_chat_tools():
         from domains.agents.tools import get_tool_registry
         return {"tools": get_tool_registry().list_tools()}
     except Exception as e:
-        logger.warning("Failed to list tools: %s", e)
+        logger.warning("Failed to list tools: %s", e, extra={"tag": "INF"})
         return {"tools": []}
 
 
@@ -533,9 +533,9 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                     return stored
                 stored = await asyncio.to_thread(_store_knowledge, req.knowledge)
                 if stored:
-                    logger.info("Stored %d injected knowledge items in vector store", stored, extra={"context": {"count": stored}})
+                    logger.info("Stored %d injected knowledge items in vector store", stored, extra={"tag": "INF", "context": {"count": stored}})
             except Exception as e:
-                logger.warning("Failed to store injected knowledge: %s", e, extra={"context": {"error": str(e)}})
+                logger.warning("Failed to store injected knowledge: %s", e, extra={"tag": "INF", "context": {"error": str(e)}})
         # Build provider messages from request
         provider_messages = [{"role": m.role, "content": m.content} for m in req.messages]
         if req.images:
@@ -607,7 +607,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                     if not replaced:
                         provider_messages.insert(0, agent_msg)
             except Exception:
-                logger.warning("Failed to inject agent instructions", exc_info=True)
+                logger.warning("Failed to inject agent instructions", exc_info=True, extra={"tag": "INF"})
 
         # ── Tool intent detection & execution ──
         tool_result_data = None
@@ -652,7 +652,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                             "content": f"[TOOL RESULT: {tool_name}]\nError: {result.error}\n[/TOOL RESULT]"
                         })
         except Exception:
-            logger.warning("Tool execution failed", exc_info=True)
+            logger.warning("Tool execution failed", exc_info=True, extra={"tag": "INF"})
 
         # ── Emit context info if available ──
         if context_info:
@@ -702,7 +702,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                         ):
                             if await request.is_disconnected():
                                 cancel_event.set()
-                                logger.info("Client disconnected from chat stream (request)", extra={"context": {"session_id": session_id}})
+                                logger.info("Client disconnected from chat stream (request)", extra={"tag": "INF", "context": {"session_id": session_id}})
                                 return
                             if token:
                                 full_response += token
@@ -710,10 +710,10 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                         yield sse_token("chat", "", done=True)
                     except GeneratorExit:
                         cancel_event.set()
-                        logger.info("Client disconnected from chat stream", extra={"context": {"session_id": session_id}})
+                        logger.info("Client disconnected from chat stream", extra={"tag": "INF", "context": {"session_id": session_id}})
                         return
                 except Exception as e:
-                    logger.error("Provider chat_stream error: %s", e, exc_info=True, extra={"context": {"session_id": session_id, "error": str(e)}})
+                    logger.error("Provider chat_stream error: %s", e, exc_info=True, extra={"tag": "INF", "context": {"session_id": session_id, "error": str(e)}})
                     yield sse_error("chat", "ERROR", f"Generation failed: {e}")
                     return
             else:
@@ -756,7 +756,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                                 streamer=streamer,
                             )
                     except Exception as e:
-                        logger.error("HF model.generate error: %s", e, exc_info=True, extra={"context": {"session_id": session_id, "error": str(e)}})
+                        logger.error("HF model.generate error: %s", e, exc_info=True, extra={"tag": "INF", "context": {"session_id": session_id, "error": str(e)}})
                         raise
 
                 thread = Thread(target=run_generation)
@@ -768,7 +768,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                         while thread.is_alive() or not streamer.text_queue.empty():
                             if await request.is_disconnected():
                                 cancel_event.set()
-                                logger.info("Client disconnected from chat stream (fallback, request)", extra={"context": {"session_id": session_id}})
+                                logger.info("Client disconnected from chat stream (fallback, request)", extra={"tag": "INF", "context": {"session_id": session_id}})
                                 return
                             try:
                                 text = streamer.text_queue.get(timeout=0.01)
@@ -783,15 +783,15 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
 
                         thread.join(timeout=120)
                         if thread.is_alive():
-                            logger.warning("Generation thread timed out after 120s", extra={"context": {"session_id": session_id, "timeout_s": 120}})
+                            logger.warning("Generation thread timed out after 120s", extra={"tag": "INF", "context": {"session_id": session_id, "timeout_s": 120}})
                             yield sse_error("chat", "ERROR", "Generation timed out")
                             return
                     except GeneratorExit:
                         cancel_event.set()
-                        logger.info("Client disconnected from chat stream (fallback)", extra={"context": {"session_id": session_id}})
+                        logger.info("Client disconnected from chat stream (fallback)", extra={"tag": "INF", "context": {"session_id": session_id}})
                         return
                 except Exception as e:
-                    logger.error("Streaming error: %s", e, exc_info=True, extra={"context": {"session_id": session_id, "error": str(e)}})
+                    logger.error("Streaming error: %s", e, exc_info=True, extra={"tag": "INF", "context": {"session_id": session_id, "error": str(e)}})
                     yield sse_error("chat", "ERROR", f"Streaming failed: {e}")
                     return
 
@@ -852,7 +852,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
             except Exception as e:
                 logger.debug("Entity extraction failed: %s", e)
 
-            logger.info("Chat stream: generated %d chars", len(full_response), extra={"context": {"char_count": len(full_response), "session_id": session_id}})
+            logger.info("Chat stream: generated %d chars", len(full_response), extra={"tag": "INF", "context": {"char_count": len(full_response), "session_id": session_id}})
 
         except Exception as e:
             yield sse_error("chat", "STREAMING", str(e))
@@ -939,7 +939,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
             if agent_instructions:
                 system_prompt = f"{system_prompt}\n\n[AGENT: {req.agent_id}]\n{agent_instructions}" if system_prompt else f"[AGENT: {req.agent_id}]\n{agent_instructions}"
         except Exception:
-            logger.warning("Failed to inject agent instructions", exc_info=True)
+            logger.warning("Failed to inject agent instructions", exc_info=True, extra={"tag": "INF"})
 
     # Inject knowledge into system prompt if provided
     if req.knowledge:

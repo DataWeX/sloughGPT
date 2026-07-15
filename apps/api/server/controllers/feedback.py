@@ -24,7 +24,7 @@ def _trigger_hf_dpo():
         pairs = trainer.prepare_dpo_pairs()
         if len(pairs) >= 2:
             result = trainer.train(pairs=pairs)
-            logger.info("HF DPO background: %s (pairs=%d)", result.get("status"), len(pairs))
+            logger.info("HF DPO background: %s (pairs=%d)", result.get("status"), len(pairs), extra={"tag": "INFRA"})
     except Exception as e:
         logger.debug("HF DPO background skipped: %s", e)
 

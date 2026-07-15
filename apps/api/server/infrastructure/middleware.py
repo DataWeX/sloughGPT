@@ -3,11 +3,17 @@ Middleware modules extracted from main.py.
 
 All middleware re-exported via ``get_configured_middleware()`` for
 registration in the FastAPI app.
+
+Output format uses type tags for quick visual scanning:
+    HH:MM:SS INF [REQ]  man.middleware GET /chat 200  (0.34s)
+    HH:MM:SS WRN [SLOW] man.middleware SLOW GET /models 200  (12.4s)
+    HH:MM:SS ERR [REQ]  man.middleware POST /chat 500  ← RuntimeError
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 import uuid
@@ -22,6 +28,9 @@ logger = logging.getLogger("man.middleware")
 # Default server-side request timeout (seconds).
 # Override via env var MAN_REQUEST_TIMEOUT in main.py.
 REQUEST_TIMEOUT_SECONDS = 60.0
+
+# Paths that are always slow during cold start — suppress SLOW log for these
+_COLD_START_PATHS = {"/health", "/models", "/souls", "/chat/sessions", "/training/jobs"}
 
 
 class RequestTimeoutMiddleware(BaseHTTPMiddleware):
@@ -42,25 +51,47 @@ class RequestTimeoutMiddleware(BaseHTTPMiddleware):
             logger.warning(
                 "Request timeout (%0.1fs) on %s %s",
                 self.timeout, request.method, request.url.path,
+                extra={"tag": "REQ", "context": {"status": 504, "timeout_s": self.timeout}, "error_code": "E_INFRA_TIMEOUT"},
             )
             return JSONResponse(
                 status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                content={"error": f"Request timed out after {self.timeout}s"},
+                content={
+                    "error": f"Request timed out after {self.timeout}s",
+                    "code": "E_INFRA_TIMEOUT",
+                },
             )
 
 
 class RequestTimingMiddleware(BaseHTTPMiddleware):
-    """Logs request method, path, status, and duration."""
+    """Logs request method, path, status, and duration with type tags."""
 
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         start = time.monotonic()
         response = await call_next(request)
         elapsed = time.monotonic() - start
         if elapsed > 1.0:
-            logger.info(
-                "SLOW %s %s %d (%.2fs)",
-                request.method, request.url.path, response.status_code, elapsed,
-            )
+            path = request.url.path
+            sc = response.status_code
+            ctx = {"method": request.method, "path": path, "status": sc, "elapsed": f"{elapsed:.2f}s"}
+
+            # Suppress SLOW log for cold-start paths on first load
+            if path in _COLD_START_PATHS and elapsed < 30.0:
+                logger.debug("COLD %s %s %d (%.2fs)", request.method, path, sc, elapsed)
+            elif sc >= 500:
+                logger.error(
+                    "SLOW %s %s %d (%.2fs)", request.method, path, sc, elapsed,
+                    extra={"tag": "REQ", "context": ctx, "error_code": "E_INFRA_TIMEOUT"},
+                )
+            elif sc >= 400:
+                logger.warning(
+                    "SLOW %s %s %d (%.2fs)", request.method, path, sc, elapsed,
+                    extra={"tag": "REQ", "context": ctx},
+                )
+            else:
+                logger.info(
+                    "SLOW %s %s %d (%.2fs)", request.method, path, sc, elapsed,
+                    extra={"tag": "REQ", "context": ctx},
+                )
         return response
 
 
@@ -86,16 +117,38 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
             elapsed = time.monotonic() - start
-            logger.debug(
-                "%s %s %s %d (%.3fs)",
-                corr_id, request.method, request.url.path, response.status_code, elapsed,
-            )
+            ctx = {
+                "corr": corr_id,
+                "method": request.method,
+                "path": request.url.path,
+                "status": response.status_code,
+                "elapsed": f"{elapsed:.3f}s",
+            }
+            if response.status_code >= 500:
+                logger.error(
+                    "%s %s %s %d (%.3fs)",
+                    corr_id, request.method, request.url.path, response.status_code, elapsed,
+                    extra={"tag": "REQ", "context": ctx},
+                )
+            elif response.status_code >= 400:
+                logger.warning(
+                    "%s %s %s %d (%.3fs)",
+                    corr_id, request.method, request.url.path, response.status_code, elapsed,
+                    extra={"tag": "REQ", "context": ctx},
+                )
+            else:
+                logger.debug(
+                    "%s %s %s %d (%.3fs)",
+                    corr_id, request.method, request.url.path, response.status_code, elapsed,
+                    extra={"tag": "REQ", "context": ctx},
+                )
             return response
         except Exception:
             elapsed = time.monotonic() - start
             logger.exception(
                 "%s %s %s UNHANDLED (%.3fs)",
                 corr_id, request.method, request.url.path, elapsed,
+                extra={"tag": "REQ", "context": {"corr": corr_id, "status": 500, "elapsed": f"{elapsed:.3f}s"}},
             )
             raise
 
@@ -120,10 +173,29 @@ class MetricsMiddleware(BaseHTTPMiddleware):
             collector.record_request(path, status_code, elapsed)
 
 
+class ClientErrorFilterMiddleware(BaseHTTPMiddleware):
+    """Filters out client-side errors from browser extensions (crypto wallets, etc.).
+
+    Extension-injected scripts that fail don't indicate server problems.
+    Logs them at DEBUG level instead of ERROR to reduce noise.
+    """
+
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+        response = await call_next(request)
+        origin = request.headers.get("origin", "")
+        if "chrome-extension" in origin or "moz-extension" in origin:
+            if response.status_code >= 400:
+                logger.debug(
+                    "Extension error suppressed: %s %s %d",
+                    request.method, request.url.path, response.status_code,
+                )
+        return response
+
+
 def get_configured_middleware(request_timeout: float = REQUEST_TIMEOUT_SECONDS) -> list[tuple[type[BaseHTTPMiddleware], dict]]:
     """Return middleware classes with kwargs in registration order.
 
-    Registration order: RequestTimeout → Metrics → CorrelationId → Timing → RequestLogging.
+    Registration order: RequestTimeout → Metrics → CorrelationId → Timing → RequestLogging → ClientErrorFilter.
     """
     return [
         (RequestTimeoutMiddleware, {"timeout": request_timeout}),
@@ -131,6 +203,7 @@ def get_configured_middleware(request_timeout: float = REQUEST_TIMEOUT_SECONDS) 
         (CorrelationIdMiddleware, {}),
         (RequestTimingMiddleware, {}),
         (RequestLoggingMiddleware, {}),
+        (ClientErrorFilterMiddleware, {}),
     ]
 
 
@@ -146,6 +219,6 @@ def register_all_middleware(app: FastAPI, request_timeout: float = REQUEST_TIMEO
     try:
         from domains.infrastructure.rate_limiter import RateLimitMiddleware
         app.add_middleware(RateLimitMiddleware)
-        logger.info("RateLimitMiddleware registered")
+        logger.info("RateLimitMiddleware registered", extra={"tag": "INFRA"})
     except Exception as exc:
-        logger.warning("RateLimitMiddleware skipped: %s", exc)
+        logger.warning("RateLimitMiddleware skipped: %s", exc, extra={"tag": "INFRA"})

@@ -264,7 +264,7 @@ async def switch_soul(
                     soul_prompt = _build_soul_system_prompt(soul_info)
                     ctx_core.set_system_prompt(soul_prompt)
             except Exception as e:
-                logger.warning("Failed to update context core system prompt on soul switch: %s", e)
+                logger.warning("Failed to update context core system prompt on soul switch: %s", e, extra={"tag": "SOUL"})
 
         # Load checkpoint into main model if requested
         if req.checkpoint_name:
@@ -287,7 +287,7 @@ async def switch_soul(
                 server_state.current_soul = soul
                 server_state.soul_engine = engine
             except Exception as exc:
-                logger.warning("Failed to set soul engine: %s", exc)
+                logger.warning("Failed to set soul engine: %s", exc, extra={"tag": "SOUL"})
 
         try:
             from domains.infrastructure.server_state import get_server_state
