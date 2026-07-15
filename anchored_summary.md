@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 5f2009a feat: tag all 834 log calls across server + core-py with error codes and type tags
+No active task. Last commit: 3ab5b37 docs: update deployment, developer guide, and environment docs
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

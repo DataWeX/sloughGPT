@@ -143,7 +143,7 @@ _SKIP_ENV_KEYS: frozenset[str] = frozenset({
 
 
 def _apply_env_overrides(config: AppConfig) -> AppConfig:
-    """Walk environment variables, parse MAN_* keys, override config values."""
+    """Walk environment variables, parse SLO_* keys, override config values."""
     overrides: dict[str, Any] = {}
     for key, value in os.environ.items():
         if not key.startswith(_ENV_PREFIX):
