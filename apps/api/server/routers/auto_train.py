@@ -467,7 +467,7 @@ async def start(req: StartRequest):
     """
     Configure auto-training — stores config for /auto-train/stream to consume.
 
-    Delegates training to UnifiedTrainingPipeline (method='slonet').
+    Delegates training to SloughGPTTrainer.
 
     Args:
         req: source_text or dataset_id, epochs, learning_rate, etc.
@@ -642,10 +642,10 @@ async def status():
 @router.get("/stream")
 async def stream(request: Request):
     """
-    Stream auto-training as SSE via UnifiedTrainingPipeline (method='slonet').
+    Stream auto-training as SSE via SloughGPTTrainer.
 
-    Delegates model creation, training, and .soul export to the pipeline.
-    Phases: GENERATE_DATA → DISTILL → TRAIN → EVALUATE → DEPLOY → COMPLETE
+    Delegates model creation, training, and checkpoint export to the trainer.
+    Phases: TRAIN → COMPLETE
     """
     if not state.config:
         return StreamingResponse(
@@ -661,59 +661,58 @@ async def stream(request: Request):
         loop.call_soon_threadsafe(queue.put_nowait, event_str)
 
     def _training_worker():
-        """Run UnifiedTrainingPipeline in executor thread."""
+        """Run SloughGPTTrainer in executor thread."""
         global _auto_train_cancel_event, _auto_train_pause_event
-        from domains.training.unified_pipeline import (
-            UnifiedTrainingPipeline, UnifiedTrainingConfig,
-        )
+        from domains.training.train_pipeline import SloughGPTTrainer
 
-        cfg = UnifiedTrainingConfig(
-            method="slonet",
-            data_path=state.config.get("data_path", ""),
-            epochs=state.config.get("epochs", 10),
-            learning_rate=state.config.get("learning_rate", 0.001),
+        data_path = state.config.get("data_path", "")
+        output_dir = Path(CHECKPOINTS_DIR)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        trainer = SloughGPTTrainer(
+            data_path=data_path,
+            vocab_size=state.config.get("vocab_size", 0),
+            n_embed=state.config.get("n_embed", 64),
+            n_layer=state.config.get("n_layer", 2),
+            n_head=state.config.get("n_head", 4),
+            block_size=state.config.get("block_size", 64),
+            dropout=state.config.get("dropout", 0.1),
             batch_size=state.config.get("batch_size", 32),
-            checkpoint_dir=str(CHECKPOINTS_DIR),
-            output_dir=str(CHECKPOINTS_DIR),
-            vocab_size=0,
-            n_embed=64,
-            n_layer=2,
-            n_head=4,
-            block_size=64,
-            soul_name=state.config.get("soul_name", "assistant"),
-            system_prompt=_build_soul_prompt(state.config.get("soul_name", "assistant")),
-            skip_generate=True,
-            skip_distill=True,
-            skip_evaluate=True,
-            skip_deploy=True,
-            resume=state.config.get("resume", False),
-            resume_path=state.config.get("resume_path", ""),
+            epochs=state.config.get("epochs", 10),
+            lr=state.config.get("learning_rate", 0.001),
+            checkpoint_dir=str(output_dir),
         )
 
-        pipeline = UnifiedTrainingPipeline(cfg)
         _auto_train_cancel_event = threading.Event()
         _auto_train_pause_event = threading.Event()
         _complete_enqueued[0] = False
 
-        def _on_progress(progress):
+        def _on_progress(info):
             if _auto_train_cancel_event is not None and _auto_train_cancel_event.is_set():
                 raise _AutoTrainCancelled("Training cancelled by user")
-            sse = progress.to_sse_event(stream_name="auto-train")
-            data = sse.get("data", {})
-            # Track if pipeline emitted a complete event
-            if sse.get("status") in ("complete", "error"):
-                _complete_enqueued[0] = True
-            # Don't emit loss=0.0 from phase transitions — only emit real loss values
-            if data.get("loss") == 0.0 and data.get("step", 0) == 0:
-                data = {k: v for k, v in data.items() if k != "loss"}
-            _enqueue(sse_event("auto-train", sse.get("phase", "PROGRESS"),
-                               sse.get("status", "working"), data=data,
-                               meta=sse.get("meta", {})))
+            loss = info.get("train_loss")
+            _enqueue(sse_event(
+                "auto-train", "TRAIN", "working",
+                data={
+                    "progress": info.get("progress_percent", 0),
+                    "loss": loss,
+                    "epoch": info.get("epoch", 0),
+                    "step": info.get("global_step", 0),
+                    "learning_rate": info.get("learning_rate", 0),
+                },
+            ))
 
         try:
             state.running = True
-            result = pipeline.run(on_progress=_on_progress, cancel_event=_auto_train_cancel_event, pause_event=_auto_train_pause_event)
+            result = trainer.train(
+                on_progress=_on_progress,
+                cancel_event=_auto_train_cancel_event,
+                pause_event=_auto_train_pause_event,
+                resume=state.config.get("resume", False),
+                resume_path=state.config.get("resume_path", ""),
+            )
 
+            _complete_enqueued[0] = True
             if result.get("status") == "completed":
                 ckpt = result.get("checkpoint", "")
                 fl = result.get("final_loss")
@@ -723,17 +722,15 @@ async def stream(request: Request):
                     ckpt, fl, ts, extra={"context": {"checkpoint": ckpt, "final_loss": fl, "steps": ts}},
                 )
                 _enforce_checkpoint_budget()
-                # Only send complete event if the pipeline didn't already emit one
-                if not _complete_enqueued[0]:
-                    epochs = result.get("epochs")
-                    _enqueue(sse_complete("auto-train",
-                        data={"checkpoint": ckpt, "final_loss": fl, "total_steps": ts, "epochs": epochs},
-                        message=f"Training complete — checkpoint={ckpt} loss={fl} steps={ts}"))
+                _enqueue(sse_complete("auto-train",
+                    data={"checkpoint": ckpt, "final_loss": fl, "total_steps": ts},
+                    message=f"Training complete — checkpoint={ckpt} loss={fl} steps={ts}"))
             elif result.get("cancelled"):
                 autotrain_logger.info("Auto-train cancelled by user", extra={"context": {"action": "cancel"}})
                 _enqueue(sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled"))
             else:
                 autotrain_logger.warning("Auto-train result: %s", result.get("status"))
+                _enqueue(sse_error("auto-train", result.get("status", "FAILED"), result.get("error", "Unknown error")))
 
         except _AutoTrainCancelled:
             autotrain_logger.info("Auto-train cancelled by user", extra={"context": {"action": "cancel"}})

@@ -154,10 +154,6 @@ export const trainingJobsController = {
     return apiPost('/auto-train/resume')
   },
 
-  async stopUnified(): Promise<void> {
-    await apiPost('/training/unified-stop')
-  },
-
   async startTurboTrain(params?: TurboTrainStartRequest): Promise<TurboTrainResponse> {
     return apiPost<TurboTrainResponse>('/auto-train/start-turbo', params ?? null)
   },
@@ -537,84 +533,6 @@ export const trainingJobsController = {
     return res.blob()
   },
 
-  // ---------------------------------------------------------------------------
-  // Unified Pipeline
-  // ---------------------------------------------------------------------------
-
-  async startUnified(config: UnifiedStartConfig): Promise<{ status: string }> {
-    return apiPost('/training/unified-start', config)
-  },
-
-  async *streamUnified(): AsyncGenerator<UnifiedStreamEvent> {
-    const { PUBLIC_API_URL } = await import('./config')
-    const res = await fetch(`${PUBLIC_API_URL}/training/unified-stream`)
-    if (!res.ok || !res.body) throw new Error(`Stream error (${res.status})`)
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const event = JSON.parse(line.slice(6))
-            yield event as UnifiedStreamEvent
-          } catch { /* skip malformed */ }
-        }
-      }
-    }
-  },
-}
-
-export interface UnifiedStartConfig {
-  method?: string
-  data_path?: string
-  dataset_name?: string
-  output_dir?: string
-  epochs?: number
-  batch_size?: number
-  learning_rate?: number
-  weight_decay?: number
-  warmup_steps?: number
-  distill?: boolean
-  temperature?: number
-  hf_model_name?: string
-  vocab_size?: number
-  n_embed?: number
-  n_layer?: number
-  n_head?: number
-  block_size?: number
-  checkpoint_dir?: string
-  skip_generate?: boolean
-  skip_distill?: boolean
-  skip_train?: boolean
-  skip_evaluate?: boolean
-  skip_deploy?: boolean
-  use_lora?: boolean
-  lora_rank?: number
-}
-
-export interface UnifiedStreamEvent {
-  stream: string
-  phase: string
-  status: string
-  data?: {
-    loss?: number
-    progress?: number
-    epoch?: number
-    step?: number
-    final_loss?: number
-    total_steps?: number
-    elapsed?: number
-    model_path?: string
-    error?: string
-  }
-  meta?: Record<string, unknown>
-  message?: string
 }
 
 export interface AutoTrainStatus {

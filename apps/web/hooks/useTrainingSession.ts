@@ -22,10 +22,6 @@ export interface TrainingSessionState {
   turboPhase: 'idle' | 'training' | 'complete' | 'error'
   turboResult: { status: string; final_loss?: number; total_steps?: number; model_path?: string } | null
   turboError: string | null
-  unifiedModelPath: string | null
-  unifiedFinalLoss: number | null
-  unifiedTotalSteps: number | null
-  unifiedElapsed: number | null
   visualOutputDir: string | null
   visualSouPath: string | null
 }
@@ -64,11 +60,6 @@ export interface UseTrainingSessionReturn extends TrainingSessionState {
     epochs: number; lr: number; embed: number; heads: number; layers: number
   }, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => void
   turboRunning: boolean
-  startUnifiedTraining: (config: {
-    method?: string; dataset?: string; epochs?: number; batchSize?: number; lr?: number
-    distill?: boolean; useLoRA?: boolean; hfModel?: string; skipGenerate?: boolean
-    skipDistill?: boolean; skipTrain?: boolean; skipEvaluate?: boolean; skipDeploy?: boolean
-  }, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => void
 }
 
 export function useTrainingSession(): UseTrainingSessionReturn {
@@ -102,10 +93,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   const [turboResult, setTurboResult] = useState<{ status: string; final_loss?: number; total_steps?: number; model_path?: string } | null>(null)
   const [turboError, setTurboError] = useState<string | null>(null)
 
-  const [unifiedModelPath, setUnifiedModelPath] = useState<string | null>(null)
-  const [unifiedFinalLoss, setUnifiedFinalLoss] = useState<number | null>(null)
-  const [unifiedTotalSteps, setUnifiedTotalSteps] = useState<number | null>(null)
-  const [unifiedElapsed, setUnifiedElapsed] = useState<number | null>(null)
+
 
   const [visualOutputDir, setVisualOutputDir] = useState<string | null>(null)
   const [visualSouPath, setVisualSouPath] = useState<string | null>(null)
@@ -119,7 +107,6 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     setPaused(false)
     setFinetunedModelPath(null); setFinetunedModelLoss(null)
     setDistillCheckpoint(null); setDistillFinalLoss(null); setDistillEpochs(null)
-    setUnifiedModelPath(null); setUnifiedFinalLoss(null); setUnifiedTotalSteps(null); setUnifiedElapsed(null)
     setVisualOutputDir(null); setVisualSouPath(null)
     setPhase('idle'); setProgress(0); setLoss(null); setEpoch(0); setTotalEpochs(0)
     setMessage(''); setLossHistory([]); setEvalResult(null)
@@ -130,7 +117,6 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     if (ftPollRef.current) { clearInterval(ftPollRef.current); ftPollRef.current = null }
     if (visualPollRef.current) { clearInterval(visualPollRef.current); visualPollRef.current = null }
     trainingJobsController.stopAutoTrain().catch(() => {})
-    trainingJobsController.stopUnified().catch(() => {})
     resetTraining()
   }, [resetTraining])
 
@@ -315,82 +301,10 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     })
   }, [])
 
-  const startUnifiedTraining = useCallback((
-    config: {
-      method?: string; dataset?: string; epochs?: number; batchSize?: number; lr?: number
-      distill?: boolean; useLoRA?: boolean; hfModel?: string; skipGenerate?: boolean
-      skipDistill?: boolean; skipTrain?: boolean; skipEvaluate?: boolean; skipDeploy?: boolean
-    },
-    addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
-  ) => {
-    esRef.current?.close(); esRef.current = null
-    setUnifiedModelPath(null); setUnifiedFinalLoss(null); setUnifiedTotalSteps(null); setUnifiedElapsed(null)
-    trainingJobsController.startUnified({
-      method: config.method,
-      data_path: config.dataset,
-      dataset_name: config.dataset,
-      epochs: config.epochs ?? 5,
-      batch_size: config.batchSize ?? 64,
-      learning_rate: config.lr ?? 1e-3,
-      distill: config.distill ?? false,
-      use_lora: config.useLoRA ?? true,
-      lora_rank: 8,
-      hf_model_name: config.hfModel,
-      skip_generate: config.skipGenerate,
-      skip_distill: config.skipDistill,
-      skip_train: config.skipTrain,
-      skip_evaluate: config.skipEvaluate,
-      skip_deploy: config.skipDeploy,
-    }).then(() => {
-      setPhase('GENERATE_DATA'); setProgress(0); setLoss(null); setEpoch(0); setTotalEpochs(0)
-      setMessage(''); setLossHistory([]); setEvalResult(null); setStartTime(Date.now())
-      const es = new EventSource(`${PUBLIC_API_URL}/training/unified-stream`)
-      esRef.current = es
-      es.onmessage = (e) => {
-        try {
-          const env = JSON.parse(e.data)
-          if (env.stream !== 'unified-train') return
-          setPhase(env.phase || 'TRAIN')
-          if (env.data?.loss != null) {
-            setLoss(env.data.loss)
-            setLossHistory(prev => {
-              const last = prev[prev.length - 1]
-              const step = (last?.step ?? 0) + 1
-              return prev.length > 200 ? prev.slice(-200) : [...prev, { step, loss: env.data.loss }]
-            })
-          }
-          if (env.data?.progress != null) setProgress(env.data.progress)
-          if (env.meta?.epoch != null) setEpoch(env.meta.epoch)
-          if (env.meta?.total_epochs != null) setTotalEpochs(env.meta.total_epochs)
-          if (env.message) setMessage(env.message)
-          if (env.data?.eval_report) setEvalResult(env.data.eval_report)
-          if (env.status === 'complete') {
-            es.close(); esRef.current = null
-            if (env.data?.model_path) setUnifiedModelPath(env.data.model_path)
-            if (env.data?.final_loss != null) setUnifiedFinalLoss(env.data.final_loss)
-            if (env.data?.total_steps != null) setUnifiedTotalSteps(env.data.total_steps)
-            if (env.data?.elapsed != null) setUnifiedElapsed(env.data.elapsed)
-            setPhase('complete')
-            addToast('Unified training complete', 'success')
-          }
-          if (env.status === 'error') { es.close(); esRef.current = null; setPhase('error'); addToast(env.message || 'Something went wrong during training', 'error') }
-        } catch (err) { console.error('[training] SSE parse error:', err) }
-      }
-      let esRetries = 0
-      es.onerror = () => {
-        if (es.readyState === EventSource.CLOSED || esRetries >= 3) {
-          es.close(); esRef.current = null; setPhase('error')
-          addToast('Connection lost during training', 'error')
-        } else { esRetries++ }
-      }
-    }).catch(() => addToast('Something went wrong starting training', 'error'))
-  }, [])
-
   return {
     phase, loss, progress, epoch, totalEpochs, message, startTime, lossHistory, evalResult,
     finetunedModelPath, finetunedModelLoss, distillCheckpoint, distillFinalLoss, distillEpochs,
     turboPhase, turboResult, turboError,
-    unifiedModelPath, unifiedFinalLoss, unifiedTotalSteps, unifiedElapsed,
     visualOutputDir, visualSouPath,
     paused,
     setPhase, setLoss, setProgress, setEpoch, setTotalEpochs, setMessage,
@@ -400,6 +314,6 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     setTurboPhase, setTurboResult, setTurboError,
     trainingRunning, turboRunning: turboPhase === 'training',
     resetTraining, stopTraining, pauseTraining, resumeTraining,
-    startSSETraining, startFineTune, startVisualTraining, startTurboTrain, startUnifiedTraining,
+    startSSETraining, startFineTune, startVisualTraining, startTurboTrain,
   }
 }

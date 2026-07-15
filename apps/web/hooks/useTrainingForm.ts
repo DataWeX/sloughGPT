@@ -7,7 +7,7 @@ import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 import type { UseTrainingSessionReturn } from '@/hooks/useTrainingSession'
 import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
 
-export type Method = 'distill' | 'finetune' | 'vlm' | 'unified'
+export type Method = 'distill' | 'finetune' | 'vlm'
 export type InputMode = 'dataset' | 'text'
 
 export interface TrainingFormState {
@@ -16,7 +16,6 @@ export interface TrainingFormState {
   textInput: string
   showAdvanced: boolean
   algo: string
-  unifiedDistill: boolean
   trainingEpochs: number
   trainingLR: number
   trainingBatchSize: number
@@ -34,7 +33,6 @@ export interface TrainingFormState {
   setTextInput: (s: string) => void
   setShowAdvanced: (v: boolean) => void
   setAlgo: (a: string) => void
-  setUnifiedDistill: (v: boolean) => void
   setTrainingEpochs: (n: number) => void
   setTrainingLR: (n: number) => void
   setTrainingBatchSize: (n: number) => void
@@ -69,7 +67,6 @@ export function useTrainingForm(
   const [inputMode, setInputMode] = useState<InputMode>(saved.current?.inputMode ?? 'dataset')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [algo, setAlgo] = useState(saved.current?.algo ?? 'bpe')
-  const [unifiedDistill, setUnifiedDistill] = useState(saved.current?.unifiedDistill ?? false)
   const [trainingEpochs, setTrainingEpochs] = useState(saved.current?.trainingEpochs ?? 5)
   const [trainingLR, setTrainingLR] = useState(saved.current?.trainingLR ?? 1e-3)
   const [trainingBatchSize, setTrainingBatchSize] = useState(saved.current?.trainingBatchSize ?? 64)
@@ -98,11 +95,11 @@ export function useTrainingForm(
   useEffect(() => {
     try {
       localStorage.setItem(TRAINING_CONFIG_KEY, JSON.stringify({
-        method, inputMode, algo, unifiedDistill, trainingEpochs, trainingLR,
+        method, inputMode, algo, trainingEpochs, trainingLR,
         trainingBatchSize, selectedModel, useLoRA,
       }))
     } catch {}
-  }, [method, inputMode, algo, unifiedDistill, trainingEpochs, trainingLR, trainingBatchSize, selectedModel, useLoRA])
+  }, [method, inputMode, algo, trainingEpochs, trainingLR, trainingBatchSize, selectedModel, useLoRA])
 
   useEffect(() => {
     modelController.list().then(models => {
@@ -116,8 +113,7 @@ export function useTrainingForm(
     (inputMode === 'dataset' && !datasets.selectedDataset) ||
     (inputMode === 'text' && !textInput.trim()) ||
     (method === 'finetune' && !selectedModel) ||
-    (method === 'vlm' && !datasets.selectedDataset) ||
-    (method === 'unified' && !datasets.selectedDataset)
+    (method === 'vlm' && !datasets.selectedDataset)
 
   const startTraining = useCallback(async (checkpointName?: string) => {
     const hasDataset = inputMode === 'dataset' && datasets.selectedDataset
@@ -127,8 +123,8 @@ export function useTrainingForm(
       addToast('Select a dataset or paste text to train on', 'error'); return
     }
 
-    if ((method === 'finetune' || method === 'unified') && !hasDataset) {
-      addToast(`${method === 'unified' ? 'Unified training' : 'Continue training'} requires a dataset.`, 'error'); return
+    if (method === 'finetune' && !hasDataset) {
+      addToast('Continue training requires a dataset.', 'error'); return
     }
 
     if (method === 'vlm' && !hasDataset) {
@@ -166,32 +162,21 @@ export function useTrainingForm(
         stage2Epochs: visualStage2Epochs,
         useLoRA,
       }, addToast, () => { checkpoints.fetchJobs() })
-    } else if (method === 'unified') {
-      session.startUnifiedTraining({
-        method: 'auto',
-        dataset: datasets.selectedDataset,
-        epochs: trainingEpochs,
-        batchSize: trainingBatchSize,
-        lr: trainingLR,
-        distill: unifiedDistill,
-        useLoRA,
-        hfModel: selectedModel || undefined,
-      }, addToast)
     } else {
       session.startSSETraining(body, addToast, () => {
         checkpoints.fetchCheckpoints()
       })
     }
   }, [method, inputMode, textInput, algo, trainingEpochs, trainingLR, trainingBatchSize,
-      selectedModel, useLoRA, unifiedDistill, datasets.selectedDataset, visualVisionEncoder, visualLLM,
+      selectedModel, useLoRA, datasets.selectedDataset, visualVisionEncoder, visualLLM,
       visualStage1Epochs, visualStage2Epochs, addToast, session, checkpoints])
 
   return {
-    method, inputMode, textInput, showAdvanced, algo, unifiedDistill,
+    method, inputMode, textInput, showAdvanced, algo,
     trainingEpochs, trainingLR, trainingBatchSize, availableModels, selectedModel, useLoRA,
     visualVisionEncoder, visualLLM, visualStage1Epochs, visualStage2Epochs, loadingFinetunedModel,
     allJobs,
-    setMethod, setInputMode, setTextInput, setShowAdvanced, setAlgo, setUnifiedDistill,
+    setMethod, setInputMode, setTextInput, setShowAdvanced, setAlgo,
     setTrainingEpochs, setTrainingLR, setTrainingBatchSize, setSelectedModel, setUseLoRA,
     setVlmVisionEncoder, setVlmLLM, setVlmStage1Epochs, setVlmStage2Epochs, setLoadingFinetunedModel,
     canStart, startTraining,

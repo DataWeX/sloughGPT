@@ -43,16 +43,6 @@ describe('trainingJobsController.stopAutoTrain', () => {
   })
 })
 
-describe('trainingJobsController.stopUnified', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('POSTs to /training/unified-stop', async () => {
-    apiClient.apiPost.mockResolvedValue(undefined)
-    await trainingJobsController.stopUnified()
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/unified-stop')
-  })
-})
-
 describe('trainingJobsController.startTurboTrain', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
@@ -348,16 +338,5 @@ describe('trainingJobsController.deleteCheckpoint', () => {
     const result = await trainingJobsController.deleteCheckpoint('old-checkpoint')
     expect(result.success).toBe(true)
     expect(apiClient.apiDelete).toHaveBeenCalledWith('/auto-train/checkpoints/old-checkpoint')
-  })
-})
-
-describe('trainingJobsController.startUnified', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('POSTs to /training/unified-start', async () => {
-    apiClient.apiPost.mockResolvedValue({ status: 'started' })
-    const result = await trainingJobsController.startUnified({ method: 'transformer', epochs: 3 })
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/unified-start', { method: 'transformer', epochs: 3 })
-    expect(result.status).toBe('started')
   })
 })

@@ -132,14 +132,6 @@ export function TrainingFormCard({
                 {session.distillEpochs != null && <p>Epochs: {session.distillEpochs}</p>}
               </div>
             )}
-            {session.unifiedModelPath && (
-              <div className="text-xs text-muted-foreground space-y-1">
-                <p>Model: <span className="font-mono">{session.unifiedModelPath}</span></p>
-                {session.unifiedFinalLoss != null && <p>Final loss: {session.unifiedFinalLoss.toFixed(4)}</p>}
-                {session.unifiedTotalSteps != null && <p>Steps: {session.unifiedTotalSteps}</p>}
-                {session.unifiedElapsed != null && <p>Time: {session.unifiedElapsed.toFixed(1)}s</p>}
-              </div>
-            )}
             {session.visualOutputDir && (
               <div className="text-xs text-muted-foreground space-y-1">
                 <p>Visual: <span className="font-mono">{session.visualOutputDir}</span></p>
@@ -175,21 +167,6 @@ export function TrainingFormCard({
                   }
                 }}>
                   Load checkpoint
-                </Button>
-              )}
-              {session.unifiedModelPath && (
-                <Button size="sm" variant="outline" onClick={async () => {
-                  form.setLoadingFinetunedModel(true)
-                  try {
-                    await modelController.loadModelPath(session.unifiedModelPath!)
-                    addToast('Model loaded', 'success')
-                  } catch {
-                    addToast('Failed to load model', 'error')
-                  } finally {
-                    form.setLoadingFinetunedModel(false)
-                  }
-                }} disabled={form.loadingFinetunedModel}>
-                  {form.loadingFinetunedModel ? 'Loading...' : 'Load model for chat'}
                 </Button>
               )}
               {session.visualOutputDir && (
@@ -243,7 +220,7 @@ export function TrainingFormCard({
             )}
             <div className="flex items-center gap-3">
               <Button size="sm" disabled={form.canStart} onClick={() => form.startTraining()}>
-                {form.method === 'unified' ? 'Start auto training' : form.method === 'distill' ? (form.inputMode === 'text' && form.textInput.trim() ? 'Train on pasted text' : 'Start training') : form.method === 'vlm' ? 'Start vision training' : 'Start training'}
+                  {form.method === 'distill' ? (form.inputMode === 'text' && form.textInput.trim() ? 'Train on pasted text' : 'Start training') : form.method === 'vlm' ? 'Start vision training' : 'Start training'}
               </Button>
               <EstimatedTime
                 method={form.method}
@@ -268,19 +245,17 @@ export function TrainingFormCard({
             {form.showAdvanced && (
               <div className="space-y-3 mt-3">
                 <div className="flex items-center gap-4" role="radiogroup" aria-label="Training method">
-                  <ToggleGroup type="single" value={form.method} onValueChange={(v) => { if (v) form.setMethod(v as 'distill' | 'finetune' | 'vlm' | 'unified') }}>
+                  <ToggleGroup type="single" value={form.method} onValueChange={(v) => { if (v) form.setMethod(v as 'distill' | 'finetune' | 'vlm') }}>
                     <ToggleGroupItem value="distill" className="px-3 py-1.5 rounded-md text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Train from scratch</ToggleGroupItem>
                     <ToggleGroupItem value="finetune" className="px-3 py-1.5 rounded-md text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Continue training</ToggleGroupItem>
                     <ToggleGroupItem value="vlm" className="px-3 py-1.5 rounded-md text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Vision model</ToggleGroupItem>
-                    <ToggleGroupItem value="unified" className="px-3 py-1.5 rounded-md text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Auto</ToggleGroupItem>
                   </ToggleGroup>
                   {form.method === 'distill' && <span className="text-xs text-muted-foreground/70">Train a small model from text data — no teacher needed</span>}
                   {form.method === 'finetune' && <span className="text-xs text-muted-foreground/70">Continue training an existing model on new data</span>}
                   {form.method === 'vlm' && <span className="text-xs text-muted-foreground/70">Teach the AI to understand images and text</span>}
-                  {form.method === 'unified' && <span className="text-xs text-muted-foreground/70">Automatically pick the best method</span>}
                 </div>
 
-                {form.method !== 'vlm' && form.method !== 'unified' && (
+                {form.method !== 'vlm' && (
                   <div className="flex items-center gap-1 text-sm" role="radiogroup" aria-label="Data source">
                     <ToggleGroup type="single" value={form.inputMode} onValueChange={(v) => { if (v) form.setInputMode(v as 'dataset' | 'text') }}>
                       <ToggleGroupItem value="dataset" className="px-3 py-1.5 rounded-md text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Use a dataset</ToggleGroupItem>
@@ -289,7 +264,7 @@ export function TrainingFormCard({
                   </div>
                 )}
 
-                {form.inputMode === 'text' && form.method !== 'vlm' && form.method !== 'unified' && (
+                {form.inputMode === 'text' && form.method !== 'vlm' && (
                   <div className="relative">
                     <textarea
                       value={form.textInput}
@@ -305,7 +280,7 @@ export function TrainingFormCard({
                   </div>
                 )}
 
-                {(form.method === 'finetune' || form.method === 'unified') && form.availableModels.length > 0 && (
+                {(form.method === 'finetune') && form.availableModels.length > 0 && (
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Base model</label>
                     <Select value={form.selectedModel} onValueChange={form.setSelectedModel}>
@@ -350,7 +325,7 @@ export function TrainingFormCard({
                 )}
 
                 <div className="flex flex-wrap items-end gap-3">
-                  {(form.method === 'distill' || form.method === 'unified') && form.availableModels.length > 0 && (
+                  {form.method === 'distill' && form.availableModels.length > 0 && (
                     <div className="flex flex-col gap-1">
                       <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Base model</label>
                       <Select value={form.selectedModel} onValueChange={form.setSelectedModel}>
@@ -375,16 +350,10 @@ export function TrainingFormCard({
                     <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Batch</label>
                     <input type="number" min={1} max={1024} value={form.trainingBatchSize} onChange={e => form.setTrainingBatchSize(Math.max(1, parseInt(e.target.value) || 64))} className="h-7 w-16 rounded-md border border-border/60 bg-background px-2 text-xs font-mono text-foreground" />
                   </div>
-                  {(form.method === 'finetune' || form.method === 'unified') && (
+                  {(form.method === 'finetune') && (
                     <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground h-7">
                       <Switch checked={form.useLoRA} onCheckedChange={form.setUseLoRA} />
                       Advanced
-                    </label>
-                  )}
-                  {form.method === 'unified' && (
-                    <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground h-7">
-                      <Switch checked={form.unifiedDistill} onCheckedChange={form.setUnifiedDistill} />
-                      Distillation
                     </label>
                   )}
                   {form.method === 'distill' && (

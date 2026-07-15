@@ -3,15 +3,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const {
   mockStartAutoTrain, mockStopAutoTrain, mockStartHFFineTune, mockStartVisualTrain,
-  mockStartTurboTrain, mockStartUnified, mockStopUnified,
+  mockStartTurboTrain,
 } = vi.hoisted(() => ({
   mockStartAutoTrain: vi.fn(),
   mockStopAutoTrain: vi.fn(() => Promise.resolve()),
   mockStartHFFineTune: vi.fn(),
   mockStartVisualTrain: vi.fn(),
   mockStartTurboTrain: vi.fn(),
-  mockStartUnified: vi.fn(),
-  mockStopUnified: vi.fn(() => Promise.resolve()),
 }))
 
 vi.mock('@/lib/controllers', () => ({
@@ -21,8 +19,6 @@ vi.mock('@/lib/controllers', () => ({
     startHFFineTune: mockStartHFFineTune,
     startVisualTrain: mockStartVisualTrain,
     startTurboTrain: mockStartTurboTrain,
-    startUnified: mockStartUnified,
-    stopUnified: mockStopUnified,
   },
 }))
 
@@ -76,7 +72,6 @@ describe('useTrainingSession', () => {
     act(() => { result.current.setPhase('TRAINING') })
     await act(async () => { result.current.stopTraining() })
     expect(mockStopAutoTrain).toHaveBeenCalled()
-    expect(mockStopUnified).toHaveBeenCalled()
     expect(result.current.phase).toBe('idle')
   })
 
@@ -188,32 +183,6 @@ describe('useTrainingSession', () => {
     expect(result.current.visualSouPath).toBe('/out/model.sou')
     expect(mockAddToast).toHaveBeenCalledWith('Image model training complete', 'success')
     vi.useRealTimers()
-  })
-
-  it('startUnifiedTraining creates EventSource', async () => {
-    mockStartUnified.mockResolvedValue(undefined)
-    const { result } = renderHook(() => useTrainingSession())
-    await act(async () => { result.current.startUnifiedTraining({ dataset: 'data' }, mockAddToast) })
-    expect(mockStartUnified).toHaveBeenCalledWith(expect.objectContaining({ data_path: 'data' }))
-    expect(result.current.phase).toBe('GENERATE_DATA')
-  })
-
-  it('startUnifiedTraining handles SSE complete', async () => {
-    mockStartUnified.mockResolvedValue(undefined)
-    const { result } = renderHook(() => useTrainingSession())
-    await act(async () => { result.current.startUnifiedTraining({ dataset: 'data' }, mockAddToast) })
-
-    const esList = MockEventSource as any
-    const es = esList.mock?.instances?.[0]
-    if (es) {
-      es.dispatchMessage(JSON.stringify({ stream: 'unified-train', phase: 'COMPLETE', status: 'complete', data: { model_path: '/unified', final_loss: 0.4, total_steps: 500, elapsed: 120 } }))
-      expect(result.current.phase).toBe('complete')
-      expect(result.current.unifiedModelPath).toBe('/unified')
-      expect(result.current.unifiedFinalLoss).toBe(0.4)
-      expect(result.current.unifiedTotalSteps).toBe(500)
-      expect(result.current.unifiedElapsed).toBe(120)
-      expect(mockAddToast).toHaveBeenCalledWith('Unified training complete', 'success')
-    }
   })
 
   it('trainingRunning is true during active training', () => {

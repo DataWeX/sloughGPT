@@ -68,7 +68,7 @@ class TestAutoTrainStreamEvents:
 
         model, tok = _make_tiny_model_and_tokenizer()
 
-        # Write source text to a temp file so UnifiedTrainingPipeline can find it
+        # Write source text to a temp file so SloughGPTTrainer can find it
         tmp_dir = REPO_ROOT / ".opencode" / "tmp"
         tmp_dir.mkdir(parents=True, exist_ok=True)
         fd, data_path = tempfile.mkstemp(suffix=".txt", dir=str(tmp_dir))

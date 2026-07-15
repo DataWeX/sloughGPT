@@ -380,16 +380,6 @@ def get_nanogpt():
     return None  # NanoGPT not available in this codebase
 
 
-def get_trainer():
-    """Get trainer function and config (requires torch)."""
-    try:
-        from .unified_pipeline import UnifiedTrainingPipeline
-
-        return UnifiedTrainingPipeline
-    except (ImportError, ModuleNotFoundError):
-        return None
-
-
 # Lazy imports - avoid importing torch-dependent modules at package load time
 _TRAINING_EXTRA_AVAILABLE = None
 

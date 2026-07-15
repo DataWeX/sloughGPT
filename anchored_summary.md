@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 3dd582b fix: make torch optional across test suite and config_loader
+No active task. Last commit: 5bba8a4 perf: skip redundant np.array conversion in load_state_dict when already float32
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

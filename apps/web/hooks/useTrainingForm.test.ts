@@ -31,7 +31,6 @@ function makeSession(phase = 'idle') {
     startSSETraining: vi.fn(),
     startFineTune: vi.fn(),
     startVisualTraining: vi.fn(),
-    startUnifiedTraining: vi.fn(),
     startTurboTrain: vi.fn(),
   } as any
 }
@@ -95,14 +94,6 @@ describe('useTrainingForm', () => {
       expect(result.current.canStart).toBe(true)
     })
 
-    it('is false when unified selected but no dataset', () => {
-      const { result } = renderHook(() =>
-        useTrainingForm(makeDatasets(null), makeSession(), makeCheckpoints(), addToast)
-      )
-      act(() => result.current.setMethod('unified'))
-      expect(result.current.canStart).toBe(true)
-    })
-
     it('is true when dataset selected in distill mode', () => {
       const { result } = renderHook(() =>
         useTrainingForm(makeDatasets('ds1'), makeSession(), makeCheckpoints(), addToast)
@@ -127,13 +118,6 @@ describe('useTrainingForm', () => {
       expect(result.current.canStart).toBe(false)
     })
 
-    it('is true when unified with dataset', () => {
-      const { result } = renderHook(() =>
-        useTrainingForm(makeDatasets('ds1'), makeSession(), makeCheckpoints(), addToast)
-      )
-      act(() => result.current.setMethod('unified'))
-      expect(result.current.canStart).toBe(false)
-    })
   })
 
   describe('startTraining', () => {
@@ -143,17 +127,6 @@ describe('useTrainingForm', () => {
       )
       await act(async () => { await result.current.startTraining() })
       expect(addToast).toHaveBeenCalledWith('Select a dataset or paste text to train on', 'error')
-    })
-
-    it('shows error for unified without dataset (even with text)', async () => {
-      const { result } = renderHook(() =>
-        useTrainingForm(makeDatasets(null), makeSession(), makeCheckpoints(), addToast)
-      )
-      act(() => result.current.setMethod('unified'))
-      act(() => result.current.setInputMode('text'))
-      act(() => result.current.setTextInput('some text'))
-      await act(async () => { await result.current.startTraining() })
-      expect(addToast).toHaveBeenCalledWith('Unified training requires a dataset.', 'error')
     })
 
     it('shows error for VLM without dataset (even with text)', async () => {
@@ -186,16 +159,6 @@ describe('useTrainingForm', () => {
       act(() => result.current.setMethod('finetune'))
       await act(async () => { await result.current.startTraining() })
       expect(session.startFineTune).toHaveBeenCalled()
-    })
-
-    it('calls startUnifiedTraining for unified method', async () => {
-      const session = makeSession()
-      const { result } = renderHook(() =>
-        useTrainingForm(makeDatasets('ds1'), session, makeCheckpoints(), addToast)
-      )
-      act(() => result.current.setMethod('unified'))
-      await act(async () => { await result.current.startTraining() })
-      expect(session.startUnifiedTraining).toHaveBeenCalled()
     })
 
     it('calls startVisualTraining for VLM method', async () => {
