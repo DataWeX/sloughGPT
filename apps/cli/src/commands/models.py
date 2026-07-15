@@ -13,7 +13,7 @@ from utils.formatting import format_size, format_number, truncate
 
 def cmd_models(args):
     """List available models. Use subcommands for info, download, compare, personalities."""
-    from ..cli import _local_soul_candidate_paths
+    from utils.helpers import local_soul_candidate_paths
 
     models_dir = Path("models")
 
@@ -21,7 +21,7 @@ def cmd_models(args):
 
     # Slo files
     printer.section("Soul Files (.soul)")
-    soul_files = _local_soul_candidate_paths(models_dir)
+    soul_files = local_soul_candidate_paths(models_dir)
     if soul_files:
         rows = []
         for f in soul_files:

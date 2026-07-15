@@ -17,7 +17,7 @@ def cmd_chat(args):
     import requests
     from requests.exceptions import ConnectionError as RequestsConnectionError
 
-    from ..cli import _chat_repository_root, _chat_uvicorn_bind_host, _chat_find_available_port, _chat_wait_for_health
+    from utils.helpers import chat_repository_root, chat_uvicorn_bind_host, chat_find_available_port, chat_wait_for_health
 
     base_url = f"http://{args.host}:{args.port}".rstrip("/")
     server_proc = None
@@ -60,15 +60,15 @@ def cmd_chat(args):
             printer.info("Start server: python3 cli.py dev")
             return
 
-        repo = _chat_repository_root()
+        repo = chat_repository_root()
         marker = repo / "apps" / "api" / "server" / "main.py"
         if not marker.is_file():
             printer.error("Not inside SloughGPT repo")
             return
 
-        bind_host = _chat_uvicorn_bind_host(args.host)
+        bind_host = chat_uvicorn_bind_host(args.host)
         try:
-            listen_port = _chat_find_available_port(bind_host, args.port)
+            listen_port = chat_find_available_port(bind_host, args.port)
         except RuntimeError as e:
             printer.error(str(e))
             return
@@ -114,7 +114,7 @@ def cmd_chat(args):
                 pass
             return
 
-        if not _chat_wait_for_health(base_url):
+        if not chat_wait_for_health(base_url):
             if server_proc.poll() is None:
                 server_proc.terminate()
                 try:
@@ -205,7 +205,7 @@ def cmd_generate(args):
     """One-shot text generation."""
     from pathlib import Path
     from domains.core import SloEngine
-    from ..cli import _local_soul_candidate_paths
+    from utils.helpers import local_soul_candidate_paths
 
     models_dir = Path("models")
     pt_path = models_dir / "sloughgpt_finetuned.pt"
@@ -229,7 +229,7 @@ def cmd_generate(args):
         except Exception as e:
             return False
 
-    for sou_path in _local_soul_candidate_paths(models_dir):
+    for sou_path in local_soul_candidate_paths(models_dir):
         if _try_load_sou(sou_path):
             break
 

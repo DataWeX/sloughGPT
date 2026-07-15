@@ -33,8 +33,8 @@ def cmd_train(args):
         return cmd_train_embed(args)
 
     # Original train logic
-    from ..cli import _chat_repository_root
-    from ..cli import _apply_optimized_train_preset, _train_export_stem_slug, _train_export_default_stem
+    from utils.helpers import chat_repository_root
+    from utils.helpers import apply_optimized_train_preset, train_export_stem_slug, train_export_default_stem
 
     if not args.api:
         sys.path.insert(0, ".")
@@ -49,7 +49,7 @@ def cmd_train(args):
         config = load_config(args.config)
         config = merge_args_with_config(config, args)
 
-        _apply_optimized_train_preset(config, args)
+        apply_optimized_train_preset(config, args)
         train_device = get_device(config.device)
 
         printer.header("SloughGPT Training")
@@ -92,9 +92,9 @@ def cmd_train(args):
 
         save_formats = [config.checkpoint.export_format]
         if getattr(args, "save_stem", None):
-            save_stem = _train_export_stem_slug(args.save_stem, "export")
+            save_stem = train_export_stem_slug(args.save_stem, "export")
         else:
-            save_stem = _train_export_default_stem(str(config.model.name), str(config.data.dataset))
+            save_stem = train_export_default_stem(str(config.model.name), str(config.data.dataset))
         save_path = f"{config.checkpoint.save_dir}/{save_stem}"
 
         printer.info(f"Export: {save_stem}")
@@ -192,7 +192,7 @@ def cmd_train(args):
         sys.exit(1)
 
     config = merge_args_with_config(load_config(args.config), args)
-    _apply_optimized_train_preset(config, args)
+    apply_optimized_train_preset(config, args)
     base_url = f"http://{args.host}:{args.port}"
 
     display_name = (config.model.soul_name or "").strip() or str(config.model.name)
