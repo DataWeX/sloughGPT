@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 97ce1c1 chore: misc README and config cleanup
+No active task. Last commit: 6565286 chore: settings cleanup
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

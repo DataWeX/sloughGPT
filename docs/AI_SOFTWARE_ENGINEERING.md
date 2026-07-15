@@ -26,7 +26,7 @@ Refactor direction: **shrink `apps/api/server/main.py`** by moving more `APIRout
 
 ## Safety and configuration
 
-- **Secrets** — Loaded via `apps/api/server/settings.py` (`get_security_settings()`): primary API key, JWT secret, optional multi-key list (`MAN_*` env vars; `SLAUGHGPT_*` still honored as legacy fallbacks). Never commit real keys.
+- **Secrets** — Loaded via `apps/api/server/settings.py` (`get_security_settings()`): primary API key, JWT secret, optional multi-key list (`SLO_*` env vars; `SLAUGHGPT_*` still honored as legacy fallbacks). Never commit real keys.
 - **Auth** — Enforce consistently on mutating routes when exposing publicly.
 - **Prompt/PII** — Treat prompts as sensitive data in logs and analytics; document retention if you add persistence.
 
