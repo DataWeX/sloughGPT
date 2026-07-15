@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 4019959 feat: error dedup, activity ticker, useLiveStatus migration, health SSE envelope
+No active task. Last commit: c13fec8 fix: non-blocking model load + resilient frontend startup
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
