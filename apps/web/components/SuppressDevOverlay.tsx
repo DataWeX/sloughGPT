@@ -40,9 +40,7 @@ export function SuppressDevOverlay() {
       const msg = (e.message || '').toLowerCase()
       if (msg.includes('hydrat') || msg.includes('did not match')) {
         e.preventDefault()
-        return
       }
-      e.preventDefault()
     }
     window.addEventListener('error', onError, true)
 

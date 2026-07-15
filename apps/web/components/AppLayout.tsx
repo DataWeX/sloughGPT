@@ -26,6 +26,7 @@ import { WhatsNewDialog, getUnseenCount } from '@/components/WhatsNewDialog'
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [portalMounted, setPortalMounted] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [showDebug, setShowDebug] = useState(false)
   const [showWhatsNew, setShowWhatsNew] = useState(false)
@@ -58,6 +59,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMobileNavOpen(false)
   }, [pathname])
+
+  useEffect(() => {
+    setPortalMounted(true)
+  }, [])
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1024px)')
@@ -121,7 +126,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
         </div>
 
-        {typeof document !== 'undefined' && createPortal(
+        {portalMounted && createPortal(
           <>
             <div
               aria-hidden="true"

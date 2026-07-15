@@ -23,20 +23,14 @@ import { ThemeSwitcher } from './ThemeSwitcher'
 import { CustomDropdown } from './CustomDropdown'
 import { useLocale, LOCALES } from '@/hooks/useLocale'
 
-const workspaceItems = [
+const allItems = [
   { path: '/chat', key: 'nav.chat', Icon: IconChat },
   { path: '/training', key: 'nav.training', Icon: IconTraining },
   { path: '/knowledge', key: 'nav.knowledge', Icon: IconSearch },
-] as const
-
-const toolsItems = [
   { path: '/datasets', key: 'nav.datasets', Icon: IconBrain },
   { path: '/export', key: 'nav.export', Icon: IconExport },
   { path: '/compare', key: 'nav.compare', Icon: IconCompare },
   { path: '/monitoring', key: 'nav.monitoring', Icon: IconActivity },
-] as const
-
-const systemItems = [
   { path: '/models', key: 'nav.models', Icon: IconModels },
   { path: '/errors', key: 'nav.errors', Icon: IconAlert },
   { path: '/settings', key: 'nav.settings', Icon: IconSettings },
@@ -116,70 +110,8 @@ export function Sidebar({ variant = 'desktop', onNavigate, onClose }: SidebarPro
         aria-label="Primary"
       >
         <div className={cn("min-h-0 flex-1 overscroll-contain", isDrawer ? "overflow-y-auto scrollbar-hide" : "overflow-y-auto")}>
-          <p
-            className="mb-2 px-3 text-xs font-medium text-muted-foreground"
-            id="sidebar-workspace-heading"
-          >
-            {t('sidebar.workspace')}
-          </p>
-          <ul className="space-y-1" aria-labelledby="sidebar-workspace-heading">
-            {workspaceItems.map((item) => {
-              const active = routeMatchesPath(pathname, item.path)
-              return (
-                <li key={item.path}>
-                  <Link
-                    href={item.path}
-                    aria-current={active ? 'page' : undefined}
-                    className={navLinkClass(active)}
-                    onClick={afterNav}
-                  >
-                    <item.Icon
-                      className={cn(NAV_ICON, active ? 'opacity-100' : 'opacity-90 dark:opacity-80')}
-                      aria-hidden
-                    />
-                    <span className="flex-1 truncate">{t(item.key)}</span>
-                  </Link>
-                </li>
-              )
-            })}
-          </ul>
-
-          <p
-            className="mb-2 mt-4 px-3 text-xs font-medium text-muted-foreground"
-            id="sidebar-tools-heading"
-          >
-            {t('sidebar.tools')}
-          </p>
-          <ul className="space-y-1" aria-labelledby="sidebar-tools-heading">
-            {toolsItems.map((item) => {
-              const active = routeMatchesPath(pathname, item.path)
-              return (
-                <li key={item.path}>
-                  <Link
-                    href={item.path}
-                    aria-current={active ? 'page' : undefined}
-                    className={navLinkClass(active)}
-                    onClick={afterNav}
-                  >
-                    <item.Icon
-                      className={cn(NAV_ICON, active ? 'opacity-100' : 'opacity-90 dark:opacity-80')}
-                      aria-hidden
-                    />
-                    <span className="flex-1 truncate">{t(item.key)}</span>
-                  </Link>
-                </li>
-              )
-            })}
-          </ul>
-
-          <p
-            className="mb-2 mt-4 px-3 text-xs font-medium text-muted-foreground"
-            id="sidebar-system-heading"
-          >
-            {t('sidebar.system')}
-          </p>
-          <ul className="space-y-1" aria-labelledby="sidebar-system-heading">
-            {systemItems.map((item) => {
+          <ul className="space-y-1">
+            {allItems.map((item) => {
               const active = routeMatchesPath(pathname, item.path)
               return (
                 <li key={item.path}>

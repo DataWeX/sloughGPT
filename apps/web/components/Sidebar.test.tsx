@@ -26,23 +26,15 @@ describe('Sidebar', () => {
     expect(screen.getByTestId('theme-switcher')).toBeDefined()
   })
 
-  it('renders workspace nav items', () => {
+  it('renders all nav items', () => {
     render(<Sidebar />)
     expect(screen.getByText('nav.chat')).toBeDefined()
     expect(screen.getByText('nav.training')).toBeDefined()
     expect(screen.getByText('nav.knowledge')).toBeDefined()
-  })
-
-  it('renders tools nav items', () => {
-    render(<Sidebar />)
     expect(screen.getByText('nav.datasets')).toBeDefined()
     expect(screen.getByText('nav.export')).toBeDefined()
     expect(screen.getByText('nav.compare')).toBeDefined()
     expect(screen.getByText('nav.monitoring')).toBeDefined()
-  })
-
-  it('renders system nav items', () => {
-    render(<Sidebar />)
     expect(screen.getByText('nav.models')).toBeDefined()
     expect(screen.getByText('nav.errors')).toBeDefined()
     expect(screen.getByText('nav.settings')).toBeDefined()
