@@ -8,7 +8,6 @@ import { createPortal } from 'react-dom'
 import { Button } from '@sloughgpt/strui'
 import { IconMenu } from '@/components/icons/NavIcons'
 import { Sidebar } from '@/components/Sidebar'
-import { ErrorPanel } from '@sloughgpt/strui'
 import { GlobalErrorHandler } from '@/components/GlobalErrorHandler'
 import { StatusBar } from '@/components/StatusBar'
 import { OutputPanel } from '@/components/OutputPanel'
@@ -161,7 +160,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         )}
 
         <GlobalErrorHandler />
-        <ErrorPanel />
         <RadixToastContainer toasts={toasts} onDismiss={dismissToast} onClearAll={clearToasts} />
         <KeyboardShortcutsModal open={showShortcuts} onOpenChange={setShowShortcuts} />
         <DebugOverlay open={showDebug} onOpenChange={setShowDebug} />

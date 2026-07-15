@@ -22,7 +22,6 @@ vi.mock('@/components/StatusBar', () => ({ StatusBar: () => <div data-testid="st
 vi.mock('@/components/GlobalErrorHandler', () => ({ GlobalErrorHandler: () => <div data-testid="error-handler" /> }))
 vi.mock('@sloughgpt/strui', () => ({
   Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-  ErrorPanel: () => <div data-testid="error-panel" />,
 }))
 vi.mock('@/components/chat/Toast', () => ({ ToastContainer: () => <div data-testid="toast-container" />, RadixToastContainer: () => <div data-testid="toast-container" /> }))
 vi.mock('@/components/CommandPalette', () => ({ CommandPalette: () => <div data-testid="command-palette" /> }))
@@ -80,11 +79,6 @@ describe('AppLayout', () => {
   it('renders GlobalErrorHandler', () => {
     render(<AppLayout><div /></AppLayout>)
     expect(screen.getByTestId('error-handler')).toBeDefined()
-  })
-
-  it('renders error panel', () => {
-    render(<AppLayout><div /></AppLayout>)
-    expect(screen.getByTestId('error-panel')).toBeDefined()
   })
 
   it('renders toast container', () => {
