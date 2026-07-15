@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 1492863 fix(test): remove unused torch import and dead benchmark_model reference from test_api.py
+No active task. Last commit: 3dd582b fix: make torch optional across test suite and config_loader
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

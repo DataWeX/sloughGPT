@@ -3893,7 +3893,8 @@ class SloTransformer(SloNet):
         param_map = dict(self._named_parameters())
         loaded, missing = set(), []
         for key, arr in state_dict.items():
-            arr = np.array(arr, dtype=np.float32)
+            if arr.dtype != np.float32:
+                arr = arr.astype(np.float32)
             if key in param_map:
                 p = param_map[key]
                 if p.data.shape == arr.shape:
