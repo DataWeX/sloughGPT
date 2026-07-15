@@ -23,7 +23,7 @@ import { formatUptime } from '@/lib/chat-utils'
 import { GpuCard, DiskCard, ServerInfoCard } from '@/components/monitoring/SystemInfoCards'
 import { Skeleton } from '@sloughgpt/strui'
 import { apiPost } from '@/lib/http-client'
-import { useErrorStore } from '@/lib/error-store'
+import { ActivityTicker, ErrorList } from '@/components/ActivityTicker'
 import { OutputCard } from '@/components/OutputCard'
 
 export default function SystemHealthPage() {
@@ -50,9 +50,6 @@ export default function SystemHealthPage() {
   const [autoTrainStatus, setAutoTrainStatus] = useState<AutoTrainStatus | null>(null)
   const [trainingJobs, setTrainingJobs] = useState<TrainingJob[]>([])
   const MAX_HISTORY = 30
-  const recentErrors = useErrorStore(s => s.errors)
-  const dismissError = useErrorStore(s => s.dismissError)
-  const clearErrors = useErrorStore(s => s.clearErrors)
 
   const fetchAll = useCallback(async (showRefreshing = false) => {
     if (showRefreshing) setRefreshing(true)
@@ -516,38 +513,16 @@ export default function SystemHealthPage() {
         {/* Server Output */}
         <OutputCard />
 
-        {recentErrors.length > 0 && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Recent Errors ({recentErrors.length})</CardTitle>
-                <Button variant="ghost" size="sm" onClick={clearErrors}>
-                  Clear
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-1 max-h-[240px] overflow-y-auto">
-              {recentErrors.slice(0, 15).map(e => {
-                const colors: Record<string, string> = { error: 'bg-destructive/10 border-destructive/30 text-destructive', warning: 'bg-warning/10 border-warning/30 text-warning', info: 'bg-muted border-border/60 text-muted-foreground' }
-                return (
-                  <div key={e.id} className={`flex items-start gap-2 p-2 rounded border text-xs ${colors[e.severity] || colors.error}`}>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">{e.title}</div>
-                      <div className="truncate opacity-80">{e.message}</div>
-                      <div className="text-[10px] opacity-60 mt-0.5">
-                        {new Date(e.timestamp).toLocaleTimeString()}
-                        {e.source && <> · {e.source}</>}
-                      </div>
-                    </div>
-                    {e.dismissible !== false && (
-                      <button onClick={() => dismissError(e.id)} className="shrink-0 opacity-50 hover:opacity-100 text-xs leading-none" aria-label="Dismiss">&times;</button>
-                    )}
-                  </div>
-                )
-              })}
-            </CardContent>
-          </Card>
-        )}
+        <ActivityTicker />
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Activity Log</CardTitle>
+          </CardHeader>
+          <CardContent className="max-h-[240px] overflow-y-auto">
+            <ErrorList />
+          </CardContent>
+        </Card>
 
         {error && (
           <Card className="border-destructive/50">

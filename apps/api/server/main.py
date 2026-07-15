@@ -75,6 +75,8 @@ _bridge.setLevel(getattr(logging, _log_level_name, logging.INFO))
 logging.root.addHandler(_bridge)
 logging.root.setLevel(getattr(logging, _log_level_name, logging.INFO))
 
+logger = logging.getLogger("man")
+
 # Log bridge → output buffer (for SSE streaming via /system/stream)
 try:
     from domains.infrastructure.output_buffer import install_log_bridge
@@ -82,8 +84,6 @@ try:
     logger.info("Output buffer bridge installed (handler=%s)", _buf_handler, extra={"tag": "START"})
 except Exception as exc:
     logger.warning("Output buffer bridge install failed: %s", exc, extra={"tag": "START"})
-
-logger = logging.getLogger("man")
 
 # ── Filter client-side extension errors ────────────────────────────────
 class _ClientExtensionFilter(logging.Filter):

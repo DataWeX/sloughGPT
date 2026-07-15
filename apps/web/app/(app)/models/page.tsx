@@ -5,7 +5,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
-import { useApiHealth } from '@/hooks/useApiHealth'
+import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useToastStore } from '@/lib/toast-store'
 import { modelDisplayName } from '@/lib/inference-display'
 import { modelController } from '@/lib/model-controller'
@@ -29,7 +29,8 @@ import {
 export default function ModelsPage() {
   const [switchingSoul, setSwitchingSoul] = useState<string | null>(null)
   const [traitWeights, setTraitWeights] = useState<Record<string, any> | null>(null)
-  const { state: health, refresh: refreshHealth } = useApiHealth()
+  const { healthLegacy: health } = useLiveStatus()
+  const refreshHealth = useCallback(async () => {}, [])
   const addToast = useToastStore(s => s.addToast)
 
   const { data: modelsData, isLoading: modelsLoading, refetch: refetchModels } = useModels()

@@ -187,7 +187,15 @@ async def health_stream(request: Request):
                 break
             try:
                 snapshot = _build_health_snapshot(ctrl)
-                yield "data: " + json.dumps(snapshot, default=str) + "\n\n"
+                envelope = {
+                    "stream": "health",
+                    "phase": "HEALTH",
+                    "status": "working",
+                    "data": snapshot,
+                    "meta": {},
+                    "message": "",
+                }
+                yield "data: " + json.dumps(envelope, default=str) + "\n\n"
             except Exception:
                 pass
             await asyncio.sleep(HEALTH_STREAM_INTERVAL)

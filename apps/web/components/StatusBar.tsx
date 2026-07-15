@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { soulsController } from '@/lib/souls-controller'
 import { useApiMonitor } from '@/lib/api-monitor-store'
+import { useErrorStore } from '@/lib/error-store'
 import { cn } from '@/lib/cn'
 import { deriveArchetype } from '@/components/souls/PersonalitySummary'
 import { getUnseenCount } from '@/components/WhatsNewDialog'
@@ -29,6 +30,7 @@ export function StatusBar() {
   const recentFailures = useApiMonitor((s) => s.recentFailures)
   const failureCount = useApiMonitor((s) => s.failureCount)
   const lastOffline = useApiMonitor((s) => s.lastOffline)
+  const errorCount = useErrorStore(s => s.errors.reduce((sum, e) => sum + e.count, 0))
   const [soulName, setSoulName] = useState<string | null>(null)
   const [archetypeLabel, setArchetypeLabel] = useState<string | null>(null)
   const [unseenCount, setUnseenCount] = useState(0)
@@ -102,6 +104,11 @@ export function StatusBar() {
         {failureCount > 0 && connectionStatus !== 'connected' && (
           <span className="hidden sm:inline-flex items-center px-1 py-0.5 rounded-full bg-destructive/10 text-destructive text-[9px] font-medium leading-none">
             {failureCount} fail{failureCount !== 1 ? 's' : ''}
+          </span>
+        )}
+        {errorCount > 0 && connectionStatus === 'connected' && (
+          <span className="hidden sm:inline-flex items-center px-1 py-0.5 rounded-full bg-destructive/10 text-destructive text-[9px] font-medium leading-none">
+            {errorCount} err{errorCount !== 1 ? 's' : ''}
           </span>
         )}
         {soulName && archetypeLabel && (

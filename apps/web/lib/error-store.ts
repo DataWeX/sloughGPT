@@ -13,7 +13,21 @@ export interface AppError {
   timestamp: number
   dismissible?: boolean
   requestId?: string
+  /** How many times this exact error occurred (deduped within 30s window) */
+  count: number
 }
+
+export interface ActivityEntry {
+  id: string
+  message: string
+  severity: ErrorSeverity
+  source?: string
+  timestamp: number
+}
+
+const DEDUP_WINDOW_MS = 30_000
+const MAX_ERRORS = 20
+const MAX_ACTIVITY = 50
 
 function extractErrorMessage(err: unknown): string {
   if (typeof err === 'string') return err
@@ -66,6 +80,9 @@ function getSeverity(err: unknown, explicitSev?: ErrorSeverity): ErrorSeverity {
 
 interface ErrorStore {
   errors: AppError[]
+  recentActivity: ActivityEntry[]
+  /** Total error count (including deduped) */
+  totalErrorCount: number
   addError: (err: unknown, opts?: { source?: string; title?: string; severity?: ErrorSeverity; dismissible?: boolean; requestId?: string }) => string
   dismissError: (id: string) => void
   clearErrors: () => void
@@ -75,26 +92,49 @@ interface ErrorStore {
 
 export const useErrorStore = create<ErrorStore>((set, get) => ({
   errors: [],
+  recentActivity: [],
+  totalErrorCount: 0,
 
   addError: (err, opts = {}) => {
-    const id = `err_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
     const { source, severity: sev, dismissible = true, requestId } = opts
     const title = opts.title || extractErrorTitle(err)
     const message = extractErrorMessage(err)
+    const severity = getSeverity(err, sev)
+    const now = Date.now()
 
-    const error: AppError = {
-      id,
-      title,
-      message,
-      severity: getSeverity(err, sev),
-      source,
-      timestamp: Date.now(),
-      dismissible,
-      requestId,
+    // Deduplication: same source + same message within 30s → increment count
+    const { errors } = get()
+    const existing = errors.find(
+      e => e.source === source && e.message === message && (now - e.timestamp) < DEDUP_WINDOW_MS,
+    )
+
+    if (existing) {
+      const updated = { ...existing, count: existing.count + 1, timestamp: now }
+      set(prev => ({
+        errors: [updated, ...prev.errors.filter(e => e.id !== existing.id)],
+      }))
+      return existing.id
     }
 
-    set(prev => ({ errors: [error, ...prev.errors].slice(0, 20) }))
-    console.debug('[ErrorStore] Added error:', title, message, source)
+    // New error
+    const id = `err_${now}_${Math.random().toString(36).slice(2, 6)}`
+    const error: AppError = {
+      id, title, message, severity, source,
+      timestamp: now, dismissible, requestId, count: 1,
+    }
+
+    // Activity entry (compact ticker feed)
+    const activity: ActivityEntry = {
+      id: `act_${now}_${Math.random().toString(36).slice(2, 6)}`,
+      message: title !== 'Error' ? title : message.slice(0, 60),
+      severity, source, timestamp: now,
+    }
+
+    set(prev => ({
+      errors: [error, ...prev.errors].slice(0, MAX_ERRORS),
+      recentActivity: [activity, ...prev.recentActivity].slice(0, MAX_ACTIVITY),
+      totalErrorCount: prev.totalErrorCount + 1,
+    }))
     return id
   },
 
@@ -103,7 +143,7 @@ export const useErrorStore = create<ErrorStore>((set, get) => ({
   },
 
   clearErrors: () => {
-    set({ errors: [] })
+    set({ errors: [], recentActivity: [], totalErrorCount: 0 })
   },
 
   getErrors: () => get().errors,

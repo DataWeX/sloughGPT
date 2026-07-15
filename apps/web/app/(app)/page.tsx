@@ -15,7 +15,7 @@ import {
 import { IconChevronRight, IconMessage, IconSearch } from '@sloughgpt/strui'
 
 import { apiGet } from '@/lib/http-client'
-import { useApiHealth } from '@/hooks/useApiHealth'
+import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useLocale } from '@/hooks/useLocale'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { useToastStore } from '@/lib/toast-store'
@@ -38,7 +38,7 @@ function Greeting() {
 
 export default function HomePage() {
   const { t } = useLocale()
-  const { state: health } = useApiHealth()
+  const { healthLegacy: health } = useLiveStatus()
   const addToast = useToastStore(s => s.addToast)
   const { modelCount, currentSoul, modelStatus, inferenceCount, runningTraining, knowledgeCount, recentSessions, recentJobs, healthSummary, feedbackStats, ...data } = useHomePageData(health)
 

@@ -21,7 +21,7 @@ import { Slider } from '@sloughgpt/strui'
 import { ToggleGroup as ToggleGroupRadix, ToggleGroupItem } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { useSettings, useUpdateSettings } from '@/lib/store'
-import { useApiHealth } from '@/hooks/useApiHealth'
+import { useLiveStatus } from '@/hooks/useLiveStatus'
 import Link from 'next/link'
 
 function SettingsSlider({
@@ -51,7 +51,7 @@ export default function SettingsPage() {
   const settings = useSettings()
   const updateSettings = useUpdateSettings()
   const addToast = useToastStore(s => s.addToast)
-  const { state: apiHealth } = useApiHealth()
+  const { healthLegacy: apiHealth } = useLiveStatus()
 
   const clearChat = () => {
     localStorage.removeItem('man_messages')

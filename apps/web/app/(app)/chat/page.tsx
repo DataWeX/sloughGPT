@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useCallback, useMemo, useState } from 'react'
 import dynamicNext from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useApiHealth } from '@/hooks/useApiHealth'
+import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { soulsController } from '@/lib/controllers'
 import type { ChatCommand } from '@/lib/chat-commands'
 import { useChatUI } from '@/hooks/useChatUI'
@@ -61,7 +61,12 @@ export default function ChatPage() {
 
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { state: health, refresh: refreshHealth } = useApiHealth()
+  const { healthLegacy: health } = useLiveStatus()
+  const refreshHealth = useCallback(async () => {
+    // Live status auto-updates via SSE, but manual refresh is still
+    // useful after model load/unload for immediate UI feedback.
+    await modelController.getHealth()
+  }, [])
   const { recordFeedback, fetchStats, fetchAdapterStats } = useFeedbackStore()
 
   const ui = useChatUI()

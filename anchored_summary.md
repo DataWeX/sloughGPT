@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 4bd8440 fix(test): update useBackendWatcher test for new diagnostic tracking
+No active task. Last commit: c13fec8 fix: non-blocking model load + resilient frontend startup
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
