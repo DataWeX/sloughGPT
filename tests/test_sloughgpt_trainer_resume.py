@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-import torch
+torch = pytest.importorskip("torch")
 
 
 def test_sloughgpt_trainer_resume_weights_only_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -8,8 +8,8 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock, PropertyMock
 
 import numpy as np
-import torch
 import pytest
+torch = pytest.importorskip("torch")
 
 
 # =============================================================================

@@ -12,9 +12,9 @@ Marked ``slow`` — imports PyTorch.
 """
 
 import asyncio
-import torch
-import torch.nn as nn
 import pytest
+torch = pytest.importorskip("torch")
+import torch.nn as nn
 
 pytestmark = pytest.mark.slow
 

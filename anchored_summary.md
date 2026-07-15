@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 03e2ae2 fix(test): widen int4 quantization cosine threshold (flaky test)
+No active task. Last commit: 1492863 fix(test): remove unused torch import and dead benchmark_model reference from test_api.py
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

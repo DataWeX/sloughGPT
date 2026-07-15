@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 import pytest
-import torch
+torch = pytest.importorskip("torch")
 
 try:
     from domains.models import SloughGPTModel

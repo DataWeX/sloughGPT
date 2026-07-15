@@ -136,12 +136,15 @@ def load_config(config_path: str = "config.yaml") -> Config:
 def get_device(config: DeviceConfig) -> str:
     """Get device string based on config."""
     if config.type == "auto":
-        if torch.cuda.is_available():
-            return "cuda"
-        elif torch.backends.mps.is_available():
-            return "mps"
-        else:
-            return "cpu"
+        try:
+            import torch
+            if torch.cuda.is_available():
+                return "cuda"
+            elif torch.backends.mps.is_available():
+                return "mps"
+        except ImportError:
+            pass
+        return "cpu"
     return config.type
 
 
@@ -236,6 +239,3 @@ def merge_args_with_config(config: Config, args) -> Config:
         config.device.type = str(args.train_device)
 
     return config
-
-
-import torch
