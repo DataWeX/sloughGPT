@@ -16,12 +16,12 @@ import { useApiMonitor } from '@/lib/api-monitor-store'
 import { ToastContainer, RadixToastContainer } from '@/components/chat/Toast'
 import { CommandPalette } from '@/components/CommandPalette'
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
-import { useBackendWatcher } from '@/hooks/useBackendWatcher'
 import { useToastStore } from '@/lib/toast-store'
 import { cn } from '@/lib/cn'
 import { KeyboardShortcutsModal } from '@/components/KeyboardShortcutsModal'
 import { DebugOverlay } from '@/components/DebugOverlay'
 import { WhatsNewDialog, getUnseenCount } from '@/components/WhatsNewDialog'
+import { initLiveStatus } from '@/hooks/useLiveStatus'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -36,7 +36,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const clearToasts = useToastStore(s => s.clearToasts)
   const apiStatus = useApiMonitor(s => s.status)
   useGlobalShortcuts()
-  useBackendWatcher()
+
+  // Initialize live health SSE stream (replaces useBackendWatcher)
+  useEffect(() => {
+    return initLiveStatus()
+  }, [])
 
   useEffect(() => {
     const handler = () => setShowShortcuts(true)

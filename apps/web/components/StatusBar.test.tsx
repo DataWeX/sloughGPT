@@ -5,8 +5,14 @@ const mockHealthState = vi.fn()
 const mockGetCurrent = vi.fn()
 const mockGetTraitWeights = vi.fn()
 
-vi.mock('@/hooks/useApiHealth', () => ({
-  useApiHealth: () => ({ state: mockHealthState() }),
+vi.mock('@/hooks/useLiveStatus', () => ({
+  useLiveStatus: () => {
+    const h = mockHealthState()
+    if (h === 'offline') return { connectionStatus: 'offline', health: null, healthLegacy: 'offline', lastUpdate: null, failureCount: 1, connected: false, live: false }
+    if (h === null) return { connectionStatus: 'connecting', health: null, healthLegacy: null, lastUpdate: null, failureCount: 0, connected: false, live: false }
+    return { connectionStatus: 'connected', health: h, healthLegacy: h, lastUpdate: Date.now(), failureCount: 0, connected: true, live: true }
+  },
+  liveStatusStore: { getState: vi.fn(() => ({ connectionStatus: 'connected', health: null, healthLegacy: null, lastUpdate: null, failureCount: 0 })), subscribe: vi.fn(() => vi.fn()) },
 }))
 
 vi.mock('@/lib/souls-controller', () => ({
@@ -31,7 +37,7 @@ const mockHealthSummary = { score: 85, summary: 'Healthy', tokens_per_sec: 15, m
 const { useApiMonitor: _useApiMonitor, setHealthSummaryData } = vi.hoisted(() => {
   let hc: typeof mockHealthSummary | null = null
   return {
-    useApiMonitor: (selector: (s: any) => any) => selector({ healthSummary: hc }),
+    useApiMonitor: (selector: (s: any) => any) => selector({ healthSummary: hc, recentFailures: [], failureCount: 0, lastOffline: null }),
     setHealthSummaryData: (v: typeof mockHealthSummary | null) => { hc = v },
   }
 })
@@ -47,7 +53,7 @@ describe('StatusBar', () => {
     vi.clearAllMocks()
     setHealthSummaryData(null)
     mockGetUnseenCount.mockReturnValue(0)
-    mockHealthState.mockReturnValue({ model_loaded: true, model_type: 'gpt2', inference_count: 42 })
+    mockHealthState.mockReturnValue({ model_loaded: true, model_type: 'gpt2', inference_count: 42, health_score: 85, health_status: 'healthy', health_summary: 'Healthy', tokens_per_sec: 15, is_inferencing: false, cpu_percent: 30, memory_percent: 40, uptime_seconds: 100, request_count: 50, error_count: 0, soul: 'friendly' })
     mockGetCurrent.mockResolvedValue({ name: 'friendly', description: 'Friendly soul' })
     mockGetTraitWeights.mockResolvedValue({ personality: { warmth: 0.7 }, cognition: {}, emotion: {} })
   })
@@ -56,7 +62,7 @@ describe('StatusBar', () => {
 
   it('renders status text', () => {
     render(<StatusBar />)
-    expect(screen.getByText('gpt2')).toBeDefined()
+    expect(screen.getByText('Healthy')).toBeDefined()
   })
 
   it('renders archetype badge when soul and weights available', async () => {
@@ -65,15 +71,15 @@ describe('StatusBar', () => {
     expect(badge.length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders tokens per second from summary', async () => {
-    setHealthSummaryData(mockHealthSummary)
+  it('renders tokens per second from live health', async () => {
+    mockHealthState.mockReturnValue({ model_loaded: true, model_type: 'gpt2', inference_count: 42, health_score: 85, health_status: 'healthy', health_summary: 'Healthy', tokens_per_sec: 15, is_inferencing: false, cpu_percent: 30, memory_percent: 40, uptime_seconds: 100, request_count: 50, error_count: 0, soul: 'friendly' })
     render(<StatusBar />)
     const tps = await screen.findAllByText('15 t/s')
     expect(tps.length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders inference count when summary has no tps', async () => {
-    setHealthSummaryData({ ...mockHealthSummary, tokens_per_sec: 0 })
+  it('renders inference count when no tps', async () => {
+    mockHealthState.mockReturnValue({ model_loaded: true, model_type: 'gpt2', inference_count: 42, health_score: 85, health_status: 'healthy', health_summary: 'Healthy', tokens_per_sec: 0, is_inferencing: false, cpu_percent: 30, memory_percent: 40, uptime_seconds: 100, request_count: 50, error_count: 0, soul: 'friendly' })
     render(<StatusBar />)
     const count = await screen.findAllByText('42 responses')
     expect(count.length).toBeGreaterThanOrEqual(1)
@@ -82,7 +88,7 @@ describe('StatusBar', () => {
   it('shows offline status', () => {
     mockHealthState.mockReturnValue('offline')
     render(<StatusBar />)
-    expect(screen.getByText('Offline')).toBeDefined()
+    expect(screen.getByText(/Offline/)).toBeDefined()
   })
 
   it('links to monitoring page', () => {

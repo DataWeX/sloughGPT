@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
 import { modelController } from '@/lib/model-controller'
 import type { HealthStatus } from '@/lib/model-controller'
+import { useLiveStatus } from '@/hooks/useLiveStatus'
 
 export interface ModelInfo {
   id: string
@@ -40,12 +41,29 @@ export function ModelProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const [health, setHealth] = useState<HealthStatus | null>(null)
 
+  // Subscribe to live health SSE for instant model status updates
+  const { health: liveHealth, connectionStatus } = useLiveStatus()
+
   const refreshHealth = useCallback(async () => {
     try {
       const h = await modelController.getHealth()
       setHealth(h)
     } catch { setHealth(null) }
   }, [])
+
+  // Sync live health into local health state for immediate UI updates
+  useEffect(() => {
+    if (liveHealth && connectionStatus === 'connected') {
+      setHealth({
+        status: liveHealth.health_status || 'healthy',
+        model_loaded: liveHealth.model_loaded,
+        model_type: liveHealth.model_type || '',
+        summary: liveHealth.health_summary,
+        inference_count: liveHealth.inference_count,
+        is_inferencing: liveHealth.is_inferencing,
+      })
+    }
+  }, [liveHealth, connectionStatus])
 
   const isModelLoaded = health !== null && health.model_loaded
 

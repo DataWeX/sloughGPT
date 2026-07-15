@@ -201,7 +201,13 @@ class _Subscriber:
 # ── Log handler ──────────────────────────────────────────────────────────
 
 class BufferLogHandler(logging.Handler):
-    """Routes log records into an OutputBuffer."""
+    """Routes log records into an OutputBuffer.
+
+    Captures all log records with structured extras (tag, error_code, context)
+    for display in the web UI's Server Output panel.
+    """
+
+    _EXTRA_FIELDS = ("tag", "error_code", "context")
 
     def __init__(self, buffer: OutputBuffer, level: int = logging.INFO):
         super().__init__(level=level)
@@ -210,6 +216,17 @@ class BufferLogHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             msg = self.format(record)
+            # Append structured extras as [TAG] prefix or key=val suffix
+            extras = []
+            for field in self._EXTRA_FIELDS:
+                val = getattr(record, field, None)
+                if val is not None:
+                    if field == "context" and isinstance(val, dict):
+                        extras.extend(f"{k}={v}" for k, v in val.items())
+                    else:
+                        extras.append(f"[{val}]" if field == "tag" else f"{field}={val}")
+            if extras:
+                msg = msg + " " + " ".join(extras)
             self._buffer.append_text(msg, level=record.levelname.lower(), source=record.name)
         except Exception:
             pass

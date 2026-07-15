@@ -39,6 +39,7 @@ vi.mock('@/lib/api-monitor-store', () => ({ useApiMonitor: (sel?: any) => sel ? 
 
 vi.mock('@/hooks/useGlobalShortcuts', () => ({ useGlobalShortcuts: vi.fn() }))
 vi.mock('@/hooks/useBackendWatcher', () => ({ useBackendWatcher: vi.fn() }))
+vi.mock('@/hooks/useLiveStatus', () => ({ initLiveStatus: vi.fn(() => vi.fn()) }))
 
 import AppLayout from './AppLayout'
 

@@ -182,6 +182,7 @@ export function MessageActions({ content, messageId, role, onCopy, onRegenerate,
           size="icon-sm"
           onClick={onRegenerate}
           className="p-2"
+          aria-label="Regenerate response"
         >
           <IconRefresh className="h-3.5 w-3.5" />
         </Button>

@@ -2,19 +2,37 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useApiHealth } from '@/hooks/useApiHealth'
+import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { soulsController } from '@/lib/souls-controller'
 import { useApiMonitor } from '@/lib/api-monitor-store'
 import { cn } from '@/lib/cn'
 import { deriveArchetype } from '@/components/souls/PersonalitySummary'
 import { getUnseenCount } from '@/components/WhatsNewDialog'
 
+function formatDuration(ms: number): string {
+  const s = Math.floor(ms / 1000)
+  if (s < 60) return `${s}s`
+  return `${Math.floor(s / 60)}m ${s % 60}s`
+}
+
+function getFailureSummary(failures: { kind: string; timeoutMs: number; error: string; timestamp: number }[]): string {
+  if (failures.length === 0) return ''
+  const last = failures[0]
+  const elapsed = Math.round((Date.now() - failures[failures.length - 1].timestamp) / 1000)
+  if (last.kind === 'timeout') return `timeout after ${last.timeoutMs / 1000}s`
+  if (last.kind === 'connection_refused') return 'connection refused'
+  return last.error.slice(0, 40)
+}
+
 export function StatusBar() {
-  const { state: health } = useApiHealth()
-  const summary = useApiMonitor((s) => s.healthSummary)
+  const { health, healthLegacy, connectionStatus } = useLiveStatus()
+  const recentFailures = useApiMonitor((s) => s.recentFailures)
+  const failureCount = useApiMonitor((s) => s.failureCount)
+  const lastOffline = useApiMonitor((s) => s.lastOffline)
   const [soulName, setSoulName] = useState<string | null>(null)
   const [archetypeLabel, setArchetypeLabel] = useState<string | null>(null)
   const [unseenCount, setUnseenCount] = useState(0)
+  const [now, setNow] = useState(Date.now())
 
   useEffect(() => {
     setUnseenCount(getUnseenCount())
@@ -23,8 +41,15 @@ export function StatusBar() {
     return () => window.removeEventListener('whatsnew-updated', handler)
   }, [])
 
+  // Tick every second for uptime display
   useEffect(() => {
-    if (health === null || health === 'offline') return
+    if (connectionStatus === 'connected' && health !== null) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [connectionStatus, health])
+
+  useEffect(() => {
+    if (health === null || connectionStatus !== 'connected') return
     soulsController.getCurrent().then(async (s) => {
       if (s && 'name' in s) {
         const name = (s as any).name
@@ -38,26 +63,47 @@ export function StatusBar() {
         } catch {}
       }
     }).catch(() => {})
-  }, [health])
+  }, [health, connectionStatus])
 
-  const score = summary?.score
-  const dot = health === null ? 'bg-muted-foreground/50' :
-    health === 'offline' ? 'bg-destructive' :
+  const score = health?.health_score
+  const dot = connectionStatus === 'connecting' ? 'bg-muted-foreground/50' :
+    connectionStatus === 'offline' ? 'bg-destructive' :
+    connectionStatus === 'reloading' ? 'bg-destructive animate-pulse' :
     score != null && score < 50 ? 'bg-destructive' :
     score != null && score < 80 ? 'bg-warning' :
-    health.model_loaded ? 'bg-success' : 'bg-warning'
+    health?.model_loaded ? 'bg-success' : 'bg-warning'
 
-  const statusText = health === null ? 'Connecting...' :
-    health === 'offline' ? 'Offline' :
-    summary?.summary || (health.model_loaded ? health.model_type : 'No model')
+  // Build diagnostic status text
+  let statusText: string
+  if (connectionStatus === 'connecting' && health === null) {
+    statusText = 'Connecting...'
+  } else if (connectionStatus === 'offline') {
+    const elapsed = lastOffline ? formatDuration(now - lastOffline) : ''
+    const failInfo = getFailureSummary(recentFailures)
+    statusText = failInfo
+      ? `Offline — ${failInfo}${elapsed ? ` (${elapsed})` : ''}`
+      : `Offline${elapsed ? ` (${elapsed})` : ''}`
+  } else {
+    statusText = health?.health_summary || (health?.model_loaded ? (health.model_type || 'Loaded') : 'No model')
+  }
 
   return (
     <Link href="/monitoring" className="flex shrink-0 h-6 sm:h-7 items-center justify-between px-2 sm:px-3 border-t border-border/30 bg-muted/20 text-[10px] text-muted-foreground/70 hover:bg-muted/40 transition-colors" aria-label="System health and model status">
       <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
         <span className="flex items-center gap-1" aria-live="polite" aria-atomic="true">
           <span className={cn("inline-block h-1.5 w-1.5 rounded-full shrink-0", dot)} aria-hidden="true" />
-          <span className="truncate max-w-[200px] sm:max-w-none">{statusText}</span>
+          <span className="truncate max-w-[200px] sm:max-w-none" title={statusText}>{statusText}</span>
         </span>
+        {connectionStatus === 'connected' && health && (
+          <span className="hidden sm:inline-flex items-center gap-1 px-1 py-0.5 rounded-full bg-success/10 text-success text-[9px] font-medium leading-none">
+            live
+          </span>
+        )}
+        {failureCount > 0 && connectionStatus !== 'connected' && (
+          <span className="hidden sm:inline-flex items-center px-1 py-0.5 rounded-full bg-destructive/10 text-destructive text-[9px] font-medium leading-none">
+            {failureCount} fail{failureCount !== 1 ? 's' : ''}
+          </span>
+        )}
         {soulName && archetypeLabel && (
           <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary/8 text-primary/80 text-[9px] font-medium leading-none">
             {archetypeLabel}
@@ -86,9 +132,9 @@ export function StatusBar() {
             </span>
           )}
         </button>
-        {summary?.tokens_per_sec ? (
-          <span className="hidden sm:inline tabular-nums">{summary.tokens_per_sec.toFixed(0)} t/s</span>
-        ) : health !== null && health !== 'offline' && health.inference_count != null ? (
+        {health?.tokens_per_sec ? (
+          <span className="hidden sm:inline tabular-nums">{health.tokens_per_sec.toFixed(0)} t/s</span>
+        ) : health !== null && health.inference_count != null ? (
           <span className="hidden sm:inline">{health.inference_count} response{health.inference_count !== 1 ? 's' : ''}</span>
         ) : null}
       </div>

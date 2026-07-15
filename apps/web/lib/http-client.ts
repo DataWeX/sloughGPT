@@ -111,9 +111,12 @@ async function request<T>(
       if (e instanceof ApiError) throw e
       const status = 0
       const isTimeout = e.name === 'AbortError' || e.message?.includes('aborted')
+      const isConnRefused = e.message === 'Failed to fetch' || e.cause?.code === 'ECONNREFUSED'
       const message = isTimeout
         ? `Request timed out after ${timeoutMs / 1000}s`
-        : e.message === 'Failed to fetch' ? 'Connection unavailable' : (e.message || 'Request failed')
+        : isConnRefused ? 'Connection unavailable — server may be starting up' : (e.message || 'Request failed')
+
+      const kind = isTimeout ? 'timeout' : isConnRefused ? 'connection_refused' : 'unknown'
 
       if (!opts?.silent) {
         const apiErr = new ApiError(message, status)
@@ -121,6 +124,17 @@ async function request<T>(
           useErrorStore.getState().addError(apiErr, {
             source: url,
             title: 'Connection Error',
+          })
+        })
+        // Report diagnostic to api-monitor-store
+        import('./api-monitor-store').then(({ useApiMonitor }) => {
+          useApiMonitor.getState().addFailure({
+            endpoint: url,
+            error: message,
+            status: 0,
+            timeoutMs,
+            timestamp: Date.now(),
+            kind,
           })
         })
       }

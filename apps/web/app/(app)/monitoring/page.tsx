@@ -13,6 +13,7 @@ import { benchmarkController } from '@/lib/benchmark-controller'
 import { multimodalController } from '@/lib/controllers'
 import type { AutoTrainStatus } from '@/lib/training-controller'
 import dynamicNext from 'next/dynamic'
+import { useLiveStatus } from '@/hooks/useLiveStatus'
 
 const SystemChart = dynamicNext(() => import('@/components/monitoring/SystemChart').then(m => m.SystemChart), {
   ssr: false,
@@ -26,6 +27,7 @@ import { useErrorStore } from '@/lib/error-store'
 import { OutputCard } from '@/components/OutputCard'
 
 export default function SystemHealthPage() {
+  const { health: liveHealth, connectionStatus } = useLiveStatus()
   const [detailed, setDetailed] = useState<DetailedHealth | null>(null)
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null)
   const [info, setInfo] = useState<SystemInfo | null>(null)
@@ -89,13 +91,6 @@ export default function SystemHealthPage() {
       setAutoTrainStatus(at)
       setTrainingJobs(Array.isArray(tj) ? tj : [])
       setLastUpdated(new Date().toLocaleTimeString())
-      if (m) {
-        setChartHistory(prev => {
-          const next = [...prev, { time: new Date().toLocaleTimeString(), cpu: m.cpu_percent, mem: m.memory_percent }]
-          if (next.length > MAX_HISTORY) next.shift()
-          return next
-        })
-      }
     } catch (e: any) {
       setError(e?.message || 'Failed to load system health')
     }
@@ -105,7 +100,17 @@ export default function SystemHealthPage() {
   useEffect(() => { fetchAll() }, [fetchAll])
 
   const loaded = detailed !== null
-  const apiOk = detailed?.status === 'healthy'
+  const apiOk = (liveHealth?.health_status ?? detailed?.status) === 'healthy'
+
+  // Live SSE data feeds the chart — no need for polling
+  useEffect(() => {
+    if (!liveHealth || !loaded) return
+    setChartHistory(prev => {
+      const next = [...prev, { time: new Date().toLocaleTimeString(), cpu: liveHealth.cpu_percent ?? 0, mem: liveHealth.memory_percent ?? 0 }]
+      if (next.length > MAX_HISTORY) next.shift()
+      return next
+    })
+  }, [liveHealth, loaded])
 
   // Periodic polling — pauses when tab is hidden
   useEffect(() => {
@@ -159,9 +164,17 @@ export default function SystemHealthPage() {
           </Card>
         )}
 
-        {/* Status + Model */}
+        {/* Status + Model — uses live SSE data for instant updates */}
         {loaded && <Card>
-          <CardHeader><CardTitle className="text-base">Status</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base flex items-center gap-2">
+            Status
+            {connectionStatus === 'connected' && liveHealth && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-success/10 text-success text-[10px] font-medium">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+                live
+              </span>
+            )}
+          </CardTitle></CardHeader>
           <CardContent>
             <KpiGrid columns={4}>
               <StatCard
@@ -173,40 +186,40 @@ export default function SystemHealthPage() {
               />
               <StatCard
                 label="Model"
-                value={!loaded ? '...' : detailed?.model_loaded ? (detailed.model_type || 'Loaded') : 'Not loaded'}
+                value={!loaded ? '...' : (liveHealth?.model_loaded ?? detailed?.model_loaded) ? (liveHealth?.model_type || detailed?.model_type || 'Loaded') : 'Not loaded'}
                 icon={
-                  <span className={`inline-block w-2 h-2 rounded-full ${!loaded ? 'bg-warning' : detailed?.model_loaded ? 'bg-success' : 'bg-warning'}`} />
+                  <span className={`inline-block w-2 h-2 rounded-full ${!loaded ? 'bg-warning' : (liveHealth?.model_loaded ?? detailed?.model_loaded) ? 'bg-success' : 'bg-warning'}`} />
                 }
               />
               <StatCard
                 label="Uptime"
-                value={!loaded ? '...' : formatUptime(detailed.uptime_seconds)}
+                value={!loaded ? '...' : formatUptime(liveHealth?.uptime_seconds ?? detailed?.uptime_seconds ?? 0)}
               />
               <StatCard
                 label="Responses served"
-                value={!loaded ? '...' : detailed?.inference?.inference_count ?? 0}
+                value={!loaded ? '...' : String(liveHealth?.inference_count ?? detailed?.inference?.inference_count ?? 0)}
               />
             </KpiGrid>
           </CardContent>
         </Card>}
 
-        {/* System Resources */}
+        {/* System Resources — uses live SSE data for CPU/memory */}
         <Card>
           <CardHeader><CardTitle className="text-base">System Resources</CardTitle></CardHeader>
           <CardContent>
             <KpiGrid columns={4}>
               <StatCard
                 label="CPU"
-                value={metrics ? `${metrics.cpu_percent}%` : '...'}
+                value={liveHealth?.cpu_percent != null ? `${liveHealth.cpu_percent}%` : metrics ? `${metrics.cpu_percent}%` : '...'}
                 icon={
-                  <span className={`inline-block w-2 h-2 rounded-full ${!metrics ? 'bg-warning' : metrics.cpu_percent > 80 ? 'bg-warning' : 'bg-success'}`} />
+                  <span className={`inline-block w-2 h-2 rounded-full ${(liveHealth?.cpu_percent ?? metrics?.cpu_percent ?? -1) < 0 ? 'bg-warning' : (liveHealth?.cpu_percent ?? metrics?.cpu_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />
                 }
               />
               <StatCard
                 label="Memory"
-                value={metrics ? `${metrics.memory_percent}%` : '...'}
+                value={liveHealth?.memory_percent != null ? `${liveHealth.memory_percent}%` : metrics ? `${metrics.memory_percent}%` : '...'}
                 icon={
-                  <span className={`inline-block w-2 h-2 rounded-full ${!metrics ? 'bg-warning' : metrics.memory_percent > 80 ? 'bg-warning' : 'bg-success'}`} />
+                  <span className={`inline-block w-2 h-2 rounded-full ${(liveHealth?.memory_percent ?? metrics?.memory_percent ?? -1) < 0 ? 'bg-warning' : (liveHealth?.memory_percent ?? metrics?.memory_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />
                 }
               />
               <StatCard
