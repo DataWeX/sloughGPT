@@ -186,7 +186,7 @@ docker stats
 
 ```bash
 # Force CPU inference
-MAN_FORCE_CPU=true
+SLO_FORCE_CPU=true
 
 # Use a smaller model in settings
 

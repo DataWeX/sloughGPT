@@ -289,7 +289,7 @@ await metrics.track_counter("api_requests_total")
 ```python
 # Enable debug mode
 import os
-os.environ['MAN_DEBUG'] = '1'
+os.environ['SLO_DEBUG'] = '1'
 
 # Use Python debugger
 import pdb; pdb.set_trace()

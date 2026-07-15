@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 6d0e9cd fix: stability audit — watchdog health check, thread error propagation, circuit breaker
+No active task. Last commit: 5f2009a feat: tag all 834 log calls across server + core-py with error codes and type tags
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

@@ -13,7 +13,7 @@ Complete reference for all environment variables used in SloughGPT.
 | `SLO_PORT` | No | `8000` | Server port |
 | `SLO_RELOAD` | No | `false` | Enable auto-reload on file changes |
 
-**Legacy names:** older docs and images used a typo (`SLAUGHGPT_*`). The server still accepts `SLAUGHGPT_API_KEY`, `SLAUGHGPT_JWT_SECRET`, and `SLAUGHGPT_API_KEYS` if the `MAN_*` counterparts are unset. Prefer `MAN_*` for new deployments.
+**Legacy names:** older docs and images used a typo (`SLAUGHGPT_*`). The server still accepts `SLAUGHGPT_API_KEY`, `SLAUGHGPT_JWT_SECRET`, and `SLAUGHGPT_API_KEYS` if the `SLO_*` counterparts are unset. Prefer `SLO_*` for new deployments.
 
 ---
 
@@ -177,4 +177,4 @@ The following environment variable names are accepted as fallbacks:
 | `SLAUGHGPT_JWT_SECRET` | `SLO_JWT_SECRET` |
 | `SLAUGHGPT_API_KEYS` | `SLO_API_KEYS` |
 
-These are read from `settings.py` if the `MAN_*` variant is unset. New deployments should use only `MAN_*` names.
+These are read from `settings.py` if the `SLO_*` variant is unset. New deployments should use only `SLO_*` names.
