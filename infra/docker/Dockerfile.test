@@ -1,12 +1,12 @@
 # SloughGPT test image — mirrors .github/workflows/reusable-ci-core.yml test job.
 # Build from repository root: docker build -f infra/docker/Dockerfile.test -t sloughgpt:test .
 
-FROM python:3.10-slim
+FROM python:3.14-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    MAN_ENV="testing" \
-    MAN_LOG_LEVEL="DEBUG" \
+    SLO_ENV="testing" \
+    SLO_LOG_LEVEL="DEBUG" \
     TESTING="true" \
     DATABASE_URL="sqlite:///:memory:" \
     CACHE_TYPE="memory"

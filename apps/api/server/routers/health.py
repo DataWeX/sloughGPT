@@ -125,6 +125,7 @@ async def health_summary():
         "summary": hs.get("summary", ""),
         "diagnoses": hs.get("diagnoses", []),
         "model_loaded": detailed.get("model_loaded", False),
+        "model_loading": detailed.get("model_loading", False),
         "model_type": detailed.get("model_type"),
         "soul": detailed.get("soul"),
         "uptime_seconds": detailed.get("uptime_seconds", 0),
@@ -147,6 +148,7 @@ def _build_health_snapshot(ctrl) -> dict:
         "status": "working",
         "data": {
             "model_loaded": detailed.get("model_loaded", False),
+            "model_loading": detailed.get("model_loading", False),
             "model_type": detailed.get("model_type"),
             "soul": detailed.get("soul"),
             "is_inferencing": basic.get("is_inferencing", False),

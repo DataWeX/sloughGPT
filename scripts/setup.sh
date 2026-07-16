@@ -156,10 +156,10 @@ setup_env() {
 # SloughGPT Environment Configuration
 
 # Application
-MAN_ENV=development
-MAN_HOST=0.0.0.0
-MAN_PORT=8000
-MAN_LOG_LEVEL=INFO
+SLO_ENV=development
+SLO_HOST=0.0.0.0
+SLO_PORT=8000
+SLO_LOG_LEVEL=INFO
 
 # Database
 DATABASE_URL=sqlite:///./sloughgpt.db
@@ -391,8 +391,8 @@ EOF
 set -e
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 source "$ROOT/.venv/bin/activate"
-export MAN_ENV=development
-export MAN_LOG_LEVEL=DEBUG
+export SLO_ENV=development
+export SLO_LOG_LEVEL=DEBUG
 cd "$ROOT/apps/api/server"
 exec python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
 EOF

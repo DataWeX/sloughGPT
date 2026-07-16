@@ -3,8 +3,8 @@ FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    MAN_ENV="development" \
-    MAN_LOG_LEVEL="DEBUG"
+    SLO_ENV="development" \
+    SLO_LOG_LEVEL="DEBUG"
 
 WORKDIR /app
 

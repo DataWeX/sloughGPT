@@ -3,6 +3,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { trainingJobsController } from '@/lib/controllers'
 import { PUBLIC_API_URL } from '@/lib/config'
+import { logger } from '@/lib/dev-log'
+
+const _log = logger.child('training-session')
 
 export interface TrainingSessionState {
   phase: string
@@ -183,7 +186,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             onCheckpointUpdate?.()
           }
           if (env.status === 'error') { es.close(); esRef.current = null; setPhase('error'); addToast('Training failed', 'error') }
-        } catch (err) { console.error('[training] SSE parse error:', err) }
+        } catch (err) { _log.error('SSE parse error', { exception: String(err) }) }
       }
       let esRetries = 0
       es.onerror = () => {

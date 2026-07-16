@@ -17,6 +17,8 @@ import threading
 from collections import defaultdict
 from typing import Dict, List, Optional
 
+import psutil
+
 
 class MetricsCollector:
     """In-memory Prometheus-style metrics collector."""
@@ -138,6 +140,17 @@ class MetricsCollector:
             lines.append("# HELP sloughgpt_model_loaded Whether a model is loaded (1=yes).")
             lines.append("# TYPE sloughgpt_model_loaded gauge")
             lines.append(f"sloughgpt_model_loaded {1 if self._model_loaded else 0}")
+
+            # System metrics (from psutil)
+            cpu_pct = psutil.cpu_percent(interval=None)
+            mem = psutil.virtual_memory()
+            lines.append("# HELP sloughgpt_system_cpu_usage CPU usage percentage.")
+            lines.append("# TYPE sloughgpt_system_cpu_usage gauge")
+            lines.append(f"sloughgpt_system_cpu_usage {cpu_pct:.1f}")
+
+            lines.append("# HELP sloughgpt_system_memory_percent Memory usage percentage.")
+            lines.append("# TYPE sloughgpt_system_memory_percent gauge")
+            lines.append(f"sloughgpt_system_memory_percent {mem.percent:.1f}")
 
         return "\n".join(lines) + "\n"
 

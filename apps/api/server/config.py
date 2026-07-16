@@ -30,13 +30,16 @@ class GenerationConfig:
 
     @classmethod
     def from_env(cls) -> GenerationConfig:
+        def _env(canonical: str, legacy: str, default: str) -> str:
+            return os.getenv(canonical, os.getenv(legacy, default))
+
         return cls(
-            temperature=float(os.getenv("SLOUGHGT_TEMPERATURE", "0.8")),
-            top_p=float(os.getenv("SLOUGHGT_TOP_P", "0.9")),
-            top_k=int(os.getenv("SLOUGHGT_TOP_K", "50")),
-            repetition_penalty=float(os.getenv("SLOUGHGT_REPETITION_PENALTY", "1.2")),
-            max_new_tokens=int(os.getenv("SLOUGHGT_MAX_NEW_TOKENS", "200")),
-            max_context_length=int(os.getenv("SLOUGHGT_MAX_CONTEXT_LENGTH", "1024")),
+            temperature=float(_env("SLO_TEMPERATURE", "SLOUGHGT_TEMPERATURE", "0.8")),
+            top_p=float(_env("SLO_TOP_P", "SLOUGHGT_TOP_P", "0.9")),
+            top_k=int(_env("SLO_TOP_K", "SLOUGHGT_TOP_K", "50")),
+            repetition_penalty=float(_env("SLO_REPETITION_PENALTY", "SLOUGHGT_REPETITION_PENALTY", "1.2")),
+            max_new_tokens=int(_env("SLO_MAX_NEW_TOKENS", "SLOUGHGT_MAX_NEW_TOKENS", "200")),
+            max_context_length=int(_env("SLO_MAX_CONTEXT_LENGTH", "SLOUGHGT_MAX_CONTEXT_LENGTH", "1024")),
         )
 
 
@@ -104,9 +107,9 @@ class ServerConfig:
             enable_health_monitor=os.getenv("SLO_HEALTH_MONITOR", "true").lower() == "true",
             health_monitor_interval=int(os.getenv("SLO_HEALTH_INTERVAL", "300")),
             enable_web=os.getenv("SLO_WEB", "").lower() in ("1", "true", "yes"),
-            jwt_secret=os.getenv("JWT_SECRET", "dev-secret-change-in-production"),
-            jwt_algorithm=os.getenv("JWT_ALGORITHM", "HS256"),
-            jwt_expiration_hours=int(os.getenv("JWT_EXPIRATION_HOURS", "24")),
+            jwt_secret=os.getenv("SLO_JWT_SECRET", os.getenv("JWT_SECRET", "dev-secret-change-in-production")),
+            jwt_algorithm=os.getenv("SLO_JWT_ALGORITHM", os.getenv("JWT_ALGORITHM", "HS256")),
+            jwt_expiration_hours=int(os.getenv("SLO_JWT_EXPIRATION_HOURS", os.getenv("JWT_EXPIRATION_HOURS", "24"))),
         )
 
 

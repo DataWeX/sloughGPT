@@ -134,7 +134,7 @@ class WebLogger(Logger):
         return LogRecord(
             level=LogLevel(d["level"]),
             message=d["message"],
-            logger=d.get("logger", "man"),
+            logger=d.get("logger", "slo"),
             timestamp=d.get("timestamp", time.time()),
             context=d.get("context", {}),
             exception=d.get("exception"),

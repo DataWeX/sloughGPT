@@ -26,6 +26,7 @@ export type ConnectionStatus = 'connected' | 'connecting' | 'offline' | 'reloadi
 
 export interface LiveHealthSnapshot {
   model_loaded: boolean
+  model_loading: boolean
   model_type: string | null
   soul: string | null
   is_inferencing: boolean
@@ -110,6 +111,7 @@ export function initLiveStatus(): () => void {
           // Convert to LiveHealthSnapshot shape
           const snap: Partial<LiveHealthSnapshot> = {
             model_loaded: h.model_loaded,
+            model_loading: (h as any).model_loading ?? false,
             model_type: h.model_type,
             soul: h.soul_name ?? null,
             inference_count: h.inference_count ?? 0,
@@ -152,6 +154,7 @@ export function initLiveStatus(): () => void {
     const d = envelope.data as Partial<LiveHealthSnapshot>
     const snap: LiveHealthSnapshot = {
       model_loaded: Boolean(d.model_loaded),
+      model_loading: Boolean(d.model_loading),
       model_type: d.model_type ?? null,
       soul: d.soul ?? null,
       is_inferencing: Boolean(d.is_inferencing),

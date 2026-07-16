@@ -1,5 +1,5 @@
 # Default config — overridden by env vars and profile-specific files.
-# Nested keys use YAML nesting. Env override: MAN_MODEL__NAME=gpt2
+# Nested keys use YAML nesting. Env override: SLO_MODEL__NAME=gpt2
 
 model:
   name: "Qwen/Qwen2.5-0.5B-Instruct"

@@ -2,6 +2,9 @@
 import { useEffect, useRef } from 'react'
 import { useApiMonitor } from '@/lib/api-monitor-store'
 import { apiGet } from '@/lib/http-client'
+import { logger } from '@/lib/dev-log'
+
+const _log = logger.child('backend-watcher')
 
 const BASE_POLL_MS = 8000
 const REQUEST_TIMEOUT = 20000
@@ -15,6 +18,7 @@ interface HealthSummary {
   status: string
   summary: string
   model_loaded: boolean
+  model_loading: boolean
 }
 
 export function useBackendWatcher() {
@@ -59,7 +63,7 @@ export function useBackendWatcher() {
           wasOffline.current = false
           setStatus('connected')
           const uptime = Math.round((Date.now() - startTime.current) / 1000)
-          console.log(`[BackendWatcher] Server reconnected after ${uptime}s`)
+          _log.info(`Server reconnected after ${uptime}s`)
           const { useToastStore } = await import('@/lib/toast-store')
           useToastStore.getState().addToast('Server reconnected', 'success')
         } else {
@@ -96,19 +100,19 @@ export function useBackendWatcher() {
           failureCount.current += 1
           wasOffline.current = true
           const reason = err?.message || 'Connection unavailable'
-          console.warn(`[BackendWatcher] Connection failed (${failureCount.current}/${MAX_FAILURES_BEFORE_RELOAD}): ${reason} — server startup: ${elapsed}s`)
+          _log.warning(`Connection failed (${failureCount.current}/${MAX_FAILURES_BEFORE_RELOAD}): ${reason} — server startup: ${elapsed}s`)
           setStatus(failureCount.current >= MAX_FAILURES_BEFORE_RELOAD ? 'reloading' : 'connecting')
         } else {
           // 4xx/5xx — server is up but returning errors
           failureCount.current += 1
           wasOffline.current = true
-          console.warn(`[BackendWatcher] HTTP error (${failureCount.current}/${MAX_FAILURES_BEFORE_RELOAD}): ${err?.status} ${err?.message}`)
+          _log.warning(`HTTP error (${failureCount.current}/${MAX_FAILURES_BEFORE_RELOAD}): ${err?.status} ${err?.message}`)
           setStatus(failureCount.current >= MAX_FAILURES_BEFORE_RELOAD ? 'reloading' : 'connecting')
         }
 
         // Only reload after sustained failures — never on rate limit
         if (failureCount.current >= MAX_FAILURES_BEFORE_RELOAD && !isRateLimit) {
-          console.warn(`[BackendWatcher] Too many failures, reloading page...`)
+          _log.warning(`Too many failures, reloading page...`)
           setTimeout(() => {
             if (!cancelled) window.location.reload()
           }, RELOAD_DELAY_MS)

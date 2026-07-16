@@ -138,12 +138,7 @@ export const knowledgeController = {
     formData.append('topic', topic)
     formData.append('chunk_size', String(chunkSize))
     formData.append('overlap', String(overlap))
-    const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/knowledge/ingest-file`, {
-      method: 'POST',
-      body: formData,
-    })
-    if (!resp.ok) throw new Error(`Upload failed: ${resp.statusText}`)
-    return resp.json()
+    return apiPost('/knowledge/ingest-file', formData, { raw: true })
   },
 
   async searchFiles(query: string, path = '.', extensions?: string[], topK = 10): Promise<{

@@ -194,7 +194,7 @@ def example_auto_train(client):
 
 def main():
     """Run all examples."""
-    base_url = os.environ.get("MAN_API_URL", "http://localhost:8000")
+    base_url = os.environ.get("SLO_API_URL", "http://localhost:8000")
     print(f"Connecting to: {base_url}")
 
     client = SloughGPTClient(base_url=base_url, timeout=60)

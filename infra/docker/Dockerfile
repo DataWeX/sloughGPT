@@ -6,10 +6,10 @@ LABEL description="SloughGPT API Server"
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    MAN_ENV="production" \
-    MAN_LOG_LEVEL="INFO" \
-    MAN_HOST="0.0.0.0" \
-    MAN_PORT=8000
+    SLO_ENV="production" \
+    SLO_LOG_LEVEL="INFO" \
+    SLO_HOST="0.0.0.0" \
+    SLO_PORT=8000
 
 WORKDIR /app
 
@@ -24,7 +24,6 @@ RUN pip install --no-cache-dir -r /tmp/requirements-api.txt \
     && pip install --no-cache-dir \
     torch --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir \
-    sentence-transformers \
     psutil
 
 COPY apps/api/server /app/apps/api/server

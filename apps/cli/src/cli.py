@@ -5,6 +5,7 @@ Commands organized into logical groups. All delegate to existing
 cmd_* functions in commands/ modules.
 """
 
+import logging
 import sys
 import os
 from pathlib import Path
@@ -20,8 +21,35 @@ for _p in [_CLI_DIR, str(_CORE_PY_DIR)]:
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from core.version import format_version_display
-from core.printer import printer
+# ── Structured logging (mirrors server setup in main.py) ────────────────
+from domains.logging import CLILogger, BridgeHandler, set_global, LogLevel  # noqa: E402
+from domains.infrastructure.output_buffer import install_log_bridge  # noqa: E402
+
+_log_level_name = os.environ.get("SLO_LOG_LEVEL", "INFO").upper()
+_log_level = getattr(LogLevel, _log_level_name, LogLevel.INFO)
+
+_cli_logger = CLILogger("slo", level=_log_level)
+set_global(_cli_logger)
+
+_bridge = BridgeHandler(_cli_logger)
+_bridge.setLevel(getattr(logging, _log_level_name, logging.INFO))
+logging.root.addHandler(_bridge)
+logging.root.setLevel(getattr(logging, _log_level_name, logging.INFO))
+
+# Suppress noisy third-party loggers
+for _noisy in ("httpx", "httpcore", "urllib3"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
+
+# Wire log output into the shared OutputBuffer (for TUI pager / SSE)
+try:
+    _buf_handler = install_log_bridge()
+except Exception:
+    pass
+
+logger = logging.getLogger("slo")
+
+from core.version import format_version_display  # noqa: E402
+from core.printer import printer  # noqa: E402
 
 # ── Helpers ───────────────────────────────────────────────────────────
 

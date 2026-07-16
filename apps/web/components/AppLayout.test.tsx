@@ -19,7 +19,6 @@ vi.mock('@/components/Sidebar', () => ({
 }))
 
 vi.mock('@/components/StatusBar', () => ({ StatusBar: () => <div data-testid="status-bar" /> }))
-vi.mock('@/components/GlobalErrorHandler', () => ({ GlobalErrorHandler: () => <div data-testid="error-handler" /> }))
 vi.mock('@sloughgpt/strui', () => ({
   Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
   ErrorPanel: () => <div data-testid="error-panel" />,
@@ -75,11 +74,6 @@ describe('AppLayout', () => {
   it('renders status bar', () => {
     render(<AppLayout><div /></AppLayout>)
     expect(screen.getByTestId('status-bar')).toBeDefined()
-  })
-
-  it('renders GlobalErrorHandler', () => {
-    render(<AppLayout><div /></AppLayout>)
-    expect(screen.getByTestId('error-handler')).toBeDefined()
   })
 
   it('renders error panel', () => {

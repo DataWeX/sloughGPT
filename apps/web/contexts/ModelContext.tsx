@@ -4,6 +4,9 @@ import React, { createContext, useContext, useEffect, useState, useCallback, typ
 import { modelController } from '@/lib/model-controller'
 import type { HealthStatus } from '@/lib/model-controller'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
+import { logger } from '@/lib/dev-log'
+
+const _log = logger.child('model-context')
 
 export interface ModelInfo {
   id: string
@@ -81,7 +84,7 @@ export function ModelProvider({ children }: { children: ReactNode }) {
         tags: m.tags,
       })))
     } catch (err) {
-      console.error('Failed to fetch models:', err)
+      _log.error('Failed to fetch models', { exception: String(err) })
     }
   }, [])
 

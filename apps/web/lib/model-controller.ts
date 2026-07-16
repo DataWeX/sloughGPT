@@ -8,6 +8,9 @@
  */
 
 import { apiGet, apiPost } from './http-client'
+import { logger } from './dev-log'
+
+const _log = logger.child('model-controller')
 
 export interface ModelInfo {
   id: string
@@ -40,6 +43,7 @@ export interface ModelStatus {
 export interface HealthStatus {
   status: string
   model_loaded: boolean
+  model_loading?: boolean
   model_type: string
   summary: string
   is_inferencing?: boolean
@@ -81,7 +85,15 @@ export interface QuantizationResult {
 }
 
 export const modelController = {
+  _listInFlight: null as Promise<ModelInfo[]> | null,
+
   async list(): Promise<ModelInfo[]> {
+    if (this._listInFlight) return this._listInFlight
+    this._listInFlight = this._listImpl().finally(() => { this._listInFlight = null })
+    return this._listInFlight
+  },
+
+  async _listImpl(): Promise<ModelInfo[]> {
     try {
       const data = await apiGet<ModelInfo[] | { models: (string | ModelInfo)[] }>('/models/hf')
       const modelList = Array.isArray(data) ? data : (data.models ?? [])
@@ -89,7 +101,7 @@ export const modelController = {
         typeof m === 'string' ? { id: m, name: m, type: 'huggingface' } : m,
       )
     } catch (e) {
-      console.error('Failed to list models:', e)
+      _log.error('Failed to list models', { exception: String(e) })
       return []
     }
   },

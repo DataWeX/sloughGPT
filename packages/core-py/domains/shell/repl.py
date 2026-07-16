@@ -119,7 +119,7 @@ class ShellREPL:
 
         # Structured logger — inherit from domains.logging
         from domains.logging import ShellLogger, LogLevel
-        self.log = ShellLogger("man.shell.repl", level=LogLevel.DEBUG)
+        self.log = ShellLogger("slo.shell.repl", level=LogLevel.DEBUG)
 
         self._aliases: dict[str, str] = dict(self.state.aliases)
         self._aliases.update({

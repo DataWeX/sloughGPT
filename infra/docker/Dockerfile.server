@@ -7,8 +7,8 @@ LABEL description="SloughGPT model server (monorepo layout)"
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    MAN_ENV="production" \
-    MAN_LOG_LEVEL="INFO"
+    SLO_ENV="production" \
+    SLO_LOG_LEVEL="INFO"
 
 WORKDIR /app
 

@@ -213,9 +213,7 @@ async def soul_chat(req: SloChatRequest, request: Request):
         return StreamingResponse(stream(), media_type="text/event-stream")
 
     except Exception as e:
-        import traceback
-
-        traceback.print_exc()
+        logger.debug("soul chat error", exc_info=True)
         return error_response(message=str(e))
 
 

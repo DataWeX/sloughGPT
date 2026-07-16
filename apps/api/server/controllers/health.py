@@ -7,6 +7,8 @@ from typing import Dict, Any, Tuple, Optional
 import psutil
 from datetime import datetime
 
+_health_start_time = datetime.now()
+
 
 def _get_executor_stats() -> Optional[Dict[str, Any]]:
     """Get TrainingExecutor pool stats if available."""
@@ -22,6 +24,24 @@ def _get_executor_stats() -> Optional[Dict[str, Any]]:
         }
     except Exception:
         return None
+
+
+def _is_model_loading() -> bool:
+    """Check if the server is currently loading a model in the background.
+
+    Returns True when the model isn't loaded yet but the server has been
+    running for less than 90s (the typical model load window).
+    """
+    try:
+        import state as server_state
+        if server_state.model is not None:
+            return False
+        # If model isn't loaded but server is up, it's probably still loading
+        from datetime import datetime
+        uptime = (datetime.now() - _health_start_time).total_seconds()
+        return uptime < 90
+    except Exception:
+        return False
 
 
 def _get_model_info() -> Tuple[bool, Optional[str]]:
@@ -130,6 +150,8 @@ def _build_status_message(
             + f". Served {request_count} requests."
             + (f" {error_count} errors." if error_count > 0 else "")
         )
+    elif _is_model_loading():
+        msg = "Loading model weights — this takes about a minute on first start."
     else:
         msg = f"Server running, no model loaded. Profile: {profile}."
     return msg
@@ -150,10 +172,12 @@ class HealthController:
         model_loaded, model_type = _get_model_info()
         inference_stats = _get_inference_stats()
         lifecycle = _get_lifecycle_info()
+        model_loading = not model_loaded and _is_model_loading()
         result: Dict[str, Any] = {
             "status": "healthy",
             "timestamp": datetime.now().isoformat(),
             "model_loaded": model_loaded,
+            "model_loading": model_loading,
             "model_type": model_type,
             "is_inferencing": inference_stats.get("is_inferencing", False),
             "inference_count": inference_stats.get("inference_count", 0),
@@ -291,6 +315,7 @@ class HealthController:
             },
             "gpu": gpu_info,
             "model_loaded": model_loaded,
+            "model_loading": not model_loaded and _is_model_loading(),
             "model_type": model_type,
             "soul": current_soul,
             "inference": inference_stats,

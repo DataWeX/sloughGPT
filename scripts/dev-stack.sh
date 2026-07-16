@@ -9,7 +9,7 @@
 #
 # Usage:
 #   ./scripts/dev-stack.sh              # both API (:8000) + Web (:3000)
-#   MAN_API_PORT=9000 ./scripts/dev-stack.sh  # custom API port
+#   SLO_API_PORT=9000 ./scripts/dev-stack.sh  # custom API port
 #
 # Replaces: npm run dev:stack (concurrently). This script is the single entrypoint.
 set -uo pipefail
@@ -18,7 +18,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 # ── Config ─────────────────────────────────────────────────────
-export MAN_API_PORT="${MAN_API_PORT:-8000}"
+export SLO_API_PORT="${SLO_API_PORT:-8000}"
 WEB_PORT="${WEB_PORT:-3000}"
 MAX_RETRIES=5
 INITIAL_BACKOFF=2
@@ -97,7 +97,7 @@ prefix_output() {
 
 # ── Start API ──────────────────────────────────────────────────
 start_api() {
-  log_api "Starting (port $MAN_API_PORT)..."
+  log_api "Starting (port $SLO_API_PORT)..."
    local py="python3"
    if [ -x ".venv/bin/python3" ]; then
      py=".venv/bin/python3"
@@ -105,8 +105,8 @@ start_api() {
    $py apps/api/server/main.py 2>&1 &
   API_PID=$!
 
-  if wait_for_health "$MAN_API_PORT" "api"; then
-    log_ok "API healthy on :$MAN_API_PORT"
+  if wait_for_health "$SLO_API_PORT" "api"; then
+    log_ok "API healthy on :$SLO_API_PORT"
     return 0
   fi
 
@@ -144,7 +144,7 @@ start_web() {
 # ══════════════════════════════════════════════════════════════
 echo ""
 echo -e "${BOLD}SloughGPT Dev Stack${RESET}"
-echo -e "${DIM}API: http://localhost:$MAN_API_PORT  |  Web: http://localhost:$WEB_PORT${RESET}"
+echo -e "${DIM}API: http://localhost:$SLO_API_PORT  |  Web: http://localhost:$WEB_PORT${RESET}"
 echo ""
 
 # ── Phase 1: Start API (with retry) ──
@@ -168,8 +168,8 @@ start_web || true
 
 echo ""
 echo -e "${BOLD}All services ready!${RESET}"
-echo -e "  ${DIM}API:${RESET}  http://localhost:$MAN_API_PORT"
-echo -e "  ${DIM}Docs:${RESET} http://localhost:$MAN_API_PORT/docs"
+echo -e "  ${DIM}API:${RESET}  http://localhost:$SLO_API_PORT"
+echo -e "  ${DIM}Docs:${RESET} http://localhost:$SLO_API_PORT/docs"
 echo -e "  ${DIM}Web:${RESET}  http://localhost:$WEB_PORT"
 echo -e "  ${DIM}Press Ctrl+C to stop${RESET}"
 echo ""

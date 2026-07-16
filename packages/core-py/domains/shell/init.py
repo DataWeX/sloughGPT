@@ -14,6 +14,7 @@ import os
 import time
 import json
 import logging
+import shlex
 import threading
 import subprocess
 from pathlib import Path
@@ -140,8 +141,7 @@ class ServiceManager:
 
         try:
             proc = subprocess.Popen(
-                self.defn.command,
-                shell=True,
+                shlex.split(self.defn.command),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,

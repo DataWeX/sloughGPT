@@ -845,6 +845,7 @@ def discover_checkpoints(checkpoint_dir: str = "models/auto-training") -> List[D
 def setup_providers(hf_model=None, hf_tokenizer=None, hf_model_id: str = "gpt2",
                     inference_engine=None,
                     slonet_hf_id: Optional[str] = None,
+                    slonet_provider=None,
                     model_registry=None,
                     quantize: bool = False,
                     quant_bits: int = 8,
@@ -854,7 +855,7 @@ def setup_providers(hf_model=None, hf_tokenizer=None, hf_model_id: str = "gpt2",
     Call after the HF model is loaded. Registers:
     - ``"hf-default"``: ``HFModelProvider`` wrapping the loaded model (if provided)
     - ``"slonet-native"``: ``SloNetChatProvider`` (pure NumPy SloTransformer, no PyTorch runtime)
-      (if ``slonet_hf_id`` given)
+      (if ``slonet_hf_id`` given OR ``slonet_provider`` given)
     - ``"inference-engine"``: ``InferenceEngineProvider`` wrapping the InferenceEngine
       (if ``inference_engine`` given)
     - ``"default"``: ``ProviderRouter`` with VisionProcessor + text provider
@@ -865,6 +866,9 @@ def setup_providers(hf_model=None, hf_tokenizer=None, hf_model_id: str = "gpt2",
     3. ``hf-default`` (HuggingFace model)
 
     Args:
+        slonet_provider: Optional pre-loaded ``SloNetChatProvider``. When provided,
+            skips re-loading the SLNC file (saves ~6s). Takes priority over
+            ``slonet_hf_id``.
         model_registry: Optional ``ModelRegistry``. If provided, the ``hf-default``
             provider uses the registered ModelServer for lifecycle-managed generation
             (semaphore, timeout, circuit breaker, pre/post hooks).
@@ -882,7 +886,13 @@ def setup_providers(hf_model=None, hf_tokenizer=None, hf_model_id: str = "gpt2",
 
     text_provider_name = "hf-default" if hf_model is not None else None
 
-    if slonet_hf_id:
+    # Prefer pre-loaded provider (avoids duplicate SLNC load)
+    if slonet_provider is not None:
+        register_provider("slonet-native", slonet_provider)
+        text_provider_name = "slonet-native"
+        logger.info("Registered slonet-native provider: %s (pre-loaded)",
+                    getattr(slonet_provider, '_model_id', '?'), extra={"tag": "MODEL"})
+    elif slonet_hf_id:
         try:
             from domains.inference.slonet_provider import SloNetChatProvider
             from domains.infrastructure.safetensors_loader import _get_model_dir

@@ -120,8 +120,8 @@ export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatTool
       bookmarkCount: config.bookmarkCount,
     },
     health: {
-      status: health === null ? 'loading' : health === 'offline' ? 'offline' : health.model_loaded ? 'ok' : 'degraded',
-      summary: health === null ? 'Connecting...' : health === 'offline' ? 'Server offline' : health.summary || '',
+      status: health === null ? 'loading' : health === 'offline' ? 'offline' : health.model_loaded ? 'ok' : health.model_loading ? 'loading' : 'degraded',
+      summary: health === null ? 'Connecting...' : health === 'offline' ? 'Server offline' : health.model_loading ? 'Loading model...' : health.summary || '',
       modelLoaded: health !== null && health !== 'offline' && health.model_loaded,
       modelType: health !== null && health !== 'offline' ? health.model_type : '',
     },

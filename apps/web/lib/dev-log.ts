@@ -6,6 +6,10 @@
  * Production: only warnings and errors are emitted.
  * Development: all levels are emitted.
  *
+ * All log records are batched and forwarded to the backend via
+ * POST /errors/logs/ingest, where they flow into the OutputBuffer
+ * and appear in the SSE /system/stream + monitoring page OutputCard.
+ *
  * Usage:
  *   import { logger } from '@/lib/dev-log'
  *
@@ -47,12 +51,74 @@ const CONSOLE_METHOD: Record<LogLevel, 'debug' | 'log' | 'warn' | 'error'> = {
 
 const IS_DEV = process.env.NODE_ENV === 'development'
 
+// ── Batch transport to backend ────────────────────────────────────────
+
+const BATCH_INTERVAL_MS = 5000
+const MAX_BATCH_SIZE = 20
+let _logBatch: LogRecord[] = []
+let _logTimer: ReturnType<typeof setTimeout> | null = null
+let _apiUrl: string | null = null
+
+function _getApiUrl(): string {
+  if (_apiUrl) return _apiUrl
+  const raw =
+    (typeof window !== 'undefined' && (window as any).__NEXT_PUBLIC_API_URL) ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    'http://localhost:8000'
+  _apiUrl = String(raw)
+  return _apiUrl
+}
+
+function _flushLogs() {
+  if (_logBatch.length === 0) return
+  const payload = _logBatch
+  _logBatch = []
+  _logTimer = null
+
+  fetch(`${_getApiUrl()}/errors/logs/ingest`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ logs: payload }),
+    keepalive: true,
+  }).catch(() => {
+    /* silent — don't loop on network errors */
+  })
+}
+
+function _scheduleFlush() {
+  if (_logTimer) return
+  _logTimer = setTimeout(_flushLogs, BATCH_INTERVAL_MS)
+}
+
+function _enqueueLog(record: LogRecord) {
+  // Always forward warnings+; in dev, forward everything
+  if (!IS_DEV && LEVEL_ORDER[record.level] < LEVEL_ORDER.warning) return
+
+  _logBatch.push(record)
+  if (_logBatch.length >= MAX_BATCH_SIZE) {
+    if (_logTimer) {
+      clearTimeout(_logTimer)
+      _logTimer = null
+    }
+    _flushLogs()
+  } else {
+    _scheduleFlush()
+  }
+}
+
+// Flush remaining logs on page unload
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', _flushLogs)
+}
+
+// ── WebLogger class ──────────────────────────────────────────────────
+
 export class WebLogger {
   private _name: string
   private _level: LogLevel
   private _context: LogContext
 
-  constructor(name = 'man.web', level: LogLevel = 'info', context: LogContext = {}) {
+  constructor(name = 'slo.web', level: LogLevel = 'info', context: LogContext = {}) {
     this._name = name
     this._level = level
     this._context = context
@@ -100,6 +166,11 @@ export class WebLogger {
     return JSON.parse(raw)
   }
 
+  /** Flush any buffered logs to the backend immediately. */
+  flush() {
+    _flushLogs()
+  }
+
   // ── Internal ──────────────────────────────────────────────────────
 
   private _emit(level: LogLevel, message: string, context?: LogContext, exception?: string) {
@@ -114,18 +185,19 @@ export class WebLogger {
     }
     if (exception) record.exception = exception
 
-    // In production, only emit warnings and above
-    if (!IS_DEV && LEVEL_ORDER[level] < LEVEL_ORDER.warning) return
-
+    // Console output (always)
     const method = CONSOLE_METHOD[level]
     const prefix = `[${this._name}]`
     console[method](prefix, message, record)
+
+    // Forward to backend
+    _enqueueLog(record)
   }
 }
 
 // ── Singleton ────────────────────────────────────────────────────────
 
-export const logger = new WebLogger('man.web')
+export const logger = new WebLogger('slo.web')
 
 /**
  * Logs only in development — keeps production consoles clean for expected API/network failures.
@@ -133,6 +205,6 @@ export const logger = new WebLogger('man.web')
  */
 export function devDebug(...args: unknown[]) {
   if (IS_DEV) {
-    console.debug('[man]', ...args)
+    console.debug('[slo]', ...args)
   }
 }

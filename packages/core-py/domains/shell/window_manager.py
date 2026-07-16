@@ -32,6 +32,7 @@ import os
 import sys
 import time
 import logging
+import shlex
 import subprocess
 from datetime import datetime
 from typing import Any, Optional
@@ -722,7 +723,7 @@ class WindowManager:
                     # Fallback: run via subprocess
                     try:
                         result = subprocess.run(
-                            cmd, shell=True, capture_output=True, text=True, timeout=30
+                            shlex.split(cmd), capture_output=True, text=True, timeout=30
                         )
                         if result.stdout:
                             p.write(result.stdout.rstrip("\n"))
@@ -1069,7 +1070,7 @@ class WindowManager:
         # Fallback: run via subprocess
         self._flash(f"  Running: {cmd}")
         try:
-            result = subprocess.run(cmd, shell=True, capture_output=True,
+            result = subprocess.run(shlex.split(cmd), capture_output=True,
                                     text=True, timeout=30)
             if result.stdout:
                 p.write(result.stdout.rstrip("\n"))

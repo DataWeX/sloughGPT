@@ -154,6 +154,62 @@ async def log_errors(batch: ErrorBatch, request: Request):
     return success_response(data={"status": "ok", "logged": len(batch.errors)})
 
 
+# ── Frontend structured log ingest ───────────────────────────────────────
+
+
+class FrontendLogEntry(BaseModel):
+    """A single structured log record from the frontend WebLogger."""
+    level: str = "info"
+    logger: str = "web"
+    message: str = ""
+    timestamp: float = 0.0
+    context: Optional[dict] = None
+    exception: Optional[str] = None
+
+
+class FrontendLogBatch(BaseModel):
+    """Batch of frontend log records."""
+    logs: List[FrontendLogEntry]
+
+
+@router.post("/logs/ingest")
+async def ingest_frontend_logs(batch: FrontendLogBatch):
+    """
+    Accept structured logs from the frontend WebLogger and route them
+    into the OutputBuffer so they appear in the SSE /system/stream
+    and the monitoring page OutputCard.
+
+    This is the bridge between frontend logging and backend logging —
+    frontend logs flow through the same pipeline as backend logs.
+    """
+    from domains.infrastructure.output_buffer import get_server_buffer
+    from domains.logging import LogLevel as _LL
+
+    buf = get_server_buffer()
+    level_map = {
+        "debug": "debug", "info": "info", "warning": "warning",
+        "error": "error", "critical": "critical",
+    }
+
+    for entry in batch.logs:
+        lvl = level_map.get(entry.level, "info")
+        # Build context string from extras
+        ctx_parts = []
+        if entry.context:
+            ctx_parts.extend(f"{k}={v}" for k, v in entry.context.items() if v is not None)
+        if entry.exception:
+            ctx_parts.append(f"exception={entry.exception}")
+        ctx_str = (" " + " ".join(ctx_parts)) if ctx_parts else ""
+
+        buf.append_text(
+            f"{entry.logger} {entry.message}{ctx_str}",
+            level=lvl,
+            source=f"web.{entry.logger}",
+        )
+
+    return success_response(data={"status": "ok", "ingested": len(batch.logs)})
+
+
 @router.get("/recent")
 async def get_recent_errors(limit: int = 50, offset: int = 0):
     """Return paginated client errors (newest first)."""

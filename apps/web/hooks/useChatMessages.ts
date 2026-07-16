@@ -8,6 +8,9 @@ import {
   exportConversationAsMarkdown, copyConversationAsMarkdown,
   type ChatMessage, type ImageAttachment, type ChatSession,
 } from '@/lib/chat-utils'
+import { logger } from '@/lib/dev-log'
+
+const _log = logger.child('chat-messages')
 import { getErrorInfo } from '@/components/chat/ErrorBanner'
 import { chatController } from '@/lib/chat-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
@@ -179,7 +182,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
         if (data.done) break
       }
     } catch (err) {
-      console.error('Regenerate error:', err)
+      _log.error('Regenerate error', { exception: String(err) })
     } finally {
       setLoading(false)
       storeSessionContext(sessionIdRef.current, messagesRef.current)

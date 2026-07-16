@@ -5,7 +5,7 @@ Uses ModelsController for business logic
 import asyncio
 import os
 import logging
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
@@ -14,6 +14,7 @@ from pathlib import Path
 from schemas.models import ModelInfo, LoadModelRequest, LoadModelResponse, ModelStatus
 from schemas.common import StandardResponse, success_response, error_response
 from controllers.models import get_models_controller
+from infrastructure.auth import require_auth_if_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +161,10 @@ def _model_display_name(model_id: str) -> str:
 
 
 @router.post("/load", response_model=LoadModelResponse)
-async def load_model(req: LoadModelRequest):
+async def load_model(
+    req: LoadModelRequest,
+    auth_user: dict = Depends(require_auth_if_enabled),
+):
     """Load a model"""
     ctrl = get_models_controller()
     result = ctrl.load_model(req.model_id, req.device.value, req.quantize)
@@ -177,7 +181,7 @@ async def load_model(req: LoadModelRequest):
 
 
 @router.post("/unload")
-async def unload_model():
+async def unload_model(auth_user: dict = Depends(require_auth_if_enabled)):
     """Unload current model"""
     ctrl = get_models_controller()
     result = ctrl.unload_model()
@@ -624,7 +628,7 @@ async def quantize_model(req: QuantizeRequest):
 
 
 @router.post("/dequantize")
-async def dequantize_model():
+async def dequantize_model(auth_user: dict = Depends(require_auth_if_enabled)):
     """Reset quantized model back to float32 weights.
 
     Clears quantization state from all linear layers. The model

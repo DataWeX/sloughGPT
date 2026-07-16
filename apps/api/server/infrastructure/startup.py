@@ -293,11 +293,17 @@ class StartupOrchestrator:
                         logger.warning("Failed to create InferenceEngine: %s", e, extra={"tag": "START"})
 
                 slonet_id = cfg.autoload_model if cfg.autoload_model else None
+                # Pass pre-loaded provider to avoid duplicate SLNC load (~6s)
+                preloaded = getattr(server_state, 'provider', None)
+                # When preloaded provider exists, don't pass hf_model — the
+                # SloNet model is not an HF model; passing it creates a ghost
+                # hf-default provider that wraps the wrong model type.
                 setup_providers(
-                    hf_model=server_state.model,
-                    hf_tokenizer=server_state.tokenizer,
+                    hf_model=None if preloaded else server_state.model,
+                    hf_tokenizer=None if preloaded else server_state.tokenizer,
                     hf_model_id=server_state.model_type,
-                    slonet_hf_id=slonet_id,
+                    slonet_hf_id=None,
+                    slonet_provider=preloaded,
                     inference_engine=inference_engine,
                     model_registry=registry,
                     quantize=cfg.quantize_slonet,
@@ -441,9 +447,9 @@ class StartupOrchestrator:
         """Validate and warm the config system."""
         STARTUP_PHASE.update(phase="config", step=3, total=9, message="Validating config...")
         try:
-            from domains.infrastructure.config import Config
-            cfg = Config.get_instance()
-            _ = cfg.get("app.name", "sloughgpt")
+            from domains.infrastructure.config import get_config
+            cfg = get_config()
+            _ = cfg.model.name
             logger.info("Config system validated", extra={"tag": "START"})
         except Exception as e:
             logger.warning("Config system init: %s", e, extra={"tag": "START"})
@@ -557,5 +563,8 @@ def _autoload_model(cfg: ServerConfig):
     server_state.model_type = result.model_id
     if result.tokenizer is not None:
         server_state.tokenizer = result.tokenizer
+    # Store the provider to avoid re-loading SLNC in setup_providers
+    if result.provider is not None:
+        server_state.provider = result.provider
 
     logger.info("Autoload ok: %s (%s)", cfg.autoload_model, result.model_type, extra={"tag": "START"})

@@ -23,6 +23,7 @@ export interface HealthSummaryData {
   status: string
   summary: string
   model_loaded: boolean
+  model_loading: boolean
   model_type: string | null
   soul: string | null
   uptime_seconds: number
@@ -95,6 +96,7 @@ if (typeof window !== 'undefined') {
           status: live.health.health_status,
           summary: live.health.health_summary,
           model_loaded: live.health.model_loaded,
+          model_loading: live.health.model_loading,
           model_type: live.health.model_type,
           soul: live.health.soul,
           uptime_seconds: live.health.uptime_seconds,

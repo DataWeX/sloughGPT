@@ -211,8 +211,8 @@ def check_environment():
     print("\n[Environment Variables]")
 
     env_vars = [
-        "MAN_API_KEY",
-        "MAN_JWT_SECRET",
+        "SLO_API_KEY",
+        "SLO_JWT_SECRET",
         "MODEL_PATH",
         "CUDA_VISIBLE_DEVICES",
     ]

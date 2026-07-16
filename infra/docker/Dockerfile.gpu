@@ -23,9 +23,9 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 COPY apps/api/server/requirements.txt /tmp/requirements-api.txt
 RUN pip install --upgrade pip && \
-    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 && \  # Optional: core server runs without torch
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 && \
     pip install --no-cache-dir -r /tmp/requirements-api.txt && \
-    pip install --no-cache-dir scipy psutil sentence-transformers chromadb
+    pip install --no-cache-dir scipy psutil
 
 COPY apps/api/server /app/apps/api/server
 COPY packages/core-py /app/packages/core-py
@@ -34,7 +34,7 @@ COPY pyproject.toml README.md LICENSE /app/
 
 RUN mkdir -p /app/models /app/datasets /app/data /app/logs /app/cache && chmod -R 755 /app
 
-ENV MAN_ENV=production
+ENV SLO_ENV=production
 ENV CUDA_VISIBLE_DEVICES=0
 
 EXPOSE 8000

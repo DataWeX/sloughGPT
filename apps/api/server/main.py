@@ -67,13 +67,17 @@ _log_level_name = os.environ.get("SLO_LOG_LEVEL", "INFO").upper()
 _log_level = getattr(LogLevel, _log_level_name, LogLevel.INFO)
 _log_format = os.environ.get("SLO_LOG_FORMAT", "human").lower()  # "human" or "json"
 
-_console_logger = ConsoleLogger("man", level=_log_level, format=_log_format)
+_console_logger = ConsoleLogger("slo", level=_log_level, format=_log_format)
 set_global(_console_logger)
 
 _bridge = BridgeHandler(_console_logger)
 _bridge.setLevel(getattr(logging, _log_level_name, logging.INFO))
 logging.root.addHandler(_bridge)
 logging.root.setLevel(getattr(logging, _log_level_name, logging.INFO))
+
+# ── Suppress noisy third-party loggers ────────────────────────────────
+for _noisy in ("httpx", "httpcore", "uvicorn.access", "urllib3"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 logger = logging.getLogger("slo")
 
@@ -167,7 +171,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=os.environ.get("SLO_CORS_ORIGINS", "http://localhost:3000,http://localhost:8000").split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -621,7 +625,7 @@ if __name__ == "__main__":
             stderr=sp.DEVNULL,
             start_new_session=True,
         )
-        print(f"Server started as daemon (PID {proc.pid})")
+        logger.info("Server started as daemon (PID %s)", proc.pid)
         sys.exit(0)
 
     # Kill orphan processes on target port to avoid port conflicts

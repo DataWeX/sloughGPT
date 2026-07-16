@@ -44,14 +44,24 @@ def _check_api_ready(port: int) -> bool:
         return False
 
 
-def _read_stream(stream, lines: deque, stop: threading.Event):
-    """Read lines from a subprocess stream into a deque until stop is set."""
+def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True):
+    """Read lines from a subprocess stream into a deque until stop is set.
+
+    Args:
+        stream: subprocess stdout/stderr pipe.
+        lines: deque to accumulate lines (for later inspection on failure).
+        stop: threading.Event to signal shutdown.
+        echo: if True, print each line to stdout in real-time.
+    """
     try:
         for line in iter(stream.readline, ""):
             if stop.is_set():
                 break
             if line:
-                lines.append(line.rstrip("\n\r"))
+                clean = line.rstrip("\n\r")
+                lines.append(clean)
+                if echo:
+                    print(f"  \033[90m│\033[0m {clean}", flush=True)
             else:
                 break
     except ValueError:

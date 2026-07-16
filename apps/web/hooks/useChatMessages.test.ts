@@ -42,7 +42,10 @@ vi.mock('@/lib/db', () => ({ chatDB: { loadSessions: vi.fn(() => Promise.resolve
 
 vi.mock('@/lib/error-store', () => ({ useErrorStore: { getState: vi.fn(() => ({ addError: vi.fn() })) } }))
 
-vi.mock('@/lib/dev-log', () => ({ devDebug: vi.fn() }))
+vi.mock('@/lib/dev-log', () => ({
+  devDebug: vi.fn(),
+  logger: { child: vi.fn(() => ({ info: vi.fn(), warning: vi.fn(), error: vi.fn() })) },
+}))
 
 
 

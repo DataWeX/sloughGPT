@@ -1,7 +1,7 @@
 """
 System Router - Host metrics, system information, lifecycle status, and output stream.
 """
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 import asyncio
 import psutil
@@ -9,6 +9,7 @@ import platform
 import time
 
 from schemas.common import success_response
+from infrastructure.auth import require_auth_if_enabled
 
 router = APIRouter(prefix="/system", tags=["system"])
 
@@ -177,7 +178,10 @@ async def get_executor_job_result(job_id: str):
 
 
 @router.post("/executor/purge")
-async def purge_executor_jobs(max_age_s: float = Query(3600.0, gt=0)):
+async def purge_executor_jobs(
+    max_age_s: float = Query(3600.0, gt=0),
+    auth_user: dict = Depends(require_auth_if_enabled),
+):
     """Remove completed/failed/cancelled jobs older than max_age_s."""
     from domains.training.executor import _instance
     if _instance is None:
@@ -187,7 +191,7 @@ async def purge_executor_jobs(max_age_s: float = Query(3600.0, gt=0)):
 
 
 @router.post("/executor/{job_id}/cancel")
-async def cancel_executor_job(job_id: str):
+async def cancel_executor_job(job_id: str, auth_user: dict = Depends(require_auth_if_enabled)):
     """Request cancellation for a training job.
 
     For queued jobs the future is cancelled outright.  For running jobs

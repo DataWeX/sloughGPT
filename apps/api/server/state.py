@@ -20,17 +20,16 @@ from domains.infrastructure.server_state import AtomicRef
 # attribute is *not* found via normal lookup), so we store refs behind _refs.
 _refs: dict[str, AtomicRef] = {}
 _ATOMIC_NAMES = frozenset({
-    "model", "tokenizer", "model_type", "checkpoint",
+    "model", "tokenizer", "model_type", "checkpoint", "provider",
     "soul_engine", "current_soul", "gen_config", "model_request_logger",
-    "autoload_skipped", "training_active",
+    "autoload_skipped", "training_active", "_self_train_proc",
+    "torch_available",
 })
 
 for _name in _ATOMIC_NAMES:
     _refs[_name] = AtomicRef(None, _name)
 
-# Plain fields (set once at startup)
-torch_available: bool = False
-_self_train_proc: Optional[Any] = None
+# Plain fields (set once at startup) — handled by AtomicRef above
 
 
 def __getattr__(name: str) -> Any:

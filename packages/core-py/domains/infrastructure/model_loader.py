@@ -339,33 +339,27 @@ class ModelLoader:
         return "cpu"
 
     def _verify_model(self, result: LoadResult) -> bool:
-        """Run test inference to verify model works.
+        """Run lightweight verification to confirm model loads correctly.
 
-        Returns True if verification passes.
+        Uses a single forward pass (not autoregressive generation) to verify
+        the model processes input without errors. ~1-2s vs ~12s for generate().
         """
         try:
-            # Create test input
-            test_input = np.array([[1, 2, 3, 4, 5]], dtype=np.int64)
-
-            # Run inference via provider
             if result.model_type == "slonet":
-                # SloNetChatProvider.generate() expects a string prompt
-                output = result.provider.generate("Hello", max_new_tokens=5)
+                # SloNet: single forward pass on raw model (skip tokenizer/generate)
+                import numpy as _np
+                test_ids = _np.array([[1, 2, 3]], dtype=_np.int64)
+                output = result.model.forward(test_ids)
             else:
-                # For HF models, use the model directly
+                # HF model: single forward pass (no generation loop)
                 import torch
-                input_tensor = torch.tensor(test_input, dtype=torch.long)
+                test_input = torch.tensor([[1, 2, 3]], dtype=torch.long)
                 if hasattr(result.model, "device"):
-                    input_tensor = input_tensor.to(result.model.device)
+                    test_input = test_input.to(result.model.device)
                 with torch.no_grad():
-                    output = result.model.generate(
-                        input_tensor,
-                        max_new_tokens=10,
-                        attention_mask=torch.ones_like(input_tensor),
-                    )
+                    output = result.model(test_input)
 
-            # Check output
-            if output is None or (hasattr(output, "shape") and output.shape[-1] == 0):
+            if output is None:
                 result.success = False
                 result.error = "Model produced empty output"
                 return False

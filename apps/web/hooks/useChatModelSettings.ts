@@ -7,6 +7,9 @@ import { soulsController, type Soul } from '@/lib/souls-controller'
 import { startDownload, getDownloadStatus } from '@/lib/download-controller'
 import { sessionStore } from '@/lib/session-store'
 import type { DownloadProgressInfo } from '@/lib/chat-utils'
+import { logger } from '@/lib/dev-log'
+
+const _log = logger.child('chat-model-settings')
 
 interface LearnerInfo {
   total_tokens_ingested: number
@@ -110,7 +113,7 @@ export function useChatModelSettings(
 
   const handleSelectSoul = useCallback((s: Soul) => {
     setCurrentSoul(s)
-    soulsController.switch(s.name).catch(e => console.error('Failed to switch soul:', e))
+    soulsController.switch(s.name).catch(e => _log.error('Failed to switch soul', { exception: String(e) }))
   }, [])
 
   const handleUnloadModel = useCallback(async () => {
@@ -161,7 +164,7 @@ export function useChatModelSettings(
 
       if (healthModel) setModel(healthModel)
     } catch (err) {
-      console.error('Failed to fetch initial model data:', err)
+      _log.error('Failed to fetch initial model data', { exception: String(err) })
     }
   }, [setAvailableModels, setModelInfoMap, setTemperature, setMaxTokens, setSouls, setCurrentSoul, setCheckpoints, setModel])
 

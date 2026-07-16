@@ -66,6 +66,7 @@ class AuthConfig(BaseModel):
     jwt_algorithm: str = "HS256"
     jwt_expiration_hours: int = 24
     api_keys_enabled: bool = False
+    auth_required: bool = False
 
 
 class TrackingConfig(BaseModel):

@@ -33,7 +33,7 @@ class Printer(CLILogger):
     Adds: key_value, print_json, blank, command.
     """
 
-    def __init__(self, name: str = "man.cli", level: LogLevel = LogLevel.DEBUG):
+    def __init__(self, name: str = "slo.cli", level: LogLevel = LogLevel.DEBUG):
         super().__init__(name=name, level=level)
         # Printer exposes width as a public attribute (used by commands)
         try:

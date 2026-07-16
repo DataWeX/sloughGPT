@@ -122,13 +122,13 @@ describe('WebLogger', () => {
   })
 
   it('exports a singleton logger', () => {
-    expect(logger.name).toBe('man.web')
+    expect(logger.name).toBe('slo.web')
   })
 })
 
 describe('devDebug', () => {
   it('calls console.debug in development', () => {
     devDebug('test', 123)
-    expect(console.debug).toHaveBeenCalledWith('[man]', 'test', 123)
+    expect(console.debug).toHaveBeenCalledWith('[slo]', 'test', 123)
   })
 })

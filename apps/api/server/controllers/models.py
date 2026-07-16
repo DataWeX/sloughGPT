@@ -448,6 +448,7 @@ class ModelsController:
         Returns list of dicts with model_id, parameters (approx), vocab_size.
         Falls back to curated list if the API is unreachable.
         Results are cached for 5 minutes to avoid repeated API calls.
+        Thread-safe: concurrent callers block until the first fetch completes.
         """
         global _hf_models_cache, _hf_cache_timestamp
 
@@ -457,52 +458,54 @@ class ModelsController:
                 if _hf_models_cache is not None and (time.monotonic() - _hf_cache_timestamp) < _HF_CACHE_TTL:
                     return _hf_models_cache
 
-        import os
-        token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
-        headers = {"Authorization": f"Bearer {token}"} if token else {}
-        search = q or ""
-        try:
-            import requests
-            url = "https://huggingface.co/api/models"
-            params = {
-                "search": search,
-                "task": "text-generation",
-                "sort": "downloads",
-                "direction": -1,
-                "limit": 50,
-            }
-            resp = requests.get(url, params=params, headers=headers, timeout=5)
-            if resp.status_code == 200:
-                data = resp.json()
-                models = []
-                for m in data:
-                    if not isinstance(m, dict) or not m.get("id"):
-                        continue
-                    pid = m.get("id")
-                    if m.get("pipeline_tag") not in ("text-generation", "text2text-generation"):
-                        continue
-                    config = m.get("config") or {}
-                    params = m.get("num_parameters", 0) or self._estimate_params(pid)
-                    vocab_size = (config.get("vocab_size") if isinstance(config, dict) else None) or 0
-                    models.append({
-                        "model_id": pid,
-                        "parameters": params,
-                        "vocab_size": vocab_size,
-                    })
-                if models:
-                    if q is None:
-                        with _hf_cache_lock:
-                            _hf_models_cache = models
-                            _hf_cache_timestamp = time.monotonic()
-                    return models
-        except Exception:
-            logger.debug("HF Hub API unreachable, using cached or curated model list")
+        # Hold lock during fetch to prevent thundering herd (3+ parallel calls)
+        with _hf_cache_lock:
+            # Double-check after acquiring lock (another thread may have populated)
+            if q is None and _hf_models_cache is not None and (time.monotonic() - _hf_cache_timestamp) < _HF_CACHE_TTL:
+                return _hf_models_cache
 
-        # Return cached if available (even if stale)
-        if q is None:
-            with _hf_cache_lock:
-                if _hf_models_cache is not None:
-                    return _hf_models_cache
+            import os
+            token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
+            headers = {"Authorization": f"Bearer {token}"} if token else {}
+            search = q or ""
+            try:
+                import requests
+                url = "https://huggingface.co/api/models"
+                params = {
+                    "search": search,
+                    "task": "text-generation",
+                    "sort": "downloads",
+                    "direction": -1,
+                    "limit": 50,
+                }
+                resp = requests.get(url, params=params, headers=headers, timeout=5)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    models = []
+                    for m in data:
+                        if not isinstance(m, dict) or not m.get("id"):
+                            continue
+                        pid = m.get("id")
+                        if m.get("pipeline_tag") not in ("text-generation", "text2text-generation"):
+                            continue
+                        config = m.get("config") or {}
+                        params = m.get("num_parameters", 0) or self._estimate_params(pid)
+                        vocab_size = (config.get("vocab_size") if isinstance(config, dict) else None) or 0
+                        models.append({
+                            "model_id": pid,
+                            "parameters": params,
+                            "vocab_size": vocab_size,
+                        })
+                    if models and q is None:
+                        _hf_models_cache = models
+                        _hf_cache_timestamp = time.monotonic()
+                    return models
+            except Exception:
+                logger.debug("HF Hub API unreachable, using cached or curated model list")
+
+            # Return cached if available (even if stale)
+            if q is None and _hf_models_cache is not None:
+                return _hf_models_cache
 
         # Fallback: curated list sorted by capability (chat-tuned first)
         curated = [

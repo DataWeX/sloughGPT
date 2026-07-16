@@ -1,5 +1,5 @@
 # Dev profile — overrides defaults for local development
-# Activate by setting MAN_ENV=dev
+# Activate by setting SLO_ENV=dev
 
 server:
   log_level: "DEBUG"

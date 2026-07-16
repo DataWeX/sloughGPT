@@ -11,10 +11,16 @@ Priority (always live data, never hardcoded):
 """
 
 import logging
+import time
+import threading
 from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger("slo.infrastructure.model_size")
+
+_SIZE_CACHE_TTL = 300  # 5 minutes
+_size_cache: dict[str, tuple[float, Optional[float]]] = {}
+_size_cache_lock = threading.Lock()
 
 try:
     from downcraft.hf_hub import (
@@ -74,15 +80,32 @@ def compute_model_size_gb(model_id: str) -> Optional[float]:
     1. Local HF cache — sum of weight files on disk, only if complete
     2. HuggingFace Hub API — sum of ``.safetensors`` + ``.bin`` sibling file sizes
     3. Returns ``None`` when size cannot be determined
+
+    Results are cached for 5 minutes to avoid repeated API calls.
     """
+    now = time.monotonic()
+    with _size_cache_lock:
+        if model_id in _size_cache:
+            ts, val = _size_cache[model_id]
+            if now - ts < _SIZE_CACHE_TTL:
+                return val
+
     # 1. Local HF cache — only if download is truly complete
     if is_download_complete(model_id):
         cache_size = _sum_weight_files(get_cache_dir(model_id))
         if cache_size is not None:
+            with _size_cache_lock:
+                _size_cache[model_id] = (now, cache_size)
             return cache_size
 
     # 2. HuggingFace Hub API — real file sizes from repo sibling listing
-    return _get_hub_file_size_gb(model_id)
+    result = _get_hub_file_size_gb(model_id)
+    with _size_cache_lock:
+        _size_cache[model_id] = (now, result)
+    return result
+
+
+_cached_check_cache: dict[str, tuple[float, bool]] = {}
 
 
 def is_model_cached(model_id: str, deep_check: bool = False) -> bool:
@@ -92,8 +115,23 @@ def is_model_cached(model_id: str, deep_check: bool = False) -> bool:
         model_id: HuggingFace model ID
         deep_check: If True, verifies every expected weight file exists
             via Hub API (slower but more accurate).
+
+    Results are cached for 5 minutes (unless deep_check is requested).
     """
-    return is_download_complete(model_id, deep_check=deep_check)
+    if deep_check:
+        return is_download_complete(model_id, deep_check=True)
+
+    now = time.monotonic()
+    with _size_cache_lock:
+        if model_id in _cached_check_cache:
+            ts, val = _cached_check_cache[model_id]
+            if now - ts < _SIZE_CACHE_TTL:
+                return val
+
+    result = is_download_complete(model_id)
+    with _size_cache_lock:
+        _cached_check_cache[model_id] = (now, result)
+    return result
 
 
 def format_size_gb(size_gb: Optional[float], decimals: int = 2) -> str:

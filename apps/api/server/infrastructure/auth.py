@@ -215,3 +215,25 @@ def get_audit_logger() -> AuditLogger:
     if _audit_logger_instance is None:
         _audit_logger_instance = AuditLogger()
     return _audit_logger_instance
+
+
+async def require_auth_if_enabled(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_security),
+) -> Optional[dict]:
+    """FastAPI dependency — enforces auth only when ``SLO_AUTH_REQUIRED=true``.
+
+    When disabled, returns None (anonymous). When enabled, validates bearer token.
+
+    Returns:
+        Decoded token payload, or None if auth is disabled.
+    """
+    import os
+    if os.environ.get("SLO_AUTH_REQUIRED", "false").lower() not in ("true", "1", "yes"):
+        return None
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization required (set SLO_AUTH_REQUIRED=false to disable)",
+        )
+    return get_jwt_auth().verify_token(credentials.credentials)
