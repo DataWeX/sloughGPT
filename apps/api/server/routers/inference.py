@@ -9,6 +9,7 @@ from pathlib import Path
 import json
 import logging
 import threading
+import contextlib
 try:
     import torch
 except ImportError:
@@ -44,6 +45,8 @@ from threading import Thread
 
 router = APIRouter(prefix="", tags=["inference"])
 
+_BG_TASKS: set = set()
+
 _SESSIONS_DIR = Path(__file__).parent.parent.parent.parent / "data" / "chat_sessions"
 _SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -77,6 +80,14 @@ _session_cache_ttl = 2.0  # seconds
 
 # In-memory session cache for hot path — avoids sync disk I/O on every chat message
 _session_memory_cache: dict[str, dict] = {}
+_SESSION_CACHE_MAX = 500
+
+def _session_cache_put(session_id: str, data: dict) -> None:
+    """Cache session data with LRU eviction."""
+    if len(_session_memory_cache) >= _SESSION_CACHE_MAX and session_id not in _session_memory_cache:
+        oldest = next(iter(_session_memory_cache))
+        del _session_memory_cache[oldest]
+    _session_memory_cache[session_id] = data
 _session_dirty: set[str] = set()
 
 # Lazy import to avoid circular deps
@@ -177,7 +188,7 @@ def _get_session(session_id: str) -> dict:
     if session_id in _session_memory_cache:
         return _session_memory_cache[session_id]
     data = _load_session_from_disk(session_id)
-    _session_memory_cache[session_id] = data
+    _session_cache_put(session_id, data)
     return data
 
 
@@ -186,7 +197,7 @@ def _save_session(session_id: str, data: dict) -> None:
     global _session_cache
     _session_cache = None  # invalidate session list cache
     data["updated_at"] = datetime.datetime.now().isoformat()
-    _session_memory_cache[session_id] = data
+    _session_cache_put(session_id, data)
     _session_dirty.add(session_id)
 
 
@@ -752,7 +763,8 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
 
                 def run_generation():
                     try:
-                        with torch.no_grad():
+                        ctx = torch.no_grad() if torch is not None else contextlib.nullcontext()
+                        with ctx:
                             ctrl._hf_model.generate(
                                 input_ids=input_ids_tensor,
                                 max_new_tokens=req.max_tokens,
@@ -857,7 +869,9 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
             # Auto-extract entities and relationships into knowledge base
             try:
                 from domains.learner.entity_extractor import extract_and_store
-                asyncio.create_task(extract_and_store(user_msg or "", full_response))
+                task = asyncio.create_task(extract_and_store(user_msg or "", full_response))
+                _BG_TASKS.add(task)
+                task.add_done_callback(_BG_TASKS.discard)
             except Exception as e:
                 logger.debug("Entity extraction failed: %s", e)
 
@@ -1041,7 +1055,9 @@ async def send_voice_message(
         raise HTTPException(status_code=400, detail="Only audio files accepted")
 
     msg_id = str(uuid.uuid4())
-    session_msg_dir = _VOICE_DIR / session_id
+    session_msg_dir = (_VOICE_DIR / session_id).resolve()
+    if not str(session_msg_dir).startswith(str(_VOICE_DIR.resolve())):
+        raise HTTPException(status_code=400, detail="Invalid session ID")
     session_msg_dir.mkdir(parents=True, exist_ok=True)
     ext = Path(file.filename or "audio.m4a").suffix or ".m4a"
     audio_path = session_msg_dir / f"{msg_id}{ext}"
@@ -1070,7 +1086,10 @@ async def send_voice_message(
 @router.get("/chat/audio/{session_id}/{message_id}")
 async def get_voice_audio(session_id: str, message_id: str):
     """Serve a stored voice message audio file."""
-    audio_path = _VOICE_DIR / session_id / message_id
+    base = _VOICE_DIR.resolve()
+    audio_path = (_VOICE_DIR / session_id / message_id).resolve()
+    if not str(audio_path).startswith(str(base)):
+        raise HTTPException(status_code=403, detail="Invalid path")
     if not audio_path.exists():
         # Try with common extensions
         for ext in [".m4a", ".wav", ".mp3", ".ogg", ".webm"]:
