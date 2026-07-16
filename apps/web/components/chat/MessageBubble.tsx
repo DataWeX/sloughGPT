@@ -70,16 +70,7 @@ export const MessageBubble = memo(function MessageBubble({
 
   useEffect(() => { setIsVisible(true) }, [])
 
-  const lastScrollRef = useRef(0)
-  useEffect(() => {
-    if (isStreaming && bubbleRef.current) {
-      const now = Date.now()
-      if (now - lastScrollRef.current > 200) {
-        lastScrollRef.current = now
-        bubbleRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
-      }
-    }
-  }, [content, isStreaming])
+
 
   const hasContent = content && content.trim().length > 0
   const showActions = role === 'assistant' && hasContent && !isStreaming && !isError

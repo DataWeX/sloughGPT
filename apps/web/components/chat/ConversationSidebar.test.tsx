@@ -150,6 +150,7 @@ describe('ConversationSidebar', () => {
   })
 
   it('calls onDeleteConversation when delete button clicked', () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     const conversations = [createConv('1')]
     render(
       <ConversationSidebar
@@ -161,6 +162,23 @@ describe('ConversationSidebar', () => {
     const deleteBtn = screen.getByLabelText('Delete Conversation 1')
     fireEvent.click(deleteBtn)
     expect(onDeleteConversation).toHaveBeenCalledWith('1')
+    confirmSpy.mockRestore()
+  })
+
+  it('does not call onDeleteConversation when confirm cancelled', () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const conversations = [createConv('1')]
+    render(
+      <ConversationSidebar
+        {...defaultProps}
+        conversations={conversations}
+        onDeleteConversation={onDeleteConversation}
+      />
+    )
+    const deleteBtn = screen.getByLabelText('Delete Conversation 1')
+    fireEvent.click(deleteBtn)
+    expect(onDeleteConversation).not.toHaveBeenCalled()
+    confirmSpy.mockRestore()
   })
 
   it('shows mobile drawer when open is true', () => {

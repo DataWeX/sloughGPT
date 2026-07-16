@@ -72,13 +72,7 @@ export function useChatSessions(opts: {
       sessionController.update(sessionId, { name: sessionName }).catch(err => addGlobalError(err, 'Chat:SessionUpdate'))
     }
     const newLocal = await chatDB.loadSessions()
-    setSessions(prev => {
-      const merged = [...(prev || [])]
-      for (const p of prev || []) {
-        if (!merged.find(m => m.id === p.id) && p.id) merged.push(p)
-      }
-      return merged.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
-    })
+    setSessions(newLocal)
   }, [])
 
   const loadSession = useCallback(async (sessionId: string) => {

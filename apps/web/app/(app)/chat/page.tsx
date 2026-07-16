@@ -230,8 +230,7 @@ export default function ChatPage() {
   }, [fetchStats, fetchAdapterStats, health, model, agents])
 
   useEffect(() => {
-    apiPost('/vector/init', { provider: 'chromadb', dimension: 384 })
-      .catch((err) => addGlobalError(err, 'Chat:VectorInit'))
+    apiPost('/vector/init', { provider: 'chromadb', dimension: 384 }).catch(() => {})
   }, [])
 
   // ── Flyweights: clearChat / selectAgent with toast ────────────────────────

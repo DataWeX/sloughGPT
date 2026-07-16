@@ -88,6 +88,9 @@ function SidebarContent({
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
+    const conv = sorted.find(c => c.id === id)
+    const name = conv?.name || 'this conversation'
+    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return
     onDeleteConversation?.(id)
   }
 

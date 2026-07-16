@@ -37,6 +37,12 @@ export function KnowledgeTab({
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
+    return () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
+    }
+  }, [])
+
+  useEffect(() => {
     let cancelled = false
     import('@/lib/knowledge-controller').then(({ knowledgeController }) => {
       knowledgeController.list().then(backendItems => {
