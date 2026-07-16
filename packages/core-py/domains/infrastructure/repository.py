@@ -243,8 +243,10 @@ class FileRepository(Generic[T]):
         try:
             if path.exists():
                 path.unlink()
+                self.invalidate(key)
+                return True
             self.invalidate(key)
-            return True
+            return False
         except Exception:
             logger.exception("Failed to delete %s", key, extra={"tag": "INFRA"})
             return False

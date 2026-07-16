@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 2316825 fix: P0 path traversal + P0 torch crash + session cache leak + fire-and-forget task
+No active task. Last commit: f5284cd fix: knowledge import crash, settings validation, health refresh, live status flash
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
