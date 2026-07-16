@@ -1,14 +1,13 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { Chip } from '@sloughgpt/strui'
 import { Textarea } from '@sloughgpt/strui'
 import { IconSend, IconBrain, IconCopy, IconX } from '@sloughgpt/strui'
 import { Spinner } from '@sloughgpt/strui'
-import { cn } from '@/lib/cn'
 import { generateController } from '@/lib/generate-controller'
 import { useToastStore } from '@/lib/toast-store'
 

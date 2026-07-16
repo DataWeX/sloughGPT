@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogPortal, DialogO
 import { Button } from '@sloughgpt/strui'
 import { IconTrash, IconPlus } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
+import { chatDB } from '@/lib/db'
 
 interface SystemPromptDialogProps {
   open: boolean
@@ -20,15 +21,13 @@ interface Preset {
 
 const STORAGE_KEY = 'chat:system_prompt_presets'
 
-function loadPresets(): Preset[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch { return [] }
+async function loadPresets(): Promise<Preset[]> {
+  const stored = await chatDB.getKV<Preset[]>(STORAGE_KEY)
+  return stored ?? []
 }
 
-function savePresets(presets: Preset[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(presets)) } catch {}
+async function savePresets(presets: Preset[]) {
+  await chatDB.setKV(STORAGE_KEY, presets)
 }
 
 const DEFAULTS: Preset[] = [
@@ -45,13 +44,14 @@ export function SystemPromptDialog({ open, onOpenChange, value, onSave }: System
   const [showSaveInput, setShowSaveInput] = useState(false)
 
   useEffect(() => {
-    const stored = loadPresets()
-    if (stored.length === 0) {
-      savePresets(DEFAULTS)
-      setPresets(DEFAULTS)
-    } else {
-      setPresets(stored)
-    }
+    loadPresets().then(stored => {
+      if (stored.length === 0) {
+        savePresets(DEFAULTS)
+        setPresets(DEFAULTS)
+      } else {
+        setPresets(stored)
+      }
+    })
   }, [])
 
   useEffect(() => {
@@ -72,20 +72,20 @@ export function SystemPromptDialog({ open, onOpenChange, value, onSave }: System
     setDraft(p.prompt)
   }, [])
 
-  const handleSaveAsPreset = () => {
+  const handleSaveAsPreset = async () => {
     const name = presetName.trim()
     if (!name || !draft.trim()) return
     const updated = [...presets.filter(p => p.name !== name), { name, prompt: draft }]
     setPresets(updated)
-    savePresets(updated)
+    await savePresets(updated)
     setPresetName('')
     setShowSaveInput(false)
   }
 
-  const handleDeletePreset = (name: string) => {
+  const handleDeletePreset = async (name: string) => {
     const updated = presets.filter(p => p.name !== name)
     setPresets(updated)
-    savePresets(updated)
+    await savePresets(updated)
   }
 
   const hasUnsavedDraft = draft !== value

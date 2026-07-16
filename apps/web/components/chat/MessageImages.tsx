@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { cn } from '@/lib/cn'
+import { cn } from '@sloughgpt/strui'
 import { ImageLightbox } from './ImageLightbox'
 import type { ImageAttachment } from './ImageUpload'
 

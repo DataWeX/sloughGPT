@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { cn } from '@/lib/cn'
-import { Button } from '@sloughgpt/strui'
+import { cn, Button } from '@sloughgpt/strui'
 import { IconStar, IconTrash, IconX } from '@sloughgpt/strui'
 import type { BookmarkedMessage } from '@/hooks/useChatBookmarks'
 

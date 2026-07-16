@@ -3,9 +3,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useLocale } from '@/hooks/useLocale'
-import { Chip } from '@sloughgpt/strui'
+import { cn, Chip } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
-import { cn } from '@/lib/cn'
 
 interface EmptyStateProps {
   hasModel: boolean

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, type ReactNode } from 'react'
-import { cn } from '@/lib/cn'
+import { cn } from '@sloughgpt/strui'
 
 interface ImageDropZoneProps {
   onImageDropped: (file: File) => void

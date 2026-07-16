@@ -1,12 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { Button } from '@sloughgpt/strui'
+import { cn, Button } from '@sloughgpt/strui'
 import { IconStar, IconPin, IconChat, IconTrash, IconEdit, IconDownload, IconMore, IconFolder } from '@sloughgpt/strui'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@sloughgpt/strui'
-import { cn } from '@/lib/cn'
 import { type Conversation } from '@/lib/session-controller'
 import { formatDate, truncateMessage } from '@/lib/conversations-utils'
 

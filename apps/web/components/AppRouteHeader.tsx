@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-import { cn } from '@/lib/cn'
+import { cn } from '@sloughgpt/strui'
 
 /** Standard title block for `AppRouteHeader` `left` slot (heading + optional muted line). */
 export function AppRouteHeaderLead({

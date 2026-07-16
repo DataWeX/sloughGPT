@@ -1,10 +1,9 @@
 'use client'
 
-import { Badge, Chip } from '@sloughgpt/strui'
+import { cn, Badge, Chip } from '@sloughgpt/strui'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
-import { cn } from '@/lib/cn'
 import type { Soul, Checkpoint } from '@/lib/souls-controller'
 
 interface PersonalitiesCardProps {

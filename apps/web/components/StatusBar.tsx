@@ -6,7 +6,7 @@ import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { soulsController } from '@/lib/souls-controller'
 import { useApiMonitor } from '@/lib/api-monitor-store'
 import { useErrorStore } from '@/lib/error-store'
-import { cn } from '@/lib/cn'
+import { cn } from '@sloughgpt/strui'
 import { deriveArchetype } from '@/components/souls/PersonalitySummary'
 import { getUnseenCount } from '@/components/WhatsNewDialog'
 

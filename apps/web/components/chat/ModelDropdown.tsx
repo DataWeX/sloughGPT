@@ -1,6 +1,6 @@
 'use client'
 
-import { IconChevronDown, IconCheck, IconRefresh } from '@sloughgpt/strui'
+import { cn, IconChevronDown, IconCheck, IconRefresh } from '@sloughgpt/strui'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,7 +8,6 @@ import {
   DropdownMenuTrigger,
 } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
-import { cn } from '@/lib/cn'
 import { useChatToolbarContext } from '@/contexts/ChatToolbarContext'
 
 interface ModelDropdownProps {

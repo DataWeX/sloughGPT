@@ -7,7 +7,7 @@ import type { ChatInputProps } from './ChatInput'
 import type { ChatMessage } from './types'
 import type { ToolCallEvent } from '@/lib/stream-chat-response'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
-import { cn } from '@/lib/cn'
+import { cn } from '@sloughgpt/strui'
 
 export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange' | 'onSend' | 'images' | 'onStop' | 'onAudioTranscript' | 'onGeneratedImage' | 'onPDFAnalysis' | 'onPDFError' | 'onExecuteCommand'> {
   messages: ChatMessage[]

@@ -71,12 +71,33 @@ interface PendingMessage {
   retries: number
 }
 
+interface Draft {
+  sessionId: string
+  text: string
+  updatedAt: number
+}
+
+interface KVEntry {
+  key: string
+  value: unknown
+}
+
+interface ErrorEntry {
+  id: string
+  message: string
+  stack?: string
+  timestamp: number
+}
+
 interface ManDB extends Dexie {
   sessions: Table<StoredChatSession, string>
   pendingMessages: Table<PendingMessage, string>
   knowledge: Table<KnowledgeItem, string>
   bookmarks: Table<BookmarkedMessage, string>
   prompts: Table<QuickPrompt, string>
+  drafts: Table<Draft, string>
+  kv: Table<KVEntry, string>
+  errors: Table<ErrorEntry, string>
 }
 
 const db = new Dexie('ManDB') as ManDB
@@ -92,6 +113,17 @@ db.version(2).stores({
   knowledge: 'id, timestamp',
   bookmarks: 'id, timestamp, role',
   prompts: 'id, name, category, createdAt',
+})
+
+db.version(3).stores({
+  sessions: 'id, name, updatedAt, synced',
+  pendingMessages: 'id, sessionId, createdAt',
+  knowledge: 'id, timestamp',
+  bookmarks: 'id, timestamp, role',
+  prompts: 'id, name, category, createdAt',
+  drafts: 'sessionId',
+  kv: 'key',
+  errors: 'id, timestamp',
 })
 
 function toStored(session: ChatSession): StoredChatSession {
@@ -251,5 +283,52 @@ export const chatDB = {
 
   async importPrompts(prompts: QuickPrompt[]): Promise<void> {
     await db.prompts.bulkPut(prompts)
+  },
+
+  async getDraft(sessionId: string): Promise<string> {
+    const draft = await db.drafts.get(sessionId)
+    return draft?.text ?? ''
+  },
+
+  async saveDraft(sessionId: string, text: string): Promise<void> {
+    if (!text) {
+      await db.drafts.delete(sessionId)
+    } else {
+      await db.drafts.put({ sessionId, text, updatedAt: Date.now() })
+    }
+  },
+
+  async deleteDraft(sessionId: string): Promise<void> {
+    await db.drafts.delete(sessionId)
+  },
+
+  async getKV<T = unknown>(key: string): Promise<T | undefined> {
+    const entry = await db.kv.get(key)
+    return entry?.value as T | undefined
+  },
+
+  async setKV(key: string, value: unknown): Promise<void> {
+    await db.kv.put({ key, value })
+  },
+
+  async deleteKV(key: string): Promise<void> {
+    await db.kv.delete(key)
+  },
+
+  async addError(message: string, stack?: string): Promise<void> {
+    await db.errors.put({
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      message,
+      stack,
+      timestamp: Date.now(),
+    })
+  },
+
+  async getErrors(limit = 20): Promise<ErrorEntry[]> {
+    return db.errors.orderBy('timestamp').reverse().limit(limit).toArray()
+  },
+
+  async clearErrors(): Promise<void> {
+    await db.errors.clear()
   },
 }

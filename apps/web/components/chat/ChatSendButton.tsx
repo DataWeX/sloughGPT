@@ -1,8 +1,7 @@
 'use client'
 
-import { Button } from '@sloughgpt/strui'
+import { cn, Button } from '@sloughgpt/strui'
 import { IconSend } from '@sloughgpt/strui'
-import { cn } from '@/lib/cn'
 
 interface ChatSendButtonProps {
   loading: boolean

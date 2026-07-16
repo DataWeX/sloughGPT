@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { IconX } from '@sloughgpt/strui'
-import { cn } from '@/lib/cn'
+import { cn, IconX } from '@sloughgpt/strui'
 
 export type ToastType = 'success' | 'error' | 'info'
 

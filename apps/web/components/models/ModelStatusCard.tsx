@@ -1,10 +1,9 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Chip } from '@sloughgpt/strui'
 import { KpiGrid, StatCard } from '@sloughgpt/strui'
 import { modelDisplayName } from '@/lib/inference-display'
-import { cn } from '@/lib/cn'
 
 interface ModelStatusCardProps {
   isOnline: boolean

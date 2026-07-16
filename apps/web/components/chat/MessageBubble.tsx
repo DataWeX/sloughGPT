@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useEffect, useRef, useState } from 'react'
-import { cn } from '@/lib/cn'
+import { cn } from '@sloughgpt/strui'
 import { MessageActions } from './MessageActions'
 import { MessageImages } from './MessageImages'
 import { MessageContent } from './MessageContent'

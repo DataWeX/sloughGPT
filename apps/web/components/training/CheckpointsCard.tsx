@@ -1,9 +1,8 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
-import { cn } from '@/lib/cn'
 import { useToastStore } from '@/lib/toast-store'
 import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
 

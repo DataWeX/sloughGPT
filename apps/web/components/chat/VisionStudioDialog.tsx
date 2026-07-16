@@ -1,11 +1,10 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@sloughgpt/strui'
+import { cn, Dialog, DialogContent, DialogHeader, DialogTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Tabs } from '@sloughgpt/strui'
 import { IconUpload, IconTrash, IconSend, IconDownload, IconX, IconRefresh } from '@sloughgpt/strui'
-import { cn } from '@/lib/cn'
 import { Skeleton } from '@sloughgpt/strui'
 
 interface VisionStudioDialogProps {

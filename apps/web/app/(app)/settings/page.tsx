@@ -18,6 +18,7 @@ import { Button } from '@sloughgpt/strui'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Textarea } from '@sloughgpt/strui'
 import { Slider } from '@sloughgpt/strui'
+import { StatusDot } from '@sloughgpt/strui'
 import { ToggleGroup as ToggleGroupRadix, ToggleGroupItem } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { useSettings, useUpdateSettings } from '@/lib/store'
@@ -54,14 +55,11 @@ export default function SettingsPage() {
   const { healthLegacy: apiHealth } = useLiveStatus()
 
   const clearChat = () => {
-    localStorage.removeItem('man_messages')
-    localStorage.removeItem('man_chat_sessions')
-    localStorage.removeItem('man_current_session')
+    localStorage.removeItem('man_current_conversation')
     addToast('Chat history cleared', 'success')
   }
 
   const resetAllSettings = () => {
-    localStorage.removeItem('man_settings')
     window.location.reload()
   }
 
@@ -204,11 +202,13 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-3 text-sm">
-                <div className={`w-2 h-2 rounded-full ${
-                  apiHealth === null ? 'bg-warning' :
-                  apiHealth === 'offline' ? 'bg-destructive' :
-                  'bg-success'
-                }`} />
+                <StatusDot
+                  tone={
+                    apiHealth === null ? 'warning' :
+                    apiHealth === 'offline' ? 'destructive' :
+                    'success'
+                  }
+                />
                 <span>{
                   apiHealth === null ? 'Connecting…' :
                   apiHealth === 'offline' ? 'Server offline' :

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { cn } from '@/lib/cn'
+import { cn } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
 import { sessionController } from '@/lib/session-controller'
 

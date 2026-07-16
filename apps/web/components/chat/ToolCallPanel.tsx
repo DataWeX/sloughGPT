@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { cn } from '@/lib/cn'
-import { Card } from '@sloughgpt/strui'
+import { cn, Card } from '@sloughgpt/strui'
 import type { ToolCallEvent } from '@/lib/stream-chat-response'
 
 interface ToolCallPanelProps {

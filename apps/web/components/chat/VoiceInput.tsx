@@ -1,11 +1,10 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { cn } from '@/lib/cn'
 import { multimodalController } from '@/lib/controllers'
 import { VoiceWaveform } from './VoiceWaveform'
 
-import { Button } from '@sloughgpt/strui'
+import { cn, Button } from '@sloughgpt/strui'
 
 interface SpeechRecognitionEvent extends Event {
   results: SpeechRecognitionResultList

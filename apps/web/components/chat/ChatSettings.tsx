@@ -1,6 +1,6 @@
 'use client'
 
-import { Button } from '@sloughgpt/strui'
+import { cn, Button } from '@sloughgpt/strui'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,7 +8,6 @@ import {
   DropdownMenuTrigger,
 } from '@sloughgpt/strui'
 import { IconChevronDown, IconCheck } from '@sloughgpt/strui'
-import { cn } from '@/lib/cn'
 
 interface ChatSettingsProps {
   isOpen: boolean

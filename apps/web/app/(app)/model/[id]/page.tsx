@@ -4,13 +4,12 @@ export const dynamic = 'force-dynamic'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
-import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
+import { StatCard, KpiGrid, Skeleton, KeyValueList, StatusDot, SettingsRow } from '@sloughgpt/strui'
 import { Slider } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash, IconCheck, IconCopy } from '@sloughgpt/strui'
-import { cn } from '@/lib/cn'
 import { modelController, type ModelInfo, type HealthStatus } from '@/lib/model-controller'
 import { benchmarkController, type BenchmarkResult } from '@/lib/benchmark-controller'
 import { generationConfigController, type GenerationConfig } from '@/lib/generation-config-controller'
@@ -207,17 +206,18 @@ export default function ModelDetailPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                  <DetailItem label="Model ID" value={modelId} />
-                  <DetailItem label="Source" value={model?.source || 'huggingface'} />
-                  <DetailItem label="Device" value={health?.device || '—'} />
-                  {model?.size_gb && <DetailItem label="Size" value={`${model.size_gb.toFixed(2)} GB`} />}
-                  {model?.cached !== undefined && <DetailItem label="Cached" value={model.cached ? 'Yes' : 'No'} />}
-                  {uptime && isLoaded && <DetailItem label="Uptime" value={uptime} />}
-                  {health?.inference_count !== undefined && (
-                    <DetailItem label="Inferences" value={health.inference_count.toString()} />
-                  )}
-                </div>
+                <KeyValueList
+                  dense
+                  items={[
+                    { label: 'Model ID', value: modelId, mono: true },
+                    { label: 'Source', value: model?.source || 'huggingface' },
+                    { label: 'Device', value: health?.device || '—' },
+                    ...(model?.size_gb ? [{ label: 'Size', value: `${model.size_gb.toFixed(2)} GB` }] : []),
+                    ...(model?.cached !== undefined ? [{ label: 'Cached', value: model.cached ? 'Yes' : 'No' }] : []),
+                    ...(uptime && isLoaded ? [{ label: 'Uptime', value: uptime }] : []),
+                    ...(health?.inference_count !== undefined ? [{ label: 'Inferences', value: health.inference_count.toString() }] : []),
+                  ]}
+                />
               </CardContent>
             </Card>
 
@@ -288,11 +288,27 @@ export default function ModelDetailPage() {
                     <Skeleton className="h-6" />
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    <ConfigSlider label="Temperature" value={genConfig.temperature} min={0} max={2} step={0.1} onChange={v => setGenConfig(p => ({ ...p, temperature: v }))} />
-                    <ConfigSlider label="Max tokens" value={genConfig.max_new_tokens} min={1} max={4096} step={1} onChange={v => setGenConfig(p => ({ ...p, max_new_tokens: v }))} />
-                    <ConfigSlider label="Top-p" value={genConfig.top_p ?? 1} min={0} max={1} step={0.05} onChange={v => setGenConfig(p => ({ ...p, top_p: v }))} />
-                    <ConfigSlider label="Top-k" value={genConfig.top_k ?? 50} min={0} max={200} step={1} onChange={v => setGenConfig(p => ({ ...p, top_k: v }))} />
+                  <div className="space-y-1 divide-y divide-border">
+                    <SettingsRow title="Temperature" control={<span className="text-xs font-mono tabular-nums w-12 text-right">{genConfig.temperature}</span>}>
+                    </SettingsRow>
+                    <div className="px-1 py-2">
+                      <Slider value={[genConfig.temperature]} onValueChange={([v]: number[]) => setGenConfig(p => ({ ...p, temperature: v }))} min={0} max={2} step={0.1} />
+                    </div>
+                    <SettingsRow title="Max tokens" control={<span className="text-xs font-mono tabular-nums w-12 text-right">{genConfig.max_new_tokens}</span>}>
+                    </SettingsRow>
+                    <div className="px-1 py-2">
+                      <Slider value={[genConfig.max_new_tokens]} onValueChange={([v]: number[]) => setGenConfig(p => ({ ...p, max_new_tokens: v }))} min={1} max={4096} step={1} />
+                    </div>
+                    <SettingsRow title="Top-p" control={<span className="text-xs font-mono tabular-nums w-12 text-right">{genConfig.top_p ?? 1}</span>}>
+                    </SettingsRow>
+                    <div className="px-1 py-2">
+                      <Slider value={[genConfig.top_p ?? 1]} onValueChange={([v]: number[]) => setGenConfig(p => ({ ...p, top_p: v }))} min={0} max={1} step={0.05} />
+                    </div>
+                    <SettingsRow title="Top-k" control={<span className="text-xs font-mono tabular-nums w-12 text-right">{genConfig.top_k ?? 50}</span>}>
+                    </SettingsRow>
+                    <div className="px-1 py-2">
+                      <Slider value={[genConfig.top_k ?? 50]} onValueChange={([v]: number[]) => setGenConfig(p => ({ ...p, top_k: v }))} min={0} max={200} step={1} />
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -304,26 +320,27 @@ export default function ModelDetailPage() {
                 <CardTitle className="text-base">Details</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-3">
-                  <DetailItem label="Type" value={model?.type || health?.model_type || modelId} />
-                  <DetailItem label="Source" value={model?.source || 'HuggingFace'} />
-                  {model?.params && <DetailItem label="Parameters (raw)" value={model.params} />}
-                  {health?.vocab_size && <DetailItem label="Vocabulary size" value={health.vocab_size.toLocaleString()} />}
-                  {health?.block_size && <DetailItem label="Block size (context)" value={health.block_size.toLocaleString()} />}
-                  {health?.soul_engine_active && (
-                    <DetailItem label="Soul engine" value={health.soul_name || 'active'} />
-                  )}
-                  {model?.tags && model.tags.length > 0 && (
-                    <div className="col-span-2">
-                      <span className="text-xs text-muted-foreground block mb-1">Tags</span>
-                      <div className="flex flex-wrap gap-1">
-                        {model.tags.map(t => (
-                          <Badge key={t} label={t} variant={"default" as const} size="sm" />
-                        ))}
-                      </div>
+                <KeyValueList
+                  dense
+                  items={[
+                    { label: 'Type', value: model?.type || health?.model_type || modelId },
+                    { label: 'Source', value: model?.source || 'HuggingFace' },
+                    ...(model?.params ? [{ label: 'Parameters (raw)', value: model.params }] : []),
+                    ...(health?.vocab_size ? [{ label: 'Vocabulary size', value: health.vocab_size.toLocaleString() }] : []),
+                    ...(health?.block_size ? [{ label: 'Block size (context)', value: health.block_size.toLocaleString() }] : []),
+                    ...(health?.soul_engine_active ? [{ label: 'Soul engine', value: health.soul_name || 'active' }] : []),
+                  ]}
+                />
+                {model?.tags && model.tags.length > 0 && (
+                  <div className="mt-3">
+                    <span className="text-xs text-muted-foreground block mb-1">Tags</span>
+                    <div className="flex flex-wrap gap-1">
+                      {model.tags.map(t => (
+                        <Badge key={t} label={t} variant={"default" as const} size="sm" />
+                      ))}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -348,34 +365,6 @@ export default function ModelDetailPage() {
           </>
         )}
       </div>
-    </div>
-  )
-}
-
-function DetailItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">{label}</p>
-      <p className="text-sm font-medium truncate">{value}</p>
-    </div>
-  )
-}
-
-function ConfigSlider({ label, value, min, max, step, onChange }: {
-  label: string
-  value: number
-  min: number
-  max: number
-  step: number
-  onChange: (v: number) => void
-}) {
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-1">
-        <label className="text-xs text-muted-foreground">{label}</label>
-        <span className="text-xs font-mono tabular-nums">{value}</span>
-      </div>
-      <Slider value={[value]} onValueChange={([v]: number[]) => onChange(v)} min={min} max={max} step={step} />
     </div>
   )
 }

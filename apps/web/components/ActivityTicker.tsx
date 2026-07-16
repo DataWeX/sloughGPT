@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useErrorStore } from '@/lib/error-store'
-import { cn } from '@/lib/cn'
+import { cn } from '@sloughgpt/strui'
 
 function timeAgo(ts: number): string {
   const s = Math.floor((Date.now() - ts) / 1000)

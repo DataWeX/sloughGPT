@@ -1,11 +1,10 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
 import { IconCheck, IconTrash } from '@sloughgpt/strui'
-import { cn } from '@/lib/cn'
 import type { BenchmarkResult } from '@/lib/benchmark-controller'
 
 interface ModelEntry {

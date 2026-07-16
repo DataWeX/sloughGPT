@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cn } from './cn'
+import { cn } from '@sloughgpt/strui'
 
 describe('cn', () => {
   it('joins single class', () => {

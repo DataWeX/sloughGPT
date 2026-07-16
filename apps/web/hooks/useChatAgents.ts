@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { agentsController } from '@/lib/agents-controller'
 import { AGENTS } from '@/lib/agents'
 import type { AgentDef } from '@/lib/agents'
+import { chatDB } from '@/lib/db'
 
 export function useChatAgents() {
   const [agents, setAgents] = useState<AgentDef[]>([])
@@ -16,7 +17,7 @@ export function useChatAgents() {
 
   const handleSelectAgent = useCallback((a: AgentDef) => {
     setCurrentAgent(a)
-    localStorage.setItem('man_current_agent', a.id)
+    chatDB.setKV('man_current_agent', a.id)
   }, [])
 
   const handleToggleKnowledge = useCallback(() => {
@@ -29,13 +30,13 @@ export function useChatAgents() {
       const localAgents = Object.values(AGENTS)
       const merged = data && data.length > 0 ? data : localAgents
       setAgents(merged)
-      const savedAgentId = localStorage.getItem('man_current_agent') || 'general'
+      const savedAgentId = await chatDB.getKV<string>('man_current_agent') || 'general'
       const found = merged.find(a => a.id === savedAgentId)
       if (found) setCurrentAgent(found)
     } catch {
       const localAgents = Object.values(AGENTS)
       setAgents(localAgents)
-      const savedAgentId = localStorage.getItem('man_current_agent') || 'general'
+      const savedAgentId = await chatDB.getKV<string>('man_current_agent') || 'general'
       const found = localAgents.find(a => a.id === savedAgentId)
       if (found) setCurrentAgent(found)
     }

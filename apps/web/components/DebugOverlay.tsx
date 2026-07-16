@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useErrorStore } from '@/lib/error-store'
 import { PUBLIC_API_URL } from '@/lib/config'
-import { cn } from '@/lib/cn'
+import { cn } from '@sloughgpt/strui'
 
 const API = PUBLIC_API_URL || 'http://localhost:8000'
 

@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: ba508ec fix: executor endpoint tests — add repo root + server dir to sys.path
+No active task. Last commit: 0a0cc34 feat(dexie): migrate localStorage to IndexedDB + icon consolidation + test fixes
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

@@ -1,5 +1,7 @@
 'use client'
 
+import { chatDB } from '@/lib/db'
+
 export const CURRENT_SESSION_KEY = 'man_current_conversation'
 
 export interface ChatMessage {
@@ -67,12 +69,12 @@ export function stripAssistantPrefix(text: string): string {
 
 const USER_ID_KEY = 'man_user_id'
 
-export function getOrCreateUserId(): string {
+export async function getOrCreateUserId(): Promise<string> {
   if (typeof window === 'undefined') return 'default'
-  const existing = localStorage.getItem(USER_ID_KEY)
+  const existing = await chatDB.getKV<string>(USER_ID_KEY)
   if (existing) return existing
   const id = `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-  localStorage.setItem(USER_ID_KEY, id)
+  await chatDB.setKV(USER_ID_KEY, id)
   return id
 }
 

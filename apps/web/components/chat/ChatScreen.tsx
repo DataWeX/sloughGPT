@@ -9,7 +9,7 @@ import { ToolCallPanel } from './ToolCallPanel'
 import type { ToolCallEvent } from '@/lib/stream-chat-response'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import type { ChatMessage } from './types'
-import { cn } from '@/lib/cn'
+import { cn } from '@sloughgpt/strui'
 
 function formatDateLabel(date: Date): string {
   const now = new Date()

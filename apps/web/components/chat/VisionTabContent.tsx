@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Button } from '@sloughgpt/strui'
-import { cn } from '@/lib/cn'
+import { cn, Button } from '@sloughgpt/strui'
 import { VisionStudioDialog } from './VisionStudioDialog'
 
 interface VisionTabContentProps {

@@ -1,12 +1,11 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Input } from '@sloughgpt/strui'
+import { cn, Input } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { IconSearch, IconX, IconMessage } from '@sloughgpt/strui'
 import { chatDB, type ChatSession, type ChatMessage as DBChatMessage } from '@/lib/db'
 import { sessionController, type SearchResult as RemoteSearchResult } from '@/lib/session-controller'
-import { cn } from '@/lib/cn'
 
 interface SearchResult {
   session: ChatSession

@@ -19,6 +19,7 @@ import { useErrorStore } from '@/lib/error-store'
 import { useToastStore } from '@/lib/toast-store'
 import { reportError } from '@/lib/error-reporter'
 import { logger } from '@/lib/dev-log'
+import { chatDB } from '@/lib/db'
 
 const _log = logger.child('error-lifecycle')
 
@@ -96,13 +97,9 @@ export function ErrorLifecycle() {
     console.error = (...args: unknown[]) => {
       const msg = args.map(a => String(a)).join(' ')
 
-      // Hydration errors: persist to localStorage + report to backend, suppress overlay
+      // Hydration errors: persist to Dexie + report to backend, suppress overlay
       if (isHydration(msg, args)) {
-        try {
-          const stored = JSON.parse(localStorage.getItem('__critical_errors') || '[]')
-          stored.push({ ts: Date.now(), msg: msg.slice(0, 500), type: 'hydration' })
-          localStorage.setItem('__critical_errors', JSON.stringify(stored.slice(-20)))
-        } catch {}
+        chatDB.addError(msg.slice(0, 500), 'hydration').catch(() => {})
         reportError(msg.slice(0, 500), 'hydration', { metadata: { detail: msg.slice(0, 1000) } })
         return // don't forward to Next.js overlay
       }

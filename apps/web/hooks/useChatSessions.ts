@@ -11,7 +11,6 @@ import { addGlobalError } from '@/lib/error-store'
 import type { Conversation } from '@/lib/session-controller'
 
 const MAX_STORAGE_MESSAGES = 40
-const DRAFT_PREFIX = 'man_draft_'
 
 /** Module-level tracking: prevents duplicate backend session creation across
  *  React StrictMode double-mounts and concurrent hook instances. */
@@ -98,11 +97,11 @@ export function useChatSessions(opts: {
         } catch {
           setMessages(filteredMessages)
         }
-        localStorage.setItem(CURRENT_SESSION_KEY, sessionId)
+        await chatDB.setKV(CURRENT_SESSION_KEY, sessionId)
         const isComplete = filteredMessages.length > 0 &&
           filteredMessages[filteredMessages.length - 1].role === 'assistant'
         setSessionSaved(isComplete)
-        const savedDraft = localStorage.getItem(`${DRAFT_PREFIX}${sessionId}`)
+        const savedDraft = await chatDB.getDraft(sessionId)
         if (savedDraft) setInput(savedDraft)
         else setInput('')
         if (filteredMessages.length > 0) showToast(`Loaded: ${session.name}`)
@@ -117,10 +116,10 @@ export function useChatSessions(opts: {
     sessionController.delete(sessionId).catch(console.error)
     const newSessions = await chatDB.loadSessions()
     setSessions(newSessions)
-    if (localStorage.getItem(CURRENT_SESSION_KEY) === sessionId) {
+    if ((await chatDB.getKV<string>(CURRENT_SESSION_KEY)) === sessionId) {
       setMessages([])
       setSessionSaved(false)
-      localStorage.removeItem(CURRENT_SESSION_KEY)
+      await chatDB.deleteKV(CURRENT_SESSION_KEY)
     }
     showToast('Session deleted')
   }, [showToast, setMessages, setSessionSaved])

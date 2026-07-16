@@ -1,7 +1,6 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
-import { cn } from '@/lib/cn'
+import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import type { BenchmarkResult } from '@/lib/benchmark-controller'
 import { METRIC_COLUMNS } from './compare-config'
 

@@ -28,6 +28,7 @@ import { addGlobalError } from '@/lib/error-store'
 import { useSettings } from '@/lib/store'
 import { apiPost } from '@/lib/http-client'
 import { imagesController } from '@/lib/images-controller'
+import { chatDB } from '@/lib/db'
 import type { ImageStyle } from '@/lib/images-controller'
 import { filesController } from '@/lib/files-controller'
 import { ChatArea, ErrorBanner } from '@/components/chat'
@@ -78,9 +79,12 @@ export default function ChatPage() {
   const [modelDescriptions, setModelDescriptions] = useState<Record<string, string>>({})
   const [readFileData, setReadFileData] = useState<{ text: string; filename: string; pages: number } | null>(null)
   const [readLoading, setReadLoading] = useState(false)
-  const [customSystemPrompt, setCustomSystemPrompt] = useState(() => {
-    try { return localStorage.getItem('chat:customSystemPrompt') || '' } catch { return '' }
-  })
+  const [customSystemPrompt, setCustomSystemPrompt] = useState('')
+  useEffect(() => {
+    chatDB.getKV<string>('chat:customSystemPrompt').then(v => {
+      if (v) setCustomSystemPrompt(v)
+    })
+  }, [])
   const [systemPromptOpen, setSystemPromptOpen] = useState(false)
   const [searchConversationsOpen, setSearchConversationsOpen] = useState(false)
   const [searchConversationsQuery, setSearchConversationsQuery] = useState('')
@@ -314,7 +318,7 @@ export default function ChatPage() {
 
   const handleSaveSystemPrompt = useCallback((value: string) => {
     setCustomSystemPrompt(value)
-    try { localStorage.setItem('chat:customSystemPrompt', value) } catch {}
+    chatDB.setKV('chat:customSystemPrompt', value)
   }, [])
 
   const handleCreateImage = useCallback(async (prompt: string) => {

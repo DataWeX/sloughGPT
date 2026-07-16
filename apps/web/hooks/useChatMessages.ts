@@ -26,7 +26,6 @@ import type { ToolCallEvent } from '@/lib/stream-chat-response'
 import { useAppStore, getKnowledgeContext } from '@/lib/store'
 import { useChatSessions } from './useChatSessions'
 
-const DRAFT_PREFIX = 'man_draft_'
 
 interface ChatMessagesConfig {
   model: string
@@ -153,8 +152,8 @@ export function useChatMessages(config: ChatMessagesConfig) {
     setSessionSaved(false)
     const newId = generateSessionId()
     sessionIdRef.current = newId
-    localStorage.setItem(CURRENT_SESSION_KEY, newId)
-    localStorage.removeItem(`${DRAFT_PREFIX}${newId}`)
+    chatDB.setKV(CURRENT_SESSION_KEY, newId)
+    chatDB.deleteDraft(newId)
     showToast('New chat started')
   }, [showToast])
   newChatRef.current = newChat
@@ -300,7 +299,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
 
     setMessages(prev => [...prev, userMessage, assistantMessage])
     setInput('')
-    localStorage.removeItem(`${DRAFT_PREFIX}${sessionIdRef.current}`)
+    chatDB.deleteDraft(sessionIdRef.current!)
     setImages([])
     setCurrentError(null)
     setToolEvents([])
@@ -450,16 +449,18 @@ export function useChatMessages(config: ChatMessagesConfig) {
     } else {
       const fresh = generateSessionId()
       sessionIdRef.current = fresh
-      localStorage.setItem(CURRENT_SESSION_KEY, fresh)
+      chatDB.setKV(CURRENT_SESSION_KEY, fresh)
     }
-    userIdRef.current = getOrCreateUserId()
-    const savedDraft = localStorage.getItem(`${DRAFT_PREFIX}${sessionIdRef.current}`)
-    if (savedDraft) setInput(savedDraft)
+    getOrCreateUserId().then(id => { userIdRef.current = id })
+    chatDB.getDraft(sessionIdRef.current).then(savedDraft => {
+      if (savedDraft) setInput(savedDraft)
+    })
   }, [])
 
   useEffect(() => {
-    const currentId = localStorage.getItem(CURRENT_SESSION_KEY)
-    if (currentId) sessions.loadSession(currentId)
+    chatDB.getKV<string>(CURRENT_SESSION_KEY).then(currentId => {
+      if (currentId) sessions.loadSession(currentId)
+    })
   }, [])
 
   // Session save: ref-based debounce (doesn't recreate on messages change)
@@ -468,7 +469,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     if (messagesRef.current.length > 0 && sessionSaved) {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       saveTimerRef.current = setTimeout(() => {
-        const sid = sessionIdRef.current || localStorage.getItem(CURRENT_SESSION_KEY) || generateSessionId()
+        const sid = sessionIdRef.current || generateSessionId()
         sessions.saveSessionToStorage(messagesRef.current, sid)
       }, 1000)
       return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
@@ -536,7 +537,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     draftTimerRef.current = setTimeout(() => {
       const sid = sessionIdRef.current
       if (sid && input) {
-        localStorage.setItem(`${DRAFT_PREFIX}${sid}`, input)
+        chatDB.saveDraft(sid, input)
       }
     }, 500)
     return () => {

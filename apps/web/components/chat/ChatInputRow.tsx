@@ -5,7 +5,7 @@ import { ChatInputAccessories } from './ChatInputAccessories'
 import { ChatInputField } from './ChatInputField'
 import { ChatSendButton } from './ChatSendButton'
 import { SlashCommandMenu } from './SlashCommandMenu'
-import { cn } from '@/lib/cn'
+import { cn } from '@sloughgpt/strui'
 import type { ChatCommand } from '@/lib/chat-commands'
 
 interface ChatInputRowProps {
