@@ -50,6 +50,7 @@ logger = logging.getLogger("slo")
 
 from core.version import format_version_display  # noqa: E402
 from core.printer import printer  # noqa: E402
+from core.cli_group import SmartGroup  # noqa: E402
 
 # ── Helpers ───────────────────────────────────────────────────────────
 
@@ -183,7 +184,7 @@ def _docker_action(action: str, a):
 # ── Top-level CLI ─────────────────────────────────────────────────────
 
 
-@click.group(invoke_without_command=True)
+@click.group(cls=SmartGroup, invoke_without_command=True)
 @click.option("--host", default="localhost", help="API hostname", show_default=True)
 @click.option("--port", default=8000, type=int, help="API port", show_default=True)
 @click.option("-c", "--config", default="config.yaml", help="Config path", show_default=True)
@@ -196,13 +197,75 @@ def cli(ctx, host: str, port: int, config: str):
     ctx.obj["config"] = config
 
     if ctx.invoked_subcommand is None:
-        version_line = f"SloughGPT CLI — {format_version_display()}"
-        click.echo()
-        click.echo(f"  {version_line}")
-        click.echo(f"  {'─' * len(version_line)}")
-        click.echo()
-        click.echo(ctx.get_help())
-        click.echo()
+        _show_welcome_banner()
+
+
+def _show_welcome_banner():
+    """Show a polished welcome banner with version and quick start."""
+    from rich.console import Console
+    from rich.text import Text
+    from rich.panel import Panel
+    from rich.columns import Columns
+
+    console = Console(highlight=False)
+
+    # Get version
+    try:
+        version = format_version_display()
+    except Exception:
+        version = "dev"
+
+    # Build banner
+    banner = Text()
+    banner.append("  SloughGPT", style="bold cyan")
+    banner.append(f"  {version}", style="dim")
+
+    console.print()
+    console.print(banner)
+    console.print("  " + "─" * 50)
+    console.print()
+
+    # Quick start commands
+    console.print("  [bold]Quick Start:[/]")
+    console.print("    [cyan]sloughgpt start[/]        Getting started guide")
+    console.print("    [cyan]sloughgpt chat[/]         Start chatting with AI")
+    console.print("    [cyan]sloughgpt model list[/]   List available models")
+    console.print("    [cyan]sloughgpt shell[/]        Interactive shell")
+    console.print()
+
+    # Server status
+    _show_server_status(console)
+
+    console.print()
+    console.print("  [dim]Run 'sloughgpt --help' to see all commands[/]")
+    console.print()
+
+
+def _show_server_status(console):
+    """Check and display server status."""
+    import requests
+    import time
+
+    console.print("  [bold]Server Status:[/]")
+
+    try:
+        # Try to connect to the server
+        response = requests.get("http://localhost:8000/health", timeout=2)
+        if response.status_code == 200:
+            data = response.json()
+            status = data.get("data", {})
+
+            if status.get("model_loaded"):
+                model = status.get("model_type", "unknown")
+                console.print(f"    [green]✓[/] Server running (model: {model})")
+            else:
+                console.print("    [yellow]![/] Server running (no model loaded)")
+        else:
+            console.print("    [red]✗[/] Server unreachable")
+    except requests.exceptions.ConnectionError:
+        console.print("    [dim]·[/] Server not running")
+    except Exception as e:
+        console.print(f"    [dim]·[/] Server status unknown")
 
 
 # ═══════════════════════════════════════════════════════════════════════

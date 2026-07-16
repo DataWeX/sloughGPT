@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: dc52393 fix: FileRepository.delete() returns True for nonexistent keys
+No active task. Last commit: 0e5878a fix: hide scrollbar on sidebar navigation list
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
