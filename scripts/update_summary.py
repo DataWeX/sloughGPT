@@ -28,3 +28,6 @@ summary.write_text(
     + f"No active task. Last commit: {commit_line}\n\n"
     + after.lstrip("\n")
 )
+
+# Re-stage so the commit doesn't fail with "file modified"
+subprocess.run(["git", "add", str(summary)], capture_output=True)
