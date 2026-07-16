@@ -109,7 +109,7 @@ export function Sidebar({ variant = 'desktop', onNavigate, onClose }: SidebarPro
         className="flex min-h-0 flex-1 flex-col p-3"
         aria-label="Primary"
       >
-        <div className={cn("min-h-0 flex-1 overscroll-contain", isDrawer ? "overflow-y-auto scrollbar-hide" : "overflow-y-auto")}>
+        <div className="min-h-0 flex-1 overscroll-contain overflow-y-auto scrollbar-hide">
           <ul className="space-y-1">
             {allItems.map((item) => {
               const active = routeMatchesPath(pathname, item.path)

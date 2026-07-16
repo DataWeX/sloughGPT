@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: f5284cd fix: knowledge import crash, settings validation, health refresh, live status flash
+No active task. Last commit: dc52393 fix: FileRepository.delete() returns True for nonexistent keys
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
