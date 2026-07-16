@@ -790,10 +790,10 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                                 full_response += text
                                 yield sse_token("chat", text)
 
-                        thread.join(timeout=120)
+                        thread.join(timeout=10)
                         if thread.is_alive():
-                            logger.warning("Generation thread timed out after 120s", extra={"tag": "INF", "context": {"session_id": session_id, "timeout_s": 120}})
-                            yield sse_error("chat", "ERROR", "Generation timed out")
+                            logger.warning("Generation thread did not finish after 10s", extra={"tag": "INF", "context": {"session_id": session_id}})
+                            yield sse_error("chat", "ERROR", "Generation thread did not finish")
                             return
                     except GeneratorExit:
                         cancel_event.set()
@@ -1085,26 +1085,17 @@ async def get_voice_audio(session_id: str, message_id: str):
 
 @router.get("/chat/sessions")
 async def list_sessions(archived: Optional[bool] = None):
-    sessions = _build_session_cache()
+    sessions = await asyncio.to_thread(_build_session_cache)
     if archived is not None:
         sessions = [s for s in sessions if s.get("archived", False) == archived]
     return success_response(data=sessions)
 
 
-@router.get("/chat/sessions/search")
-async def search_sessions(q: str = "", limit: int = 20):
-    """Full-text search across all conversation files.
-
-    Searches session names and message content. Returns session
-    summaries with matching message excerpts.
-    """
-    if not q.strip():
-        return success_response(data=[], meta={"query": q, "total": 0})
-
+def _search_sessions_sync(q: str, limit: int) -> list:
+    """Synchronous full-text search across session files on disk."""
     q_lower = q.lower().strip()
     results = []
 
-    # Search both possible session directories
     search_dirs: list[Path] = []
     sessions_dir = Path(__file__).parent.parent.parent.parent / "data" / "chat_sessions"
     if sessions_dir.is_dir():
@@ -1149,18 +1140,32 @@ async def search_sessions(q: str = "", limit: int = 20):
                         "created_at": data.get("created_at", ""),
                         "updated_at": data.get("updated_at", ""),
                         "match_count": len(matches),
-                        "matches": matches[:3],  # Top 3 matches per session
+                        "matches": matches[:3],
                     })
             except (json.JSONDecodeError, OSError):
                 continue
 
+    return results
+
+
+@router.get("/chat/sessions/search")
+async def search_sessions(q: str = "", limit: int = 20):
+    """Full-text search across all conversation files.
+
+    Searches session names and message content. Returns session
+    summaries with matching message excerpts.
+    """
+    if not q.strip():
+        return success_response(data=[], meta={"query": q, "total": 0})
+
+    results = await asyncio.to_thread(_search_sessions_sync, q, limit)
     return success_response(data=results, meta={"query": q, "total": len(results)})
 
 
 @router.get("/chat/sessions/current")
 async def get_current_session():
     """Return the most recently updated session, or null."""
-    sessions = _build_session_cache()
+    sessions = await asyncio.to_thread(_build_session_cache)
     if not sessions:
         return success_response(data=None)
     return success_response(data=sessions[0])

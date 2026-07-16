@@ -596,22 +596,34 @@ class HFModelProvider:
         thread = Thread(target=_generate)
         thread.start()
         is_first = True
+        _gen_cancelled = False
 
-        while thread.is_alive() or not streamer.text_queue.empty():
-            if _error:
-                raise _error[0]
-            try:
-                text = streamer.text_queue.get(timeout=0.01)
-            except queue.Empty:
-                await asyncio.sleep(0)
-                continue
-            if text == streamer.stop_signal:
-                break
-            if text:
-                yield self._formatter.clean_chunk(text, first=is_first)
-                is_first = False
-
-        thread.join(timeout=15)
+        try:
+            while thread.is_alive() or not streamer.text_queue.empty():
+                if _error:
+                    raise _error[0]
+                try:
+                    text = streamer.text_queue.get(timeout=0.01)
+                except queue.Empty:
+                    await asyncio.sleep(0)
+                    continue
+                if text == streamer.stop_signal:
+                    break
+                if text:
+                    yield self._formatter.clean_chunk(text, first=is_first)
+                    is_first = False
+        except GeneratorExit:
+            _gen_cancelled = True
+            raise
+        finally:
+            if _gen_cancelled and thread.is_alive():
+                try:
+                    streamer.stop()
+                except Exception:
+                    pass
+            thread.join(timeout=5)
+            if thread.is_alive():
+                logger.warning("Generation thread did not stop within 5s after cancel", extra={"tag": "INF"})
 
         try:
             del input_ids, gen_kwargs, streamer

@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 54e9d4c fix: 6 chat UX bugs from audit
+No active task. Last commit: ac9c06f fix: training pipeline P0/P1 bugs + dead code cleanup
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

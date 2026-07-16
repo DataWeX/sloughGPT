@@ -136,7 +136,9 @@ export function VoiceInput({ onTranscript, disabled }: VoiceInputProps) {
         try {
           const result = await multimodalController.transcribeAudio(blob as File)
           if (result.text) onTranscript(result.text)
-        } catch {}
+        } catch (err) {
+          console.error('Audio transcription failed:', err)
+        }
       }
 
       mediaRecorder.start()
@@ -144,7 +146,9 @@ export function VoiceInput({ onTranscript, disabled }: VoiceInputProps) {
       setTimeout(() => {
         if (mediaRecorder.state === 'recording') mediaRecorder.stop()
       }, 5000)
-    } catch {}
+    } catch (err) {
+      console.error('Microphone access failed:', err)
+    }
   }, [onTranscript])
 
   const toggleListening = useCallback(() => {

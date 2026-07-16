@@ -142,7 +142,9 @@ export function useChatMessages(config: ChatMessagesConfig) {
   const storeSessionContext = useCallback(async (sessionId: string, msgs: ChatMessage[]) => {
     try {
       await chatController.saveSessionContext(sessionId, msgs.map(m => ({ role: m.role, content: m.content })))
-    } catch {}
+    } catch (err) {
+      _log.warning('Failed to store session context', { sessionId })
+    }
   }, [])
 
   const newChat = useCallback(() => {
@@ -248,9 +250,9 @@ export function useChatMessages(config: ChatMessagesConfig) {
       multimodalController.getCapabilities().then(caps => {
         multimodalController.getTrainingReport().then(r => {
           onVisionUpdate(caps, r.caption_history || [], r.vocab_size)
-        }).catch(() => {})
-      }).catch(() => {})
-    }).catch(() => {})
+        }).catch(err => _log.warning('Vision report failed', { error: String(err) }))
+      }).catch(err => _log.warning('Vision capabilities failed', { error: String(err) }))
+    }).catch(err => _log.warning('Image training failed', { error: String(err) }))
   }, [onVisionUpdate])
 
   const handleRemoveImage = useCallback((id: string) => {

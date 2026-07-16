@@ -71,7 +71,9 @@ export default function MultimodalPage() {
           fetchAll()
           if (status.completed > 0) addToast(`Training complete: ${status.completed} images, ${status.errors} errors`, status.errors > 0 ? 'error' : 'success')
         }
-      } catch {}
+      } catch (err) {
+        console.error('Training status poll failed:', err)
+      }
     }, 2000)
   }, [fetchAll, addToast])
 
@@ -88,7 +90,9 @@ export default function MultimodalPage() {
         setDpoError(s.result?.error as string || 'DPO failed'); setDpoRunning(false)
         addToast(s.result?.error as string || 'DPO failed', 'error')
       } else if (s.status === 'idle') { setDpoRunning(false) }
-    } catch {}
+    } catch (err) {
+      console.error('DPO status poll failed:', err)
+    }
   }, [addToast])
 
   useEffect(() => { fetchAll() }, [fetchAll])

@@ -479,7 +479,9 @@ export default function SystemHealthPage() {
                     try {
                       await apiPost('/multimodal/dpo', {})
                       await fetchAll()
-                    } catch {}
+                    } catch (err) {
+                      console.error('DPO training failed:', err)
+                    }
                     setDpoRunning(false)
                   }}
                   aria-label="Run feedback training"

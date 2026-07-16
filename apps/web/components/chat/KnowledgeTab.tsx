@@ -86,8 +86,8 @@ export function KnowledgeTab({
         const idMap = new Map<string, string>()
         for (const item of updated) idMap.set(item.content, item.id)
         setBackendContentIds(idMap)
-      } catch {
-        // offline — fine, next sync will catch up
+      } catch (err) {
+        console.warn('Knowledge sync failed, will retry:', err)
       }
     }, 2000)
   }
