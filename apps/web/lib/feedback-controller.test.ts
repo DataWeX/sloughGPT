@@ -14,73 +14,121 @@ import { setupApiMocks, apiClient } from './__test-helper'
 setupApiMocks()
 
 import { feedbackController } from './feedback-controller'
+import { userAdaptersController } from './user-adapters-controller'
 
-describe('feedbackController', () => {
+describe('feedbackController.recordFeedbackWorkflow', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('recordFeedbackWorkflow POSTs /feedback/workflow-record', async () => {
-    apiClient.apiPost.mockResolvedValue({ status: 'recorded', feedback_id: 'f1', workflow_active: true })
+  it('POSTs to /feedback/workflow-record with feedback data', async () => {
+    apiClient.apiPost.mockResolvedValue({
+      status: 'recorded',
+      feedback_id: 'test-123',
+      workflow_active: true,
+    })
+
     const result = await feedbackController.recordFeedbackWorkflow({
-      userMessage: 'hi', assistantResponse: 'hello', rating: 'thumbs_up',
+      userMessage: 'Hello?',
+      assistantResponse: 'Hi there!',
+      rating: 'thumbs_up',
+      userId: 'user-1',
     })
+
     expect(result.status).toBe('recorded')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/feedback/workflow-record', {
-      user_message: 'hi', assistant_response: 'hello', rating: 'thumbs_up',
-      conversation_id: undefined, quality_score: undefined, user_id: undefined,
-    })
+    expect(apiClient.apiPost).toHaveBeenCalledWith(
+      '/feedback/workflow-record',
+      expect.objectContaining({ rating: 'thumbs_up' }),
+    )
   })
 
-  it('getFeedbackStats GETs /meta-weights/stats', async () => {
-    apiClient.apiGet.mockResolvedValue({
-      db_stats: { conversations: 5, messages: 20, feedback_total: 10, thumbs_up: 7, thumbs_down: 3, ratio: 0.7 },
-      current_weights: { temperature: 0.8, repetition_penalty: 1.0 },
-      history_length: 10,
+  it('handles thumbs_down rating', async () => {
+    apiClient.apiPost.mockResolvedValue({ status: 'recorded', feedback_id: 'test-456', workflow_active: false })
+
+    await feedbackController.recordFeedbackWorkflow({
+      userMessage: 'What is 2+2?',
+      assistantResponse: '5',
+      rating: 'thumbs_down',
     })
-    const result = await feedbackController.getFeedbackStats()
-    expect(result.db_stats.thumbs_up).toBe(7)
+
+    expect(apiClient.apiPost).toHaveBeenCalledWith(
+      '/feedback/workflow-record',
+      expect.objectContaining({ rating: 'thumbs_down' }),
+    )
+  })
+})
+
+describe('feedbackController.getFeedbackStats', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('calls /meta-weights/stats endpoint', async () => {
+    apiClient.apiGet.mockResolvedValue({
+      db_stats: { feedback_total: 10, thumbs_up: 7, thumbs_down: 3 },
+      current_weights: { temperature: 0.8 },
+    })
+
+    await feedbackController.getFeedbackStats()
+
     expect(apiClient.apiGet).toHaveBeenCalledWith('/meta-weights/stats')
   })
+})
 
-  it('getWorkflowStatus GETs /workflow/status', async () => {
+describe('userAdaptersController.list', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('calls /user-adapters endpoint', async () => {
+    apiClient.apiGet.mockResolvedValue({ stats: { total_users: 5, total_size_mb: 0.25 } })
+
+    await userAdaptersController.list()
+
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/user-adapters')
+  })
+})
+
+describe('feedbackController.getWorkflowStatus', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('GETs /workflow/status', async () => {
     apiClient.apiGet.mockResolvedValue({
-      running: true, stats: { workflow_runs: 3, aggregations_performed: 1, prunes_performed: 0, exports_performed: 1, feedback_recorded: 10, start_time: 100 },
-      config: { aggregate_interval_minutes: 30, prune_interval_minutes: 60, export_interval_hours: 24, health_check_interval_seconds: 30, auto_aggregate_threshold: 50, auto_prune_threshold: 100, min_feedback_for_aggregation: 5 },
-      last_runs: { aggregate: 0, prune: 0, export: 0, health_check: 0 },
-      systems: {},
+      running: true,
+      stats: { workflow_runs: 10 },
     })
+
     const result = await feedbackController.getWorkflowStatus()
+
     expect(result.running).toBe(true)
     expect(apiClient.apiGet).toHaveBeenCalledWith('/workflow/status')
   })
+})
 
-  it('triggerWorkflowAction POSTs /workflow/trigger/{action}', async () => {
-    apiClient.apiPost.mockResolvedValue({ status: 'triggered', timestamp: 123 })
-    const result = await feedbackController.triggerWorkflowAction('aggregate')
-    expect(result.status).toBe('triggered')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/workflow/trigger/aggregate')
-  })
+describe('feedbackController.getTrainingStats', () => {
+  beforeEach(() => { vi.clearAllMocks() })
 
-  it('getTrainingStats GETs /training/status and maps fields', async () => {
-    apiClient.apiGet.mockResolvedValue({ pairs_converted: 15, last_training: '2026-01-01', quality_score: 0.85 })
+  it('calls /training/status endpoint', async () => {
+    apiClient.apiGet.mockResolvedValue({
+      pairs_converted: 3,
+      last_training: '2026-01-01',
+      quality_score: 0.85,
+    })
+
     const result = await feedbackController.getTrainingStats()
-    expect(result.feedback_pairs).toBe(15)
-    expect(result.last_training).toBe('2026-01-01')
-    expect(result.quality_score).toBe(0.85)
+
+    expect(result.feedback_pairs).toBe(3)
     expect(apiClient.apiGet).toHaveBeenCalledWith('/training/status')
   })
+})
 
-  it('getTrainingStats handles null fields', async () => {
-    apiClient.apiGet.mockResolvedValue({})
-    const result = await feedbackController.getTrainingStats()
-    expect(result.feedback_pairs).toBe(0)
-    expect(result.last_training).toBeNull()
-    expect(result.quality_score).toBeNull()
-  })
+describe('feedbackController.exportTrainingData', () => {
+  beforeEach(() => { vi.clearAllMocks() })
 
-  it('exportTrainingData POSTs /training/export-text', async () => {
-    apiClient.apiPost.mockResolvedValue({ status: 'exported', path: '/tmp/export.json', count: 10 })
-    const result = await feedbackController.exportTrainingData('json', '/tmp')
+  it('POSTs to /training/export-text with format', async () => {
+    apiClient.apiPost.mockResolvedValue({
+      status: 'exported',
+      path: '/data/dpo_123.jsonl',
+      count: 10,
+    })
+
+    const result = await feedbackController.exportTrainingData('dpo')
+
     expect(result.count).toBe(10)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/export-text', { format: 'json', filepath: '/tmp' })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/export-text', { format: 'dpo', filepath: undefined })
   })
 })

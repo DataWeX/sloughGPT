@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: d9d500b fix: model load 23s→5s, eliminate duplicate SLNC load, fix provider registration
+No active task. Last commit: dcf3a2b fix: update_summary hook re-stages anchored_summary.md after stamping
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

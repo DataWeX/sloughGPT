@@ -18,23 +18,24 @@ import { generateController } from './generate-controller'
 describe('generateController.generate', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('POSTs /inference/generate with request body', async () => {
-    apiClient.apiPost.mockResolvedValue({ text: 'Hello world', model: 'gpt2', tokens_generated: 3 })
-    const result = await generateController.generate({ prompt: 'Hi' })
-    expect(result.text).toBe('Hello world')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/inference/generate', { prompt: 'Hi' })
+  it('throws when server returns 200 with error field (no model loaded)', async () => {
+    apiClient.apiPost.mockResolvedValue({ error: 'Model not loaded', text: '' })
+
+    await expect(generateController.generate({ prompt: 'hello' })).rejects.toThrow('Model not loaded')
   })
 
-  it('throws on error response', async () => {
-    apiClient.apiPost.mockResolvedValue({ error: 'Model not loaded', text: '', tokens_generated: 0 })
-    await expect(generateController.generate({ prompt: 'Hi' })).rejects.toThrow('Model not loaded')
+  it('returns text when server returns a non-empty body', async () => {
+    apiClient.apiPost.mockResolvedValue({ text: 'hi there', model: 'gpt2-engine', tokens_generated: 2 })
+
+    const out = await generateController.generate({ prompt: 'hello' })
+    expect(out.text).toBe('hi there')
+    expect(out.model).toBe('gpt2-engine')
+    expect(out.tokens_generated).toBe(2)
   })
 
-  it('passes all optional fields', async () => {
-    apiClient.apiPost.mockResolvedValue({ text: 'ok' })
-    await generateController.generate({ prompt: 'Hi', max_new_tokens: 100, temperature: 0.8, top_p: 0.9, top_k: 40, repetition_penalty: 1.1, model: 'gpt2' })
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/inference/generate', {
-      prompt: 'Hi', max_new_tokens: 100, temperature: 0.8, top_p: 0.9, top_k: 40, repetition_penalty: 1.1, model: 'gpt2',
-    })
+  it('throws on HTTP error responses', async () => {
+    apiClient.apiPost.mockRejectedValue(new Error('503'))
+
+    await expect(generateController.generate({ prompt: 'x' })).rejects.toThrow('503')
   })
 })

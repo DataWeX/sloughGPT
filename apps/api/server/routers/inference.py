@@ -1171,11 +1171,19 @@ async def upsert_session(session_id: str, req: dict):
 
 @router.post("/chat/sessions")
 async def create_session(req: dict):
-    """Create a new session."""
-    session_id = req.get("session_id") or str(uuid.uuid4())
-    _save_session(session_id, req)
-    await _flush_session_to_disk(session_id)
-    return success_response(data={"session_id": session_id}, message="created")
+    """Create a new session.
+
+    Accepts any JSON body. Generates a session_id if not provided.
+    Saves to in-memory cache and queues async disk write.
+    """
+    try:
+        session_id = req.get("session_id") or str(uuid.uuid4())
+        _save_session(session_id, req)
+        await _flush_session_to_disk(session_id)
+        return success_response(data={"session_id": session_id}, message="created")
+    except Exception as exc:
+        logger.error("create_session failed: %s", exc, exc_info=True, extra={"tag": "REQ"})
+        raise HTTPException(status_code=500, detail=f"Session creation failed: {exc}")
 
 
 @router.get("/chat/sessions/{session_id}")
