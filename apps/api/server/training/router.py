@@ -273,6 +273,11 @@ async def stop_training_job(job_id: str):
     if job.get("status") not in ("running", "queued", "starting"):
         raise HTTPException(status_code=400, detail=f"Job is not running (status: {job.get('status', 'unknown')})")
     job["status"] = "stopping"
+    cancel_event = job.get("_cancel_event")
+    if cancel_event is not None:
+        cancel_event.set()
+    executor = get_training_executor()
+    executor.cancel(job_id)
     return {"status": "stopping", "job_id": job_id}
 
 
@@ -500,6 +505,8 @@ async def start_training(request: TrainingRequest):
     data_path_for_thread = data_path_str
     out_stem_for_thread = out_stem
     jid = job_id
+    cancel_event = threading.Event()
+    training_jobs[job_id]["_cancel_event"] = cancel_event
 
     def run_training(job_id_: str = jid) -> None:
         from domains.training.train_pipeline import SloughGPTTrainer
@@ -541,6 +548,11 @@ async def start_training(request: TrainingRequest):
             safe_stem = "".join(
                 c if c.isalnum() or c in "-_" else "_" for c in out_stem_for_thread
             )[:120]
+            if cancel_event.is_set():
+                training_jobs[jid]["status"] = "cancelled"
+                training_jobs[jid]["progress"] = 0
+                get_training_controller().complete()
+                return
             trainer.save(f"models/{safe_stem}_trained.pt")
             training_jobs[jid]["status"] = "completed"
             training_jobs[jid]["progress"] = 100
@@ -601,6 +613,15 @@ async def start_training(request: TrainingRequest):
 
     executor = get_training_executor()
     executor.submit(run_training, jid)
+
+    return {
+        "status": "started",
+        "job_id": job_id,
+        "name": request.name or "training",
+        "model": request.model,
+        "dataset": request.dataset,
+        "epochs": request.epochs,
+    }
 
 
 @router.post("/training/hf-start")
@@ -827,9 +848,6 @@ async def start_hf_training(request: HFTrainingRequest):
         "status": "queued",
         "message": f"HF fine-tune started: {request.model} on {request.dataset}",
     }
-
-
-# ── Activity Training ──────────────────────────────────────────────
 
 
 # ── Visual Training ────────────────────────────────────────────────
@@ -1421,13 +1439,6 @@ async def train_from_feedback():
     import os
     import uuid
     from pathlib import Path
-    from pydantic import BaseModel
-
-    class TrainFromFeedbackRequest(BaseModel):
-        epochs: int = 3
-        batch_size: int = 16
-        learning_rate: float = 1e-4
-        use_lora: bool = True
 
     try:
         from domains.feedback.training import FeedbackTrainer
@@ -1487,16 +1498,20 @@ async def train_from_feedback():
                     use_mixed_precision=True,
                 )
 
-                def on_progress(
-                    step: int, epoch: int, loss: Optional[float], loss_type: str = "train"
-                ):
-                    training_jobs[jid]["progress"] = min(99, int((epoch / 3) * 100))
-                    training_jobs[jid]["current_epoch"] = epoch
-                    if loss is not None:
-                        training_jobs[jid][loss_type] = float(loss)
-                        training_jobs[jid].setdefault("loss_history", []).append({"step": step, "value": float(loss), "type": loss_type})
+                def on_progress(info: dict) -> None:
+                    training_jobs[jid]["progress"] = min(99, int((info.get("progress_percent", 0))))
+                    training_jobs[jid]["current_epoch"] = int(info.get("epoch", training_jobs[jid].get("current_epoch", 0)))
+                    tl = info.get("train_loss")
+                    if tl is not None:
+                        training_jobs[jid]["train_loss"] = float(tl)
+                        training_jobs[jid].setdefault("loss_history", []).append({"step": info.get("global_step", 0), "value": float(tl), "type": "train"})
+                    el = info.get("eval_loss")
+                    if el is not None:
+                        training_jobs[jid]["eval_loss"] = float(el)
+                        training_jobs[jid]["loss"] = float(el)
+                        training_jobs[jid].setdefault("loss_history", []).append({"step": info.get("global_step", 0), "value": float(el), "type": "eval"})
 
-                result = trainer.train(on_progress=on_progress)
+                result = trainer.train(on_progress=on_progress, cancel_event=cancel_event)
                 safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
                 trainer.save(f"models/{safe_stem}.pt")
 
@@ -1563,8 +1578,6 @@ async def train_from_feedback():
     except Exception as e:
         logger.exception("Failed to start feedback training", extra={"tag": "TRAIN"})
         raise HTTPException(status_code=500, detail=str(e))
-
-    return None
 
 
 # ===== TRAINING STATE CONTROLLER =====
@@ -1936,7 +1949,6 @@ async def list_builds():
             builds.append(info)
 
     # 3. Completed HF fine-tune jobs
-    from training.jobs import training_jobs
     for jid, job in training_jobs.items():
         if job.get("status") == "completed":
             model_path = job.get("result", {}).get("model_path", "") if isinstance(job.get("result"), dict) else ""

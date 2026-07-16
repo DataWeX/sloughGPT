@@ -239,7 +239,6 @@ export function useTrainingSession(): UseTrainingSessionReturn {
         } catch { clearInterval(pollId); ftPollRef.current = null }
       }, 3000)
       ftPollRef.current = pollId
-      setTimeout(() => { clearInterval(pollId); ftPollRef.current = null }, 300000)
     }).catch(() => addToast('Something went wrong starting training', 'error'))
   }, [])
 
@@ -285,7 +284,6 @@ export function useTrainingSession(): UseTrainingSessionReturn {
         } catch { clearInterval(pollId); visualPollRef.current = null }
       }, 3000)
       visualPollRef.current = pollId
-      setTimeout(() => { clearInterval(pollId); visualPollRef.current = null }, 600000)
     }).catch(() => addToast('Something went wrong starting image model training', 'error'))
   }, [])
 

@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 54a9ddb fix: session disk write error handling + duplicate session creation guard
+No active task. Last commit: 54e9d4c fix: 6 chat UX bugs from audit
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
