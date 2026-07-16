@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 0a0cc34 feat(dexie): migrate localStorage to IndexedDB + icon consolidation + test fixes
+No active task. Last commit: 1af06b9 refactor: adopt strui components, consolidate cn(), delete duplicate
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, EmptyCard } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
@@ -87,13 +87,10 @@ export default function DatasetsPage() {
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <Card>
-            <CardContent className="py-10 text-center">
-              <p className="text-sm text-muted-foreground mb-1">{datasets.length === 0 ? 'No datasets yet.' : 'No datasets match your search.'}</p>
-              <p className="text-xs text-muted-foreground mb-3">Import a dataset to get started with training.</p>
-              <Button size="sm" onClick={() => router.push('/training')}>Import Dataset</Button>
-            </CardContent>
-          </Card>
+          <EmptyCard
+            message={datasets.length === 0 ? 'No datasets yet.' : 'No datasets match your search.'}
+            action={<Button size="sm" onClick={() => router.push('/training')}>Import Dataset</Button>}
+          />
         ) : (
           <div className="grid gap-2">
             {filtered.map(ds => (
