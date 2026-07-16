@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: d3e2d63 feat(cli): fuzzy command matching and polished UX
+No active task. Last commit: ba508ec fix: executor endpoint tests — add repo root + server dir to sys.path
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

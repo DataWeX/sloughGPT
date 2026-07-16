@@ -3,13 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Button } from '@sloughgpt/strui'
 import { IconX } from '@sloughgpt/strui'
-import { KNOWLEDGE_STORAGE_KEY } from '@/lib/config'
-
-interface KnowledgeItem {
-  id: string
-  content: string
-  timestamp: number
-}
+import { chatDB, type KnowledgeItem } from '@/lib/db'
 
 interface KnowledgeTabProps {
   onOpenConversationViewer: () => void
@@ -22,19 +16,17 @@ export function KnowledgeTab({
   onOpenSettings,
   onOpenShortcuts,
 }: KnowledgeTabProps) {
-  const [knowledge, setKnowledge] = useState<KnowledgeItem[]>(() => {
-    if (typeof window === 'undefined') return []
-    try {
-      const raw = localStorage.getItem(KNOWLEDGE_STORAGE_KEY)
-      return raw ? JSON.parse(raw) : []
-    } catch { return [] }
-  })
+  const [knowledge, setKnowledge] = useState<KnowledgeItem[]>([])
   const [showAddKnowledge, setShowAddKnowledge] = useState(false)
   const [newKnowledge, setNewKnowledge] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
   const [backendContentIds, setBackendContentIds] = useState<Map<string, string>>(new Map())
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    chatDB.getKnowledge().then(items => setKnowledge(items)).catch(() => {})
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -45,29 +37,30 @@ export function KnowledgeTab({
   useEffect(() => {
     let cancelled = false
     import('@/lib/knowledge-controller').then(({ knowledgeController }) => {
-      knowledgeController.list().then(backendItems => {
+      knowledgeController.list().then(async (backendItems) => {
         if (cancelled) return
         const idMap = new Map<string, string>()
         for (const item of backendItems) {
           idMap.set(item.content, item.id)
         }
         setBackendContentIds(idMap)
-        const raw = localStorage.getItem(KNOWLEDGE_STORAGE_KEY)
-        const local: KnowledgeItem[] = raw ? JSON.parse(raw) : []
+        const local = await chatDB.getKnowledge()
         const existingContent = new Set(local.map(k => k.content))
         const needsSave = backendItems.some(item => !existingContent.has(item.content))
         if (needsSave) {
+          const merged = [...local]
           for (const item of backendItems) {
             if (!existingContent.has(item.content)) {
-              local.push({
+              merged.push({
                 id: `know_b_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
                 content: item.content,
                 timestamp: Date.now(),
               })
             }
           }
-          setKnowledge(local)
-          localStorage.setItem(KNOWLEDGE_STORAGE_KEY, JSON.stringify(local))
+          setKnowledge(merged)
+          await chatDB.clearKnowledge()
+          await chatDB.importKnowledge(merged)
         }
       }).catch(() => {})
     }).catch(() => {})
@@ -92,27 +85,28 @@ export function KnowledgeTab({
     }, 2000)
   }
 
-  const saveKnowledge = (items: KnowledgeItem[]) => {
+  const saveKnowledge = async (items: KnowledgeItem[]) => {
     setKnowledge(items)
-    localStorage.setItem(KNOWLEDGE_STORAGE_KEY, JSON.stringify(items))
+    await chatDB.clearKnowledge()
+    await chatDB.importKnowledge(items)
     syncToBackend(items)
   }
 
-  const addKnowledge = () => {
+  const addKnowledge = async () => {
     if (!newKnowledge.trim()) return
     const item: KnowledgeItem = {
       id: `know_${Date.now()}`,
       content: newKnowledge.trim(),
       timestamp: Date.now(),
     }
-    saveKnowledge([...knowledge, item])
+    await saveKnowledge([...knowledge, item])
     setNewKnowledge('')
     setShowAddKnowledge(false)
   }
 
-  const removeKnowledge = (id: string) => {
+  const removeKnowledge = async (id: string) => {
     const item = knowledge.find(k => k.id === id)
-    saveKnowledge(knowledge.filter(k => k.id !== id))
+    await saveKnowledge(knowledge.filter(k => k.id !== id))
     if (item) {
       const backendId = backendContentIds.get(item.content)
       if (backendId) {
@@ -167,8 +161,8 @@ export function KnowledgeTab({
                     aria-label="Edit knowledge snippet"
                   />
                   <div className="flex gap-1">
-                    <Button size="sm" className="h-5 text-[10px] px-2 flex-1" onClick={() => {
-                      saveKnowledge(knowledge.map(k => k.id === item.id ? { ...k, content: editText } : k))
+                    <Button size="sm" className="h-5 text-[10px] px-2 flex-1" onClick={async () => {
+                      await saveKnowledge(knowledge.map(k => k.id === item.id ? { ...k, content: editText } : k))
                       setEditingId(null)
                     }}>Save</Button>
                     <Button variant="outline" size="sm" className="h-5 text-[10px] px-2" onClick={() => setEditingId(null)}>Cancel</Button>
@@ -205,7 +199,7 @@ export function KnowledgeTab({
 
       {knowledge.length > 0 && (
         <button
-          onClick={() => { saveKnowledge([]) }}
+          onClick={() => saveKnowledge([])}
           className="text-[10px] text-muted-foreground hover:text-destructive transition-colors"
         >
           Clear all

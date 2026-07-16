@@ -22,6 +22,8 @@ vi.mock('@/components/StatusBar', () => ({ StatusBar: () => <div data-testid="st
 vi.mock('@sloughgpt/strui', () => ({
   Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
   ErrorPanel: () => <div data-testid="error-panel" />,
+  IconX: (props: any) => <svg {...props} />,
+  IconMenu: (props: any) => <svg {...props} />,
 }))
 vi.mock('@/components/chat/Toast', () => ({ ToastContainer: () => <div data-testid="toast-container" />, RadixToastContainer: () => <div data-testid="toast-container" /> }))
 vi.mock('@/components/CommandPalette', () => ({ CommandPalette: () => <div data-testid="command-palette" /> }))

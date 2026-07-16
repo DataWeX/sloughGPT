@@ -101,15 +101,18 @@ export { Avatar, AvatarGroup, ProgressBar, Spinner, Divider, CardDeck, Paginatio
 // Tags
 export { Chip, Chips, TagInput } from './components/ui/tags'
 
-// Icons (40+ from our components/ui/icons)
+// Icons (50+ from our components/ui/icons)
 export {
   IconSearch, IconPlus, IconChevronLeft, IconChevronDown, IconChevronRight,
   IconMenu, IconX, IconCheck, IconChat, IconStar, IconPin, IconClock,
   IconSettings, IconCopy, IconRefresh, IconTrash, IconEdit, IconMessage,
   IconSend, IconUser, IconHome, IconCog, IconFolder, IconDocument,
-  IconDownload, IconUpload, IconExternalLink, IconModel, IconBrain,
+  IconDownload, IconUpload, IconExternalLink, IconModel, IconModels, IconBrain,
   IconHeart, IconThumbUp, IconThumbDown, IconInfo, IconAlert,
   IconCheckCircle, IconError, IconEye, IconFilter, IconSort, IconMore,
+  IconMoon, IconSun, IconActivity, IconCompare, IconTraining, IconBenchmark,
+  IconTokenizer, IconExport, IconLabs, IconAgents, IconLogin, IconVision,
+  IconFile, IconChangelog,
 } from './components/ui/icons'
 
 // Error store + panel

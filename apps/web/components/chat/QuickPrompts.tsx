@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
-import { Button } from '@sloughgpt/strui'
-import { Input } from '@sloughgpt/strui'
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { Button, Input } from '@sloughgpt/strui'
 import type { QuickPrompt } from '@/lib/quick-prompts'
 import { listPromptsByCategory, createPrompt, updatePrompt, deletePrompt, resetToDefaults, applyPrompt } from '@/lib/quick-prompts'
 
@@ -19,7 +18,7 @@ interface QuickPromptsProps {
 }
 
 export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
-  const [grouped, setGrouped] = useState(() => listPromptsByCategory())
+  const [grouped, setGrouped] = useState<Record<string, QuickPrompt[]>>({})
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState('')
@@ -30,9 +29,12 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
   const [editDesc, setEditDesc] = useState('')
   const [editPrompt, setEditPrompt] = useState('')
 
-  const refresh = useCallback(() => {
-    setGrouped(listPromptsByCategory())
+  const refresh = useCallback(async () => {
+    const result = await listPromptsByCategory()
+    setGrouped(result)
   }, [])
+
+  useEffect(() => { refresh() }, [refresh])
 
   const filtered = useMemo(() => {
     if (!search.trim()) return grouped
@@ -49,9 +51,9 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
     return result
   }, [grouped, search])
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!newName.trim() || !newPrompt.trim()) return
-    createPrompt({
+    await createPrompt({
       name: newName.trim(),
       description: newDesc.trim() || newName.trim(),
       prompt: newPrompt.trim(),
@@ -62,23 +64,23 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
     setNewDesc('')
     setNewPrompt('')
     setShowCreate(false)
-    refresh()
+    await refresh()
   }
 
-  const handleEdit = (id: string) => {
+  const handleEdit = async (id: string) => {
     if (!editName.trim() || !editPrompt.trim()) return
-    updatePrompt(id, {
+    await updatePrompt(id, {
       name: editName.trim(),
       description: editDesc.trim() || editName.trim(),
       prompt: editPrompt.trim(),
     })
     setEditingId(null)
-    refresh()
+    await refresh()
   }
 
-  const handleDelete = (id: string) => {
-    deletePrompt(id)
-    refresh()
+  const handleDelete = async (id: string) => {
+    await deletePrompt(id)
+    await refresh()
   }
 
   const handleUse = (p: QuickPrompt) => {
@@ -90,7 +92,7 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">Quick Prompts</span>
         <div className="flex gap-1">
-          <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => { resetToDefaults(); refresh() }}>
+          <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={async () => { await resetToDefaults(); await refresh() }}>
             Reset
           </Button>
           <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setShowCreate(true)}>

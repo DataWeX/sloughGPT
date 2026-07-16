@@ -1,53 +1,34 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
+import { chatDB, type BookmarkedMessage } from '@/lib/db'
 
-export interface BookmarkedMessage {
-  id: string
-  content: string
-  role: 'user' | 'assistant'
-  timestamp: number
-  sessionTitle?: string
-}
-
-const STORAGE_KEY = 'chat:bookmarks'
-
-function loadBookmarks(): BookmarkedMessage[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
-  }
-}
-
-function saveBookmarks(bookmarks: BookmarkedMessage[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks))
-  } catch {}
-}
+export type { BookmarkedMessage }
 
 export function useChatBookmarks() {
-  const [bookmarks, setBookmarks] = useState<BookmarkedMessage[]>(loadBookmarks)
+  const [bookmarks, setBookmarks] = useState<BookmarkedMessage[]>([])
 
   useEffect(() => {
-    saveBookmarks(bookmarks)
-  }, [bookmarks])
+    chatDB.getBookmarks().then(items => setBookmarks(items)).catch(() => {})
+  }, [])
 
-  const addBookmark = useCallback((msg: { id: string; content: string; role: 'user' | 'assistant'; timestamp?: number }, sessionTitle?: string) => {
+  const addBookmark = useCallback(async (msg: { id: string; content: string; role: 'user' | 'assistant'; timestamp?: number }, sessionTitle?: string) => {
+    const bm: BookmarkedMessage = {
+      id: msg.id,
+      content: msg.content,
+      role: msg.role,
+      timestamp: msg.timestamp ?? Date.now(),
+      sessionTitle,
+    }
+    await chatDB.addBookmark(bm)
     setBookmarks(prev => {
       if (prev.some(b => b.id === msg.id)) return prev
-      return [{
-        id: msg.id,
-        content: msg.content,
-        role: msg.role,
-        timestamp: msg.timestamp ?? Date.now(),
-        sessionTitle,
-      }, ...prev]
+      return [bm, ...prev]
     })
   }, [])
 
-  const removeBookmark = useCallback((id: string) => {
+  const removeBookmark = useCallback(async (id: string) => {
+    await chatDB.removeBookmark(id)
     setBookmarks(prev => prev.filter(b => b.id !== id))
   }, [])
 
@@ -55,7 +36,8 @@ export function useChatBookmarks() {
     return bookmarks.some(b => b.id === id)
   }, [bookmarks])
 
-  const clearAll = useCallback(() => {
+  const clearAll = useCallback(async () => {
+    await chatDB.clearBookmarks()
     setBookmarks([])
   }, [])
 

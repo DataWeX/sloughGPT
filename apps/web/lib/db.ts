@@ -19,6 +19,31 @@ export interface ChatSession {
   archived?: boolean
 }
 
+export interface KnowledgeItem {
+  id: string
+  content: string
+  timestamp: number
+}
+
+export interface BookmarkedMessage {
+  id: string
+  content: string
+  role: 'user' | 'assistant'
+  timestamp: number
+  sessionTitle?: string
+}
+
+export interface QuickPrompt {
+  id: string
+  name: string
+  description: string
+  prompt: string
+  icon: string
+  category: string
+  createdAt: number
+  updatedAt: number
+}
+
 interface StoredChatMessage {
   id: string
   role: 'user' | 'assistant'
@@ -49,6 +74,9 @@ interface PendingMessage {
 interface ManDB extends Dexie {
   sessions: Table<StoredChatSession, string>
   pendingMessages: Table<PendingMessage, string>
+  knowledge: Table<KnowledgeItem, string>
+  bookmarks: Table<BookmarkedMessage, string>
+  prompts: Table<QuickPrompt, string>
 }
 
 const db = new Dexie('ManDB') as ManDB
@@ -56,6 +84,14 @@ const db = new Dexie('ManDB') as ManDB
 db.version(1).stores({
   sessions: 'id, name, updatedAt, synced',
   pendingMessages: 'id, sessionId, createdAt',
+})
+
+db.version(2).stores({
+  sessions: 'id, name, updatedAt, synced',
+  pendingMessages: 'id, sessionId, createdAt',
+  knowledge: 'id, timestamp',
+  bookmarks: 'id, timestamp, role',
+  prompts: 'id, name, category, createdAt',
 })
 
 function toStored(session: ChatSession): StoredChatSession {
@@ -155,5 +191,65 @@ export const chatDB = {
       }
     }
     return results.sort((a, b) => b.matches.length - a.matches.length)
+  },
+
+  async getKnowledge(): Promise<KnowledgeItem[]> {
+    return db.knowledge.orderBy('timestamp').reverse().toArray()
+  },
+
+  async addKnowledge(item: KnowledgeItem): Promise<void> {
+    await db.knowledge.put(item)
+  },
+
+  async updateKnowledge(id: string, updates: { content?: string }): Promise<void> {
+    await db.knowledge.update(id, updates)
+  },
+
+  async deleteKnowledge(id: string): Promise<void> {
+    await db.knowledge.delete(id)
+  },
+
+  async clearKnowledge(): Promise<void> {
+    await db.knowledge.clear()
+  },
+
+  async importKnowledge(items: KnowledgeItem[]): Promise<void> {
+    await db.knowledge.bulkPut(items)
+  },
+
+  async getBookmarks(): Promise<BookmarkedMessage[]> {
+    return db.bookmarks.orderBy('timestamp').reverse().toArray()
+  },
+
+  async addBookmark(item: BookmarkedMessage): Promise<void> {
+    await db.bookmarks.put(item)
+  },
+
+  async removeBookmark(id: string): Promise<void> {
+    await db.bookmarks.delete(id)
+  },
+
+  async clearBookmarks(): Promise<void> {
+    await db.bookmarks.clear()
+  },
+
+  async getPrompts(): Promise<QuickPrompt[]> {
+    return db.prompts.orderBy('createdAt').reverse().toArray()
+  },
+
+  async savePrompt(prompt: QuickPrompt): Promise<void> {
+    await db.prompts.put(prompt)
+  },
+
+  async deletePrompt(id: string): Promise<void> {
+    await db.prompts.delete(id)
+  },
+
+  async clearPrompts(): Promise<void> {
+    await db.prompts.clear()
+  },
+
+  async importPrompts(prompts: QuickPrompt[]): Promise<void> {
+    await db.prompts.bulkPut(prompts)
   },
 }
