@@ -1449,6 +1449,7 @@ class ModelServer:
         start = time.time()
         token_count = 0
         aborted = False
+        pump_thread = None
         try:
             # Run the backend's sync generator in a thread pool so we
             # don't block the event loop during generation.
@@ -1519,6 +1520,11 @@ class ModelServer:
             logger.info("generate_stream[%s]: client disconnected mid-stream", self.model_id, extra={"tag": "MODEL"})
             if cancel_event is not None:
                 cancel_event.set()
+            # Join the pump thread so post-generation hooks don't race with it
+            if pump_thread is not None and pump_thread.is_alive():
+                pump_thread.join(timeout=10)
+                if pump_thread.is_alive():
+                    logger.warning("generate_stream[%s]: pump thread did not stop within 10s", self.model_id, extra={"tag": "MODEL"})
             return
         except asyncio.TimeoutError:
             with self._metrics_lock:

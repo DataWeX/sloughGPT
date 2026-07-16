@@ -30,7 +30,9 @@ export default function ModelsPage() {
   const [switchingSoul, setSwitchingSoul] = useState<string | null>(null)
   const [traitWeights, setTraitWeights] = useState<Record<string, any> | null>(null)
   const { healthLegacy: health } = useLiveStatus()
-  const refreshHealth = useCallback(async () => {}, [])
+  const refreshHealth = useCallback(async () => {
+    await modelController.getHealth()
+  }, [])
   const addToast = useToastStore(s => s.addToast)
 
   const { data: modelsData, isLoading: modelsLoading, refetch: refetchModels } = useModels()

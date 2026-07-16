@@ -180,18 +180,22 @@ export default function KnowledgePage() {
   const importJson = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const text = await file.text()
-    const data = JSON.parse(text)
-    const arr = Array.isArray(data) ? data : data.items ?? []
-    let count = 0
-    for (const item of arr) {
-      try {
-        await knowledgeController.add(item.content || item.text, item.topic || item.category || 'general')
-        count++
-      } catch { /* skip individual item */ }
+    try {
+      const text = await file.text()
+      const data = JSON.parse(text)
+      const arr = Array.isArray(data) ? data : data.items ?? []
+      let count = 0
+      for (const item of arr) {
+        try {
+          await knowledgeController.add(item.content || item.text, item.topic || item.category || 'general')
+          count++
+        } catch { /* skip individual item */ }
+      }
+      addToast(`Imported ${count} items`, 'success')
+      await Promise.all([fetchItems(), fetchStats()])
+    } catch {
+      addToast('Invalid JSON file', 'error')
     }
-    addToast(`Imported ${count} items`, 'success')
-    await Promise.all([fetchItems(), fetchStats()])
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 

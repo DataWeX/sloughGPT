@@ -197,7 +197,6 @@ export function initLiveStatus(): () => void {
   }
 
   function onOpen() {
-    liveStatusStore.getState().setConnectionStatus('connected')
     liveStatusStore.getState().reset()
     liveStatusStore.getState().setConnectionStatus('connected')
   }

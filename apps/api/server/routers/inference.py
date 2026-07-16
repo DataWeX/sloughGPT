@@ -81,6 +81,8 @@ _session_cache_ttl = 2.0  # seconds
 # In-memory session cache for hot path — avoids sync disk I/O on every chat message
 _session_memory_cache: dict[str, dict] = {}
 _SESSION_CACHE_MAX = 500
+# Track recently deleted sessions to prevent resurrection from concurrent streams
+_session_deleted: set[str] = set()
 
 def _session_cache_put(session_id: str, data: dict) -> None:
     """Cache session data with LRU eviction."""
@@ -205,14 +207,17 @@ async def _flush_session_to_disk(session_id: str) -> None:
     """Write a single dirty session to disk via FileRepository.
 
     Catches disk errors to prevent them from crashing request handlers.
+    Deep-copies the session dict to avoid data races with concurrent handlers.
     """
     data = _session_memory_cache.get(session_id)
     if data is None:
         _session_dirty.discard(session_id)
         return
+    # Deep copy to avoid mutation during serialization on the executor thread
+    data_copy = json.loads(json.dumps(data))
     try:
         loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, _session_repo.save, session_id, data)
+        await loop.run_in_executor(None, _session_repo.save, session_id, data_copy)
     except Exception as exc:
         logger.warning("Disk write failed for session %s: %s", session_id, exc, extra={"tag": "REQ"})
     finally:
@@ -847,13 +852,17 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                 pass
 
             # Save response (memory cache + async disk flush)
-            session_data["messages"].append({
-                "role": "assistant",
-                "content": full_response,
-                "timestamp": datetime.datetime.now().isoformat(),
-            })
-            _save_session(session_id, session_data)
-            await _flush_session_to_disk(session_id)
+            # Skip if session was deleted while we were generating
+            if session_id not in _session_deleted:
+                session_data["messages"].append({
+                    "role": "assistant",
+                    "content": full_response,
+                    "timestamp": datetime.datetime.now().isoformat(),
+                })
+                _save_session(session_id, session_data)
+                await _flush_session_to_disk(session_id)
+            else:
+                logger.info("Session %s was deleted during generation, skipping save", session_id, extra={"tag": "INF"})
 
             # Update ContextCore with response
             if ctx_core and req.use_context_core:
@@ -1192,9 +1201,16 @@ async def get_current_session():
 
 @router.put("/chat/sessions/{session_id}")
 async def upsert_session(session_id: str, req: dict):
-    """Merge fields into existing session (preserves messages and metadata)."""
+    """Merge fields into existing session (preserves messages and metadata).
+
+    Only safe metadata fields (name, archived, starred, pinned) can be updated.
+    Protected fields (id, messages, created_at, updated_at) are ignored.
+    """
+    _SAFE_FIELDS = {"name", "archived", "starred", "pinned"}
     existing = _get_session(session_id)
-    existing.update(req)
+    for key, value in req.items():
+        if key in _SAFE_FIELDS:
+            existing[key] = value
     _save_session(session_id, existing)
     await _flush_session_to_disk(session_id)
     return success_response(data={"session_id": session_id}, message="saved")
@@ -1230,6 +1246,7 @@ async def delete_session(session_id: str):
     if _session_repo.delete(session_id):
         _session_memory_cache.pop(session_id, None)
         _session_dirty.discard(session_id)
+        _session_deleted.add(session_id)
         return success_response(data={"session_id": session_id}, message="deleted")
     raise HTTPException(status_code=404, detail="Session not found")
 

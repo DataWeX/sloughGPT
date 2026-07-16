@@ -245,8 +245,19 @@ export default function SettingsPage() {
                   if (!file) return
                   try {
                     const text = await file.text()
-                    const data = JSON.parse(text)
-                    updateSettings(data)
+                    const raw = JSON.parse(text)
+                    const valid: Record<string, unknown> = {}
+                    if (typeof raw.apiUrl === 'string') valid.apiUrl = raw.apiUrl
+                    if (typeof raw.hfToken === 'string') valid.hfToken = raw.hfToken
+                    if (typeof raw.defaultModel === 'string') valid.defaultModel = raw.defaultModel
+                    if (typeof raw.defaultTemp === 'number') valid.defaultTemp = raw.defaultTemp
+                    if (typeof raw.defaultMaxTokens === 'number') valid.defaultMaxTokens = raw.defaultMaxTokens
+                    if (['dark', 'light', 'system'].includes(raw.theme)) valid.theme = raw.theme
+                    if (typeof raw.streaming === 'boolean') valid.streaming = raw.streaming
+                    if (typeof raw.customContext === 'string') valid.customContext = raw.customContext
+                    if (typeof raw.collapsibleMessageLength === 'number') valid.collapsibleMessageLength = raw.collapsibleMessageLength
+                    if (Object.keys(valid).length === 0) throw new Error('No valid settings found')
+                    updateSettings(valid)
                     addToast('Settings imported', 'success')
                   } catch {
                     addToast('Invalid settings file', 'error')
