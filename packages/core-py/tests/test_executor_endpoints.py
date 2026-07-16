@@ -5,10 +5,12 @@ import time
 import threading
 from pathlib import Path
 
-# Ensure apps/api/server is on sys.path so `schemas` can be imported
+# Ensure repo root AND apps/api/server are on sys.path
+_repo_root = str(Path(__file__).resolve().parents[3])
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
-if _server_dir not in sys.path:
-    sys.path.insert(0, _server_dir)
+for _p in (_repo_root, _server_dir):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 import pytest
 from fastapi import FastAPI

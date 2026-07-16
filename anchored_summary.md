@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 0e5878a fix: hide scrollbar on sidebar navigation list
+No active task. Last commit: d3e2d63 feat(cli): fuzzy command matching and polished UX
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
