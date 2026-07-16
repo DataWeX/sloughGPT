@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import {
   CURRENT_SESSION_KEY, generateSessionId,
   type ChatMessage, type ChatSession,
@@ -12,6 +12,10 @@ import type { Conversation } from '@/lib/session-controller'
 
 const MAX_STORAGE_MESSAGES = 40
 const DRAFT_PREFIX = 'man_draft_'
+
+/** Module-level tracking: prevents duplicate backend session creation across
+ *  React StrictMode double-mounts and concurrent hook instances. */
+const _createdSessions = new Set<string>()
 
 export interface UseChatSessionsReturn {
   sessions: ChatSession[]
@@ -39,7 +43,6 @@ export function useChatSessions(opts: {
   const { setMessages, setInput, setSessionSaved, setSessionLoading, sessionIdRef, showToast } = opts
 
   const [sessions, setSessions] = useState<ChatSession[]>([])
-  const sessionCreatedRef = useRef(false)
 
   const saveSessionToStorage = useCallback(async (msgs: ChatMessage[], sessionId: string) => {
     const sessionName = (() => {
@@ -59,9 +62,12 @@ export function useChatSessions(opts: {
       synced: false, starred: false, pinned: false,
     }
     await chatDB.saveSession(session)
-    if (!sessionCreatedRef.current) {
-      sessionController.create(sessionName, sessionId).catch(console.error)
-      sessionCreatedRef.current = true
+    if (!_createdSessions.has(sessionId)) {
+      _createdSessions.add(sessionId)
+      sessionController.create(sessionName, sessionId).catch(err => {
+        _createdSessions.delete(sessionId)
+        addGlobalError(err, 'Chat:SessionCreate')
+      })
     } else {
       sessionController.update(sessionId, { name: sessionName }).catch(err => addGlobalError(err, 'Chat:SessionUpdate'))
     }
@@ -73,7 +79,7 @@ export function useChatSessions(opts: {
       }
       return merged.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
     })
-  }, [sessionCreatedRef])
+  }, [])
 
   const loadSession = useCallback(async (sessionId: string) => {
     setSessionLoading(true)

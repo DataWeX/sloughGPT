@@ -191,14 +191,21 @@ def _save_session(session_id: str, data: dict) -> None:
 
 
 async def _flush_session_to_disk(session_id: str) -> None:
-    """Write a single dirty session to disk via FileRepository."""
+    """Write a single dirty session to disk via FileRepository.
+
+    Catches disk errors to prevent them from crashing request handlers.
+    """
     data = _session_memory_cache.get(session_id)
     if data is None:
         _session_dirty.discard(session_id)
         return
-    loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, _session_repo.save, session_id, data)
-    _session_dirty.discard(session_id)
+    try:
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, _session_repo.save, session_id, data)
+    except Exception as exc:
+        logger.warning("Disk write failed for session %s: %s", session_id, exc, extra={"tag": "REQ"})
+    finally:
+        _session_dirty.discard(session_id)
 
 
 async def flush_dirty_sessions() -> int:
