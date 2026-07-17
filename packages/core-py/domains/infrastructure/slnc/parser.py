@@ -136,13 +136,13 @@ class SLNCParser:
             self._tensor_map[name] = (offset, shape, dtype, crc)
 
     def get_tensor(self, name: str) -> np.ndarray:
-        """Get weight tensor as numpy view into mmap'd memory.
+        """Get weight tensor from mmap'd file.
 
         Args:
             name: Tensor name (e.g. "h.0.attn.c_attn.weight")
 
         Returns:
-            numpy array — a VIEW into the mmap'd file (zero copy)
+            numpy array — COPY of data from mmap'd file
         """
         if name not in self._tensor_map:
             raise KeyError(f"Unknown tensor: {name}")
@@ -150,9 +150,10 @@ class SLNCParser:
         offset, shape, dtype, crc = self._tensor_map[name]
         nbytes = int(np.prod(shape)) * np.dtype(dtype).itemsize
 
-        # Create view into mmap (zero copy!)
+        # Copy from mmap to avoid segfaults when mmap is closed/GC'd
+        # while numpy arrays still reference the pages
         data = self._mm[offset:offset + nbytes]
-        arr = np.frombuffer(data, dtype=dtype).reshape(shape)
+        arr = np.frombuffer(bytes(data), dtype=dtype).reshape(shape).copy()
 
         # Optional integrity check
         if self._verify:
