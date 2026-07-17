@@ -247,7 +247,7 @@ class TestRegistry:
 
 class TestPGQGeneric:
     def test_put_get_cluster(self):
-        sys = PGQGeneric(name="test", compressor="cluster", storage="memory")
+        sys = PGQGeneric(name="test", compressor="cluster", storage=MemoryStorage())
         data = np.random.randn(500).astype(np.float32)
         sys.put("w1", data)
         result = sys.get("w1")
@@ -257,21 +257,21 @@ class TestPGQGeneric:
         assert mse / (np.var(data) + 1e-8) < 0.3
 
     def test_put_get_function(self):
-        sys = PGQGeneric(name="test", compressor="function", storage="memory")
+        sys = PGQGeneric(name="test", compressor="function", storage=MemoryStorage())
         data = np.arange(100, dtype=np.float32) * 2.0 + 1.0
         sys.put("w1", data)
         result = sys.get("w1")
         np.testing.assert_array_almost_equal(result, data, decimal=4)
 
     def test_put_get_raw(self):
-        sys = PGQGeneric(name="test", compressor="raw", storage="memory")
+        sys = PGQGeneric(name="test", compressor="raw", storage=MemoryStorage())
         data = np.array([1.0, 2.0, 3.0], dtype=np.float32)
         sys.put("w1", data)
         result = sys.get("w1")
         np.testing.assert_array_almost_equal(result, data)
 
     def test_put_get_auto(self):
-        sys = PGQGeneric(name="test", compressor="auto", storage="memory")
+        sys = PGQGeneric(name="test", compressor="auto", storage=MemoryStorage())
         data = np.random.randn(300).astype(np.float32)
         sys.put("w1", data)
         result = sys.get("w1")
@@ -279,7 +279,7 @@ class TestPGQGeneric:
         assert result.shape == (300,)
 
     def test_has_remove(self):
-        sys = PGQGeneric(name="test")
+        sys = PGQGeneric(name="test", storage=MemoryStorage())
         data = np.ones(10, dtype=np.float32)
         sys.put("w1", data)
         assert sys.has("w1") is True
@@ -287,7 +287,7 @@ class TestPGQGeneric:
         assert sys.has("w1") is False
 
     def test_put_get_many(self):
-        sys = PGQGeneric(name="test", compressor="cluster")
+        sys = PGQGeneric(name="test", compressor="cluster", storage=MemoryStorage())
         arrays = {f"w{i}": np.random.randn(100).astype(np.float32) for i in range(5)}
         sys.put_many(arrays)
         results = sys.get_many(list(arrays.keys()))
@@ -297,7 +297,7 @@ class TestPGQGeneric:
             assert results[name].shape == (100,)
 
     def test_search(self):
-        sys = PGQGeneric(name="test")
+        sys = PGQGeneric(name="test", storage=MemoryStorage())
         sys.put("model.layer1.weight", np.ones(10, dtype=np.float32))
         sys.put("model.layer2.weight", np.ones(10, dtype=np.float32))
         sys.put("model.bias", np.ones(5, dtype=np.float32))
@@ -305,14 +305,14 @@ class TestPGQGeneric:
         assert len(results) == 2
 
     def test_best(self):
-        sys = PGQGeneric(name="test")
+        sys = PGQGeneric(name="test", storage=MemoryStorage())
         sys.put("good", np.arange(100, dtype=np.float32))
         sys.put("bad", np.random.randn(100).astype(np.float32))
         best = sys.best(1)
         assert len(best) == 1
 
     def test_stats(self):
-        sys = PGQGeneric(name="test", compressor="cluster")
+        sys = PGQGeneric(name="test", compressor="cluster", storage=MemoryStorage())
         sys.put("w1", np.random.randn(100).astype(np.float32))
         stats = sys.stats()
         assert stats["name"] == "test"
@@ -334,7 +334,7 @@ class TestPGQGeneric:
                 return np.full(n, point.params["centroids"][0])
 
         registry.compressors.register(HalveStrategy())
-        sys = PGQGeneric(name="test", compressor="halve")
+        sys = PGQGeneric(name="test", compressor="halve", storage=MemoryStorage())
         data = np.ones(100, dtype=np.float32) * 5.0
         sys.put("w1", data)
         result = sys.get("w1")
@@ -343,7 +343,7 @@ class TestPGQGeneric:
 
     def test_compose_strategy_instance(self):
         s = ClusterStrategy(n_clusters=32)
-        sys = PGQGeneric(name="test", compressor=s, storage="memory")
+        sys = PGQGeneric(name="test", compressor=s, storage=MemoryStorage())
         data = np.random.randn(200).astype(np.float32)
         sys.put("w1", data)
         result = sys.get("w1")
@@ -362,7 +362,7 @@ class TestPGQGeneric:
             assert result is not None
 
     def test_clear(self):
-        sys = PGQGeneric(name="test")
+        sys = PGQGeneric(name="test", storage=MemoryStorage())
         sys.put("w1", np.ones(10, dtype=np.float32))
         sys.put("w2", np.ones(20, dtype=np.float32))
         assert sys.count() == 2
@@ -371,7 +371,7 @@ class TestPGQGeneric:
 
     def test_unknown_compressor_raises(self):
         with pytest.raises(ValueError, match="Unknown compressor"):
-            PGQGeneric(name="test", compressor="nonexistent")
+            PGQGeneric(name="test", compressor="nonexistent", storage=MemoryStorage())
 
     def test_unknown_storage_raises(self):
         with pytest.raises(ValueError, match="Unknown storage"):

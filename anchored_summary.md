@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 436c627 fix: update test_delete_nonexistent to match FileRepository.delete() behavior
+No active task. Last commit: 7e7a705 feat: generic pluggable pugqeep + streamlined CLI
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
