@@ -117,7 +117,7 @@ class TestFileRepository:
 
     def test_delete_nonexistent(self, tmp_path):
         repo = FileRepository[_RepoItem](tmp_path, serializer=_RepoItem)
-        assert repo.delete("nonexistent") is True
+        assert repo.delete("nonexistent") is False
 
     def test_exists(self, tmp_path):
         repo = FileRepository[_RepoItem](tmp_path, serializer=_RepoItem)

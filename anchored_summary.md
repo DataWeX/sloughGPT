@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: f4e29d1 feat(pugqeep): composability — serialization, configs, auto_save
+No active task. Last commit: c250117 fix: frontend test mocks, bandwidth rule, inference max_tokens
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
