@@ -6,23 +6,50 @@ Supports:
   - Function fitting (periodic, linear, polynomial) with residual storage
 """
 
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 
 from .point import Point
+from .config import CompressorConfig
 
 
 class PointCompressor:
-    """Compresses weight tensors into points (generator functions)."""
+    """Compresses weight tensors into points (generator functions).
+
+    Args:
+        config: Optional CompressorConfig. If None, uses defaults.
+        n_clusters: Override config n_clusters.
+        lloyd_iterations: Override config lloyd_iterations.
+        residual_threshold: Accuracy below this stores residual (0-1).
+    """
+
+    def __init__(self, config: Optional[CompressorConfig] = None, *,
+                 n_clusters: int = 16, lloyd_iterations: int = 5,
+                 residual_threshold: float = 0.99):
+        if config is not None:
+            self.n_clusters = config.n_clusters
+            self.lloyd_iterations = config.lloyd_iterations
+            self.gap_fill_iterations = config.gap_fill_iterations
+            self.gap_fill_max_elements = config.gap_fill_max_elements
+            self.method = config.method
+        else:
+            self.n_clusters = n_clusters
+            self.lloyd_iterations = lloyd_iterations
+            self.gap_fill_iterations = 4
+            self.gap_fill_max_elements = 100_000
+            self.method = "cluster"
+        self.residual_threshold = residual_threshold
 
     def compress_cluster(self, weights: np.ndarray, identity: str = "unknown",
-                        n_clusters: int = 16) -> Point:
+                        n_clusters: Optional[int] = None) -> Point:
         """
         Compress using vector quantization (cluster-based).
 
         This is the approach that works for neural network weights.
         """
+        if n_clusters is None:
+            n_clusters = self.n_clusters
         flat = weights.flatten().astype(np.float32)
         n = len(flat)
 
@@ -31,16 +58,16 @@ class PointCompressor:
         centroids = np.percentile(flat, quantiles)
         centroids.sort()
         # Fill largest gaps for smaller weights only
-        if n < 100000:
-            for _ in range(4):
+        if n < self.gap_fill_max_elements:
+            for _ in range(self.gap_fill_iterations):
                 gaps = np.diff(centroids)
                 biggest = np.argmax(gaps)
                 new_c = (centroids[biggest] + centroids[biggest + 1]) / 2
                 centroids = np.sort(np.append(centroids, new_c))
 
-        # Lloyd's refinement (5 iterations)
+        # Lloyd's refinement
         nc = len(centroids)
-        for _ in range(5):
+        for _ in range(self.lloyd_iterations):
             assignments = np.clip(np.searchsorted(centroids, flat), 0, nc - 1).astype(np.uint8)
             sums = np.bincount(assignments, weights=flat, minlength=nc)
             counts = np.bincount(assignments, minlength=nc).astype(np.float64)
@@ -79,7 +106,7 @@ class PointCompressor:
         best_type, (params, mse) = min(fits, key=lambda x: x[1][1])
         accuracy = 1.0 - mse / (var + 1e-8)
 
-        if accuracy < 0.99:
+        if accuracy < self.residual_threshold:
             i = np.arange(n, dtype=np.float32)
             if best_type == "periodic":
                 fitted = params["a"] * np.cos(i) + params["b"] * np.sin(i) + params["w"]
@@ -100,8 +127,10 @@ class PointCompressor:
         )
 
     def compress(self, weights: np.ndarray, identity: str = "unknown",
-                method: str = "cluster") -> Point:
-        """Compress using specified method."""
+                method: Optional[str] = None) -> Point:
+        """Compress using specified method (defaults to self.method)."""
+        if method is None:
+            method = self.method
         if method == "cluster":
             return self.compress_cluster(weights, identity)
         elif method == "function":

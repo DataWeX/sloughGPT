@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 71e28f1 fix: SLNC mmap segfault — copy data instead of numpy views
+No active task. Last commit: ec24ae4 fix: provider fallback — chat endpoint no longer hangs or crashes
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

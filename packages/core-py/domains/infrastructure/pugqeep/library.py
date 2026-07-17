@@ -17,16 +17,30 @@ import numpy as np
 
 from .point import Point
 from .compressor import PointCompressor
+from .config import LibraryConfig
 
 logger = logging.getLogger("slo.pdqeep")
 
 
 class PointLibrary:
-    """Stores, indexes, and retrieves Points."""
+    """Stores, indexes, and retrieves Points.
 
-    def __init__(self, name: str = "default", storage_dir: Optional[Path] = None):
-        self.name = name
-        self._storage_dir = storage_dir
+    Args:
+        name: Library identifier.
+        storage_dir: Directory for persistence.
+        config: Optional LibraryConfig (overrides name, storage_dir, auto_save).
+    """
+
+    def __init__(self, name: str = "default", storage_dir: Optional[Path] = None,
+                 config: Optional[LibraryConfig] = None):
+        if config is not None:
+            self.name = config.name
+            self._storage_dir = config.storage_dir or storage_dir
+            self._auto_save = config.auto_save
+        else:
+            self.name = name
+            self._storage_dir = storage_dir
+            self._auto_save = False
         self._points: Dict[str, Point] = {}
         self._by_type: Dict[str, List[str]] = {}
         self._created_at = time.time()
@@ -39,6 +53,8 @@ class PointLibrary:
         by_type = self._by_type.setdefault(point.function_type, [])
         if point.identity not in by_type:
             by_type.append(point.identity)
+        if self._auto_save and self._storage_dir is not None:
+            self.save()
 
     def get(self, identity: str) -> Optional[Point]:
         return self._points.get(identity)
@@ -50,6 +66,8 @@ class PointLibrary:
         by_type = self._by_type.get(point.function_type, [])
         if identity in by_type:
             by_type.remove(identity)
+        if self._auto_save and self._storage_dir is not None:
+            self.save()
         return True
 
     def list_all(self) -> List[Point]:

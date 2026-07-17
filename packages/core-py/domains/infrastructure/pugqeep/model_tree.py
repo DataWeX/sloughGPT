@@ -19,24 +19,55 @@ import numpy as np
 from .point import Point
 from .compressor import PointCompressor
 from .library import PointLibrary
+from .config import TreeConfig, CompressorConfig
 
 logger = logging.getLogger("slo.pugqeep")
 
 
 class ModelTree:
-    """Model instance that compresses weights into Points and runs inference."""
+    """Model instance that compresses weights into Points and runs inference.
+
+    Args:
+        name: Model identifier.
+        library: Optional pre-existing PointLibrary.
+        n_clusters: VQ cluster count.
+        config: Optional TreeConfig (overrides n_clusters, method, skip_embeddings, skip_biases).
+        compressor: Optional PointCompressor (overrides config's compressor settings).
+    """
 
     def __init__(self, name: str, library: Optional[PointLibrary] = None,
-                 n_clusters: int = 16):
+                 n_clusters: int = 16, config: Optional[TreeConfig] = None,
+                 compressor: Optional[PointCompressor] = None):
         self.name = name
         self.library = library or PointLibrary(name=f"{name}_points")
-        self.n_clusters = n_clusters
-        self._compressor = PointCompressor()
+        if config is not None:
+            self.n_clusters = config.n_clusters
+            self._method = config.method
+            self._skip_embeddings = config.skip_embeddings
+            self._skip_biases = config.skip_biases
+        else:
+            self.n_clusters = n_clusters
+            self._method = "cluster"
+            self._skip_embeddings = True
+            self._skip_biases = True
+        self._compressor = compressor or PointCompressor(
+            n_clusters=self.n_clusters)
         self._weight_shapes: Dict[str, Tuple[int, ...]] = {}
         self._weight_dtypes: Dict[str, np.dtype] = {}
         self._loaded = False
 
-    def load_weights(self, weights: Dict[str, np.ndarray], method: str = "cluster") -> dict:
+    def load_weights(self, weights: Dict[str, np.ndarray], method: Optional[str] = None) -> dict:
+        """Compress all weight tensors into Points and store in library.
+
+        Args:
+            weights: Dict of name → numpy array.
+            method: Compression method ("cluster" or "function"). Defaults to self._method.
+
+        Returns:
+            Dict with compression stats.
+        """
+        if method is None:
+            method = self._method
         total_raw = 0
         total_compressed = 0
 
@@ -44,7 +75,24 @@ class ModelTree:
             point_id = f"{self.name}.{name}"
             flat = raw.flatten()
 
-            if method == "cluster" and len(flat) < self.n_clusters * 2:
+            # Skip embeddings and biases if configured
+            skip = False
+            if self._skip_embeddings and ("embed" in name.lower() or "embedding" in name.lower()):
+                skip = True
+            if self._skip_biases and name.lower().endswith("bias"):
+                skip = True
+
+            if skip:
+                # Store as raw (no compression for discrete/small tensors)
+                point = Point(
+                    identity=point_id,
+                    function_type="raw",
+                    params={"data_b64": base64.b64encode(raw.tobytes()).decode(),
+                            "shape": list(raw.shape),
+                            "dtype": str(raw.dtype)},
+                    accuracy=1.0,
+                )
+            elif method == "cluster" and len(flat) < self.n_clusters * 2:
                 point = Point(
                     identity=point_id,
                     function_type="raw",

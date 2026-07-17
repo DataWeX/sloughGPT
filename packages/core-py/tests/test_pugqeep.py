@@ -377,3 +377,159 @@ class TestPGQ:
         assert s["eviction_policy"] == "lfu"
         assert "memory_max" in s
         assert "hot_max" in s
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Cluster serialization roundtrip
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestClusterSerialization:
+    def test_cluster_to_bytes_roundtrip(self):
+        from domains.infrastructure.pugqeep.point import Point
+        centroids = np.array([0.1, 0.5, 0.9, -0.3], dtype=np.float32)
+        assignments = np.array([0, 1, 2, 3, 1, 0, 2, 3], dtype=np.uint8)
+        p = Point(identity="test.cluster", function_type="cluster",
+                  params={"centroids": centroids, "assignments": assignments},
+                  accuracy=0.95, dtype="float32", shape=(8,))
+        data = p.to_bytes()
+        p2 = Point.from_bytes(data, identity="test.cluster")
+        assert p2.function_type == "cluster"
+        np.testing.assert_array_equal(p2.params["centroids"], centroids)
+        np.testing.assert_array_equal(p2.params["assignments"], assignments)
+
+    def test_cluster_with_residual_roundtrip(self):
+        from domains.infrastructure.pugqeep.point import Point
+        centroids = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+        assignments = np.array([0, 1, 2, 0], dtype=np.uint8)
+        residual = np.array([0.01, -0.02, 0.03, -0.04], dtype=np.float32)
+        p = Point(identity="test.res", function_type="cluster",
+                  params={"centroids": centroids, "assignments": assignments},
+                  residual=residual, accuracy=0.98)
+        data = p.to_bytes()
+        p2 = Point.from_bytes(data, identity="test.res")
+        np.testing.assert_array_equal(p2.params["centroids"], centroids)
+        np.testing.assert_array_equal(p2.params["assignments"], assignments)
+        assert p2.residual is not None
+        np.testing.assert_array_almost_equal(p2.residual, residual)
+
+    def test_raw_to_bytes_roundtrip(self):
+        from domains.infrastructure.pugqeep.point import Point
+        raw = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+        import base64
+        p = Point(identity="test.raw", function_type="raw",
+                  params={"data_b64": base64.b64encode(raw.tobytes()).decode(),
+                          "shape": [3], "dtype": "float32"},
+                  accuracy=1.0)
+        data = p.to_bytes()
+        p2 = Point.from_bytes(data, identity="test.raw")
+        assert p2.function_type == "raw"
+        decoded = np.frombuffer(base64.b64decode(p2.params["data_b64"]), dtype="float32")
+        np.testing.assert_array_equal(decoded, raw)
+
+    def test_generate_after_bytes_roundtrip(self):
+        """Cluster generate should work after bytes roundtrip."""
+        from domains.infrastructure.pugqeep.point import Point
+        centroids = np.array([10.0, 20.0, 30.0], dtype=np.float32)
+        assignments = np.array([0, 1, 2, 1, 0], dtype=np.uint8)
+        p = Point(identity="t", function_type="cluster",
+                  params={"centroids": centroids, "assignments": assignments})
+        data = p.to_bytes()
+        p2 = Point.from_bytes(data, identity="t")
+        result = p2.generate(5)
+        expected = centroids[assignments]
+        np.testing.assert_array_almost_equal(result, expected)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Config wiring
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestConfigWiring:
+    def test_compressor_config_override(self):
+        from domains.infrastructure.pugqeep.compressor import PointCompressor
+        from domains.infrastructure.pugqeep.config import CompressorConfig
+        cfg = CompressorConfig(n_clusters=32, lloyd_iterations=10,
+                               gap_fill_iterations=8, gap_fill_max_elements=50_000,
+                               method="function")
+        c = PointCompressor(config=cfg)
+        assert c.n_clusters == 32
+        assert c.lloyd_iterations == 10
+        assert c.gap_fill_iterations == 8
+        assert c.gap_fill_max_elements == 50_000
+        assert c.method == "function"
+
+    def test_compressor_residual_threshold(self):
+        from domains.infrastructure.pugqeep.compressor import PointCompressor
+        c = PointCompressor(residual_threshold=0.80)
+        # With low threshold, even decent fits won't store residual
+        weights = np.sin(np.linspace(0, 4 * np.pi, 200)).astype(np.float32)
+        p = c.compress_function(weights, "test")
+        # If accuracy > 0.80, no residual
+        if p.accuracy >= 0.80:
+            assert p.residual is None
+
+    def test_compressor_defaults_without_config(self):
+        from domains.infrastructure.pugqeep.compressor import PointCompressor
+        c = PointCompressor()
+        assert c.n_clusters == 16
+        assert c.lloyd_iterations == 5
+        assert c.residual_threshold == 0.99
+
+    def test_tree_config_skip_embeddings(self):
+        from domains.infrastructure.pugqeep.model_tree import ModelTree
+        from domains.infrastructure.pugqeep.config import TreeConfig
+        cfg = TreeConfig(skip_embeddings=False, skip_biases=False, n_clusters=8)
+        tree = ModelTree("test", config=cfg)
+        weights = {
+            "embed_tokens.weight": np.random.randn(100, 64).astype(np.float32),
+            "layer.bias": np.random.randn(64).astype(np.float32),
+            "layer.weight": np.random.randn(64, 64).astype(np.float32),
+        }
+        tree.load_weights(weights)
+        # With skip=False, all should be compressed as cluster (not raw)
+        for name in weights:
+            point = tree.library.get(f"test.{name}")
+            assert point is not None
+            # embed/bias stored as cluster, not raw
+            if "embed" in name or name.endswith("bias"):
+                assert point.function_type == "cluster", f"{name} should be cluster, got {point.function_type}"
+
+    def test_tree_config_skip_embeddings_on(self):
+        from domains.infrastructure.pugqeep.model_tree import ModelTree
+        from domains.infrastructure.pugqeep.config import TreeConfig
+        cfg = TreeConfig(skip_embeddings=True, skip_biases=True)
+        tree = ModelTree("test", config=cfg)
+        weights = {
+            "embed_tokens.weight": np.random.randn(100, 64).astype(np.float32),
+            "layer.bias": np.random.randn(64).astype(np.float32),
+            "layer.weight": np.random.randn(64, 64).astype(np.float32),
+        }
+        tree.load_weights(weights)
+        # embed/bias → raw, weight → cluster
+        embed_point = tree.library.get("test.embed_tokens.weight")
+        bias_point = tree.library.get("test.layer.bias")
+        weight_point = tree.library.get("test.layer.weight")
+        assert embed_point.function_type == "raw"
+        assert bias_point.function_type == "raw"
+        assert weight_point.function_type == "cluster"
+
+    def test_library_auto_save(self, tmp_path):
+        from domains.infrastructure.pugqeep.library import PointLibrary
+        from domains.infrastructure.pugqeep.point import Point
+        from domains.infrastructure.pugqeep.config import LibraryConfig
+        cfg = LibraryConfig(name="autosave_test", auto_save=True, storage_dir=tmp_path)
+        lib = PointLibrary(config=cfg)
+        p = Point(identity="x", function_type="linear", params={"a": 1.0, "b": 0.0})
+        lib.add(p)
+        # File should exist after add
+        assert (tmp_path / "autosave_test.points.json").exists()
+
+    def test_compressor_uses_config_lloyd_iterations(self):
+        from domains.infrastructure.pugqeep.compressor import PointCompressor
+        from domains.infrastructure.pugqeep.config import CompressorConfig
+        cfg = CompressorConfig(n_clusters=4, lloyd_iterations=1, gap_fill_iterations=0)
+        c = PointCompressor(config=cfg)
+        weights = np.random.randn(100).astype(np.float32)
+        p = c.compress_cluster(weights, "test", n_clusters=4)
+        assert p.function_type == "cluster"
+        assert len(p.params["centroids"]) == 4
