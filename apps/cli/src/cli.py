@@ -310,6 +310,8 @@ Version: {format_version_display()}
 @cli.command(help="Launch interactive terminal UI")
 @click.pass_context
 def tui(ctx):
+    from utils.helpers import ensure_server
+    ensure_server(host=ctx.obj["host"], port=ctx.obj["port"])
     from apps.tui.interactive import main as tui_main
     args = _ns(host=ctx.obj["host"], port=ctx.obj["port"])
     tui_main(["--host", args.host, "--port", str(args.port)])
@@ -320,6 +322,8 @@ def tui(ctx):
 @click.pass_context
 def shell(ctx, command):
     """Launch the SloughGPT interactive shell REPL."""
+    from utils.helpers import ensure_server
+    ensure_server(host=ctx.obj["host"], port=ctx.obj["port"])
     from domains.shell.repl import ShellREPL
     from domains.shell.kernel import DaitRuntime
 
@@ -365,20 +369,15 @@ def completion(shell):
 # ═══════════════════════════════════════════════════════════════════════
 
 
-@cli.command(help="Interactive chat with API")
+@cli.command(help="Interactive chat")
 @click.option("--no-serve", is_flag=True, help="Don't auto-start server")
-@click.option("--auto-model", default=None, help="Auto-load model")
-@click.option("--load-mode", type=click.Choice(["local", "api"]), default="local")
-@click.option("--device", default="auto", help="Device hint")
-@click.option("--max-tokens", default=100, type=int, help="Max tokens per reply")
-@click.option("--temperature", default=0.8, type=float, help="Temperature")
 @click.pass_context
-def chat(ctx, no_serve, auto_model, load_mode, device, max_tokens, temperature):
+def chat(ctx, no_serve):
     from commands.chat import cmd_chat
     args = _ns(
-        no_serve=no_serve, auto_model=auto_model,
-        load_mode=load_mode, device=device, max_tokens=max_tokens,
-        temperature=temperature, host=ctx.obj["host"], port=ctx.obj["port"],
+        no_serve=no_serve, auto_model=None,
+        load_mode="local", device="auto", max_tokens=64,
+        temperature=0.7, host=ctx.obj["host"], port=ctx.obj["port"],
     )
     cmd_chat(args)
 

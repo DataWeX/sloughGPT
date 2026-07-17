@@ -226,6 +226,8 @@ class Point:
                 "assignments_shape": list(assignments.shape),
                 "assignments_dtype": str(assignments.dtype),
             }
+        elif self.function_type == "raw":
+            d["params"] = dict(self.params)
         else:
             d["params"] = {k: float(v) for k, v in self.params.items()}
 
@@ -252,6 +254,8 @@ class Point:
                 dtype=pd["assignments_dtype"],
             ).reshape(pd["assignments_shape"])
             params = {"centroids": centroids, "assignments": assignments}
+        elif func_type == "raw":
+            params = dict(d["params"])
         else:
             params = {k: float(v) for k, v in d["params"].items()}
 

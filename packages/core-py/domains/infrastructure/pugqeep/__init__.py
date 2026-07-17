@@ -41,6 +41,20 @@ from .dedup import PointDeduplicator, PointLibrarySync
 from .store import MemoryStore as FunctionMemoryStore, JSONStore, DirectoryStore
 from .config import PointConfig, CompressorConfig, LibraryConfig, TreeConfig, QueueConfig
 from .facade import PGQ
+from .generic import (
+    PGQGeneric,
+    CompressionStrategy,
+    StorageBackend,
+    FunctionType,
+    registry,
+    ClusterStrategy,
+    FunctionStrategy,
+    RawStrategy,
+    AutoStrategy,
+    MemoryStorage,
+    JSONStorage,
+    DirectoryStorage,
+)
 
 __all__ = [
     # Core types
@@ -52,6 +66,28 @@ __all__ = [
 
     # Facade
     "PGQ",
+
+    # Generic pluggable facade
+    "PGQGeneric",
+
+    # ABCs
+    "CompressionStrategy",
+    "StorageBackend",
+    "FunctionType",
+
+    # Registry
+    "registry",
+
+    # Built-in strategies
+    "ClusterStrategy",
+    "FunctionStrategy",
+    "RawStrategy",
+    "AutoStrategy",
+
+    # Built-in storage backends
+    "MemoryStorage",
+    "JSONStorage",
+    "DirectoryStorage",
 
     # Cache
     "TieredCache",

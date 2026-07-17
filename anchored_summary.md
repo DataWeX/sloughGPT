@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: c250117 fix: frontend test mocks, bandwidth rule, inference max_tokens
+No active task. Last commit: 436c627 fix: update test_delete_nonexistent to match FileRepository.delete() behavior
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
