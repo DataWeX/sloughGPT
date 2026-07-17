@@ -1,11 +1,12 @@
 import { renderHook, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { chatDB } from '@/lib/db'
 
 // ── Set up hoisted mocks first ──────────────────────────────────────────────
 const { mockGetErrorInfo, mockGenerateSessionId, mockGetOrCreateUserId, mockStreamChatResponse } = vi.hoisted(() => ({
   mockGetErrorInfo: vi.fn((): any => null),
   mockGenerateSessionId: vi.fn(() => 'test-session-id'),
-  mockGetOrCreateUserId: vi.fn(() => 'test-user'),
+  mockGetOrCreateUserId: vi.fn(async () => 'test-user'),
   mockStreamChatResponse: vi.fn(),
 }))
 
@@ -16,7 +17,7 @@ vi.mock('@/lib/chat-utils', () => ({
   stripAssistantPrefix: (s: string) => s,
   getOrCreateUserId: mockGetOrCreateUserId,
   generateSessionId: mockGenerateSessionId,
-  CURRENT_SESSION_KEY: 'man_current_session',
+  CURRENT_SESSION_KEY: 'man_current_conversation',
   buildLocalPrompt: vi.fn(() => 'prompt'),
   exportConversationAsMarkdown: vi.fn(),
   copyConversationAsMarkdown: vi.fn(),
@@ -37,8 +38,6 @@ vi.mock('@/lib/knowledge-controller', () => ({
 vi.mock('@/lib/multimodal-controller', () => ({
   multimodalController: { trainImage: vi.fn().mockResolvedValue({ caption: 'test' }), getCapabilities: vi.fn().mockResolvedValue({}), getTrainingReport: vi.fn().mockResolvedValue({}) },
 }))
-
-vi.mock('@/lib/db', () => ({ chatDB: { loadSessions: vi.fn(() => Promise.resolve([])), saveSession: vi.fn(() => Promise.resolve(undefined)), loadSession: vi.fn(() => Promise.resolve(null)) } }))
 
 vi.mock('@/lib/error-store', () => ({ useErrorStore: { getState: vi.fn(() => ({ addError: vi.fn() })) } }))
 
@@ -70,14 +69,26 @@ function makeConfig(overrides = {}) {
 }
 
 describe('useChatMessages', () => {
+  const spies: ReturnType<typeof vi.spyOn>[] = []
+
   beforeEach(() => {
-    vi.clearAllMocks()
-    localStorage.clear()
+    mockGetErrorInfo.mockReturnValue(null)
+    mockStreamChatResponse.mockReset()
     mockGenerateSessionId.mockReturnValue('test-session-id')
+    const db = chatDB as any
+    spies.push(vi.spyOn(db, 'getKV').mockResolvedValue(undefined))
+    spies.push(vi.spyOn(db, 'setKV').mockResolvedValue(undefined))
+    spies.push(vi.spyOn(db, 'getDraft').mockResolvedValue(''))
   })
 
   afterEach(() => {
-    localStorage.clear()
+    spies.forEach(s => s.mockRestore())
+    spies.length = 0
+  })
+
+  afterEach(() => {
+    mockGetErrorInfo.mockReset()
+    mockStreamChatResponse.mockReset()
   })
 
   it('returns default state', () => {
@@ -87,16 +98,19 @@ describe('useChatMessages', () => {
     expect(result.current.loading).toBe(false)
   })
 
-  it('initializes session ID from localStorage', () => {
-    localStorage.setItem('man_current_session', 'existing-session')
+  it('initializes session ID from chatDB', async () => {
+    const spy = vi.spyOn(chatDB as any, 'getKV').mockResolvedValueOnce('existing-session')
     const { result } = renderHook(() => useChatMessages(makeConfig()))
+    await act(async () => { await new Promise(r => setTimeout(r, 10)) })
     expect(result.current.sessionIdRef.current).toBe('existing-session')
+    spy.mockRestore()
   })
 
-  it('generates new session ID when none exists', () => {
+  it('generates new session ID when none exists', async () => {
     const { result } = renderHook(() => useChatMessages(makeConfig()))
+    await act(async () => { await new Promise(r => setTimeout(r, 10)) })
     expect(result.current.sessionIdRef.current).toBe('test-session-id')
-    expect(localStorage.getItem('man_current_session')).toBe('test-session-id')
+    expect(chatDB.setKV).toHaveBeenCalledWith('man_current_conversation', 'test-session-id')
   })
 
   it('newChat resets state', () => {

@@ -20,11 +20,13 @@ vi.mock('@/components/Sidebar', () => ({
 
 vi.mock('@/components/StatusBar', () => ({ StatusBar: () => <div data-testid="status-bar" /> }))
 vi.mock('@sloughgpt/strui', () => ({
+  cn: (...classes: any[]) => classes.filter(Boolean).join(' '),
   Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
   ErrorPanel: () => <div data-testid="error-panel" />,
   IconX: (props: any) => <svg {...props} />,
   IconMenu: (props: any) => <svg {...props} />,
 }))
+vi.mock('@/components/OutputPanel', () => ({ OutputPanel: () => <div data-testid="output-panel" /> }))
 vi.mock('@/components/chat/Toast', () => ({ ToastContainer: () => <div data-testid="toast-container" />, RadixToastContainer: () => <div data-testid="toast-container" /> }))
 vi.mock('@/components/CommandPalette', () => ({ CommandPalette: () => <div data-testid="command-palette" /> }))
 vi.mock('@/components/KeyboardShortcutsModal', () => ({ KeyboardShortcutsModal: ({ open }: any) => open ? <div data-testid="shortcuts-modal" /> : null }))

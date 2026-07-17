@@ -3,6 +3,7 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import React from 'react'
 
 vi.mock('@sloughgpt/strui', () => ({
+  cn: vi.fn((...args: any[]) => args.join(' ')),
   IconX: () => <span data-testid="icon-x">x</span>,
   IconEye: () => <span data-testid="icon-eye">eye</span>,
   IconStar: () => <span data-testid="icon-star">star</span>,

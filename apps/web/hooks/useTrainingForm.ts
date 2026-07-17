@@ -1,11 +1,12 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { modelController } from '@/lib/controllers'
 import type { TrainingJob } from '@/lib/training-controller'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 import type { UseTrainingSessionReturn } from '@/hooks/useTrainingSession'
 import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
+import { chatDB } from '@/lib/db'
 
 export type Method = 'distill' | 'finetune' | 'vlm'
 export type InputMode = 'dataset' | 'text'
@@ -49,31 +50,51 @@ export interface TrainingFormState {
 
 const TRAINING_CONFIG_KEY = 'sloughgpt-training-config'
 
+interface SavedConfig {
+  method?: Method
+  inputMode?: InputMode
+  algo?: string
+  trainingEpochs?: number
+  trainingLR?: number
+  trainingBatchSize?: number
+  selectedModel?: string
+  useLoRA?: boolean
+}
+
 export function useTrainingForm(
   datasets: UseTrainingDatasetsReturn,
   session: UseTrainingSessionReturn,
   checkpoints: UseTrainingCheckpointsReturn,
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
 ): TrainingFormState {
-  const loadSavedConfig = useCallback(() => {
-    try {
-      const saved = localStorage.getItem(TRAINING_CONFIG_KEY)
-      return saved ? JSON.parse(saved) : null
-    } catch { return null }
-  }, [])
-  const saved = useRef(loadSavedConfig())
-
-  const [method, setMethod] = useState<Method>(saved.current?.method ?? 'distill')
-  const [inputMode, setInputMode] = useState<InputMode>(saved.current?.inputMode ?? 'dataset')
+  const [method, setMethod] = useState<Method>('distill')
+  const [inputMode, setInputMode] = useState<InputMode>('dataset')
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [algo, setAlgo] = useState(saved.current?.algo ?? 'bpe')
-  const [trainingEpochs, setTrainingEpochs] = useState(saved.current?.trainingEpochs ?? 5)
-  const [trainingLR, setTrainingLR] = useState(saved.current?.trainingLR ?? 1e-3)
-  const [trainingBatchSize, setTrainingBatchSize] = useState(saved.current?.trainingBatchSize ?? 64)
+  const [algo, setAlgo] = useState('bpe')
+  const [trainingEpochs, setTrainingEpochs] = useState(5)
+  const [trainingLR, setTrainingLR] = useState(1e-3)
+  const [trainingBatchSize, setTrainingBatchSize] = useState(64)
   const [availableModels, setAvailableModels] = useState<string[]>([])
-  const [selectedModel, setSelectedModel] = useState(saved.current?.selectedModel ?? '')
-  const [useLoRA, setUseLoRA] = useState(saved.current?.useLoRA ?? true)
+  const [selectedModel, setSelectedModel] = useState('')
+  const [useLoRA, setUseLoRA] = useState(true)
   const [textInput, setTextInput] = useState('')
+  const [configLoaded, setConfigLoaded] = useState(false)
+
+  useEffect(() => {
+    chatDB.getKV<SavedConfig>(TRAINING_CONFIG_KEY).then(saved => {
+      if (saved) {
+        if (saved.method) setMethod(saved.method)
+        if (saved.inputMode) setInputMode(saved.inputMode)
+        if (saved.algo) setAlgo(saved.algo)
+        if (saved.trainingEpochs) setTrainingEpochs(saved.trainingEpochs)
+        if (saved.trainingLR) setTrainingLR(saved.trainingLR)
+        if (saved.trainingBatchSize) setTrainingBatchSize(saved.trainingBatchSize)
+        if (saved.selectedModel) setSelectedModel(saved.selectedModel)
+        if (saved.useLoRA !== undefined) setUseLoRA(saved.useLoRA)
+      }
+      setConfigLoaded(true)
+    })
+  }, [])
 
   const [visualVisionEncoder, setVlmVisionEncoder] = useState('google/siglip-base-patch16-224')
   const [visualLLM, setVlmLLM] = useState('Qwen/Qwen2.5-0.5B-Instruct')
@@ -93,13 +114,12 @@ export function useTrainingForm(
   }, [session.phase])
 
   useEffect(() => {
-    try {
-      localStorage.setItem(TRAINING_CONFIG_KEY, JSON.stringify({
-        method, inputMode, algo, trainingEpochs, trainingLR,
-        trainingBatchSize, selectedModel, useLoRA,
-      }))
-    } catch {}
-  }, [method, inputMode, algo, trainingEpochs, trainingLR, trainingBatchSize, selectedModel, useLoRA])
+    if (!configLoaded) return
+    chatDB.setKV(TRAINING_CONFIG_KEY, {
+      method, inputMode, algo, trainingEpochs, trainingLR,
+      trainingBatchSize, selectedModel, useLoRA,
+    })
+  }, [method, inputMode, algo, trainingEpochs, trainingLR, trainingBatchSize, selectedModel, useLoRA, configLoaded])
 
   useEffect(() => {
     modelController.list().then(models => {

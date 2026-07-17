@@ -5,6 +5,7 @@ import React from 'react'
 vi.mock('@sloughgpt/strui', () => {
   const iconMock = (name: string) => { const C = () => <span data-testid={`icon-${name}`}>{name}</span>; C.displayName = `Icon${name}`; return C }
   return {
+    cn: vi.fn((...args: any[]) => args.join(' ')),
     IconX: iconMock('x'),
     IconTrash: iconMock('trash'),
     IconThumbUp: iconMock('thumb-up'),

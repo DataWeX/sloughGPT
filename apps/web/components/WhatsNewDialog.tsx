@@ -6,35 +6,30 @@ import { whatsNewItems, type WhatsNewItem } from '@/lib/whats-new-data'
 import { cn, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
+import { chatDB } from '@/lib/db'
 
 const SEEN_KEY = 'whatsnew_seen'
 
-function getSeenIds(): Set<string> {
+async function getSeenIds(): Promise<Set<string>> {
   if (typeof window === 'undefined') return new Set()
-  try {
-    const raw = localStorage.getItem(SEEN_KEY)
-    return new Set(raw ? JSON.parse(raw) : [])
-  } catch {
-    return new Set()
-  }
+  const raw = await chatDB.getKV<string[]>(SEEN_KEY)
+  return new Set(raw ?? [])
 }
 
-export function getUnseenCount(): number {
-  const seen = getSeenIds()
+export async function getUnseenCount(): Promise<number> {
+  const seen = await getSeenIds()
   return whatsNewItems.filter(i => !seen.has(i.id)).length
 }
 
-export function markAllSeen() {
-  try {
-    localStorage.setItem(SEEN_KEY, JSON.stringify(whatsNewItems.map(i => i.id)))
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('whatsnew-updated'))
-    }
-  } catch {}
+export async function markAllSeen() {
+  await chatDB.setKV(SEEN_KEY, whatsNewItems.map(i => i.id))
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('whatsnew-updated'))
+  }
 }
 
-export function getLatestSeenDate(): string | null {
-  const seen = getSeenIds()
+export async function getLatestSeenDate(): Promise<string | null> {
+  const seen = await getSeenIds()
   if (seen.size === 0) return null
   const unseen = whatsNewItems.filter(i => !seen.has(i.id))
   if (unseen.length > 0) return null
@@ -47,8 +42,12 @@ export function getLatestSeenDate(): string | null {
 }
 
 export function WhatsNewDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
-  const [seen, setSeen] = useState(getSeenIds())
+  const [seen, setSeen] = useState<Set<string>>(new Set())
   const markStartedRef = useRef(false)
+
+  useEffect(() => {
+    getSeenIds().then(setSeen)
+  }, [])
 
   useEffect(() => {
     if (!open) {
@@ -59,14 +58,12 @@ export function WhatsNewDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     const unseen = whatsNewItems.some(i => !seen.has(i.id))
     if (!unseen) return
     markStartedRef.current = true
-    markAllSeen()
-    setSeen(new Set(whatsNewItems.map(i => i.id)))
+    markAllSeen().then(() => setSeen(new Set(whatsNewItems.map(i => i.id))))
   }, [open, seen])
 
   const handleOpen = (v: boolean) => {
     if (v) {
-      markAllSeen()
-      setSeen(new Set(whatsNewItems.map(i => i.id)))
+      markAllSeen().then(() => setSeen(new Set(whatsNewItems.map(i => i.id))))
     }
     onOpenChange(v)
   }

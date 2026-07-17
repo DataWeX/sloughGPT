@@ -19,6 +19,7 @@ vi.mock('@sloughgpt/strui', () => {
     return C
   }
   return {
+    cn: vi.fn((...args: any[]) => args.join(' ')),
     Input: (props: any) => <input data-testid="search-input" {...props} />,
     Button: ({ children, onClick, variant, size, ...rest }: any) => (
       <button onClick={onClick} data-variant={variant} data-size={size} {...rest}>{children}</button>

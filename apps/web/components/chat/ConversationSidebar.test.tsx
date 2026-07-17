@@ -11,6 +11,7 @@ vi.mock('next/link', () => ({
 vi.mock('@sloughgpt/strui', () => {
   const iconMock = (name: string) => { const C = () => <span data-testid={`icon-${name}`}>{name}</span>; C.displayName = `Icon${name}`; return C }
   return {
+    cn: vi.fn((...args: any[]) => args.join(' ')),
     Button: ({ children, onClick, variant, size, className }: any) => (
       <button onClick={onClick} className={className} data-variant={variant} data-size={size}>{children}</button>
     ),

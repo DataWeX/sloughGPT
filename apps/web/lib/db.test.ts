@@ -66,6 +66,12 @@ const { tables, FakeDexie } = vi.hoisted(() => {
 
 vi.mock('dexie', () => ({ default: FakeDexie }))
 
+// Override the global @/lib/db mock with the real module (which uses our FakeDexie)
+vi.mock('@/lib/db', async () => {
+  const actual = await vi.importActual<typeof import('./db')>('./db')
+  return actual
+})
+
 import { chatDB, type ChatSession, type ChatMessage } from './db'
 
 beforeEach(() => { tables.clear() })

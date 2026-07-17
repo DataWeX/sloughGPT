@@ -37,8 +37,8 @@ export function StatusBar() {
   const [now, setNow] = useState(Date.now())
 
   useEffect(() => {
-    setUnseenCount(getUnseenCount())
-    const handler = () => setUnseenCount(getUnseenCount())
+    getUnseenCount().then(setUnseenCount)
+    const handler = () => { getUnseenCount().then(setUnseenCount) }
     window.addEventListener('whatsnew-updated', handler)
     return () => window.removeEventListener('whatsnew-updated', handler)
   }, [])

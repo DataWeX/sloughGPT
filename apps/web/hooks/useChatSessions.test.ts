@@ -5,19 +5,26 @@ const {
   mockSaveSession, mockLoadSession, mockLoadSessions,
   mockDeleteSession, mockUpdateSessionFn,
   mockCreate, mockUpdate, mockDelete, mockFetchMessages,
-  mockAddGlobalError,
-} = vi.hoisted(() => ({
-  mockSaveSession: vi.fn(),
-  mockLoadSession: vi.fn(),
-  mockLoadSessions: vi.fn(),
-  mockDeleteSession: vi.fn(),
-  mockUpdateSessionFn: vi.fn(),
-  mockCreate: vi.fn(),
-  mockUpdate: vi.fn(),
-  mockDelete: vi.fn(),
-  mockFetchMessages: vi.fn(),
-  mockAddGlobalError: vi.fn(),
-}))
+  mockAddGlobalError, mockGetKV, mockSetKV, mockDeleteKV, mockGetDraft,
+} = vi.hoisted(() => {
+  const kvStore = new Map<string, unknown>()
+  return {
+    mockSaveSession: vi.fn(),
+    mockLoadSession: vi.fn(),
+    mockLoadSessions: vi.fn(),
+    mockDeleteSession: vi.fn(),
+    mockUpdateSessionFn: vi.fn(),
+    mockCreate: vi.fn(),
+    mockUpdate: vi.fn(),
+    mockDelete: vi.fn(),
+    mockFetchMessages: vi.fn(),
+    mockAddGlobalError: vi.fn(),
+    mockGetKV: vi.fn(async (key: string) => kvStore.get(key)),
+    mockSetKV: vi.fn(async (key: string, value: unknown) => { kvStore.set(key, value) }),
+    mockDeleteKV: vi.fn(async (key: string) => { kvStore.delete(key) }),
+    mockGetDraft: vi.fn(async () => ''),
+  }
+})
 
 vi.mock('@/lib/db', () => ({
   chatDB: {
@@ -26,6 +33,10 @@ vi.mock('@/lib/db', () => ({
     loadSessions: mockLoadSessions,
     deleteSession: mockDeleteSession,
     updateSession: mockUpdateSessionFn,
+    getKV: mockGetKV,
+    setKV: mockSetKV,
+    deleteKV: mockDeleteKV,
+    getDraft: mockGetDraft,
   },
 }))
 
@@ -43,7 +54,7 @@ vi.mock('@/lib/error-store', () => ({
 }))
 
 vi.mock('@/lib/chat-utils', () => ({
-  CURRENT_SESSION_KEY: 'man_current_session',
+  CURRENT_SESSION_KEY: 'man_current_conversation',
   generateSessionId: () => 'session_test',
 }))
 
@@ -61,7 +72,6 @@ describe('useChatSessions', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    localStorage.clear()
     mockLoadSessions.mockResolvedValue([])
     mockCreate.mockResolvedValue(undefined)
     mockUpdate.mockResolvedValue(undefined)
@@ -121,7 +131,7 @@ describe('useChatSessions', () => {
   })
 
   it('deleteSession removes session and clears messages if current', async () => {
-    localStorage.setItem('man_current_session', 's1')
+    mockGetKV.mockResolvedValueOnce('s1')
     mockLoadSessions.mockResolvedValue([])
     const opts = defaultOpts()
     const { result } = renderHook(() => useChatSessions(opts))

@@ -14,6 +14,12 @@ Full map in `.opencode/agents/doc-aware-engineer.md`.
 
 ## Development Principles
 
+### Bandwidth — No Downloads Without Asking
+- **Never download models, datasets, or large files** (>50MB) without explicit user permission
+- User has a limited data subscription — bandwidth is constrained
+- This includes `pip install`, `apt install`, HuggingFace model downloads, dataset imports
+- Always ask first: "This will download ~X MB. OK?"
+
 ### Engineering Standards — No Shortcuts
 Engineering means building properly, not hackily. Every change must be:
 - **Tested** — Don't assume it works, verify it works

@@ -3,6 +3,7 @@ import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/re
 import React from 'react'
 
 vi.mock('@sloughgpt/strui', () => ({
+  cn: vi.fn((...args: any[]) => args.join(' ')),
   Dialog: ({ children, open }: any) => open ? <div data-testid="dialog">{children}</div> : null,
   DialogContent: ({ children }: any) => <div data-testid="dialog-content">{children}</div>,
   DialogHeader: ({ children }: any) => <div>{children}</div>,

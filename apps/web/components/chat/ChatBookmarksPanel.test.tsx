@@ -7,6 +7,7 @@ import type { BookmarkedMessage } from '@/hooks/useChatBookmarks'
 vi.mock('@sloughgpt/strui', () => {
   const Btn = (props: any) => <button {...props} />
   return {
+    cn: vi.fn((...args: any[]) => args.join(' ')),
     Button: Btn,
     IconStar: (p: any) => <svg data-testid="icon-star" {...p} />,
     IconTrash: (p: any) => <svg data-testid="icon-trash" {...p} />,

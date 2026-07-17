@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: ec24ae4 fix: provider fallback — chat endpoint no longer hangs or crashes
+No active task. Last commit: f4e29d1 feat(pugqeep): composability — serialization, configs, auto_save
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

@@ -12,6 +12,8 @@
 const BATCH_INTERVAL_MS = 5000
 const MAX_BATCH_SIZE = 10
 
+import { chatDB } from '@/lib/db'
+
 const API_URL =
   (typeof window !== 'undefined' &&
     (window as any).__NEXT_PUBLIC_API_URL) ||
@@ -121,15 +123,13 @@ export function initErrorReporter() {
   window.addEventListener('error', handleOnError as any)
   window.addEventListener('unhandledrejection', handleRejection as any)
 
-  // Persist critical unhandled errors to localStorage for crash recovery
-  // (hydration errors are handled separately by SuppressDevOverlay)
+  // Persist critical unhandled errors to Dexie for crash recovery
+  // (hydration errors are handled separately by ErrorLifecycle)
   window.addEventListener('error', (event) => {
     try {
       const msg = (event as ErrorEvent).message
       if (!msg || msg.toLowerCase().includes('hydrat') || msg.includes('did not match')) return
-      const stored = JSON.parse(localStorage.getItem('__critical_errors') || '[]')
-      stored.push({ ts: Date.now(), msg: msg.slice(0, 500), type: 'unhandled' })
-      localStorage.setItem('__critical_errors', JSON.stringify(stored.slice(-20)))
+      chatDB.addError(msg.slice(0, 500), 'unhandled').catch(() => {})
     } catch {}
   })
 

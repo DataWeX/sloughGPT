@@ -36,6 +36,7 @@ vi.mock('@sloughgpt/strui', () => {
     return <button role="menuitem" disabled={disabled} onClick={onSelect}>{children}</button>
   }
   return {
+    cn: vi.fn((...args: any[]) => args.join(' ')),
     DropdownMenu: DM, DropdownMenuTrigger: DMT, DropdownMenuContent: ({ children }: any) => <div>{children}</div>,
     DropdownMenuItem: DMI, DropdownMenuSeparator: () => <hr />, DropdownMenuLabel: ({ children }: any) => <div>{children}</div>,
     DropdownMenuCheckboxItem: DMI, DropdownMenuPortal: ({ children }: any) => <div>{children}</div>,

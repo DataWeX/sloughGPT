@@ -18,7 +18,7 @@ import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
 import { useToastStore } from '@/lib/toast-store'
 import { KeyboardShortcutsModal } from '@/components/KeyboardShortcutsModal'
 import { DebugOverlay } from '@/components/DebugOverlay'
-import { WhatsNewDialog, getUnseenCount } from '@/components/WhatsNewDialog'
+import { WhatsNewDialog } from '@/components/WhatsNewDialog'
 import { initLiveStatus } from '@/hooks/useLiveStatus'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

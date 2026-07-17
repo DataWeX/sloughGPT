@@ -443,14 +443,15 @@ export function useChatMessages(config: ChatMessagesConfig) {
   // ── Effects ───────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    const existing = localStorage.getItem(CURRENT_SESSION_KEY)
-    if (existing) {
-      sessionIdRef.current = existing
-    } else {
-      const fresh = generateSessionId()
-      sessionIdRef.current = fresh
-      chatDB.setKV(CURRENT_SESSION_KEY, fresh)
-    }
+    chatDB.getKV<string>(CURRENT_SESSION_KEY).then(existing => {
+      if (existing) {
+        sessionIdRef.current = existing
+      } else {
+        const fresh = generateSessionId()
+        sessionIdRef.current = fresh
+        chatDB.setKV(CURRENT_SESSION_KEY, fresh)
+      }
+    })
     getOrCreateUserId().then(id => { userIdRef.current = id })
     chatDB.getDraft(sessionIdRef.current).then(savedDraft => {
       if (savedDraft) setInput(savedDraft)

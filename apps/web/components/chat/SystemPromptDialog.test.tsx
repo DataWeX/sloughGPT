@@ -1,18 +1,18 @@
-import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import React from 'react'
 
-const localStorageMock = (() => {
-  let store: Record<string, string> = {}
-  return {
-    getItem: (key: string) => store[key] ?? null,
-    setItem: (key: string, value: string) => { store[key] = value },
-    removeItem: (key: string) => { delete store[key] },
-    clear: () => { store = {} },
-  }
-})()
+const DEFAULTS = [
+  { name: 'Helpful Assistant', prompt: 'You are a helpful, harmless, and honest assistant. Answer concisely and accurately.' },
+  { name: 'Code Expert', prompt: 'You are an expert software engineer. Provide clean, well-documented code solutions. Explain your reasoning.' },
+]
 
-vi.stubGlobal('localStorage', localStorageMock)
+vi.mock('@/lib/db', () => ({
+  chatDB: {
+    getKV: vi.fn(async () => DEFAULTS),
+    setKV: vi.fn(async () => {}),
+  },
+}))
 
 vi.mock('@sloughgpt/strui', () => {
   function Dialog({ children, open }: any) { return open ? <div data-testid="dialog">{children}</div> : null }
@@ -37,12 +37,13 @@ vi.mock('@sloughgpt/strui', () => {
 import { SystemPromptDialog } from './SystemPromptDialog'
 
 describe('SystemPromptDialog', () => {
-  beforeEach(() => localStorageMock.clear())
   afterEach(cleanup)
 
-  it('renders when open', () => {
+  it('renders when open', async () => {
     render(<SystemPromptDialog open={true} onOpenChange={vi.fn()} value="" onSave={vi.fn()} />)
-    expect(screen.getByTestId('dialog')).toBeDefined()
+    await waitFor(() => {
+      expect(screen.getByTestId('dialog')).toBeDefined()
+    })
     expect(screen.getByText('Custom System Prompt')).toBeDefined()
   })
 
@@ -51,46 +52,62 @@ describe('SystemPromptDialog', () => {
     expect(screen.queryByTestId('dialog')).toBeNull()
   })
 
-  it('shows the current value in textarea', () => {
+  it('shows the current value in textarea', async () => {
     render(<SystemPromptDialog open={true} onOpenChange={vi.fn()} value="Be helpful" onSave={vi.fn()} />)
-    const textarea = screen.getByLabelText('System prompt') as HTMLTextAreaElement
-    expect(textarea.value).toBe('Be helpful')
+    await waitFor(() => {
+      const textarea = screen.getByLabelText('System prompt') as HTMLTextAreaElement
+      expect(textarea.value).toBe('Be helpful')
+    })
   })
 
-  it('shows preset buttons', () => {
+  it('shows preset buttons', async () => {
     render(<SystemPromptDialog open={true} onOpenChange={vi.fn()} value="" onSave={vi.fn()} />)
-    expect(screen.getByText('Helpful Assistant')).toBeDefined()
-    expect(screen.getByText('Code Expert')).toBeDefined()
+    await waitFor(() => {
+      expect(screen.getByText('Helpful Assistant')).toBeDefined()
+      expect(screen.getByText('Code Expert')).toBeDefined()
+    })
   })
 
-  it('applies preset text on preset click', () => {
+  it('applies preset text on preset click', async () => {
     render(<SystemPromptDialog open={true} onOpenChange={vi.fn()} value="" onSave={vi.fn()} />)
+    await waitFor(() => {
+      expect(screen.getByText('Helpful Assistant')).toBeDefined()
+    })
     fireEvent.click(screen.getByText('Helpful Assistant'))
     const textarea = screen.getByLabelText('System prompt') as HTMLTextAreaElement
     expect(textarea.value).toContain('helpful')
   })
 
-  it('calls onSave with draft value when Save changes clicked', () => {
+  it('calls onSave with draft value when Save changes clicked', async () => {
     const onSave = vi.fn()
     render(<SystemPromptDialog open={true} onOpenChange={vi.fn()} value="" onSave={onSave} />)
+    await waitFor(() => {
+      expect(screen.getByLabelText('System prompt')).toBeDefined()
+    })
     const textarea = screen.getByLabelText('System prompt')
     fireEvent.change(textarea, { target: { value: 'Be concise' } })
     fireEvent.click(screen.getByText('Save changes'))
     expect(onSave).toHaveBeenCalledWith('Be concise')
   })
 
-  it('closes dialog when Save clicked', () => {
+  it('closes dialog when Save clicked', async () => {
     const onOpenChange = vi.fn()
     render(<SystemPromptDialog open={true} onOpenChange={onOpenChange} value="" onSave={vi.fn()} />)
+    await waitFor(() => {
+      expect(screen.getByLabelText('System prompt')).toBeDefined()
+    })
     const textarea = screen.getByLabelText('System prompt')
     fireEvent.change(textarea, { target: { value: 'Be concise' } })
     fireEvent.click(screen.getByText('Save changes'))
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
-  it('does not save draft when Cancel clicked', () => {
+  it('does not save draft when Cancel clicked', async () => {
     const onSave = vi.fn()
     render(<SystemPromptDialog open={true} onOpenChange={vi.fn()} value="" onSave={onSave} />)
+    await waitFor(() => {
+      expect(screen.getByLabelText('System prompt')).toBeDefined()
+    })
     const textarea = screen.getByLabelText('System prompt')
     fireEvent.change(textarea, { target: { value: 'Be concise' } })
     fireEvent.click(screen.getByText('Cancel'))

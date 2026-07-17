@@ -16,10 +16,27 @@ vi.mock('@/lib/agents', () => ({
   },
 }))
 
+const { mockChatDB, kvStore } = vi.hoisted(() => {
+  const kvStore = new Map<string, unknown>()
+  const mockChatDB = {
+    getKV: vi.fn(async (key: string) => kvStore.get(key)),
+    setKV: vi.fn(async (key: string, value: unknown) => { kvStore.set(key, value) }),
+    deleteKV: vi.fn(async (key: string) => { kvStore.delete(key) }),
+  }
+  return { mockChatDB, kvStore }
+})
+
+vi.mock('@/lib/db', () => ({
+  chatDB: mockChatDB,
+}))
+
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
-  localStorage.clear()
+  kvStore.clear()
+  mockChatDB.getKV.mockImplementation(async (key: string) => kvStore.get(key))
+  mockChatDB.setKV.mockImplementation(async (key: string, value: unknown) => { kvStore.set(key, value) })
+  mockChatDB.deleteKV.mockImplementation(async (key: string) => { kvStore.delete(key) })
 })
 
 describe('useChatAgents', () => {
@@ -30,11 +47,11 @@ describe('useChatAgents', () => {
     expect(result.current.knowledgeCtx).toEqual({ showing: false, count: 0, context: '' })
   })
 
-  it('handleSelectAgent sets current agent and saves to localStorage', () => {
+  it('handleSelectAgent sets current agent and saves to chatDB', async () => {
     const { result } = renderHook(() => useChatAgents())
-    act(() => result.current.handleSelectAgent({ id: 'custom', name: 'Custom', description: 'test', icon: 'brain', instructions: '' }))
+    await act(async () => { result.current.handleSelectAgent({ id: 'custom', name: 'Custom', description: 'test', icon: 'brain', instructions: '' }) })
     expect(result.current.currentAgent).toEqual({ id: 'custom', name: 'Custom', description: 'test', icon: 'brain', instructions: '' })
-    expect(localStorage.getItem('man_current_agent')).toBe('custom')
+    expect(mockChatDB.setKV).toHaveBeenCalledWith('man_current_agent', 'custom')
   })
 
   it('handleToggleKnowledge flips knowledgeCtx.showing', () => {
@@ -60,8 +77,8 @@ describe('useChatAgents', () => {
     expect(result.current.agents[0].id).toBe('general')
   })
 
-  it('fetchInitialData uses saved agent from localStorage', async () => {
-    localStorage.setItem('man_current_agent', 'researcher')
+  it('fetchInitialData uses saved agent from chatDB', async () => {
+    mockChatDB.getKV.mockResolvedValueOnce('researcher')
     mockList.mockRejectedValue(new Error('fail'))
     const { result } = renderHook(() => useChatAgents())
     await act(async () => { await result.current.fetchInitialData() })

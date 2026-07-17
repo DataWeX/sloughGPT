@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, cleanup, fireEvent } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 
 const mockHealthState = vi.fn()
 const mockGetCurrent = vi.fn()
@@ -29,7 +29,7 @@ vi.mock('@/components/souls/PersonalitySummary', () => ({
 const mockGetUnseenCount = vi.fn()
 
 vi.mock('@/components/WhatsNewDialog', () => ({
-  getUnseenCount: () => mockGetUnseenCount(),
+  getUnseenCount: () => Promise.resolve(mockGetUnseenCount()),
 }))
 
 const mockHealthSummary = { score: 85, summary: 'Healthy', tokens_per_sec: 15, model_loaded: true, model_type: 'gpt2', soul: 'friendly', uptime_seconds: 100, request_count: 50, error_count: 0, cpu_percent: 30, memory_percent: 40 }
@@ -107,15 +107,19 @@ describe('StatusBar', () => {
     window.removeEventListener('toggle-whatsnew', listener)
   })
 
-  it('shows unseen count badge when there are new features', () => {
+  it('shows unseen count badge when there are new features', async () => {
     mockGetUnseenCount.mockReturnValue(3)
     render(<StatusBar />)
-    expect(screen.getByText('3')).toBeDefined()
+    await waitFor(() => {
+      expect(screen.getByText('3')).toBeDefined()
+    })
   })
 
-  it('caps unseen count badge at 9+', () => {
+  it('caps unseen count badge at 9+', async () => {
     mockGetUnseenCount.mockReturnValue(15)
     render(<StatusBar />)
-    expect(screen.getByText('9+')).toBeDefined()
+    await waitFor(() => {
+      expect(screen.getByText('9+')).toBeDefined()
+    })
   })
 })
