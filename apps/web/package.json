@@ -45,7 +45,7 @@
     "dexie": "^4.4.2",
     "next": "^14.0.0",
     "next-auth": "^4.24.13",
-    "react": "^18.2.0",
+    "react": "^19.2.7",
     "react-dom": "^18.2.0",
     "recharts": "^2.5.0",
     "tailwind-merge": "^3.5.0",
