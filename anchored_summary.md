@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 7e5512c refactor: adopt EmptyCard in datasets page
+No active task. Last commit: 71e28f1 fix: SLNC mmap segfault — copy data instead of numpy views
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

@@ -7,8 +7,11 @@ Simple, focused: receive message → generate response → log
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 import json
+import logging
 import time
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -118,47 +121,41 @@ class ChatDomain:
         max_tokens: int,
         messages: List[Dict[str, str]] = None,
     ) -> str:
-        """Generate response using provider pipeline or core inference engine."""
+        """Generate response using provider pipeline.
+
+        Delegates to provider.chat() which handles ModelServer, engine
+        fallback, and error recovery internally. The provider is async
+        and non-blocking.
+        """
         import asyncio
 
-        # Try the provider pipeline first (supports loaded HF models like TinyLlama)
+        # Build messages with system prompt
+        chat_messages = messages or [{"role": "user", "content": user_msg}]
+        if system_prompt:
+            chat_messages = [{"role": "system", "content": system_prompt}] + chat_messages
+
         try:
             from domains.models.provider import get_provider
             provider = get_provider("default")
-            if provider is not None:
-                msgs = messages or [{"role": "user", "content": user_msg}]
-                # Add timeout to prevent hanging
-                result = await asyncio.wait_for(
-                    provider.chat(msgs, max_tokens=max_tokens, temperature=temperature),
-                    timeout=60.0
-                )
-                return result or ""
+            if provider is None:
+                return "[Error: No provider available]"
+
+            chat_msgs = [
+                {"role": m.get("role", "user"), "content": m.get("content", "")}
+                for m in chat_messages
+            ]
+
+            result = await asyncio.wait_for(
+                provider.chat(chat_msgs, max_tokens=max_tokens, temperature=temperature),
+                timeout=60.0,
+            )
+            return result or ""
+
         except asyncio.TimeoutError:
             return "[Error: Generation timed out after 60 seconds]"
         except Exception as e:
-            # Log the exception instead of silently swallowing it
-            import logging
-            logging.getLogger(__name__).warning(f"Provider chat failed: {e}", exc_info=True)
-
-        # Fallback: use core inference engine
-        engine = self._engine
-        if engine is None:
-            try:
-                from domains.inference.engine import create_engine
-                engine = create_engine()
-                self._engine = engine
-            except Exception as e:
-                return f"[Error: {str(e)}]"
-        try:
-            full_prompt = self._build_prompt(system_prompt, messages or [], user_msg)
-            response = engine.generate_single(
-                prompt=full_prompt,
-                max_new_tokens=max_tokens,
-                temperature=temperature,
-            )
-            return response
-        except Exception as e:
-            return f"[Error: {str(e)}]"
+            logger.error("Chat generation failed: %s", e, exc_info=True)
+            return f"[Error: {type(e).__name__}: {str(e)}]"
 
     @staticmethod
     def _build_prompt(system_prompt: str, messages: List[Dict[str, str]], user_msg: str) -> str:

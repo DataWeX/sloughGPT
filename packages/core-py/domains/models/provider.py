@@ -727,32 +727,76 @@ class InferenceEngineProvider:
         cancel_event = kwargs.get("cancel_event")
 
         if self._server is not None:
-            is_first = True
-            async for text in self._server.generate_stream(
-                prompt=prompt,
-                max_new_tokens=max_tokens,
-                temperature=temperature,
-                top_p=kwargs.get("top_p", 0.9),
-                top_k=kwargs.get("top_k", 40),
-                cancel_event=cancel_event,
-                session_id=session_id,
-            ):
-                cleaned = self._formatter.clean_chunk(text, first=is_first)
-                is_first = False
-                if cleaned:
-                    yield cleaned
-            return
+            try:
+                is_first = True
+                async for text in self._server.generate_stream(
+                    prompt=prompt,
+                    max_new_tokens=max_tokens,
+                    temperature=temperature,
+                    top_p=kwargs.get("top_p", 0.9),
+                    top_k=kwargs.get("top_k", 40),
+                    cancel_event=cancel_event,
+                    session_id=session_id,
+                ):
+                    cleaned = self._formatter.clean_chunk(text, first=is_first)
+                    is_first = False
+                    if cleaned:
+                        yield cleaned
+                return
+            except Exception as e:
+                logger.warning(
+                    "ModelServer generate_stream failed, falling back to engine: %s", e,
+                    extra={"tag": "MODEL"},
+                )
 
-        # Fallback: direct engine generation (no lifecycle management)
+        # Fallback: direct engine generation (no lifecycle management).
+        # The engine's generate_stream() is async but has a synchronous
+        # token-by-token loop inside that blocks the event loop.  We run
+        # it in a thread and bridge tokens through a queue.
+        import asyncio as _aio
+        import queue as _q
+        from threading import Thread
+
+        _token_q: _q.Queue = _q.Queue()
+        _error_holder: list = []
+
+        async def _drain_engine():
+            """Consume engine's async generator in a new event loop in a thread."""
+            loop = _aio.new_event_loop()
+            try:
+                async def _inner():
+                    async for token in self._engine.generate_stream(
+                        prompt=prompt,
+                        max_new_tokens=max_tokens,
+                        temperature=temperature,
+                        top_p=kwargs.get("top_p", 0.9),
+                        top_k=kwargs.get("top_k", 40),
+                        cancel_event=cancel_event,
+                    ):
+                        _token_q.put(token)
+                    _token_q.put(None)  # sentinel
+                loop.run_until_complete(_inner())
+            except Exception as e:
+                _error_holder.append(e)
+                _token_q.put(None)  # unblock consumer
+            finally:
+                loop.close()
+
+        drain_thread = Thread(target=_drain_engine, daemon=True)
+        drain_thread.start()
+
         is_first = True
-        async for token in self._engine.generate_stream(
-            prompt=prompt,
-            max_new_tokens=max_tokens,
-            temperature=temperature,
-            top_p=kwargs.get("top_p", 0.9),
-            top_k=kwargs.get("top_k", 40),
-            cancel_event=cancel_event,
-        ):
+        while True:
+            try:
+                token = _token_q.get(timeout=0.5)
+            except _q.Empty:
+                if not drain_thread.is_alive():
+                    break
+                continue
+            if token is None:
+                break
+            if _error_holder:
+                raise _error_holder[0]
             cleaned = self._formatter.clean_chunk(token, first=is_first)
             is_first = False
             if cleaned:
@@ -769,22 +813,28 @@ class InferenceEngineProvider:
         import time as _time
         t0 = _time.monotonic()
         if self._server is not None:
-            prompt = self._formatter.messages_to_prompt(messages)
-            result = await self._server.generate(
-                prompt=prompt,
-                max_new_tokens=max_tokens,
-                temperature=temperature,
-                top_p=kwargs.get("top_p", 0.9),
-                top_k=kwargs.get("top_k", 40),
-                session_id=session_id,
-            )
-            text = self._formatter.clean_response(result.get("text", ""))
             try:
-                from domains.infrastructure.metrics import get_metrics_collector
-                get_metrics_collector().record_inference(_time.monotonic() - t0, tokens=result.get("tokens_generated", 0))
-            except Exception:
-                pass
-            return text
+                prompt = self._formatter.messages_to_prompt(messages)
+                result = await self._server.generate(
+                    prompt=prompt,
+                    max_new_tokens=max_tokens,
+                    temperature=temperature,
+                    top_p=kwargs.get("top_p", 0.9),
+                    top_k=kwargs.get("top_k", 40),
+                    session_id=session_id,
+                )
+                text = self._formatter.clean_response(result.get("text", ""))
+                try:
+                    from domains.infrastructure.metrics import get_metrics_collector
+                    get_metrics_collector().record_inference(_time.monotonic() - t0, tokens=result.get("tokens_generated", 0))
+                except Exception:
+                    pass
+                return text
+            except Exception as e:
+                logger.warning(
+                    "ModelServer generate failed, falling back to chat_stream: %s", e,
+                    extra={"tag": "MODEL"},
+                )
 
         chunks = []
         async for chunk in self.chat_stream(messages, max_tokens, temperature, session_id=session_id, **kwargs):
