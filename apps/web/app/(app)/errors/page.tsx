@@ -7,6 +7,7 @@ import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Button } from '@sloughgpt/strui'
 import { Chip } from '@sloughgpt/strui'
 import { IconRefresh, IconDownload } from '@sloughgpt/strui'
+import { apiGet } from '@/lib/http-client'
 
 interface LogEntry {
   timestamp: string
@@ -59,11 +60,8 @@ export default function ErrorsPage() {
 
   const fetchLogs = useCallback(async () => {
     try {
-      const res = await fetch('/errors/log')
-      if (res.ok) {
-        const data = await res.json()
-        setEntries(data.entries || [])
-      }
+      const data = await apiGet<{ entries: LogEntry[] }>('/errors/log', undefined, { silent: true })
+      setEntries(data.entries || [])
     } catch {
       // server may not be running
     }

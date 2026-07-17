@@ -8,6 +8,11 @@ import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { SearchInput } from '@sloughgpt/strui'
 import { IconTrash, IconDownload, IconPlus, IconFolder } from '@sloughgpt/strui'
+import { Input } from '@sloughgpt/strui'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@sloughgpt/strui'
 import { sessionController, type Conversation } from '@/lib/session-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { parseConversationJSON, parseConversationMD } from '@/lib/conversations-utils'
@@ -22,6 +27,7 @@ export default function ConversationsPage() {
   const [search, setSearch] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [archiving, setArchiving] = useState(false)
   const [filter, setFilter] = useState<'all' | 'active' | 'archived'>('active')
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -111,22 +117,36 @@ export default function ConversationsPage() {
     } catch { addToast('Failed to archive conversation', 'error') }
   }
 
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+
   const handleRename = async (id: string) => {
     const conv = conversations.find(c => c.id === id)
     if (!conv) return
-    const name = window.prompt('Rename conversation:', conv.name)
-    const trimmed = name?.trim()
-    if (trimmed && trimmed !== conv.name) {
+    setRenamingId(id)
+    setRenameValue(conv.name)
+  }
+
+  const confirmRename = async () => {
+    if (!renamingId) return
+    const trimmed = renameValue.trim()
+    if (trimmed) {
       try {
-        await sessionController.update(id, { name: trimmed })
-        setConversations(prev => prev.map(c => c.id === id ? { ...c, name: trimmed } : c))
+        await sessionController.update(renamingId, { name: trimmed })
+        setConversations(prev => prev.map(c => c.id === renamingId ? { ...c, name: trimmed } : c))
       } catch { addToast('Failed to rename', 'error') }
     }
+    setRenamingId(null)
+    setRenameValue('')
   }
 
   const handleBatchDelete = async () => {
     if (selectedIds.size === 0) return
-    if (!confirm(`Delete ${selectedIds.size} conversations?`)) return
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDelete = async () => {
+    setShowDeleteConfirm(false)
     setDeleting(true)
     let deleted = 0
     for (const id of selectedIds) {
@@ -343,6 +363,40 @@ export default function ConversationsPage() {
       </div>
 
       {importResult && <ImportResultModal result={importResult} onClose={() => setImportResult(null)} />}
+
+      {/* Batch delete confirmation */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedIds.size} conversation{selectedIds.size !== 1 ? 's' : ''}?</AlertDialogTitle>
+            <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Rename dialog */}
+      <AlertDialog open={renamingId !== null} onOpenChange={(open) => { if (!open) setRenamingId(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Rename conversation</AlertDialogTitle>
+          </AlertDialogHeader>
+          <Input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmRename() } }}
+            placeholder="Conversation name"
+            autoFocus
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmRename}>Save</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

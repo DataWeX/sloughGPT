@@ -25,6 +25,14 @@ vi.mock('@sloughgpt/strui', () => {
     IconFolder: iconMock('folder'),
     IconSort: iconMock('sort'),
     IconCheck: iconMock('check'),
+    AlertDialog: ({ open, onOpenChange, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
+    AlertDialogContent: ({ children }: any) => <div>{children}</div>,
+    AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
+    AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
+    AlertDialogDescription: ({ children }: any) => <div>{children}</div>,
+    AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
+    AlertDialogCancel: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    AlertDialogAction: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
   }
 })
 
@@ -151,7 +159,6 @@ describe('ConversationSidebar', () => {
   })
 
   it('calls onDeleteConversation when delete button clicked', () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     const conversations = [createConv('1')]
     render(
       <ConversationSidebar
@@ -162,12 +169,13 @@ describe('ConversationSidebar', () => {
     )
     const deleteBtn = screen.getByLabelText('Delete Conversation 1')
     fireEvent.click(deleteBtn)
+    expect(screen.getByTestId('alert-dialog')).toBeDefined()
+    const deleteAction = screen.getByText('Delete')
+    fireEvent.click(deleteAction)
     expect(onDeleteConversation).toHaveBeenCalledWith('1')
-    confirmSpy.mockRestore()
   })
 
-  it('does not call onDeleteConversation when confirm cancelled', () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+  it('does not call onDeleteConversation when dialog cancelled', () => {
     const conversations = [createConv('1')]
     render(
       <ConversationSidebar
@@ -178,8 +186,10 @@ describe('ConversationSidebar', () => {
     )
     const deleteBtn = screen.getByLabelText('Delete Conversation 1')
     fireEvent.click(deleteBtn)
+    expect(screen.getByTestId('alert-dialog')).toBeDefined()
+    const cancelBtn = screen.getByText('Cancel')
+    fireEvent.click(cancelBtn)
     expect(onDeleteConversation).not.toHaveBeenCalled()
-    confirmSpy.mockRestore()
   })
 
   it('shows mobile drawer when open is true', () => {

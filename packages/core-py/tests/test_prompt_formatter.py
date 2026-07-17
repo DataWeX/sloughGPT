@@ -154,3 +154,66 @@ class TestCleanResponse:
         fmt = PromptFormatter()
         result = fmt.clean_response("  Hello  ")
         assert result == "Hello"
+
+    def test_strips_thinking_block(self):
+        fmt = PromptFormatter()
+        result = fmt.clean_response("<think>reasoning</think>Hello")
+        assert "reasoning" not in result
+        assert "Hello" in result
+
+    def test_strips_unterminated_thinking(self):
+        fmt = PromptFormatter()
+        result = fmt.clean_response("<think>reasoning")
+        assert "reasoning" not in result
+
+    def test_strips_tool_call_block(self):
+        fmt = PromptFormatter()
+        result = fmt.clean_response("<tool_call>{\"cmd\": \"search\"}</tool_call>Hello")
+        assert "search" not in result
+        assert "Hello" in result
+
+
+class TestStreamingStateTracking:
+    def test_think_block_across_chunks(self):
+        fmt = PromptFormatter()
+        # Chunk 1: opening think tag + partial content
+        c1 = fmt.clean_chunk("<think>Let me think")
+        assert "<think>" not in c1
+        # Chunk 2: content inside think block (should be suppressed)
+        c2 = fmt.clean_chunk(" about this problem")
+        assert c2 == ""
+        # Chunk 3: closing think tag + actual response
+        c3 = fmt.clean_chunk("</think>Hello!")
+        assert "</think>" not in c3
+        assert "Hello!" in c3
+
+    def test_tool_call_across_chunks(self):
+        fmt = PromptFormatter()
+        # Chunk 1: opening tool_call
+        c1 = fmt.clean_chunk("<tool_call>{\"cmd\": \"s")
+        assert "<tool_call>" not in c1
+        # Chunk 2: content inside tool_call
+        c2 = fmt.clean_chunk("earch\"}</tool_call>")
+        assert c2 == ""
+        # Chunk 3: response after tool_call
+        c3 = fmt.clean_chunk(" Here are the results")
+        assert "Here are the results" in c3
+
+    def test_state_resets_across_generations(self):
+        fmt = PromptFormatter()
+        # First generation has a think block
+        fmt.clean_chunk("<think>thinking")
+        fmt.clean_chunk("</think>Hello")
+        # Reset for new generation
+        fmt.clean_chunk("", first=True)
+        # Second generation should not be affected
+        result = fmt.clean_chunk("World")
+        assert "World" in result
+
+    def test_multiple_think_blocks(self):
+        fmt = PromptFormatter()
+        # Two consecutive think blocks
+        c1 = fmt.clean_chunk("<think>a</think><think>b</think>Done")
+        assert "a" not in c1
+        assert "b" not in c1
+        assert "Done" in c1

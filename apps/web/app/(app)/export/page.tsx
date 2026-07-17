@@ -12,6 +12,7 @@ import { exportController } from '@/lib/controllers'
 import { modelController, type ModelInfo } from '@/lib/model-controller'
 import { sessionController } from '@/lib/session-controller'
 import { useToastStore } from '@/lib/toast-store'
+import { logger } from '@/lib/dev-log'
 
 export default function ExportPage() {
   const addToast = useToastStore(s => s.addToast)
@@ -36,7 +37,9 @@ export default function ExportPage() {
       setFormats(prev => fmts.length > 0 ? fmts : prev)
       const loaded = list.find(m => m.loaded || health?.model_type?.includes(m.id || m.name)) || null
       setLoadedModel(loaded)
-    } catch {} finally {
+    } catch {
+      logger.warning('ExportPage: failed to fetch model data', {})
+    } finally {
       setLoading(false)
     }
   }, [])

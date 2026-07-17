@@ -16,11 +16,9 @@ import {
   IconAlert,
   IconBrain,
 } from '@/components/icons/NavIcons'
-import { IconChevronDown } from '@sloughgpt/strui'
 import { routeMatchesPath } from '@/lib/route-match'
 import { ThemeSwitcher } from './ThemeSwitcher'
-import { CustomDropdown } from './CustomDropdown'
-import { useLocale, LOCALES } from '@/hooks/useLocale'
+import { useLocale } from '@/hooks/useLocale'
 
 const allItems = [
   { path: '/chat', key: 'nav.chat', Icon: IconChat },
@@ -135,28 +133,6 @@ export function Sidebar({ variant = 'desktop', onNavigate, onClose }: SidebarPro
 
       <div className="shrink-0 space-y-1 border-t border-border/50 px-3 py-3">
         <ThemeSwitcher />
-        <CustomDropdown
-          align="start"
-          trigger={
-            <button className="flex items-center justify-between gap-2 w-full px-3 py-2 hover:bg-accent/50 rounded-lg transition-colors cursor-pointer text-sm">
-              <span className="h-7 w-7 shrink-0 rounded-full bg-primary text-primary-foreground text-sm font-medium flex items-center justify-center">
-                A
-              </span>
-              <span className="flex-1 truncate text-sm text-left">{t('sidebar.account')}</span>
-              <IconChevronDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
-            </button>
-          }
-          items={[
-            {
-              label: `${t('sidebar.signOut')} (offline)`,
-              onClick: () => {
-                import('@/lib/toast-store').then(({ useToastStore }) =>
-                  useToastStore.getState().addToast('Auth is running in offline mode. Sign-in coming soon.')
-                ).catch(() => {})
-              },
-            },
-          ]}
-        />
       </div>
     </aside>
   )

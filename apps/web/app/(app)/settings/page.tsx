@@ -60,7 +60,18 @@ export default function SettingsPage() {
   }
 
   const resetAllSettings = () => {
-    window.location.reload()
+    updateSettings({
+      apiUrl: 'http://localhost:8000',
+      hfToken: '',
+      defaultModel: 'gpt2',
+      defaultTemp: 0.8,
+      defaultMaxTokens: 200,
+      theme: 'light',
+      streaming: true,
+      customContext: '',
+      collapsibleMessageLength: 500,
+    })
+    addToast('Settings reset to defaults', 'success')
   }
 
   return (

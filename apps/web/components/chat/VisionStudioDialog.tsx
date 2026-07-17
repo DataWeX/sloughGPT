@@ -6,6 +6,7 @@ import { Button } from '@sloughgpt/strui'
 import { Tabs } from '@sloughgpt/strui'
 import { IconUpload, IconTrash, IconSend, IconDownload, IconX, IconRefresh } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
+import { logger } from '@/lib/dev-log'
 
 interface VisionStudioDialogProps {
   open: boolean
@@ -89,7 +90,7 @@ export function VisionStudioDialog({
         last_accuracy: report.last_accuracy,
       })
     } catch {
-      // silent
+      logger.warning('VisionStudioDialog: failed to fetch training report', {})
     }
   }, [])
 
@@ -205,7 +206,7 @@ export function VisionStudioDialog({
       setTrainResult(null)
       refreshReport()
     } catch {
-      // silent
+      logger.warning('VisionStudioDialog: failed to reset vision model', {})
     } finally {
       setResetLoading(false)
     }

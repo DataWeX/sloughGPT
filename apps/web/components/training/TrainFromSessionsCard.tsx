@@ -6,6 +6,7 @@ import { Button } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
 import { trainingController } from '@/lib/controllers'
 import { useToastStore } from '@/lib/toast-store'
+import { logger } from '@/lib/dev-log'
 import type { AutoTrainStatus, ChatSession } from '@/lib/training-controller'
 
 interface TrainProgress {
@@ -46,7 +47,7 @@ export function TrainFromSessionsCard() {
       setStatus(s)
       setSessions(sess)
     } catch {
-      // endpoint might not be available
+      logger.warning('TrainFromSessionsCard: auto-train endpoint not available', {})
     } finally {
       setLoading(false)
     }

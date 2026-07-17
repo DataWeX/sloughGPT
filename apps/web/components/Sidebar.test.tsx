@@ -11,8 +11,6 @@ vi.mock('@/hooks/useLocale', () => ({
 
 vi.mock('./ThemeSwitcher', () => ({ ThemeSwitcher: () => <div data-testid="theme-switcher" /> }))
 
-vi.mock('./CustomDropdown', () => ({ CustomDropdown: ({ trigger }: any) => <div data-testid="custom-dropdown">{trigger}</div> }))
-
 vi.mock('@/lib/route-match', () => ({ routeMatchesPath: (p: string, path: string) => p.startsWith(path) }))
 
 import { Sidebar } from './Sidebar'
@@ -50,11 +48,6 @@ describe('Sidebar', () => {
     const onClose = vi.fn()
     render(<Sidebar variant="drawer" onClose={onClose} />)
     expect(screen.getByLabelText('sidebar.close')).toBeDefined()
-  })
-
-  it('renders account dropdown', () => {
-    render(<Sidebar />)
-    expect(screen.getByText('sidebar.account')).toBeDefined()
   })
 
   it('renders app name and console subtitle for desktop', () => {

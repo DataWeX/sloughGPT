@@ -4,6 +4,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconPlus, IconStar, IconPin, IconChat, IconChevronRight, IconX, IconSearch, IconFolder, IconSort, IconCheck } from '@sloughgpt/strui'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@sloughgpt/strui'
 import type { Conversation } from '@/lib/session-controller'
 import { formatDate, truncateMessage } from '@/lib/conversations-utils'
 
@@ -52,6 +56,7 @@ function SidebarContent({
   const SORT_KEY = 'sloughgpt:sidebar-sort'
 
   const [search, setSearch] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
   const [sortMode, setSortMode] = useState<'updated' | 'name' | 'messages'>(() => {
     if (typeof window === 'undefined') return 'updated'
     const saved = localStorage.getItem(SORT_KEY)
@@ -88,9 +93,14 @@ function SidebarContent({
   const handleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
     const conv = sorted.find(c => c.id === id)
-    const name = conv?.name || 'this conversation'
-    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return
-    onDeleteConversation?.(id)
+    setDeleteTarget({ id, name: conv?.name || 'this conversation' })
+  }
+
+  const confirmDelete = () => {
+    if (deleteTarget) {
+      onDeleteConversation?.(deleteTarget.id)
+      setDeleteTarget(null)
+    }
   }
 
   const starred = filtered.filter(c => c.starred).slice(0, 10)
@@ -291,6 +301,20 @@ function SidebarContent({
         View all conversations
         <IconChevronRight className="h-3 w-3" />
       </Link>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete &ldquo;{deleteTarget?.name}&rdquo;?</AlertDialogTitle>
+            <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -5,6 +5,7 @@ import { Button } from '@sloughgpt/strui'
 import { IconAlert } from '@sloughgpt/strui'
 import { addGlobalError } from '@/lib/error-store'
 import { useToastStore } from '@/lib/toast-store'
+import { logger } from '@/lib/dev-log'
 
 interface Props {
   children: ReactNode
@@ -44,7 +45,7 @@ export class ErrorBoundary extends Component<Props, State> {
       try {
         useToastStore.getState().addToast('Something went wrong. Try refreshing the page.', 'error')
       } catch {
-        // Toast store might not be initialized
+        logger.warning('ErrorBoundary: toast store not initialized', { error: error.message })
       }
       return { hasError: false, error }
     }
@@ -56,7 +57,7 @@ export class ErrorBoundary extends Component<Props, State> {
     try {
       addGlobalError(error, errorInfo.componentStack || 'componentDidCatch')
     } catch {
-      // store might not be initialized
+      logger.error('ErrorBoundary: failed to persist error', { error: error.message })
     }
   }
 

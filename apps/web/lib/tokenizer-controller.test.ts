@@ -83,12 +83,12 @@ describe('tokenizerController.getSamples', () => {
   })
 })
 
-describe('tokenizerController.train', () => {
+describe('tokenizerController.trainTokenizer', () => {
   beforeEach(() => vi.clearAllMocks())
   it('POSTs to /tokenizer/train with vocab size', async () => {
     const mock = { status: 'ok' }
     apiClient.apiPost.mockResolvedValue(mock)
-    const result = await tokenizerController.train(1024)
+    const result = await tokenizerController.trainTokenizer(1024)
     expect(result.status).toBe('ok')
     expect(apiClient.apiPost).toHaveBeenCalledWith('/tokenizer/train', { vocab_size: 1024, texts: undefined })
   })

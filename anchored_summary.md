@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 7e7a705 feat: generic pluggable pugqeep + streamlined CLI
+No active task. Last commit: bfad5c3 fix: test isolation — use fresh MemoryStorage per test
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

@@ -43,7 +43,7 @@ export default function ComparePage() {
           loaded: m.loaded || (health?.model_type?.includes(m.id || m.name) ?? false),
           sizeGb: m.size_gb,
         }))
-        setModels(entries.slice(0, 8))
+        setModels(entries)
       } catch { addToast('Failed to load models', 'error')
       } finally { setLoading(false) }
     })()

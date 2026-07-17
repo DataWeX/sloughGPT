@@ -9,6 +9,7 @@ import { useErrorStore } from '@/lib/error-store'
 import { cn } from '@sloughgpt/strui'
 import { deriveArchetype } from '@/components/souls/PersonalitySummary'
 import { getUnseenCount } from '@/components/WhatsNewDialog'
+import { logger } from '@/lib/dev-log'
 
 function formatDuration(ms: number): string {
   const s = Math.floor(ms / 1000)
@@ -62,7 +63,9 @@ export function StatusBar() {
             const arch = deriveArchetype(w as any)
             setArchetypeLabel(arch.label)
           }
-        } catch {}
+        } catch {
+          logger.warning('StatusBar: failed to fetch trait weights', {})
+        }
       }
     }).catch(() => {})
   }, [health, connectionStatus])

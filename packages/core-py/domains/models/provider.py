@@ -844,7 +844,7 @@ class InferenceEngineProvider:
             get_metrics_collector().record_inference(_time.monotonic() - t0, tokens=len(chunks))
         except Exception:
             pass
-        return "".join(chunks)
+        return self._formatter.clean_response("".join(chunks))
 
     def embed(self, text: str) -> List[float]:
         return []

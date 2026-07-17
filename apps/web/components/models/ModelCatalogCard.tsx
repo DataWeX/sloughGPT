@@ -8,6 +8,7 @@ import { catalogIdMatchesRuntime } from '@/lib/inference-display'
 import { generateController } from '@/lib/generate-controller'
 import { useLoadModel } from '@/lib/query/api-hooks'
 import { useToastStore } from '@/lib/toast-store'
+import { logger } from '@/lib/dev-log'
 
 interface Model {
   id: string; name?: string; source?: string; description?: string; tags?: string[]
@@ -37,7 +38,9 @@ export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeI
       addToast(`${data.model_id ?? modelId} ready`, 'success')
       setLoadingModel(null)
       setWarmingModel(modelId)
-      try { await generateController.generate({ prompt: 'Hello', max_new_tokens: 2 }) } catch {}
+      try { await generateController.generate({ prompt: 'Hello', max_new_tokens: 2 }) } catch {
+        logger.warning('ModelCatalogCard: warmup generation failed', { modelId })
+      }
       setWarmingModel(null)
     } catch (err) {
       addToast(err instanceof Error ? err.message : String(err), 'error')

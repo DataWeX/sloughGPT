@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
 import { trainingController } from '@/lib/controllers'
+import { logger } from '@/lib/dev-log'
 import type { EvalHistoryEntry } from '@/lib/training-controller'
 
 function VerdictBadge({ verdict }: { verdict: string }) {
@@ -74,7 +75,7 @@ export function EvalReportCard() {
       const { results } = await trainingController.getEvalHistory(20)
       setEntries(results)
     } catch {
-      // eval endpoint may not be available
+      logger.warning('EvalReportCard: eval endpoint not available', {})
     } finally {
       setLoading(false)
     }

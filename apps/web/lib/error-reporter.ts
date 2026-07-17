@@ -20,6 +20,14 @@ const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   'http://localhost:8000'
 
+let _logger: { warn: (msg: string, ctx?: unknown) => void } | null = null
+function getLogger() {
+  if (!_logger) {
+    try { _logger = require('@/lib/dev-log').logger } catch { /* fallback: no-op */ }
+  }
+  return _logger
+}
+
 interface ErrorReport {
   message: string
   source: string
@@ -129,8 +137,12 @@ export function initErrorReporter() {
     try {
       const msg = (event as ErrorEvent).message
       if (!msg || msg.toLowerCase().includes('hydrat') || msg.includes('did not match')) return
-      chatDB.addError(msg.slice(0, 500), 'unhandled').catch(() => {})
-    } catch {}
+      chatDB.addError(msg.slice(0, 500), 'unhandled').catch((e: unknown) => {
+        getLogger()?.warn('error-reporter: failed to persist error to IndexedDB', { error: e })
+      })
+    } catch {
+      getLogger()?.warn('error-reporter: failed to read error event', {})
+    }
   })
 
   // Flush remaining errors on page unload

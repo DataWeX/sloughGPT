@@ -7,6 +7,7 @@ import { Skeleton } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { trainingController } from '@/lib/controllers'
 import { useToastStore } from '@/lib/toast-store'
+import { logger } from '@/lib/dev-log'
 import type { TrainingDataStats, TrainingPair } from '@/lib/training-controller'
 
 export function TrainingDataCard() {
@@ -49,7 +50,7 @@ export function TrainingDataCard() {
       p.pairs.forEach(pair => { if (pair.session_id) sessionIds.add(pair.session_id) })
       setAllSessions(Array.from(sessionIds).sort())
     } catch {
-      // might not be available
+      logger.warning('TrainingDataCard: training data endpoint not available', {})
     } finally {
       setLoading(false)
     }

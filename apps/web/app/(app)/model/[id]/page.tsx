@@ -380,14 +380,9 @@ function ModelTestPrompt({ modelId }: { modelId: string }) {
     setLoading(true)
     setOutput('')
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/inference/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: prompt.trim(), max_new_tokens: 200 }),
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      setOutput(data.text || data.response || JSON.stringify(data))
+      const { generateController } = await import('@/lib/generate-controller')
+      const data = await generateController.generate({ prompt: prompt.trim(), max_new_tokens: 200 })
+      setOutput(data.text || '')
     } catch (err) {
       addToast('Test failed — is the model loaded?', 'error')
     } finally {

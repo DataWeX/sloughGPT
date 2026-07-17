@@ -15,6 +15,7 @@ import {
 import { IconChevronRight, IconMessage, IconSearch } from '@sloughgpt/strui'
 
 import { apiGet } from '@/lib/http-client'
+import { chatController } from '@/lib/chat-controller'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useLocale } from '@/hooks/useLocale'
 import { knowledgeController } from '@/lib/knowledge-controller'
@@ -272,15 +273,10 @@ export default function HomePage() {
                   data.setTestRunning(true)
                   data.setTestResponse(null)
                   try {
-                    const resp = await fetch(`${PUBLIC_API_URL}/chat`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ messages: [{ role: 'user', content: 'Hello!' }] }),
-                    })
-                    const result = await resp.json()
-                    data.setTestResponse(result.message || result.error || 'No response')
-                  } catch {
-                    data.setTestResponse('Failed to connect')
+                    const result = await chatController.send('Hello!')
+                    data.setTestResponse(result.message || 'No response')
+                  } catch (e: any) {
+                    data.setTestResponse(e?.message || 'Failed to connect')
                   } finally {
                     data.setTestRunning(false)
                   }
