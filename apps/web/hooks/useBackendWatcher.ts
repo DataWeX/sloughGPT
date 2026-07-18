@@ -101,14 +101,14 @@ export function useBackendWatcher() {
         } else if (isConnectionDown) {
           failureCount.current += 1
           wasOffline.current = true
-          const reason = err?.message || 'Connection unavailable'
+          const reason = errMsg || 'Connection unavailable'
           _log.warning(`Connection failed (${failureCount.current}/${MAX_FAILURES_BEFORE_RELOAD}): ${reason} — server startup: ${elapsed}s`)
           setStatus(failureCount.current >= MAX_FAILURES_BEFORE_RELOAD ? 'reloading' : 'connecting')
         } else {
           // 4xx/5xx — server is up but returning errors
           failureCount.current += 1
           wasOffline.current = true
-          _log.warning(`HTTP error (${failureCount.current}/${MAX_FAILURES_BEFORE_RELOAD}): ${err?.status} ${err?.message}`)
+          _log.warning(`HTTP error (${failureCount.current}/${MAX_FAILURES_BEFORE_RELOAD}): ${errStatus ?? 'unknown'} ${errMsg ?? 'unknown'}`)
           setStatus(failureCount.current >= MAX_FAILURES_BEFORE_RELOAD ? 'reloading' : 'connecting')
         }
 

@@ -119,7 +119,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     esRef.current?.close(); esRef.current = null
     if (ftPollRef.current) { clearInterval(ftPollRef.current); ftPollRef.current = null }
     if (visualPollRef.current) { clearInterval(visualPollRef.current); visualPollRef.current = null }
-    trainingJobsController.stopAutoTrain().catch(() => {})
+    trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Failed to stop training', e))
     resetTraining()
   }, [resetTraining])
 

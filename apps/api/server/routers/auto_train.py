@@ -1364,11 +1364,16 @@ async def cancel_from_sessions():
     return success_response(message="Cancel signal sent")
 
 
+_VALID_CKPT_NAME = re.compile(r'^[a-zA-Z0-9_\-\.]+$')
+
+
 @router.get("/checkpoints/{name}/download")
 async def download_checkpoint(name: str):
     """Download a checkpoint .soul file for local (WebGPU) inference."""
+    if not _VALID_CKPT_NAME.match(name) or '..' in name:
+        raise HTTPException(status_code=400, detail="Invalid checkpoint name")
     for d in (CHECKPOINTS_DIR, LORA_DIR):
-        fp = d / name
-        if fp.exists() and fp.suffix in (".soul", ".pt"):
+        fp = (d / name).resolve()
+        if fp.exists() and fp.suffix in (".soul", ".pt") and str(fp).startswith(str(d.resolve())):
             return FileResponse(str(fp), media_type="application/octet-stream", filename=name)
     raise HTTPException(status_code=404, detail="Checkpoint not found")

@@ -66,8 +66,8 @@ interface UnifiedStatus {
     last_accuracy: number
   }
   batch: TrainingStatus
-  dpo: { status: string; last_run: string | null; result: any; accepted_count: number; rejected_count: number }
-  video: { status: string; job_id: string | null; current_epoch: number; current_step: number; total_steps: number; current_loss: number | null; result: any; error: string | null }
+  dpo: { status: string; last_run: string | null; result: { perplexity_delta?: number; bleu_delta?: number; verdict?: string; report_path?: string } | null; accepted_count: number; rejected_count: number }
+  video: { status: string; job_id: string | null; current_epoch: number; current_step: number; total_steps: number; current_loss: number | null; result: { output_dir?: string; final_loss?: number } | null; error: string | null }
 }
 
 async function dataUrlToBlob(dataUrl: string): Promise<Blob> {

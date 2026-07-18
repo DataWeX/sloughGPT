@@ -128,3 +128,15 @@ class VersionRestoreResponse(BaseModel):
     """Result of a version restore operation."""
     success: bool
     message: str
+
+
+class ChatMessage(BaseModel):
+    """A single chat message for dataset import."""
+    role: str = Field(pattern=r"^(user|assistant|system)$")
+    content: str
+
+
+class FromChatRequest(BaseModel):
+    """Request body for POST /datasets/from-chat."""
+    messages: List[ChatMessage]
+    name: str = Field(default="chat-export", max_length=100)

@@ -14,13 +14,28 @@ from schemas.datasets import (
     LocalImportRequest, KaggleImportRequest, CSVImportRequest,
     BatchImportRequest, ISBNImportRequest, ImportResponse,
     VersionCreateResponse, VersionListResponse, VersionRestoreResponse,
+    FromChatRequest,
 )
 from schemas.common import success_response
 from controllers.datasets import get_datasets_controller
 
+import logging
+import re
+
+logger = logging.getLogger("slo.routers.datasets")
+
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
 _DATASETS_DIR = Path(__file__).resolve().parents[4] / "datasets"
+
+_DATASET_ID_RE = re.compile(r'^[a-zA-Z0-9_\-]+$')
+
+
+def _validate_dataset_id(dataset_id: str) -> str:
+    """Validate dataset_id contains only safe characters (no path traversal)."""
+    if not _DATASET_ID_RE.match(dataset_id):
+        raise HTTPException(status_code=422, detail=f"Invalid dataset ID: {dataset_id!r} — only alphanumeric, hyphens, underscores allowed")
+    return dataset_id
 
 
 def _get_data_importer():
@@ -47,6 +62,11 @@ async def list_datasets(
 async def import_from_local(request: LocalImportRequest):
     """Import dataset from local file or directory."""
     try:
+        from pathlib import Path as _P
+        import_path = _P(request.path).resolve()
+        _allowed = {_P.home(), _P.home() / "Documents", _P.home() / "Downloads", _P.home() / "Pictures", _DATASETS_DIR.resolve()}
+        if not any(import_path == b or str(import_path).startswith(str(b) + "/") for b in _allowed):
+            raise HTTPException(status_code=403, detail=f"Directory not in allowed paths: {request.path}")
         importer = _get_data_importer()
         result = importer.import_from_local(
             path=request.path,
@@ -338,6 +358,8 @@ async def search_datasets(q: str = Query(..., description="Search query")):
 @router.get("/{dataset_id}", response_model=DatasetInfo)
 async def get_dataset(dataset_id: str):
     """Get dataset details"""
+
+    _validate_dataset_id(dataset_id)
     ctrl = get_datasets_controller()
     dataset = ctrl.get_dataset(dataset_id)
     if not dataset:
@@ -348,6 +370,8 @@ async def get_dataset(dataset_id: str):
 @router.get("/{dataset_id}/stats", response_model=DatasetStats)
 async def get_dataset_stats(dataset_id: str):
     """Get dataset statistics"""
+
+    _validate_dataset_id(dataset_id)
     ctrl = get_datasets_controller()
     stats = ctrl.get_dataset_stats(dataset_id)
     if not stats:
@@ -366,6 +390,8 @@ async def create_dataset(req: DatasetCreate):
 @router.patch("/{dataset_id}", response_model=DatasetInfo)
 async def update_dataset(dataset_id: str, req: DatasetUpdate):
     """Update dataset metadata"""
+
+    _validate_dataset_id(dataset_id)
     ctrl = get_datasets_controller()
     dataset = ctrl.update_dataset(dataset_id, req.model_dump(exclude_none=True))
     if not dataset:
@@ -376,6 +402,8 @@ async def update_dataset(dataset_id: str, req: DatasetUpdate):
 @router.delete("/{dataset_id}")
 async def delete_dataset(dataset_id: str):
     """Delete a dataset"""
+
+    _validate_dataset_id(dataset_id)
     ctrl = get_datasets_controller()
     ok = ctrl.delete_dataset(dataset_id)
     if not ok:
@@ -386,6 +414,8 @@ async def delete_dataset(dataset_id: str):
 @router.post("/{dataset_id}/versions", response_model=VersionCreateResponse)
 async def create_version(dataset_id: str):
     """Create a timestamped snapshot of a dataset."""
+
+    _validate_dataset_id(dataset_id)
     ctrl = get_datasets_controller()
     timestamp = ctrl.create_version_snapshot(dataset_id)
     if not timestamp:
@@ -396,6 +426,8 @@ async def create_version(dataset_id: str):
 @router.get("/{dataset_id}/versions", response_model=VersionListResponse)
 async def list_versions(dataset_id: str):
     """List all version timestamps for a dataset."""
+
+    _validate_dataset_id(dataset_id)
     ctrl = get_datasets_controller()
     versions = ctrl.list_versions(dataset_id)
     return VersionListResponse(versions=versions, count=len(versions))
@@ -404,6 +436,8 @@ async def list_versions(dataset_id: str):
 @router.post("/{dataset_id}/versions/{timestamp}", response_model=VersionRestoreResponse)
 async def restore_version(dataset_id: str, timestamp: str):
     """Restore a dataset to a specific version snapshot."""
+
+    _validate_dataset_id(dataset_id)
     ctrl = get_datasets_controller()
     ok = ctrl.restore_version(dataset_id, timestamp)
     if not ok:
@@ -416,6 +450,8 @@ async def restore_version(dataset_id: str, timestamp: str):
 @router.post("/{dataset_id}/data")
 async def add_dataset_data(dataset_id: str, req: DatasetDataRequest):
     """Add data rows to a dataset"""
+
+    _validate_dataset_id(dataset_id)
     ctrl = get_datasets_controller()
     result = ctrl.add_data(dataset_id, req.data)
     if result is None:
@@ -427,6 +463,8 @@ async def add_dataset_data(dataset_id: str, req: DatasetDataRequest):
 @router.get("/{dataset_id}/preview")
 async def preview_dataset(dataset_id: str, limit: int = Query(10, description="Number of samples")):
     """Preview dataset contents (first N rows)"""
+
+    _validate_dataset_id(dataset_id)
     ctrl = get_datasets_controller()
     preview = ctrl.preview_dataset(dataset_id, limit)
     if not preview:
@@ -437,6 +475,8 @@ async def preview_dataset(dataset_id: str, limit: int = Query(10, description="N
 @router.post("/{dataset_id}/export")
 async def export_dataset(dataset_id: str, format: str = Query("jsonl", description="Export format")):
     """Export a dataset as a downloadable file"""
+
+    _validate_dataset_id(dataset_id)
     ctrl = get_datasets_controller()
     export_path = ctrl.export_dataset(dataset_id, format)
     if not export_path:
@@ -449,14 +489,14 @@ async def export_dataset(dataset_id: str, format: str = Query("jsonl", descripti
 
 
 @router.post("/from-chat")
-async def create_dataset_from_chat(req: dict):
+async def create_dataset_from_chat(req: FromChatRequest):
     """Create a training dataset from a chat conversation.
 
-    Accepts { messages: [{role, content}...], name?: string }.
+    Accepts validated { messages: [{role, content}...], name?: string }.
     Saves as JSONL in the datasets directory and returns the dataset ID.
     """
-    messages = req.get("messages", [])
-    name = req.get("name", "chat-export")
+    messages = req.messages
+    name = req.name
 
     if not messages:
         raise HTTPException(status_code=400, detail="No messages provided")
@@ -470,8 +510,8 @@ async def create_dataset_from_chat(req: dict):
     jsonl_path = dataset_dir / "input.jsonl"
     with open(jsonl_path, "w") as f:
         for msg in messages:
-            if msg.get("role") in ("user", "assistant") and msg.get("content"):
-                f.write(json.dumps({"messages": [{"role": msg["role"], "content": msg["content"]}]}) + "\n")
+            if msg.role in ("user", "assistant") and msg.content:
+                f.write(json.dumps({"messages": [{"role": msg.role, "content": msg.content}]}) + "\n")
 
     return {
         "status": "created",
@@ -488,6 +528,7 @@ async def convert_to_messages(dataset_id: str, system_prompt: str = "You are a h
     Reads the dataset's input.jsonl, wraps each entry in a
     system/user/assistant message structure, and saves as a new dataset.
     """
+    _validate_dataset_id(dataset_id)
     ctrl = get_datasets_controller()
     datasets = ctrl.list_datasets()
     source = None

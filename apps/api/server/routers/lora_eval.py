@@ -47,8 +47,9 @@ async def run_eval(
                     "delta": delta,
                     "report": evaluator.compare_with_report(baseline, with_adapter),
                 })
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger("slo.lora_eval").warning("Adapter comparison failed: %s", e)
 
         return success_response(data={
             "status": "baseline_only",

@@ -1,3 +1,4 @@
+import { logger } from '@/lib/dev-log'
 'use client'
 export const dynamic = 'force-dynamic'
 
@@ -64,7 +65,7 @@ export default function ModelDetailPage() {
     fetchData()
     generationConfigController.get().then(cfg => {
       if (cfg && typeof cfg.temperature === 'number') setGenConfig(cfg)
-    }).catch(() => {}).finally(() => setConfigLoading(false))
+    }).catch((e) => logger.debug('Config load failed', e)).finally(() => setConfigLoading(false))
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [modelId, fetchData, router])
 

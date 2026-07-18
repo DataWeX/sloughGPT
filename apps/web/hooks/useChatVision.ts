@@ -1,3 +1,4 @@
+import { logger } from '@/lib/dev-log'
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -19,7 +20,7 @@ export function useChatVision() {
   }, [])
 
   useEffect(() => {
-    multimodalController.getCapabilities().then(setVisionCaps).catch(() => {})
+    multimodalController.getCapabilities().then(setVisionCaps).catch((e) => logger.debug('Vision capabilities load failed', e))
     multimodalController.getTrainingReport().then(r => {
       setVisionCaptionHistory(r.caption_history || [])
       setVisionVocabSize(r.vocab_size)

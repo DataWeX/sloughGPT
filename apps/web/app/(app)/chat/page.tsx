@@ -1,6 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
+import { logger } from '@/lib/dev-log'
 import { useEffect, useCallback, useMemo, useState } from 'react'
 import dynamicNext from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -232,7 +233,7 @@ export default function ChatPage() {
   }, [fetchStats, fetchAdapterStats, health, model, agents])
 
   useEffect(() => {
-    apiPost('/vector/init', { provider: 'chromadb', dimension: 384 }).catch(() => {})
+    apiPost('/vector/init', { provider: 'chromadb', dimension: 384 }).catch((e) => logger.debug('Vector init failed', e))
   }, [])
 
   // ── Flyweights: clearChat / selectAgent with toast ────────────────────────

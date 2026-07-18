@@ -115,7 +115,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
       const now = Date.now()
       if (now - lastSaveRef.current > 500) {
         lastSaveRef.current = now
-        sessionsRef.current.saveSessionToStorage(updated, sessionIdRef.current).catch(console.error)
+        sessionsRef.current.saveSessionToStorage(updated, sessionIdRef.current).catch((e) => logger.warning('Session save failed', { error: e }))
       }
       return updated
     })
@@ -329,7 +329,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     const knowledgeFacts = appState.injectedKnowledge.map((k: { content: string }) => k.content)
 
     const messagesWithNew = [...messagesRef.current, userMessage, assistantMessage]
-    sessions.saveSessionToStorage(messagesWithNew, sessionIdRef.current).catch(console.error)
+    sessions.saveSessionToStorage(messagesWithNew, sessionIdRef.current).catch((e) => logger.warning('Session save failed', { error: e }))
     messagesRef.current = messagesWithNew
     loadingRef.current = new AbortController()
 
@@ -412,10 +412,10 @@ export function useChatMessages(config: ChatMessagesConfig) {
           },
         })
         if (streamComplete) {
-          storeSessionContext(sessionIdRef.current, messagesRef.current).catch(console.error)
+          storeSessionContext(sessionIdRef.current, messagesRef.current).catch((e) => logger.warning('Session context store failed', { error: e }))
           knowledgeController.context().then(res => {
             onKnowledgeUpdate({ count: res.count, context: res.context })
-          }).catch(() => {})
+          }).catch((e) => logger.debug('Search query failed', e))
         }
       }
     } catch (err) {

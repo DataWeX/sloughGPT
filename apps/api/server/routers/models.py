@@ -622,7 +622,7 @@ async def quantize_model(req: QuantizeRequest):
         from domains.infrastructure.quant_core.wrapper import HAS_AVX2
         report["avx2_enabled"] = bool(HAS_AVX2)
     except Exception:
-        pass
+        report["avx2_enabled"] = False
 
     return success_response(data=report)
 

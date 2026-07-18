@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 6f80aa4 fix: lm_head quantized path in generate_numpy_stream
+No active task. Last commit: 1cd9565 feat: lm_head fused argmax kernel + INT8 quantized inference
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

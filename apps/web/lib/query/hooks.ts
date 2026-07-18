@@ -184,7 +184,7 @@ export function useMutation<T, V = void>(
     [],
   )
 
-  const mutate = useCallback((vars: V) => { mutateAsync(vars).catch(() => {}) }, [mutateAsync])
+  const mutate = useCallback((vars: V) => { mutateAsync(vars).catch((e) => console.error('[mutation] failed:', e)) }, [mutateAsync])
 
   const reset = useCallback(() => {
     setState({ isLoading: false, error: null })

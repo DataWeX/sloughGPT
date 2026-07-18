@@ -44,7 +44,7 @@ export default function SystemHealthPage() {
   const [benchStats, setBenchStats] = useState<{ total: number; avg_tokens: number; models: string[] } | null>(null)
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
   const [chartHistory, setChartHistory] = useState<Array<{ time: string; cpu: number; mem: number }>>([])
-  const [dpoStatus, setDpoStatus] = useState<{ status: string; last_run: string | null; accepted_count: number; rejected_count: number; result: any } | null>(null)
+  const [dpoStatus, setDpoStatus] = useState<{ status: string; last_run: string | null; accepted_count: number; rejected_count: number; result: { perplexity_delta?: number; bleu_delta?: number; verdict?: string; report_path?: string } | null } | null>(null)
   const [dpoRunning, setDpoRunning] = useState(false)
   const [visualStatus, setVisualStatus] = useState<{ visual_loaded: boolean; training: { status: string } } | null>(null)
   const [executorStatus, setExecutorStatus] = useState<ExecutorStatus | null>(null)

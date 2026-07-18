@@ -110,8 +110,8 @@ def _get_context_core():
         try:
             from domains.inference.vector_store import simple_embed
             _context_core.set_vector_store(_vector_store_ref, simple_embed)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Vector store connection failed: %s", e)
     return _context_core
 
 
@@ -300,8 +300,8 @@ async def generate(req: GenerateRequest) -> GenerateResponse:
         try:
             from domains.infrastructure.server_state import get_server_state
             get_server_state().record_inference(tokens=tokens, elapsed_ms=0, model=req.model)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to record inference metrics: %s", e)
         return GenerateResponse(text=result, model=req.model, tokens_generated=tokens)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -351,8 +351,8 @@ async def generate_stream(req: GenerateRequest, request: Request) -> StreamingRe
         try:
             from domains.infrastructure.server_state import get_server_state
             get_server_state().record_inference(tokens=token_count, elapsed_ms=elapsed, model=req.model)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to record inference metrics: %s", e)
         yield sse_token("generate", "", done=True, meta={"tokens": token_count, "elapsed_ms": round(elapsed, 1)})
 
     return StreamingResponse(generate(), media_type="text/event-stream")
@@ -432,8 +432,8 @@ async def get_info_soul():
             "tags": getattr(cs, "tags", []),
             "certifications": getattr(cs, "certifications", []),
         }
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to build soul info: %s", e)
     return soul_info
 
 
@@ -667,8 +667,8 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                     "role": "system",
                     "content": f"Use the following context to answer the question:\n{k_text}"
                 })
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Knowledge enrichment failed: %s", e)
 
         try:
             from domains.models.provider import get_provider
@@ -815,8 +815,8 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                     duration_ms=duration_ms,
                     has_images=bool(req.images),
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("ResponseTracker.log failed: %s", e)
 
             # Record inference metrics
             try:
@@ -972,8 +972,8 @@ async def chat(req: ChatRequest) -> ChatResponse:
         if enrichment.get("facts"):
             k_text = "\n".join(f"- {f}" for f in enrichment["facts"])
             system_prompt = f"{system_prompt}\n\nUse the following context to answer:\n{k_text}" if system_prompt else f"Use the following context to answer:\n{k_text}"
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Knowledge enrichment failed: %s", e)
 
     result = await chat_domain.respond(
         messages=messages,
@@ -990,8 +990,8 @@ async def chat(req: ChatRequest) -> ChatResponse:
         from domains.infrastructure.server_state import get_server_state
         tokens = len(result.text.split())
         get_server_state().record_inference(tokens=tokens, elapsed_ms=0, model=req.model)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to record inference metrics: %s", e)
 
     return ChatResponse(
         message=result.text,

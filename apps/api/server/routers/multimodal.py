@@ -535,7 +535,11 @@ async def generate_image(prompt: str = Form(...), steps: int = Form(20),
 @router.post("/visual-dataset")
 async def create_visual_dataset(req: VisualDatasetRequest):
     """Create a visual training dataset from a directory of images."""
-    image_dir = Path(req.image_dir)
+    image_dir = Path(req.image_dir).resolve()
+    _REPO_ROOT = Path(__file__).resolve().parents[4]
+    allowed_bases = {_REPO_ROOT / "datasets", _REPO_ROOT / "data", Path.home() / "Pictures", Path.home() / "Downloads"}
+    if not any(image_dir == base or str(image_dir).startswith(str(base) + "/") for base in allowed_bases):
+        raise HTTPException(status_code=403, detail=f"Directory not in allowed paths: {req.image_dir}")
     if not image_dir.exists():
         raise HTTPException(status_code=400, detail=f"Directory not found: {req.image_dir}")
     extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}

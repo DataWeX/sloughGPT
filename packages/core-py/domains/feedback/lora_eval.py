@@ -216,8 +216,9 @@ class LoRAEvaluator:
                 # Apply LoRA adjustment to embedding (lightweight simulation)
                 scale = float(data.get("alpha", 16) / max(data.get("rank", 8), 1))
                 # Just mark that adapter is applied
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.getLogger("slo.lora_eval").debug("Failed to load adapter %s: %s", adapter_path, e)
 
         streamer = TextIteratorStreamer(self._tokenizer, skip_prompt=True, skip_special_tokens=True)
         gen_kwargs = dict(
@@ -607,8 +608,9 @@ class LoRAEvaluator:
                 with open(f) as fp:
                     data = json.load(fp)
                     results.append(EvalResult(**data))
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.getLogger("slo.lora_eval").debug("Failed to load eval result %s: %s", f.name, e)
         return sorted(results, key=lambda r: r.timestamp, reverse=True)
 
 

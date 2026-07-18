@@ -234,8 +234,8 @@ class HealthController:
                 "tier": acc.compute_tier,
                 "memory_hint": json.dumps(acc.memory_hint()),
             }
-        except Exception:
-            gpu_info = {"backend": "unknown", "error": str(Exception)}
+        except Exception as e:
+            gpu_info = {"backend": "unknown", "error": str(e)}
 
         # Add ModelRegistry health if available
         registry_health: Dict[str, Any] = {}

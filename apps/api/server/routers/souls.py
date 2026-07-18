@@ -139,11 +139,13 @@ async def soul_chat(req: SloChatRequest, request: Request):
 
         acc = get_accelerator()
         repo_root = _get_repo_root()
-        checkpoint_file = repo_root / "models" / "auto-training" / (req.checkpoint_name + ".soul")
+        if not _VALID_CKPT_NAME.match(req.checkpoint_name) or '..' in req.checkpoint_name:
+            return error_response(message="Invalid checkpoint name")
+        checkpoint_file = (repo_root / "models" / "auto-training" / (req.checkpoint_name + ".soul")).resolve()
         if not checkpoint_file.exists():
-            checkpoint_file = repo_root / "models" / (req.checkpoint_name + ".soul")
+            checkpoint_file = (repo_root / "models" / (req.checkpoint_name + ".soul")).resolve()
 
-        if not checkpoint_file.exists():
+        if not checkpoint_file.exists() or not str(checkpoint_file).startswith(str((repo_root / "models").resolve())):
             return error_response(message=f"Checkpoint not found: {req.checkpoint_name}")
 
         # Load checkpoint into SloughGPTModel
@@ -217,18 +219,7 @@ async def soul_chat(req: SloChatRequest, request: Request):
         return error_response(message=str(e))
 
 
-def _soul_tensor(data):
-    """Create a SloNet Tensor from numpy array."""
-    from domains.training.slonet import Tensor
-    if hasattr(data, 'data') and isinstance(getattr(data, 'data', None), np.ndarray):
-        return data
-    if not isinstance(data, np.ndarray):
-        data = np.array(data, dtype=np.float32)
-    elif data.dtype != np.float32:
-        data = np.array(data, dtype=np.float32)
-    else:
-        data = np.array(data, copy=True)
-    return Tensor(data)
+_VALID_CKPT_NAME = re.compile(r'^[a-zA-Z0-9_\-\.]+$')
 
 
 def _get_repo_root():
@@ -310,8 +301,10 @@ def _load_checkpoint_into_model(checkpoint_name: str) -> dict:
         if checkpoints_dir is None:
             return {"status": "no_repo_root"}
 
-        checkpoint_file = checkpoints_dir / checkpoint_name
-        if not checkpoint_file.exists():
+        if not _VALID_CKPT_NAME.match(checkpoint_name) or '..' in checkpoint_name:
+            return {"status": "invalid_name"}
+        checkpoint_file = (checkpoints_dir / checkpoint_name).resolve()
+        if not checkpoint_file.exists() or not str(checkpoint_file).startswith(str(checkpoints_dir.resolve())):
             return {"status": "not_found", "path": str(checkpoint_file)}
 
         # Use SloNet import for .soul files

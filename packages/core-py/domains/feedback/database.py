@@ -6,7 +6,6 @@ to retrieve similar good responses for biasing generation.
 """
 
 import sqlite3
-import pickle
 import json
 import uuid
 import threading
@@ -141,11 +140,11 @@ class FeedbackDB:
 
     def _embeddings_to_blob(self, embedding: np.ndarray) -> bytes:
         """Convert numpy array to blob for storage."""
-        return pickle.dumps(embedding.astype(np.float32))
+        return embedding.astype(np.float32).tobytes()
 
     def _blob_to_embeddings(self, blob: bytes) -> np.ndarray:
         """Convert blob back to numpy array."""
-        return pickle.loads(blob)
+        return np.frombuffer(blob, dtype=np.float32)
 
     def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
         """Compute cosine similarity between two vectors."""

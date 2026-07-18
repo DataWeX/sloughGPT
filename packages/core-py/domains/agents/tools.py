@@ -169,19 +169,31 @@ class ToolRegistry:
     # ── Tool Implementations ────────────────────────────────────────
 
     async def _run_calculator(self, expression: str) -> Dict[str, Any]:
-        """Evaluate a math expression safely."""
-        allowed = set("0123456789+-*/.()% ,")
-        cleaned = "".join(c for c in expression if c in allowed or c.isalpha())
-        cleaned = cleaned.strip()
+        """Evaluate a math expression safely using AST validation."""
+        import ast
+        cleaned = expression.strip()
         if not cleaned:
             return {"output": "", "error": "Empty expression"}
-        blocked = {"__import__", "eval", "exec", "open", "os.", "import"}
-        if any(b in cleaned for b in blocked):
-            return {"output": "", "error": "Blocked function detected"}
-        safe_globals = {"__builtins__": {k: __builtins__[k] for k in ["abs", "int", "float", "str", "round", "min", "max", "sum", "len", "range", "list", "dict", "tuple", "bool", "pow"]}}
-        safe_globals["__builtins__"].update({"math": math, "sqrt": math.sqrt, "pi": math.pi, "e": math.e, "sin": math.sin, "cos": math.cos, "tan": math.tan, "log": math.log, "log10": math.log10, "ceil": math.ceil, "floor": math.floor, "factorial": math.factorial})
         try:
-            result = eval(cleaned, safe_globals, {})
+            tree = ast.parse(cleaned, mode='eval')
+            allowed_names = {"math", "sqrt", "pi", "e", "sin", "cos", "tan",
+                             "log", "log10", "ceil", "floor", "factorial"}
+            allowed_nodes = (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Constant,
+                             ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow,
+                             ast.USub, ast.UAdd, ast.Call, ast.Name, ast.Load)
+            for node in ast.walk(tree):
+                if not isinstance(node, allowed_nodes):
+                    return {"output": "", "error": f"Disallowed expression: {type(node).__name__}"}
+                if isinstance(node, ast.Name) and node.id not in allowed_names:
+                    return {"output": "", "error": f"Unknown name: {node.id}"}
+                if isinstance(node, ast.Call):
+                    if not (isinstance(node.func, ast.Name) and node.func.id in allowed_names):
+                        return {"output": "", "error": "Disallowed function call"}
+            safe_env = {"__builtins__": {}, "math": math, "sqrt": math.sqrt, "pi": math.pi,
+                        "e": math.e, "sin": math.sin, "cos": math.cos, "tan": math.tan,
+                        "log": math.log, "log10": math.log10, "ceil": math.ceil, "floor": math.floor,
+                        "factorial": math.factorial}
+            result = eval(compile(tree, '<calc>', 'eval'), safe_env)
             return {"output": str(result)}
         except Exception as e:
             return {"output": "", "error": str(e)}

@@ -27,6 +27,15 @@ export interface HomePageData {
   inferenceCount: number | null
   healthSummary: string | null
   feedbackStats: FeedbackStats | null
+  /** Per-section error flags — true if that section's fetch failed */
+  errors: {
+    models: boolean
+    soul: boolean
+    sessions: boolean
+    training: boolean
+    knowledge: boolean
+    feedback: boolean
+  }
 }
 
 export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
@@ -41,6 +50,14 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
   const [testRunning, setTestRunning] = useState(false)
   const [testResponse, setTestResponse] = useState<string | null>(null)
   const [feedbackStats, setFeedbackStats] = useState<FeedbackStats | null>(null)
+  const [errors, setErrors] = useState({
+    models: false,
+    soul: false,
+    sessions: false,
+    training: false,
+    knowledge: false,
+    feedback: false,
+  })
 
   const inferenceCount = health && health !== 'offline' ? (health as HealthStatus).inference_count ?? 0 : null
   const healthSummary = health && health !== 'offline' ? (health as HealthStatus).model_type ?? null : null
@@ -50,7 +67,7 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
     const cancelled = { current: false }
     modelController.status().then(status => {
       if (!cancelled.current) setModelStatus({ loaded: status.loaded, model: status.model_type })
-    }).catch(() => {})
+    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, models: true })) })
     soulsController.list().then(data => {
       if (!cancelled.current) {
         const active = data.current_soul
@@ -58,10 +75,10 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
           : null
         setCurrentSoul(active || null)
       }
-    }).catch(() => {})
+    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, soul: true })) })
     modelController.list().then(models => {
       if (!cancelled.current) setModelCount(models.length)
-    }).catch(() => {})
+    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, models: true })) })
     sessionController.list().then(sessions => {
       if (!cancelled.current) {
         const sorted = [...sessions]
@@ -70,7 +87,7 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
           .slice(0, 5)
         setRecentSessions(sorted)
       }
-    }).catch(() => {})
+    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, sessions: true })) })
     trainingController.list().then(jobs => {
       if (!cancelled.current) {
         const running = jobs.find(j => j.status === 'running')
@@ -80,13 +97,13 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
           .slice(0, 3)
         setRecentJobs(recent)
       }
-    }).catch(() => {})
+    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, training: true })) })
     knowledgeController.stats().then(s => {
       if (!cancelled.current) setKnowledgeCount(s.total_items)
-    }).catch(() => {})
+    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, knowledge: true })) })
     feedbackController.getFeedbackStats().then(s => {
       if (!cancelled.current) setFeedbackStats(s)
-    }).catch(() => {})
+    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, feedback: true })) })
     return () => { cancelled.current = true }
   }, [])
 
@@ -99,5 +116,6 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
     setTestRunning, setTestResponse,
     setKnowledgeCount, inferenceCount,
     healthSummary, feedbackStats,
+    errors,
   }
 }

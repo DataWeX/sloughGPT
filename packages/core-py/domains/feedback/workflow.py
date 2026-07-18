@@ -145,8 +145,9 @@ class FeedbackWorkflowManager:
                 user_message=user_message,
                 response=assistant_response,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger("slo.feedback.workflow").debug("Trait config update failed: %s", e)
 
         self.lora_updater.add_feedback(
             prompt=user_message,
