@@ -27,7 +27,7 @@ function formatDuration(start: number | string, end?: number | string): string {
   return `${Math.floor(ms / 3600000)}h ${Math.floor((ms % 3600000) / 60000)}m`
 }
 
-const STATUS_BADGE: Record<string, { label: string; variant: string }> = {
+const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'error' }> = {
   running: { label: 'Running', variant: 'default' },
   completed: { label: 'Completed', variant: 'secondary' },
   failed: { label: 'Failed', variant: 'destructive' },
@@ -184,7 +184,7 @@ export default function TrainingJobDetailPage() {
               <CardContent className="pt-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Badge variant={badge?.variant as any}>{badge?.label}</Badge>
+                    <Badge variant={badge?.variant ?? 'outline'}>{badge?.label}</Badge>
                     {job.status === 'running' && (
                       <span className="relative flex h-2 w-2">
                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
@@ -255,7 +255,7 @@ export default function TrainingJobDetailPage() {
                   {job.loss != null && <StatCard label="Final loss" value={job.loss.toFixed(4)} />}
                   {job.train_loss != null && <StatCard label="Train loss" value={job.train_loss.toFixed(4)} />}
                   {job.eval_loss != null && <StatCard label="Validation loss" value={job.eval_loss.toFixed(4)} />}
-                  {(job.result as any)?.final_reward != null && <StatCard label="Final reward" value={(job.result as any).final_reward.toFixed(4)} />}
+                  {typeof job.result?.final_reward === 'number' && <StatCard label="Final reward" value={job.result.final_reward.toFixed(4)} />}
                 </KpiGrid>
                 {job.loss_history && job.loss_history.length > 1 && (
                   <div className="mt-4">

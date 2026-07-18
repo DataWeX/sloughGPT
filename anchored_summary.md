@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 9e3fb04 fix: chat_stream broken — delegate to generate_numpy, fix hidden_dim/head_dim, GQA split, biases
+No active task. Last commit: 83ff68b chore: PBKDF2 password hashing, dead code removal, type safety
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
