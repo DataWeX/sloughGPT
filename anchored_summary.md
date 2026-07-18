@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 83ff68b chore: PBKDF2 password hashing, dead code removal, type safety
+No active task. Last commit: 6bbc786 fix: type safety in training job detail page
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

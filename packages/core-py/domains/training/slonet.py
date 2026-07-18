@@ -3862,6 +3862,276 @@ class SloTransformer(SloNet):
 
         return out_buf
 
+    def generate_numpy_stream(self, input_ids, max_new_tokens=50, eos_token=0):
+        """Generator version of generate_numpy — yields token ids one at a time.
+
+        Inlines the full forward pass (identical to generate_numpy) but yields
+        each token as produced, enabling true token-by-token streaming.
+        """
+        if input_ids.ndim == 1:
+            input_ids = input_ids.reshape(1, -1)
+        prompt_len = input_ids.shape[1]
+        total_len = min(prompt_len + max_new_tokens, self.max_seq_len)
+        max_gen = total_len - prompt_len
+
+        out_buf = np.empty((1, total_len), dtype=np.int64)
+        out_buf[:, :prompt_len] = input_ids
+
+        _use_kernels = _KERNELS_AVAILABLE
+
+        _is_quantized = False
+        for l in self.layers[1:-2]:
+            if isinstance(l, SloTransformerBlock):
+                if getattr(l.attn.W_q, '_quant_info', None) is not None:
+                    _is_quantized = True
+                    break
+
+        n_an_w = []; n_an_b = []; n_an_e = []
+        n_fn_w = []; n_fn_b = []; n_fn_e = []
+        m_wqkv = []; m_bqkv = []; m_wo = []; m_bo = []
+        m_w13 = []; m_b13 = []; m_w2 = []; m_b2 = []
+        _nkv = []
+        if _is_quantized:
+            q_wq = []; q_wk = []; q_wv = []; q_wo = []
+            q_w1 = []; q_w3 = []; q_w2 = []
+        for l in self.layers[1:-2]:
+            if isinstance(l, SloTransformerBlock):
+                b = l
+                has_ln = isinstance(b.attn_norm, SloLayerNorm)
+                n_an_w.append(b.attn_norm.weight.data)
+                n_an_b.append(b.attn_norm.bias.data if has_ln else None)
+                n_an_e.append(b.attn_norm.eps)
+                n_fn_w.append(b.ff_norm.weight.data)
+                n_fn_b.append(b.ff_norm.bias.data if has_ln else None)
+                n_fn_e.append(b.ff_norm.eps)
+                if _is_quantized:
+                    q_wq.append(b.attn.W_q); q_wk.append(b.attn.W_k)
+                    q_wv.append(b.attn.W_v); q_wo.append(b.attn.W_o)
+                    q_w1.append(b.ff.w1); q_w3.append(b.ff.w3)
+                    q_w2.append(b.ff.w2)
+                    _nkv.append(b.attn.n_kv_head)
+                    m_wqkv.append(None); m_bqkv.append(None)
+                    m_wo.append(None); m_bo.append(None)
+                    m_w13.append(None); m_b13.append(None)
+                    m_w2.append(None); m_b2.append(None)
+                else:
+                    wqkv = np.concatenate([b.attn.W_q.weight.data, b.attn.W_k.weight.data,
+                                           b.attn.W_v.weight.data], axis=0)
+                    bq = b.attn.W_q.bias.data if b.attn.W_q.use_bias else None
+                    bk = b.attn.W_k.bias.data if b.attn.W_k.use_bias else None
+                    bv = b.attn.W_v.bias.data if b.attn.W_v.use_bias else None
+                    bqkv = np.concatenate([bq, bk, bv]) if bq is not None else None
+                    w13 = np.concatenate([b.ff.w1.weight.data.T, b.ff.w3.weight.data.T], axis=1)
+                    b1 = b.ff.w1.bias.data if b.ff.w1.use_bias else None
+                    b3 = b.ff.w3.bias.data if b.ff.w3.use_bias else None
+                    b13 = np.concatenate([b1, b3]) if b1 is not None else None
+                    _nkv.append(b.attn.n_kv_head)
+                    m_wqkv.append(wqkv); m_bqkv.append(bqkv)
+                    m_wo.append(b.attn.W_o.weight.data)
+                    m_bo.append(b.attn.W_o.bias.data if b.attn.W_o.use_bias else None)
+                    m_w13.append(w13); m_b13.append(b13)
+                    m_w2.append(b.ff.w2.weight.data)
+                    m_b2.append(b.ff.w2.bias.data if b.ff.w2.use_bias else None)
+
+        n_blocks = len(m_wqkv)
+        tok_emb_w = self.layers[0].weight.data
+        pos_emb_w = self.pos_emb.weight.data if self.pos_emb is not None else None
+        pos_emb_n = self.pos_emb.num_embeddings if self.pos_emb is not None else 0
+
+        norm_layer = self.layers[-2]
+        norm_has_bias = isinstance(norm_layer, SloLayerNorm)
+        norm_w = norm_layer.weight.data
+        norm_b = norm_layer.bias.data if norm_has_bias else None
+        norm_eps = norm_layer.eps
+        lm_w = self.layers[-1].weight.data
+
+        _first_block = None
+        for l in self.layers[1:-2]:
+            if isinstance(l, SloTransformerBlock):
+                _first_block = l
+                break
+        E = _first_block.attn.head_dim
+        H = _first_block.attn.n_heads
+        K_H = _nkv[0]
+        _first_w1 = None
+        for l in self.layers[1:-2]:
+            if isinstance(l, SloTransformerBlock):
+                _first_w1 = l.ff.w1
+                break
+        _ff_dim = _first_w1.weight.shape[0]
+        scale = np.float32(1.0 / math.sqrt(E))
+        _clip_max = np.int64(tok_emb_w.shape[0] - 1)
+        _pos_clip_max = np.int64(pos_emb_n - 1 if pos_emb_n > 0 else 0)
+        _use_gqa = K_H < H
+        _gqa_reps = H // K_H if _use_gqa else 0
+        _he = H * E
+        _khe = K_H * E
+
+        kv_buf_k = [np.zeros((1, total_len, _nkv[i], E), dtype=np.float32) for i in range(n_blocks)]
+        kv_buf_v = [np.zeros((1, total_len, _nkv[i], E), dtype=np.float32) for i in range(n_blocks)]
+        kv_len = [0] * n_blocks
+
+        _use_rope = False
+        _rope_inv_freq = None
+        for l in self.layers[1:-2]:
+            if isinstance(l, SloTransformerBlock) and l.attn.use_rope:
+                _use_rope = True
+                _rope_inv_freq = l.attn.rope.inv_freq.data.copy()
+                break
+        _rope_cos = None
+        _rope_sin = None
+        if _use_rope:
+            t = np.arange(0, total_len, dtype=np.float32)
+            freqs = np.outer(t, _rope_inv_freq)
+            emb = np.concatenate([freqs, freqs], axis=-1)
+            _rope_cos = np.cos(emb).astype(np.float32)
+            _rope_sin = np.sin(emb).astype(np.float32)
+
+        causal_mask = np.triu(np.full((self.block_size, self.block_size), -1e9, dtype=np.float32), k=1)
+
+        _use_bias_bqkv = m_bqkv[0] is not None
+        _use_bias_bo = m_bo[0] is not None
+        _use_bias_b13 = m_b13[0] is not None
+        _use_bias_b2 = m_b2[0] is not None
+
+        for step in range(max_gen):
+            if step == 0:
+                idx = out_buf[:, :prompt_len]
+                pos = 0
+                seq_len = prompt_len
+            else:
+                idx = out_buf[:, step + prompt_len - 1:step + prompt_len]
+                pos = step + prompt_len - 1
+                seq_len = 1
+
+            clipped = np.clip(idx, 0, _clip_max)
+            x = tok_emb_w[clipped].astype(np.float32)
+
+            if pos_emb_w is not None:
+                p = np.arange(pos, pos + seq_len, dtype=np.int64).reshape(1, -1)
+                x = x + pos_emb_w[np.clip(p, 0, _pos_clip_max)]
+
+            for bi in range(n_blocks):
+                if n_an_b[bi] is not None:
+                    if _use_kernels:
+                        h = _nb_layernorm(x, n_an_w[bi], n_an_b[bi], n_an_e[bi])
+                    else:
+                        mu = x.mean(axis=-1, keepdims=True)
+                        centered = x - mu
+                        var = (centered * centered).mean(axis=-1, keepdims=True)
+                        h = centered * (n_an_w[bi] * np.float32(1.0) / np.sqrt(var + n_an_e[bi]))
+                        h = h + n_an_b[bi]
+                else:
+                    rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + n_an_e[bi])
+                    h = x * (n_an_w[bi] / rms)
+
+                if _is_quantized:
+                    q = q_wq[bi].forward_numpy(h)
+                    k = q_wk[bi].forward_numpy(h)
+                    v = q_wv[bi].forward_numpy(h)
+                    q = q.reshape(1, seq_len, H, E)
+                    k = k.reshape(1, seq_len, K_H, E)
+                    v = v.reshape(1, seq_len, K_H, E)
+                else:
+                    qkv = h @ m_wqkv[bi].T
+                    if _use_bias_bqkv:
+                        qkv = qkv + m_bqkv[bi]
+                    q = qkv[:, :, :_he].reshape(1, seq_len, H, E)
+                    k = qkv[:, :, _he:_he+_khe].reshape(1, seq_len, K_H, E)
+                    v = qkv[:, :, _he+_khe:].reshape(1, seq_len, K_H, E)
+
+                if _use_rope and _rope_cos is not None:
+                    _rope_cs = _rope_cos[pos:pos+seq_len].reshape(1, seq_len, 1, E)
+                    _rope_sn = _rope_sin[pos:pos+seq_len].reshape(1, seq_len, 1, E)
+                    q = q * _rope_cs + np.concatenate([-q[..., E//2:], q[..., :E//2]], axis=-1) * _rope_sn
+                    k = k * _rope_cs + np.concatenate([-k[..., E//2:], k[..., :E//2]], axis=-1) * _rope_sn
+
+                new_len = kv_len[bi] + seq_len
+                kv_buf_k[bi][:, kv_len[bi]:new_len] = k
+                kv_buf_v[bi][:, kv_len[bi]:new_len] = v
+                kv_len[bi] = new_len
+                k = kv_buf_k[bi][:, :new_len]
+                v = kv_buf_v[bi][:, :new_len]
+
+                if _use_gqa:
+                    k = np.repeat(k, _gqa_reps, axis=2)
+                    v = np.repeat(v, _gqa_reps, axis=2)
+
+                scores = np.einsum('bnhd,bmhd->bhnm', q, k) * scale
+                if step == 0 and seq_len > 1:
+                    scores = scores + causal_mask[:seq_len, :new_len]
+                attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
+                attn = attn / attn.sum(axis=-1, keepdims=True)
+                ao = np.einsum('bhnm,bmhd->bnhd', attn, v).reshape(1, seq_len, _he)
+
+                if _is_quantized:
+                    ao = q_wo[bi].forward_numpy(ao)
+                else:
+                    ao = ao @ m_wo[bi].T
+                    if _use_bias_bo:
+                        ao = ao + m_bo[bi]
+                x = x + ao
+
+                if n_fn_b[bi] is not None:
+                    if _use_kernels:
+                        h = _nb_layernorm(x, n_fn_w[bi], n_fn_b[bi], n_fn_e[bi])
+                    else:
+                        mu = x.mean(axis=-1, keepdims=True)
+                        centered = x - mu
+                        var = (centered * centered).mean(axis=-1, keepdims=True)
+                        h = centered * (n_fn_w[bi] * np.float32(1.0) / np.sqrt(var + n_fn_e[bi]))
+                        h = h + n_fn_b[bi]
+                else:
+                    rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + n_fn_e[bi])
+                    h = x * (n_fn_w[bi] / rms)
+
+                if _is_quantized:
+                    h1 = q_w1[bi].forward_numpy(h)
+                    h3 = q_w3[bi].forward_numpy(h)
+                    if _use_kernels:
+                        h = _nb_swi_glu_mul(h1, h3)
+                    else:
+                        h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
+                    h = q_w2[bi].forward_numpy(h)
+                else:
+                    h13 = h @ m_w13[bi]
+                    if _use_bias_b13:
+                        h13 = h13 + m_b13[bi]
+                    h1 = h13[..., :_ff_dim]
+                    h3 = h13[..., _ff_dim:]
+                    if _use_kernels:
+                        h = _nb_swi_glu_mul(h1, h3)
+                    else:
+                        h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
+                    h = h @ m_w2[bi].T
+                    if _use_bias_b2:
+                        h = h + m_b2[bi]
+                x = x + h
+
+            if norm_has_bias:
+                if _use_kernels:
+                    x = _nb_layernorm(x, norm_w, norm_b, norm_eps)
+                else:
+                    mu = x.mean(axis=-1, keepdims=True)
+                    centered = x - mu
+                    var = (centered * centered).mean(axis=-1, keepdims=True)
+                    x = centered * (norm_w * np.float32(1.0) / np.sqrt(var + norm_eps))
+                    x = x + norm_b
+            else:
+                rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + norm_eps)
+                x = x * (norm_w / rms)
+
+            if _is_quantized:
+                logits = lm_w.forward_numpy(x[:, -1, :])
+            else:
+                logits = x[:, -1, :] @ lm_w.T
+
+            next_id = int(np.argmax(logits[0]))
+            out_buf[0, prompt_len + step] = next_id
+            if next_id == eos_token and step > 0:
+                return
+            yield next_id
+
     def state_dict(self) -> Dict[str, np.ndarray]:
         result = {}
         for name, param in self._named_parameters():

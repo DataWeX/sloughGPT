@@ -669,31 +669,19 @@ class SloNetChatProvider:
         cancel_event = kwargs.get('cancel_event')
 
         def _stream_generate():
-            """Generation using model.generate_numpy() — runs in a thread.
+            """Token-by-token streaming using generate_numpy_stream().
 
-            Delegates to the battle-tested generate_numpy() path which already
-            has KV cache, fused QKV, fused gate+up, and RoPE. Tokens are
-            decoded one at a time for streaming output.
+            Yields decoded tokens as they are produced — true streaming
+            without waiting for full generation to complete.
             """
             m = self._model
             input_ids = _np.array([token_ids], dtype=_np.int64)
-            prompt_len = len(token_ids)
 
-            result = m.generate_numpy(
+            for tok_id in m.generate_numpy_stream(
                 input_ids,
                 max_new_tokens=max_tokens,
-                temperature=temperature,
-                top_k=top_k,
-                top_p=top_p,
-                repetition_penalty=repetition_penalty,
                 eos_token=eos_id,
-            )
-
-            # Yield tokens one at a time (skip prompt tokens)
-            for i in range(prompt_len, result.shape[1]):
-                tok_id = int(result[0, i])
-                if tok_id == eos_id and i > prompt_len:
-                    break
+            ):
                 decoded = self._tokenizer.decode([tok_id])
                 if decoded:
                     yield decoded
