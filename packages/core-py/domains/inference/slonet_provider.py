@@ -669,248 +669,34 @@ class SloNetChatProvider:
         cancel_event = kwargs.get('cancel_event')
 
         def _stream_generate():
-            """KV-cache streaming generation — runs in a thread.
+            """Generation using model.generate_numpy() — runs in a thread.
 
-            llama.cpp-style optimizations applied:
-            - Fused QKV matmul (3→1 matmul per block)
-            - Fused gate+up matmul (2→1 matmul per block)
-            - Numba JIT kernels for RMSNorm, SwiGLU, softmax (when available)
-            - Pre-allocated output buffer for FFN
-            - Flat tuple indexing (no dict lookups per step)
+            Delegates to the battle-tested generate_numpy() path which already
+            has KV cache, fused QKV, fused gate+up, and RoPE. Tokens are
+            decoded one at a time for streaming output.
             """
-            from domains.training.slonet import _sample_from_logits
-            from domains.training.slonet_kernels import get_kernels
-            _nb_rmsnorm, _nb_layernorm, _nb_swiglu, _nb_softmax, _nb_embed, _nb_add_pos, _nb_swi_glu_mul = get_kernels()
             m = self._model
-            tokens = _np.array([token_ids], dtype=_np.int64)
-            prompt_len = tokens.shape[1]
+            input_ids = _np.array([token_ids], dtype=_np.int64)
+            prompt_len = len(token_ids)
 
-            # ── Extract weights once → flat lists (no dict per-step) ──
-            _an_w, _an_b, _an_eps = [], [], []
-            _fn_w, _fn_b, _fn_eps = [], [], []
-            _wqkv, _bqkv = [], []        # fused QKV weights
-            _wo, _bo = [], []
-            _w13, _b13 = [], []           # fused gate+up weights
-            _w2, _b2 = [], []
-            _n_heads_l, _n_kv_heads_l, _head_dim_l = [], [], []
-            _rope_inv_freq_l = []
-
-            for l in m.layers[1:-2]:
-                if not (hasattr(l, 'attn_norm') and hasattr(l, 'ff')):
-                    continue
-                b = l
-                SloLN = _get_slo_layernorm()
-                has_ln = isinstance(b.attn_norm, SloLN)
-                _an_w.append(b.attn_norm.weight.data)
-                _an_b.append(b.attn_norm.bias.data if has_ln else None)
-                _an_eps.append(b.attn_norm.eps)
-                _fn_w.append(b.ff_norm.weight.data)
-                _fn_b.append(b.ff_norm.bias.data if has_ln else None)
-                _fn_eps.append(b.ff_norm.eps)
-
-                # Fused QKV: concatenate [W_q; W_k; W_v] → single matmul
-                wq = b.attn.W_q.weight.data
-                wk = b.attn.W_k.weight.data
-                wv = b.attn.W_v.weight.data
-                _wqkv.append(_np.concatenate([wq, wk, wv], axis=0))
-
-                # Fused gate+up: concatenate [W_1; W_3] → single matmul
-                w1 = b.ff.w1.weight.data
-                w3 = b.ff.w3.weight.data
-                _w13.append(_np.concatenate([w1, w3], axis=0))
-
-                _wo.append(b.attn.W_o.weight.data)
-                _bo.append(b.attn.W_o.bias.data if b.attn.W_o.use_bias else None)
-                _w2.append(b.ff.w2.weight.data)
-                _b2.append(b.ff.w2.bias.data if b.ff.w2.use_bias else None)
-
-                _n_heads_l.append(b.attn.n_heads)
-                _n_kv_heads_l.append(b.attn.n_kv_head)
-                _head_dim_l.append(b.attn.head_dim)
-                _rope_inv_freq_l.append(
-                    b.attn.rope.inv_freq.data if hasattr(b.attn, 'rope') and b.attn.rope is not None else None
-                )
-
-            n_blocks = len(_an_w)
-
-            tok_emb_w = m.layers[0].weight.data
-            pos_emb_w = m.pos_emb.weight.data if m.pos_emb is not None else None
-            pos_emb_n = m.pos_emb.num_embeddings if m.pos_emb is not None else 0
-            norm_layer = m.layers[-2]
-            SloLN = _get_slo_layernorm()
-            norm_has_bias = isinstance(norm_layer, SloLN)
-            norm_w = norm_layer.weight.data
-            norm_b = norm_layer.bias.data if norm_has_bias else None
-            norm_eps = norm_layer.eps
-            lm_w = m.layers[-1].weight.data
-
-            E = _head_dim_l[0]
-            H = _n_heads_l[0]
-            K_H = _n_kv_heads_l[0]
-            QKV_dim = 3 * H * E     # fused QKV output dim
-            GATE_dim = 2 * _w1[0].shape[0]  # fused gate+up output dim
-            scale = 1.0 / math.sqrt(E)
-
-            # Precompute RoPE cos/sin
-            rope_inv_freq = _rope_inv_freq_l[0]
-            rope_cos = rope_sin = None
-            if rope_inv_freq is not None:
-                max_rope_pos = m.max_seq_len if hasattr(m, 'max_seq_len') else 32768
-                t = _np.arange(max_rope_pos, dtype=_np.float32)
-                freqs = _np.outer(t, rope_inv_freq)
-                emb = _np.concatenate([freqs, freqs], axis=-1)
-                rope_cos = _np.cos(emb).astype(_np.float32)
-                rope_sin = _np.sin(emb).astype(_np.float32)
-
-            # Pre-allocate KV cache
-            kv_buf_k = [None] * n_blocks
-            kv_buf_v = [None] * n_blocks
-            kv_len = [0] * n_blocks
-
-            # Pre-allocate output buffers (avoid temp alloc per step)
-            _qkv_out = _np.empty((1, E * 3), dtype=_np.float32)
-            _fused_out = _np.empty((1, GATE_dim), dtype=_np.float32)
-
-            def _forward_step(idx, pos, step):
-                nonlocal kv_buf_k, kv_buf_v, kv_len
-                B = 1
-                seq_len = idx.shape[1]
-
-                # ── Embedding ──
-                clipped = _np.clip(idx.astype(_np.int64), 0, tok_emb_w.shape[0] - 1)
-                x = _np.take(tok_emb_w, clipped, axis=0)
-                if pos_emb_w is not None:
-                    p = _np.arange(pos, pos + seq_len, dtype=_np.int64).reshape(1, -1)
-                    x = x + _np.take(pos_emb_w, _np.clip(p, 0, pos_emb_n - 1), axis=0)
-
-                for bi in range(n_blocks):
-                    # ── RMSNorm (numba JIT when available) ──
-                    x_flat = x.reshape(-1, E)
-                    rms_x = _nb_rmsnorm(x_flat, _an_w[bi], _np.float32(_an_eps[bi]))
-                    h = rms_x.reshape(B, seq_len, E)
-
-                    # ── Fused QKV matmul: 3 matmuls → 1 ──
-                    qkv = h.reshape(-1, E) @ _wqkv[bi].T   # (seq_len, QKV_dim)
-                    q = qkv[:, :H * E].reshape(B, seq_len, H, E)
-                    k = qkv[:, H * E:2 * H * E].reshape(B, seq_len, K_H, E)
-                    v = qkv[:, 2 * H * E:].reshape(B, seq_len, K_H, E)
-
-                    # ── RoPE ──
-                    if rope_cos is not None:
-                        cos = rope_cos[pos:pos + seq_len][None, :, None, :]
-                        sin = rope_sin[pos:pos + seq_len][None, :, None, :]
-                        half = E // 2
-                        q1, q2 = q[..., :half], q[..., half:]
-                        q = _np.concatenate([-q2, q1], axis=-1) * sin + q * cos
-                        k1, k2 = k[..., :half], k[..., half:]
-                        k = _np.concatenate([-k2, k1], axis=-1) * sin + k * cos
-
-                    # ── KV cache update ──
-                    new_len = kv_len[bi] + seq_len
-                    if kv_buf_k[bi] is None or new_len > kv_buf_k[bi].shape[1]:
-                        cap = max(64, new_len * 2)
-                        new_buf_k = _np.zeros((B, cap, K_H, E), dtype=k.dtype)
-                        new_buf_v = _np.zeros((B, cap, K_H, E), dtype=v.dtype)
-                        if kv_buf_k[bi] is not None:
-                            old = kv_len[bi]
-                            new_buf_k[:, :old] = kv_buf_k[bi][:, :old]
-                            new_buf_v[:, :old] = kv_buf_v[bi][:, :old]
-                        kv_buf_k[bi] = new_buf_k
-                        kv_buf_v[bi] = new_buf_v
-                    kv_buf_k[bi][:, kv_len[bi]:new_len] = k
-                    kv_buf_v[bi][:, kv_len[bi]:new_len] = v
-                    kv_len[bi] = new_len
-                    k = kv_buf_k[bi][:, :new_len]
-                    v = kv_buf_v[bi][:, :new_len]
-
-                    if K_H < H:
-                        k = _np.repeat(k, H // K_H, axis=2)
-                        v = _np.repeat(v, H // K_H, axis=2)
-
-                    # ── Attention (einsum kept — numba fallback was slower) ──
-                    scores = _np.einsum('bnhd,bmhd->bhnm', q, k) * scale
-                    if step == 0 and seq_len > 1:
-                        causal = _np.triu(_np.full((seq_len, seq_len), -1e9, dtype=_np.float32), k=1)
-                        scores = scores + causal
-
-                    # Softmax (numba JIT when available)
-                    scores_flat = scores.reshape(-1, new_len)
-                    _nb_softmax(scores_flat)
-
-                    ao = _np.einsum('bhnm,bmhd->bnhd', scores, v).reshape(B, seq_len, H * E)
-                    ao = ao @ _wo[bi].T
-                    x = x + ao
-
-                    # ── FFN RMSNorm ──
-                    x_flat = x.reshape(-1, E)
-                    h = _nb_rmsnorm(x_flat, _fn_w[bi], _np.float32(_fn_eps[bi])).reshape(B, seq_len, E)
-
-                    # ── Fused gate+up matmul: 2 matmuls → 1 ──
-                    fused = h.reshape(-1, E) @ _w13[bi].T   # (seq_len, GATE_dim)
-                    h1 = fused[:, :GATE_dim // 2]
-                    h3 = fused[:, GATE_dim // 2:]
-
-                    # ── SwiGLU (numba JIT fused: silu(h1)*h3 in one pass) ──
-                    h = _nb_swi_glu_mul(h1, h3).reshape(B, seq_len, GATE_dim // 2)
-
-                    h = h @ _w2[bi].T
-                    x = x + h
-
-                # ── Final RMSNorm + LM head ──
-                x_flat = x.reshape(-1, E)
-                x = _nb_rmsnorm(x_flat, norm_w, _np.float32(norm_eps)).reshape(B, seq_len, E)
-                logits = x[:, -1, :] @ lm_w.T
-                return logits
-
-            # Step 0: pre-fill full prompt
-            logits = _forward_step(tokens[:, -m.block_size:], 0, step=0)
-
-            # NaN/Inf guard on first logits
-            if not _np.all(_np.isfinite(logits)):
-                raise RuntimeError(f"Model produced non-finite logits (NaN/Inf) in pre-fill step. "
-                                   f"logits range: [{_np.min(logits):.4f}, {_np.max(logits):.4f}]")
-
-            generated_so_far = _np.array([], dtype=_np.int64)
-            next_id = _sample_from_logits(
-                logits, temperature=temperature,
-                top_k=top_k, top_p=top_p,
+            result = m.generate_numpy(
+                input_ids,
+                max_new_tokens=max_tokens,
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p,
                 repetition_penalty=repetition_penalty,
-                generated_ids=generated_so_far,
                 eos_token=eos_id,
             )
-            tokens = _np.concatenate([tokens, _np.array([[next_id]], dtype=_np.int64)], axis=1)
-            generated_so_far = _np.append(generated_so_far, next_id)
-            yield self._tokenizer.decode([next_id])
 
-            # Steps 1..max_tokens: single-token forward with KV cache
-            for step in range(1, max_tokens):
-                # Cancel check (threading.Event is safe to poll from any thread)
-                if cancel_event and cancel_event.is_set():
-                    return
-
-                if next_id == eos_id:
+            # Yield tokens one at a time (skip prompt tokens)
+            for i in range(prompt_len, result.shape[1]):
+                tok_id = int(result[0, i])
+                if tok_id == eos_id and i > prompt_len:
                     break
-                pos = tokens.shape[1] - 1
-                logits = _forward_step(tokens[:, -1:], pos, step=step)
-
-                # NaN/Inf guard — stop generation if logits are corrupt
-                if not _np.all(_np.isfinite(logits)):
-                    raise RuntimeError(
-                        f"Model produced non-finite logits at step {step} "
-                        f"(prompt_len={prompt_len}, generated={len(generated_so_far)}). "
-                        f"logits range: [{_np.min(logits):.4f}, {_np.max(logits):.4f}]"
-                    )
-
-                next_id = _sample_from_logits(
-                    logits, temperature=temperature,
-                    top_k=top_k, top_p=top_p,
-                    repetition_penalty=repetition_penalty,
-                    generated_ids=generated_so_far,
-                    eos_token=eos_id if step < max_tokens - 1 else None,
-                )
-                tokens = _np.concatenate([tokens, _np.array([[next_id]], dtype=_np.int64)], axis=1)
-                generated_so_far = _np.append(generated_so_far, next_id)
-                yield self._tokenizer.decode([next_id])
+                decoded = self._tokenizer.decode([tok_id])
+                if decoded:
+                    yield decoded
 
         # ── Robust streaming pipeline ──
         # Producer thread feeds tokens into queue; consumer yields from queue.
@@ -926,6 +712,9 @@ class SloNetChatProvider:
                 for token in _stream_generate():
                     q.put(token)
             except Exception as e:
+                import sys, traceback
+                print(f"[chat_stream] Producer error: {e}", file=sys.stderr, flush=True)
+                traceback.print_exc(file=sys.stderr)
                 err_q.put(e)
             finally:
                 q.put(sentinel)
