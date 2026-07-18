@@ -122,41 +122,45 @@ User clicks → Frontend (simple) → Core logic (complex) → API (thin)
 
 This codebase replaces most standard ML/DL libraries with custom implementations. **Do NOT add PyTorch, sentence-transformers, safetensors, bitsandbytes, Pinecone, ChromaDB, or similar as hard dependencies.** All replacements are intentional — they eliminate ~4GB of dependencies.
 
+**SloNet fully replaces HuggingFace Transformers and PyTorch.** There is no fallback path to PyTorch for training or inference. All model loading, tokenization, generation, and training runs on pure NumPy via SloNet.
+
 ### What We Use Instead
 
 | Standard Library | Our Replacement | Where | Why |
 |-----------------|-----------------|-------|-----|
-| **PyTorch** (`torch`, `torch.nn`, `torch.optim`) | **SloNet** (pure NumPy autograd) | `slonet.py`, `slonet_compat.py` | ~2GB eliminated. Full autograd (reverse + forward JVP), training, inference. |
+| **PyTorch** (`torch`, `torch.nn`, `torch.optim`) | **SloNet** (pure NumPy autograd + inference) | `slonet.py` | ~2GB eliminated. Full autograd (reverse + forward JVP), training, AND inference. No torch fallback. |
+| **HuggingFace Transformers** (`model.generate()`, `AutoModelForCausalLM`) | **SloNet `generate_numpy()`/`generate_numpy_stream()`** | `slonet.py`, `slonet_provider.py` | Pure NumPy generation with KV cache, fused QKV, RoPE, GQA. ~5 tok/s on CPU (Qwen2.5-0.5B). |
 | **safetensors** (runtime loading) | **Raw byte parser + .slnc mmap** | `model_loader.py`, `slnc/compiler.py`, `slnc/parser.py` | .slnc = 2.2x faster load, mmap zero-copy. safetensors only used as input format. |
 | **sentence-transformers** | **N-gram TF-IDF** + **SloTextEmbedder** | `vector_store.py`, `slo_embedder.py` | ~2GB eliminated. Zero-dependency embeddings. |
 | **torchvision** | **VisionCNN** (SloNet Conv2D layers) | `multimodal/vision.py` | 24K params, learns from uploaded images at runtime. |
 | **HuggingFace tokenizers** | **MorphTokenizer** (pure Python BPE) | `morph_tokenizer.py` | No Rust binary. Morphological analysis (stemming, decomposition). |
 | **bitsandbytes** (int8/int4) | **QuantEngine** (per-tensor quant) | `quantization.py` | Pure NumPy. Works on CPU (no CUDA required). |
-| **transformers generation** | **NumpyEngine** | `numpy_engine.py` | Architecture-agnostic HF inference without PyTorch. |
+| **transformers generation** | **SloNet `generate_numpy_stream()`** | `slonet.py` | Token-by-token streaming, KV cache, greedy/sampling. No transformers dependency. |
 | **Pinecone/ChromaDB** | **InMemoryVectorStore** + **MogDB** | `vector_store.py` | Zero external DB servers. Cosine-similarity in pure Python. |
 | **PyTorch checkpoints** (`.pt`/`.bin`) | **`.sou` format** | `sou_format.py`, `slonet.py` | Soul metadata (traits, system prompt) embedded in checkpoint. |
 | **GPU dispatch** (CUDA/MPS) | **Multi-backend accelerator** | `slolib/gpu/__init__.py` | Metal/CUDA/OpenCL/CPU unified. All ops take/return numpy arrays. |
 
 ### Key Patterns for Agents
 
-1. **PyTorch is optional** — `try: import torch except ImportError: torch = None`. All core logic works without it. `slonet_compat.py` provides a drop-in torch shim.
+1. **PyTorch is NOT used** — SloNet handles all training and inference. `slonet_compat.py` exists only for loading legacy `.pt` checkpoints into SloNet tensors, not for running torch models.
 2. **NumPy is the tensor framework** — `Tensor` in `slonet.py` wraps numpy arrays with autograd. Never call `torch.tensor()` directly.
-3. **No external model downloads at runtime** — SloNet models train from scratch. HuggingFace models are cached locally via `~/.cache/huggingface/`.
+3. **No external model downloads at runtime** — SloNet models train from scratch. HuggingFace models are converted to `.slnc` format on first load.
 4. **`safetensors` is optional** — `model_loader.py` reads raw bytes as fallback. `.slnc` is the preferred format.
-5. **Embeddings are zero-dependency** — `vector_store.py:_word_ngram_embed()` or `slo_embedder.py:SloTextEmbedder`. Never `pip install sentence-transformers`.
+5. **Embeddings are zero-dependency** — `vector_store.py:_ngram_embed()` or `slo_embedder.py:SloTextEmbedder`. Never `pip install sentence-transformers`.
 6. **Quantization is pure NumPy** — `QuantEngine` with `quantized_linear()` kernel. Never `pip install bitsandbytes`.
 7. **`.sou` checkpoints** — Export via `export_to_sou()`, load via `import_from_sou()`. Contains soul metadata + weights.
 8. **Accelerator dispatch** — `_accel_op()` in `slonet.py` dispatches to Metal/CUDA/OpenCL/CPU. Never import GPU frameworks directly.
+9. **Generation is pure NumPy** — `generate_numpy_stream()` yields tokens one at a time. KV cache, fused QKV, RoPE, GQA all implemented in numpy. No `model.generate()` from transformers.
 
 ### Dependency Hierarchy
 
 ```
-slonet.py (core) ──────────────── numpy only
-  ├── slonet_compat.py ─────────── torch shim (optional)
+slonet.py (core) ──────────────── numpy only (training + inference)
+  ├── slonet_compat.py ─────────── torch shim (legacy .pt loading only)
   ├── slolib/gpu/ ──────────────── Metal/CUDA/OpenCL (auto-detected)
   ├── quantization.py ──────────── numpy only
   ├── slnc/ ────────────────────── mmap + struct (stdlib only)
-  └── inference/ ───────────────── numpy + optional transformers
+  └── inference/ ───────────────── numpy only (no transformers)
 ```
 
 ---

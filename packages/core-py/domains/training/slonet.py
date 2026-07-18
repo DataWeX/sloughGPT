@@ -3687,8 +3687,6 @@ class SloTransformer(SloNet):
             _rope_cos = np.cos(emb).astype(np.float32)
             _rope_sin = np.sin(emb).astype(np.float32)
 
-        causal_mask = np.triu(np.full((self.block_size, self.block_size), -1e9, dtype=np.float32), k=1)
-
         _use_bias_bqkv = m_bqkv[0] is not None
         _use_bias_bo = m_bo[0] is not None
         _use_bias_b13 = m_b13[0] is not None
@@ -3768,7 +3766,9 @@ class SloTransformer(SloNet):
                 # Attention
                 scores = np.einsum('bnhd,bmhd->bhnm', q, k) * scale
                 if step == 0 and seq_len > 1:
-                    scores = scores + causal_mask[:seq_len, :new_len]
+                    # Build small causal mask inline — no 4GB allocation
+                    _cm = np.triu(np.full((seq_len, new_len), -1e9, dtype=np.float32), k=1)
+                    scores = scores + _cm
                 attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
                 attn = attn / attn.sum(axis=-1, keepdims=True)
                 ao = np.einsum('bhnm,bmhd->bnhd', attn, v).reshape(1, seq_len, _he)
@@ -3987,8 +3987,6 @@ class SloTransformer(SloNet):
             _rope_cos = np.cos(emb).astype(np.float32)
             _rope_sin = np.sin(emb).astype(np.float32)
 
-        causal_mask = np.triu(np.full((self.block_size, self.block_size), -1e9, dtype=np.float32), k=1)
-
         _use_bias_bqkv = m_bqkv[0] is not None
         _use_bias_bo = m_bo[0] is not None
         _use_bias_b13 = m_b13[0] is not None
@@ -4059,7 +4057,8 @@ class SloTransformer(SloNet):
 
                 scores = np.einsum('bnhd,bmhd->bhnm', q, k) * scale
                 if step == 0 and seq_len > 1:
-                    scores = scores + causal_mask[:seq_len, :new_len]
+                    _cm = np.triu(np.full((seq_len, new_len), -1e9, dtype=np.float32), k=1)
+                    scores = scores + _cm
                 attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
                 attn = attn / attn.sum(axis=-1, keepdims=True)
                 ao = np.einsum('bhnm,bmhd->bnhd', attn, v).reshape(1, seq_len, _he)

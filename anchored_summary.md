@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 694f118 chore: type safety — remove 'as any' casts, add global Window types
+No active task. Last commit: 22f2b1a chore: catch (e: unknown) type safety in hooks and SSE client
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
