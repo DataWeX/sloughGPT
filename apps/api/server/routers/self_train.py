@@ -1,12 +1,14 @@
 """
 Self-Train Router - Start/stop/status for self-training subprocess.
 """
-from typing import Optional
-from fastapi import APIRouter
+import re
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 import state as server_state
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
 
 from schemas.common import success_response
 
@@ -14,33 +16,51 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 
 router = APIRouter(prefix="/self-train", tags=["self-train"])
 
+_MODEL_NAME_RE = re.compile(r'^[a-zA-Z0-9_./-]+$')
+
+
+class SelfTrainRequest(BaseModel):
+    """Validated request body for starting self-training.
+
+    Attributes:
+        model: Model name — alphanumeric, dots, hyphens, slashes, underscores only.
+        temperature: Sampling temperature between 0.0 and 2.0.
+        forever: Whether to train indefinitely.
+    """
+    model: Optional[str] = Field(default=None, max_length=128)
+    temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0)
+    forever: bool = False
+
 
 @router.post("/start")
-async def start_self_train(params: Optional[dict] = None):
+async def start_self_train(req: Optional[SelfTrainRequest] = None):
     """Start self-training in a subprocess.
 
     Args:
-        params: optional config with model, temperature, forever keys
+        req: Validated config with model, temperature, forever keys.
 
     Returns:
-        status dict with pid or error
+        Status dict with pid or error.
     """
-    params = params or {}
     proc = server_state._self_train_proc
     if proc is not None and proc.poll() is None:
         return success_response(data={"status": "already_running", "pid": proc.pid})
     try:
         script = _REPO_ROOT / "scripts" / "self_train.py"
         cmd = [sys.executable, str(script)]
-        if params.get("model"):
-            cmd.extend(["--model", params["model"]])
-        if params.get("temperature"):
-            cmd.extend(["--temperature", str(params["temperature"])])
-        if params.get("forever"):
+        if req and req.model:
+            if not _MODEL_NAME_RE.match(req.model):
+                raise HTTPException(status_code=422, detail="Invalid model name — only alphanumeric, dots, hyphens, slashes, underscores allowed")
+            cmd.extend(["--model", req.model])
+        if req and req.temperature is not None:
+            cmd.extend(["--temperature", str(req.temperature)])
+        if req and req.forever:
             cmd.append("--forever")
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         server_state._self_train_proc = proc
         return success_response(data={"status": "started", "pid": proc.pid})
+    except HTTPException:
+        raise
     except Exception as e:
         return success_response(data={"status": "error", "error": str(e)})
 

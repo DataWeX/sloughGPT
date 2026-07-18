@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: c2845f0 feat: true token-by-token streaming via generate_numpy_stream()
+No active task. Last commit: 330de56 chore: remove dead demo endpoint, wire registry to real ModelRegistry, type safety
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
