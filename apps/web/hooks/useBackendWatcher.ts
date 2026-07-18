@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useRef } from 'react'
-import { useApiMonitor } from '@/lib/api-monitor-store'
+import { useApiMonitor, type HealthSummaryData } from '@/lib/api-monitor-store'
 import { apiGet } from '@/lib/http-client'
 import { logger } from '@/lib/dev-log'
 
@@ -57,7 +57,7 @@ export function useBackendWatcher() {
         failureCount.current = 0
         consecutiveRateLimits.current = 0
         clearFailures()
-        setHealthSummary(data as any)
+        setHealthSummary(data as HealthSummaryData)
 
         if (wasOffline.current) {
           wasOffline.current = false

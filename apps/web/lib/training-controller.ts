@@ -572,7 +572,7 @@ export const trainingJobsController = {
 
   async listChatSessions(): Promise<ChatSession[]> {
     const data = await apiGet<{ data: ChatSession[] } | ChatSession[]>('/chat/sessions')
-    return Array.isArray(data) ? data : (data as any).data || []
+    return Array.isArray(data) ? data : (data as { data: ChatSession[] }).data || []
   },
 
   async exportTrainingPairs(params?: {

@@ -7,12 +7,9 @@ External providers (Pinecone, ChromaDB) live in the ``vector_stores/`` package.
 import hashlib
 import json
 import logging
-import pickle
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
 from enum import Enum
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np

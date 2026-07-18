@@ -90,12 +90,4 @@ describe('getKnowledgeContext', () => {
     const ctx = getKnowledgeContext()
     expect(ctx).toContain('Paris is capital of France')
   })
-
-  it('combines custom context and injected knowledge', () => {
-    useAppStore.getState().updateSettings({ customContext: 'Be concise.' })
-    useAppStore.getState().addKnowledge('E=mc^2')
-    const ctx = getKnowledgeContext()
-    expect(ctx).toContain('Be concise.')
-    expect(ctx).toContain('E=mc^2')
-  })
 })

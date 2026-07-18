@@ -111,7 +111,7 @@ export function initLiveStatus(): () => void {
           // Convert to LiveHealthSnapshot shape
           const snap: Partial<LiveHealthSnapshot> = {
             model_loaded: h.model_loaded,
-            model_loading: (h as any).model_loading ?? false,
+            model_loading: h.model_loading ?? false,
             model_type: h.model_type,
             soul: h.soul_name ?? null,
             inference_count: h.inference_count ?? 0,
@@ -169,7 +169,7 @@ export function initLiveStatus(): () => void {
       health_score: Number(d.health_score) || 0,
       health_status: String(d.health_status || 'unknown'),
       health_summary: String(d.health_summary || ''),
-      diagnoses: Array.isArray(d.diagnoses) ? d.diagnoses as any : [],
+      diagnoses: Array.isArray(d.diagnoses) ? d.diagnoses as Array<{ check: string; severity: string; score: number; message: string }> : [],
       num_parameters: d.num_parameters != null ? Number(d.num_parameters) : null,
       quantization: d.quantization ?? null,
       training_pool: d.training_pool ?? null,

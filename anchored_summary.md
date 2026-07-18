@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 77e26f4 feat: inference optimizations + security/timezone/quality fixes
+No active task. Last commit: 9e3fb04 fix: chat_stream broken — delegate to generate_numpy, fix hidden_dim/head_dim, GQA split, biases
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

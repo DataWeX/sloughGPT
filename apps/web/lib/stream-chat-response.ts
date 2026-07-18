@@ -1,6 +1,6 @@
 'use client'
 
-import { API_CHAT_ENDPOINT } from '@/lib/config'
+import { PUBLIC_API_URL } from '@/lib/config'
 
 export interface ToolCallEvent {
   tool: string
@@ -38,7 +38,7 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
     onToken, onComplete, onError, onKnowledge, onThinking, onToolCall,
   } = params
 
-  const response = await fetch(API_CHAT_ENDPOINT, {
+  const response = await fetch(`${PUBLIC_API_URL}/chat/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

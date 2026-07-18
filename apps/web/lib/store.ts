@@ -87,15 +87,6 @@ export function useUpdateSettings() {
   return useAppStore((state) => state.updateSettings)
 }
 
-export function useKnowledge() {
-  return useAppStore((state) => ({
-    items: state.injectedKnowledge,
-    add: state.addKnowledge,
-    remove: state.removeKnowledge,
-    clear: state.clearKnowledge,
-  }))
-}
-
 export function getKnowledgeContext(): string {
   const state = useAppStore.getState()
   const { customContext } = state.settings

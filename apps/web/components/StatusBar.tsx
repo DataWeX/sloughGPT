@@ -55,12 +55,12 @@ export function StatusBar() {
     if (health === null || connectionStatus !== 'connected') return
     soulsController.getCurrent().then(async (s) => {
       if (s && 'name' in s) {
-        const name = (s as any).name
+        const name = s.name
         setSoulName(name)
         try {
           const w = await soulsController.getTraitWeights()
           if (w && !('error' in w)) {
-            const arch = deriveArchetype(w as any)
+            const arch = deriveArchetype(w as Record<string, Record<string, number>>)
             setArchetypeLabel(arch.label)
           }
         } catch {

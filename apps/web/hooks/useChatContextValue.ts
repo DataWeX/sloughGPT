@@ -3,7 +3,7 @@
 import { useMemo, useCallback } from 'react'
 import type { ChatHealthContextValue, ChatModelContextValue, ChatUICallbacksContextValue } from '@/contexts/ChatContext'
 import { soulsController } from '@/lib/souls-controller'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { apiPost } from '@/lib/http-client'
 import type { useChatUI } from './useChatUI'
 import type { useChatVision } from './useChatVision'
 import type { useChatAgents } from './useChatAgents'
@@ -43,21 +43,18 @@ export function useChatModelValue(opts: Pick<UseChatContextValueOpts, 'model' | 
   const onTrainStep = useCallback(async () => {
     model.setLearnerTraining(true)
     try {
-      const resp = await fetch(`${PUBLIC_API_URL}/learn/train`, { method: 'POST' })
-      if (resp.ok) {
-        const data = await resp.json()
-        if (data.current_loss !== undefined) showToast(`Training step: loss ${data.current_loss.toFixed(4)}`)
-        else showToast('Training step complete')
-        model.setLearnerInfo(prev => {
-          if (!prev) return prev
-          return {
-            ...prev,
-            train_steps_completed: data.train_steps_completed ?? prev.train_steps_completed,
-            current_loss: data.current_loss ?? prev.current_loss,
-            loss_history: data.loss_history ?? prev.loss_history,
-          }
-        })
-      } else showToast('Training step failed', 'error')
+      const data = await apiPost<{ current_loss?: number; train_steps_completed?: number; loss_history?: Array<{ step: number; loss: number; tokens: number; timestamp: number }> }>('/learn/train', {})
+      if (data.current_loss !== undefined) showToast(`Training step: loss ${data.current_loss.toFixed(4)}`)
+      else showToast('Training step complete')
+      model.setLearnerInfo(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          train_steps_completed: data.train_steps_completed ?? prev.train_steps_completed,
+          current_loss: data.current_loss ?? prev.current_loss,
+          loss_history: data.loss_history ?? prev.loss_history,
+        }
+      })
     } catch { showToast('Training step failed', 'error') }
     finally { model.setLearnerTraining(false) }
   }, [model.setLearnerTraining, model.setLearnerInfo, showToast])

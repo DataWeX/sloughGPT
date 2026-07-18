@@ -54,7 +54,7 @@ export const soulsController = {
   async list(): Promise<SoulsResponse> {
     const souls = await apiGet<Soul[]>('/souls')
     // _meta is attached by http-client unwrap for StandardResponse meta field
-    const meta = (souls as any)?._meta
+    const meta = (souls as unknown as { _meta?: { current_soul?: string } })?._meta
     return {souls: souls || [], current_soul: meta?.current_soul}
   },
 
@@ -127,7 +127,7 @@ export const soulsController = {
     const res = await apiDelete<{ deleted: boolean } | { status: string; data: { deleted: boolean } }>(
       `/souls/weights/snapshot/${encodeURIComponent(name)}`
     )
-    return (res as any).deleted ?? (res as any)?.data?.deleted ?? false
+    return ('deleted' in res ? (res as { deleted: boolean }).deleted : false) ?? ('data' in res ? (res as { data: { deleted: boolean } }).data?.deleted : false) ?? false
   },
 
   async saveTraitWeights(weights: Record<string, Record<string, number>>): Promise<{ status: string }> {

@@ -39,3 +39,5 @@ export type { MultimodalCapabilities, TrainingReport } from './multimodal-contro
 export type { FeedbackStats, WorkflowStatus, TrainingStats } from './feedback-controller'
 export type { UserAdapterStats, UserAdapterInfo } from './user-adapters-controller'
 export type { GenerateRequest, GenerateResponse } from './generate-controller'
+export { startDownload, getDownloadStatus, cancelDownload } from './download-controller'
+export type { DownloadProgress, VerifyResult } from './download-controller'

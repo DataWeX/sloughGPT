@@ -68,15 +68,15 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
           .filter(s => s.name || s.id)
           .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
           .slice(0, 5)
-        setRecentSessions(sorted as any)
+        setRecentSessions(sorted)
       }
     }).catch(() => {})
     trainingController.list().then(jobs => {
       if (!cancelled.current) {
-        const running = jobs.find((j: any) => j.status === 'running')
+        const running = jobs.find(j => j.status === 'running')
         setRunningTraining(running ? { name: running.name || running.id, status_message: running.status_message || 'Training...' } : null)
         const recent = [...jobs]
-          .sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+          .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
           .slice(0, 3)
         setRecentJobs(recent)
       }

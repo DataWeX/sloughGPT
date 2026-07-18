@@ -9,10 +9,8 @@ Output: .soul checkpoint that can be loaded into the inference pipeline.
 """
 
 import gc
-import json
 import logging
-import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -23,7 +21,6 @@ from domains.training.slonet import (
 )
 from domains.training.quality_scorer import score_batch
 from domains.training.pair_extractor import extract_pairs_from_sessions
-from domains.training.trainer_protocol import TrainResult
 
 logger = logging.getLogger("slo.training.chat_trainer")
 

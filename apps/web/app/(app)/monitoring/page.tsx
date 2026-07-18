@@ -78,11 +78,11 @@ export default function SystemHealthPage() {
       setKnowledgeStats(ks)
       setAdapterStatus(as)
       if (bq && 'coherence_score' in bq) {
-        setBenchQuality(bq as any)
+        setBenchQuality(bq as { status: string; total_responses: number; coherence_score: number; quality_score: number; repetition_rate: number; avg_length: number; empty_rate: number })
       } else {
         setBenchQuality(null)
       }
-      setBenchStats(bs as any)
+      setBenchStats(bs as { total: number; avg_tokens: number; models: string[] } | null)
       setDpoStatus(dsRes as typeof dpoStatus)
       setVisualStatus(null)
       setExecutorStatus(ex)

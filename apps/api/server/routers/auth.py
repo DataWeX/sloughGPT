@@ -1,7 +1,7 @@
 """
 Auth Router - JWT token management + login/register/me/logout endpoints
 """
-import uuid, json, os, hashlib
+import uuid, json, os, hashlib, secrets
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Header, Request, Depends
 from pydantic import BaseModel
@@ -33,7 +33,31 @@ def _save_users(users: dict) -> None:
 
 
 def _hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Hash password with PBKDF2-HMAC-SHA256 + random salt (100k iterations).
+
+    Returns:
+        Format: ``v1:<salt>:<hash>`` for new hashes.
+    """
+    salt = secrets.token_hex(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 100_000)
+    return f"v1:{salt}:{dk.hex()}"
+
+
+def _verify_password(password: str, stored: str) -> bool:
+    """Verify password against stored hash.
+
+    Supports:
+        - ``v1:<salt>:<hash>`` — PBKDF2-HMAC-SHA256 (current)
+        - ``<hex64>`` — legacy bare SHA256 (auto-migrate on next login)
+    """
+    if stored.startswith("v1:"):
+        parts = stored.split(":")
+        if len(parts) == 3:
+            _, salt, expected_hex = parts
+            dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 100_000)
+            return secrets.compare_digest(dk.hex(), expected_hex)
+    legacy = hashlib.sha256(password.encode()).hexdigest()
+    return secrets.compare_digest(legacy, stored)
 
 
 # ---------- request / response models ----------
@@ -104,8 +128,11 @@ async def login(req: LoginRequest):
     users = _load_users()
     for uid, u in users.items():
         if u["username"] == req.username:
-            if u.get("password_hash") != _hash_password(req.password):
+            if not _verify_password(req.password, u.get("password_hash", "")):
                 raise HTTPException(status_code=401, detail="Invalid credentials")
+            if not u.get("password_hash", "").startswith("v1:"):
+                u["password_hash"] = _hash_password(req.password)
+                _save_users(users)
             _, exp_hours, jwt_auth, _ = _get_auth_deps()
             token = jwt_auth.create_token(subject=uid)
             return AuthResponse(

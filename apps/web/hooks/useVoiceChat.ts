@@ -272,7 +272,7 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
     }
 
     recognition.onerror = (e: Event) => {
-      const errType = (e as any)?.error || 'unknown'
+      const errType = (e as { error?: string })?.error || 'unknown'
       if (errType === 'not-allowed') {
         setErrorMessage('Microphone access denied')
       } else if (errType !== 'aborted') {

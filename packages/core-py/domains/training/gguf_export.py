@@ -578,47 +578,6 @@ class QwenMapping(TensorMapping):
         return mapping
 
 
-class StarcoderMapping(TensorMapping):
-    """Tensor mapping for Starcoder (BigCode)."""
-
-    def __init__(self):
-        super().__init__("starcoder", "llama")
-
-    def get_tensor_map(self) -> Dict[str, str]:
-        return {
-            "transformer.wte.weight": "token_embd.weight",
-            "lm_head.weight": "output.weight",
-            "transformer.ln_f.weight": "output_norm.weight",
-        }
-
-    def get_block_prefix(self) -> str:
-        return "transformer.h."
-
-    def has_rope(self) -> bool:
-        return True
-
-    def has_position_embeddings(self) -> bool:
-        return False
-
-    def get_block_mapping(self, n_layers: int = 100) -> Dict[str, str]:
-        mapping = {}
-        for i in range(n_layers):
-            prefix = f"transformer.h.{i}."
-
-            mapping[f"{prefix}ln_1.weight"] = f"blk.{i}.attn_norm.weight"
-            mapping[f"{prefix}ln_2.weight"] = f"blk.{i}.ffn_norm.weight"
-
-            mapping[f"{prefix}attn.q_proj.weight"] = f"blk.{i}.attn_q.weight"
-            mapping[f"{prefix}attn.k_proj.weight"] = f"blk.{i}.attn_k.weight"
-            mapping[f"{prefix}attn.v_proj.weight"] = f"blk.{i}.attn_v.weight"
-            mapping[f"{prefix}attn.c_proj.weight"] = f"blk.{i}.attn_output.weight"
-
-            mapping[f"{prefix}mlp.c_fc.weight"] = f"blk.{i}.ffn_gate.weight"
-            mapping[f"{prefix}mlp.c_proj.weight"] = f"blk.{i}.ffn_down.weight"
-
-        return mapping
-
-
 class DeepseekMapping(TensorMapping):
     """Tensor mapping for Deepseek (Deepseek AI)."""
 
@@ -895,12 +854,11 @@ def export_to_gguf(
                 fused_set.add(key)
 
     import numpy as np
-    import torch
     for key, tensor in state_dict.items():
         if isinstance(tensor, np.ndarray):
             tensor_np = tensor.astype(np.float16)
-        elif isinstance(tensor, torch.Tensor):
-            tensor_np = tensor.detach().cpu().to(dtype=torch.float16).numpy()
+        elif hasattr(tensor, 'detach') and hasattr(tensor, 'numpy'):
+            tensor_np = tensor.detach().cpu().astype(np.float16).numpy() if hasattr(tensor, 'float16') else tensor.detach().cpu().numpy().astype(np.float16)
         else:
             continue
 

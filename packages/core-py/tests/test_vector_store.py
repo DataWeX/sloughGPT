@@ -338,10 +338,11 @@ class TestLoadEmbedModel:
         mock_model = MagicMock()
         mock_st.SentenceTransformer.return_value = mock_model
 
+        mock_torch = MagicMock()
         fake_mem = MagicMock()
         fake_mem.available = 2 * 1024 * 1024 * 1024  # 2 GB
 
-        with patch.dict("sys.modules", {"sentence_transformers": mock_st}):
+        with patch.dict("sys.modules", {"torch": mock_torch, "sentence_transformers": mock_st}):
             with patch("psutil.virtual_memory", return_value=fake_mem):
                 import domains.inference.vector_store as vs
                 vs._embed_model = None

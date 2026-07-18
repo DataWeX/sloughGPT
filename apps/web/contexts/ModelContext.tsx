@@ -128,8 +128,8 @@ export function ModelProvider({ children }: { children: ReactNode }) {
 
     try {
       const data = await modelController.loadModelPath(path)
-      if (data && (data as any).error) {
-        const error = String((data as any).error)
+      if (data && data.error) {
+        const error = String(data.error)
         setError(error)
         return { success: false, error }
       }

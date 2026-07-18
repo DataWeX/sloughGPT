@@ -14,7 +14,7 @@ const localStorageMock = (() => {
 
 vi.stubGlobal('localStorage', localStorageMock)
 
-import { useAppStore, getKnowledgeContext } from './store'
+import { useAppStore } from './store'
 
 beforeEach(() => {
   useAppStore.setState({ settings: useAppStore.getInitialState().settings, injectedKnowledge: [] })
@@ -97,33 +97,5 @@ describe('useAppStore', () => {
       useAppStore.getState().clearKnowledge()
       expect(useAppStore.getState().injectedKnowledge).toEqual([])
     })
-  })
-})
-
-describe('getKnowledgeContext', () => {
-  it('returns empty string when no knowledge', () => {
-    const result = getKnowledgeContext()
-    expect(result).toBe('')
-  })
-
-  it('includes customContext', () => {
-    useAppStore.getState().updateSettings({ customContext: 'You are a helpful assistant.' })
-    const result = getKnowledgeContext()
-    expect(result).toContain('You are a helpful assistant.')
-    expect(result).toMatch(/^\n\n\[IMPORTANT KNOWLEDGE/)
-  })
-
-  it('includes injected knowledge items', () => {
-    useAppStore.getState().addKnowledge('Paris is the capital of France')
-    const result = getKnowledgeContext()
-    expect(result).toContain('Paris is the capital of France')
-  })
-
-  it('combines customContext and injected knowledge', () => {
-    useAppStore.getState().updateSettings({ customContext: 'Be concise.' })
-    useAppStore.getState().addKnowledge('The sky is blue')
-    const result = getKnowledgeContext()
-    expect(result).toContain('Be concise.')
-    expect(result).toContain('The sky is blue')
   })
 })

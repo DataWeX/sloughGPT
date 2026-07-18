@@ -262,24 +262,23 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       setPhase('TRAINING'); setProgress(0); setTotalEpochs(params.stage1Epochs + params.stage2Epochs)
       const pollId = setInterval(async () => {
         try {
-          const resp2 = await fetch(`${PUBLIC_API_URL}/training/jobs`)
-          const jobs = await resp2.json()
-          const myJob = (jobs || []).find((j: { id: string }) => j.id === jobId)
+          const jobs = await trainingJobsController.list()
+          const myJob = (jobs || []).find((j: { id: string }) => j.id === jobId) as Record<string, unknown> | undefined
           if (!myJob) {             clearInterval(pollId); visualPollRef.current = null; return }
           if (myJob.status === 'completed') {
             clearInterval(pollId); visualPollRef.current = null; setPhase('complete'); setProgress(100)
-            setFinetunedModelPath(myJob.model_path || '')
-            setFinetunedModelLoss(myJob.loss || null)
-            setVisualOutputDir(myJob.output_dir || null)
-            setVisualSouPath(myJob.sou_path || null)
+            setFinetunedModelPath((myJob.model_path as string) || '')
+            setFinetunedModelLoss((myJob.loss as number) || null)
+            setVisualOutputDir((myJob.output_dir as string) || null)
+            setVisualSouPath((myJob.sou_path as string) || null)
             addToast('Image model training complete', 'success')
             onComplete?.()
           } else if (myJob.status === 'failed') {
             clearInterval(pollId); visualPollRef.current = null; setPhase('error')
-            addToast(myJob.error || 'Image model training failed', 'error')
+            addToast((myJob.error as string) || 'Image model training failed', 'error')
           } else if (myJob.loss != null) {
-            setLoss(myJob.loss); setProgress(myJob.progress || 0); setEpoch(myJob.current_epoch || 0)
-            setMessage(myJob.stage || '')
+            setLoss(myJob.loss as number); setProgress((myJob.progress as number) || 0); setEpoch((myJob.current_epoch as number) || 0)
+            setMessage((myJob.stage as string) || '')
           }
         } catch { clearInterval(pollId); visualPollRef.current = null }
       }, 3000)
