@@ -83,12 +83,14 @@ export function useBackendWatcher() {
           }
           lastScoreStatus.current = data.status
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (cancelled) return
 
+        const errStatus = err instanceof Error ? (err as Error & { status?: number }).status : undefined
+        const errMsg = err instanceof Error ? err.message : undefined
         // Check if this is a rate limit (429) vs actual server down
-        const isRateLimit = err?.status === 429
-        const isConnectionDown = err?.status === 0 || err?.message === 'Connection unavailable'
+        const isRateLimit = errStatus === 429
+        const isConnectionDown = errStatus === 0 || errMsg === 'Connection unavailable'
         const elapsed = Math.round((Date.now() - startTime.current) / 1000)
 
         if (isRateLimit) {

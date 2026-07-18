@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 4bf003f perf: use useSyncExternalStore for Zustand live status subscription
+No active task. Last commit: 694f118 chore: type safety — remove 'as any' casts, add global Window types
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

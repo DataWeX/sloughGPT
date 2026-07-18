@@ -67,10 +67,10 @@ export function useChatMode({ chat }: UseChatModeOptions) {
           ? { ...m, content: `Here's your ${createStyle.toLowerCase()} image:\n\n![${prompt}](${result.image})` }
           : m
       ))
-    } catch (err: any) {
+    } catch (err: unknown) {
       chat.setMessages(prev => prev.map(m =>
         m.id === pendingId
-          ? { ...m, content: `❌ Sorry, I couldn't create that image. ${err?.message || 'Please try again.'}` }
+          ? { ...m, content: `❌ Sorry, I couldn't create that image. ${err instanceof Error ? err.message : 'Please try again.'}` }
           : m
       ))
     } finally {

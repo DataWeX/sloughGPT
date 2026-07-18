@@ -142,16 +142,16 @@ export function createSSEStream(options: SSEStreamOptions): SSEStream {
       // Stream ended normally
       _connected = false
       onClose?.()
-    } catch (err: any) {
+    } catch (err: unknown) {
       _connected = false
 
-      if (err.name === 'AbortError' || _stopped) {
+      if (err instanceof Error && (err.name === 'AbortError' || _stopped)) {
         // Intentional stop — don't reconnect
         onClose?.()
         return
       }
 
-      onError?.(err)
+      onError?.(err instanceof Error ? err : new Error(String(err)))
 
       if (reconnect && reconnectCount < maxReconnects) {
         reconnectCount++

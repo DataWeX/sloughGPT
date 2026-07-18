@@ -453,8 +453,8 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
       } else {
         setState('idle')
       }
-    } catch (e: any) {
-      if (e.name !== 'AbortError') {
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name !== 'AbortError') {
         setErrorMessage(e.message || 'Generation failed')
         setState('error')
       }
