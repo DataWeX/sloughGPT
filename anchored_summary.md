@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 1ab8ce3 perf: eliminate 4GB causal mask allocation per generate call
+No active task. Last commit: 7ea28cc feat: wire fused numba kernels into generate_numpy/stream
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

@@ -3965,6 +3965,7 @@ class SloTransformer(SloNet):
         norm_b = norm_layer.bias.data if norm_has_bias else None
         norm_eps = norm_layer.eps
         lm_w = self.layers[-1].weight.data
+        lm_head_mod = self.layers[-1]  # SloLinear — for quantized forward_numpy()
 
         _first_block = None
         for l in self.layers[1:-2]:
@@ -4163,7 +4164,7 @@ class SloTransformer(SloNet):
                 x = x * (norm_w / rms)
 
             if _is_quantized:
-                logits = lm_w.forward_numpy(x[:, -1, :])
+                logits = lm_head_mod.forward_numpy(x[:, -1, :])
             else:
                 logits = x[:, -1, :] @ lm_w.T
 
