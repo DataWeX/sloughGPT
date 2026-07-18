@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 330de56 chore: remove dead demo endpoint, wire registry to real ModelRegistry, type safety
+No active task. Last commit: 5a1d029 fix: add Pydantic validation and input sanitization to self-train endpoint
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

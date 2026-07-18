@@ -16,7 +16,7 @@
 
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback, useSyncExternalStore } from 'react'
 import { create } from 'zustand'
 import { createSSEStream, type SSEEnvelope } from '@/lib/sse-client'
 import { modelController, type HealthStatus } from '@/lib/model-controller'
@@ -264,14 +264,18 @@ export function useLiveStatus() {
 
 // Re-export the store selector for non-hook usage
 function useLiveStatusStore<T>(selector: (s: LiveStatusState) => T): T {
-  const [value, setValue] = useState(() => selector(liveStatusStore.getState()))
-  useEffect(() => {
-    return liveStatusStore.subscribe((state) => {
-      const next = selector(state)
-      setValue(next)
-    })
-  }, [selector])
-  return value
+  const selectorRef = useRef(selector)
+  selectorRef.current = selector
+
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => liveStatusStore.subscribe(() => onStoreChange()),
+    [],
+  )
+
+  return useSyncExternalStore(
+    subscribe,
+    () => selectorRef.current(liveStatusStore.getState()),
+  )
 }
 
 export { useLiveStatusStore }
