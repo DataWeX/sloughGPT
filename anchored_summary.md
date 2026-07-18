@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 6da4267 fix: UI quality — AlertDialogs, error logging, type safety, dead code removal
+No active task. Last commit: 40f16b3 feat: chat-from-sessions trainer + dead code removal + test cleanup
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

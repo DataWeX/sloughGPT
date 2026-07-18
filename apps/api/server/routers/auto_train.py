@@ -529,15 +529,19 @@ async def start(req: StartRequest):
     if not resume and req.checkpoint_name:
         ckpt_soul = CHECKPOINTS_DIR / f"{req.checkpoint_name}.soul"
         ckpt_pt = CHECKPOINTS_DIR / f"{req.checkpoint_name}.pt"
-        if ckpt_pt.exists():
-            resume = True
-            resume_path = str(ckpt_pt)
-            autotrain_logger.info("Auto-resume from %s", resume_path, extra={"tag": "TRAIN", "context": {"checkpoint": resume_path}})
-        elif ckpt_soul.exists():
+        if ckpt_soul.exists():
             resume = True
             resume_path = str(ckpt_soul)
             method = "chat-trained"  # SloNet checkpoint — use chat_trainer
             autotrain_logger.info("Auto-resume from %s (SloNet)", resume_path, extra={"tag": "TRAIN", "context": {"checkpoint": resume_path, "method": method}})
+        elif ckpt_pt.exists():
+            resume = True
+            resume_path = str(ckpt_pt)
+            if not data_path:
+                method = "chat-trained"
+                autotrain_logger.info("Checkpoint-only resume (no data): routing to chat_trainer", extra={"tag": "TRAIN", "context": {"checkpoint": resume_path}})
+            else:
+                autotrain_logger.info("Auto-resume from %s", resume_path, extra={"tag": "TRAIN", "context": {"checkpoint": resume_path}})
 
     state.config = {
         "epochs": req.epochs,
@@ -767,6 +771,11 @@ async def stream(request: Request):
         data_path = state.config.get("data_path", "")
         output_dir = Path(CHECKPOINTS_DIR)
         output_dir.mkdir(parents=True, exist_ok=True)
+
+        if not data_path:
+            autotrain_logger.error("Auto-train: data_path is empty but method is %s — cannot train without data", method, extra={"tag": "TRAIN"})
+            _enqueue(sse_error("auto-train", "NO_DATA", "No training data provided. Supply source_text, dataset_id, or a valid checkpoint."))
+            return
 
         trainer_config = TrainerConfig(
             vocab_size=0,  # let prepare_data() determine from actual charset

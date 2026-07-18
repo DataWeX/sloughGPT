@@ -81,7 +81,8 @@ export const sessionController = {
   },
 
   async update(id: string, data: { name?: string; starred?: boolean; pinned?: boolean; archived?: boolean }): Promise<void> {
-    await apiPut(`/chat/sessions/${id}`, data)
+    if (!id) return
+    await apiPut(`/chat/sessions/${encodeURIComponent(id)}`, data)
   },
 
   async delete(id: string): Promise<void> {
