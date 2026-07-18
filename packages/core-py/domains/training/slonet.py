@@ -39,6 +39,10 @@ try:
     from domains.training.slonet_kernels import (
         nb_layernorm as _nb_layernorm,
         nb_swi_glu_mul as _nb_swi_glu_mul,
+        fused_attention_single as _nb_fused_attention_single,
+        fused_attention_multi as _nb_fused_attention_multi,
+        gqa_expand as _nb_gqa_expand,
+        nb_rmsnorm as _nb_rmsnorm,
     )
     _KERNELS_AVAILABLE = True
 except ImportError:
@@ -3725,8 +3729,11 @@ class SloTransformer(SloNet):
                         h = h + n_an_b[bi]
                 else:
                     # RMSNorm: h = x * weight / sqrt(mean(x^2) + eps)
-                    rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + n_an_e[bi])
-                    h = x * (n_an_w[bi] / rms)
+                    if _use_kernels:
+                        h = _nb_rmsnorm(x, n_an_w[bi], n_an_e[bi])
+                    else:
+                        rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + n_an_e[bi])
+                        h = x * (n_an_w[bi] / rms)
 
                 # QKV projection
                 if _is_quantized:
@@ -3760,18 +3767,30 @@ class SloTransformer(SloNet):
                 v = kv_buf_v[bi][:, :new_len]
 
                 if _use_gqa:
-                    k = np.repeat(k, _gqa_reps, axis=2)
-                    v = np.repeat(v, _gqa_reps, axis=2)
+                    if _use_kernels:
+                        # GQA expand via numba — wrapper returns expanded array
+                        k = _nb_gqa_expand(k[0], _gqa_reps).reshape(1, H, new_len, E)
+                        v = _nb_gqa_expand(v[0], _gqa_reps).reshape(1, H, new_len, E)
+                    else:
+                        k = np.repeat(k, _gqa_reps, axis=2)
+                        v = np.repeat(v, _gqa_reps, axis=2)
 
-                # Attention
-                scores = np.einsum('bnhd,bmhd->bhnm', q, k) * scale
-                if step == 0 and seq_len > 1:
-                    # Build small causal mask inline — no 4GB allocation
-                    _cm = np.triu(np.full((seq_len, new_len), -1e9, dtype=np.float32), k=1)
-                    scores = scores + _cm
-                attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
-                attn = attn / attn.sum(axis=-1, keepdims=True)
-                ao = np.einsum('bhnm,bmhd->bnhd', attn, v).reshape(1, seq_len, _he)
+                # Attention — use fused numba kernel for single-token steps
+                if step > 0 and _use_kernels:
+                    _ao_flat = _nb_fused_attention_single(q[0, 0], k[0], v[0], scale, H, E)
+                    ao = _ao_flat.reshape(1, 1, _he)
+                elif step == 0 and seq_len > 1 and _use_kernels:
+                    _q = q.reshape(seq_len, H, E)
+                    _ao = _nb_fused_attention_multi(_q, k[0], v[0], scale, H, E)
+                    ao = _ao.reshape(1, seq_len, _he)
+                else:
+                    scores = np.einsum('bnhd,bmhd->bhnm', q, k) * scale
+                    if step == 0 and seq_len > 1:
+                        _cm = np.triu(np.full((seq_len, new_len), -1e9, dtype=np.float32), k=1)
+                        scores = scores + _cm
+                    attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
+                    attn = attn / attn.sum(axis=-1, keepdims=True)
+                    ao = np.einsum('bhnm,bmhd->bnhd', attn, v).reshape(1, seq_len, _he)
 
                 # Output projection
                 if _is_quantized:
@@ -3794,9 +3813,12 @@ class SloTransformer(SloNet):
                         h = centered * (n_fn_w[bi] * np.float32(1.0) / np.sqrt(var + n_fn_e[bi]))
                         h = h + n_fn_b[bi]
                 else:
-                    # RMSNorm
-                    rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + n_fn_e[bi])
-                    h = x * (n_fn_w[bi] / rms)
+                    # RMSNorm — use numba kernel when available
+                    if _use_kernels:
+                        h = _nb_rmsnorm(x, n_fn_w[bi], n_fn_e[bi])
+                    else:
+                        rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + n_fn_e[bi])
+                        h = x * (n_fn_w[bi] / rms)
 
                 # FFN
                 if _is_quantized:
@@ -3805,20 +3827,16 @@ class SloTransformer(SloNet):
                     if _use_kernels:
                         h = _nb_swi_glu_mul(h1, h3)
                     else:
-                        # SwiGLU: SiLU(gate) * up
                         h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
                     h = q_w2[bi].forward_numpy(h)
                 else:
                     h13 = h @ m_w13[bi]
                     if _use_bias_b13:
                         h13 = h13 + m_b13[bi]
-                    h1 = h13[..., :_ff_dim]
-                    h3 = h13[..., _ff_dim:]
                     if _use_kernels:
-                        h = _nb_swi_glu_mul(h1, h3)
+                        h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
                     else:
-                        # SwiGLU: SiLU(gate) * up, where SiLU(x) = x * sigmoid(x)
-                        h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
+                        h = h13[..., :_ff_dim] * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h13[..., :_ff_dim]))) * h13[..., _ff_dim:]
                     h = h @ m_w2[bi].T
                     if _use_bias_b2:
                         h = h + m_b2[bi]
@@ -3836,8 +3854,11 @@ class SloTransformer(SloNet):
                     x = x + norm_b
             else:
                 # RMSNorm
-                rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + norm_eps)
-                x = x * (norm_w / rms)
+                if _use_kernels:
+                    x = _nb_rmsnorm(x, norm_w, norm_eps)
+                else:
+                    rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + norm_eps)
+                    x = x * (norm_w / rms)
 
             # LM head
             if _is_quantized:
@@ -4020,8 +4041,12 @@ class SloTransformer(SloNet):
                         h = centered * (n_an_w[bi] * np.float32(1.0) / np.sqrt(var + n_an_e[bi]))
                         h = h + n_an_b[bi]
                 else:
-                    rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + n_an_e[bi])
-                    h = x * (n_an_w[bi] / rms)
+                    # RMSNorm
+                    if _use_kernels:
+                        h = _nb_rmsnorm(x, n_an_w[bi], n_an_e[bi])
+                    else:
+                        rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + n_an_e[bi])
+                        h = x * (n_an_w[bi] / rms)
 
                 if _is_quantized:
                     q = q_wq[bi].forward_numpy(h)
@@ -4052,16 +4077,29 @@ class SloTransformer(SloNet):
                 v = kv_buf_v[bi][:, :new_len]
 
                 if _use_gqa:
-                    k = np.repeat(k, _gqa_reps, axis=2)
-                    v = np.repeat(v, _gqa_reps, axis=2)
+                    if _use_kernels:
+                        k = _nb_gqa_expand(k[0], _gqa_reps).reshape(1, H, new_len, E)
+                        v = _nb_gqa_expand(v[0], _gqa_reps).reshape(1, H, new_len, E)
+                    else:
+                        k = np.repeat(k, _gqa_reps, axis=2)
+                        v = np.repeat(v, _gqa_reps, axis=2)
 
-                scores = np.einsum('bnhd,bmhd->bhnm', q, k) * scale
-                if step == 0 and seq_len > 1:
-                    _cm = np.triu(np.full((seq_len, new_len), -1e9, dtype=np.float32), k=1)
-                    scores = scores + _cm
-                attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
-                attn = attn / attn.sum(axis=-1, keepdims=True)
-                ao = np.einsum('bhnm,bmhd->bnhd', attn, v).reshape(1, seq_len, _he)
+                # Attention — use fused numba kernel for single-token steps
+                if step > 0 and _use_kernels:
+                    _ao_flat = _nb_fused_attention_single(q[0, 0], k[0], v[0], scale, H, E)
+                    ao = _ao_flat.reshape(1, 1, _he)
+                elif step == 0 and seq_len > 1 and _use_kernels:
+                    _q = q.reshape(seq_len, H, E)
+                    _ao = _nb_fused_attention_multi(_q, k[0], v[0], scale, H, E)
+                    ao = _ao.reshape(1, seq_len, _he)
+                else:
+                    scores = np.einsum('bnhd,bmhd->bhnm', q, k) * scale
+                    if step == 0 and seq_len > 1:
+                        _cm = np.triu(np.full((seq_len, new_len), -1e9, dtype=np.float32), k=1)
+                        scores = scores + _cm
+                    attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
+                    attn = attn / attn.sum(axis=-1, keepdims=True)
+                    ao = np.einsum('bhnm,bmhd->bnhd', attn, v).reshape(1, seq_len, _he)
 
                 if _is_quantized:
                     ao = q_wo[bi].forward_numpy(ao)
@@ -4081,8 +4119,12 @@ class SloTransformer(SloNet):
                         h = centered * (n_fn_w[bi] * np.float32(1.0) / np.sqrt(var + n_fn_e[bi]))
                         h = h + n_fn_b[bi]
                 else:
-                    rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + n_fn_e[bi])
-                    h = x * (n_fn_w[bi] / rms)
+                    # RMSNorm
+                    if _use_kernels:
+                        h = _nb_rmsnorm(x, n_fn_w[bi], n_fn_e[bi])
+                    else:
+                        rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + n_fn_e[bi])
+                        h = x * (n_fn_w[bi] / rms)
 
                 if _is_quantized:
                     h1 = q_w1[bi].forward_numpy(h)

@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 22f2b1a chore: catch (e: unknown) type safety in hooks and SSE client
+No active task. Last commit: 1ab8ce3 perf: eliminate 4GB causal mask allocation per generate call
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
