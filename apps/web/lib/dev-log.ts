@@ -62,7 +62,7 @@ let _apiUrl: string | null = null
 function _getApiUrl(): string {
   if (_apiUrl) return _apiUrl
   const raw =
-    (typeof window !== 'undefined' && (window as any).__NEXT_PUBLIC_API_URL) ||
+    (typeof window !== 'undefined' && window.__NEXT_PUBLIC_API_URL) ||
     process.env.NEXT_PUBLIC_API_URL ||
     'http://localhost:8000'
   _apiUrl = String(raw)

@@ -106,15 +106,18 @@ async function request<T>(
         return result
       }
       return json as T
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (timer) clearTimeout(timer)
       if (e instanceof ApiError) throw e
       const status = 0
-      const isTimeout = e.name === 'AbortError' || e.message?.includes('aborted')
-      const isConnRefused = e.message === 'Failed to fetch' || e.cause?.code === 'ECONNREFUSED'
+      const name = e instanceof Error ? e.name : undefined
+      const message_ = e instanceof Error ? e.message : undefined
+      const cause = e instanceof Error ? (e as Error & { cause?: { code?: string } }).cause : undefined
+      const isTimeout = name === 'AbortError' || message_?.includes('aborted')
+      const isConnRefused = message_ === 'Failed to fetch' || cause?.code === 'ECONNREFUSED'
       const message = isTimeout
         ? `Request timed out after ${timeoutMs / 1000}s`
-        : isConnRefused ? 'Connection unavailable — server may be starting up' : (e.message || 'Request failed')
+        : isConnRefused ? 'Connection unavailable — server may be starting up' : (message_ || 'Request failed')
 
       const kind = isTimeout ? 'timeout' : isConnRefused ? 'connection_refused' : 'unknown'
 

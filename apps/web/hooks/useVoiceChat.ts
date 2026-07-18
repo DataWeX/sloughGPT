@@ -240,7 +240,7 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
   // ── Start Listening ────────────────────────────────────────────────
 
   const startListening = useCallback(async () => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SR) {
       setErrorMessage('Speech recognition not supported — try Chrome or Safari')
       setState('error')

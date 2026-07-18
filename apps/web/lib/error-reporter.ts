@@ -15,8 +15,7 @@ const MAX_BATCH_SIZE = 10
 import { chatDB } from '@/lib/db'
 
 const API_URL =
-  (typeof window !== 'undefined' &&
-    (window as any).__NEXT_PUBLIC_API_URL) ||
+  (typeof window !== 'undefined' && window.__NEXT_PUBLIC_API_URL) ||
   process.env.NEXT_PUBLIC_API_URL ||
   'http://localhost:8000'
 
