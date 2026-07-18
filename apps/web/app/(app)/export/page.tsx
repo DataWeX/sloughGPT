@@ -62,8 +62,8 @@ export default function ExportPage() {
         setResult(res)
         addToast(`Exported as ${selectedFormat.toUpperCase()}`, 'success')
       }
-    } catch (e: any) {
-      addToast(`Export error: ${e.message}`, 'error')
+    } catch (e: unknown) {
+      addToast(`Export error: ${e instanceof Error ? e.message : 'Unknown error'}`, 'error')
     }
     setExporting(false)
   }
@@ -75,12 +75,12 @@ export default function ExportPage() {
     setExportingConv(true)
     try {
       const sessions = await sessionController.list()
-      const conversations = sessions.map((s: any) => ({
+      const conversations = sessions.map((s) => ({
         id: s.id,
         name: s.name,
         created_at: s.created_at,
         updated_at: s.updated_at,
-        messages: (s.messages || []).map((m: any) => ({
+        messages: (s.messages || []).map((m) => ({
           role: m.role,
           content: m.content,
           timestamp: m.timestamp,
@@ -96,9 +96,9 @@ export default function ExportPage() {
         mimeType = 'application/json'
         ext = 'json'
       } else {
-        output = conversations.map((c: any) => {
+        output = conversations.map((c) => {
           const header = `# ${c.name || 'Untitled'}`
-          const msgs = (c.messages || []).map((m: any) => `**${m.role}**: ${m.content}`).join('\n\n')
+          const msgs = (c.messages || []).map((m) => `**${m.role}**: ${m.content}`).join('\n\n')
           return `${header}\n\n${msgs}`
         }).join('\n\n---\n\n')
         mimeType = 'text/markdown'
@@ -113,8 +113,8 @@ export default function ExportPage() {
       a.click()
       URL.revokeObjectURL(url)
       addToast(`Exported ${conversations.length} conversations as ${ext.toUpperCase()}`, 'success')
-    } catch (e: any) {
-      addToast(`Export failed: ${e.message}`, 'error')
+    } catch (e: unknown) {
+      addToast(`Export failed: ${e instanceof Error ? e.message : 'Unknown error'}`, 'error')
     }
     setExportingConv(false)
   }

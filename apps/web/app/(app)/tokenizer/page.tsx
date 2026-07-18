@@ -232,7 +232,7 @@ export default function TokenizerPage() {
         {/* Tab navigation */}
         <Tabs
           value={tab}
-          onChange={(v) => setTab(v)}
+          onChange={(v) => setTab(v as typeof tab)}
           tabs={[
             { value: 'playground', label: 'Playground' },
             { value: 'samples', label: 'Samples' },

@@ -255,30 +255,6 @@ def _start_background_flush() -> None:
         pass  # No running event loop
 
 
-@router.post("/generate/demo")
-async def generate_demo(prompt: str = "Hello", max_new_tokens: int = 100):
-    """Demo endpoint — returns hardcoded mock responses (no model required).
-
-    WARNING: This endpoint does NOT use any loaded model. Responses are
-    randomly selected from a fixed list. Use POST /chat or POST /inference/generate
-    for real model inference.
-    """
-    responses = [
-        "I'm Aria, your self-learning AI companion. I'm running entirely on-device!",
-        "That's interesting! I'm continuously learning from our conversation.",
-        "I process everything locally - your data never leaves your device.",
-        "My transformer model updates its weights in real-time. I'm getting smarter as we talk!",
-    ]
-    import random
-    response = random.choice(responses)
-    return {
-        "text": response,
-        "model": "demo",
-        "prompt": prompt[:50],
-        "warning": "This is a demo response — no model was used. Use POST /chat for real inference.",
-    }
-
-
 class GenerateRequest(BaseModel):
     prompt: str
     max_new_tokens: int = Field(default=256, ge=1, le=2048)

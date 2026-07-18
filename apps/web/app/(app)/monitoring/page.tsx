@@ -89,8 +89,8 @@ export default function SystemHealthPage() {
       setAutoTrainStatus(at)
       setTrainingJobs(Array.isArray(tj) ? tj : [])
       setLastUpdated(new Date().toLocaleTimeString())
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load system health')
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load system health')
     }
     if (showRefreshing) setRefreshing(false)
   }, [])

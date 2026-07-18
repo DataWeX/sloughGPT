@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 6bbc786 fix: type safety in training job detail page
+No active task. Last commit: c2845f0 feat: true token-by-token streaming via generate_numpy_stream()
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
