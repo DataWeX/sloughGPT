@@ -39,6 +39,7 @@ export function TrainFromSessionsCard() {
   const [lastResult, setLastResult] = useState<{ loss: number; steps: number; elapsed_ms: number; checkpoint: string; perplexity?: number; samples?: TrainSample[] } | null>(null)
   const [progress, setProgress] = useState<TrainProgress | null>(null)
   const [elapsed, setElapsed] = useState(0)
+  const [fetchError, setFetchError] = useState(false)
   const startTimeRef = useRef<number>(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -51,8 +52,9 @@ export function TrainFromSessionsCard() {
       ])
       setStatus(s)
       setSessions(sess)
+      setFetchError(false)
     } catch {
-      logger.warning('TrainFromSessionsCard: auto-train endpoint not available', {})
+      setFetchError(true)
     } finally {
       setLoading(false)
     }
@@ -89,11 +91,20 @@ export function TrainFromSessionsCard() {
     }, 1000)
 
     try {
-      await trainingController.startFromSessionsSloNet({
+      const params: {
+        epochs: number
+        min_pair_quality: number
+        max_pairs: number
+        session_ids?: string[]
+      } = {
         epochs: 5,
         min_pair_quality: 0.0,
         max_pairs: 500,
-      })
+      }
+      if (selectedSessions.size > 0) {
+        params.session_ids = Array.from(selectedSessions)
+      }
+      await trainingController.startFromSessionsSloNet(params)
 
       for await (const event of trainingController.streamFromSessionsSloNet()) {
         if (event.status === 'error') {
@@ -145,24 +156,42 @@ export function TrainFromSessionsCard() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Training failed'
       addToast(msg, 'error')
+      setLastResult(null)
     } finally {
       setTraining(false)
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
     }
-  }, [addToast, fetchStatus])
+  }, [addToast, fetchStatus, selectedSessions])
+
+  const handleCancel = useCallback(async () => {
+    try {
+      await trainingController.cancelFromSessionsSloNet()
+      addToast('Training cancelled', 'info')
+      setTraining(false)
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
+    } catch {
+      addToast('Failed to cancel training', 'error')
+    }
+  }, [addToast])
 
   const handleSaveConfig = useCallback(async () => {
     setSavingConfig(true)
     try {
       const params: { threshold?: number; interval_s?: number } = {}
-      if (configThreshold) params.threshold = parseInt(configThreshold, 10)
-      if (configInterval) params.interval_s = parseInt(configInterval, 10)
+      if (configThreshold) {
+        const v = parseInt(configThreshold, 10)
+        if (!isNaN(v)) params.threshold = v
+      }
+      if (configInterval) {
+        const v = parseInt(configInterval, 10)
+        if (!isNaN(v)) params.interval_s = v
+      }
       if (Object.keys(params).length === 0) return
       await trainingController.updateAutoTrainConfig(params)
       addToast('Config updated', 'success')
       setConfigThreshold('')
       setConfigInterval('')
-      void fetchStatus()
+      await fetchStatus()
     } catch {
       addToast('Failed to update config', 'error')
     } finally {
@@ -178,6 +207,22 @@ export function TrainFromSessionsCard() {
         </CardHeader>
         <CardContent>
           <Skeleton className="h-16 w-full" />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (fetchError && !status) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">From conversations</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-xs text-muted-foreground">Auto-train endpoint unavailable.</p>
+          <Button size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => { setLoading(true); void fetchStatus() }}>
+            Retry
+          </Button>
         </CardContent>
       </Card>
     )
@@ -339,6 +384,14 @@ export function TrainFromSessionsCard() {
                 {progress?.phase === 'PAIRS' ? 'Extracting pairs...' : 'Training in progress'}
               </span>
               <span className="text-muted-foreground/50 ml-auto">{elapsed}s</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-5 text-[10px] text-destructive hover:text-destructive"
+                onClick={() => void handleCancel()}
+              >
+                Stop
+              </Button>
             </div>
 
             {/* Progress bar */}

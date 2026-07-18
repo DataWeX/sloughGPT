@@ -73,23 +73,23 @@ export default function TrainingPage() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pause checkpoint polling when page is hidden
+  const tickRef = useRef<() => void>(() => {})
+  tickRef.current = () => {
+    if (visibilityRef.current) {
+      void checkpoints.fetchCheckpoints()
+      const hasRunning = form.allJobs.some(j => j.status === 'running')
+      if (hasRunning) void checkpoints.fetchJobs()
+    }
+  }
   useEffect(() => {
     const onVisibility = () => { visibilityRef.current = !document.hidden }
     document.addEventListener('visibilitychange', onVisibility)
-    let id: ReturnType<typeof setInterval>
-    const tick = () => {
-      if (visibilityRef.current) {
-        void checkpoints.fetchCheckpoints()
-        const hasRunning = form.allJobs.some(j => j.status === 'running')
-        if (hasRunning) void checkpoints.fetchJobs()
-      }
-    }
-    id = setInterval(tick, 10000)
+    const id = setInterval(() => tickRef.current(), 10000)
     return () => {
       clearInterval(id)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [checkpoints, form.allJobs])
+  }, [])
 
   useEffect(() => {
     if (datasets.selectedDataset && form.inputMode === 'dataset') {
@@ -97,7 +97,7 @@ export default function TrainingPage() {
     } else {
       datasets.setDatasetPreview(null)
     }
-  }, [datasets, form.inputMode])
+  }, [datasets.selectedDataset, form.inputMode])
 
   const runningJob = form.allJobs.find(j => j.status === 'running')
   const completedCount = form.allJobs.filter(j => j.status === 'completed').length

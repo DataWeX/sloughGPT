@@ -476,6 +476,7 @@ def _ngram_embed(text: str, dimension: int = 384) -> np.ndarray:
 
 
 _slo_embedder = None
+_slo_embedder_untrained = False
 
 
 def simple_embed(text: str, dimension: int = 384) -> List[float]:
@@ -512,8 +513,8 @@ def simple_embed(text: str, dimension: int = 384) -> List[float]:
             logging.getLogger(__name__).warning("sentence-transformers encode failed, trying SloNet embedder")
 
     # 2. Try SloNet-trained embedder (no downloads, trained on your corpus)
-    global _slo_embedder
-    if _slo_embedder is None:
+    global _slo_embedder, _slo_embedder_untrained
+    if _slo_embedder is None and not _slo_embedder_untrained:
         try:
             from domains.inference.slo_embedder import SloTextEmbedder
             candidate = SloTextEmbedder.load()
@@ -529,7 +530,7 @@ def simple_embed(text: str, dimension: int = 384) -> List[float]:
                 )
                 if _same_count >= 1:
                     logger.info("SloNet embedder is untrained (%d/%d identical pairs), skipping", _same_count, len(_tests))
-                    _slo_embedder = None
+                    _slo_embedder_untrained = True
                 else:
                     _slo_embedder = candidate
         except Exception:

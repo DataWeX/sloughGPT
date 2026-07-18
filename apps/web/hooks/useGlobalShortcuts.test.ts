@@ -39,10 +39,10 @@ describe('useGlobalShortcuts', () => {
     expect(mockPush).toHaveBeenCalledWith('/chat')
   })
 
-  it('Ctrl+2 navigates to /models', () => {
+  it('Ctrl+2 navigates to /training', () => {
     renderHook(() => useGlobalShortcuts())
     keydown('2', { ctrl: true })
-    expect(mockPush).toHaveBeenCalledWith('/models')
+    expect(mockPush).toHaveBeenCalledWith('/training')
   })
 
   it('Ctrl+3 navigates to /knowledge', () => {
@@ -51,16 +51,16 @@ describe('useGlobalShortcuts', () => {
     expect(mockPush).toHaveBeenCalledWith('/knowledge')
   })
 
-  it('Ctrl+4 navigates to /training', () => {
+  it('Ctrl+4 navigates to /datasets', () => {
     renderHook(() => useGlobalShortcuts())
     keydown('4', { ctrl: true })
-    expect(mockPush).toHaveBeenCalledWith('/training')
+    expect(mockPush).toHaveBeenCalledWith('/datasets')
   })
 
-  it('Ctrl+5 navigates to /datasets', () => {
+  it('Ctrl+5 navigates to /models', () => {
     renderHook(() => useGlobalShortcuts())
     keydown('5', { ctrl: true })
-    expect(mockPush).toHaveBeenCalledWith('/datasets')
+    expect(mockPush).toHaveBeenCalledWith('/models')
   })
 
   it('Ctrl+n dispatches new-chat event', () => {

@@ -680,6 +680,7 @@ def _train_chat_trained(cfg_state, cancel_event, enqueue):
         batch_size=cfg_state.config.get("batch_size", 8),
         soul_name=soul_name,
         checkpoint_dir=str(CHECKPOINTS_DIR),
+        session_ids=cfg_state.config.get("session_ids"),
         resume_checkpoint=resume_path if resume_path and resume_path.endswith(".soul") else None,
     )
 
@@ -1159,6 +1160,7 @@ class FromSessionsRequest(BaseModel):
     min_pair_quality: float = Field(default=2.0, ge=0.0, le=5.0)
     max_pairs: int = Field(default=500, ge=10, le=10000)
     checkpoint_name: Optional[str] = Field(default=None, description="Resume from existing checkpoint")
+    session_ids: Optional[list] = Field(default=None, description="If provided, only train from these session IDs")
 
 
 @router.post("/from-sessions/start")
@@ -1188,6 +1190,7 @@ async def start_from_sessions(req: FromSessionsRequest):
         "min_pair_quality": req.min_pair_quality,
         "max_pairs": req.max_pairs,
         "checkpoint_name": req.checkpoint_name,
+        "session_ids": req.session_ids,
         "started_at": time.time(),
     }
     return success_response(data=state.config, message="Training started")
@@ -1230,6 +1233,7 @@ async def stream_from_sessions(request: Request):
             max_pairs=cfg.get("max_pairs", 500),
             soul_name=cfg.get("soul_name", "chat-trained"),
             checkpoint_dir=str(CHECKPOINTS_DIR),
+            session_ids=cfg.get("session_ids"),
             resume_checkpoint=cfg.get("checkpoint_name"),
         )
 

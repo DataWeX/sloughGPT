@@ -38,7 +38,7 @@ export function CommandPalette() {
       { id: 'nav-datasets', label: 'Datasets', description: 'Manage training data', icon: '📊', category: 'navigation', run: () => router.push('/datasets') },
       { id: 'nav-knowledge', label: 'Knowledge', description: 'Agent memory', icon: '📚', category: 'navigation', run: () => router.push('/knowledge') },
       { id: 'nav-agents', label: 'Agents', description: 'Manage AI agents', icon: '🤖', category: 'navigation', run: () => router.push('/agents') },
-      { id: 'nav-vision', label: 'Vision Studio', description: 'Image analysis and generation', icon: '🎨', category: 'navigation', run: () => router.push('/vision') },
+      { id: 'nav-vision', label: 'Multimodal', description: 'Image analysis and generation', icon: '🎨', category: 'navigation', run: () => router.push('/multimodal') },
       { id: 'nav-files', label: 'Files', description: 'Uploaded file manager', icon: '📁', category: 'navigation', run: () => router.push('/files') },
       { id: 'nav-compare', label: 'Compare', description: 'Side-by-side model metrics', icon: '⚖️', category: 'navigation', run: () => router.push('/compare') },
       { id: 'nav-settings', label: 'Settings', description: 'App settings', icon: '⚙️', category: 'navigation', run: () => router.push('/settings') },

@@ -39,6 +39,15 @@ interface ErrorReport {
   metadata?: Record<string, unknown>
 }
 
+const EXTENSION_RE =
+  /metamask|chrome-extension|moz-extension|safari-web-extension|webextension|extension.*inject|content.?script/i
+
+function isExtensionError(message: string, url?: string): boolean {
+  if (EXTENSION_RE.test(message)) return true
+  if (url && EXTENSION_RE.test(url)) return true
+  return false
+}
+
 let batch: ErrorReport[] = []
 let timer: ReturnType<typeof setTimeout> | null = null
 

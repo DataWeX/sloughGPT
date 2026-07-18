@@ -21,7 +21,14 @@ _LOG_BUF = 500  # max lines kept per panel
 
 def _kill_port(port: int):
     """Kill process running on port."""
-    subprocess.run(f"lsof -ti:{port} 2>/dev/null | xargs kill -9 2>/dev/null", shell=True)
+    import shlex
+    result = subprocess.run(
+        shlex.split(f"lsof -ti:{port}"),
+        capture_output=True, text=True,
+    )
+    for pid in result.stdout.strip().split():
+        if pid.isdigit():
+            subprocess.run(["kill", "-9", pid], capture_output=True)
 
 
 def _check_port(port: int) -> bool:

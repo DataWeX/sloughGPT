@@ -352,8 +352,8 @@ class FeedbackWorkflowManager:
                 monitor = get_health_monitor()
                 monitor.set_model(net, tok)
                 monitor.run_benchmark()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Health monitor benchmark failed: %s", e)
         except Exception as e:
             logger.warning(f"Auto-train skipped: {e}", extra={"tag": "INFRA"})
 

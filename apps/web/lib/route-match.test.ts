@@ -16,6 +16,12 @@ describe('routeMatchesPath', () => {
 
   it('does not match different segments', () => {
     expect(routeMatchesPath('/chat/', '/models')).toBe(false)
-    expect(routeMatchesPath('/chat/foo', '/chat')).toBe(false)
+    expect(routeMatchesPath('/channels', '/chat')).toBe(false)
+  })
+
+  it('prefix-matches nested routes to parent', () => {
+    expect(routeMatchesPath('/chat/foo', '/chat')).toBe(true)
+    expect(routeMatchesPath('/training/job/xyz', '/training')).toBe(true)
+    expect(routeMatchesPath('/models/detail/gpt2', '/models')).toBe(true)
   })
 })

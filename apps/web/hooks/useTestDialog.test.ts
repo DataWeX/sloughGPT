@@ -4,12 +4,14 @@ import { describe, expect, it, vi, afterEach } from 'vitest'
 import { renderHook, act, cleanup } from '@testing-library/react'
 import { useTestDialog } from './useTestDialog'
 
-const mockFetch = vi.fn()
-vi.stubGlobal('fetch', mockFetch)
+const mockGenerate = vi.fn()
+vi.mock('@/lib/generate-controller', () => ({
+  generateController: { generate: (...args: unknown[]) => mockGenerate(...args) },
+}))
 
 afterEach(() => {
   cleanup()
-  mockFetch.mockReset()
+  mockGenerate.mockReset()
 })
 
 describe('useTestDialog', () => {
@@ -40,15 +42,15 @@ describe('useTestDialog', () => {
   it('handleTestModel does nothing when prompt is empty', async () => {
     const { result } = renderHook(() => useTestDialog())
     await act(async () => { await result.current.handleTestModel() })
-    expect(mockFetch).not.toHaveBeenCalled()
+    expect(mockGenerate).not.toHaveBeenCalled()
   })
 
-  it('handleTestModel calls /inference/generate and sets structured result', async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ text: 'hello world', model: 'gpt2', tokens_generated: 3 }) })
+  it('handleTestModel calls generate and sets structured result', async () => {
+    mockGenerate.mockResolvedValue({ text: 'hello world', model: 'gpt2', tokens_generated: 3 })
     const { result } = renderHook(() => useTestDialog())
     act(() => result.current.setTestPrompt('hi'))
     await act(async () => { await result.current.handleTestModel() })
-    expect(mockFetch).toHaveBeenCalledTimes(1)
+    expect(mockGenerate).toHaveBeenCalledTimes(1)
     expect(result.current.testResult).toEqual({
       prompt: 'hi',
       response: 'hello world',
@@ -58,8 +60,8 @@ describe('useTestDialog', () => {
     })
   })
 
-  it('handleTestModel shows error when fetch fails', async () => {
-    mockFetch.mockRejectedValue(new Error('network down'))
+  it('handleTestModel shows error when generate rejects', async () => {
+    mockGenerate.mockRejectedValue(new Error('network down'))
     const { result } = renderHook(() => useTestDialog())
     act(() => result.current.setTestPrompt('hi'))
     await act(async () => { await result.current.handleTestModel() })
@@ -72,8 +74,8 @@ describe('useTestDialog', () => {
     })
   })
 
-  it('handleTestModel shows error when response not ok', async () => {
-    mockFetch.mockResolvedValue({ ok: false, json: () => Promise.resolve({ detail: 'model not loaded' }) })
+  it('handleTestModel shows error when generate throws error field', async () => {
+    mockGenerate.mockRejectedValue(new Error('model not loaded'))
     const { result } = renderHook(() => useTestDialog())
     act(() => result.current.setTestPrompt('hi'))
     await act(async () => { await result.current.handleTestModel() })

@@ -53,7 +53,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: { componentStack?: string }) {
-    console.error('ErrorBoundary caught:', error, errorInfo)
+    logger.error('ErrorBoundary caught', { exception: error.message, stack: errorInfo.componentStack || '' })
     try {
       addGlobalError(error, errorInfo.componentStack || 'componentDidCatch')
     } catch {
@@ -98,7 +98,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
 export function useErrorHandler() {
   return (error: Error) => {
-    console.error('Error:', error)
+    logger.error('Error', { exception: error.message })
     // Show as toast for non-fatal errors
     if (isNonFatalError(error)) {
       useToastStore.getState().addToast('Something went wrong. Try refreshing the page.', 'error')

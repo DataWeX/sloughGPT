@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { generateController } from '@/lib/generate-controller'
 
 export interface TestModelResult {
   prompt: string
@@ -33,29 +33,18 @@ export function useTestDialog(): UseTestDialogReturn {
     setTestLoading(true)
     setTestResult(null)
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/inference/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: testPrompt, max_new_tokens: 100, temperature: 0.8 }),
+      const data = await generateController.generate({
+        prompt: testPrompt,
+        max_new_tokens: 100,
+        temperature: 0.8,
       })
-      const data = await res.json()
-      if (!res.ok) {
-        setTestResult({
-          prompt: testPrompt,
-          response: '',
-          model: data.model || '',
-          tokens_generated: 0,
-          error: data.detail || `HTTP ${res.status}`,
-        })
-      } else {
-        setTestResult({
-          prompt: testPrompt,
-          response: data.text || '(empty)',
-          model: data.model || '',
-          tokens_generated: data.tokens_generated || 0,
-          error: '',
-        })
-      }
+      setTestResult({
+        prompt: testPrompt,
+        response: data.text || '(empty)',
+        model: data.model || '',
+        tokens_generated: data.tokens_generated || 0,
+        error: '',
+      })
     } catch (e) {
       setTestResult({
         prompt: testPrompt,

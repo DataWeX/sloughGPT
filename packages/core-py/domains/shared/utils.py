@@ -7,7 +7,7 @@ import json
 import hashlib
 import random
 import string
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 import logging
 
@@ -177,7 +177,7 @@ def validate_config(config: Dict, required_keys: List[str]) -> bool:
 
 def get_timestamp() -> str:
     """Get ISO timestamp."""
-    return datetime.now().isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 __all__ = [

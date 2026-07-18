@@ -24,7 +24,6 @@ import { generationConfigController } from '@/lib/generation-config-controller'
 
 import { useFeedbackStore } from '@/lib/feedback-store'
 import { useToastStore } from '@/lib/toast-store'
-import { addGlobalError } from '@/lib/error-store'
 import { useSettings } from '@/lib/store'
 import { apiPost } from '@/lib/http-client'
 import { imagesController } from '@/lib/images-controller'
@@ -126,7 +125,6 @@ export default function ChatPage() {
     brainstormTopic, setBrainstormTopic,
     wellnessType, setWellnessType,
     createStyle, setCreateStyle,
-    handleSend: handleModeSend,
   } = useChatMode({
     chat: {
       input: chat.input,

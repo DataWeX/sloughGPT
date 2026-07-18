@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { multimodalController } from '@/lib/controllers'
+import { logger } from '@/lib/dev-log'
 import { VoiceWaveform } from './VoiceWaveform'
 
 import { cn, Button } from '@sloughgpt/strui'
@@ -136,7 +137,7 @@ export function VoiceInput({ onTranscript, disabled }: VoiceInputProps) {
           const result = await multimodalController.transcribeAudio(blob as File)
           if (result.text) onTranscript(result.text)
         } catch (err) {
-          console.error('Audio transcription failed:', err)
+          logger.error('Audio transcription failed', { exception: String(err) })
         }
       }
 
@@ -146,7 +147,7 @@ export function VoiceInput({ onTranscript, disabled }: VoiceInputProps) {
         if (mediaRecorder.state === 'recording') mediaRecorder.stop()
       }, 5000)
     } catch (err) {
-      console.error('Microphone access failed:', err)
+      logger.error('Microphone access failed', { exception: String(err) })
     }
   }, [onTranscript])
 

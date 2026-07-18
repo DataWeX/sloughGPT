@@ -52,6 +52,7 @@ class ChatTrainConfig:
     checkpoint_dir: str = "models/auto-training"
     soul_name: str = "chat-trained"
 
+    session_ids: Optional[List[str]] = None
     resume_checkpoint: Optional[str] = None
     resume_epoch: int = 0
     resume_step: int = 0
@@ -329,13 +330,15 @@ def train_chat_model(
             "n_layer": config.n_layer,
             "n_head": config.n_head,
             "block_size": config.block_size,
+            "epoch": epoch + 1,
+            "step": step,
             "epochs": config.epochs,
             "final_loss": float(avg_epoch_loss) if 'avg_epoch_loss' in dir() else 0.0,
             "best_loss": best_loss,
             "num_pairs": len(good_pairs),
             "num_chars": len(text),
             "stoi": stoi,
-            "itos": {str(k): v for k, v in itos.items()},
+            "itos": itos,
         },
     )
     logger.info("Checkpoint saved: %s", ckpt_path,
@@ -417,7 +420,7 @@ def generate_from_chat_model(
 
     for _ in range(max_tokens):
         # Truncate to block_size
-        ctx = tokens[-model.block_size:] if hasattr(model, 'block_size') else tokens[-128]
+        ctx = tokens[-model.block_size:] if hasattr(model, 'block_size') else tokens[-128:]
         x = tensor([ctx], requires_grad=False)
         logits, _ = model.forward(x)
         if hasattr(logits, 'data'):
@@ -513,7 +516,7 @@ def train_from_sessions(
         (trained_model, metadata_dict) with evaluation results.
     """
     config = config or ChatTrainConfig()
-    pairs = extract_pairs_from_sessions(limit=config.max_pairs)
+    pairs = extract_pairs_from_sessions(limit=config.max_pairs, session_ids=config.session_ids)
     if not pairs:
         raise ValueError("No chat sessions found to train on")
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -52,7 +52,7 @@ class ShellState:
                 "history": self.history[-_MAX_HISTORY:],
                 "aliases": self.aliases,
                 "env": self.env,
-                "last_session": datetime.now().isoformat(),
+                "last_session": datetime.now(timezone.utc).isoformat(),
                 "first_run": self.first_run,
             }, indent=2))
         except Exception as e:

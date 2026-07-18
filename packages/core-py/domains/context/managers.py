@@ -12,7 +12,7 @@ Architecture:
 import json
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import threading
 
 from domains.infrastructure.repository import FileRepository, JsonSerializer
@@ -199,8 +199,8 @@ class TraitWeightsConfig:
                 data = self._snapshot_repo.get(sid)
                 if data and "_meta" in data:
                     meta.update(data["_meta"])
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to load snapshot metadata %s: %s", path, e)
             results.append(meta)
         return sorted(results, key=lambda x: x.get("saved_at", ""))
 
@@ -209,7 +209,7 @@ class TraitWeightsConfig:
         safe = name.replace(" ", "_").replace("/", "_")
         with _lock:
             data = {**self._weights}
-            data["_meta"] = {"saved_at": datetime.now().isoformat(), "label": name}
+            data["_meta"] = {"saved_at": datetime.now(timezone.utc).isoformat(), "label": name}
         self._snapshot_repo.save(safe, data)
         return str(self._snapshots_dir / f"{safe}.json")
 

@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 logger = logging.getLogger("slo.response_tracker")
@@ -64,7 +64,7 @@ class ResponseTracker:
         repo_root = Path(__file__).resolve().parents[4]
         self.log_dir = repo_root / log_dir
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        self.current_file = self.log_dir / f"responses_{datetime.now().strftime('%Y%m%d')}.jsonl"
+        self.current_file = self.log_dir / f"responses_{datetime.now(timezone.utc).strftime('%Y%m%d')}.jsonl"
         self._buffer: List[ResponseLog] = []
         self._buffer_size = 1
 
@@ -83,7 +83,7 @@ class ResponseTracker:
     ) -> ResponseLog:
         """Log a response."""
         entry = ResponseLog(
-            timestamp=datetime.now().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
             user_message=user_message,
             assistant_response=assistant_response,
             model=model,

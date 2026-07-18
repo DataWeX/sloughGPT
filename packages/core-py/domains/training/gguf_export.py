@@ -87,6 +87,15 @@ class TensorMapping:
         """Return mapping for transformer block tensors."""
         return {}
 
+    def get_fused_qkv_keys(self) -> List[Tuple[str, str]]:
+        """Return list of (source_suffix, arch_name) for fused QKV tensors.
+
+        Architectures like Falcon/GPT-NeoX/Bloom use a single fused
+        ``query_key_value.weight`` that must be split into Q/K/V parts.
+        Default: no fused QKV.
+        """
+        return []
+
 
 class SloughGPTMapping(TensorMapping):
     """Tensor mapping for SloughGPTModel architecture."""
@@ -331,14 +340,19 @@ class FalconMapping(TensorMapping):
             mapping[f"{prefix}ln_mlp.weight"] = f"blk.{i}.ffn_norm.weight"
 
             mapping[f"{prefix}self_attention.query_key_value.weight"] = f"blk.{i}.attn_q.weight"
-            mapping[f"{prefix}self_attention.query_key_value.weight"] = f"blk.{i}.attn_k.weight"
-            mapping[f"{prefix}self_attention.query_key_value.weight"] = f"blk.{i}.attn_v.weight"
             mapping[f"{prefix}self_attention.dense.weight"] = f"blk.{i}.attn_output.weight"
 
             mapping[f"{prefix}mlp.dense_h_to_4h.weight"] = f"blk.{i}.ffn_gate.weight"
             mapping[f"{prefix}mlp.dense_4h_to_h.weight"] = f"blk.{i}.ffn_down.weight"
 
         return mapping
+
+    def get_fused_qkv_keys(self) -> List[Tuple[str, str]]:
+        """Return (source_key_pattern, architecture_name) for fused QKV splits.
+
+        Falcon uses fused query_key_value.weight that must be split into Q/K/V.
+        """
+        return [("query_key_value.weight", "falcon")]
 
 
 class GPTNeoXMapping(TensorMapping):
@@ -372,14 +386,16 @@ class GPTNeoXMapping(TensorMapping):
             mapping[f"{prefix}post_attention_layer_norm.weight"] = f"blk.{i}.ffn_norm.weight"
 
             mapping[f"{prefix}attention.query_key_value.weight"] = f"blk.{i}.attn_q.weight"
-            mapping[f"{prefix}attention.query_key_value.weight"] = f"blk.{i}.attn_k.weight"
-            mapping[f"{prefix}attention.query_key_value.weight"] = f"blk.{i}.attn_v.weight"
             mapping[f"{prefix}attention.dense.weight"] = f"blk.{i}.attn_output.weight"
 
             mapping[f"{prefix}mlp.dense_h_to_4h.weight"] = f"blk.{i}.ffn_gate.weight"
             mapping[f"{prefix}mlp.dense_4h_to_h.weight"] = f"blk.{i}.ffn_down.weight"
 
         return mapping
+
+    def get_fused_qkv_keys(self) -> List[Tuple[str, str]]:
+        """GPT-NeoX uses fused query_key_value that must be split into Q/K/V."""
+        return [("query_key_value.weight", "gpt_neox")]
 
 
 class BloomMapping(TensorMapping):
@@ -413,14 +429,16 @@ class BloomMapping(TensorMapping):
             mapping[f"{prefix}ln_2.weight"] = f"blk.{i}.ffn_norm.weight"
 
             mapping[f"{prefix}self_attention.query_key_value.weight"] = f"blk.{i}.attn_q.weight"
-            mapping[f"{prefix}self_attention.query_key_value.weight"] = f"blk.{i}.attn_k.weight"
-            mapping[f"{prefix}self_attention.query_key_value.weight"] = f"blk.{i}.attn_v.weight"
             mapping[f"{prefix}self_attention.dense.weight"] = f"blk.{i}.attn_output.weight"
 
             mapping[f"{prefix}mlp.dense_h_to_4h.weight"] = f"blk.{i}.ffn_gate.weight"
             mapping[f"{prefix}mlp.dense_4h_to_h.weight"] = f"blk.{i}.ffn_down.weight"
 
         return mapping
+
+    def get_fused_qkv_keys(self) -> List[Tuple[str, str]]:
+        """Bloom uses fused query_key_value that must be split into Q/K/V."""
+        return [("query_key_value.weight", "bloom")]
 
 
 ARCHITECTURE_MAPPINGS: Dict[str, TensorMapping] = {
@@ -869,17 +887,41 @@ def export_to_gguf(
     block_map = mapping.get_block_mapping(n_layer)
     tensor_map.update(block_map)
 
+    fused_suffixes = mapping.get_fused_qkv_keys()
+    fused_set = set()
+    for suffix, _arch in fused_suffixes:
+        for key in list(tensor_map.keys()):
+            if key.endswith(suffix):
+                fused_set.add(key)
+
     import numpy as np
     import torch
     for key, tensor in state_dict.items():
-        mapped_key = tensor_map.get(key, key)
         if isinstance(tensor, np.ndarray):
             tensor_np = tensor.astype(np.float16)
         elif isinstance(tensor, torch.Tensor):
             tensor_np = tensor.detach().cpu().to(dtype=torch.float16).numpy()
         else:
             continue
-        writer.add_tensor(mapped_key, tensor_np)
+
+        if key in fused_set:
+            qkv = tensor_np
+            dim0 = qkv.shape[0]
+            third = dim0 // 3
+            q_part = qkv[:third]
+            k_part = qkv[third:2 * third]
+            v_part = qkv[2 * third:]
+
+            q_target = tensor_map[key]
+            k_target = q_target.replace(".attn_q.", ".attn_k.")
+            v_target = q_target.replace(".attn_q.", ".attn_v.")
+
+            writer.add_tensor(q_target, q_part)
+            writer.add_tensor(k_target, k_part)
+            writer.add_tensor(v_target, v_part)
+        else:
+            mapped_key = tensor_map.get(key, key)
+            writer.add_tensor(mapped_key, tensor_np)
 
     writer.write_header_to_file()
     writer.write_kv_data_to_file()

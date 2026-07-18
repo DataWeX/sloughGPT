@@ -446,6 +446,7 @@ export const trainingJobsController = {
     soul_name?: string
     min_pair_quality?: number
     max_pairs?: number
+    session_ids?: string[]
   }): Promise<void> {
     await apiPost('/auto-train/from-sessions/start', params)
   },

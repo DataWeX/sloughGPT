@@ -10,6 +10,7 @@ import { multimodalController } from '@/lib/controllers'
 import type { MultimodalCapabilities, TrainingReport, TrainingStatus } from '@/lib/multimodal-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { apiPost } from '@/lib/http-client'
+import { logger } from '@/lib/dev-log'
 import dynamicNext from 'next/dynamic'
 import CapabilitiesCard from '@/components/multimodal/CapabilitiesCard'
 
@@ -72,7 +73,7 @@ export default function MultimodalPage() {
           if (status.completed > 0) addToast(`Training complete: ${status.completed} images, ${status.errors} errors`, status.errors > 0 ? 'error' : 'success')
         }
       } catch (err) {
-        console.error('Training status poll failed:', err)
+        logger.error('Training status poll failed', { exception: String(err) })
       }
     }, 2000)
   }, [fetchAll, addToast])
@@ -91,7 +92,7 @@ export default function MultimodalPage() {
         addToast(s.result?.error as string || 'DPO failed', 'error')
       } else if (s.status === 'idle') { setDpoRunning(false) }
     } catch (err) {
-      console.error('DPO status poll failed:', err)
+      logger.error('DPO status poll failed', { exception: String(err) })
     }
   }, [addToast])
 

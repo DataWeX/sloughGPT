@@ -219,15 +219,15 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       setPhase('TRAINING'); setProgress(0); setTotalEpochs(params.epochs)
       const pollId = setInterval(async () => {
         try {
-          const resp2 = await fetch(`${PUBLIC_API_URL}/training/jobs`)
-          const jobs = await resp2.json()
+          const jobs = await trainingJobsController.list()
           const myJob = (jobs || []).find((j: { id: string }) => j.id === jobId)
           if (!myJob) { clearInterval(pollId); ftPollRef.current = null; return }
           if (myJob.status === 'completed') {
             clearInterval(pollId); ftPollRef.current = null
             setPhase('complete'); setProgress(100)
-            setFinetunedModelPath(myJob.result?.model_path || '')
-            setFinetunedModelLoss(myJob.result?.final_loss || myJob.loss || null)
+            const result = myJob.result as Record<string, unknown> | undefined
+            setFinetunedModelPath((result?.model_path as string) || '')
+            setFinetunedModelLoss((result?.final_loss as number) ?? myJob.loss ?? null)
             addToast('Training complete', 'success')
             onComplete?.()
           } else if (myJob.status === 'failed') {

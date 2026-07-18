@@ -20,29 +20,44 @@ import { routeMatchesPath } from '@/lib/route-match'
 import { ThemeSwitcher } from './ThemeSwitcher'
 import { useLocale } from '@/hooks/useLocale'
 
-const allItems = [
-  { path: '/chat', key: 'nav.chat', Icon: IconChat },
-  { path: '/training', key: 'nav.training', Icon: IconTraining },
-  { path: '/knowledge', key: 'nav.knowledge', Icon: IconSearch },
-  { path: '/datasets', key: 'nav.datasets', Icon: IconBrain },
-  { path: '/export', key: 'nav.export', Icon: IconExport },
-  { path: '/compare', key: 'nav.compare', Icon: IconCompare },
-  { path: '/monitoring', key: 'nav.monitoring', Icon: IconActivity },
-  { path: '/models', key: 'nav.models', Icon: IconModels },
-  { path: '/errors', key: 'nav.errors', Icon: IconAlert },
-  { path: '/settings', key: 'nav.settings', Icon: IconSettings },
-] as const
+interface NavItem {
+  path: string
+  key: string
+  Icon: typeof IconChat
+}
 
-/** Sidebar list — smaller than home quick-action tiles */
+interface NavSection {
+  items: NavItem[]
+}
+
+const sections: NavSection[] = [
+  {
+    items: [
+      { path: '/chat', key: 'nav.chat', Icon: IconChat },
+      { path: '/training', key: 'nav.training', Icon: IconTraining },
+      { path: '/knowledge', key: 'nav.knowledge', Icon: IconSearch },
+      { path: '/datasets', key: 'nav.datasets', Icon: IconBrain },
+    ],
+  },
+  {
+    items: [
+      { path: '/models', key: 'nav.models', Icon: IconModels },
+      { path: '/compare', key: 'nav.compare', Icon: IconCompare },
+      { path: '/export', key: 'nav.export', Icon: IconExport },
+      { path: '/monitoring', key: 'nav.monitoring', Icon: IconActivity },
+      { path: '/errors', key: 'nav.errors', Icon: IconAlert },
+      { path: '/settings', key: 'nav.settings', Icon: IconSettings },
+    ],
+  },
+]
+
 const NAV_ICON = 'h-[1.125rem] w-[1.125rem] shrink-0'
 
 export type SidebarVariant = 'desktop' | 'drawer'
 
 export type SidebarProps = {
   variant?: SidebarVariant
-  /** Called after choosing a nav link (e.g. close mobile drawer). */
   onNavigate?: () => void
-  /** Close control for drawer variant. */
   onClose?: () => void
 }
 
@@ -56,8 +71,8 @@ export function Sidebar({ variant = 'desktop', onNavigate, onClose }: SidebarPro
       'group relative flex min-h-[2.5rem] items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-200 ease-smooth',
       active
         ? 'bg-primary/[0.13] font-medium text-primary dark:bg-primary/[0.11]'
-: 'text-foreground/78 hover:bg-primary/10 hover:text-primary dark:text-muted-foreground',
-  )
+        : 'text-foreground/78 hover:bg-primary/10 hover:text-primary dark:text-muted-foreground',
+    )
 
   const afterNav = onNavigate ? () => onNavigate() : undefined
 
@@ -107,27 +122,34 @@ export function Sidebar({ variant = 'desktop', onNavigate, onClose }: SidebarPro
         aria-label="Primary"
       >
         <div className="min-h-0 flex-1 overscroll-contain overflow-y-auto scrollbar-hide">
-          <ul className="space-y-1">
-            {allItems.map((item) => {
-              const active = routeMatchesPath(pathname, item.path)
-              return (
-                <li key={item.path}>
-                  <Link
-                    href={item.path}
-                    aria-current={active ? 'page' : undefined}
-                    className={navLinkClass(active)}
-                    onClick={afterNav}
-                  >
-                    <item.Icon
-                      className={cn(NAV_ICON, active ? 'opacity-100' : 'opacity-90 dark:opacity-80')}
-                      aria-hidden
-                    />
-                    <span className="flex-1 truncate">{t(item.key)}</span>
-                  </Link>
-                </li>
-              )
-            })}
-          </ul>
+          {sections.map((section, si) => (
+            <div key={si}>
+              {si > 0 && (
+                <div className="my-2 border-t border-border/30 dark:border-border/40" />
+              )}
+              <ul className="space-y-0.5">
+                {section.items.map((item) => {
+                  const active = routeMatchesPath(pathname, item.path)
+                  return (
+                    <li key={item.path}>
+                      <Link
+                        href={item.path}
+                        aria-current={active ? 'page' : undefined}
+                        className={navLinkClass(active)}
+                        onClick={afterNav}
+                      >
+                        <item.Icon
+                          className={cn(NAV_ICON, active ? 'opacity-100' : 'opacity-90 dark:opacity-80')}
+                          aria-hidden
+                        />
+                        <span className="flex-1 truncate">{t(item.key)}</span>
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          ))}
         </div>
       </nav>
 

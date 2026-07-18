@@ -51,7 +51,9 @@ export function middleware(request: NextRequest) {
     `${duration}ms`,
   ].join(' ')
 
-  console.log(logLine)
+  if (process.env.NODE_ENV === 'development') {
+    console.log(logLine)
+  }
 
   response.headers.set('X-Response-Time', `${duration}ms`)
   response.headers.set('X-Request-ID', crypto.randomUUID())

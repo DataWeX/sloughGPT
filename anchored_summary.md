@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 40f16b3 feat: chat-from-sessions trainer + dead code removal + test cleanup
+No active task. Last commit: ce21f5b fix: IsADirectoryError in auto-train + session update guard
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

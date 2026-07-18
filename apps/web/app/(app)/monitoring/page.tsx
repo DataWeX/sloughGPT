@@ -11,6 +11,7 @@ import { trainingController, type TrainingJob } from '@/lib/training-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { benchmarkController } from '@/lib/benchmark-controller'
 import { multimodalController } from '@/lib/controllers'
+import { logger } from '@/lib/dev-log'
 import type { AutoTrainStatus } from '@/lib/training-controller'
 import dynamicNext from 'next/dynamic'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
@@ -480,7 +481,7 @@ export default function SystemHealthPage() {
                       await apiPost('/multimodal/dpo', {})
                       await fetchAll()
                     } catch (err) {
-                      console.error('DPO training failed:', err)
+                      logger.error('DPO training failed', { exception: String(err) })
                     }
                     setDpoRunning(false)
                   }}

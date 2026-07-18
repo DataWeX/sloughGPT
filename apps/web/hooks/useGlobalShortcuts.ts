@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation'
 
 const NAV_SHORTCUTS: Record<string, string> = {
   '1': '/chat',
-  '2': '/models',
+  '2': '/training',
   '3': '/knowledge',
-  '4': '/training',
-  '5': '/datasets',
+  '4': '/datasets',
+  '5': '/models',
 }
 
 export function useGlobalShortcuts() {

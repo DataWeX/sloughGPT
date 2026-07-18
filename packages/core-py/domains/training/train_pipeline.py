@@ -37,7 +37,7 @@ except ImportError:
 
 if TYPE_CHECKING:
     from domains.training.tracking import ExperimentTracker
-from datetime import datetime
+from datetime import datetime, timezone
 
 try:
     from domains.models import SloughGPTModel
@@ -323,7 +323,7 @@ class CheckpointManager:
                 "step": step,
                 "epoch": epoch,
                 "metrics": metrics,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "config": {
                     "vocab_size": config.vocab_size,
                     "n_embed": config.n_embed,

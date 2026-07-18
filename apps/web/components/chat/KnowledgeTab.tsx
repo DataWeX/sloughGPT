@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Button } from '@sloughgpt/strui'
 import { IconX } from '@sloughgpt/strui'
 import { chatDB, type KnowledgeItem } from '@/lib/db'
+import { logger } from '@/lib/dev-log'
 
 interface KnowledgeTabProps {
   onOpenConversationViewer: () => void
@@ -80,7 +81,7 @@ export function KnowledgeTab({
         for (const item of updated) idMap.set(item.content, item.id)
         setBackendContentIds(idMap)
       } catch (err) {
-        console.warn('Knowledge sync failed, will retry:', err)
+        logger.warning('Knowledge sync failed, will retry', { error: String(err) })
       }
     }, 2000)
   }

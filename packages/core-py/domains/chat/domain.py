@@ -195,9 +195,10 @@ class ChatDomain:
     ) -> None:
         """Log response to file."""
         import datetime
+        from datetime import timezone
 
         entry = {
-            "timestamp": datetime.datetime.now().isoformat(),
+            "timestamp": datetime.datetime.now(timezone.utc).isoformat(),
             "user_message": user_message[:500],
             "assistant_response": assistant_response[:1000],
             "model": model,
@@ -209,7 +210,7 @@ class ChatDomain:
             "duration_ms": duration_ms,
         }
 
-        log_file = self.log_dir / f"responses_{datetime.datetime.now().strftime('%Y%m%d')}.jsonl"
+        log_file = self.log_dir / f"responses_{datetime.datetime.now(timezone.utc).strftime('%Y%m%d')}.jsonl"
 
         with open(log_file, "a") as f:
             f.write(json.dumps(entry) + "\n")

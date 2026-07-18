@@ -94,7 +94,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           Skip to main content
         </a>
 
-        <header className="flex shrink-0 items-center gap-2 border-b px-3 min-h-12 sm:min-h-14 lg:hidden">
+        <header className="flex shrink-0 items-center gap-2 border-b px-3 h-11 sm:h-12 lg:hidden">
           <Button
             variant="menu"
             size="icon"
