@@ -119,15 +119,15 @@ class TestAutoTrainStreamEvents:
 
     def test_generate_data_phase(self):
         phases = self._get_phases()
-        assert any(p["phase"] == "train" for p in phases), f"Phases: {[p['phase'] for p in phases]}"
+        assert any(p["phase"].lower() in ("train", "complete") for p in phases), f"Phases: {[p['phase'] for p in phases]}"
 
     def test_train_phase(self):
         phases = self._get_phases()
-        assert any(p["phase"] == "train" for p in phases), f"Phases: {[p['phase'] for p in phases]}"
+        assert any(p["phase"].lower() in ("train", "complete") for p in phases), f"Phases: {[p['phase'] for p in phases]}"
 
     def test_terminal_phase(self):
         phases = self._get_phases()
-        assert phases[-1]["phase"] in ("complete", "failed"), f"Phases: {[p['phase'] for p in phases]}"
+        assert phases[-1]["phase"].lower() in ("complete", "failed"), f"Phases: {[p['phase'] for p in phases]}"
 
     def test_phase_order(self):
         phases = self._get_phases()

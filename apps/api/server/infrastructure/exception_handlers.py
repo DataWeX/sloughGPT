@@ -74,9 +74,9 @@ async def _validation_error_handler(request: Request, exc: ValidationError) -> J
         extra={"context": {"corr": corr_id, "fields": len(errors), "status": 422}},
     )
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content=_error_response(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             "Validation failed", "E_VAL_FIELD",
             details={"errors": errors},
             correlation_id=corr_id,
@@ -95,9 +95,9 @@ async def _request_validation_error_handler(request: Request, exc: RequestValida
         extra={"context": {"corr": corr_id, "errors": len(_safe), "status": 422}},
     )
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content=_error_response(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             "Request validation failed", "E_VAL_REQUEST",
             details={"errors": _safe},
             correlation_id=corr_id,

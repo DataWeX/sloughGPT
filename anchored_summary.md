@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: bfad5c3 fix: test isolation — use fresh MemoryStorage per test
+No active task. Last commit: 6da4267 fix: UI quality — AlertDialogs, error logging, type safety, dead code removal
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

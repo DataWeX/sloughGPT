@@ -495,9 +495,9 @@ class KnowledgeMemory:
             finally:
                 loop.close()
 
-    def __init__(self, vector_store: Optional[Any] = None):
+    def __init__(self, vector_store: Optional[Any] = None, load_persisted: bool = True):
         self._lock = threading.Lock()
-        self._visited: set[str] = set(self._load_visited())
+        self._visited: set[str] = set(self._load_visited()) if load_persisted else set()
         if vector_store is not None:
             self._vector_store = vector_store
         else:
@@ -511,8 +511,9 @@ class KnowledgeMemory:
                 pass
         self._embed_fn = None
         self._fact_counter = 0
-        self._load_entries()
-        self._migrate_from_json_topics()
+        if load_persisted:
+            self._load_entries()
+            self._migrate_from_json_topics()
 
     def _zero_vec(self) -> list[float]:
         from domains.infrastructure.embedding_service import get_embedding_service
@@ -774,7 +775,15 @@ class KnowledgeMemory:
             return []
 
     def search(self, text: str, top_k: int = 5) -> list[dict]:
-        """Semantic search across all facts via vector embedding."""
+        """Semantic search across all facts via vector embedding.
+
+        Args:
+            text: search query
+            top_k: max results
+
+        Returns:
+            list of matching fact dicts, sorted by relevance
+        """
         try:
             query_vec = self._get_embedding(text)
             if hasattr(self._vector_store, 'query_sync'):

@@ -648,7 +648,8 @@ class HFModelProvider:
                 session_id=session_id,
                 **kwargs,
             )
-            return result.get("text", "")
+            # Clean the raw output before returning
+            return self._formatter.clean_response(result.get("text", ""))
         # Fallback: collect from streaming
         chunks = []
         async for chunk in self.chat_stream(messages, max_tokens, temperature, session_id=session_id, **kwargs):

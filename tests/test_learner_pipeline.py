@@ -93,7 +93,7 @@ class TestKnowledgeMemory:
 
     @pytest.fixture
     def memory(self):
-        m = KnowledgeMemory(vector_store=InMemoryVectorStore(dimension=384))
+        m = KnowledgeMemory(vector_store=InMemoryVectorStore(dimension=384), load_persisted=False)
         m._visited.clear()
         return m
 
@@ -148,7 +148,7 @@ class TestKnowledgeAugmenter:
     """enrich_with_knowledge retrieves stored facts to augment chat messages."""
 
     def test_enrich_with_stored_facts(self):
-        memory = KnowledgeMemory(vector_store=InMemoryVectorStore(dimension=384))
+        memory = KnowledgeMemory(vector_store=InMemoryVectorStore(dimension=384), load_persisted=False)
         memory._visited.clear()
         memory.add_fact(KnowledgeFact(
             content="Python is a high-level programming language created by Guido van Rossum",
@@ -171,7 +171,7 @@ class TestKnowledgeAugmenter:
             assert any("Python" in f for f in result["facts"])
 
     def test_enrich_empty_with_no_data(self):
-        memory = KnowledgeMemory(vector_store=InMemoryVectorStore(dimension=384))
+        memory = KnowledgeMemory(vector_store=InMemoryVectorStore(dimension=384), load_persisted=False)
         memory._visited.clear()
 
         with patch("domains.learner.knowledge_augmenter.get_knowledge_memory", return_value=memory):

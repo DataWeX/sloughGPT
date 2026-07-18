@@ -85,7 +85,7 @@ class StabilityResult:
 
 # ── HTTP Helpers ────────────────────────────────────────────────────────────
 
-def _chat_request(url: str, prompt: str, timeout: int = 60) -> tuple:
+def _chat_request(url: str, prompt: str, timeout: int = 120) -> tuple:
     """Send one chat request, return (status, latency_s, response_text)."""
     body = json.dumps({
         "messages": [{"role": "user", "content": prompt}],

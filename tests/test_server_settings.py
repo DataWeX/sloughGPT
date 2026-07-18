@@ -24,7 +24,7 @@ def clear_settings_cache() -> None:
 def test_prefers_sloughgpt_over_legacy_typo(monkeypatch: pytest.MonkeyPatch, clear_settings_cache: None) -> None:
     from settings import get_security_settings
 
-    monkeypatch.setenv("MAN_API_KEY", "canonical-key")
+    monkeypatch.setenv("SLO_API_KEY", "canonical-key")
     monkeypatch.setenv("SLAUGHGPT_API_KEY", "should-not-win")
     s = get_security_settings()
     assert s.primary_api_key == "canonical-key"
@@ -33,7 +33,7 @@ def test_prefers_sloughgpt_over_legacy_typo(monkeypatch: pytest.MonkeyPatch, cle
 def test_legacy_slaughgpt_api_key_still_works(monkeypatch: pytest.MonkeyPatch, clear_settings_cache: None) -> None:
     from settings import get_security_settings
 
-    monkeypatch.delenv("MAN_API_KEY", raising=False)
+    monkeypatch.delenv("SLO_API_KEY", raising=False)
     monkeypatch.setenv("SLAUGHGPT_API_KEY", "legacy-only-key")
     s = get_security_settings()
     assert s.primary_api_key == "legacy-only-key"

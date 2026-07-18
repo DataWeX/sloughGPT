@@ -550,10 +550,12 @@ class NumpyEngine:
 
             ids.append(next_id)
 
-        # Reset KV cache
+        # Reset KV cache and collect garbage to prevent numpy memory fragmentation
         if self._kv_cache is not None:
             self._kv_cache.reset()
             self._kv_cache = None
+        import gc
+        gc.collect()
 
         return self.tokenizer.decode(ids)
 

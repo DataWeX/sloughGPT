@@ -10,6 +10,9 @@ from domains.infrastructure.config import get_config
 
 def wandb_training_enabled_from_env() -> bool:
     """Enable W&B for ``POST /training/start`` background jobs when API key or offline mode is usable."""
+    import os
+    if os.environ.get("MAN_WANDB_TRAINING") in ("1", "true", "yes"):
+        return True
     return get_config().tracking.wandb_training_enabled
 
 

@@ -55,8 +55,8 @@ class TestSimpleEmbed:
 
     def test_embed_different_texts(self):
         """Test different texts give different embeddings."""
-        vec1 = simple_embed("python programming")
-        vec2 = simple_embed("machine learning")
+        vec1 = simple_embed("hello world")
+        vec2 = simple_embed("goodbye moon")
         assert not np.allclose(vec1, vec2)
 
 

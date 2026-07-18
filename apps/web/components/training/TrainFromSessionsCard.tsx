@@ -19,6 +19,11 @@ interface TrainProgress {
   message: string
 }
 
+interface TrainSample {
+  prompt: string
+  response: string
+}
+
 export function TrainFromSessionsCard() {
   const addToast = useToastStore(s => s.addToast)
   const [status, setStatus] = useState<AutoTrainStatus | null>(null)
@@ -31,7 +36,7 @@ export function TrainFromSessionsCard() {
   const [configThreshold, setConfigThreshold] = useState<string>('')
   const [configInterval, setConfigInterval] = useState<string>('')
   const [savingConfig, setSavingConfig] = useState(false)
-  const [lastResult, setLastResult] = useState<{ loss: number; steps: number; elapsed_ms: number; checkpoint: string } | null>(null)
+  const [lastResult, setLastResult] = useState<{ loss: number; steps: number; elapsed_ms: number; checkpoint: string; perplexity?: number; samples?: TrainSample[] } | null>(null)
   const [progress, setProgress] = useState<TrainProgress | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const startTimeRef = useRef<number>(0)
@@ -84,13 +89,13 @@ export function TrainFromSessionsCard() {
     }, 1000)
 
     try {
-      const sessionIds = selectedSessions.size > 0 ? Array.from(selectedSessions) : undefined
+      await trainingController.startFromSessionsSloNet({
+        epochs: 5,
+        min_pair_quality: 0.0,
+        max_pairs: 500,
+      })
 
-      for await (const event of trainingController.streamTrainFromSessions({
-        limit: 50,
-        min_length: 5,
-        session_ids: sessionIds,
-      })) {
+      for await (const event of trainingController.streamFromSessionsSloNet()) {
         if (event.status === 'error') {
           const errorMsg = (event.data as { error?: string })?.error || event.message || 'Training failed'
           addToast(errorMsg, 'error')
@@ -98,41 +103,41 @@ export function TrainFromSessionsCard() {
         }
 
         if (event.status === 'complete') {
-          const d = event.data as { checkpoint_name?: string; loss?: number; steps?: number; elapsed_ms?: number }
+          const d = event.data as { checkpoint?: string; final_loss?: number; num_pairs?: number; perplexity?: number; samples?: TrainSample[] }
           setLastResult({
-            loss: d.loss ?? 0,
-            steps: d.steps ?? 0,
-            elapsed_ms: d.elapsed_ms ?? 0,
-            checkpoint: d.checkpoint_name ?? '',
+            loss: d.final_loss ?? 0,
+            steps: d.num_pairs ?? 0,
+            elapsed_ms: Date.now() - startTimeRef.current,
+            checkpoint: d.checkpoint ?? '',
+            perplexity: d.perplexity,
+            samples: d.samples,
           })
-          const label = sessionIds ? `${sessionIds.length} sessions` : 'all sessions'
           addToast(
-            `Trained from ${label} — loss ${(d.loss ?? 0).toFixed(4)}, ${d.steps ?? 0} steps`,
+            `Training complete — ${(d.num_pairs ?? 0)} pairs, loss ${(d.final_loss ?? 0).toFixed(4)}`,
             'success'
           )
           void fetchStatus()
           break
         }
 
-        // Update live progress from TRAIN phase events
         if (event.phase === 'TRAIN' && event.status === 'working') {
-          const d = event.data as { step?: number; loss?: number; epoch?: number; progress_pct?: number; total_steps?: number }
+          const d = event.data as { step?: number; loss?: number; epoch?: number }
+          const m = event.meta as { epoch?: number; total_epochs?: number } | undefined
           setProgress({
             step: d.step ?? null,
             loss: d.loss ?? null,
-            epoch: d.epoch ?? null,
-            progress_pct: d.progress_pct ?? 0,
-            total_steps: d.total_steps ?? null,
+            epoch: m?.epoch ?? d.epoch ?? null,
+            progress_pct: m?.total_epochs && m.epoch ? Math.round(((m.epoch + 1) / m.total_epochs) * 100) : 0,
+            total_steps: null,
             phase: event.phase,
             message: event.message,
           })
         }
 
-        // GENERATE_DATA phase
-        if (event.phase === 'GENERATE_DATA') {
+        if (event.phase === 'PAIRS' && event.status === 'working') {
           setProgress(prev => ({
             ...(prev ?? { step: null, loss: null, epoch: null, progress_pct: 0, total_steps: null, phase: '', message: '' }),
-            phase: 'GENERATE_DATA',
+            phase: 'PAIRS',
             message: event.message,
           }))
         }
@@ -144,7 +149,7 @@ export function TrainFromSessionsCard() {
       setTraining(false)
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
     }
-  }, [addToast, fetchStatus, selectedSessions])
+  }, [addToast, fetchStatus])
 
   const handleSaveConfig = useCallback(async () => {
     setSavingConfig(true)
@@ -331,7 +336,7 @@ export function TrainFromSessionsCard() {
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
               </span>
               <span className="text-foreground font-medium">
-                {progress?.phase === 'GENERATE_DATA' ? 'Extracting pairs...' : 'Training in progress'}
+                {progress?.phase === 'PAIRS' ? 'Extracting pairs...' : 'Training in progress'}
               </span>
               <span className="text-muted-foreground/50 ml-auto">{elapsed}s</span>
             </div>
@@ -372,15 +377,44 @@ export function TrainFromSessionsCard() {
 
         {/* Last training result */}
         {lastResult && !training && (
-          <div className="rounded-lg border border-success/30 bg-success/5 p-2 text-[11px] space-y-0.5">
+          <div className="rounded-lg border border-success/30 bg-success/5 p-2 text-[11px] space-y-1.5">
             <div className="flex items-center gap-1.5 text-success font-medium">
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-success" />
               Training complete
             </div>
             <div className="text-muted-foreground/70">
-              loss {lastResult.loss.toFixed(4)} · {lastResult.steps} steps · {(lastResult.elapsed_ms / 1000).toFixed(1)}s
-              {lastResult.checkpoint && <> · {lastResult.checkpoint}</>}
+              loss {lastResult.loss.toFixed(4)} · {lastResult.steps} pairs · {(lastResult.elapsed_ms / 1000).toFixed(1)}s
+              {lastResult.perplexity != null && <> · perplexity {lastResult.perplexity.toFixed(2)}</>}
             </div>
+            {lastResult.checkpoint && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 text-[11px]"
+                onClick={() => {
+                  const name = lastResult.checkpoint.split('/').pop()?.replace('.soul', '') || ''
+                  trainingController.loadCheckpoint(name).then(() => {
+                    addToast('Model loaded for chat', 'success')
+                  }).catch((e: unknown) => {
+                    addToast(`Load failed: ${e instanceof Error ? e.message : 'unknown'}`, 'error')
+                  })
+                }}
+              >
+                Load for chat
+              </Button>
+            )}
+            {lastResult.samples && lastResult.samples.length > 0 && (
+              <div className="space-y-1 mt-1.5 pt-1.5 border-t border-success/20">
+                <p className="text-[10px] text-muted-foreground/50 font-medium">Samples:</p>
+                {lastResult.samples.slice(0, 3).map((s, i) => (
+                  <div key={i} className="text-[10px] text-muted-foreground/60">
+                    <span className="text-foreground/70">{s.prompt}</span>
+                    <span className="text-muted-foreground/40"> → </span>
+                    <span>{s.response.slice(0, 60)}{s.response.length > 60 ? '...' : ''}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

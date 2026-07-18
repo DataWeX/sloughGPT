@@ -12,6 +12,10 @@ vi.mock('@/lib/controllers', () => ({
     trainFromSessions: vi.fn(),
     streamTrainFromSessions: vi.fn(),
     listChatSessions: vi.fn(),
+    startFromSessionsSloNet: vi.fn(),
+    streamFromSessionsSloNet: vi.fn(),
+    cancelFromSessionsSloNet: vi.fn(),
+    loadCheckpoint: vi.fn(),
   },
 }))
 
@@ -19,12 +23,16 @@ vi.mock('@/lib/toast-store', () => ({
   useToastStore: (sel?: any) => sel ? sel(mockToastStore) : mockToastStore,
 }))
 
+vi.mock('@/lib/dev-log', () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warning: vi.fn(), error: vi.fn() },
+}))
+
 import { TrainFromSessionsCard } from './TrainFromSessionsCard'
 import { trainingController } from '@/lib/controllers'
 
 const mockGetAutoTrainStatus = vi.mocked(trainingController.getAutoTrainStatus)
-const mockTrainFromSessions = vi.mocked(trainingController.trainFromSessions)
-const mockStreamTrainFromSessions = vi.mocked(trainingController.streamTrainFromSessions)
+const mockStartSloNet = vi.mocked(trainingController.startFromSessionsSloNet)
+const mockStreamSloNet = vi.mocked(trainingController.streamFromSessionsSloNet)
 const mockListSessions = vi.mocked(trainingController.listChatSessions)
 
 beforeEach(() => {
@@ -45,6 +53,7 @@ beforeEach(() => {
     { id: 's1', name: 'First chat', updated_at: '2026-07-13T10:00:00Z', messages: [{ role: 'user', content: 'Hello' }, { role: 'assistant', content: 'Hi' }] },
     { id: 's2', name: 'Second chat', updated_at: '2026-07-13T09:00:00Z', messages: [{ role: 'user', content: 'Bye' }] },
   ])
+  mockStartSloNet.mockResolvedValue(undefined)
 })
 
 afterEach(cleanup)
@@ -108,13 +117,13 @@ describe('TrainFromSessionsCard', () => {
     })
   })
 
-  it('calls streamTrainFromSessions on button click', async () => {
+  it('calls startFromSessionsSloNet and stream on button click', async () => {
     async function* mockStream() {
-      yield { stream: 'training', phase: 'GENERATE_DATA', status: 'working', data: { pairs: 10 }, meta: {}, message: 'Extracted 10 pairs' }
-      yield { stream: 'training', phase: 'TRAIN', status: 'working', data: { step: 5, loss: 1.5, epoch: 0.5, progress_pct: 50, total_steps: 10 }, meta: { elapsed_ms: 2000 }, message: '' }
-      yield { stream: 'training', phase: 'COMPLETE', status: 'complete', data: { checkpoint_name: 'sessions_999', loss: 1.5, steps: 10, elapsed_ms: 5000 }, meta: { elapsed_ms: 5000 }, message: 'Done' }
+      yield { stream: 'auto-train', phase: 'PAIRS', status: 'working', data: {}, meta: {}, message: 'Extracting pairs...' }
+      yield { stream: 'auto-train', phase: 'TRAIN', status: 'working', data: { step: 5, loss: 1.5 }, meta: { epoch: 0, total_epochs: 5 }, message: '' }
+      yield { stream: 'auto-train', phase: 'COMPLETE', status: 'complete', data: { checkpoint: '/tmp/test.soul', final_loss: 1.5, num_pairs: 10 }, meta: {}, message: 'Done' }
     }
-    mockStreamTrainFromSessions.mockReturnValue(mockStream())
+    mockStreamSloNet.mockReturnValue(mockStream())
 
     const user = userEvent.setup()
     render(<TrainFromSessionsCard />)
@@ -126,9 +135,10 @@ describe('TrainFromSessionsCard', () => {
     await user.click(screen.getByText('Train from conversations'))
 
     await waitFor(() => {
-      expect(mockStreamTrainFromSessions).toHaveBeenCalledWith({ limit: 50, min_length: 5, session_ids: undefined })
+      expect(mockStartSloNet).toHaveBeenCalled()
+      expect(mockStreamSloNet).toHaveBeenCalled()
       expect(mockAddToast).toHaveBeenCalledWith(
-        expect.stringContaining('Trained from all sessions'),
+        expect.stringContaining('Training complete'),
         'success'
       )
     })
@@ -136,9 +146,9 @@ describe('TrainFromSessionsCard', () => {
 
   it('shows error toast on training failure', async () => {
     async function* mockStream() {
-      yield { stream: 'training', phase: 'GENERATE_DATA', status: 'error', data: { error: 'Not enough data' }, meta: {}, message: 'Error: Not enough data' }
+      yield { stream: 'auto-train', phase: 'TRAIN', status: 'error', data: { error: 'Not enough data' }, meta: {}, message: 'Error: Not enough data' }
     }
-    mockStreamTrainFromSessions.mockReturnValue(mockStream())
+    mockStreamSloNet.mockReturnValue(mockStream())
 
     const user = userEvent.setup()
     render(<TrainFromSessionsCard />)

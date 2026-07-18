@@ -524,6 +524,7 @@ async def start(req: StartRequest):
 
     resume = getattr(req, "resume", False)
     resume_path = getattr(req, "resume_path", "")
+    method = "slonet"  # default: SloughGPTTrainer
 
     if not resume and req.checkpoint_name:
         ckpt_soul = CHECKPOINTS_DIR / f"{req.checkpoint_name}.soul"
@@ -535,7 +536,8 @@ async def start(req: StartRequest):
         elif ckpt_soul.exists():
             resume = True
             resume_path = str(ckpt_soul)
-            autotrain_logger.info("Auto-resume from %s", resume_path, extra={"tag": "TRAIN", "context": {"checkpoint": resume_path}})
+            method = "chat-trained"  # SloNet checkpoint — use chat_trainer
+            autotrain_logger.info("Auto-resume from %s (SloNet)", resume_path, extra={"tag": "TRAIN", "context": {"checkpoint": resume_path, "method": method}})
 
     state.config = {
         "epochs": req.epochs,
@@ -546,6 +548,7 @@ async def start(req: StartRequest):
         "soul_name": req.soul_name,
         "resume": resume,
         "resume_path": resume_path,
+        "method": method,
         "early_stopping_patience": req.early_stopping_patience,
     }
     state.running = True
@@ -652,6 +655,79 @@ async def status():
     return {"running": state.running, "config": state.config}
 
 
+def _train_chat_trained(cfg_state, cancel_event, enqueue):
+    """Train using chat_trainer for .soul checkpoints.
+
+    Resumes from an existing SloNet checkpoint and trains on session data.
+    """
+    from domains.training.chat_trainer import ChatTrainConfig, train_from_sessions
+
+    resume_path = cfg_state.config.get("resume_path", "")
+    soul_name = cfg_state.config.get("soul_name", "chat-trained")
+
+    train_config = ChatTrainConfig(
+        n_embed=cfg_state.config.get("n_embed", 128),
+        n_layer=cfg_state.config.get("n_layer", 4),
+        n_head=cfg_state.config.get("n_head", 4),
+        block_size=cfg_state.config.get("block_size", 128),
+        dropout=cfg_state.config.get("dropout", 0.1),
+        epochs=cfg_state.config.get("epochs", 5),
+        lr=cfg_state.config.get("learning_rate", 3e-4),
+        batch_size=cfg_state.config.get("batch_size", 8),
+        soul_name=soul_name,
+        checkpoint_dir=str(CHECKPOINTS_DIR),
+        resume_checkpoint=resume_path if resume_path and resume_path.endswith(".soul") else None,
+    )
+
+    def _on_step(step, loss, epoch):
+        if cancel_event is not None and cancel_event.is_set():
+            raise _AutoTrainCancelled("Training cancelled by user")
+        enqueue(sse_event(
+            "auto-train", "TRAIN", "working",
+            data={"step": step, "loss": loss, "done": False},
+            meta={"epoch": epoch, "total_epochs": cfg_state.config.get("epochs", 5)},
+        ))
+
+    try:
+        enqueue(sse_event(
+            "auto-train", "PAIRS", "working",
+            message="Extracting chat pairs from sessions...",
+        ))
+
+        model, metadata = train_from_sessions(
+            config=train_config,
+            on_step=_on_step,
+            cancel_event=cancel_event,
+        )
+
+        _complete_enqueued[0] = True
+        _enforce_checkpoint_budget()
+
+        enqueue(sse_complete(
+            "auto-train",
+            data={
+                "checkpoint": metadata.get("checkpoint", ""),
+                "final_loss": metadata.get("final_loss"),
+                "num_pairs": metadata.get("num_pairs", 0),
+                "total_pairs": metadata.get("total_pairs", 0),
+                "epochs": metadata.get("epochs_completed", 0),
+                "vocab_size": metadata.get("vocab_size", 0),
+                "perplexity": metadata.get("perplexity"),
+                "samples": metadata.get("samples", []),
+                "avg_response_len": metadata.get("avg_response_len", 0),
+            },
+            message=f"Training complete — {metadata.get('num_pairs', 0)} pairs, loss={metadata.get('final_loss')}",
+        ))
+
+    except _AutoTrainCancelled:
+        enqueue(sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled"))
+    except Exception as e:
+        autotrain_logger.error("Chat-trained worker error: %s", e, extra={"tag": "TRAIN"})
+        enqueue(sse_error("auto-train", "FAILED", str(e)))
+    finally:
+        cfg_state.running = False
+
+
 @router.get("/stream")
 async def stream(request: Request):
     """
@@ -677,6 +753,16 @@ async def stream(request: Request):
         """Run SloughGPTTrainer in executor thread."""
         global _auto_train_cancel_event, _auto_train_pause_event
         from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
+
+        _auto_train_cancel_event = threading.Event()
+        _auto_train_pause_event = threading.Event()
+        _complete_enqueued[0] = False
+
+        method = state.config.get("method", "slonet")
+
+        if method == "chat-trained":
+            _train_chat_trained(state, _auto_train_cancel_event, _enqueue)
+            return
 
         data_path = state.config.get("data_path", "")
         output_dir = Path(CHECKPOINTS_DIR)
@@ -1048,6 +1134,221 @@ async def export_checkpoint_mobile(name: str):
     }
 
     return {"config": config, "weights_b64": weights_b64}
+
+
+class FromSessionsRequest(BaseModel):
+    """Configuration for on-device training from chat sessions."""
+    epochs: int = Field(default=5, ge=1, le=100)
+    learning_rate: float = Field(default=3e-4, ge=1e-5, le=1.0)
+    batch_size: int = Field(default=8, ge=1, le=128)
+    n_embed: int = Field(default=128, ge=16, le=512)
+    n_layer: int = Field(default=4, ge=1, le=12)
+    n_head: int = Field(default=4, ge=1, le=16)
+    block_size: int = Field(default=128, ge=16, le=512)
+    dropout: float = Field(default=0.1, ge=0.0, le=0.9)
+    soul_name: str = Field(default="chat-trained")
+    min_pair_quality: float = Field(default=2.0, ge=0.0, le=5.0)
+    max_pairs: int = Field(default=500, ge=10, le=10000)
+    checkpoint_name: Optional[str] = Field(default=None, description="Resume from existing checkpoint")
+
+
+@router.post("/from-sessions/start")
+async def start_from_sessions(req: FromSessionsRequest):
+    """Start on-device training from chat sessions.
+
+    Extracts (user, assistant) pairs from local session files, trains a small
+    SloTransformer via next-token prediction, and exports a .soul checkpoint.
+
+    Use ``GET /auto-train/from-sessions/stream`` to receive SSE progress events.
+    """
+    if state.running:
+        return error_response("Training already in progress")
+
+    state.running = True
+    state.config = {
+        "method": "from-sessions",
+        "epochs": req.epochs,
+        "learning_rate": req.learning_rate,
+        "batch_size": req.batch_size,
+        "n_embed": req.n_embed,
+        "n_layer": req.n_layer,
+        "n_head": req.n_head,
+        "block_size": req.block_size,
+        "dropout": req.dropout,
+        "soul_name": req.soul_name,
+        "min_pair_quality": req.min_pair_quality,
+        "max_pairs": req.max_pairs,
+        "checkpoint_name": req.checkpoint_name,
+        "started_at": time.time(),
+    }
+    return success_response(data=state.config, message="Training started")
+
+
+@router.get("/from-sessions/stream")
+async def stream_from_sessions(request: Request):
+    """Stream on-device chat training as SSE.
+
+    Phases: PAIRS → TRAIN → COMPLETE | FAILED
+    """
+    if not state.config or state.config.get("method") != "from-sessions":
+        return StreamingResponse(
+            iter([sse_error("auto-train", "IDLE", "No training state — call /auto-train/from-sessions/start first")]),
+            media_type="text/event-stream",
+        )
+
+    import asyncio as _asyncio
+    queue: _asyncio.Queue[str] = _asyncio.Queue()
+    loop = _asyncio.get_running_loop()
+
+    def _enqueue(event_str: str) -> None:
+        loop.call_soon_threadsafe(queue.put_nowait, event_str)
+
+    def _training_worker():
+        global _auto_train_cancel_event
+        from domains.training.chat_trainer import ChatTrainConfig, train_from_sessions
+
+        cfg = state.config
+        train_config = ChatTrainConfig(
+            n_embed=cfg.get("n_embed", 128),
+            n_layer=cfg.get("n_layer", 4),
+            n_head=cfg.get("n_head", 4),
+            block_size=cfg.get("block_size", 128),
+            dropout=cfg.get("dropout", 0.1),
+            epochs=cfg.get("epochs", 5),
+            lr=cfg.get("learning_rate", 3e-4),
+            batch_size=cfg.get("batch_size", 8),
+            min_pair_quality=cfg.get("min_pair_quality", 2.0),
+            max_pairs=cfg.get("max_pairs", 500),
+            soul_name=cfg.get("soul_name", "chat-trained"),
+            checkpoint_dir=str(CHECKPOINTS_DIR),
+            resume_checkpoint=cfg.get("checkpoint_name"),
+        )
+
+        _auto_train_cancel_event = threading.Event()
+        _complete_enqueued[0] = False
+
+        def _on_step(step: int, loss: float, epoch: int) -> None:
+            if _auto_train_cancel_event is not None and _auto_train_cancel_event.is_set():
+                raise _AutoTrainCancelled("Training cancelled by user")
+            _enqueue(sse_event(
+                "auto-train", "TRAIN", "working",
+                data={"step": step, "loss": loss, "done": False},
+                meta={"epoch": epoch, "total_epochs": cfg.get("epochs", 5)},
+            ))
+
+        try:
+            _enqueue(sse_event(
+                "auto-train", "PAIRS", "working",
+                message="Extracting chat pairs from sessions...",
+            ))
+
+            model, metadata = train_from_sessions(
+                config=train_config,
+                on_step=_on_step,
+                cancel_event=_auto_train_cancel_event,
+            )
+
+            _complete_enqueued[0] = True
+            _enforce_checkpoint_budget()
+
+            ckpt = metadata.get("checkpoint", "")
+            fl = metadata.get("final_loss")
+            pairs = metadata.get("num_pairs", 0)
+            epochs_done = metadata.get("epochs_completed", 0)
+
+            autotrain_logger.info(
+                "From-sessions train complete: checkpoint=%s final_loss=%s pairs=%d epochs=%d",
+                ckpt, fl, pairs, epochs_done,
+                extra={"tag": "TRAIN"},
+            )
+            _enqueue(sse_complete(
+                "auto-train",
+                data={
+                    "checkpoint": ckpt,
+                    "final_loss": fl,
+                    "num_pairs": pairs,
+                    "total_pairs": metadata.get("total_pairs", 0),
+                    "epochs": epochs_done,
+                    "vocab_size": metadata.get("vocab_size", 0),
+                    "train_losses": metadata.get("train_losses", []),
+                    "val_losses": metadata.get("val_losses", []),
+                    "perplexity": metadata.get("perplexity"),
+                    "samples": metadata.get("samples", []),
+                    "avg_response_len": metadata.get("avg_response_len", 0),
+                },
+                message=f"Training complete — {pairs} pairs, loss={fl}",
+            ))
+
+        except _AutoTrainCancelled:
+            autotrain_logger.info("From-sessions training cancelled", extra={"tag": "TRAIN"})
+            _enqueue(sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled"))
+        except Exception as e:
+            autotrain_logger.error("From-sessions worker error: %s", e, extra={"tag": "TRAIN"})
+            _enqueue(sse_error("auto-train", "FAILED", str(e)))
+        finally:
+            _auto_train_cancel_event = None
+            state.running = False
+
+    async def event_generator():
+        worker_task = loop.run_in_executor(None, _training_worker)
+        deadline = time.time() + 3600
+        heartbeat_interval = 10.0
+        last_yield = time.time()
+        try:
+            while True:
+                if time.time() > deadline:
+                    yield sse_error("auto-train", "TIMEOUT", "Training SSE stream timed out")
+                    return
+                if await request.is_disconnected():
+                    if _auto_train_cancel_event is not None:
+                        _auto_train_cancel_event.set()
+                    worker_task.cancel()
+                    state.running = False
+                    autotrain_logger.info("Client disconnected from from-sessions stream", extra={"tag": "TRAIN"})
+                    return
+                remaining = heartbeat_interval - (time.time() - last_yield)
+                if remaining <= 0:
+                    remaining = heartbeat_interval
+                try:
+                    event = await _asyncio.wait_for(queue.get(), timeout=remaining)
+                except _asyncio.TimeoutError:
+                    yield ": heartbeat\n\n"
+                    last_yield = time.time()
+                    continue
+                yield event
+                last_yield = time.time()
+                if event.startswith("data: "):
+                    try:
+                        ev = json.loads(event[6:])
+                        if ev.get("status") in ("complete", "error"):
+                            break
+                    except json.JSONDecodeError:
+                        pass
+
+            while not queue.empty():
+                try:
+                    extra = queue.get_nowait()
+                    yield extra
+                except _asyncio.QueueEmpty:
+                    break
+
+            await worker_task
+        except TimeoutError:
+            yield sse_error("auto-train", "TIMEOUT", "No training progress for 60 seconds")
+        except Exception as e:
+            if not _complete_enqueued[0]:
+                yield sse_error("auto-train", "FAILED", str(e))
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@router.get("/from-sessions/cancel")
+async def cancel_from_sessions():
+    """Cancel on-device training."""
+    global _auto_train_cancel_event
+    if _auto_train_cancel_event is not None:
+        _auto_train_cancel_event.set()
+    return success_response(message="Cancel signal sent")
 
 
 @router.get("/checkpoints/{name}/download")

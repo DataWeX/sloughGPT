@@ -387,7 +387,12 @@ def _load_embed_model() -> Any:
     except ImportError:
         pass  # psutil not installed — proceed without memory check
 
-    # Try importing sentence-transformers
+    # Try importing sentence-transformers (needs PyTorch)
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        _EMBED_LOAD_FAILED = True
+        return None
     try:
         from sentence_transformers import SentenceTransformer
     except ImportError:
@@ -511,7 +516,22 @@ def simple_embed(text: str, dimension: int = 384) -> List[float]:
     if _slo_embedder is None:
         try:
             from domains.inference.slo_embedder import SloTextEmbedder
-            _slo_embedder = SloTextEmbedder.load()
+            candidate = SloTextEmbedder.load()
+            if candidate is not None:
+                _tests = [
+                    ("the quick brown fox", "a slow red elephant"),
+                    ("python programming", "machine learning"),
+                    ("hello world", "goodbye moon"),
+                ]
+                _same_count = sum(
+                    1 for _ta, _tb in _tests
+                    if np.allclose(candidate.embed(_ta), candidate.embed(_tb))
+                )
+                if _same_count >= 1:
+                    logger.info("SloNet embedder is untrained (%d/%d identical pairs), skipping", _same_count, len(_tests))
+                    _slo_embedder = None
+                else:
+                    _slo_embedder = candidate
         except Exception:
             pass
     if _slo_embedder is not None:

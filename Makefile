@@ -1,4 +1,4 @@
-.PHONY: api api-daemon api-stop web tsc lint test-py test-web test dev install build precommit
+.PHONY: api api-daemon api-stop web tsc lint test-py test-web test dev install build precommit test-repo-root colab-smoke colab-test
 
 # ── Dev Servers ──────────────────────────────────────────
 api:
@@ -88,6 +88,17 @@ precommit-run:
 
 precommit-update:
 	.venv/bin/pre-commit autoupdate
+
+# ── Repo Root Tests ─────────────────────────────────────
+test-repo-root:
+	.venv/bin/python3 -m pytest tests/test_repo_root_package_json.py -v
+
+# ── Colab Smoke Tests ───────────────────────────────────
+colab-smoke:
+	bash scripts/run_colab_notebook_smoke.sh
+
+colab-test:
+	.venv/bin/python3 -m pytest tests/test_sloughgpt_colab_notebook.py -v
 
 # ── Cleanup ─────────────────────────────────────────────
 clean:

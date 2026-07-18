@@ -27,7 +27,7 @@ def test_prefetch_factor_only_when_workers() -> None:
 
 
 def test_apply_api_process_torch_env_respects_skip(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MAN_SKIP_TORCH_ENV", "1")
+    monkeypatch.setenv("SLO_SKIP_TORCH_ENV", "1")
     monkeypatch.delenv("PYTORCH_DISABLE_MPS", raising=False)
     import domains.torch_runtime as tr
 
@@ -40,8 +40,8 @@ def test_apply_api_process_torch_env_respects_skip(monkeypatch: pytest.MonkeyPat
 def test_apply_api_process_darwin_disables_mps_by_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("MAN_SKIP_TORCH_ENV", raising=False)
-    monkeypatch.delenv("MAN_API_ENABLE_MPS", raising=False)
+    monkeypatch.delenv("SLO_SKIP_TORCH_ENV", raising=False)
+    monkeypatch.delenv("SLO_API_ENABLE_MPS", raising=False)
     monkeypatch.delenv("PYTORCH_DISABLE_MPS", raising=False)
     import domains.torch_runtime as tr
 
@@ -53,7 +53,7 @@ def test_apply_api_process_darwin_disables_mps_by_default(
 
 
 def test_apply_api_process_linux_leaves_mps_env_unset(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("MAN_SKIP_TORCH_ENV", raising=False)
+    monkeypatch.delenv("SLO_SKIP_TORCH_ENV", raising=False)
     monkeypatch.delenv("PYTORCH_DISABLE_MPS", raising=False)
     import domains.torch_runtime as tr
 

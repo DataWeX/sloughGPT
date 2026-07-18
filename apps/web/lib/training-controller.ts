@@ -432,6 +432,66 @@ export const trainingJobsController = {
     }
   },
 
+  // ---------------------------------------------------------------------------
+  // On-device SloNet training from sessions (pure NumPy, no PyTorch)
+  // ---------------------------------------------------------------------------
+
+  async startFromSessionsSloNet(params: {
+    epochs?: number
+    learning_rate?: number
+    n_embed?: number
+    n_layer?: number
+    n_head?: number
+    block_size?: number
+    soul_name?: string
+    min_pair_quality?: number
+    max_pairs?: number
+  }): Promise<void> {
+    await apiPost('/auto-train/from-sessions/start', params)
+  },
+
+  async *streamFromSessionsSloNet(): AsyncGenerator<{
+    stream: string
+    phase: string
+    status: string
+    data: Record<string, unknown>
+    meta: Record<string, unknown>
+    message: string
+  }> {
+    const { PUBLIC_API_URL } = await import('./config')
+    const res = await fetch(`${PUBLIC_API_URL}/auto-train/from-sessions/stream`)
+    if (!res.ok || !res.body) throw new Error(`Stream failed (${res.status})`)
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const event = JSON.parse(line.slice(6))
+            yield event
+            if (event.status === 'complete' || event.status === 'error') return
+          } catch { /* skip malformed */ }
+        }
+      }
+    }
+    if (buffer.startsWith('data: ')) {
+      try {
+        const event = JSON.parse(buffer.slice(6))
+        yield event
+      } catch { /* skip */ }
+    }
+  },
+
+  async cancelFromSessionsSloNet(): Promise<void> {
+    await apiGet('/auto-train/from-sessions/cancel')
+  },
+
   async getAutoTrainStatus(): Promise<AutoTrainStatus> {
     return apiGet<AutoTrainStatus>('/mobile/train/auto-status')
   },
