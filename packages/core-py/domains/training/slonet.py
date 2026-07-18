@@ -43,6 +43,8 @@ try:
         fused_attention_multi as _nb_fused_attention_multi,
         gqa_expand as _nb_gqa_expand,
         nb_rmsnorm as _nb_rmsnorm,
+        lm_head_argmax as _nb_lm_head_argmax,
+        lm_head_argmax_int8 as _nb_lm_head_argmax_int8,
     )
     _KERNELS_AVAILABLE = True
 except ImportError:
@@ -3860,23 +3862,36 @@ class SloTransformer(SloNet):
                     rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + norm_eps)
                     x = x * (norm_w / rms)
 
-            # LM head
-            if _is_quantized:
-                logits = lm_head_mod.forward_numpy(x[:, -1, :])
+            # LM head — use fused argmax kernel for greedy decoding
+            if _is_greedy and _use_kernels:
+                qi = lm_head_mod._quant_info if _is_quantized else None
+                if qi is not None and qi.is_quantized and qi.meta.bits == 8:
+                    next_id = _nb_lm_head_argmax_int8(
+                        x[:, -1, :], qi.array,
+                        np.float32(qi.meta.scale), np.int32(qi.meta.zero_point),
+                    )
+                elif _is_quantized:
+                    logits = lm_head_mod.forward_numpy(x[:, -1, :])
+                    next_id = int(np.argmax(logits[0]))
+                else:
+                    next_id = _nb_lm_head_argmax(x[:, -1, :], lm_w)
             else:
-                logits = x[:, -1, :] @ lm_w.T
+                if _is_quantized:
+                    logits = lm_head_mod.forward_numpy(x[:, -1, :])
+                else:
+                    logits = x[:, -1, :] @ lm_w.T
 
-            # Inlined greedy sampling (avoids function call + logits.copy + penalty checks)
-            if _is_greedy:
-                next_id = int(np.argmax(logits[0]))
-            else:
-                next_id = _sample_from_logits(
-                    logits, temperature=temperature,
-                    top_k=top_k, top_p=top_p,
-                    repetition_penalty=repetition_penalty,
-                    generated_ids=out_buf[:, prompt_len:step + prompt_len].flatten(),
-                    eos_token=eos_token if step < max_gen - 1 else None,
-                )
+                # Greedy sampling
+                if _is_greedy:
+                    next_id = int(np.argmax(logits[0]))
+                else:
+                    next_id = _sample_from_logits(
+                        logits, temperature=temperature,
+                        top_k=top_k, top_p=top_p,
+                        repetition_penalty=repetition_penalty,
+                        generated_ids=out_buf[:, prompt_len:step + prompt_len].flatten(),
+                        eos_token=eos_token if step < max_gen - 1 else None,
+                    )
             out_buf[0, prompt_len + step] = next_id
             if next_id == eos_token:
                 return out_buf[:, :prompt_len + step + 1]
@@ -4163,12 +4178,26 @@ class SloTransformer(SloNet):
                 rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + norm_eps)
                 x = x * (norm_w / rms)
 
-            if _is_quantized:
-                logits = lm_head_mod.forward_numpy(x[:, -1, :])
+            # lm_head — use fused argmax kernel for greedy decoding (no logits allocation)
+            if _use_kernels:
+                qi = lm_head_mod._quant_info if _is_quantized else None
+                if qi is not None and qi.is_quantized and qi.meta.bits == 8:
+                    next_id = _nb_lm_head_argmax_int8(
+                        x[:, -1, :], qi.array,
+                        np.float32(qi.meta.scale), np.int32(qi.meta.zero_point),
+                    )
+                elif _is_quantized:
+                    logits = lm_head_mod.forward_numpy(x[:, -1, :])
+                    next_id = int(np.argmax(logits[0]))
+                else:
+                    next_id = _nb_lm_head_argmax(x[:, -1, :], lm_w)
             else:
-                logits = x[:, -1, :] @ lm_w.T
+                if _is_quantized:
+                    logits = lm_head_mod.forward_numpy(x[:, -1, :])
+                else:
+                    logits = x[:, -1, :] @ lm_w.T
+                next_id = int(np.argmax(logits[0]))
 
-            next_id = int(np.argmax(logits[0]))
             out_buf[0, prompt_len + step] = next_id
             if next_id == eos_token and step > 0:
                 return

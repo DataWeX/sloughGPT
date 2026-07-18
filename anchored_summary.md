@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 7ea28cc feat: wire fused numba kernels into generate_numpy/stream
+No active task. Last commit: 6f80aa4 fix: lm_head quantized path in generate_numpy_stream
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

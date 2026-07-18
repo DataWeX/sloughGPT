@@ -723,3 +723,113 @@ def _ensure_fused_norm_residual():
         return
     _nb_fused_norm_residual_out = _build_fused_norm_residual()
     _fused_norm_res_built = True
+
+
+# ---------------------------------------------------------------------------
+#  lm_head argmax kernel — avoids allocating full vocab-size logits vector
+# ---------------------------------------------------------------------------
+
+_nb_lm_head_argmax = None
+_lm_head_built = False
+
+
+def _build_lm_head_argmax():
+    """Build lm_head_argmax kernel: argmax(x @ W.T) without materializing logits."""
+    from numba import njit
+
+    @njit(cache=True)
+    def _lm_head_argmax(x, W):
+        """Compute argmax(x @ W.T) without allocating the full logits vector.
+
+        x: (1, D) float32
+        W: (V, D) float32
+        Returns: int index of best token
+        """
+        D = x.shape[1]
+        V = W.shape[0]
+        best_score = np.float32(-1e30)
+        best_idx = np.int64(0)
+        for v in range(V):
+            score = np.float32(0.0)
+            for d in range(D):
+                score += x[0, d] * W[v, d]
+            if score > best_score:
+                best_score = score
+                best_idx = v
+        return best_idx
+
+    @njit(cache=True)
+    def _lm_head_argmax_int8(x, W_int8, w_scale, w_zp):
+        """Compute argmax(x @ dequant(W).T) for int8 weights without full logits.
+
+        x: (1, D) float32
+        W_int8: (V, D) int8
+        w_scale: float32
+        w_zp: int
+        Returns: int index of best token
+        """
+        D = x.shape[1]
+        V = W_int8.shape[0]
+        best_score = np.float32(-1e30)
+        best_idx = np.int64(0)
+        # Quantize x on-the-fly
+        x_max = np.float32(0.0)
+        for d in range(D):
+            a = x[0, d] if x[0, d] >= 0 else -x[0, d]
+            if a > x_max:
+                x_max = a
+        x_scale = x_max / np.float32(127.0) if x_max > 0 else np.float32(1.0)
+        for v in range(V):
+            accum = np.int32(0)
+            for d in range(D):
+                xi = int(x[0, d] / x_scale)
+                if xi > 127:
+                    xi = 127
+                elif xi < -128:
+                    xi = -128
+                accum += np.int32(xi) * np.int32(W_int8[v, d])
+            score = np.float32(accum) * (x_scale * w_scale)
+            if score > best_score:
+                best_score = score
+                best_idx = v
+        return best_idx
+
+    def _warmup_lm_head():
+        x = np.ones((1, 4), dtype=np.float32)
+        W = np.ones((10, 4), dtype=np.float32)
+        _lm_head_argmax(x, W)
+        W8 = np.ones((10, 4), dtype=np.int8)
+        _lm_head_argmax_int8(x, W8, np.float32(1.0), np.int32(0))
+
+    _warmup_lm_head()
+    return _lm_head_argmax, _lm_head_argmax_int8
+
+
+def _ensure_lm_head():
+    global _nb_lm_head_argmax, _lm_head_built
+    global _nb_lm_head_argmax_int8
+    if _lm_head_built:
+        return
+    if not _check_numba():
+        return
+    _nb_lm_head_argmax, _nb_lm_head_argmax_int8 = _build_lm_head_argmax()
+    _lm_head_built = True
+
+
+def lm_head_argmax(x, W):
+    """lm_head argmax without allocating full logits vector."""
+    _ensure_lm_head()
+    if _nb_lm_head_argmax is not None:
+        return int(_nb_lm_head_argmax(x, W))
+    logits = x @ W.T
+    return int(np.argmax(logits[0]))
+
+
+def lm_head_argmax_int8(x, W_int8, w_scale, w_zp=0):
+    """lm_head argmax for int8 weights — no full logits allocation."""
+    _ensure_lm_head()
+    if _nb_lm_head_argmax_int8 is not None:
+        return int(_nb_lm_head_argmax_int8(x, W_int8, w_scale, w_zp))
+    # Fallback: dequantize and do normal argmax
+    logits = x @ (W_int8.astype(np.float32) * w_scale).T
+    return int(np.argmax(logits[0]))
