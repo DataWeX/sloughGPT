@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: a7262e81 chore: security, timezone, quality improvements
+No active task. Last commit: 0338039c refactor: remove PyTorch from server core — SloNet is sole inference engine
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
