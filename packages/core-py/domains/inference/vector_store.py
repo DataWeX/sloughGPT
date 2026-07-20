@@ -384,12 +384,7 @@ def _load_embed_model() -> Any:
     except ImportError:
         pass  # psutil not installed — proceed without memory check
 
-    # Try importing sentence-transformers (needs PyTorch)
-    try:
-        import torch  # noqa: F401
-    except ImportError:
-        _EMBED_LOAD_FAILED = True
-        return None
+    # Try importing sentence-transformers (requires torch)
     try:
         from sentence_transformers import SentenceTransformer
     except ImportError:

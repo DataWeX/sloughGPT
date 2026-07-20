@@ -27,10 +27,6 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-try:
-    import torch
-except ImportError:
-    torch = None
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -48,10 +44,6 @@ for _p in (_SERVER_ROOT, _CORE_PY_ROOT, _SGLOADER_ROOT, _REPO_ROOT):
     _s = str(_p)
     if _s not in sys.path:
         sys.path.insert(0, _s)
-
-from domains.torch_runtime import apply_api_process_torch_env
-
-apply_api_process_torch_env()
 
 import state as server_state  # noqa: E402
 
@@ -202,98 +194,6 @@ from infrastructure.exception_handlers import register_all_handlers  # noqa: E40
 register_all_handlers(app)
 
 
-# ── Legacy helpers (preserved for existing callers) ─────────────────
-def _first_trainable_device(module: Any) -> torch.device:
-    """Device for placing tokenized inputs beside a loaded HF ``model``."""
-    try:
-        return next(module.parameters()).device
-    except (StopIteration, AttributeError, TypeError):
-        return torch.device("cpu")
-
-
-def _inputs_to_model_device(inputs: Any, model: Any) -> Any:
-    """Move tokenizer outputs (``BatchEncoding`` or ``dict``) to the module device."""
-    dev = _first_trainable_device(model)
-    if dev.type == "meta":
-        return inputs
-    if hasattr(inputs, "to"):
-        return inputs.to(dev)
-    if isinstance(inputs, dict):
-        return {k: v.to(dev) for k, v in inputs.items()}
-    return inputs
-
-
-def _inference_engine_device_str(module: Any) -> str:
-    """String device for ``InferenceEngine`` — match where ``module`` parameters live."""
-    if module is None:
-        return "cpu"
-    try:
-        dev = _first_trainable_device(module)
-    except Exception:
-        return "cpu"
-    if dev.type == "meta":
-        return "cpu"
-    return str(dev.type)
-
-
-def load_model(model_path: Optional[str] = None):
-    """Load the actual sloughgpt model. If model_path provided, load that specific checkpoint."""
-    try:
-        import torch
-
-        if model_path:
-            if not Path(model_path).is_absolute():
-                model_path = str((_REPO_ROOT / model_path).resolve())
-        else:
-            default_paths = [
-                "models/sloughgpt_finetuned.pt",
-                "models/sloughgpt_lora.pt",
-                "models/sloughgpt_variant.pt",
-            ]
-            model_path = None
-            for path in default_paths:
-                if (_REPO_ROOT / path).exists():
-                    model_path = str((_REPO_ROOT / path).resolve())
-                    break
-
-        if model_path is None or not Path(model_path).exists():
-            server_state.model = None
-            server_state.model_type = "demo"
-            logger.info("No model found, demo mode active", extra={"tag": "START"})
-            return
-
-        logger.info("Loading model", extra={"context": {"model_path": model_path}, "tag": "START"})
-        ckpt = torch.load(model_path, map_location="cpu", weights_only=False)
-
-        if isinstance(ckpt, dict):
-            server_state.model = ckpt
-            server_state.model_type = "sloughgpt_finetuned"
-            if "chars" in ckpt and "stoi" in ckpt and "itos" in ckpt:
-                server_state.tokenizer = {
-                    "chars": ckpt["chars"],
-                    "stoi": ckpt["stoi"],
-                    "itos": ckpt["itos"],
-                    "vocab_size": len(ckpt["chars"]),
-                }
-                logger.info("Tokenizer loaded", extra={"context": {"char_count": len(ckpt['chars'])}, "tag": "START"})
-            else:
-                server_state.tokenizer = None
-            logger.info("Model loaded", extra={"context": {"param_count": len(ckpt.get('model', {}))}, "tag": "START"})
-        else:
-            server_state.model = ckpt
-            server_state.model_type = "sloughgpt_finetuned"
-            server_state.tokenizer = None
-            logger.info("Model loaded successfully", extra={"context": {"model_path": model_path}, "tag": "START"})
-
-    except Exception as e:
-        logger.warning("Failed to load model", extra={"context": {"error": str(e)}, "tag": "START"})
-        import traceback
-        traceback.print_exc()
-        server_state.model = None
-        server_state.tokenizer = None
-        server_state.model_type = "demo"
-
-
 # ── Meta-weight manager ─────────────────────────────────────────────
 _meta_weight_manager = None
 
@@ -342,114 +242,20 @@ class LoadModelRequest(BaseModel):
     device: Optional[str] = "auto"
 
 
-def _load_hf_model_core(request: LoadModelRequest, use_slonet: bool = False) -> Dict[str, Any]:
-    """
-    Load HuggingFace model via ModelsController (extracted into
-    ``routers/models.py`` endpoint).  Preserved here for startup import.
-    """
+def _load_hf_model_core(request: LoadModelRequest) -> Dict[str, Any]:
+    """Load HuggingFace model via ModelsController (SloNet-only)."""
     try:
         from controllers.models import get_models_controller
 
         ctrl = get_models_controller()
-        result = ctrl.load_model(request.model_id, request.device or "auto", use_slonet=use_slonet)
+        result = ctrl.load_model(request.model_id, request.device or "auto")
 
         if result.get("status") == "error":
             logger.warning("Failed to load model %s: %s", request.model_id, result.get("error"), extra={"tag": "START"})
             return result
 
-        if use_slonet:
-            server_state.model_type = request.model_id
-            return result
-
-        model = getattr(ctrl, "_hf_model", None)
-        tokenizer = getattr(ctrl, "_tokenizer", None)
-
-        if model is None or tokenizer is None:
-            return {"status": "error", "error": "Model loaded but model/tokenizer not available"}
-
-        server_state.model = model
-        server_state.tokenizer = tokenizer
         server_state.model_type = request.model_id
-
-        # Auto-load knowledge adapter
-        try:
-            from domains.infrastructure.knowledge_weight_integrator import load_knowledge_adapter, get_adapter_status
-
-            status = get_adapter_status()
-            if status.get("adapter_exists"):
-                model = load_knowledge_adapter(model, device="cpu", merge=True)
-                server_state.model = model
-                logger.info("Knowledge adapter merged (%d facts)", status.get("fact_count", 0), extra={"tag": "START"})
-        except Exception as e:
-            logger.warning("Knowledge adapter load skipped: %s", e, extra={"tag": "START"})
-
-        # Optionally wrap in ProcessGuard for crash isolation
-        process_guard = None
-        if os.environ.get("SLO_ENABLE_PROCESS_GUARD", "").lower() in ("1", "true", "yes"):
-            try:
-                from domains.infrastructure.process_guard import create_model_guard
-                process_guard = create_model_guard(
-                    model_id=request.model_id,
-                    device=request.device or "cpu",
-                    max_restarts=3,
-                    restart_delay=2.0,
-                    memory_limit_mb=4096,
-                )
-                logger.info("_load_hf_model_core: ProcessGuard started for %s", request.model_id, extra={"tag": "START"})
-            except Exception as e:
-                logger.warning("_load_hf_model_core: ProcessGuard init failed (without): %s", e, extra={"tag": "START"})
-
-        # Register with ModelRegistry
-        try:
-            from domains.infrastructure.model_registry import get_model_registry
-
-            registry = get_model_registry()
-            registry.register(
-                model_id=request.model_id,
-                model=model,
-                tokenizer=tokenizer,
-                make_default=True,
-                max_concurrent=1,
-                generate_timeout=120.0,
-                process_guard=process_guard,
-            )
-            from domains.models.provider import register_provider, HFModelProvider, ProviderRouter, VisionProcessor
-
-            model_server = registry.get(request.model_id)
-            provider = HFModelProvider(
-                model, tokenizer,
-                model_id_str=request.model_id,
-                model_server=model_server,
-            )
-            register_provider("hf-default", provider)
-            logger.info("hf-default provider re-registered with ModelServer: %s", request.model_id, extra={"tag": "START"})
-
-            # Wire default provider router — but don't override SloNet if already active.
-            # SloNet is registered by auto_train as "default"; replacing it would
-            # cause chat to silently fall back to HF and produce empty responses.
-            from domains.models.provider import get_provider as _gp
-            existing = _gp("default")
-            _is_slonet = existing is not None and type(existing).__name__ in ("SloTransformerProvider", "SloNetChatProvider")
-            if not _is_slonet:
-                router = ProviderRouter()
-                router.add_processor(VisionProcessor("multimodal"))
-                router.set_text_provider("hf-default")
-                register_provider("default", router)
-                logger.info("Default provider router registered with VisionProcessor", extra={"tag": "START"})
-            else:
-                logger.info("SloNet provider active — keeping as default (skipping HF override)", extra={"tag": "START"})
-        except Exception as e:
-            logger.warning("Failed to register with ModelRegistry: %s", e, extra={"tag": "START"})
-
-        effective = _inference_engine_device_str(model)
-        return {
-            "status": "loaded",
-            "model": request.model_id,
-            "mode": request.mode or "local",
-            "device": result.get("device", request.device),
-            "effective_device": effective,
-            "model_type": server_state.model_type or request.model_id,
-        }
+        return result
     except Exception as e:
         logger.error("_load_hf_model_core failed: %s", e, exc_info=True, extra={"tag": "START"})
         return {"status": "error", "error": str(e)}

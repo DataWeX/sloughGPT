@@ -195,6 +195,7 @@ class MorphTokenizer:
         byte_level: bool = False,
         byte_fallback: bool = False,
         model_id: str = "",
+        added_tokens: Optional[Dict[str, int]] = None,
     ):
         self.vocab = vocab
         self.inv_vocab = {v: k for k, v in vocab.items()}
@@ -208,25 +209,60 @@ class MorphTokenizer:
         self._morpheme_cache: Dict[str, List[str]] = {}
         self._chat_template: Optional[str] = None
         self._chat_template_jinja = False
+        # Special tokens added beyond BPE vocab (chat template tokens like im_start, im_end)
+        self.added_tokens: Dict[str, int] = added_tokens or {}
+        self._added_token_patterns = self._build_added_token_patterns()
+
+    def _build_added_token_patterns(self):
+        """Build regex patterns for matching added tokens, longest first."""
+        import re as _re
+        if not self.added_tokens:
+            return []
+        # Sort by length descending so longest match wins
+        sorted_tokens = sorted(self.added_tokens.keys(), key=len, reverse=True)
+        # Escape for regex, match literally
+        pattern = "|".join(_re.escape(t) for t in sorted_tokens)
+        return _re.compile(pattern) if pattern else None
 
     @classmethod
     def from_pretrained(cls, model_id: str) -> "MorphTokenizer":
         """Load from tokenizer.json — our own parser, no HF tokenizers lib."""
-        from domains.infrastructure.safetensors_loader import _get_model_dir
-        model_dir = _get_model_dir(model_id)
+        from pathlib import Path
+
+        model_slug = model_id.replace("/", "--")
+
+        # Search multiple cache locations
+        search_dirs = []
+        # Standard HF cache
+        import os
+        hf_home = os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))
+        search_dirs.append(Path(hf_home) / "hub" / f"models--{model_slug}")
+        # Project-local cache (models/hf-cache/hub/)
+        for candidate in [
+            Path(__file__).resolve().parents[3] / "models" / "hf-cache" / "hub" / f"models--{model_slug}",
+            Path("models/hf-cache/hub") / f"models--{model_slug}",
+        ]:
+            if candidate.exists() and candidate not in search_dirs:
+                search_dirs.append(candidate)
 
         tokenizer_path = None
-        snapshots = model_dir / "snapshots"
-        if snapshots.exists():
-            for snap in snapshots.iterdir():
-                candidate = snap / "tokenizer.json"
+        for model_dir in search_dirs:
+            snapshots = model_dir / "snapshots"
+            if snapshots.exists():
+                for snap in snapshots.iterdir():
+                    candidate = snap / "tokenizer.json"
+                    if candidate.exists():
+                        tokenizer_path = candidate
+                        break
+            if tokenizer_path is None:
+                candidate = model_dir / "tokenizer.json"
                 if candidate.exists():
                     tokenizer_path = candidate
-                    break
-        if tokenizer_path is None:
-            tokenizer_path = model_dir / "tokenizer.json"
+            if tokenizer_path is not None:
+                break
+
         if tokenizer_path is None or not tokenizer_path.exists():
-            raise FileNotFoundError(f"No tokenizer.json for {model_id}")
+            raise FileNotFoundError(f"No tokenizer.json for {model_id} (searched {len(search_dirs)} dirs)")
 
         with open(tokenizer_path) as f:
             tok_data = json.load(f)
@@ -271,25 +307,44 @@ class MorphTokenizer:
         if "end_token_id" in post:
             eos = post["end_token_id"]
 
-        logger.info("Loaded tokenizer %s (vocab=%d, merges=%d, byte_level=%s, byte_fallback=%s)",
-                     model_id, len(vocab), len(merges), byte_level, byte_fallback,
+        # Parse added tokens (chat template tokens like im_start, im_end)
+        added_tokens = {}
+        for at in tok_data.get("added_tokens", []):
+            content_str = at.get("content", "")
+            tid = at.get("id")
+            if content_str and tid is not None:
+                added_tokens[content_str] = tid
+        if added_tokens:
+            logger.info("Loaded %d added tokens for %s: %s",
+                        len(added_tokens), model_id, list(added_tokens.keys())[:5],
+                        extra={"tag": "INFRA"})
+
+        logger.info("Loaded tokenizer %s (vocab=%d, merges=%d, byte_level=%s, byte_fallback=%s, added=%d)",
+                     model_id, len(vocab), len(merges), byte_level, byte_fallback, len(added_tokens),
                      extra={"tag": "INFRA"})
 
         instance = cls(vocab=vocab, merges=merges, eos_token_id=eos,
                        byte_level=byte_level, byte_fallback=byte_fallback,
-                       model_id=model_id)
+                       model_id=model_id, added_tokens=added_tokens)
 
         # Extract chat template — check tokenizer.json first, then tokenizer_config.json
         chat_tpl = tok_data.get("chat_template")
         if not chat_tpl:
-            # Check tokenizer_config.json (Qwen, LLaMA, etc. store it there)
-            tok_config_path = model_dir / "tokenizer_config.json"
-            if not tok_config_path.exists() and snapshots.exists():
-                for snap in snapshots.iterdir():
-                    candidate = snap / "tokenizer_config.json"
-                    if candidate.exists():
-                        tok_config_path = candidate
-                        break
+            # tokenizer_config.json is usually in same dir as tokenizer.json
+            tok_config_path = tokenizer_path.parent / "tokenizer_config.json"
+            if not tok_config_path.exists():
+                # Try parent (model dir / snapshot dir)
+                tok_config_path = tokenizer_path.parent.parent / "tokenizer_config.json"
+            if not tok_config_path.exists():
+                # Broader search: walk snapshots
+                tok_model_dir = tokenizer_path.parent.parent
+                snapshots = tok_model_dir / "snapshots"
+                if snapshots.exists():
+                    for snap in snapshots.iterdir():
+                        candidate = snap / "tokenizer_config.json"
+                        if candidate.exists():
+                            tok_config_path = candidate
+                            break
             if tok_config_path.exists():
                 try:
                     with open(tok_config_path) as f:
@@ -374,8 +429,16 @@ class MorphTokenizer:
         return ''.join(parts)
 # ── BPE encode ──────────────────────────────────────────────────────
 
+    def _normalize_sentencepiece(self, text: str) -> str:
+        """Apply SentencePiece normalization: replace spaces with \u2581, prepend \u2581."""
+        return "▁" + text.replace(" ", "▁")
+
     def _bpe_encode(self, text: str) -> List[int]:
-        """BPE encode a single word/token (no whitespace splitting)."""
+        """BPE encode text, handling byte_level and byte_fallback modes."""
+        # Apply SentencePiece normalization for byte_fallback models
+        if self.byte_fallback:
+            text = self._normalize_sentencepiece(text)
+
         # Convert to initial tokens
         if self.byte_level:
             # Byte-level: convert to GPT-2 byte-to-unicode chars
@@ -406,9 +469,17 @@ class MorphTokenizer:
         for t in tokens:
             if t in self.vocab:
                 ids.append(self.vocab[t])
+            elif self.byte_fallback:
+                # SentencePiece ByteFallback: encode each byte as <0xHH> token
+                for byte_val in t.encode('utf-8'):
+                    hex_token = f"<0x{byte_val:02X}>"
+                    if hex_token in self.vocab:
+                        ids.append(self.vocab[hex_token])
+                    else:
+                        ids.append(self.eos_token_id)
             elif self.byte_level:
                 # Fallback: encode bytes individually
-                for byte_val in t.encode("utf-8"):
+                for byte_val in t.encode('utf-8'):
                     char = _BYTE2UNICODE.get(byte_val, chr(byte_val))
                     ids.append(self.vocab.get(char, self.eos_token_id))
             else:
@@ -416,15 +487,32 @@ class MorphTokenizer:
         return ids
 
     def encode(self, text: str) -> List[int]:
-        """Encode text to token IDs via BPE."""
-        return self._bpe_encode(text)
+        """Encode text to token IDs via BPE, respecting special tokens."""
+        if not self._added_token_patterns:
+            return self._bpe_encode(text)
+        # Split text by special tokens, keeping the tokens
+        parts = self._added_token_patterns.split(text)
+        ids: List[int] = []
+        import re as _re
+        all_tokens = self._added_token_patterns.findall(text)
+        for i, part in enumerate(parts):
+            if part:
+                ids.extend(self._bpe_encode(part))
+            if i < len(all_tokens):
+                ids.append(self.added_tokens[all_tokens[i]])
+        return ids
 
     def decode(self, ids: List[int]) -> str:
         """Decode token IDs to text."""
+        inv_added = {v: k for k, v in self.added_tokens.items()}
         tokens = []
         for tid in ids:
-            t = self.inv_vocab.get(int(tid), "")
-            tokens.append(t)
+            tid = int(tid)
+            if tid in inv_added:
+                tokens.append(inv_added[tid])
+            else:
+                t = self.inv_vocab.get(tid, "")
+                tokens.append(t)
 
         if self.byte_level:
             result = []
@@ -434,19 +522,24 @@ class MorphTokenizer:
                     result.append(byte_val)
             return bytes(result).decode("utf-8", errors="replace")
         elif self.byte_fallback:
-            # SentencePiece ByteFallback: <0xHH> tokens → bytes, ▁ → space
+            # SentencePiece ByteFallback: <0xHH> tokens -> bytes
+            # \u2581 in tokens means space-before-word (not at text start)
             result = bytearray()
+            first = True
             for t in tokens:
                 if t.startswith("<0x") and t.endswith(">") and len(t) == 6:
-                    # Hex byte token
                     try:
                         result.append(int(t[3:5], 16))
                     except ValueError:
                         result.extend(t.encode("utf-8"))
-                elif t == "\u2581":  # ▁ = space prefix
-                    result.append(0x20)
                 else:
-                    result.extend(t.encode("utf-8"))
+                    # Strip \u2581 prefix; add space only if NOT the first token
+                    cleaned = t.lstrip("\u2581")
+                    n_stripped = len(t) - len(cleaned)
+                    if n_stripped > 0 and not first:
+                        result.extend(b" " * n_stripped)
+                    first = False
+                    result.extend(cleaned.encode("utf-8"))
             return result.decode("utf-8", errors="replace")
         else:
             return "".join(tokens)

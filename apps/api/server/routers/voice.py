@@ -1,5 +1,6 @@
 """Voice Router - text-to-speech endpoint with optional HF model backend."""
 
+import asyncio
 import base64
 import io
 import logging
@@ -106,7 +107,7 @@ async def text_to_speech(request: TTSRequest):
 
     try:
         if _tts_backend.load():
-            audio_bytes = _tts_backend.generate(request.text)
+            audio_bytes = await asyncio.to_thread(_tts_backend.generate, request.text)
             sample_rate = 24000  # bark-small default
             # Estimate duration from sample rate and data size
             import wave

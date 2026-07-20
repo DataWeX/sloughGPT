@@ -102,11 +102,11 @@ class ModelsController:
 
         return models
 
-    def _load_hf_model(self, model_id: str, device: str, use_slonet: bool = False) -> Dict[str, Any]:
-        """Load a HuggingFace model.
+    def _load_hf_model(self, model_id: str, device: str) -> Dict[str, Any]:
+        """Load a HuggingFace model via SloNet (pure NumPy inference).
 
-        When ``use_slonet=True``, loads weights into SloTransformer (pure NumPy)
-        instead of PyTorch. No PyTorch dependency at inference time.
+        Converts safetensors → .slnc on first load, then loads via mmap.
+        No PyTorch dependency at inference time.
         """
         if model_id.endswith('.gguf'):
             return self._load_gguf_model(model_id, device)
@@ -114,127 +114,30 @@ class ModelsController:
         import state as server_state
         server_state.model_type = model_id
 
-        if use_slonet:
-            logger.info("Loading %s into SloTransformer (pure NumPy)...", model_id, extra={"tag": "MODEL"})
-            try:
-                from domains.models.provider import setup_providers
-                from domains.infrastructure.config import get_config
-                cfg = get_config()
-                setup_providers(
-                    None, None,
-                    hf_model_id=model_id,
-                    slonet_hf_id=model_id,
-                    quantize=cfg.quantize_slonet,
-                    quant_bits=cfg.quant_bits,
-                    quant_mode=cfg.quant_mode,
-                )
-                logger.info("SloNet provider registered: %s (quant=%s)",
-                            model_id, f"int{cfg.quant_bits}" if cfg.quantize_slonet else "none", extra={"tag": "MODEL"})
-            except Exception as e:
-                logger.error("Failed to register SloNet provider for %s: %s", model_id, e, extra={"tag": "MODEL"})
-                raise
-
-            return {
-                "model_id": model_id,
-                "type": "slonet",
-                "device": "cpu",
-                "total_parameters": 0,
-                "tokenizer_type": "SloNetChatProvider",
-            }
-
+        logger.info("Loading %s into SloTransformer (pure NumPy)...", model_id, extra={"tag": "MODEL"})
         try:
-            from domains.infrastructure.model_loader import load_model
-            from domains.infrastructure.model_loader import LoadResult
-
-            resolved_device = self._resolve_device(device)
-            result: LoadResult = load_model(
-                model_id,
-                device=resolved_device,
-                verify=False,
+            from domains.models.provider import setup_providers
+            from domains.infrastructure.config import get_config
+            cfg = get_config()
+            setup_providers(
+                slonet_hf_id=model_id,
+                quantize=cfg.quantize_slonet,
+                quant_bits=cfg.quant_bits,
+                quant_mode=cfg.quant_mode,
             )
-
-            if not result.success:
-                raise RuntimeError(result.error or f"Failed to load {model_id}")
-
-            model = result.model
-            tokenizer = result.tokenizer
-            actual_device = result.metrics.get("device", resolved_device)
-
-            self._tokenizer = tokenizer
-            self._hf_model = model
-
-            # Handle safetensors path (returns dict of weights + config instead of model object)
-            if isinstance(model, dict):
-                from domains.infrastructure.safetensors_loader import load_model_config
-                config = load_model_config(model_id) if not isinstance(tokenizer, dict) else tokenizer
-                total_params = sum(arr.size for arr in model.values())
-                self._hf_weights = model
-                self._hf_config = config if isinstance(config, dict) else {}
-            else:
-                total_params = sum(p.numel() for p in model.parameters())
-
-            # Update server_state so health endpoints reflect the active model
-            server_state.model = model
-            server_state.tokenizer = tokenizer
-
-            # Register model with ModelRegistry BEFORE setup_providers()
-            if not isinstance(model, dict):
-                from domains.infrastructure.model_registry import get_model_registry
-                model_registry = get_model_registry()
-                model_registry.register(
-                    model_id, model, tokenizer,
-                    make_default=True,
-                    generate_timeout=120.0,
-                )
-                logger.info("Registered model in ModelRegistry: %s", model_id, extra={"tag": "MODEL"})
-
-            # Create InferenceEngine for the new model (requires torch model object)
-            inference_engine = None
-            if not isinstance(model, dict):
-                try:
-                    from domains.inference.engine import InferenceEngine
-                    inference_engine = InferenceEngine(
-                        model=model,
-                        tokenizer=tokenizer,
-                        device=actual_device,
-                    )
-                except Exception as e:
-                    logger.warning("Failed to create InferenceEngine: %s", e, extra={"tag": "MODEL"})
-
-            # Register all providers via setup_providers
-            try:
-                from domains.models.provider import setup_providers
-                setup_providers(
-                    model, tokenizer,
-                    hf_model_id=model_id,
-                    inference_engine=inference_engine,
-                    model_registry=model_registry,
-                )
-                logger.info("Updated providers for: %s (text=inference-engine)", model_id, extra={"tag": "MODEL"})
-            except Exception as e:
-                logger.warning("Failed to set up model providers: %s", e, extra={"tag": "MODEL"})
-
-            # Push the new engine into ChatDomain so streaming chat uses it.
-            try:
-                from domains.chat.domain import get_chat_domain
-                cd = get_chat_domain()
-                if inference_engine is not None:
-                    cd.set_engine(inference_engine)
-                else:
-                    cd.set_engine(None)
-            except Exception as e:
-                logger.warning("Failed to inject engine into ChatDomain: %s", e, extra={"tag": "MODEL"})
-
-            return {
-                "model_id": model_id,
-                "type": "huggingface",
-                "device": actual_device,
-                "total_parameters": total_params,
-                "tokenizer_type": type(tokenizer).__name__,
-            }
+            logger.info("SloNet provider registered: %s (quant=%s)",
+                        model_id, f"int{cfg.quant_bits}" if cfg.quantize_slonet else "none", extra={"tag": "MODEL"})
         except Exception as e:
-            logger.error(f"Failed to load HF model {model_id}: {e}", extra={"tag": "MODEL"})
+            logger.error("Failed to register SloNet provider for %s: %s", model_id, e, extra={"tag": "MODEL"})
             raise
+
+        return {
+            "model_id": model_id,
+            "type": "slonet",
+            "device": "cpu",
+            "total_parameters": 0,
+            "tokenizer_type": "SloNetChatProvider",
+        }
 
     def _load_gguf_model(self, model_path: str, device: str) -> Dict[str, Any]:
         """Load a GGUF model using llama.cpp"""
@@ -269,98 +172,26 @@ class ModelsController:
             raise
 
     def load_model(self, model_id: str, device: str = "auto", quantize: Optional[str] = None,
-                    use_slonet: bool = False) -> Dict[str, Any]:
-        """Load a model into memory (local or HuggingFace).
+                    **kwargs) -> Dict[str, Any]:
+        """Load a model into memory via SloNet (pure NumPy inference).
 
-        Args:
-            use_slonet: If True, load weights into SloTransformer (pure NumPy)
-                        instead of PyTorch. No PyTorch at inference time.
+        Converts safetensors → .slnc on first load, then loads via mmap.
+        No PyTorch dependency at inference time.
         """
         resolved_device = self._resolve_device(device)
 
-        # Treat any model_id as a HuggingFace model first.
-        # Falls back to local file if HuggingFace loading fails.
         try:
-            result = self._load_hf_model(model_id, resolved_device, use_slonet=use_slonet)
+            result = self._load_hf_model(model_id, resolved_device)
             self._current_model = model_id
             self._current_device = resolved_device
             self._loaded_at = datetime.now()
             return {
                 "status": "loaded",
                 "model_id": model_id,
-                "type": "huggingface",
+                "type": "slonet",
                 "device": resolved_device,
                 "loaded_at": self._loaded_at.isoformat(),
             }
-        except Exception as e:
-            logger.warning("HF load failed for %s, trying local path: %s", model_id, e, extra={"tag": "MODEL"})
-
-        # Try local model
-        model_path = self._find_model_path(model_id)
-        if model_path is None:
-            return {
-                "status": "error",
-                "error": f"Model not found: {model_id}",
-            }
-
-        try:
-            if model_path.suffix == ".pt":
-                import torch
-                checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
-
-                if isinstance(checkpoint, dict):
-                    raw_state_dict = checkpoint.get("model", checkpoint)
-                    config = checkpoint.get("config", {})
-                else:
-                    raw_state_dict = checkpoint
-                    config = {}
-
-                state_dict = {}
-                for k, v in raw_state_dict.items():
-                    if hasattr(v, 'cpu'):
-                        state_dict[k] = v.cpu().numpy().astype(np.float32)
-                    else:
-                        state_dict[k] = np.array(v, dtype=np.float32)
-
-                if not config:
-                    config = self._infer_config(state_dict)
-
-                model_type = config.get("model_type", "sloughgpt")
-
-                from domains.models import SloughGPTModel
-
-                model = SloughGPTModel(
-                    vocab_size=config.get("vocab_size", 256),
-                    n_embed=config.get("n_embed", 256),
-                    n_layer=config.get("n_layer", 6),
-                    n_head=config.get("n_head", 8),
-                    block_size=config.get("block_size", 128),
-                    max_seq_len=config.get("max_seq_len", 2048),
-                )
-                model.load_state_dict(state_dict, strict=False)
-                model = model.to(resolved_device)
-                model.eval()
-
-                self._model_instance = model
-            else:
-                return {
-                    "status": "error",
-                    "error": "GGUF loading not implemented in controller",
-                }
-
-            self._current_model = model_id
-            self._current_device = resolved_device
-            self._loaded_at = datetime.now()
-
-            return {
-                "status": "loaded",
-                "model_id": model_id,
-                "device": resolved_device,
-                "quantize": quantize,
-                "path": str(model_path),
-                "loaded_at": self._loaded_at.isoformat(),
-            }
-
         except Exception as e:
             return {
                 "status": "error",

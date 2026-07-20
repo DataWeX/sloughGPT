@@ -2,24 +2,19 @@
 Production-Grade Embedding Models
 
 Supports:
-- sentence-transformers (default, best quality)
+- In-memory n-gram TF-IDF (default, zero-dependency)
 - OpenAI (text-embedding-ada-002, text-embedding-3-small, text-embedding-3-large)
-- HuggingFace Hub models
-- In-memory fallback (fast, lower quality)
 
 Usage:
     from domains.inference.embeddings import Embedder, EmbeddingModel
 
-    # Default: sentence-transformers
+    # Default: in-memory (zero-dependency)
     embedder = Embedder()
     vectors = embedder.embed(["Hello world", "How are you?"])
 
     # OpenAI
     embedder = Embedder(provider="openai", api_key="sk-...")
     vectors = embedder.embed("Hello world")
-
-    # Specific model
-    embedder = Embedder(model="sentence-transformers/all-MiniLM-L6-v2")
 """
 
 import os
@@ -99,61 +94,6 @@ class InMemoryEmbedder(BaseEmbedder):
         return "in_memory"
 
 
-class SentenceTransformerEmbedder(BaseEmbedder):
-    """High-quality embeddings using sentence-transformers."""
-
-    def __init__(
-        self,
-        model: str = "sentence-transformers/all-MiniLM-L6-v2",
-        device: Optional[str] = None,
-        normalize: bool = True,
-    ):
-        self.model_name = model
-        self.normalize = normalize
-
-        if device is None:
-            if os.getenv("CUDA_VISIBLE_DEVICES"):
-                device = "cuda"
-            else:
-                try:
-                    from domains.training.slonet_compat import torch as _torch
-                    _mps_ok = hasattr(_torch, "backends") and _torch.backends.mps.is_available()
-                except Exception:
-                    _mps_ok = False
-                if _mps_ok:
-                    device = "mps"
-                else:
-                    device = "cpu"
-
-        try:
-            from sentence_transformers import SentenceTransformer
-            self.model = SentenceTransformer(model, device=device)
-            logger.info("Loaded sentence-transformers: %s on %s", model, device, extra={"tag": "INF"})
-        except ImportError:
-            raise ImportError(
-                "pip install sentence-transformers\n"
-                "Or use: Embedder(provider='in_memory')"
-            )
-
-    def embed(self, texts: Union[str, List[str]]) -> List[List[float]]:
-        if isinstance(texts, str):
-            texts = [texts]
-
-        embeddings = self.model.encode(
-            texts,
-            normalize_embeddings=self.normalize,
-            convert_to_numpy=True,
-        )
-
-        return embeddings.tolist()
-
-    def get_dimension(self) -> int:
-        return self.model.get_sentence_embedding_dimension()
-
-    def get_model_name(self) -> str:
-        return self.model_name
-
-
 class OpenAIEmbedder(BaseEmbedder):
     """OpenAI embeddings (ada, text-embedding-3-small, text-embedding-3-large)."""
 
@@ -201,65 +141,6 @@ class OpenAIEmbedder(BaseEmbedder):
         return self.model_name
 
 
-class HuggingFaceEmbedder(BaseEmbedder):
-    """Embeddings from HuggingFace models."""
-
-    def __init__(
-        self,
-        model: str = "sentence-transformers/all-MiniLM-L6-v2",
-        token: Optional[str] = None,
-    ):
-        self.model_name = model
-
-        try:
-            from transformers import AutoTokenizer, AutoModel
-            from domains.training.slonet_compat import torch
-
-            self.tokenizer = AutoTokenizer.from_pretrained(model, token=token)
-            self.model = AutoModel.from_pretrained(model, token=token)
-            self.model.eval()
-
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            self.model.to(device)
-            self.device = device
-
-        except ImportError:
-            raise ImportError("pip install transformers torch")
-
-    def embed(self, texts: Union[str, List[str]]) -> List[List[float]]:
-        if isinstance(texts, str):
-            texts = [texts]
-
-        from domains.training.slonet_compat import torch
-
-        with torch.no_grad():
-            inputs = self.tokenizer(
-                texts,
-                padding=True,
-                truncation=True,
-                return_tensors="pt",
-            )
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
-
-            outputs = self.model(**inputs)
-
-            attention_mask = inputs["attention_mask"]
-            token_embeddings = outputs.last_hidden_state
-
-            input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
-            embeddings = torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
-
-            embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
-
-            return embeddings.cpu().numpy().tolist()
-
-    def get_dimension(self) -> int:
-        return self.model.config.hidden_size
-
-    def get_model_name(self) -> str:
-        return self.model_name
-
-
 class Embedder:
     """
     Unified embedding interface.
@@ -280,22 +161,9 @@ class Embedder:
     ):
         provider = provider or get_config().embedding.provider
 
-        if provider == "sentence_transformers" or provider == "st":
-            try:
-                model_name = model or "sentence-transformers/all-MiniLM-L6-v2"
-                self._impl = SentenceTransformerEmbedder(model_name, **kwargs)
-            except ImportError:
-                logger.warning("sentence-transformers not available, using in-memory", extra={"tag": "INF"})
-                self._impl = InMemoryEmbedder(dimension=dimension)
-
-        elif provider == "openai":
+        if provider == "openai":
             model_name = model or "text-embedding-3-small"
             self._impl = OpenAIEmbedder(api_key=api_key, model=model_name)
-
-        elif provider == "huggingface" or provider == "hf":
-            model_name = model or "sentence-transformers/all-MiniLM-L6-v2"
-            self._impl = HuggingFaceEmbedder(model=model_name, token=api_key)
-
         else:
             self._impl = InMemoryEmbedder(dimension=dimension)
 
@@ -372,9 +240,7 @@ __all__ = [
     "Embedder",
     "BaseEmbedder",
     "InMemoryEmbedder",
-    "SentenceTransformerEmbedder",
     "OpenAIEmbedder",
-    "HuggingFaceEmbedder",
     "BatchEmbedder",
     "EmbeddingProvider",
     "EmbeddingResult",

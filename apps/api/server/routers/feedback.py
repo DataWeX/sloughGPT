@@ -3,26 +3,33 @@ Feedback Router - MVC View layer
 """
 from fastapi import APIRouter, HTTPException, Request
 
-from schemas.feedback import FeedbackRequest, FeedbackResponse, FeedbackStats, ConversationCreate, ConversationUpdate, ConversationResponse
+from schemas.feedback import FeedbackRequest
+from pydantic import BaseModel, Field, FeedbackResponse, FeedbackStats, ConversationCreate, ConversationUpdate, ConversationResponse
 from schemas.common import success_response
 from controllers.feedback import get_feedback_controller
+
+class WorkflowFeedbackRequest(BaseModel):
+    """Schema for workflow feedback recording."""
+    conversation_id: str = Field(..., max_length=256)
+    rating: str = Field(..., pattern=r'^(thumbs_up|thumbs_down|neutral)$')
+    assistant_response: str = Field('', max_length=10000)
+    user_message: str = Field('', max_length=10000)
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
 
 
 @router.post("/workflow-record")
-async def record_feedback_workflow(req: Request):
+async def record_feedback_workflow(req: WorkflowFeedbackRequest):
     """Record user feedback (workflow variant used by frontend feedback store)."""
     from controllers.feedback import get_feedback_controller
-    body = await req.json()
     ctrl = get_feedback_controller()
     feedback = ctrl.record_feedback(
-        message_id=body.get("conversation_id", "unknown"),
-        rating=body.get("rating", "thumbs_up"),
-        session_id=body.get("conversation_id"),
-        message_content=body.get("assistant_response", ""),
-        user_message=body.get("user_message"),
-        assistant_response=body.get("assistant_response"),
+        message_id=req.conversation_id,
+        rating=req.rating,
+        session_id=req.conversation_id,
+        message_content=req.assistant_response,
+        user_message=req.user_message,
+        assistant_response=req.assistant_response,
     )
     return success_response(data={
         "feedback_id": feedback.get("feedback_id", ""),

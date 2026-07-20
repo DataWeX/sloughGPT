@@ -79,14 +79,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const closeMobileNav = () => setMobileNavOpen(false)
 
   return (
-    <div className="flex h-dvh max-h-dvh flex-col bg-background pt-[env(safe-area-inset-top)]">
-        {apiStatus === 'reloading' && (
-          <div className="shrink-0 flex items-center justify-center gap-2 h-7 bg-warning/15 border-b border-warning/30 text-[11px] text-warning font-medium">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />
-            Backend restarting — reconnecting…
-          </div>
-        )}
-        <div className="flex min-h-0 flex-1 lg:flex-row">
+    <div className="sl-app-shell">
+      {/* Restarting banner */}
+      {apiStatus === 'reloading' && (
+        <div className="sl-app-banner">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />
+          Backend restarting — reconnecting…
+        </div>
+      )}
+
+      {/* Main horizontal split: sidebar + content */}
+      <div className="sl-app-body">
+        {/* Skip link */}
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:rounded-md focus:border focus:border-border focus:bg-card focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-ring"
@@ -94,7 +98,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           Skip to main content
         </a>
 
-        <header className="flex shrink-0 items-center gap-2 border-b px-3 h-11 sm:h-12 lg:hidden">
+        {/* Mobile header */}
+        <header className="sl-app-mobile-header">
           <Button
             variant="menu"
             size="icon"
@@ -114,57 +119,58 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </Link>
         </header>
 
-        <div className="hidden h-full shrink-0 lg:flex">
+        {/* Desktop sidebar */}
+        <div className="sl-app-sidebar-desktop">
           <Sidebar variant="desktop" />
         </div>
 
+        {/* Main content area */}
         <main
           id="main-content"
-          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+          className="sl-app-main"
           tabIndex={-1}
         >
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
+          <div className="sl-app-content">{children}</div>
           <StatusBar />
         </main>
-        </div>
-
-        {portalMounted && createPortal(
-          <>
-            <div
-              aria-hidden="true"
-              className={cn(
-                'fixed inset-0 z-[100] bg-black/45 backdrop-blur-sm lg:hidden transition-opacity duration-200',
-                mobileNavOpen ? 'opacity-100' : 'opacity-0 pointer-events-none',
-              )}
-            />
-            <div
-              id="mobile-navigation-drawer"
-              role="dialog"
-              aria-modal="true"
-              aria-label="Main navigation"
-              className={cn(
-                'fixed inset-y-0 left-0 z-[110] flex w-[min(var(--sidebar-width),min(18rem,92vw))] max-w-full outline-none lg:hidden',
-                'shadow-[0.25rem_0_1.5rem_-0.25rem_rgba(0,0,0,0.28)]',
-                'transition-all duration-200',
-                mobileNavOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none',
-                'scrollbar-hide',
-              )}
-            >
-              <span className="sr-only">Main navigation</span>
-              <span className="sr-only">Primary navigation for the sloughGPT console. Choose a section or close this panel.</span>
-              <Sidebar variant="drawer" onClose={closeMobileNav} onNavigate={closeMobileNav} />
-            </div>
-          </>,
-          document.body,
-        )}
-
-        <ErrorPanel />
-        <RadixToastContainer toasts={toasts} onDismiss={dismissToast} onClearAll={clearToasts} />
-        <KeyboardShortcutsModal open={showShortcuts} onOpenChange={setShowShortcuts} />
-        <DebugOverlay open={showDebug} onOpenChange={setShowDebug} />
-        <CommandPalette />
-        <WhatsNewDialog open={showWhatsNew} onOpenChange={setShowWhatsNew} />
-        <OutputPanel open={showOutput} onClose={() => setShowOutput(false)} />
       </div>
+
+      {/* Mobile drawer portal */}
+      {portalMounted && createPortal(
+        <>
+          <div
+            aria-hidden="true"
+            className={cn(
+              'sl-app-drawer-backdrop',
+              mobileNavOpen ? 'opacity-100' : 'opacity-0 pointer-events-none',
+            )}
+          />
+          <div
+            id="mobile-navigation-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Main navigation"
+            className={cn(
+              'sl-app-drawer',
+              mobileNavOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none',
+            )}
+          >
+            <span className="sr-only">Main navigation</span>
+            <span className="sr-only">Primary navigation for the sloughGPT console. Choose a section or close this panel.</span>
+            <Sidebar variant="drawer" onClose={closeMobileNav} onNavigate={closeMobileNav} />
+          </div>
+        </>,
+        document.body,
+      )}
+
+      {/* Overlays */}
+      <ErrorPanel />
+      <RadixToastContainer toasts={toasts} onDismiss={dismissToast} onClearAll={clearToasts} />
+      <KeyboardShortcutsModal open={showShortcuts} onOpenChange={setShowShortcuts} />
+      <DebugOverlay open={showDebug} onOpenChange={setShowDebug} />
+      <CommandPalette />
+      <WhatsNewDialog open={showWhatsNew} onOpenChange={setShowWhatsNew} />
+      <OutputPanel open={showOutput} onClose={() => setShowOutput(false)} />
+    </div>
   )
 }

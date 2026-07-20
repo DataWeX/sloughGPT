@@ -102,14 +102,14 @@ class ModelRegistry:
         provider: Any,
         make_default: bool = False,
     ) -> None:
-        """Register an InferenceEngine-backed provider.
+        """Register an inference engine provider.
 
         The provider is expected to implement ``get_metrics_snapshot()``
-        and ``metadata`` (e.g. ``InferenceEngineProvider``).
+        and ``metadata``.
 
         Args:
             engine_id: Unique identifier for this engine.
-            provider: The InferenceEngineProvider instance.
+            provider: The provider instance (e.g. ``SloNetChatProvider``).
             make_default: If True, this becomes the default.
         """
         with self._lock:

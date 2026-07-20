@@ -1,8 +1,8 @@
 """
-Tests for unified ModelLoader.
+Tests for SloNet ModelLoader.
 
-Tests the common interface for loading both SloNet and HuggingFace models
-through a single loader, including detection, verification, and quantization.
+Tests the torch-free model loading via .slnc format, including detection,
+conversion, verification, and the singleton accessor.
 """
 
 from pathlib import Path
@@ -40,7 +40,7 @@ class TestLoadResult:
         result = LoadResult(
             success=False,
             model_id="missing",
-            model_type="huggingface",
+            model_type="slonet",
             error="Model not found",
         )
         assert not result.success
@@ -74,137 +74,59 @@ class TestModelLoader:
         result = loader._try_load_slnc("nonexistent", "cpu", False, 8, "symmetric")
         assert result is None
 
-    def test_try_load_hf_returns_error_when_import_fails(self, tmp_path):
+    def test_load_returns_error_when_no_slnc(self, tmp_path):
+        """load() returns error result when no .slnc file found."""
         loader = ModelLoader(models_dir=tmp_path)
-        # HF loading requires torch/transformers which may not be installed
-        result = loader._try_load_hf("nonexistent-model", "cpu", False, 8, "symmetric")
-        # Should return error result, not crash
+        result = loader.load("nonexistent-model")
         assert not result.success
-        assert result.error is not None
+        assert result.model_type == "slonet"
+        assert "No .slnc file" in result.error
 
-    def test_resolve_device_returns_cpu_when_no_torch(self, tmp_path):
-        loader = ModelLoader(models_dir=tmp_path)
-        with patch.dict("sys.modules", {"torch": None}):
-            device = loader._resolve_device()
-            assert device == "cpu"
+    def test_verify_model_passes_for_valid_model(self):
+        """_verify_model returns True for a model that forward passes."""
+        mock_model = MagicMock()
+        mock_model.forward.return_value = np.zeros((1, 10))
 
-    def test_walk_hf_linears_finds_linear_layers(self, tmp_path):
-        """Test walk_hf_linears finds all nn.Linear layers."""
-        try:
-            import torch
-            import torch.nn as nn
-
-            # Create a simple model with Linear layers
-            class SimpleModel(nn.Module):
-                def __init__(self):
-                    super().__init__()
-                    self.embed = nn.Embedding(100, 32)
-                    self.attn = nn.Linear(32, 32)
-                    self.ff = nn.Linear(32, 100)
-
-                def forward(self, x):
-                    return self.ff(self.attn(self.embed(x)))
-
-            model = SimpleModel()
-            loader = ModelLoader(models_dir=tmp_path)
-            layers = loader.walk_hf_linears(model)
-
-            assert "attn" in layers
-            assert "ff" in layers
-            assert "embed" not in layers  # Embedding is not Linear
-            assert layers["attn"].weight.shape == (32, 32)
-            assert layers["ff"].weight.shape == (100, 32)
-        except ImportError:
-            pytest.skip("torch not installed")
-
-    def test_walk_hf_linears_handles_nested_modules(self, tmp_path):
-        """Test walk_hf_linears finds Linear layers in nested modules."""
-        try:
-            import torch
-            import torch.nn as nn
-
-            class NestedModel(nn.Module):
-                def __init__(self):
-                    super().__init__()
-                    self.layer1 = nn.ModuleDict({
-                        "attn": nn.Linear(16, 16),
-                        "ff": nn.Linear(16, 16),
-                    })
-                    self.layer2 = nn.Linear(16, 16)
-
-                def forward(self, x):
-                    return self.layer2(self.layer1["ff"](self.layer1["attn"](x)))
-
-            model = NestedModel()
-            loader = ModelLoader(models_dir=tmp_path)
-            layers = loader.walk_hf_linears(model)
-
-            assert "layer1.attn" in layers
-            assert "layer1.ff" in layers
-            assert "layer2" in layers
-            assert len(layers) == 3
-        except ImportError:
-            pytest.skip("torch not installed")
-
-
-class TestWalkHfLinearsFunction:
-    """Test the standalone walk_hf_linears function in quantization module."""
-
-    def test_walk_hf_linears_importable(self):
-        from domains.infrastructure.quantization import walk_hf_linears
-        assert callable(walk_hf_linears)
-
-    def test_walk_hf_linears_finds_layers(self):
-        try:
-            import torch
-            import torch.nn as nn
-            from domains.infrastructure.quantization import walk_hf_linears
-
-            class TestModel(nn.Module):
-                def __init__(self):
-                    super().__init__()
-                    self.q_proj = nn.Linear(32, 32)
-                    self.k_proj = nn.Linear(32, 32)
-                    self.v_proj = nn.Linear(32, 32)
-
-                def forward(self, x):
-                    return self.v_proj(self.k_proj(self.q_proj(x)))
-
-            model = TestModel()
-            layers = walk_hf_linears(model)
-
-            assert "q_proj" in layers
-            assert "k_proj" in layers
-            assert "v_proj" in layers
-            assert len(layers) == 3
-        except ImportError:
-            pytest.skip("torch not installed")
-
-
-class TestFlashAttention:
-    """Tests for flash attention resolution."""
-
-    def test_returns_empty_when_disabled(self):
-        """_resolve_attn_kwargs returns {} when use_flash_attention=False."""
-        from domains.infrastructure.model_loader import ModelLoader
+        result = LoadResult(
+            success=True,
+            model_id="test",
+            model_type="slonet",
+            model=mock_model,
+        )
         loader = ModelLoader()
-        kwargs = loader._resolve_attn_kwargs()
-        assert kwargs == {}
+        assert loader._verify_model(result) is True
+        assert result.metrics["verified"] is True
 
-    def test_returns_empty_without_cuda(self):
-        """_resolve_attn_kwargs returns {} on non-CUDA systems."""
-        from domains.infrastructure.config import get_config
-        from domains.infrastructure.model_loader import ModelLoader
-        cfg = get_config()
-        old = cfg.model.use_flash_attention
-        cfg.model.use_flash_attention = True
-        try:
-            loader = ModelLoader()
-            kwargs = loader._resolve_attn_kwargs()
-            # No CUDA on this machine → empty
-            assert kwargs == {}
-        finally:
-            cfg.model.use_flash_attention = old
+    def test_verify_model_fails_for_none_output(self):
+        """_verify_model returns False when model returns None."""
+        mock_model = MagicMock()
+        mock_model.forward.return_value = None
+
+        result = LoadResult(
+            success=True,
+            model_id="test",
+            model_type="slonet",
+            model=mock_model,
+        )
+        loader = ModelLoader()
+        assert loader._verify_model(result) is False
+        assert result.success is False
+        assert "empty output" in result.error
+
+    def test_verify_model_fails_on_exception(self):
+        """_verify_model returns False when model raises."""
+        mock_model = MagicMock()
+        mock_model.forward.side_effect = RuntimeError("boom")
+
+        result = LoadResult(
+            success=True,
+            model_id="test",
+            model_type="slonet",
+            model=mock_model,
+        )
+        loader = ModelLoader()
+        assert loader._verify_model(result) is False
+        assert result.metrics["verified"] is False
 
 
 class TestModelLoaderSingleton:

@@ -155,10 +155,189 @@ html {
     background-color: rgb(var(--background));
   }
 
-  .sl-page {
-    @apply min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4 md:p-6 lg:p-8 text-foreground;
-    background-color: rgb(var(--background));
+/* ── App Shell Layout ────────────────────────────────────── */
+/*
+ * Container hierarchy for the web application:
+ *   sl-app-shell    → fills viewport, contains everything
+ *   sl-app-body     → horizontal split: sidebar | main
+ *   sl-app-main     → content column (scrolls internally)
+ *   sl-app-content  → inner wrapper for page content
+ *
+ * Mobile (< lg): sidebar becomes a drawer overlay
+ * Desktop (≥ lg): sidebar is fixed-width, main fills remaining space
+ */
+.sl-app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-height: 100dvh;
+  background-color: rgb(var(--background));
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  overflow: hidden;
+}
+
+.sl-app-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+
+.sl-app-main {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sl-app-content {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Mobile header — visible below lg, fixed height */
+.sl-app-mobile-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
+  height: var(--app-mobile-header-h);
+  min-height: var(--app-mobile-header-h);
+  flex-shrink: 0;
+  border-bottom: 1px solid color-mix(in srgb, rgb(var(--border)) 50%, transparent);
+  background-color: rgb(var(--background));
+}
+@media (min-width: 1024px) {
+  .sl-app-mobile-header {
+    display: none;
   }
+}
+
+/* Desktop sidebar — hidden below lg */
+.sl-app-sidebar-desktop {
+  display: none;
+  height: 100%;
+  flex-shrink: 0;
+}
+@media (min-width: 1024px) {
+  .sl-app-sidebar-desktop {
+    display: flex;
+  }
+}
+
+/* Restarting banner */
+.sl-app-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  height: 1.75rem;
+  background-color: color-mix(in srgb, rgb(var(--warning)) 15%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, rgb(var(--warning)) 30%, transparent);
+  font-size: 11px;
+  font-weight: 500;
+  color: rgb(var(--warning));
+}
+
+/* Mobile drawer backdrop */
+.sl-app-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background-color: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: opacity 200ms ease;
+}
+@media (min-width: 1024px) {
+  .sl-app-drawer-backdrop {
+    display: none;
+  }
+}
+
+/* Mobile drawer panel */
+.sl-app-drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 110;
+  display: flex;
+  width: min(var(--sidebar-width), min(18rem, 92vw));
+  max-width: 100%;
+  outline: none;
+  box-shadow: 0.25rem 0 1.5rem -0.25rem rgba(0, 0, 0, 0.28);
+  transition: transform 200ms ease;
+  overscroll-behavior: contain;
+}
+.sl-app-drawer::-webkit-scrollbar {
+  display: none;
+}
+.sl-app-drawer {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+@media (min-width: 1024px) {
+  .sl-app-drawer {
+    display: none;
+  }
+}
+
+/*
+ * sl-page — standard page content wrapper
+ * Used by non-chat pages (settings, models, training, etc.)
+ * Provides scroll containment and responsive padding.
+ */
+.sl-page {
+  @apply min-h-0 flex-1 overflow-y-auto overscroll-contain text-foreground;
+  padding: 0.75rem;
+  background-color: rgb(var(--background));
+}
+@media (min-width: 640px) {
+  .sl-page { padding: 1rem; }
+}
+@media (min-width: 768px) {
+  .sl-page { padding: 1.5rem; }
+}
+@media (min-width: 1024px) {
+  .sl-page { padding: 2rem; }
+}
+
+/*
+ * sl-main-container — constrains content width on large screens
+ * Use inside sl-page for pages that shouldn't stretch full width.
+ */
+.sl-main-container {
+  width: 100%;
+  max-width: var(--content-max-width, 72rem);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/*
+ * sl-card-grid — responsive card grid
+ * Auto-fills cards based on available width.
+ */
+.sl-card-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 640px) {
+  .sl-card-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 1024px) {
+  .sl-card-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (min-width: 1280px) {
+  .sl-card-grid { grid-template-columns: repeat(4, 1fr); }
+}
 
   /**
    * Chat message list — flat notebook canvas (matches @man/strui).

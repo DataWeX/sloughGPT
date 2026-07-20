@@ -282,29 +282,12 @@ class StartupOrchestrator:
                         make_default=True, generate_timeout=120.0,
                     )
 
-                inference_engine = None
-                if server_state.model is not None and server_state.tokenizer is not None:
-                    try:
-                        from domains.inference.engine import InferenceEngine
-                        inference_engine = InferenceEngine(
-                            model=server_state.model, tokenizer=server_state.tokenizer, device="cpu",
-                        )
-                    except Exception as e:
-                        logger.warning("Failed to create InferenceEngine: %s", e, extra={"tag": "START"})
-
                 slonet_id = cfg.autoload_model if cfg.autoload_model else None
                 # Pass pre-loaded provider to avoid duplicate SLNC load (~6s)
                 preloaded = getattr(server_state, 'provider', None)
-                # When preloaded provider exists, don't pass hf_model — the
-                # SloNet model is not an HF model; passing it creates a ghost
-                # hf-default provider that wraps the wrong model type.
                 setup_providers(
-                    hf_model=None if preloaded else server_state.model,
-                    hf_tokenizer=None if preloaded else server_state.tokenizer,
-                    hf_model_id=server_state.model_type,
-                    slonet_hf_id=None,
+                    slonet_hf_id=server_state.model_type,
                     slonet_provider=preloaded,
-                    inference_engine=inference_engine,
                     model_registry=registry,
                     quantize=cfg.quantize_slonet,
                     quant_bits=cfg.quant_bits,

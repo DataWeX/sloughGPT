@@ -1,5 +1,5 @@
-import { logger } from '@/lib/dev-log'
 'use client'
+import { logger } from '@/lib/dev-log'
 
 import { useState, useEffect, useCallback } from 'react'
 import { multimodalController, type MultimodalCapabilities } from '@/lib/multimodal-controller'

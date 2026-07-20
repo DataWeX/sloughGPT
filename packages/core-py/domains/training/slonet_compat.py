@@ -868,11 +868,22 @@ def save(obj, f, **kw):
         pass
 
     if has_tensors:
-        import pickle
+        import numpy as np
         # Convert SloNet Tensors → numpy arrays for serialization
         obj_clean = _walk_replace(obj, lambda v: v.data if isinstance(v, (Tensor, _Tensor)) else v)
-        with open(f, 'wb') as fh:
-            pickle.dump(obj_clean, fh, protocol=pickle.HIGHEST_PROTOCOL)
+        # Flatten dict of arrays into numpy savez format
+        arrays = {}
+        def _flatten(v, prefix=""):
+            if isinstance(v, dict):
+                for k, val in v.items():
+                    _flatten(val, f"{prefix}{k}." if prefix else f"{k}.")
+            elif isinstance(v, (np.ndarray,)):
+                arrays[prefix.rstrip(".")] = v
+            elif isinstance(v, (int, float, str, bool)):
+                arrays[prefix.rstrip(".")] = np.array(v)
+        _flatten(obj_clean)
+        arrays["_meta_json"] = np.array(json.dumps({"format": "numpy_flat"}, default=str))
+        np.savez_compressed(str(f), **arrays)
     else:
         import json
         with open(f, 'w') as fh:
@@ -889,6 +900,7 @@ def load(f, **kw):
     needed in the SloNet runtime.
     """
     import numpy as np
+    import os
 
     if _is_sou_file(f):
         from domains.training.slonet import import_from_sou
@@ -897,14 +909,28 @@ def load(f, **kw):
     if _is_npz_file(f):
         return dict(np.load(f))
 
-    # Try pickle first (.pt or generic binary)
+    # Try numpy format first (.pt saved as numpy, or generic binary)
     try:
-        import pickle
-        with open(f, 'rb') as fh:
-            data = pickle.load(fh)
-        # Convert numpy arrays back to SloNet Tensors
-        return _walk_replace(data, lambda v: Tensor(v, requires_grad=False) if isinstance(v, np.ndarray) else v)
-    except (pickle.UnpicklingError, EOFError, ModuleNotFoundError, AttributeError):
+        import numpy as np
+        file_size = os.path.getsize(f)
+        if file_size > 500 * 1024 * 1024:  # >500MB — reject suspiciously large files
+            raise ValueError(f"Checkpoint too large ({file_size} bytes) — possible malicious file")
+        data = np.load(str(f), allow_pickle=False)
+        if "_meta_json" in data.files:
+            # Reconstruct nested dict from flat keys
+            meta = json.loads(str(data["_meta_json"]))
+            result = {}
+            for k in data.files:
+                if k == "_meta_json":
+                    continue
+                parts = k.split(".")
+                d = result
+                for part in parts[:-1]:
+                    d = d.setdefault(part, {})
+                d[parts[-1]] = data[k]
+            # Convert numpy arrays back to SloNet Tensors
+            return _walk_replace(result, lambda v: Tensor(v, requires_grad=False) if isinstance(v, np.ndarray) else v)
+    except Exception:
         pass
 
     # Fallback to JSON

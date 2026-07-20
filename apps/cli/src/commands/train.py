@@ -823,7 +823,6 @@ def cmd_demo(args):
     from domains.cognitive.rag import ProductionRAG
     from domains.cognitive.knowledge_graph_v2 import KnowledgeGraph
     from domains.training.ewc import EwcContinualLearner
-    from domains.inference.optimizer import KVCache
 
     if args.component in ("all", "rag"):
         printer.section("RAG - Document Retrieval")
@@ -849,8 +848,7 @@ def cmd_demo(args):
 
     if args.component in ("all", "inference"):
         printer.section("Inference - KV Cache")
-        cache = KVCache(num_layers=2, num_heads=2, head_dim=64, max_length=100)
-        printer.key_value("Max Tokens", str(cache.max_length))
+        printer.key_value("Status", "KVCache removed — SloNet handles caching internally")
 
     printer.blank()
     printer.success("Demo complete!")

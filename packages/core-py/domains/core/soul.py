@@ -143,7 +143,6 @@ class SloEngine:
         self._reasoning_engine = None
         self._sentiment_analyzer = None
         self._hebbian_connections: Dict[str, Dict[str, float]] = {}
-        self._inference_optimizer = None
         self._grounding: Optional[Any] = None
         self._hd_memory: Optional["HDMemoryStore"] = None
         self._semantic_cache: Optional["SemanticCache"] = None  # noqa: F821
@@ -995,27 +994,7 @@ class SloEngine:
             Optimization status
         """
         try:
-            from domains.inference.optimizer import InferenceOptimizer, InferenceConfig
-
-            config = InferenceConfig(
-                use_kv_cache=use_kv_cache,
-                use_flash_attention=use_flash_attention,
-                use_quantization=use_quantization,
-                quantization_bits=quantization_bits,
-            )
-
-            self._inference_optimizer = InferenceOptimizer(
-                model=self._model,
-                config=config,
-                device=self._device,
-            )
-
-            return {
-                "success": True,
-                "kv_cache": use_kv_cache,
-                "flash_attention": use_flash_attention,
-                "quantization": use_quantization if use_quantization else f"{quantization_bits}bit",
-            }
+            return {"success": False, "error": "optimize_inference removed — SloNet is the sole inference engine"}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
@@ -1036,26 +1015,7 @@ class SloEngine:
         Returns:
             Benchmark results
         """
-        if not hasattr(self, "_inference_optimizer") or not self._inference_optimizer:
-            return {"error": "Run optimize_inference() first"}
-
-        try:
-            from domains.inference.optimizer import InferenceBenchmark
-
-            benchmark = InferenceBenchmark(self._inference_optimizer)
-
-            # Create dummy prompt as numpy array
-            prompt = np.random.randint(0, 1000, (1, prompt_tokens)).astype(np.int64)
-
-            results = benchmark.run_benchmark(
-                prompt="benchmark",
-                num_tokens=generated_tokens,
-                num_runs=num_runs,
-            )
-
-            return results
-        except Exception as e:
-            return {"error": str(e)}
+        return {"error": "benchmark_inference removed — SloNet is the sole inference engine"}
 
     def enable_grounding(self) -> Dict[str, bool]:
         """

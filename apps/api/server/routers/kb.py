@@ -12,6 +12,11 @@ import time
 
 from schemas.common import success_response
 
+import urllib.parse
+
+_BLOCKED_SCHEMES = {"file", "ftp", "data", "javascript", "vbscript"}
+_ALLOWED_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}  # blocked for SSRF
+
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
 
@@ -264,6 +269,13 @@ def list_topics():
 def ingest_url(req: UrlIngestRequest):
     """Ingest a URL into the knowledge base."""
     try:
+        parsed = urllib.parse.urlparse(req.url)
+        if parsed.scheme.lower() in _BLOCKED_SCHEMES:
+            raise HTTPException(status_code=400, detail=f"URL scheme '{parsed.scheme}' not allowed")
+        if parsed.hostname and parsed.hostname in _ALLOWED_HOSTS:
+            raise HTTPException(status_code=400, detail="Internal host URLs not allowed")
+        if not parsed.scheme or parsed.scheme.lower() not in ("http", "https"):
+            raise HTTPException(status_code=400, detail="Only HTTP/HTTPS URLs allowed")
         from domains.learner.knowledge import get_knowledge_ingestor
         ingestor = get_knowledge_ingestor()
         result = ingestor.ingest_url(req.url)
@@ -275,6 +287,8 @@ def ingest_url(req: UrlIngestRequest):
             "rejected": result.get("rejected", False),
             "reason": result.get("reason"),
         })
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {e}")
 

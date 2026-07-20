@@ -20,6 +20,10 @@ import httpx
 from schemas.common import success_response
 
 logger = logging.getLogger(__name__)
+class UnregisterDeviceRequest(BaseModel):
+    """Schema for unregistering a push notification device."""
+    token: str = Field(..., max_length=512)
+
 router = APIRouter(prefix="/mobile", tags=["mobile"])
 
 
@@ -653,7 +657,7 @@ async def register_device(body: DeviceRegistrationRequest):
 
 
 @router.post("/notifications/unregister")
-async def unregister_device(body: dict):
+async def unregister_device(body: UnregisterDeviceRequest):
     """
     Unregister a device from push notifications.
 
@@ -666,8 +670,7 @@ async def unregister_device(body: dict):
     from domains.mobile.notifications import get_notification_service
 
     svc = get_notification_service()
-    token = body.get("token", "")
-    removed = svc.unregister_device(token)
+    removed = svc.unregister_device(body.token)
     return {"status": "removed" if removed else "not_found"}
 
 

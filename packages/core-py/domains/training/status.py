@@ -379,7 +379,7 @@ class CheckpointManager:
         checkpoint_path: Path,
     ) -> Dict[str, Any]:
         """Load checkpoint from ``.npz``."""
-        data = np.load(str(checkpoint_path), allow_pickle=True)
+        data = np.load(str(checkpoint_path), allow_pickle=False)
         meta = json.loads(str(data["_meta_json"]))
         state_dict = {k: data[k] for k in data.files if k != "_meta_json"}
         if state_dict:
@@ -586,7 +586,7 @@ def load_checkpoint_npz(path: str) -> Dict[str, Any]:
     Returns:
         Dict with ``model_state_dict`` (numpy arrays) + metadata keys.
     """
-    data = np.load(path, allow_pickle=True)
+    data = np.load(path, allow_pickle=False)
     meta = json.loads(str(data["_meta_json"]))
     state_dict = {k: data[k] for k in data.files if k != "_meta_json"}
     meta["model_state_dict"] = state_dict

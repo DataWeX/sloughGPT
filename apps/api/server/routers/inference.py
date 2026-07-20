@@ -9,11 +9,6 @@ from pathlib import Path
 import json
 import logging
 import threading
-import contextlib
-try:
-    import torch
-except ImportError:
-    torch = None
 
 from schemas.common import success_response
 
@@ -42,6 +37,21 @@ import datetime
 import uuid
 import time
 from threading import Thread
+
+
+class CreateSessionRequest(BaseModel):
+    """Schema for creating a new chat session."""
+    session_id: Optional[str] = None
+    name: Optional[str] = Field(None, max_length=200)
+    model: Optional[str] = None
+
+class UpsertSessionRequest(BaseModel):
+    """Schema for updating session metadata."""
+    name: Optional[str] = Field(None, max_length=200)
+    archived: Optional[bool] = None
+    starred: Optional[bool] = None
+    pinned: Optional[bool] = None
+
 
 router = APIRouter(prefix="", tags=["inference"])
 
@@ -365,10 +375,6 @@ async def get_info():
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from host_metrics import sample_host_metrics_async
     import state as server_state
-    import torch
-
-    torch_ver = torch.__version__ if server_state._torch_available else None
-    cuda_avail = torch.cuda.is_available() if server_state._torch_available else False
 
     data = {
         "api_version": "1.0.0",
@@ -376,8 +382,6 @@ async def get_info():
             "type": server_state.model_type,
             "loaded": server_state.model is not None,
         },
-        "pytorch_version": torch_ver,
-        "cuda_available": cuda_avail,
     }
 
     mrl = server_state.model_request_logger
@@ -399,18 +403,6 @@ async def get_info():
     cs = server_state.current_soul
     if se is not None and getattr(se, 'is_loaded', False):
         data["soul_engine"] = se.get_stats()
-
-    if torch.cuda.is_available():
-        props = torch.cuda.get_device_properties(0)
-        total_b = int(props.total_memory)
-        used_b = int(torch.cuda.memory_allocated(0))
-        data["cuda"] = {
-            "device": torch.cuda.get_device_name(0),
-            "memory_total": total_b / 1e9,
-            "memory_total_bytes": total_b,
-            "memory_used_bytes": used_b,
-            "memory_percent": round(100.0 * used_b / max(total_b, 1), 2),
-        }
 
     return data
 
@@ -713,91 +705,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                     yield sse_error("chat", "ERROR", f"Generation failed: {e}")
                     return
             else:
-                # Fallback: direct HF model (no provider pipeline)
-                from controllers.models import get_models_controller
-                from transformers import TextIteratorStreamer
-
-                ctrl = get_models_controller()
-                if not ctrl._hf_model or not ctrl._tokenizer:
-                    yield sse_error("chat", "STREAMING", "No model loaded")
-                    return
-
-                system_prompt = frame.system_prompt if frame and frame.system_prompt else (req.system_prompt or "")
-                if req.knowledge:
-                    knowledge_str = "\n".join(f"- {k}" for k in req.knowledge)
-                    system_prompt = f"{system_prompt}\n\nUse the following context to answer:\n{knowledge_str}"
-                if knowledge_retrieved:
-                    k_text = "\n".join(f"- {f}" for f in knowledge_retrieved)
-                    system_prompt = f"{system_prompt}\n\nUse the following context to answer:\n{k_text}"
-                full_prompt = f"{system_prompt}\n{user_msg}" if system_prompt else user_msg
-
-                inputs = ctrl._tokenizer(full_prompt, return_tensors="pt")
-                input_ids_tensor = inputs["input_ids"].to(ctrl._hf_model.device)
-
-                streamer = TextIteratorStreamer(
-                    ctrl._tokenizer,
-                    skip_prompt=True,
-                    skip_special_tokens=True,
-                )
-
-                _thread_error = [None]
-
-                def run_generation():
-                    try:
-                        ctx = torch.no_grad() if torch is not None else contextlib.nullcontext()
-                        with ctx:
-                            ctrl._hf_model.generate(
-                                input_ids=input_ids_tensor,
-                                max_new_tokens=req.max_tokens,
-                                temperature=req.temperature,
-                                do_sample=req.temperature > 0,
-                                pad_token_id=ctrl._tokenizer.eos_token_id,
-                                streamer=streamer,
-                            )
-                    except Exception as e:
-                        _thread_error[0] = e
-                        logger.error("HF model.generate error: %s", e, exc_info=True, extra={"tag": "INF", "context": {"session_id": session_id, "error": str(e)}})
-
-                thread = Thread(target=run_generation)
-                thread.start()
-
-                full_response = ""
-                try:
-                    try:
-                        while thread.is_alive() or not streamer.text_queue.empty():
-                            if _thread_error[0] is not None:
-                                yield sse_error("chat", "ERROR", f"Generation failed: {_thread_error[0]}")
-                                return
-                            if await request.is_disconnected():
-                                cancel_event.set()
-                                logger.info("Client disconnected from chat stream (fallback, request)", extra={"tag": "INF", "context": {"session_id": session_id}})
-                                return
-                            try:
-                                text = streamer.text_queue.get(timeout=0.01)
-                            except Exception:
-                                await asyncio.sleep(0)
-                                continue
-                            if text == streamer.stop_signal:
-                                break
-                            if text:
-                                full_response += text
-                                yield sse_token("chat", text)
-
-                        thread.join(timeout=10)
-                        if thread.is_alive():
-                            logger.warning("Generation thread did not finish after 10s", extra={"tag": "INF", "context": {"session_id": session_id}})
-                            yield sse_error("chat", "ERROR", "Generation thread did not finish")
-                            return
-                    except GeneratorExit:
-                        cancel_event.set()
-                        logger.info("Client disconnected from chat stream (fallback)", extra={"tag": "INF", "context": {"session_id": session_id}})
-                        return
-                except Exception as e:
-                    logger.error("Streaming error: %s", e, exc_info=True, extra={"tag": "INF", "context": {"session_id": session_id, "error": str(e)}})
-                    yield sse_error("chat", "ERROR", f"Streaming failed: {e}")
-                    return
-
-                yield sse_token("chat", "", done=True)
+                yield sse_error("chat", "STREAMING", "No inference provider loaded")
 
             # Log response for benchmarking
             try:
@@ -1176,32 +1084,33 @@ async def get_current_session():
 
 
 @router.put("/chat/sessions/{session_id}")
-async def upsert_session(session_id: str, req: dict):
+async def upsert_session(session_id: str, req: UpsertSessionRequest):
     """Merge fields into existing session (preserves messages and metadata).
 
     Only safe metadata fields (name, archived, starred, pinned) can be updated.
     Protected fields (id, messages, created_at, updated_at) are ignored.
     """
-    _SAFE_FIELDS = {"name", "archived", "starred", "pinned"}
     existing = _get_session(session_id)
-    for key, value in req.items():
-        if key in _SAFE_FIELDS:
-            existing[key] = value
+    update_data = req.model_dump(exclude_none=True)
+    for key, value in update_data.items():
+        existing[key] = value
     _save_session(session_id, existing)
     await _flush_session_to_disk(session_id)
     return success_response(data={"session_id": session_id}, message="saved")
 
 
 @router.post("/chat/sessions")
-async def create_session(req: dict):
+async def create_session(req: CreateSessionRequest):
     """Create a new session.
 
-    Accepts any JSON body. Generates a session_id if not provided.
+    Generates a session_id if not provided.
     Saves to in-memory cache and queues async disk write.
     """
     try:
-        session_id = req.get("session_id") or str(uuid.uuid4())
-        _save_session(session_id, req)
+        session_id = req.session_id or str(uuid.uuid4())
+        session_data = req.model_dump(exclude_none=True)
+        session_data["session_id"] = session_id
+        _save_session(session_id, session_data)
         await _flush_session_to_disk(session_id)
         return success_response(data={"session_id": session_id}, message="created")
     except Exception as exc:

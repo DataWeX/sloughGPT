@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from typing import Optional, Any
 from datetime import datetime
 import json
+import re
 from pathlib import Path
 
 from schemas.common import success_response
@@ -14,6 +15,7 @@ router = APIRouter(prefix="/experiments", tags=["experiments"])
 
 REPO_ROOT = Path(__file__).parent.parent.parent.parent
 EXPERIMENTS_DIR = REPO_ROOT / "data" / "experiments"
+_VALID_EXP_ID = re.compile(r'^[a-zA-Z0-9_\-]+$')
 
 
 class ExperimentCreate(BaseModel):
@@ -43,8 +45,10 @@ async def list_experiments():
 @router.get("/{experiment_id}")
 async def get_experiment(experiment_id: str):
     """Get experiment details"""
-    path = EXPERIMENTS_DIR / experiment_id
-    if not path.exists():
+    if not _VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
+        raise HTTPException(status_code=400, detail="Invalid experiment ID")
+    path = (EXPERIMENTS_DIR / experiment_id).resolve()
+    if not path.exists() or not str(path).startswith(str(EXPERIMENTS_DIR.resolve())):
         raise HTTPException(status_code=404, detail="Experiment not found")
     return success_response(data={"id": experiment_id, "path": str(path)})
 
@@ -52,8 +56,10 @@ async def get_experiment(experiment_id: str):
 @router.get("/{experiment_id}/runs")
 async def get_experiment_runs(experiment_id: str):
     """Get runs for an experiment"""
-    path = EXPERIMENTS_DIR / experiment_id
-    if not path.exists():
+    if not _VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
+        raise HTTPException(status_code=400, detail="Invalid experiment ID")
+    path = (EXPERIMENTS_DIR / experiment_id).resolve()
+    if not path.exists() or not str(path).startswith(str(EXPERIMENTS_DIR.resolve())):
         raise HTTPException(status_code=404, detail="Experiment not found")
     runs = list(path.glob("*.json"))
     return success_response(data={"runs": len(runs)})
@@ -71,6 +77,8 @@ async def log_metric(experiment_id: str, metric_name: str, value: float, step: i
     import json, os, datetime
     log_dir = os.path.join(os.path.dirname(__file__), "..", "data", "experiments")
     os.makedirs(log_dir, exist_ok=True)
+    if not _VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
+        raise HTTPException(status_code=400, detail="Invalid experiment ID")
     entry = {"experiment_id": experiment_id, "metric": metric_name, "value": value, "step": step, "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()}
     with open(os.path.join(log_dir, f"{experiment_id}_metrics.jsonl"), "a") as f:
         f.write(json.dumps(entry) + "\n")
@@ -83,6 +91,8 @@ async def log_param(experiment_id: str, param_name: str, value: Any):
     import json, os, datetime
     log_dir = os.path.join(os.path.dirname(__file__), "..", "data", "experiments")
     os.makedirs(log_dir, exist_ok=True)
+    if not _VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
+        raise HTTPException(status_code=400, detail="Invalid experiment ID")
     entry = {"experiment_id": experiment_id, "param": param_name, "value": value, "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()}
     with open(os.path.join(log_dir, f"{experiment_id}_params.jsonl"), "a") as f:
         f.write(json.dumps(entry) + "\n")

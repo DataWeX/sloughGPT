@@ -1,5 +1,5 @@
-import { logger } from '@/lib/dev-log'
 'use client'
+import { logger } from '@/lib/dev-log'
 export const dynamic = 'force-dynamic'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'

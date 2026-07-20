@@ -15,7 +15,7 @@ ProviderRouter chains message processors + a text provider:
 Each MessageProcessor transforms messages before they reach the text provider.
 Processors are composable, swappable, and testable independently.
 
-HFModelProvider wraps a HuggingFace model+tokenizer as a ModelProvider.
+SloNetChatProvider is the primary torch-free inference engine.
 """
 
 import asyncio
@@ -24,7 +24,6 @@ from dataclasses import dataclass
 import logging
 
 from domains.inference.prompt_formatter import PromptFormatter
-from domains.training.slonet_compat import torch
 
 logger = logging.getLogger("slo.models.provider")
 
@@ -471,443 +470,11 @@ class SloTransformerProvider:
 
 
 # =============================================================================
-# HFModelProvider — wrap a HuggingFace model+tokenizer as a ModelProvider
-# =============================================================================
-
-class HFModelProvider:
-    """Wraps a HuggingFace model+tokenizer as a ModelProvider.
-
-    .. deprecated::
-        Use ``NumpyEngine`` (no PyTorch) or ``InferenceEngine`` (full features)
-        instead. This engine will be removed in a future version.
-
-    Args:
-        model: HuggingFace PreTrainedModel
-        tokenizer: HuggingFace PreTrainedTokenizer
-        model_id_str: Optional name (defaults to 'hf-model')
-        model_server: Optional ModelServer for lifecycle-managed generation.
-            If provided, the provider delegates ``model.generate()`` through the
-            server's semaphore, circuit breaker, timeout, and lifecycle hooks.
-    """
-
-    def __init__(self, model, tokenizer, model_id_str: str = "hf-model",
-                 model_server=None):
-        self._model = model
-        self._tokenizer = tokenizer
-        self._model_id_str = model_id_str
-        self._formatter = PromptFormatter(tokenizer=tokenizer)
-        self._server = model_server
-        self._quant_engine = None
-
-    def quantization_report(self) -> dict:
-        """Get quantization error report (if quantized).
-
-        Returns:
-            Dict with per-tensor error metrics and aggregate summary.
-            Empty dict if model was not quantized.
-        """
-        if self._quant_engine is None:
-            return {"quantized": False}
-        summary = self._quant_engine.summary()
-        return {
-            "quantized": True,
-            "bits": summary.get("bits", 0),
-            "mode": summary.get("mode", "symmetric"),
-            "summary": summary,
-            "per_tensor": self._quant_engine.error_report(),
-        }
-
-    @property
-    def model_id(self) -> str:
-        return self._model_id_str
-
-    @property
-    def capabilities(self):
-        return ModelCapabilities(chat=True, streaming=True, embedding=False, vision=False)
-
-    async def chat_stream(
-        self,
-        messages: List[ChatMessage],
-        max_tokens: int = 512,
-        temperature: float = 0.8,
-        cancel_event=None,
-        session_id: Optional[str] = None,
-        **kwargs,
-    ) -> AsyncIterator[str]:
-        prompt = self._formatter.messages_to_prompt(messages)
-
-        if self._server is not None:
-            is_first = True
-            async for text in self._server.generate_stream(
-                prompt=prompt,
-                max_new_tokens=max_tokens,
-                temperature=temperature,
-                top_p=kwargs.pop("top_p", 0.9),
-                cancel_event=cancel_event,
-                session_id=session_id,
-                **kwargs,
-            ):
-                cleaned = self._formatter.clean_chunk(text, first=is_first)
-                is_first = False
-                if cleaned:
-                    yield cleaned
-            return
-
-        # Fallback: direct generation without ModelServer
-        from transformers import TextIteratorStreamer
-        from threading import Thread
-        import queue
-        import asyncio
-
-        inputs = self._tokenizer(prompt, return_tensors="pt")
-        input_ids = inputs["input_ids"]
-
-        if hasattr(self._model, "device"):
-            input_ids = input_ids.to(self._model.device)
-
-        streamer = TextIteratorStreamer(
-            self._tokenizer,
-            skip_prompt=True,
-            skip_special_tokens=True,
-        )
-
-        gen_kwargs = dict(
-            input_ids=input_ids,
-            max_new_tokens=max_tokens,
-            do_sample=temperature > 0,
-            temperature=temperature,
-            top_p=kwargs.pop("top_p", 0.9),
-            top_k=kwargs.pop("top_k", 50),
-            repetition_penalty=kwargs.pop("repetition_penalty", 1.2),
-            pad_token_id=self._tokenizer.eos_token_id,
-            streamer=streamer,
-        )
-        gen_kwargs.update(kwargs)
-
-        _error: list[Exception] = []
-
-        def _generate():
-            try:
-                with torch.no_grad():
-                    self._model.generate(**gen_kwargs)  # noqa: F821
-            except Exception as e:
-                _error.append(e)
-
-        thread = Thread(target=_generate)
-        thread.start()
-        is_first = True
-        _gen_cancelled = False
-
-        try:
-            while thread.is_alive() or not streamer.text_queue.empty():
-                if _error:
-                    raise _error[0]
-                try:
-                    text = streamer.text_queue.get(timeout=0.01)
-                except queue.Empty:
-                    await asyncio.sleep(0)
-                    continue
-                if text == streamer.stop_signal:
-                    break
-                if text:
-                    yield self._formatter.clean_chunk(text, first=is_first)
-                    is_first = False
-        except GeneratorExit:
-            _gen_cancelled = True
-            raise
-        finally:
-            if _gen_cancelled and thread.is_alive():
-                try:
-                    streamer.stop()
-                except Exception:
-                    pass
-            thread.join(timeout=5)
-            if thread.is_alive():
-                logger.warning("Generation thread did not stop within 5s after cancel", extra={"tag": "INF"})
-
-        try:
-            del input_ids, gen_kwargs, streamer
-        except Exception:
-            pass
-
-    async def chat(
-        self,
-        messages: List[ChatMessage],
-        max_tokens: int = 512,
-        temperature: float = 0.8,
-        session_id: Optional[str] = None,
-        **kwargs,
-    ) -> str:
-        if self._server is not None:
-            prompt = self._formatter.messages_to_prompt(messages)
-            result = await self._server.generate(
-                prompt=prompt,
-                max_new_tokens=max_tokens,
-                temperature=temperature,
-                top_p=kwargs.pop("top_p", 0.9),
-                session_id=session_id,
-                **kwargs,
-            )
-            # Clean the raw output before returning
-            return self._formatter.clean_response(result.get("text", ""))
-        # Fallback: collect from streaming
-        chunks = []
-        async for chunk in self.chat_stream(messages, max_tokens, temperature, session_id=session_id, **kwargs):
-            chunks.append(chunk)
-        return "".join(chunks)
-
-    def embed(self, text: str) -> List[float]:
-        return []
-
-    @property
-    def metadata(self) -> Dict[str, Any]:
-        try:
-            total = sum(p.numel() for p in self._model.parameters())
-            return {
-                "model_id": self._model_id_str,
-                "parameters": total,
-                "device": str(self._model.device),
-            }
-        except Exception:
-            return {"model_id": self._model_id_str}
-
-
-# =============================================================================
-# InferenceEngineProvider — wraps InferenceEngine as a ModelProvider
-# =============================================================================
-
-
-class InferenceEngineProvider:
-    """ModelProvider backed by InferenceEngine (KV cache, streaming, sampling).
-
-    When a ``model_server`` is provided, delegates lifecycle management
-    (semaphore, circuit breaker, timeout, warmup) to the ``ModelServer``,
-    keeping this class as a thin message-formatting wrapper — same pattern
-    as ``HFModelProvider``.
-
-    Without a ``model_server``, falls back to direct ``InferenceEngine``
-    generation (no lifecycle management).
-
-    Args:
-        engine: InferenceEngine instance.
-        tokenizer: Optional tokenizer for chat template formatting.
-        model_id_str: Identifier for this provider.
-        model_server: Optional ``ModelServer`` for lifecycle management.
-    """
-
-    def __init__(
-        self,
-        engine,
-        tokenizer=None,
-        model_id_str: str = "inference-engine",
-        model_server=None,
-    ):
-        self._engine = engine
-        self._tokenizer = tokenizer
-        self._model_id_str = model_id_str
-        self._formatter = PromptFormatter(tokenizer=tokenizer)
-        self._server = model_server
-
-    @property
-    def model_id(self) -> str:
-        return self._model_id_str
-
-    @property
-    def capabilities(self):
-        return ModelCapabilities(chat=True, streaming=True, embedding=False, vision=False)
-
-    async def chat_stream(
-        self,
-        messages: List[ChatMessage],
-        max_tokens: int = 512,
-        temperature: float = 0.8,
-        session_id: Optional[str] = None,
-        **kwargs,
-    ) -> AsyncIterator[str]:
-        prompt = self._formatter.messages_to_prompt(messages)
-        cancel_event = kwargs.get("cancel_event")
-
-        if self._server is not None:
-            try:
-                is_first = True
-                async for text in self._server.generate_stream(
-                    prompt=prompt,
-                    max_new_tokens=max_tokens,
-                    temperature=temperature,
-                    top_p=kwargs.get("top_p", 0.9),
-                    top_k=kwargs.get("top_k", 40),
-                    cancel_event=cancel_event,
-                    session_id=session_id,
-                ):
-                    cleaned = self._formatter.clean_chunk(text, first=is_first)
-                    is_first = False
-                    if cleaned:
-                        yield cleaned
-                return
-            except Exception as e:
-                logger.warning(
-                    "ModelServer generate_stream failed, falling back to engine: %s", e,
-                    extra={"tag": "MODEL"},
-                )
-
-        # Fallback: direct engine generation (no lifecycle management).
-        # The engine's generate_stream() is async but has a synchronous
-        # token-by-token loop inside that blocks the event loop.  We run
-        # it in a thread and bridge tokens through a queue.
-        import asyncio as _aio
-        import queue as _q
-        from threading import Thread
-
-        _token_q: _q.Queue = _q.Queue()
-        _error_holder: list = []
-
-        async def _drain_engine():
-            """Consume engine's async generator in a new event loop in a thread."""
-            loop = _aio.new_event_loop()
-            try:
-                async def _inner():
-                    async for token in self._engine.generate_stream(
-                        prompt=prompt,
-                        max_new_tokens=max_tokens,
-                        temperature=temperature,
-                        top_p=kwargs.get("top_p", 0.9),
-                        top_k=kwargs.get("top_k", 40),
-                        cancel_event=cancel_event,
-                    ):
-                        _token_q.put(token)
-                    _token_q.put(None)  # sentinel
-                loop.run_until_complete(_inner())
-            except Exception as e:
-                _error_holder.append(e)
-                _token_q.put(None)  # unblock consumer
-            finally:
-                loop.close()
-
-        drain_thread = Thread(target=_drain_engine, daemon=True)
-        drain_thread.start()
-
-        is_first = True
-        while True:
-            try:
-                token = _token_q.get(timeout=0.5)
-            except _q.Empty:
-                if not drain_thread.is_alive():
-                    break
-                continue
-            if token is None:
-                break
-            if _error_holder:
-                raise _error_holder[0]
-            cleaned = self._formatter.clean_chunk(token, first=is_first)
-            is_first = False
-            if cleaned:
-                yield cleaned
-
-    async def chat(
-        self,
-        messages: List[ChatMessage],
-        max_tokens: int = 512,
-        temperature: float = 0.8,
-        session_id: Optional[str] = None,
-        **kwargs,
-    ) -> str:
-        import time as _time
-        t0 = _time.monotonic()
-        if self._server is not None:
-            try:
-                prompt = self._formatter.messages_to_prompt(messages)
-                result = await self._server.generate(
-                    prompt=prompt,
-                    max_new_tokens=max_tokens,
-                    temperature=temperature,
-                    top_p=kwargs.get("top_p", 0.9),
-                    top_k=kwargs.get("top_k", 40),
-                    session_id=session_id,
-                )
-                text = self._formatter.clean_response(result.get("text", ""))
-                try:
-                    from domains.infrastructure.metrics import get_metrics_collector
-                    get_metrics_collector().record_inference(_time.monotonic() - t0, tokens=result.get("tokens_generated", 0))
-                except Exception:
-                    pass
-                return text
-            except Exception as e:
-                logger.warning(
-                    "ModelServer generate failed, falling back to chat_stream: %s", e,
-                    extra={"tag": "MODEL"},
-                )
-
-        chunks = []
-        async for chunk in self.chat_stream(messages, max_tokens, temperature, session_id=session_id, **kwargs):
-            chunks.append(chunk)
-        try:
-            from domains.infrastructure.metrics import get_metrics_collector
-            get_metrics_collector().record_inference(_time.monotonic() - t0, tokens=len(chunks))
-        except Exception:
-            pass
-        return self._formatter.clean_response("".join(chunks))
-
-    def embed(self, text: str) -> List[float]:
-        return []
-
-    def get_metrics_snapshot(self) -> dict:
-        if self._server is not None:
-            return self._server.get_metrics_snapshot()
-        return {
-            "model_id": self._model_id_str,
-            "status": "ready",
-            "device": "cpu",
-        }
-
-    @property
-    def metadata(self) -> Dict[str, Any]:
-        try:
-            stats = self._engine.get_stats()
-            base = self.get_metrics_snapshot()
-            base["stats"] = stats
-            return base
-        except Exception:
-            return self.get_metrics_snapshot()
-
-
-# =============================================================================
 # setup_providers — wire up default vision→text routing
 # =============================================================================
 
 
-def discover_checkpoints(checkpoint_dir: str = "models/auto-training") -> List[Dict[str, Any]]:
-    """Scan a directory for trainable SloNet checkpoints.
-
-    Returns list of dicts with ``path``, ``name``, ``steps``, ``vocab_size``.
-    Only includes checkpoints with valid stoi/itos vocab.
-    """
-    from pathlib import Path
-    results = []
-    base = Path(checkpoint_dir)
-    if not base.exists():
-        return results
-    for pt in sorted(base.glob("*.pt"), key=lambda p: p.stat().st_mtime, reverse=True):
-        try:
-            ckpt = torch.load(str(pt), map_location="cpu", weights_only=False)
-            tok = ckpt.get("tokenizer", {})
-            stoi = tok.get("stoi") or ckpt.get("stoi")
-            if stoi is None:
-                continue
-            info = {
-                "path": str(pt),
-                "name": pt.stem,
-                "vocab_size": len(stoi),
-                "steps": ckpt.get("total_steps", 0),
-            }
-            results.append(info)
-        except Exception:
-            continue
-    return results
-
-
-def setup_providers(hf_model=None, hf_tokenizer=None, hf_model_id: str = "gpt2",
-                    inference_engine=None,
-                    slonet_hf_id: Optional[str] = None,
+def setup_providers(slonet_hf_id: Optional[str] = None,
                     slonet_provider=None,
                     model_registry=None,
                     quantize: bool = False,
@@ -915,39 +482,18 @@ def setup_providers(hf_model=None, hf_tokenizer=None, hf_model_id: str = "gpt2",
                     quant_mode: str = "symmetric") -> None:
     """Register all model providers and wire up the default router.
 
-    Call after the HF model is loaded. Registers:
-    - ``"hf-default"``: ``HFModelProvider`` wrapping the loaded model (if provided)
-    - ``"slonet-native"``: ``SloNetChatProvider`` (pure NumPy SloTransformer, no PyTorch runtime)
+    Registers:
+    - ``"slonet-native"``: ``SloNetChatProvider`` (pure NumPy, no PyTorch)
       (if ``slonet_hf_id`` given OR ``slonet_provider`` given)
-    - ``"inference-engine"``: ``InferenceEngineProvider`` wrapping the InferenceEngine
-      (if ``inference_engine`` given)
     - ``"default"``: ``ProviderRouter`` with VisionProcessor + text provider
-
-    The text provider is chosen in this priority order:
-    1. ``slonet-native`` (pure NumPy SloTransformer, no PyTorch at inference time)
-    2. ``inference-engine`` (InferenceEngine with KV cache)
-    3. ``hf-default`` (HuggingFace model)
 
     Args:
         slonet_provider: Optional pre-loaded ``SloNetChatProvider``. When provided,
             skips re-loading the SLNC file (saves ~6s). Takes priority over
             ``slonet_hf_id``.
-        model_registry: Optional ``ModelRegistry``. If provided, the ``hf-default``
-            provider uses the registered ModelServer for lifecycle-managed generation
-            (semaphore, timeout, circuit breaker, pre/post hooks).
+        model_registry: Optional ``ModelRegistry`` for lifecycle management.
     """
-    if hf_model is not None and hf_tokenizer is not None:
-        # Look up ModelServer from registry
-        model_server = model_registry.get(hf_model_id) if model_registry else None
-        hf_provider = HFModelProvider(
-            hf_model, hf_tokenizer,
-            model_id_str=hf_model_id,
-            model_server=model_server,
-        )
-        register_provider("hf-default", hf_provider)
-        logger.info("Registered hf-default provider: %s (model_server=%s)", hf_model_id, model_server is not None, extra={"tag": "MODEL"})
-
-    text_provider_name = "hf-default" if hf_model is not None else None
+    text_provider_name = None
 
     # Prefer pre-loaded provider (avoids duplicate SLNC load)
     if slonet_provider is not None:
@@ -976,29 +522,6 @@ def setup_providers(hf_model=None, hf_tokenizer=None, hf_model_id: str = "gpt2",
                         slonet_hf_id, f"int{quant_bits}" if quantize else "none", extra={"tag": "MODEL"})
         except Exception as e:
             logger.warning("Failed to load slonet-native provider %s: %s", slonet_hf_id, e, extra={"tag": "MODEL"})
-
-    if inference_engine is not None:
-        try:
-            # Look up ModelServer from registry (same pattern as hf-default)
-            model_server = model_registry.get("inference-engine") if model_registry else None
-            ie_provider = InferenceEngineProvider(
-                inference_engine,
-                tokenizer=hf_tokenizer,
-                model_id_str="inference-engine",
-                model_server=model_server,
-            )
-            register_provider("inference-engine", ie_provider)
-            if text_provider_name is None:
-                text_provider_name = "inference-engine"
-            # Register in ModelRegistry for lifecycle visibility
-            if model_registry is not None:
-                model_registry.register_engine(
-                    "inference-engine", ie_provider, make_default=False,
-                )
-                logger.info("Registered inference-engine in ModelRegistry", extra={"tag": "MODEL"})
-            logger.info("Registered inference-engine provider", extra={"tag": "MODEL"})
-        except Exception as e:
-            logger.warning("Failed to register inference-engine provider: %s", e, extra={"tag": "MODEL"})
 
     router = ProviderRouter()
     router.add_processor(VisionProcessor("multimodal"))
@@ -1121,7 +644,7 @@ class ProviderRouter:
         router = ProviderRouter()
         router.add_processor(VisionProcessor("multimodal"))
         router.add_processor(ToolUseProcessor())
-        router.set_text_provider("hf-default")
+        router.set_text_provider("slonet-native")
         register_provider("default", router)
     """
 
@@ -1286,8 +809,5 @@ __all__ = [
     "get_provider",
     "list_providers",
     "ProviderRouter",
-    "HFModelProvider",
-    "InferenceEngineProvider",
     "setup_providers",
-    "discover_checkpoints",
 ]
