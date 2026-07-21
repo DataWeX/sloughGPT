@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: e1394683 fix: useTrainingSession tests + remove deprecated constructor
+No active task. Last commit: fc733f9c chore: remove dead code (native inference dir, cloud_vector_store, unused imports)
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

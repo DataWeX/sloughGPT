@@ -13,6 +13,7 @@ Import pattern::
 from __future__ import annotations
 
 import os
+import secrets
 import multiprocessing
 from dataclasses import dataclass, field
 
@@ -79,7 +80,7 @@ class ServerConfig:
     enable_process_guard: bool = False
     enable_web: bool = False
 
-    jwt_secret: str = "dev-secret-change-in-production"
+    jwt_secret: str = ""  # auto-generated if empty
     jwt_algorithm: str = "HS256"
     jwt_expiration_hours: int = 24
 
@@ -107,7 +108,7 @@ class ServerConfig:
             enable_health_monitor=os.getenv("SLO_HEALTH_MONITOR", "true").lower() == "true",
             health_monitor_interval=int(os.getenv("SLO_HEALTH_INTERVAL", "300")),
             enable_web=os.getenv("SLO_WEB", "").lower() in ("1", "true", "yes"),
-            jwt_secret=os.getenv("SLO_JWT_SECRET", os.getenv("JWT_SECRET", "dev-secret-change-in-production")),
+            jwt_secret=os.getenv("SLO_JWT_SECRET") or os.getenv("JWT_SECRET") or secrets.token_urlsafe(64),
             jwt_algorithm=os.getenv("SLO_JWT_ALGORITHM", os.getenv("JWT_ALGORITHM", "HS256")),
             jwt_expiration_hours=int(os.getenv("SLO_JWT_EXPIRATION_HOURS", os.getenv("JWT_EXPIRATION_HOURS", "24"))),
         )
