@@ -118,6 +118,53 @@ User clicks → Frontend (simple) → Core logic (complex) → API (thin)
 
 ---
 
+## Software Foundations — First Principles
+
+Every line of code in this project is a commitment. Software foundations are not optional guidelines — they are the structural integrity of the system. Violate them and the system degrades silently.
+
+### Code of Quality
+
+Code is a living contract between developers. Every function, every module, every interface must be:
+
+- **Correct** — Does what it claims. No silent failures, no approximate behavior presented as exact.
+- **Honest** — Names match behavior. `get_models()` returns models, not metadata about models. `is_ready()` reflects actual readiness, not a cached flag from 30 seconds ago.
+- **Defensive** — Assumes the worst about input. Validates at boundaries. Fails loudly with context, never silently with corruption.
+- **Observable** — Every state change, every decision, every side effect is logged or auditable. If you can't explain what the code did after the fact, it's not done.
+
+### Security Development Lifecycle (SDL)
+
+Security is not a feature — it is a property of the architecture. Apply these at every layer:
+
+- **Least privilege** — Every component gets exactly the access it needs, never more. The shell permission system exists because of this principle: `rm` gets ELEVATED access, not blanket root.
+- **Input validation at every boundary** — User input, API input, file input, subprocess output. Validate once, trust never. The `_cmd_py` sandbox exists because Python `eval()` is an attack surface.
+- **No secrets in code** — API keys, tokens, passwords live in environment variables or encrypted config. Never in source, never in logs, never in error messages.
+- **Audit trail** — Every privileged operation leaves a trace. The `ShellAuditLogger` exists because unmonitored power is dangerous power.
+- **Fail secure** — When something breaks, the default state is denial, not allowance. A crashed permission check denies access; it does not grant it.
+- **Defense in depth** — Multiple independent layers. The shell has: permission gating → audit logging → sandboxed `py` eval → restricted `__import__`. No single layer is the only protection.
+
+### Software Development Lifecycle
+
+Every feature follows a lifecycle. Skipping stages creates debt that compounds:
+
+1. **Design before code** — Understand the problem. Identify the boundaries. Map the data flow. If you can't draw it, you can't build it.
+2. **Core logic first** — Build the algorithm, the data structure, the business rule. Test it in isolation. No frameworks, no HTTP, no UI.
+3. **Interface second** — CLI, API, or UI wraps the core logic. The interface is a thin adapter, not the implementation.
+4. **Tests alongside** — Every public function gets a test. Every edge case gets a test. Every error path gets a test. Tests are not overhead — they are the specification.
+5. **Documentation inline** — Docstrings on every public function. Side effects documented. Trade-offs noted. The next developer reading your code is you, six months from now, with no memory of this session.
+6. **Security review** — Before merging: Does this expose new attack surface? Does it handle untrusted input? Does it log appropriately? Does it fail secure?
+7. **Deprecation before deletion** — Mark old code deprecated with a warning. Let it run for one release cycle. Then remove. Never delete in the same commit that adds the replacement.
+
+### Integrity Over Speed
+
+- ❌ Shipping fast with known bugs creates a bug tracker, not a product
+- ❌ "It works for the common case" means "it fails for the edge case that matters"
+- ❌ Skipping tests to meet a deadline means the deadline is the test — and it will fail
+- ✅ Slow and correct beats fast and broken, always
+- ✅ A feature that ships with tests, docs, and audit logging is done. One without any of those is not.
+- ✅ If you can't explain the security model, you don't have one
+
+---
+
 ## Proprietary Infrastructure & Library Replacements
 
 This codebase replaces most standard ML/DL libraries with custom implementations. **Do NOT add PyTorch, sentence-transformers, safetensors, bitsandbytes, Pinecone, ChromaDB, or similar as hard dependencies.** All replacements are intentional — they eliminate ~4GB of dependencies.
@@ -1873,11 +1920,7 @@ $ for i in 1..10; do curl /chat ...; done  # All 10 succeed, health still "healt
 
 ---
 
-## Session 2026-05-26 — trawcsy PyPI + Mobile Polish + Bugfixes + Performance
-
-### trawcsy
-- Published to PyPI: `pip install trawcsy` now works
-- **93 tests** (was 80), wheel 18KB (was 17KB), v0.3.0
+## Session 2026-05-26 — Mobile Polish + Bugfixes + Performance
 - `--include`, `--exclude`, `--progress`, `--dedup` CLI flags added
 - `AGENT` string auto-derives version via `importlib.metadata` instead of hardcoded `"0.1"`
 - README updated with all new flags and features

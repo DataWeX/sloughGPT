@@ -1,22 +1,18 @@
-"""Chat screen for SloughGPT TUI — streaming conversation."""
+"""Chat screen for SloughGPT TUI — thin shell wrapper.
+
+Every input goes through ``ShellREPL.execute()``. The TUI is a
+rendering layer — the shell is the engine. No duplicate API calls,
+no duplicate state management.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import List
-
 from rich.text import Text
 
-from apps.tui.components import CONSOLE, Color, header, divider
+from apps.tui.components import CONSOLE, Color, divider
 from apps.tui.session import TuiSession
 from apps.tui.screen import Screen
 from apps.tui.bindings import Binding
-
-
-@dataclass
-class ChatMessage:
-    role: str
-    content: str
 
 
 class ChatScreen(Screen):
@@ -25,40 +21,34 @@ class ChatScreen(Screen):
 
     def __init__(self):
         super().__init__()
-        self.messages: List[ChatMessage] = []
         self.input_buffer: str = ""
-        self.streaming: bool = False
+        self._repl = None
 
-    def _render_messages(self):
-        for msg in self.messages:
-            role_label = "You" if msg.role == "user" else "Assistant"
-            role_color = Color.PRIMARY if msg.role == "user" else Color.SUCCESS
-            CONSOLE.print()
-            CONSOLE.print(Text(f"  {role_label}", style=f"bold {role_color}"))
-            terminal_w = CONSOLE.width - 4
-            text = msg.content
-            while text:
-                CONSOLE.print(Text(f"  {text[:terminal_w]}", style=Color.WHITE))
-                text = text[terminal_w:]
+    def _get_repl(self):
+        """Lazy-init ShellREPL — imports core-py on first use."""
+        if self._repl is None:
+            import sys
+            from pathlib import Path
+            repo = Path(__file__).resolve().parents[3]
+            core_py = str(repo / "packages" / "core-py")
+            if core_py not in sys.path:
+                sys.path.insert(0, core_py)
+            from domains.shell import get_dait_runtime, ShellREPL
+            from domains.shell.commands import ShellCommands
+            os = get_dait_runtime()
+            cmds = ShellCommands()
+            self._repl = ShellREPL(os, cmds)
+        return self._repl
 
     def render(self, session: TuiSession) -> str:
-        self.render_header("Chat", f"{session.api_base_url}  ·  {len(self.messages)} messages")
+        self.render_header("Shell", session.api_base_url)
         divider()
         CONSOLE.print()
 
-        self._render_messages()
-
-        if self.streaming:
-            CONSOLE.print()
-            CONSOLE.print(Text("  [streaming...]", style=Color.MUTED))
-            return ""
-
-        CONSOLE.print()
-        divider()
         if self.input_buffer:
-            CONSOLE.print(Text(f"  Message: {self.input_buffer}", style=Color.HIGHLIGHT))
+            CONSOLE.print(Text(f"  {self.input_buffer}", style=Color.HIGHLIGHT))
         else:
-            CONSOLE.print(Text("  Type your message and press Enter", style=Color.MUTED))
+            CONSOLE.print(Text("  Type a command — shell handles everything", style=Color.MUTED))
         CONSOLE.print()
         CONSOLE.print(Text(self.binding_manager.format_footer(self.bindings), style=Color.MUTED))
 
@@ -79,33 +69,22 @@ class ChatScreen(Screen):
                 if not text:
                     return "chat"
 
-                self.messages.append(ChatMessage(role="user", content=text))
                 self.input_buffer = ""
-                self.streaming = True
 
-                self.render_header("Chat", f"{session.api_base_url}  ·  {len(self.messages)} messages")
-                divider()
-                self._render_messages()
-                CONSOLE.print()
-                CONSOLE.print(Text("  Assistant", style=f"bold {Color.SUCCESS}"), end="")
+                if text.lower() in ("exit", "quit", "q"):
+                    return "quit"
 
-                collected = ""
-                for token in session.api_client.stream_chat(
-                    session.api_base_url,
-                    [{"role": m.role, "content": m.content} for m in self.messages],
-                    temperature=0.8,
-                    max_tokens=256,
-                ):
-                    collected += token
-                    CONSOLE.print(Text(token, style=Color.WHITE), end="")
-                CONSOLE.print()
+                repl = self._get_repl()
+                output, exit_code = repl.execute(text)
 
-                self.streaming = False
-                self.messages.append(ChatMessage(role="assistant", content=collected))
+                if output:
+                    CONSOLE.print()
+                    for line in output.rstrip("\n").split("\n"):
+                        CONSOLE.print(Text(f"  {line}", style=Color.WHITE))
+
                 return "chat"
 
             elif key == "/":
-                self.messages.clear()
                 self.input_buffer = ""
                 return "chat"
 

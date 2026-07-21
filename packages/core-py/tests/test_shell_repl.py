@@ -13,6 +13,7 @@ from unittest.mock import patch
 import pytest
 
 from domains.shell.repl import ShellREPL, _CaptureOutput
+from domains.shell.io import capture_cmd
 from domains.shell.kernel import DaitRuntime
 from domains.shell.state import ShellState
 
@@ -159,27 +160,22 @@ class TestPipelineExecution:
 
 class TestEcho:
     def test_echo_prints_args(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_echo("hello world")
-        assert cap.getvalue().strip() == "hello world"
+        output = capture_cmd(repl, repl._cmd_echo, "hello world")
+        assert output.strip() == "hello world"
 
     def test_echo_empty(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_echo("")
-        assert cap.getvalue().strip() == ""
+        output = capture_cmd(repl, repl._cmd_echo, "")
+        assert output.strip() == ""
 
     def test_echo_no_newline(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_echo("-n hello")
-        assert cap.getvalue() == "hello"
+        output = capture_cmd(repl, repl._cmd_echo, "-n hello")
+        assert output == "hello"
 
     def test_echo_escapes(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_echo("-e 'hello\\nworld'")
-        result = cap.getvalue().strip()
-        assert "hello" in result
-        assert "world" in result
-        assert "\n" in result  # actually interpreted
+        output = capture_cmd(repl, repl._cmd_echo, "-e 'hello\\nworld'")
+        assert "hello" in output
+        assert "world" in output
+        assert "\n" in output  # actually interpreted
 
 
 # ── read ─────────────────────────────────────────────────────────────
@@ -1309,3 +1305,98 @@ class TestAllCommandsRegistered:
     def test_find_registered(self):
         from domains.shell.repl import ShellREPL
         assert "find" in ShellREPL.COMMANDS
+
+
+# ── Permissions ──────────────────────────────────────────────────────
+
+
+class TestPermissions:
+    def test_permit_registered(self):
+        from domains.shell.repl import ShellREPL
+        assert "permit" in ShellREPL.COMMANDS
+
+    def test_deny_registered(self):
+        from domains.shell.repl import ShellREPL
+        assert "deny" in ShellREPL.COMMANDS
+
+    def test_permissions_registered(self):
+        from domains.shell.repl import ShellREPL
+        assert "permissions" in ShellREPL.COMMANDS
+
+    def test_dangerous_command_blocked_by_default(self, repl):
+        repl._perms._granted.clear()
+        output, code = repl.execute("chmod 777 /nonexistent/path")
+        assert code == 126
+        assert "Permission denied" in output
+
+    def test_critical_command_blocked_by_default(self, repl):
+        repl._perms._granted.clear()
+        output, code = repl.execute("shutdown")
+        assert code == 126
+        assert "Permission denied" in output
+
+    def test_permit_allows_command(self, repl):
+        repl._perms._granted.clear()
+        repl._cmd_permit("chmod")
+        output, code = repl.execute("chmod 777 /nonexistent/path")
+        assert code != 126
+
+    def test_permit_shows_usage_when_empty(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_permit("")
+        assert "Usage" in cap.getvalue()
+
+    def test_deny_shows_usage_when_empty(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_deny("")
+        assert "Usage" in cap.getvalue()
+
+    def test_permissions_shows_policy(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_permissions()
+        output = cap.getvalue()
+        assert "Risk policies" in output
+        assert "safe" in output
+        assert "elevated" in output
+        assert "dangerous" in output
+        assert "critical" in output
+
+    def test_permit_persist_flag(self, repl):
+        repl._perms._granted.clear()
+        with _CaptureOutput() as cap:
+            repl._cmd_permit("chmod --persist")
+        output = cap.getvalue()
+        assert "persistent" in output.lower() or "Granted" in output
+
+    def test_permit_all_dangerous(self, repl):
+        repl._perms._granted.clear()
+        with _CaptureOutput() as cap:
+            repl._cmd_permit("--all-dangerous")
+        output = cap.getvalue()
+        assert "Granted" in output or "allow" in output.lower()
+
+    def test_deny_revokes_permission(self, repl):
+        repl._perms._granted.clear()
+        repl._cmd_permit("chmod")
+        repl._cmd_deny("chmod")
+        output, code = repl.execute("chmod 777 /nonexistent/path")
+        assert code == 126
+
+    def test_permit_tab_completion(self, repl):
+        candidates = repl._complete_args_for("permit")
+        assert "chmod" in candidates
+        assert "shutdown" in candidates
+        assert "--persist" in candidates
+        assert "--all-dangerous" in candidates
+
+    def test_deny_tab_completion(self, repl):
+        candidates = repl._complete_args_for("deny")
+        assert "chmod" in candidates
+        assert "shutdown" in candidates
+        assert "--persist" in candidates
+        assert "--all-dangerous" not in candidates
+
+    def test_safe_command_not_blocked(self, repl):
+        output, code = repl.execute("echo hello")
+        assert code == 0
+        assert "hello" in output

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Compatibility wrapper for migrated CLI entrypoint."""
+"""Direct entry point — calls src/cli.py:main."""
 
-from apps.cli.cli import main
+from apps.cli.src.cli import main
 
 
 if __name__ == "__main__":

@@ -75,31 +75,58 @@ except ImportError:
 
 
 class _CaptureOutput:
-    """Captures all print() output within a with-block."""
+    """Captures all write() output within a with-block. Test-only utility.
 
-    def __init__(self):
-        self._buf = io.StringIO()
-        self._old: io.TextIOWrapper | None = None
+    If repl is provided, swaps repl.io to a MemoryIO buffer (proper capture).
+    If no repl, falls back to capturing sys.stdout (legacy behavior).
+    """
 
-    def __enter__(self) -> _CaptureOutput:
-        self._old = sys.stdout
-        sys.stdout = self._buf
+    def __init__(self, repl=None):
+        self._repl = repl
+        self._mem = None
+        self._old_io = None
+        self._buf = None
+        self._old_stdout = None
+
+    def __enter__(self):
+        if self._repl is not None:
+            from .io import MemoryIO
+            self._mem = MemoryIO()
+            self._old_io = self._repl.io
+            self._repl.io = self._mem
+        else:
+            self._buf = io.StringIO()
+            self._old_stdout = sys.stdout
+            sys.stdout = self._buf
         return self
 
     def __exit__(self, *exc):
-        sys.stdout = self._old
+        if self._repl is not None and self._old_io is not None:
+            self._repl.io = self._old_io
+        elif self._old_stdout is not None:
+            sys.stdout = self._old_stdout
 
     def getvalue(self) -> str:
-        return self._buf.getvalue()
+        if self._mem is not None:
+            return self._mem.get_output()
+        if self._buf is not None:
+            return self._buf.getvalue()
+        return ""
 
 
 # ── REPL ─────────────────────────────────────────────────────────────
 
 
 class ShellREPL:
-    """Interactive REPL with built-in commands and AI-assisted mode."""
+    """Interactive REPL with built-in commands and AI-assisted mode.
 
-    def __init__(self, os: DaitRuntime, cmds: ShellCommands | None = None):
+    For programmatic / TUI usage, call ``execute(line)`` directly —
+    it returns ``(output, exit_code)`` without touching readline or
+    the terminal.
+    """
+
+    def __init__(self, os: DaitRuntime, cmds: ShellCommands | None = None,
+                 io: "ShellIO | None" = None):
         self.os = os
         self.cmds = cmds or ShellCommands()
         self.state = ShellState()
@@ -117,9 +144,21 @@ class ShellREPL:
         self._env.update(self.state.env)
         self._update_color_state()
 
+        # I/O layer — swap for TUI via ``io=TuiIO()``
+        from .io import ConsoleIO
+        self.io = io or ConsoleIO()
+
         # Structured logger — inherit from domains.logging
         from domains.logging import ShellLogger, LogLevel
         self.log = ShellLogger("slo.shell.repl", level=LogLevel.DEBUG)
+
+        # Audit logger — every command is logged to JSONL
+        from .audit import get_shell_audit_logger
+        self._audit = get_shell_audit_logger()
+
+        # Permissions manager — gates destructive operations
+        from .permissions import ShellPermissions
+        self._perms = ShellPermissions()
 
         self._aliases: dict[str, str] = dict(self.state.aliases)
         self._aliases.update({
@@ -131,11 +170,147 @@ class ShellREPL:
         self._last_exit_code = 0
         self._cmd_count = 0
         self._dir_stack: list[str] = []
+        self._chat_session_id: str | None = None
+        self._chat_history: list[dict[str, str]] = []
 
         if _HAS_READLINE:
             self._setup_readline()
 
         self._load_rc()
+
+    # ── Permission gate ─────────────────────────────────────────────
+
+    def _check_permission(self, cmd: str, args_str: str, interactive: bool = True) -> bool:
+        """Check if a command is allowed. Returns True if allowed, False if denied.
+
+        In interactive mode, prompts the user when a command is blocked.
+        In programmatic mode (execute()), silently denies.
+        """
+        from .permissions import Risk
+        try:
+            self._perms.check(cmd, args_str)
+            return True
+        except PermissionError as e:
+            risk = self._perms.classify(cmd, args_str)
+            if not interactive:
+                self._print(f"  {_C_RED}Permission denied:{_C_RESET} {cmd} (risk={risk})")
+                self._print(f"  Use `permit {cmd}` to grant, or `permit --all-{risk}` for all {risk} commands.")
+                return False
+            risk_colors = {
+                Risk.SAFE: _C_GREEN,
+                Risk.ELEVATED: _C_YELLOW,
+                Risk.DANGEROUS: _C_RED,
+                Risk.CRITICAL: _C_RED,
+            }
+            color = risk_colors.get(risk, _C_RED)
+            self._print(f"  {_C_YELLOW}⚡ {cmd}{_C_RESET} requires {_C_BOLD}{color}{risk}{_C_RESET} permissions.")
+            self._print(f"  Allow this command? {_C_DIM}[y/N/always]{_C_RESET}")
+            try:
+                answer = self.io.read("  > ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                answer = ""
+            if answer == "always":
+                self._perms.grant(cmd, persist=True)
+                self._print(f"  {_C_GREEN}✓ Granted (persistent){_C_RESET} — {cmd} allowed for this and future sessions.")
+                return True
+            elif answer == "y":
+                self._perms.grant(cmd)
+                self._print(f"  {_C_GREEN}✓ Granted{_C_RESET} — {cmd} allowed this session.")
+                return True
+            else:
+                self._print(f"  {_C_DIM}Denied{_C_RESET} — {cmd} skipped.")
+                return False
+
+    # ── Programmatic API (TUI / tests) ─────────────────────────────
+
+    def execute(self, line: str) -> tuple[str, int]:
+        """Execute a command line, return (output, exit_code).
+
+        Does NOT touch readline or the terminal — safe for TUI usage.
+        Still audit-logs every execution.
+        """
+        import time as _time
+        from .io import MemoryIO, capture_output
+
+        if not line.strip():
+            return "", 0
+
+        mem = MemoryIO()
+        old_io = self.io
+        self.io = mem
+        old_print = self._print
+
+        def _captured_print(*args, **kwargs):
+            end = kwargs.get("end", "\n")
+            text = " ".join(str(a) for a in args)
+            mem.write(text, end=end)
+
+        self._print = _captured_print  # type: ignore
+
+        t0 = _time.time()
+        try:
+            self._cmd_count += 1
+            self._history.append(line)
+            self.state.add_history(line)
+            self.state.save()
+            self._aborted = False
+            self._piped_input = ""
+
+            commands, is_bg, should_time = self._parse_pipeline(line)
+
+            if is_bg:
+                if len(commands) > 1:
+                    self._execute_background_tuples(commands)
+                else:
+                    self._execute_background(commands[0][0])
+                self._audit.command(line, commands[0][0].split()[0] if commands[0][0] else "", line, 0, is_background=True, is_pipeline=len(commands) > 1)
+                return mem.get_output(), 0
+            elif len(commands) > 1:
+                self._execute_pipeline(commands, should_time=should_time)
+                self._audit.command(line, "pipeline", line, self._last_exit_code, is_pipeline=True)
+            else:
+                raw_cmd, op = commands[0]
+                expanded = self._expand_alias(raw_cmd)
+                parts = expanded.split(maxsplit=1)
+                cmd = parts[0].lower()
+                args_str = parts[1] if len(parts) > 1 else ""
+                handler = self.COMMANDS.get(cmd)
+                if handler:
+                    if not self._check_permission(cmd, args_str, interactive=False):
+                        self._last_exit_code = 126
+                        self._audit.command(line, cmd, args_str, 126, elapsed_ms=0, expanded=expanded)
+                        return mem.get_output(), self._last_exit_code
+                    try:
+                        handler(self, args_str)
+                        self._last_exit_code = 0
+                    except SystemExit as e:
+                        self._last_exit_code = e.code if isinstance(e.code, int) else 1
+                    except Exception as e:
+                        self._print(f"  Error: {e}")
+                        self._last_exit_code = 1
+                        self._audit.error(line, repr(e))
+                    elapsed_ms = (_time.time() - t0) * 1000
+                    self._audit.command(line, cmd, args_str, self._last_exit_code, elapsed_ms=elapsed_ms, expanded=expanded)
+                else:
+                    suggestion = self._suggest_command(cmd)
+                    msg = f"  Unknown command: {cmd}. Type `help`."
+                    if suggestion:
+                        msg += f" Did you mean `{suggestion}`?"
+                    self._print(msg)
+                    self._last_exit_code = 127
+                    self._audit.unknown(cmd)
+        except KeyboardInterrupt:
+            self._aborted = True
+            self._print("  Aborted")
+        except Exception as e:
+            self._print(f"  Error: {e}")
+            self._last_exit_code = 1
+            self._audit.error(line, repr(e))
+
+        output = mem.get_output()
+        self.io = old_io
+        self._print = old_print
+        return output, self._last_exit_code
 
     def _rc_path(self) -> Path:
         return Path.home() / ".config" / "sloughgpt" / "rc"
@@ -255,6 +430,12 @@ class ShellREPL:
             if cmd == "train":
                 # Subcommand completion: status, follow, stop, distill, hf, auto, load, del
                 return ["status", "follow", "stop", "distill", "hf", "auto", "load", "del"]
+            if cmd in ("permit", "deny"):
+                from .permissions import _DANGEROUS, _CRITICAL
+                candidates = sorted(_DANGEROUS | _CRITICAL) + ["--persist"]
+                if cmd == "permit":
+                    candidates.append("--all-dangerous")
+                return candidates
         except Exception:
             pass
         # Fallback: file/directory path completion
@@ -291,7 +472,9 @@ class ShellREPL:
     # ── I/O helpers ─────────────────────────────────────────────────
 
     def _print(self, *args, **kwargs) -> None:
-        print(*args, **kwargs)
+        end = kwargs.get("end", "\n")
+        text = " ".join(str(a) for a in args)
+        self.io.write(text, end=end)
 
     def _log_ok(self, msg: str, **ctx) -> None:
         """Log a success message (green checkmark)."""
@@ -315,12 +498,12 @@ class ShellREPL:
         sep = f"{_C_DIM}{'━' * terminal}{_C_RESET}"
         lines = self.os.status_summary.split("\n")
         header = lines[0] if lines else ""
-        print(sep)
-        print(f"{_C_CYAN}{_C_BOLD}  Dait{_C_RESET}".center(terminal))
-        print(f"{_C_DIM}  {header}{_C_RESET}".center(terminal))
-        print(sep)
-        print(f"  Type {_C_YELLOW}`help`{_C_RESET} for commands, {_C_YELLOW}`exit`{_C_RESET} to quit, {_C_YELLOW}`ai <query>`{_C_RESET} for AI mode")
-        print()
+        self.io.write(sep)
+        self.io.write(f"{_C_CYAN}{_C_BOLD}  Dait{_C_RESET}".center(terminal))
+        self.io.write(f"{_C_DIM}  {header}{_C_RESET}".center(terminal))
+        self.io.write(sep)
+        self.io.write(f"  Type {_C_YELLOW}`help`{_C_RESET} for commands, {_C_YELLOW}`exit`{_C_RESET} to quit, {_C_YELLOW}`ai <query>`{_C_RESET} for AI mode")
+        self.io.write("")
 
     def _format_table(self, rows: list[list[str]], header: list[str] | None = None) -> str:
         if not rows:
@@ -600,7 +783,21 @@ class ShellREPL:
             self._last_exit_code = 127
             return msg + "\n"
 
-        with _CaptureOutput() as cap:
+        if not self._check_permission(cmd, args, interactive=False):
+            self._last_exit_code = 126
+            for k in inline_env:
+                if old_env[k] is None:
+                    self._env.pop(k, None)
+                else:
+                    self._env[k] = old_env[k]
+            self._piped_input = ""
+            return f"  Permission denied: {cmd} (use `permit {cmd}` to grant)\n"
+
+        from .io import MemoryIO as _MemIO
+        cap = _MemIO()
+        old_io = self.io
+        self.io = cap
+        try:
             try:
                 handler(self, args)
                 self._last_exit_code = 0
@@ -609,6 +806,8 @@ class ShellREPL:
             except Exception as e:
                 self._print(f"  Error: {e}")
                 self._last_exit_code = 1
+        finally:
+            self.io = old_io
 
         for k in inline_env:
             if old_env[k] is None:
@@ -617,7 +816,7 @@ class ShellREPL:
                 self._env[k] = old_env[k]
 
         self._piped_input = ""
-        output = cap.getvalue()
+        output = cap.get_output()
 
         if redirect_path:
             vfs = self.os.vfs
@@ -686,9 +885,9 @@ class ShellREPL:
             try:
                 out = self._execute_single(raw, "")
                 with threading.Lock():
-                    print(f"\n[bg-{bg_id}] {out}", end="")
+                    self._print(f"\n[bg-{bg_id}] {out}", end="")
             except Exception as e:
-                print(f"\n[bg-{bg_id}] Error: {e}")
+                self._print(f"\n[bg-{bg_id}] Error: {e}")
 
         t = threading.Thread(target=_run, daemon=True, name=f"shell-bg-{bg_id}")
         t.start()
@@ -704,7 +903,7 @@ class ShellREPL:
             try:
                 self._execute_pipeline(commands)
             except Exception as e:
-                print(f"\n[bg-{bg_id}] Error: {e}")
+                self._print(f"\n[bg-{bg_id}] Error: {e}")
 
         t = threading.Thread(target=_run, daemon=True, name=f"shell-bg-{bg_id}")
         t.start()
@@ -965,18 +1164,66 @@ class ShellREPL:
             self._print(f"  Error reading {path}: {e}")
 
     def _cmd_py(self, args: str = "") -> None:
-        """Evaluate a Python expression and print the result."""
+        """Evaluate a Python expression and print the result.
+
+        Sandboxed: only safe builtins and whitelisted modules available.
+        Every evaluation is audit-logged.
+        """
         if not args:
             self._print("  Usage: py <expression>")
             self._print("  Example: py 2 + 2")
             self._print("  Example: py [i*i for i in range(5)]")
             self._print("  Example: py __import__('json').dumps({'a': 1})")
             return
+
+        # Restricted __import__ — only safe stdlib modules
+        _SAFE_MODULES = frozenset({
+            "math", "json", "datetime", "time", "re", "collections",
+            "itertools", "functools", "operator", "string", "textwrap",
+            "statistics", "decimal", "fractions", "random", "uuid",
+            "hashlib", "base64", "binascii", "struct", "codecs",
+            "unicodedata", "enum", "dataclasses", "typing", "copy",
+            "pprint", "array", "heapq", "bisect", "graphlib",
+        })
+
+        def _safe_import(name: str, *args: Any, **kwargs: Any) -> Any:
+            root = name.split(".")[0]
+            if root not in _SAFE_MODULES:
+                raise ImportError(
+                    f"module {name!r} is not allowed in py. "
+                    f"Allowed: {', '.join(sorted(_SAFE_MODULES))}"
+                )
+            return __import__(name, *args, **kwargs)
+
+        safe_builtins = {
+            "abs": abs, "all": all, "any": any, "bool": bool,
+            "chr": chr, "dict": dict, "dir": dir, "enumerate": enumerate,
+            "filter": filter, "float": float, "format": format,
+            "frozenset": frozenset, "getattr": getattr,
+            "hasattr": hasattr, "hash": hash, "hex": hex,
+            "int": int, "isinstance": isinstance, "issubclass": issubclass,
+            "iter": iter, "len": len, "list": list, "map": map,
+            "max": max, "min": min, "next": next, "oct": oct, "ord": ord,
+            "pow": pow, "print": print, "property": property,
+            "range": range, "repr": repr, "reversed": reversed,
+            "round": round, "set": set, "slice": slice, "sorted": sorted,
+            "str": str, "sum": sum, "super": super, "tuple": tuple,
+            "type": type, "zip": zip, "__import__": _safe_import,
+        }
+
+        exit_code = 0
+        result_repr = ""
         try:
-            result = eval(args, {"__builtins__": __builtins__})
-            self._print(repr(result))
+            result = eval(args, {"__builtins__": safe_builtins})
+            result_repr = repr(result)
+            self._print(result_repr)
         except Exception as e:
-            self._print(f"  Error: {e}")
+            exit_code = 1
+            result_repr = f"Error: {e}"
+            self._print(f"  {result_repr}")
+
+        # Audit-log every evaluation
+        self._audit.eval(args, result_repr, exit_code)
 
     def _cmd_bg(self, args: str = "") -> None:
         if not self._bg_threads:
@@ -1215,6 +1462,9 @@ class ShellREPL:
                 "devices": "  devices | lsdev  — List AI device nodes (/dev/*)",
                 "lsdev": "  devices | lsdev  — List AI device nodes (/dev/*)",
                 "asm": '  asm [file.asm] | asm --test | asm --list  — Assemble and run VM programs',
+                "permit": "  permit <cmd> [--persist]  — Grant permission for a blocked command",
+                "deny": "  deny <cmd> [--persist]  — Revoke a previously granted permission",
+                "permissions": "  permissions  — Show current permission policy and granted commands",
             }
             if args in cmd_help:
                 self._print(cmd_help[args])
@@ -1250,12 +1500,14 @@ Most common commands (help [cmd] for details, help for full list):
   kill <id>            Stop a job
   grep / head / tail / wc  Pipe filters
   pbcopy / pbpaste     Clipboard
+  permit / deny        Permission management
+  permissions          Show permission policy
 """)
             else:
                 self._print(f"  Unknown command: {args}")
             return
-        self._print("""
-Built-in commands:
+        self._print(f"""
+{_C_CYAN}Built-in commands:{_C_RESET}
   help [cmd]             Show this help or help for a specific command
   exit / q / quit         Exit the shell
   clear / cls             Clear the screen
@@ -1273,7 +1525,7 @@ Built-in commands:
   popd                    Pop dir stack and cd back
   dirs                    Show directory stack
 
-Unix filesystem:
+{_C_CYAN}Unix filesystem:{_C_RESET}
   ls [-l] [-a] [path]    List directory contents
   cd [dir]                Change directory
   pwd                     Print working directory
@@ -1286,15 +1538,15 @@ Unix filesystem:
   chmod <mode> <file>     Change file permissions
   find [path] -name <glob>  Recursively find files matching a pattern
 
-Clipboard (macOS):
+{_C_CYAN}Clipboard (macOS):{_C_RESET}
   pbcopy                  Copy piped input to clipboard. E.g. gen hello | pbcopy
   pbpaste                 Paste from clipboard
 
-Knowledge:
+{_C_CYAN}Knowledge:{_C_RESET}
   remember <fact>         Store a fact in the knowledge base
   recall <query>          Search the knowledge base
 
-Unix scripting:
+{_C_CYAN}Unix scripting:{_C_RESET}
   true                    Return exit code 0
   false                   Return exit code 1
   test <expr> / [ <expr> ]  Evaluate expression (-f, -d, -e, =, !=)
@@ -1303,7 +1555,7 @@ Unix scripting:
   env                     Print environment variables
   font [name]             Show or set terminal font (OSC 50 / iTerm2)
 
-Process management:
+{_C_CYAN}Process management:{_C_RESET}
   procs / ps              List running training jobs
   kill <id>               Stop a training job
   train [dataset]         Start training (or list datasets)
@@ -1318,45 +1570,45 @@ Process management:
   bg / jobs               List background shell processes
   fg <id>                 Bring a background process to foreground
 
-Init system:
+{_C_CYAN}Init system:{_C_RESET}
   boot                    Boot the shell (kernel + services)
   shutdown                Halt all services + kernel
   svc                     Service manager: list, start, stop, restart, status
 
-Devices:
+{_C_CYAN}Devices:{_C_RESET}
   devices / lsdev         List AI device nodes (/dev/*)
   cat /dev/<name>         Read from an AI device (e.g. cat /dev/llm, cat /dev/random)
 
-Model management:
+{_C_CYAN}Model management:{_C_RESET}
   models                  List available models (tab-completes names)
   load <name>             Load a model (tab-completes names)
   unload                  Unload the current model
 
-Souls:
+{_C_CYAN}Souls:{_C_RESET}
   souls                   List available souls (tab-completes names)
   switch <name>           Switch to a soul (tab-completes names)
   whoami                  Show current soul
 
-System:
+{_C_CYAN}System:{_C_RESET}
   health                  Quick health check (colored status)
   status                  Detailed system status
   metrics                 CPU/memory/disk metrics
   uname [-a]              Print system info (Dait version, machine)
   uptime                  How long Dait has been running
 
-Data:
+{_C_CYAN}Data:{_C_RESET}
   datasets                List datasets (tab-completes names)
   knowledge               List knowledge base entries
 
-Training:
+{_C_CYAN}Training:{_C_RESET}
   checkpoints             List training checkpoints (tab-completes names)
   finetuned               List fine-tuned models (tab-completes names)
 
-Inference:
+{_C_CYAN}Inference:{_C_RESET}
   gen <prompt>            Generate text
   tokenizer               Show tokenizer stats
 
-Pipe filters:
+{_C_CYAN}Pipe filters:{_C_RESET}
   grep <pattern>          Filter lines by regex
   head [n]                Show first n lines (default 10)
   tail [n]                Show last n lines (default 10)
@@ -1367,7 +1619,7 @@ Pipe filters:
   less                    Pager: scroll through output page by page
   echo <text>             Print text
 
-Shell features:
+{_C_CYAN}Shell features:{_C_RESET}
   <cmd> | <cmd>           Pipeline: output of first feeds second
   <cmd> &                 Background: run without blocking
   <cmd> && <cmd>          Chain: run next only if previous succeeded ($?=0)
@@ -1382,6 +1634,13 @@ Shell features:
   /dev/embedding          Compute embeddings: echo text > /dev/embedding
   /dev/knowledge          Knowledge base: cat /dev/knowledge, echo fact > /dev/knowledge
 
+{_C_CYAN}Permissions:{_C_RESET}
+  permit <cmd>            Grant permission for a blocked command (this session)
+  permit <cmd> --persist  Grant and save to disk (survives restart)
+  permit --all-dangerous  Allow all dangerous commands at once
+  deny <cmd>              Revoke a previously granted permission
+  permissions             Show current policy (safe/elevated/dangerous/critical)
+
 Virtual machine:
   asm [file.asm]          Assemble and run a VM program (.text + .data sections)
   asm --test              Run VM self-tests
@@ -1393,7 +1652,7 @@ Virtual machine:
   wm [subcmd]             Open window manager TUI (:split-h, :split-v, :close, :q)
   $(cmd)                  Command substitution: inline output of cmd
   py <expr>               Evaluate Python expression
-  $VAR / ${VAR}           Environment variable expansion
+  $VAR / ${{VAR}}           Environment variable expansion
   NAME=VALUE cmd          Inline env var (set for single command)
   \\\\h \\\\w \\\\t \\\\u \\\\#    PS1 escapes: host, cwd, time, user, cmd#
 
@@ -1420,7 +1679,9 @@ Examples:
 
     def _cmd_exit(self, args: str = "") -> None:
         self._running = False
+        self._audit.shutdown()
         self.state.save()
+        self.os.shutdown()
         self._print(f"  {_C_DIM}Shutting down...{_C_RESET}")
 
     def _cmd_history(self, args: str = "") -> None:
@@ -1469,6 +1730,74 @@ Examples:
         else:
             out = self._execute_single(cmd, "")
             self._print(out, end="")
+
+    # ── Permission commands ────────────────────────────────────────
+
+    def _cmd_permit(self, args: str = "") -> None:
+        """permit <cmd> — grant permission for a command (session or persistent)."""
+        from .permissions import Risk
+        parts = args.strip().split()
+        if not parts:
+            self._print(f"  Usage: permit <cmd> [--persist]")
+            self._print(f"         permit --all-<risk> [--persist]")
+            self._print(f"  Risk levels: {Risk.SAFE}, {Risk.ELEVATED}, {Risk.DANGEROUS}, {Risk.CRITICAL}")
+            granted = self._perms.list_granted()
+            if granted:
+                self._print(f"  Currently granted: {', '.join(granted)}")
+            return
+        persist = "--persist" in parts
+        targets = [p for p in parts if p != "--persist"]
+        for t in targets:
+            if t.startswith("--all-"):
+                risk = t[len("--all-"):]
+                if risk not in (Risk.SAFE, Risk.ELEVATED, Risk.DANGEROUS, Risk.CRITICAL):
+                    self._print(f"  Unknown risk level: {risk}")
+                    continue
+                self._perms.set_policy(risk, "allow")
+                if persist:
+                    self._perms._save_persistent()
+                self._print(f"  All {risk} commands now allowed")
+            else:
+                self._perms.grant(t, persist=persist)
+                self._print(f"  Granted: {t}" + (" (persistent)" if persist else ""))
+
+    def _cmd_deny(self, args: str = "") -> None:
+        """deny <cmd> — revoke permission for a command."""
+        from .permissions import Risk
+        parts = args.strip().split()
+        if not parts:
+            self._print(f"  Usage: deny <cmd> [--persist]")
+            self._print(f"         deny --all-<risk> [--persist]")
+            return
+        persist = "--persist" in parts
+        targets = [p for p in parts if p != "--persist"]
+        for t in targets:
+            if t.startswith("--all-"):
+                risk = t[len("--all-"):]
+                if risk not in (Risk.SAFE, Risk.ELEVATED, Risk.DANGEROUS, Risk.CRITICAL):
+                    self._print(f"  Unknown risk level: {risk}")
+                    continue
+                self._perms.set_policy(risk, "deny")
+                self._perms.revoke(t, persist=persist) if persist else None
+                if persist:
+                    self._perms._save_persistent()
+                self._print(f"  All {risk} commands now denied")
+            else:
+                self._perms.revoke(t, persist=persist)
+                self._print(f"  Revoked: {t}" + (" (persistent)" if persist else ""))
+
+    def _cmd_permissions(self, args: str = "") -> None:
+        """permissions — show current permission policy and granted commands."""
+        from .permissions import Risk
+        self._print(f"  Risk policies:")
+        for risk in (Risk.SAFE, Risk.ELEVATED, Risk.DANGEROUS, Risk.CRITICAL):
+            action = self._perms._policy.get(risk, "deny")
+            icon = f"{_C_GREEN}✓ allow{_C_RESET}" if action == "allow" else f"{_C_RED}✗ deny{_C_RESET}"
+            self._print(f"    {risk:10s} {icon}")
+        granted = self._perms.list_granted()
+        if granted:
+            self._print(f"  Granted commands: {', '.join(granted)}")
+        self._print(f"  Config: {self._perms._config_path}")
 
     def _cmd_procs(self, args: str = "") -> None:
         jobs = self.cmds.ps()
@@ -1611,6 +1940,15 @@ Examples:
                     self._print(f"  Registry models: {len(models)}")
         except Exception:
             pass
+        from .permissions import Risk
+        granted = self._perms.list_granted()
+        policies = []
+        for risk in (Risk.SAFE, Risk.ELEVATED, Risk.DANGEROUS, Risk.CRITICAL):
+            action = self._perms._policy.get(risk, "deny")
+            policies.append(f"{risk}={action}")
+        self._print(f"  Permissions: {', '.join(policies)}")
+        if granted:
+            self._print(f"  Granted: {', '.join(granted)}")
 
     def _cmd_metrics(self, args: str = "") -> None:
         metrics = self.cmds.system_metrics()
@@ -1938,12 +2276,13 @@ Examples:
             return
         if args == "/reset":
             self._chat_session_id = None
+            self._chat_history = []
             self._print("  [session cleared]")
             return
-        if not hasattr(self, '_chat_session_id') or not self._chat_session_id:
+        if not self._chat_session_id:
             import uuid
             self._chat_session_id = str(uuid.uuid4())
-            self._chat_history: list[dict[str, str]] = []
+            self._chat_history = []
             self._print("  [new session]")
         self._chat_history.append({"role": "user", "content": args})
         result = self.cmds.chat(self._chat_history)
@@ -2721,8 +3060,7 @@ Examples:
         self.state.set_env("FONT", font_name)
         self.state.save()
         # Emit OSC 50 to change terminal font (iTerm2, some terminals)
-        sys.stdout.write(f"\x1b]50;Set Font={font_name}\x07")
-        sys.stdout.flush()
+        self.io.write(f"\x1b]50;Set Font={font_name}\x07", end="")
         self._print(f"  Font set to: {font_name}")
 
     def _cmd_read(self, args: str = "") -> None:
@@ -2742,7 +3080,7 @@ Examples:
             self._last_exit_code = 1
             return
         try:
-            value = input(f"  {prompt}").strip()
+            value = self.io.read(f"  {prompt}")
             self._env[parts[0]] = value
             self._last_exit_code = 0
         except (EOFError, KeyboardInterrupt):
@@ -3002,7 +3340,7 @@ Examples:
                 self._last_exit_code = 1
 
         elif cmd == "runlevel":
-            self._print(f"  Current runlevel: {init._current_runlevel}")
+            self._print(f"  Current runlevel: {init.runlevel}")
 
         else:
             self._print("  Usage: svc [list|start|stop|restart|status] [name]")
@@ -3062,6 +3400,7 @@ Examples:
     COMMANDS: dict[str, Callable] = {
         "help": _cmd_help,
         "clear": _cmd_clear,
+        "cls": _cmd_clear,
         "exit": _cmd_exit,
         "ls": _cmd_ls,
         "cd": _cmd_cd,
@@ -3152,33 +3491,50 @@ Examples:
         "devices": _cmd_lsdev,
         "lsdev": _cmd_lsdev,
         "asm": _cmd_asm,
+        "permit": _cmd_permit,
+        "deny": _cmd_deny,
+        "permissions": _cmd_permissions,
     }
 
     # ── Main loop ───────────────────────────────────────────────────
 
     def run(self) -> None:
+        import time as _time
+        import signal as _signal
         boot_log = self.os.boot()
         self._print(boot_log)
         self._running = True
         self._print_header()
+        self._audit.startup()
+
+        def _graceful_shutdown(signum, frame):
+            self._print(f"\n  {_C_DIM}Signal {signum} received — shutting down gracefully{_C_RESET}")
+            self._running = False
+
+        for _sig in (_signal.SIGTERM, _signal.SIGHUP):
+            try:
+                _signal.signal(_sig, _graceful_shutdown)
+            except (OSError, ValueError):
+                pass  # signal not available on this platform
         if self.state.first_run:
             self._show_welcome()
         while self._running:
             try:
                 prompt = self._render_prompt()
-                line = input(f" {prompt} ").strip()
+                line = self.io.read(f" {prompt} ")
             except EOFError:
                 self._print()
                 break
             except KeyboardInterrupt:
                 self._print("^C")
+                self._last_exit_code = 0
                 continue
 
             # Multiline continuation with trailing backslash
             while line.endswith("\\") and not line.endswith("\\\\"):
                 line = line.rstrip("\\").rstrip()
                 try:
-                    continuation = input("  > ").strip()
+                    continuation = self.io.read("  > ")
                     line = f"{line} {continuation}"
                 except (EOFError, KeyboardInterrupt):
                     break
@@ -3201,38 +3557,36 @@ Examples:
                         self._execute_background_tuples(commands)
                     else:
                         self._execute_background(commands[0][0])
+                    self._audit.command(line, commands[0][0].split()[0] if commands[0][0] else "", line, 0, is_background=True, is_pipeline=len(commands) > 1)
                 elif len(commands) > 1:
                     self._execute_pipeline(commands, should_time=should_time)
+                    self._audit.command(line, "pipeline", line, self._last_exit_code, is_pipeline=True)
                 else:
                     raw_cmd, op = commands[0]
                     expanded = self._expand_alias(raw_cmd)
                     parts = expanded.split(maxsplit=1)
                     cmd = parts[0].lower()
-                    args = parts[1] if len(parts) > 1 else ""
+                    args_str = parts[1] if len(parts) > 1 else ""
                     handler = self.COMMANDS.get(cmd)
                     if handler:
-                        if should_time:
-                            import time as _time
-                            t0 = _time.time()
-                            try:
-                                handler(self, args)
-                                self._last_exit_code = 0
-                            except SystemExit as e:
-                                self._last_exit_code = e.code if isinstance(e.code, int) else 1
-                            except Exception as e:
-                                self._print(f"  {_C_RED}Error:{_C_RESET} {e}")
-                                self._last_exit_code = 1
-                            elapsed = _time.time() - t0
-                            self._print(f"{_C_DIM}  [{elapsed:.2f}s]{_C_RESET}")
-                        else:
-                            try:
-                                handler(self, args)
-                                self._last_exit_code = 0
-                            except SystemExit as e:
-                                self._last_exit_code = e.code if isinstance(e.code, int) else 1
-                            except Exception as e:
-                                self._print(f"  {_C_RED}Error:{_C_RESET} {e}")
-                                self._last_exit_code = 1
+                        if not self._check_permission(cmd, args_str, interactive=True):
+                            self._last_exit_code = 126
+                            self._audit.command(line, cmd, args_str, 126, elapsed_ms=0, expanded=expanded)
+                            continue
+                        t0 = _time.time() if should_time else None
+                        try:
+                            handler(self, args_str)
+                            self._last_exit_code = 0
+                        except SystemExit as e:
+                            self._last_exit_code = e.code if isinstance(e.code, int) else 1
+                        except Exception as e:
+                            self._print(f"  {_C_RED}Error:{_C_RESET} {e}")
+                            self._last_exit_code = 1
+                            self._audit.error(line, repr(e))
+                        elapsed_ms = (_time.time() - t0) * 1000 if t0 else None
+                        self._audit.command(line, cmd, args_str, self._last_exit_code, elapsed_ms=elapsed_ms, expanded=expanded)
+                        if should_time and elapsed_ms is not None:
+                            self._print(f"{_C_DIM}  [{elapsed_ms/1000:.2f}s]{_C_RESET}")
                     else:
                         suggestion = self._suggest_command(cmd)
                         msg = f"  {_C_RED}Unknown command:{_C_RESET} {cmd}. Type `help`."
@@ -3240,11 +3594,15 @@ Examples:
                             msg += f" Did you mean `{_C_YELLOW}{suggestion}{_C_RESET}`?"
                         self._print(msg)
                         self._last_exit_code = 127
+                        self._audit.unknown(cmd)
             except KeyboardInterrupt:
                 self._print(f"  {_C_DIM}Aborted{_C_RESET}")
                 self._aborted = True
+                self._last_exit_code = 0
             except Exception as e:
                 self._print(f"  {_C_RED}Error:{_C_RESET} {e}")
+                self._audit.error(line, repr(e))
 
+        self._audit.shutdown()
         self.state.save()
         self.os.shutdown()

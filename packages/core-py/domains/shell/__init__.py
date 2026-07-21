@@ -27,6 +27,9 @@ from .kernel import DaitRuntime, Kernel, Process, ProcessState, Resource
 from .repl import ShellREPL
 from .commands import ShellCommands
 from .state import ShellState
+from .io import ShellIO, ConsoleIO, MemoryIO, capture_output
+from .audit import ShellAuditLogger, get_shell_audit_logger
+from .permissions import ShellPermissions, Risk
 from .window_manager import WindowManager, get_window_manager, reset_window_manager
 from .init import InitSystem, ServiceDef, ServiceInstance, ServiceManager, get_init_system, reset_init_system
 from .devices import DeviceManager, AIDevice, create_default_devices
@@ -80,4 +83,6 @@ __all__ = [
     "FIB_ASM",
     "COLLATZ_ASM",
     "self_test",
+    "ShellPermissions",
+    "Risk",
 ]

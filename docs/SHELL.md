@@ -704,6 +704,96 @@ documented in `docs/routers.md`.
 
 ---
 
+## Permissions
+
+The shell gates destructive operations by risk level. Every command is classified, and blocked commands require explicit grant before execution.
+
+### Risk Levels
+
+| Level | Default | Commands | Examples |
+|-------|---------|----------|----------|
+| **safe** | allow | Read-only, no side effects | `ls`, `cat`, `echo`, `help`, `pwd`, `grep`, `wc` |
+| **elevated** | allow | Modifies shell state | `alias`, `cd`, `set`, `export`, `py`, `ai`, `bg`, `fg` |
+| **dangerous** | **deny** | Modifies filesystem | `rm`, `cp`, `mv`, `chmod`, `mkdir`, `touch` |
+| **critical** | **deny** | Affects system/services | `boot`, `shutdown`, `svc`, `load`, `train`, `kill` |
+
+Force patterns auto-promote risk: `rm -rf` → critical (even though `rm` is dangerous).
+
+### Commands
+
+```
+permit <cmd>                 Grant permission for this session
+permit <cmd> --persist       Grant and save to ~/.config/shell_permissions.json
+permit --all-dangerous       Allow all dangerous commands at once
+deny <cmd>                   Revoke a previously granted permission
+permissions                  Show current policy and granted commands
+```
+
+### Interactive Flow
+
+When a blocked command is run, the shell prompts:
+
+```
+⚡ rm requires dangerous permissions.
+Allow this? [y/N/always]
+```
+
+- **y** → grant for this session
+- **always** → grant persistently (saved to disk)
+- **N** or empty → deny, command skipped (exit code 126)
+
+In programmatic mode (`execute()`), blocked commands are silently denied with exit code 126.
+
+### Architecture
+
+```
+User input
+  → run() / execute()
+    → _check_permission(cmd, args)
+      → ShellPermissions.check(cmd, args)
+        → classify(cmd) → risk level
+        → policy[risk] → allow/deny
+        → granted set → override?
+      → PermissionError → interactive prompt or silent deny
+    → handler(self, args)
+    → audit log
+```
+
+All paths covered:
+- `run()` main loop → `_check_permission(interactive=True)`
+- `execute()` programmatic API → `_check_permission(interactive=False)`
+- `_execute_single()` pipelines/background/fc → `_check_permission(interactive=False)`
+
+### Persistence
+
+Grants persist to `~/.config/shell_permissions.json`:
+
+```json
+{
+  "granted": ["rm", "chmod"],
+  "policy": {
+    "safe": "allow",
+    "elevated": "allow",
+    "dangerous": "deny",
+    "critical": "deny"
+  }
+}
+```
+
+### Configuration
+
+```python
+from domains.shell import ShellPermissions, Risk
+
+perms = ShellPermissions()
+perms.set_policy(Risk.DANGEROUS, "allow")   # allow all dangerous
+perms.set_policy(Risk.CRITICAL, "deny")     # keep critical blocked
+perms.grant("rm", persist=True)             # allow rm forever
+perms.revoke("rm")                          # remove rm grant
+```
+
+---
+
 ## CLI Integration
 
 The shell is exposed via Click in `apps/cli/src/cli.py`:

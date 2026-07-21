@@ -385,6 +385,10 @@ class InitSystem:
         return list(self._managers.values())
 
     @property
+    def runlevel(self) -> int:
+        return self._current_runlevel
+
+    @property
     def uptime(self) -> float:
         return time.time() - self._boot_time if self._boot_time else 0.0
 

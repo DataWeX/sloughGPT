@@ -29,4 +29,4 @@ See `docs/REPO_STRUCTURE_MIGRATION.md` for the full move map.
 
 Contributor and security policies: **[CONTRIBUTING.md](../CONTRIBUTING.md)** and **[SECURITY.md](../SECURITY.md)** at the repo root (symlinks to `docs/policies/`).
 
-CI: **`.github/workflows/reusable-ci-core.yml`** (Python ruff smoke + core pytest), **`ci_cd.yml`** (Python SDK **`sdk-test-py`**, TypeScript SDK **`test-sdk-ts`**, TUI **`test-tui-ts`** (builds SDK then **`packages/tui-ts`**), Next.js **`test-web`**, **`standards-schemas`**, Docker images, benchmarks), **`publish.yml`** (PyPI). Local parity commands are in **CONTRIBUTING.md**.
+CI: **`.github/workflows/reusable-ci-core.yml`** (Python ruff smoke + core pytest), **`ci_cd.yml`** (Python SDK **`sdk-test-py`**, TypeScript SDK **`test-sdk-ts`**, TUI **`test-tui-ts`** (builds SDK then **`packages/tui-ts`**), Next.js **`test-web`**, **`standards-schemas`**, Docker images, benchmarks). Local parity commands are in **CONTRIBUTING.md**.

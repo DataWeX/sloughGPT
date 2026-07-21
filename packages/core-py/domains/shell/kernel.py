@@ -253,8 +253,7 @@ class DaitRuntime:
             f"Memory: {self.kernel.memory_usage_str}"
         )
         if self._boot_complete and self._init is not None:
-            lines += f"\nInit: runlevel {self._init._current_runlevel}, " \
-                     f"services: {len(self._init._managers)}"
+            lines += f"\n{self._init.status_summary}"
         return lines
 
     @property

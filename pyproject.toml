@@ -82,7 +82,7 @@ tui = [
 ]
 
 [project.scripts]
-sloughgpt = "apps.cli.cli:main"
+sloughgpt = "apps.cli.src.cli:main"
 sloughgpt-tui = "apps.tui:main"
 
 [project.urls]

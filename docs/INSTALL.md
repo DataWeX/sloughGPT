@@ -270,8 +270,10 @@ sudo apt-get update
 sudo apt-get install python3.9 python3.9-dev
 sudo apt-get install build-essential
 
-# Install SloughGPT
-python3.9 -m pip install sloughgpt
+# Install SloughGPT from source
+git clone https://github.com/DataWeX/sloughGPT.git
+cd sloughGPT
+python3.9 -m pip install -e .
 ```
 
 ### Windows

@@ -21,7 +21,7 @@ API_BASE = "http://localhost:8000"
 def _api_get(path: str) -> dict[str, Any] | list:
     import requests
     try:
-        r = requests.get(f"{API_BASE}{path}", timeout=5)
+        r = requests.get(f"{API_BASE}{path}", timeout=15)
         if r.status_code == 200:
             return r.json()
         return {"error": f"HTTP {r.status_code}", "detail": r.text[:200]}
@@ -40,23 +40,10 @@ def _api_post(path: str, data: dict | None = None) -> dict[str, Any] | list:
         return {"error": str(e)}
 
 
-async def _api_post_async(path: str, data: dict | None = None) -> dict[str, Any] | list:
-    """Async version of _api_post using httpx with connection pooling."""
-    import httpx
-    try:
-        async with httpx.AsyncClient(base_url=API_BASE, timeout=120.0) as client:
-            r = await client.post(path, json=data or {})
-            if r.status_code in (200, 201):
-                return r.json()
-            return {"error": f"HTTP {r.status_code}", "detail": r.text[:200]}
-    except Exception as e:
-        return {"error": str(e)}
-
-
 def _api_delete(path: str) -> dict[str, Any]:
     import requests
     try:
-        r = requests.delete(f"{API_BASE}{path}", timeout=5)
+        r = requests.delete(f"{API_BASE}{path}", timeout=15)
         return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}"}
     except Exception as e:
         return {"error": str(e)}
@@ -85,7 +72,7 @@ class ShellCommands:
         if isinstance(result, list):
             return result
         if isinstance(result, dict):
-            return result.get("models", result.get("models", []))
+            return result.get("models", result.get("available", []))
         return []
 
     @staticmethod
@@ -280,14 +267,6 @@ class ShellCommands:
         })
 
     @staticmethod
-    async def generate_async(prompt: str, max_tokens: int = 100) -> dict[str, Any]:
-        """Async generate via httpx — non-blocking, connection-pooled."""
-        return await _api_post_async("/inference/generate", {
-            "prompt": prompt,
-            "max_new_tokens": max_tokens,
-            "temperature": 0.7,
-        })
-
     @staticmethod
     def chat(messages: list[dict[str, str]]) -> dict[str, Any]:
         """Send a chat message."""
