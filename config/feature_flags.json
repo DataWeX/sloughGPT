@@ -21,5 +21,6 @@
   "knowledge_memory": "enabled",
   "semantic_cache": "experimental",
   "llm_nlp": "experimental",
-  "feature_flags": "enabled"
+  "feature_flags": "enabled",
+  "slonet_provider_tests": "enabled"
 }

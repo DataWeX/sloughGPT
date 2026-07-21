@@ -267,6 +267,11 @@ def _register_defaults():
         description="Runtime feature toggles with env var overrides",
         status=FlagStatus.ENABLED,
     )
+    FeatureFlags.register(
+        "slonet_provider_tests",
+        description="Tests for SloNetChatProvider features",
+        status=FlagStatus.ENABLED,
+    )
 
 
 _register_defaults()

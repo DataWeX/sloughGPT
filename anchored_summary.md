@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: b56886d3 fix: restore native C engine + cloud_vector_store, tag all features
+No active task. Last commit: be30e120 feat: feature flags system with CI protection
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
