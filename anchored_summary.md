@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 0338039c refactor: remove PyTorch from server core — SloNet is sole inference engine
+No active task. Last commit: 54ca1ce1 chore: remove leftover native/bindings.py from previous delete
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 
