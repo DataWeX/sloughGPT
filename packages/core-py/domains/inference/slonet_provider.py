@@ -301,40 +301,11 @@ class SloNetChatProvider:
                     weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info['shape'])
         return weights
 
-    def __init__(self, hf_model_id: str = "gpt2", quantize: bool = False,
-                 quant_bits: int = 8, quant_mode: str = "symmetric",
-                 quant_clip: float = 0.999):
-        """Deprecated: use SloNetChatProvider.from_slnc() instead.
-
-        This shim resolves the .slnc path from the HuggingFace model ID
-        and delegates to from_slnc(). Will be removed in a future version.
-        """
-        import warnings
-        warnings.warn(
-            "SloNetChatProvider(hf_model_id=...) is deprecated. "
-            "Use SloNetChatProvider.from_slnc(slnc_path, model_id=...) instead.",
-            DeprecationWarning, stacklevel=2,
+    def __init__(self, *args, **kwargs):
+        raise TypeError(
+            "SloNetChatProvider(hf_model_id=...) is removed. "
+            "Use SloNetChatProvider.from_slnc(slnc_path, model_id=...) instead."
         )
-        from pathlib import Path as _Path
-        from domains.infrastructure.safetensors_loader import _get_model_dir
-
-        model_dir = _get_model_dir(hf_model_id)
-        slnc_path = model_dir / "model.slnc"
-        if not slnc_path.exists():
-            raise FileNotFoundError(
-                f"No .slnc file for {hf_model_id}. "
-                "Run the server once to auto-convert from safetensors."
-            )
-
-        instance = self.from_slnc(
-            str(slnc_path),
-            model_id=hf_model_id,
-            quantize=quantize,
-            quant_bits=quant_bits,
-            quant_mode=quant_mode,
-            quant_clip=quant_clip,
-        )
-        self.__dict__.update(instance.__dict__)
 
     @classmethod
     def from_slnc(

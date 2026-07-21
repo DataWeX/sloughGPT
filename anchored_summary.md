@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 54ca1ce1 chore: remove leftover native/bindings.py from previous delete
+No active task. Last commit: e3d6c3b0 feat: native C forward pass with chat templates + sampling + KV cache
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

@@ -3,13 +3,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const {
   mockStartAutoTrain, mockStopAutoTrain, mockStartHFFineTune, mockStartVisualTrain,
-  mockStartTurboTrain,
+  mockStartTurboTrain, mockListJobs,
 } = vi.hoisted(() => ({
   mockStartAutoTrain: vi.fn(),
   mockStopAutoTrain: vi.fn(() => Promise.resolve()),
   mockStartHFFineTune: vi.fn(),
   mockStartVisualTrain: vi.fn(),
   mockStartTurboTrain: vi.fn(),
+  mockListJobs: vi.fn(),
 }))
 
 vi.mock('@/lib/controllers', () => ({
@@ -19,6 +20,9 @@ vi.mock('@/lib/controllers', () => ({
     startHFFineTune: mockStartHFFineTune,
     startVisualTrain: mockStartVisualTrain,
     startTurboTrain: mockStartTurboTrain,
+    list: mockListJobs,
+    pauseTraining: vi.fn(),
+    resumeTraining: vi.fn(),
   },
 }))
 
@@ -45,6 +49,7 @@ describe('useTrainingSession', () => {
     globalThis.EventSource = MockEventSource as any
     mockStartAutoTrain.mockResolvedValue(undefined)
     mockStartHFFineTune.mockRejectedValue(new Error('fail'))
+    mockListJobs.mockResolvedValue([])
   })
 
   it('returns default state', () => {
@@ -113,9 +118,9 @@ describe('useTrainingSession', () => {
   it('startFineTune polls for completion', async () => {
     vi.useFakeTimers()
     mockStartHFFineTune.mockResolvedValue({ job_id: 'job-1', message: 'Queued' })
-    globalThis.fetch = vi.fn().mockResolvedValue({ json: () => Promise.resolve([
+    mockListJobs.mockResolvedValue([
       { id: 'job-1', status: 'completed', result: { model_path: '/model/final', final_loss: 1.2 } },
-    ])})
+    ])
 
     const { result } = renderHook(() => useTrainingSession())
     await act(async () => { result.current.startFineTune({ model: 'gpt2', dataset: 'data', epochs: 3, batchSize: 4, lr: 0.001, useLoRA: false }, mockAddToast) })
@@ -130,9 +135,9 @@ describe('useTrainingSession', () => {
   it('startFineTune handles failure', async () => {
     vi.useFakeTimers()
     mockStartHFFineTune.mockResolvedValue({ job_id: 'job-2', message: 'Queued' })
-    globalThis.fetch = vi.fn().mockResolvedValue({ json: () => Promise.resolve([
+    mockListJobs.mockResolvedValue([
       { id: 'job-2', status: 'failed', error: 'OOM' },
-    ])})
+    ])
 
     const { result } = renderHook(() => useTrainingSession())
     await act(async () => { result.current.startFineTune({ model: 'gpt2', dataset: 'data', epochs: 3, batchSize: 4, lr: 0.001, useLoRA: false }, mockAddToast) })
@@ -170,9 +175,9 @@ describe('useTrainingSession', () => {
   it('startVisualTraining polls for completion', async () => {
     vi.useFakeTimers()
     mockStartVisualTrain.mockResolvedValue({ job_id: 'visual-1', message: 'Queued' })
-    globalThis.fetch = vi.fn().mockResolvedValue({ json: () => Promise.resolve([
+    mockListJobs.mockResolvedValue([
       { id: 'visual-1', status: 'completed', model_path: '/visual/final', loss: 0.8, output_dir: '/out', sou_path: '/out/model.sou' },
-    ])})
+    ])
 
     const { result } = renderHook(() => useTrainingSession())
     await act(async () => { result.current.startVisualTraining({ dataset: 'visual_data', visionEncoder: 'vit', llm: 'gpt2', stage1Epochs: 2, stage2Epochs: 2, useLoRA: true }, mockAddToast) })
