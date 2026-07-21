@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: 726b7544 fix: replace hardcoded JWT secret fallback with auto-generated token
+No active task. Last commit: b56886d3 fix: restore native C engine + cloud_vector_store, tag all features
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

@@ -54,6 +54,13 @@ def map_slnc_to_native(
                 return tensors[name].astype(np.float32)
         return np.zeros(0, dtype=np.float32)
 
+    def _bias_or(name, size):
+        """Get bias tensor or return zeros if missing (for models without biases)."""
+        t = tensors.get(name)
+        if t is not None:
+            return t.astype(np.float32)
+        return np.zeros(size, dtype=np.float32)
+
     prefix_fn = lambda i: f"model.layers.{i}" if is_qwen_style else f"h.{i}"
 
     layer_size = (D + D*(NH*HD) + NH*HD + D*(NKV*HD) + NKV*HD
@@ -96,6 +103,8 @@ def map_slnc_to_native(
         ow = _get(f"{p}.self_attn.o_proj.weight")
         flat[offset:offset+NH*HD*D] = ow.ravel()[:NH*HD*D]; offset += NH*HD*D
         ob = _get_or(f"{p}.self_attn.o_proj.bias", f"{p}.self_attn.bias")
+        if ob.size == 0:
+            ob = np.zeros(D, dtype=np.float32)
         flat[offset:offset+D] = ob.ravel()[:D]; offset += D
 
         fnw = _get(f"{p}.post_attention_layernorm.weight")
@@ -103,17 +112,17 @@ def map_slnc_to_native(
 
         gw = _get(f"{p}.mlp.gate_proj.weight")
         flat[offset:offset+D*FF] = gw.ravel()[:D*FF]; offset += D*FF
-        gb = _get(f"{p}.mlp.gate_proj.bias")
+        gb = _bias_or(f"{p}.mlp.gate_proj.bias", FF)
         flat[offset:offset+FF] = gb.ravel()[:FF]; offset += FF
 
         uw = _get(f"{p}.mlp.up_proj.weight")
         flat[offset:offset+D*FF] = uw.ravel()[:D*FF]; offset += D*FF
-        ub = _get(f"{p}.mlp.up_proj.bias")
+        ub = _bias_or(f"{p}.mlp.up_proj.bias", FF)
         flat[offset:offset+FF] = ub.ravel()[:FF]; offset += FF
 
         dw = _get(f"{p}.mlp.down_proj.weight")
         flat[offset:offset+FF*D] = dw.ravel()[:FF*D]; offset += FF*D
-        db = _get(f"{p}.mlp.down_proj.bias")
+        db = _bias_or(f"{p}.mlp.down_proj.bias", D)
         flat[offset:offset+D] = db.ravel()[:D]; offset += D
 
         layer_info[i] = {"offset": start, "size": layer_size}
@@ -125,7 +134,7 @@ def map_slnc_to_native(
 
     lm_head = _get("model.lm_head.weight")
     if lm_head.size == 0:
-        lm_head = _get("wte.weight")
+        lm_head = _get_or("wte.weight", "model.embed_tokens.weight")
     flat[offset:offset+V*D] = lm_head.ravel()[:V*D]; offset += V*D
 
     info = {

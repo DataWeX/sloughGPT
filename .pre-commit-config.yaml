@@ -53,3 +53,11 @@ repos:
         types: [python, ts, tsx, yaml, toml]
         pass_filenames: true
         stages: [pre-commit]
+
+      - id: check-feature-tags
+        name: Check FEATURE tags
+        entry: bash -c 'PYTHONPATH=packages/core-py python3 scripts/check_feature_tags.py --validate'
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-commit]

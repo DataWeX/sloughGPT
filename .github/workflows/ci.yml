@@ -126,3 +126,17 @@ jobs:
           python3 -m py_compile packages/mogdb/src/mogdb/database.py
       - name: Run mogdb tests
         run: python3 -m pytest packages/mogdb/tests/test_mogdb.py -q -o "addopts="
+
+  feature-tags:
+    name: Feature Tags
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Check feature tags
+        run: |
+          PYTHONPATH=packages/core-py python3 scripts/check_feature_tags.py --validate --check-deletions
