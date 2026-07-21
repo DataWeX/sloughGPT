@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: e3d6c3b0 feat: native C forward pass with chat templates + sampling + KV cache
+No active task. Last commit: e1394683 fix: useTrainingSession tests + remove deprecated constructor
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

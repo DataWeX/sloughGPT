@@ -219,7 +219,7 @@ from config import gen_config as gen_config_reexport  # noqa: E402, F401
 gen_config = gen_config_reexport
 server_state.gen_config = gen_config
 
-from infrastructure.auth import JWTAuth, AuditLogger, get_jwt_auth, get_audit_logger  # noqa: E402
+from infrastructure.auth import get_jwt_auth, get_audit_logger  # noqa: E402
 jwt_auth = get_jwt_auth()
 audit_logger = get_audit_logger()
 
