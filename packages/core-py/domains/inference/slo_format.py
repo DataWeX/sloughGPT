@@ -1,6 +1,9 @@
 """
 .soul - SloughGPT Soul Unit Format
 
+FEATURE: soul-format — Self-contained model format (weights + personality + metadata).
+DO NOT DELETE. Core infrastructure used by all model loading.
+
 The living identity format for trained AI models. Every .soul file is self-contained:
 model weights + soul profile + training metadata — no PyTorch dependency required.
 

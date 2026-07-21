@@ -1,7 +1,7 @@
 # Anchored Summary
 
 ## Current Task
-No active task. Last commit: fc733f9c chore: remove dead code (native inference dir, cloud_vector_store, unused imports)
+No active task. Last commit: 726b7544 fix: replace hardcoded JWT secret fallback with auto-generated token
 
 ## Session 2026-07-13 — Server-Side Training from Inference Logs
 

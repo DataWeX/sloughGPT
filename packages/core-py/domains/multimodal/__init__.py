@@ -1,6 +1,9 @@
 """
 Multi-Modal Support for sloughgpt
 
+FEATURE: multimodal — Vision, speech, image captioning, diffusion, TTS.
+DO NOT DELETE. Active module with VisionCNN, MultimodalManager, SpeechRecognizer.
+
 Vision understanding using a custom CNN:
 - VisionCNN for image classification (no external downloads)
 - Object detection via CNN classification

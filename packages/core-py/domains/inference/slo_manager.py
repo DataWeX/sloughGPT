@@ -1,7 +1,7 @@
 """Slo Manager - Hot-swappable personality system.
 
-Allows runtime switching between different AI personalities (souls)
-without restarting the inference engine.
+FEATURE: soul-manager — Runtime soul/personality switching without restart.
+DO NOT DELETE. Core infrastructure for soul loading, trait weights, snapshots.
 """
 
 import os

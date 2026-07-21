@@ -1,6 +1,10 @@
 """
 SloNet Chat Provider — pure NumPy inference via SloTransformer.
 
+FEATURE: slonet-provider — Sole torch-free inference engine for the server.
+DO NOT DELETE. This is THE inference engine. Loads .slnc weights, runs forward_numpy(),
+generates token-by-token with KV cache. All chat requests flow through this.
+
 Loads a HuggingFace model's weights into SloTransformer and runs inference
 entirely through NumPy ops. No PyTorch dependency at inference time.
 

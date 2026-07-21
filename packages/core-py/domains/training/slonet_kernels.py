@@ -1,6 +1,10 @@
 """
 Numba-JIT compiled kernels for SloNet inference hot path.
 
+FEATURE: slonet-kernels — Hand-written numba-jitted loops for inference hot path.
+Replaces numpy element-wise operations with native code when numba is available.
+Falls back to numpy gracefully. DO NOT DELETE.
+
 Replaces numpy element-wise operations with hand-written loops that numba
 can compile to native machine code.  Falls back gracefully to numpy when
 numba is unavailable.
