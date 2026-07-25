@@ -273,4 +273,25 @@ def self_test() -> list[str]:
     out3 = runner3.assemble_and_run(FIB_ASM)
     results.append(f"  fib: {'PASS' if out3 else 'FAIL'} — steps: {runner3.cpu._step_count}")
 
+    runner4 = VMRunner()
+    out4 = runner4.assemble_and_run(
+        "MOV R0, 10\nPUSH R0\nMOV R0, 20\nPOP R1\nIADD R2, R0, R1\nPRINT R2\nHALT"
+    )
+    stack_ok = out4 == ["30"]
+    results.append(f"  stack_push_pop: {'PASS' if stack_ok else 'FAIL'} — output: {out4}")
+
+    runner5 = VMRunner()
+    out5 = runner5.assemble_and_run(
+        "LOAD_CONST R0, 3.0\nLOAD_CONST R1, 4.0\nFMUL R2, R0, R1\nPRINT R2\nHALT"
+    )
+    float_ok = out5 and float(out5[0]) == 12.0
+    results.append(f"  float_mul: {'PASS' if float_ok else 'FAIL'} — output: {out5}")
+
+    runner6 = VMRunner()
+    out6 = runner6.assemble_and_run(
+        "ALLOC R0, 256\nMEMINFO R1\nPRINT R1\nHALT"
+    )
+    mem_ok = out6 and int(out6[0]) >= 1
+    results.append(f"  alloc_meminfo: {'PASS' if mem_ok else 'FAIL'} — output: {out6}")
+
     return results

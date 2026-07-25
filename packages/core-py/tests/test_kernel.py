@@ -456,3 +456,20 @@ class TestKernel:
         # Now dep2 should be able to run
         k.tick()
         k.shutdown()
+
+    def test_run_program(self):
+        k = Kernel()
+        k.boot()
+        result = k.run_program("LOAD_CONST R0, 42\nPRINT R0\nHALT")
+        assert result["output"] == ["42"]
+        assert result["steps"] == 3
+        assert result["regs"]["R0"] == 42
+        k.shutdown()
+
+    def test_run_program_with_trace(self):
+        k = Kernel()
+        k.boot()
+        result = k.run_program("MOV R0, 10\nMOV R1, 20\nIADD R2, R0, R1\nPRINT R2\nHALT", trace=True)
+        assert len(result["trace"]) > 0
+        assert result["output"] == ["30"]
+        k.shutdown()

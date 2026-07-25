@@ -1342,6 +1342,36 @@ class Kernel:
                 break
         return results
 
+    def run_program(self, source: str, trace: bool = False) -> dict:
+        """Run a VM assembly program through the kernel's device bus.
+
+        Creates a VM CPU, wires it to the kernel's devices, and executes
+        the assembled program. Returns output, trace, and step count.
+        """
+        from .vm import CPU, Assembler, DeviceBus as VMBus
+
+        vm_bus = VMBus()
+        if hasattr(self._devices, '_table'):
+            for name, dev in self._devices._table._devices.items():
+                vm_bus.register(name, dev)
+        elif hasattr(self._devices, '_devices'):
+            for name, dev in self._devices._devices.items():
+                vm_bus.register(name, dev)
+
+        cpu = CPU(devices=vm_bus)
+        cpu._tracing = trace
+        assembler = Assembler()
+        instructions = assembler.assemble(source)
+        cpu.load_program(instructions)
+        output = cpu.run()
+
+        return {
+            "output": output,
+            "steps": cpu._step_count,
+            "trace": cpu.get_trace() if trace else [],
+            "regs": {f"R{i}": v for i, v in enumerate(cpu.regs) if v != 0},
+        }
+
     # --- Info ---
 
     def info(self) -> dict:
