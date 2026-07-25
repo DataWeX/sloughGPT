@@ -44,6 +44,61 @@ class NPUModel:
 
 
 # ---------------------------------------------------------------------------
+# _HuggingFaceProvider — wraps transformers model for kernel integration
+# ---------------------------------------------------------------------------
+
+class _HuggingFaceProvider:
+    """Wraps a HuggingFace model + tokenizer behind the kernel's provider interface."""
+
+    def __init__(self, model: Any, tokenizer: Any, model_id: str, device: str = "cpu"):
+        self._model = model
+        self._tokenizer = tokenizer
+        self._model_id = model_id
+        self._device = device
+
+    def metadata(self) -> dict:
+        return {
+            "model_id": self._model_id,
+            "device": self._device,
+            "vocab_size": getattr(self._tokenizer, "vocab_size", 0),
+        }
+
+    def __call__(self, inputs: dict) -> Any:
+        import torch
+        input_ids = inputs.get("input_ids", None)
+        if input_ids is None:
+            raise ValueError("inputs must contain 'input_ids'")
+        if isinstance(input_ids, np.ndarray):
+            input_ids = torch.from_numpy(input_ids).long()
+        with torch.no_grad():
+            output = self._model(input_ids)
+        logits = output.logits if hasattr(output, "logits") else output
+        if isinstance(logits, torch.Tensor):
+            return logits.cpu().numpy()
+        return logits
+
+    def generate_numpy(self, prompt: str, max_tokens: int = 20,
+                       temperature: float = 1.0, **kwargs) -> list[int]:
+        import torch
+        inputs = self._tokenizer(prompt, return_tensors="pt")
+        input_ids = inputs["input_ids"].to(self._device)
+        with torch.no_grad():
+            output = self._model.generate(
+                input_ids, max_new_tokens=max_tokens,
+                temperature=temperature, do_sample=temperature > 0,
+                pad_token_id=self._tokenizer.eos_token_id,
+            )
+        new_tokens = output[0, input_ids.shape[1]:]
+        return new_tokens.cpu().tolist()
+
+    def tokenize(self, text: str) -> list[int]:
+        return self._tokenizer.encode(text)
+
+    def detokenize(self, token_ids: list[int]) -> str:
+        return self._tokenizer.decode(token_ids)
+
+
+# ---------------------------------------------------------------------------
 # NPUDevice
 # ---------------------------------------------------------------------------
 
@@ -147,8 +202,8 @@ class NPUDevice(DeviceDriver):
 
     def _load_provider(self, name: str, source: str, path: str,
                        backend: str = "", *args, **kwargs) -> tuple[Any, str]:
-        """Try C backend first (for .slnc), fall back to numpy."""
-        if backend and backend not in ("c", "numpy"):
+        """Route to C backend (.slnc), numpy backend, or HuggingFace."""
+        if backend and backend not in ("c", "numpy", "huggingface"):
             raise ValueError(f"Unknown backend: {backend}")
         if source.endswith(".slnc"):
             try:
@@ -157,8 +212,34 @@ class NPUDevice(DeviceDriver):
             except Exception:
                 provider = self._load_numpy_provider(name, source, path, kwargs)
                 return provider, "numpy"
+        elif source.startswith("huggingface:") or backend == "huggingface":
+            provider = self._load_huggingface_provider(name, source, kwargs)
+            return provider, "huggingface"
         else:
             raise ValueError(f"Unknown backend for {source}")
+
+    def _load_huggingface_provider(self, name: str, source: str,
+                                   kwargs: dict) -> Any:
+        """Load a HuggingFace model via transformers + tokenizer."""
+        model_id = source.replace("huggingface:", "")
+        try:
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+        except ImportError:
+            raise ValueError("transformers not installed — cannot load HuggingFace models")
+
+        device = kwargs.get("device", "cpu")
+        dtype = kwargs.get("dtype", None)
+
+        logger.info("Loading HuggingFace model %s on %s", model_id, device)
+        tokenizer = AutoTokenizer.from_pretrained(model_id)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id, torch_dtype=dtype, device_map=None,
+        )
+        model.to(device)
+        model.eval()
+
+        return _HuggingFaceProvider(model=model, tokenizer=tokenizer,
+                                    model_id=model_id, device=device)
 
     def _load_c_provider(self, name: str, source: str, path: str) -> Any:
         if not source.endswith(".slnc"):

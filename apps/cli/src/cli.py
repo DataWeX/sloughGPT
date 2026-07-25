@@ -1347,12 +1347,34 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
             mock = MockModel()
             k.engine.load_model(model, mock)
         else:
-            # Try loading real model via NPU
             from domains.shell.kernel_npu import NPUDevice
             npu = NPUDevice(name="npu")
             npu.open()
-            npu.load_model(model, f"huggingface:{model}")
-            k.engine.load_model(model, npu)
+            result = npu.load_model(model, f"huggingface:{model}")
+            if not result.success:
+                console.print(f"  [yellow]⚠ Could not load '{model}': {result.error}[/yellow]")
+                console.print("  [dim]Falling back to mock model. Install transformers for real models.[/dim]")
+                class FallbackModel:
+                    def __init__(self):
+                        self.call_count = 0
+                        self.total_tokens = 0
+                    def __call__(self, input_ids):
+                        self.call_count += 1
+                        self.total_tokens += input_ids.size
+                        return np.random.randn(input_ids.shape[0], input_ids.shape[1], vocab_size).astype(np.float32)
+                    def generate_numpy(self, prompt, max_tokens=10, temperature=1.0, **kw):
+                        self.call_count += 1
+                        self.total_tokens += max_tokens
+                        return list(range(10, 10 + max_tokens))
+                    def forward(self, inputs):
+                        self.call_count += 1
+                        ids = inputs.get("input_ids", np.zeros((1, 10), dtype=np.int64))
+                        self.total_tokens += ids.size
+                        return {"logits": np.random.randn(ids.shape[0], ids.shape[1], vocab_size).astype(np.float32)}
+                k.engine.load_model(model, FallbackModel())
+            else:
+                provider = npu._models[model].provider
+                k.engine.load_model(model, provider)
         t_load = time.perf_counter() - t1
         console.print(f"  [green]✓[/green] Model '{model}' loaded in {t_load*1000:.1f}ms")
 
