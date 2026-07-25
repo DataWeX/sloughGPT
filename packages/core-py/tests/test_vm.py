@@ -647,6 +647,33 @@ class TestShellWrite:
         assert any("wrote" in line for line in output)
         assert any("hello world" in line for line in output)
         k.shutdown()
+
+
+class TestX86Bootloader:
+    def test_bootloader_source_valid(self):
+        from domains.shell.vm_programs import X86_BOOTLOADER_ASM
+        assert "[BITS 16]" in X86_BOOTLOADER_ASM
+        assert "0xAA55" in X86_BOOTLOADER_ASM
+
+    def test_kernel_source_valid(self):
+        from domains.shell.vm_programs import X86_KERNEL_ASM
+        assert "[BITS 16]" in X86_KERNEL_ASM
+        assert "kernel_start" in X86_KERNEL_ASM
+
+    def test_export_binary(self):
+        from domains.shell.vm_programs import export_x86_binary, X86_BOOTLOADER_ASM
+        binary = export_x86_binary(X86_BOOTLOADER_ASM)
+        assert isinstance(binary, bytes)
+        assert len(binary) > 0
+
+    def test_build_disk_image(self):
+        from domains.shell.vm_programs import build_disk_image
+        boot = b'\x00' * 512
+        kernel = b'\x00' * 1024
+        image = build_disk_image(boot, kernel, size_mb=1)
+        assert len(image) == 1024 * 1024
+        assert image[:512] == boot
+        assert image[512:1536] == kernel
     def test_list_programs(self):
         from domains.shell.vm import BlockDevice, FlatFS, DiskProgramLoader
         blk = BlockDevice(num_sectors=16)

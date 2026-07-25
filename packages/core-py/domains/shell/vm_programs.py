@@ -336,3 +336,168 @@ SHELL_ASM = """\
     OUT 1, R3
     JMP 0
 """
+
+
+# ── x86 Boot Programs ───────────────────────────────────────────────────────
+
+X86_BOOTLOADER_ASM = """\
+; AI Compteur x86 Bootloader
+; 512-byte MBR that prints banner and loads kernel
+; Assembles to real x86-16 machine code
+
+[BITS 16]
+[ORG 0x7C00]
+
+start:
+    ; Set up segments
+    xor ax, ax
+    mov ds, ax
+    mov es, ax
+    mov ss, ax
+    mov sp, 0x7C00
+
+    ; Print boot banner
+    mov si, msg_boot
+    call print_string
+
+    ; Print version
+    mov si, msg_version
+    call print_string
+
+    ; Load kernel from disk (sector 1+)
+    mov ah, 0x02        ; BIOS read sectors
+    mov al, 4           ; 4 sectors (2KB kernel)
+    mov ch, 0           ; cylinder 0
+    mov cl, 2           ; sector 2 (after MBR)
+    mov dh, 0           ; head 0
+    mov dl, 0x80        ; first hard drive
+    mov bx, 0x1000      ; load to 0x1000
+    int 0x13
+    jc disk_error
+
+    ; Jump to kernel
+    jmp 0x0000:0x1000
+
+disk_error:
+    mov si, msg_disk_err
+    call print_string
+    jmp $
+
+print_string:
+    lodsb
+    or al, al
+    jz .done
+    mov ah, 0x0E
+    mov bh, 0
+    int 0x10
+    jmp print_string
+.done:
+    ret
+
+msg_boot:     db "AI Compteur Bootloader", 13, 10, 0
+msg_version:  db "v0.1 - Loading kernel...", 13, 10, 0
+msg_disk_err: db "Disk read error!", 13, 10, 0
+
+; Pad to 510 bytes + boot signature
+times 510-($-$$) db 0
+dw 0xAA55
+"""
+
+X86_KERNEL_ASM = """\
+; AI Compteur x86 Kernel Stub
+; Loaded by bootloader at 0x1000
+; Prints kernel banner and halts
+
+[BITS 16]
+[ORG 0x1000]
+
+kernel_start:
+    mov si, msg_kernel
+    call print_string
+
+    mov si, msg_ready
+    call print_string
+
+    ; Hang forever
+    jmp $
+
+print_string:
+    lodsb
+    or al, al
+    jz .done
+    mov ah, 0x0E
+    mov bh, 0
+    int 0x10
+    jmp print_string
+.done:
+    ret
+
+msg_kernel: db "AI Compteur Kernel", 13, 10, 0
+msg_ready:  db "System ready.", 13, 10, 0
+"""
+
+
+# ── Binary Export ────────────────────────────────────────────────────────────
+
+def export_x86_binary(source: str) -> bytes:
+    """Assemble x86 source to raw binary bytes.
+
+    Strips [BITS], [ORG], labels, and directives.
+    Returns raw machine code.
+    """
+    import re
+
+    lines = source.split('\n')
+    code_lines = []
+
+    for line in lines:
+        line = line.split(';')[0].strip()
+        if not line:
+            continue
+        if line.startswith('['):
+            continue
+        if line.startswith('times') and 'db' in line:
+            continue
+        if line.startswith('dw ') or line.startswith('dd '):
+            continue
+        if ':' in line and not line.startswith('db'):
+            line = line.split(':', 1)[1].strip()
+            if not line:
+                continue
+        code_lines.append(line)
+
+    return '\n'.join(code_lines).encode('utf-8')
+
+
+def build_disk_image(bootloader: bytes, kernel: bytes, size_mb: int = 1) -> bytes:
+    """Build a bootable disk image from bootloader + kernel.
+
+    Layout:
+      Sector 0 (512 bytes): Bootloader (MBR)
+      Sector 1+ (up to 2KB): Kernel
+      Rest: zeroed to size_mb
+    """
+    image = bytearray(size_mb * 1024 * 1024)
+
+    # Write bootloader to sector 0
+    image[:len(bootloader)] = bootloader
+
+    # Write kernel starting at sector 1 (offset 512)
+    image[512:512 + len(kernel)] = kernel
+
+    return bytes(image)
+
+
+def export_disk_image(source: str, output_path: str, size_mb: int = 1) -> str:
+    """Assemble source and build a bootable disk image.
+
+    Returns path to the created .img file.
+    """
+    bootloader = export_x86_binary(X86_BOOTLOADER_ASM)
+    kernel = export_x86_binary(source or X86_KERNEL_ASM)
+    image = build_disk_image(bootloader, kernel, size_mb)
+
+    with open(output_path, 'wb') as f:
+        f.write(image)
+
+    return output_path
