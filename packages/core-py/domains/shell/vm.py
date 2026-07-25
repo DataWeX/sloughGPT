@@ -354,6 +354,164 @@ class IRQDevice(Device):
         return super().call(method, *args)
 
 
+class VGADevice(Device):
+    """VGA text mode device — memory-mapped display at 0xB8000.
+
+    80x25 text mode with color attributes. Each character is 2 bytes:
+      byte 0 = ASCII character, byte 1 = color attribute (fg|bg<<4).
+
+    Colors:
+      0=black 1=blue 2=green 3=cyan 4=red 5=magenta 6=brown 7=lightgray
+      8=darkgray 9=lightblue 10=lightgreen 11=lightcyan
+      12=lightred 13=lightmagenta 14=yellow 15=white
+
+    Commands (via DEV_CALL):
+      write(row, col, char, fg, bg)  — write character with color
+      write_string(row, col, text, fg, bg)  — write string
+      clear(fg, bg)  — clear screen
+      scroll(n)  — scroll up n lines
+      set_cursor(row, col)  — move cursor
+      get_cursor() -> (row, col)
+      get_screen() -> list of 25 lines of 80 chars
+    """
+
+    ROWS = 25
+    COLS = 80
+    VGA_BUFFER_ADDR = 0xB8000
+
+    def __init__(self):
+        self._screen = [[{'char': ' ', 'fg': 7, 'bg': 0} for _ in range(self.COLS)]
+                        for _ in range(self.ROWS)]
+        self._cursor_row = 0
+        self._cursor_col = 0
+        self._default_fg = 7  # light gray
+        self._default_bg = 0  # black
+        self._writes = 0
+
+    def info(self):
+        return {
+            "type": "vga",
+            "rows": self.ROWS,
+            "cols": self.COLS,
+            "cursor": (self._cursor_row, self._cursor_col),
+            "writes": self._writes,
+        }
+
+    def call(self, method, *args):
+        if method == "write":
+            row, col, char = args[0], args[1], args[2]
+            fg = args[3] if len(args) > 3 else self._default_fg
+            bg = args[4] if len(args) > 4 else self._default_bg
+            if 0 <= row < self.ROWS and 0 <= col < self.COLS:
+                self._screen[row][col] = {'char': char, 'fg': fg, 'bg': bg}
+                self._writes += 1
+            return True
+        if method == "write_string":
+            row, col, text = args[0], args[1], args[2]
+            fg = args[3] if len(args) > 3 else self._default_fg
+            bg = args[4] if len(args) > 4 else self._default_bg
+            for i, ch in enumerate(text):
+                c = col + i
+                if c < self.COLS and 0 <= row < self.ROWS:
+                    self._screen[row][c] = {'char': ch, 'fg': fg, 'bg': bg}
+                    self._writes += 1
+            return True
+        if method == "clear":
+            fg = args[0] if args else self._default_fg
+            bg = args[1] if len(args) > 1 else self._default_bg
+            self._screen = [[{'char': ' ', 'fg': fg, 'bg': bg}
+                             for _ in range(self.COLS)] for _ in range(self.ROWS)]
+            self._cursor_row = 0
+            self._cursor_col = 0
+            self._writes += self.ROWS * self.COLS
+            return True
+        if method == "scroll":
+            n = args[0] if args else 1
+            for _ in range(n):
+                self._screen.pop(0)
+                self._screen.append([{'char': ' ', 'fg': 7, 'bg': 0}
+                                     for _ in range(self.COLS)])
+            self._writes += n * self.COLS
+            return True
+        if method == "set_cursor":
+            self._cursor_row = max(0, min(args[0], self.ROWS - 1))
+            self._cursor_col = max(0, min(args[1], self.COLS - 1))
+            return True
+        if method == "get_cursor":
+            return (self._cursor_row, self._cursor_col)
+        if method == "get_screen":
+            lines = []
+            for row in self._screen:
+                lines.append(''.join(c['char'] for c in row))
+            return lines
+        return super().call(method, *args)
+
+
+class PS2KeyboardDevice(Device):
+    """PS/2 keyboard device — port 0x60 scancode input.
+
+    Translates scancodes to ASCII. Supports key press and release.
+    Special keys: arrow keys, enter, backspace, escape, tab.
+
+    Commands (via DEV_CALL):
+      read_key() -> ascii_code  — non-blocking read (0 if empty)
+      read_key_blocking() -> ascii_code  — blocking read
+      push_scancode(scancode)  — inject scancode (for testing)
+      has_key() -> bool
+      clear()  — flush input buffer
+    """
+
+    # PS/2 Set 1 scancodes → ASCII
+    SCANCODE_TO_ASCII = {
+        0x00: 0, 0x1E: ord('1'), 0x1F: ord('2'), 0x20: ord('3'),
+        0x21: ord('4'), 0x22: ord('5'), 0x23: ord('6'), 0x24: ord('7'),
+        0x25: ord('8'), 0x26: ord('9'), 0x27: ord('0'),
+        0x10: ord('q'), 0x11: ord('w'), 0x12: ord('e'), 0x13: ord('r'),
+        0x14: ord('t'), 0x15: ord('y'), 0x16: ord('u'), 0x17: ord('i'),
+        0x18: ord('o'), 0x19: ord('p'),
+        0x1E: ord('a'), 0x1F: ord('s'), 0x20: ord('d'), 0x21: ord('f'),
+        0x22: ord('g'), 0x23: ord('h'), 0x24: ord('j'), 0x25: ord('k'),
+        0x26: ord('l'),
+        0x2C: ord('z'), 0x2D: ord('x'), 0x2E: ord('c'), 0x2F: ord('v'),
+        0x30: ord('b'), 0x31: ord('n'), 0x32: ord('m'),
+        0x39: ord(' '), 0x1C: 10, 0x0E: 8, 0x01: 27, 0x0F: 9,
+        0x4B: 0x100, 0x4D: 0x101, 0x48: 0x102, 0x50: 0x103,  # arrows
+    }
+
+    def __init__(self):
+        self._buffer: list[int] = []
+        self._read_count = 0
+
+    def info(self):
+        return {
+            "type": "ps2_keyboard",
+            "buffered": len(self._buffer),
+            "reads": self._read_count,
+        }
+
+    def call(self, method, *args):
+        if method == "read_key":
+            return self.read_key()
+        if method == "push_scancode":
+            scancode = args[0]
+            if scancode < 0x80:  # key press only (not release)
+                ascii_val = self.SCANCODE_TO_ASCII.get(scancode, 0)
+                self._buffer.append(ascii_val)
+            return True
+        if method == "has_key":
+            return len(self._buffer) > 0
+        if method == "clear":
+            self._buffer.clear()
+            return True
+        return super().call(method, *args)
+
+    def read_key(self):
+        if self._buffer:
+            self._read_count += 1
+            return self._buffer.pop(0)
+        return 0
+
+
 class BlockDevice(Device):
     """Sector-based block storage — 512-byte sectors.
 

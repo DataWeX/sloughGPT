@@ -674,6 +674,100 @@ class TestX86Bootloader:
         assert len(image) == 1024 * 1024
         assert image[:512] == boot
         assert image[512:1536] == kernel
+
+
+class TestVGA:
+    def test_vga_write(self):
+        from domains.shell.vm import VGADevice
+        vga = VGADevice()
+        vga.call("write", 0, 0, 'A', 15, 0)
+        screen = vga.call("get_screen")
+        assert screen[0][0] == 'A'
+
+    def test_vga_write_string(self):
+        from domains.shell.vm import VGADevice
+        vga = VGADevice()
+        vga.call("write_string", 0, 0, "Hello", 10, 0)
+        screen = vga.call("get_screen")
+        assert screen[0][:5] == "Hello"
+
+    def test_vga_clear(self):
+        from domains.shell.vm import VGADevice
+        vga = VGADevice()
+        vga.call("write", 5, 5, 'X', 15, 0)
+        vga.call("clear", 15, 1)
+        screen = vga.call("get_screen")
+        assert all(c == ' ' for c in screen[0])
+
+    def test_vga_scroll(self):
+        from domains.shell.vm import VGADevice
+        vga = VGADevice()
+        vga.call("write_string", 0, 0, "Line1", 15, 0)
+        vga.call("write_string", 1, 0, "Line2", 15, 0)
+        vga.call("scroll", 1)
+        screen = vga.call("get_screen")
+        assert "Line2" in screen[0]
+        assert screen[1][:5] == "     "
+
+    def test_vga_cursor(self):
+        from domains.shell.vm import VGADevice
+        vga = VGADevice()
+        vga.call("set_cursor", 10, 20)
+        assert vga.call("get_cursor") == (10, 20)
+
+    def test_vga_info(self):
+        from domains.shell.vm import VGADevice
+        vga = VGADevice()
+        info = vga.info()
+        assert info["type"] == "vga"
+        assert info["rows"] == 25
+        assert info["cols"] == 80
+
+
+class TestPS2Keyboard:
+    def test_read_key(self):
+        from domains.shell.vm import PS2KeyboardDevice
+        kb = PS2KeyboardDevice()
+        kb.call("push_scancode", 0x10)  # 'q'
+        assert kb.call("read_key") == ord('q')
+
+    def test_empty_returns_zero(self):
+        from domains.shell.vm import PS2KeyboardDevice
+        kb = PS2KeyboardDevice()
+        assert kb.call("read_key") == 0
+
+    def test_has_key(self):
+        from domains.shell.vm import PS2KeyboardDevice
+        kb = PS2KeyboardDevice()
+        assert kb.call("has_key") is False
+        kb.call("push_scancode", 0x1E)  # 'a'
+        assert kb.call("has_key") is True
+
+    def test_clear(self):
+        from domains.shell.vm import PS2KeyboardDevice
+        kb = PS2KeyboardDevice()
+        kb.call("push_scancode", 0x1E)
+        kb.call("push_scancode", 0x30)
+        kb.call("clear")
+        assert kb.call("has_key") is False
+
+    def test_key_release_ignored(self):
+        from domains.shell.vm import PS2KeyboardDevice
+        kb = PS2KeyboardDevice()
+        kb.call("push_scancode", 0x9E)  # key release 'a'
+        assert kb.call("has_key") is False
+
+    def test_enter_key(self):
+        from domains.shell.vm import PS2KeyboardDevice
+        kb = PS2KeyboardDevice()
+        kb.call("push_scancode", 0x1C)  # Enter
+        assert kb.call("read_key") == 10
+
+    def test_space_key(self):
+        from domains.shell.vm import PS2KeyboardDevice
+        kb = PS2KeyboardDevice()
+        kb.call("push_scancode", 0x39)  # Space
+        assert kb.call("read_key") == ord(' ')
     def test_list_programs(self):
         from domains.shell.vm import BlockDevice, FlatFS, DiskProgramLoader
         blk = BlockDevice(num_sectors=16)
