@@ -793,8 +793,8 @@ class TestX86Bootloader:
         from domains.shell.vm_programs import X86_BOOTLOADER_ASM
         assert "[BITS 16]" in X86_BOOTLOADER_ASM
         assert "0xAA55" in X86_BOOTLOADER_ASM
-        assert "gdt_" in X86_BOOTLOADER_ASM
-        assert "protected_mode" in X86_BOOTLOADER_ASM
+        assert "int 0x10" in X86_BOOTLOADER_ASM
+        assert "msg_boot" in X86_BOOTLOADER_ASM
 
     def test_kernel_source_valid(self):
         from domains.shell.vm_programs import X86_KERNEL_ASM
@@ -818,11 +818,14 @@ class TestX86Bootloader:
         assert image[:512] == boot
         assert image[512:1536] == kernel
 
-    def test_bootloader_has_gdt(self):
+    def test_bootloader_compiles_to_512(self):
+        from domains.shell.vm import X86Assembler
         from domains.shell.vm_programs import X86_BOOTLOADER_ASM
-        assert "gdt_code" in X86_BOOTLOADER_ASM
-        assert "gdt_data" in X86_BOOTLOADER_ASM
-        assert "lgdt" in X86_BOOTLOADER_ASM
+        asm = X86Assembler()
+        code = asm.assemble(X86_BOOTLOADER_ASM)
+        assert len(code) == 512
+        assert code[510] == 0x55
+        assert code[511] == 0xAA
 
     def test_kernel_has_vga(self):
         from domains.shell.vm_programs import X86_KERNEL_ASM
