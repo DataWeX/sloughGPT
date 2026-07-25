@@ -258,6 +258,60 @@ class ConsoleDevice(Device):
         return super().call(method, *args)
 
 
+class FileDevice(Device):
+    """File I/O device — provides read/write access to the host filesystem.
+
+    Commands (via DEV_CALL):
+      open(path, mode) -> fd
+      read(fd, size) -> bytes
+      write(fd, data) -> bytes_written
+      close(fd)
+      listdir(path) -> list[str]
+      exists(path) -> bool
+    """
+
+    def __init__(self):
+        self._files: dict[int, any] = {}
+        self._next_fd: int = 1
+
+    def info(self):
+        return {"type": "file", "open_files": len(self._files)}
+
+    def call(self, method, *args):
+        if method == "open":
+            path, mode = args[0], args[1] if len(args) > 1 else "r"
+            fh = open(path, mode)
+            fd = self._next_fd
+            self._next_fd += 1
+            self._files[fd] = fh
+            return fd
+        if method == "read":
+            fd, size = args[0], args[1] if len(args) > 1 else 4096
+            fh = self._files.get(fd)
+            if fh is None:
+                raise DeviceFault(f"bad fd: {fd}")
+            return fh.read(size)
+        if method == "write":
+            fd, data = args[0], args[1]
+            fh = self._files.get(fd)
+            if fh is None:
+                raise DeviceFault(f"bad fd: {fd}")
+            return fh.write(data)
+        if method == "close":
+            fd = args[0]
+            fh = self._files.pop(fd, None)
+            if fh:
+                fh.close()
+            return True
+        if method == "listdir":
+            import os
+            return os.listdir(args[0])
+        if method == "exists":
+            import os
+            return os.path.exists(args[0])
+        return super().call(method, *args)
+
+
 class BlockDevice(Device):
     """Sector-based block storage — 512-byte sectors.
 
@@ -1185,12 +1239,13 @@ class VirtualSystem:
     Wires together the components into a single runnable system.
     """
 
-    def __init__(self, enable_block: bool = False, enable_console: bool = True):
+    def __init__(self, enable_block: bool = False, enable_console: bool = True,
+                 stdin_fn=None, stdout_fn=None):
         self.memory = Memory()
         self.bus = DeviceBus()
 
         if enable_console:
-            self.bus.register_console()
+            self.bus.register_console(stdin_fn=stdin_fn, stdout_fn=stdout_fn)
         if enable_block:
             self.block = BlockDevice()
             self.bus.register("block", self.block)

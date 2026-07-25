@@ -311,3 +311,45 @@ class TestEndToEndSimulation:
         assert ns["engine"]["models_loaded"] == 1
 
         k.shutdown()
+
+
+class TestBootAndShell:
+    def test_boot_program(self):
+        from domains.shell.vm import VirtualSystem
+        from domains.shell.vm_programs import BOOT_ASM
+
+        out = []
+        vs = VirtualSystem(enable_block=True, stdout_fn=lambda v: out.append(str(v)))
+        vs.load_program(BOOT_ASM)
+        vs.run()
+        assert any("AI Compteur" in line for line in out)
+        assert any("Ready" in line for line in out)
+
+    def test_shell_echoes_command(self):
+        from domains.shell.vm import VirtualSystem
+        from domains.shell.vm_programs import SHELL_ASM
+
+        out = []
+        inputs = ['test-cmd']
+        input_iter = iter(inputs)
+
+        vs = VirtualSystem(
+            stdin_fn=lambda: next(input_iter, 'exit'),
+            stdout_fn=lambda v: out.append(str(v)),
+        )
+        vs.load_program(SHELL_ASM)
+        vs.run(max_steps=30)
+        assert any("test-cmd" in line for line in out)
+        assert any("ai-compteur>" in line for line in out)
+
+    def test_kernel_boots_and_spawns_shell(self):
+        import time as _time
+        k = Kernel()
+        k.boot()
+        k.register_devices()
+        proc = k.spawn_shell()
+        assert proc.name == "shell"
+        k.tick()
+        _time.sleep(0.05)
+        assert proc.state.name in ("RUNNING", "READY")
+        k.shutdown()

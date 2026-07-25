@@ -295,3 +295,44 @@ def self_test() -> list[str]:
     results.append(f"  alloc_meminfo: {'PASS' if mem_ok else 'FAIL'} — output: {out6}")
 
     return results
+
+
+# ── Boot & Shell Programs ───────────────────────────────────────────────────
+
+BOOT_ASM = """\
+    ; AI Compteur Boot Sequence
+    ; Initializes system, prints banner, loads shell
+    LOAD_CONST R0, "AI Compteur v0.1"
+    OUT 1, R0
+    LOAD_CONST R0, "Booting kernel..."
+    OUT 1, R0
+    LOAD_CONST R0, 0
+    MEMINFO R1
+    LOAD_CONST R2, "Memory: "
+    OUT 1, R2
+    OUT 1, R1
+    LOAD_CONST R2, " blocks available"
+    OUT 1, R2
+    LOAD_CONST R0, "Initializing devices..."
+    OUT 1, R0
+    LOAD_CONST R0, "Console: port 0 (in), port 1 (out)"
+    OUT 1, R0
+    LOAD_CONST R0, "Ready."
+    OUT 1, R0
+    HALT
+"""
+
+SHELL_ASM = """\
+    ; AI Compteur Interactive Shell
+    ; Reads commands from port 0, executes, prints to port 1
+    ; Simple REPL: read line, echo it back
+    LOAD_CONST R0, "ai-compteur> "
+    OUT 1, R0
+    IN R1, 0
+    LOAD_CONST R2, "exec: "
+    OUT 1, R2
+    OUT 1, R1
+    LOAD_CONST R3, "ok"
+    OUT 1, R3
+    JMP 0
+"""
