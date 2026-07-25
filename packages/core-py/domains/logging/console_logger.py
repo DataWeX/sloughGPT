@@ -174,13 +174,7 @@ class ConsoleLogger(Logger):
     def _format_human(self, record: LogRecord) -> str:
         """Human-readable colored output for terminals.
 
-        Format: HH:MM:SS LVL  [TAG]  message  key=val ...  (exception)
-
-        Enhanced error formatting:
-        - Error type detection and classification
-        - File/line info extraction from exceptions
-        - Structured stack trace formatting
-        - Visual hierarchy with box-drawing characters
+        Format: HH:MM:SS LVL [TAG] logger message key=val ... (exception)
         """
         parts = []
 
@@ -206,11 +200,13 @@ class ConsoleLogger(Logger):
             else:
                 parts.append(f"[{tag_text}]")
 
-        # Logger name — dimmed cyan
-        if self._colors:
-            parts.append(f"{_Ansi.GREY}{_Ansi.DIM}{record.logger}{_Ansi.RESET}")
-        else:
-            parts.append(record.logger)
+        # Logger name — dimmed grey
+        logger_name = record.logger.split(".")[-1] if record.logger else ""
+        if logger_name:
+            if self._colors:
+                parts.append(f"{_Ansi.GREY}{_Ansi.DIM}{logger_name}{_Ansi.RESET}")
+            else:
+                parts.append(logger_name)
 
         # Message
         parts.append(record.message)
