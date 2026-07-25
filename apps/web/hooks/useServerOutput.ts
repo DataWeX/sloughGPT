@@ -80,8 +80,9 @@ export function useServerOutput(opts: UseServerOutputOptions = {}): UseServerOut
       content = JSON.stringify(lines, null, 2)
     } else {
       content = lines.map(l => {
-        const ts = new Date(l.ts * 1000).toISOString()
-        return `${ts} [${l.level}] [${l.source}] ${l.text}`
+        const tag = l.tag ? ` [${l.tag}]` : ''
+        const src = l.source ? ` ${l.source}` : ''
+        return `${l.level}${tag}${src}  ${l.text}`
       }).join('\n')
     }
     const blob = new Blob([content], { type: format === 'json' ? 'application/json' : 'text/plain' })

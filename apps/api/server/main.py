@@ -75,8 +75,9 @@ logger = logging.getLogger("slo")
 
 # Log bridge → output buffer (for SSE streaming via /system/stream)
 try:
-    from domains.infrastructure.output_buffer import install_log_bridge
+    from domains.infrastructure.output_buffer import install_log_bridge, install_stdio_bridge
     _buf_handler = install_log_bridge()
+    install_stdio_bridge()
     logger.info("Output buffer bridge installed (handler=%s)", _buf_handler, extra={"tag": "START"})
 except Exception as exc:
     logger.warning("Output buffer bridge install failed: %s", exc, extra={"tag": "START"})

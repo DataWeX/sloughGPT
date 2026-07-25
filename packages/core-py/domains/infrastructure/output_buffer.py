@@ -1,42 +1,59 @@
 """
-Shared output buffer — ring buffer with subscriber support for SSE streaming.
+Shared output buffer — unified structured log capture.
 
-Moved from shell/stdio.py to shared infrastructure so both the shell REPL
-and the API server can use the same buffer. Extended with:
-  - Subscriber cursors for real-time SSE streaming
-  - Log handler integration (logging.Handler subclass)
-  - JSON serialization for SSE events
-  - Singletons for server-wide use
+Captures logs from ALL sources into a single structured schema:
+  - Python logging (via BufferLogHandler)
+  - stdout/stderr (via TeeWriter)
+  - Frontend logs (via /logs/ingest endpoint)
+  - Training progress, API requests, lifecycle events
+
+Each log entry carries structured fields (level, source, tag, context)
+so the frontend can render without regex parsing.
+
+Used by:
+  - Shell REPL (via StdioWriter) for terminal output + pager
+  - API server for capturing all log/stdout output → SSE streaming
+  - Training pipelines for real-time loss/progress streaming
 """
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 import threading
 import time
-from typing import Callable, List, Optional
+from dataclasses import dataclass, field
+from typing import Any
 
 
+@dataclass
 class OutputLine:
-    """A single line of output with style and metadata."""
+    """A single structured log entry.
 
-    __slots__ = ("text", "style", "indent", "level", "source", "timestamp")
+    Attributes:
+        text: The log message (clean, without timestamp/level prefix).
+        level: Log level — debug, info, warning, error, critical.
+        source: Module/source that produced the log (e.g. "slo.startup", "uvicorn").
+        tag: Optional category tag (e.g. "START", "INFRA", "MODEL", "REQ").
+        context: Extra structured metadata (e.g. {"method": "GET", "status": 200}).
+        timestamp: Unix timestamp.
+        style: ANSI prefix (shell mode only, ignored in server mode).
+        indent: Indentation level (shell mode only).
+    """
 
-    def __init__(
-        self,
-        text: str = "",
-        style: str = "",
-        indent: int = 0,
-        level: str = "info",
-        source: str = "server",
-        timestamp: float | None = None,
-    ) -> None:
-        self.text = text
-        self.style = style       # ANSI prefix (shell) or level tag (server)
-        self.indent = indent
-        self.level = level
-        self.source = source
-        self.timestamp = timestamp or time.time()
+    text: str = ""
+    level: str = "info"
+    source: str = ""
+    tag: str = ""
+    context: dict[str, Any] = field(default_factory=dict)
+    timestamp: float = 0.0
+    style: str = ""
+    indent: int = 0
+
+    def __post_init__(self):
+        if self.timestamp == 0.0:
+            self.timestamp = time.time()
 
     def render(self, width: int = 0, color: bool = True) -> str:
         """Render for terminal output (shell mode)."""
@@ -47,30 +64,30 @@ class OutputLine:
         return line
 
     def to_dict(self) -> dict:
-        """Serialize to dict (server mode)."""
-        return {
+        """Serialize to dict for SSE/API transport."""
+        d: dict[str, Any] = {
             "text": self.text,
             "level": self.level,
             "source": self.source,
             "ts": self.timestamp,
         }
+        if self.tag:
+            d["tag"] = self.tag
+        if self.context:
+            d["context"] = self.context
+        return d
 
     def to_sse(self) -> str:
         """Serialize to JSON for SSE event."""
-        import json
         return json.dumps(self.to_dict())
 
     def __repr__(self) -> str:
-        return f"OutputLine({self.text[:30]!r})"
+        tag = f" [{self.tag}]" if self.tag else ""
+        return f"OutputLine({self.level}{tag} {self.source}: {self.text[:40]!r})"
 
 
 class OutputBuffer:
     """Thread-safe ring buffer of OutputLines with subscriber support.
-
-    Used by:
-      - Shell REPL (via StdioWriter) for terminal output + pager
-      - API server for capturing all log/stdout output → SSE streaming
-      - Training pipelines for real-time loss/progress streaming
 
     Thread safety: all mutations go through ``self._lock``.
     Subscribers get a cursor that wakes on each append.
@@ -79,8 +96,8 @@ class OutputBuffer:
     def __init__(self, max_lines: int = 5000) -> None:
         self._lines: list[OutputLine] = []
         self._max = max_lines
-        self._view_top = 0        # first visible line index (shell pager)
-        self._view_height = 0     # number of visible lines (shell pager)
+        self._view_top = 0
+        self._view_height = 0
         self._lock = threading.Lock()
         self._subscribers: dict[str, _Subscriber] = {}
         self._seq = 0
@@ -97,9 +114,30 @@ class OutputBuffer:
             for sub in self._subscribers.values():
                 sub._notify(line)
 
-    def append_text(self, text: str, style: str = "", indent: int = 0, **kwargs) -> None:
-        """Append raw text as an OutputLine."""
-        self.append(OutputLine(text, style, indent, **kwargs))
+    def append_text(self, text: str, **kwargs) -> OutputLine:
+        """Append raw text as an OutputLine. Kept for backward compat."""
+        line = OutputLine(text=text, **kwargs)
+        self.append(line)
+        return line
+
+    def append_log(
+        self,
+        text: str,
+        level: str = "info",
+        source: str = "",
+        tag: str = "",
+        context: dict[str, Any] | None = None,
+    ) -> OutputLine:
+        """Append a structured log entry."""
+        line = OutputLine(
+            text=text,
+            level=level,
+            source=source,
+            tag=tag,
+            context=context or {},
+        )
+        self.append(line)
+        return line
 
     def clear(self) -> None:
         with self._lock:
@@ -119,18 +157,12 @@ class OutputBuffer:
     def seq(self) -> int:
         return self._seq
 
-    # ── Tail access (server mode) ──
-
     def tail(self, n: int = 100) -> list[OutputLine]:
-        """Get last N lines."""
         with self._lock:
             return list(self._lines)[-n:]
 
     def tail_dicts(self, n: int = 100) -> list[dict]:
-        """Get last N lines as dicts."""
         return [l.to_dict() for l in self.tail(n)]
-
-    # ── Viewport scrolling (shell mode) ──
 
     def scroll(self, delta: int) -> None:
         with self._lock:
@@ -150,12 +182,9 @@ class OutputBuffer:
         self._view_height = max(1, height)
         with self._lock:
             max_top = max(0, len(self._lines) - self._view_height)
-            self._view_top = max(0, min(self._view_top, max_top))
-
-    # ── Subscribers (server SSE mode) ──
+            self._view_top = min(self._view_top, max_top)
 
     def subscribe(self, name: str | None = None) -> _Subscriber:
-        """Create a subscriber with its own cursor."""
         name = name or f"sub-{id(self)}-{self._seq}"
         sub = _Subscriber(name=name, buffer=self)
         with self._lock:
@@ -177,12 +206,10 @@ class _Subscriber:
         self._event = threading.Event()
 
     def _notify(self, line: OutputLine) -> None:
-        """Called by buffer on append (under buffer lock)."""
         self._pending.append(line)
         self._event.set()
 
     def read(self, timeout: float = 0.1) -> list[OutputLine]:
-        """Block up to timeout, then return pending lines."""
         self._event.wait(timeout=timeout)
         self._event.clear()
         with self._buffer._lock:
@@ -191,23 +218,29 @@ class _Subscriber:
         return lines
 
     def read_all(self) -> list[OutputLine]:
-        """Non-blocking: return all pending lines."""
         with self._buffer._lock:
             lines = list(self._pending)
             self._pending.clear()
         return lines
 
 
-# ── Log handler ──────────────────────────────────────────────────────────
+# ── Capture handlers ────────────────────────────────────────────────────
+
 
 class BufferLogHandler(logging.Handler):
-    """Routes log records into an OutputBuffer.
+    """Captures Python logging records into structured OutputLines.
 
-    Captures all log records with structured extras (tag, error_code, context)
-    for display in the web UI's Server Output panel.
+    Extracts structured extras (tag, error_code, context) from the record
+    and stores them as fields — not formatted into text.
     """
 
-    _EXTRA_FIELDS = ("tag", "error_code", "context")
+    _LEVEL_MAP = {
+        logging.DEBUG: "debug",
+        logging.INFO: "info",
+        logging.WARNING: "warning",
+        logging.ERROR: "error",
+        logging.CRITICAL: "critical",
+    }
 
     def __init__(self, buffer: OutputBuffer, level: int = logging.INFO):
         super().__init__(level=level)
@@ -215,30 +248,134 @@ class BufferLogHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
-            msg = self.format(record)
-            # Append structured extras as [TAG] prefix or key=val suffix
-            extras = []
-            for field in self._EXTRA_FIELDS:
-                val = getattr(record, field, None)
-                if val is not None:
-                    if field == "context" and isinstance(val, dict):
-                        extras.extend(f"{k}={v}" for k, v in val.items())
-                    else:
-                        extras.append(f"[{val}]" if field == "tag" else f"{field}={val}")
-            if extras:
-                msg = msg + " " + " ".join(extras)
-            self._buffer.append_text(msg, level=record.levelname.lower(), source=record.name)
+            msg = record.getMessage()
+            tag = getattr(record, "tag", "")
+            ctx_raw = getattr(record, "context", None)
+            error_code = getattr(record, "error_code", None)
+
+            context: dict[str, Any] = {}
+            if isinstance(ctx_raw, dict):
+                context.update(ctx_raw)
+            if error_code:
+                context["error_code"] = error_code
+
+            self._buffer.append_log(
+                text=msg,
+                level=self._LEVEL_MAP.get(record.levelno, "info"),
+                source=record.name,
+                tag=tag,
+                context=context,
+            )
         except Exception:
             pass
 
 
-# ── Singletons ──────────────────────────────────────────────────────────
+class _TeeWriter:
+    """Tees writes to both the original stream and the OutputBuffer.
+
+    Parses common output formats into structured fields:
+      - "HH:MM:SS LVL [TAG] source message"
+      - "LEVEL:     message" (uvicorn)
+      - Rich CLI output (plain text)
+      - System warnings
+    """
+
+    _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+    # "HH:MM:SS LVL [TAG] source message"
+    _STRUCTURED_RE = re.compile(
+        r"^(\d{2}:\d{2}:\d{2})\s+"
+        r"(INF|WRN|ERR|DBG|INFO|WARNING|ERROR|DEBUG)\s+"
+        r"(?:\[([^\]]+)\]\s+)?"
+        r"(\S+)\s+"
+        r"(.*)$"
+    )
+    # "LEVEL:     message" (uvicorn)
+    _UVICORN_RE = re.compile(r"^(INFO|WARNING|ERROR|DEBUG):\s{2,}(.*)$")
+    # "(process:PID): program-WARNING **: time: message"
+    _SYSTEM_RE = re.compile(
+        r"^\(.*?\):\s+\S+[-](?:WARNING|ERROR)\s+\*\*:\s+\d{2}:\d{2}:\d{2}\.\d+:\s+(.*)$"
+    )
+
+    def __init__(self, original, buffer: OutputBuffer, source: str = "stdout"):
+        self._original = original
+        self._buffer = buffer
+        self._source = source
+        self._buf = ""
+
+    def write(self, data: str):
+        self._original.write(data)
+        self._buf += data
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            line = self._ANSI_RE.sub("", line.rstrip())
+            if not line.strip():
+                continue
+            self._parse_and_append(line)
+
+    def _parse_and_append(self, line: str):
+        """Parse a raw stdout line into structured fields."""
+        # Structured: "HH:MM:SS LVL [TAG] source message"
+        m = self._STRUCTURED_RE.match(line)
+        if m:
+            self._buffer.append_log(
+                text=m.group(5),
+                level=_norm_level(m.group(2)),
+                source=m.group(4),
+                tag=m.group(3) or "",
+            )
+            return
+
+        # Uvicorn: "LEVEL:     message"
+        m = self._UVICORN_RE.match(line)
+        if m:
+            self._buffer.append_log(
+                text=m.group(2),
+                level=_norm_level(m.group(1)),
+                source="uvicorn",
+            )
+            return
+
+        # System warning
+        m = self._SYSTEM_RE.match(line)
+        if m:
+            self._buffer.append_log(
+                text=m.group(1),
+                level="warning",
+                source="system",
+            )
+            return
+
+        # Plain text — store as-is
+        self._buffer.append_log(text=line, level="info", source=self._source)
+
+    def flush(self):
+        self._original.flush()
+
+    def __getattr__(self, name):
+        return getattr(self._original, name)
+
+
+def _norm_level(raw: str) -> str:
+    """Normalize level strings to lowercase."""
+    low = raw.lower()
+    if low in ("inf", "info"):
+        return "info"
+    if low in ("wrn", "warning"):
+        return "warning"
+    if low in ("err", "error"):
+        return "error"
+    if low in ("dbg", "debug"):
+        return "debug"
+    return low
+
+
+# ── Singletons + installation ──────────────────────────────────────────
 
 _server_buffer: OutputBuffer | None = None
 
 
 def get_server_buffer() -> OutputBuffer:
-    """Global server output buffer singleton."""
     global _server_buffer
     if _server_buffer is None:
         _server_buffer = OutputBuffer(max_lines=10_000)
@@ -246,9 +383,16 @@ def get_server_buffer() -> OutputBuffer:
 
 
 def install_log_bridge(buffer: OutputBuffer | None = None, level: int = logging.INFO) -> BufferLogHandler:
-    """Install a log handler that routes all logging into the buffer."""
+    """Install a log handler that routes all Python logging into the buffer."""
     buf = buffer or get_server_buffer()
     handler = BufferLogHandler(buf, level=level)
-    handler.setFormatter(logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s", datefmt="%H:%M:%S"))
     logging.root.addHandler(handler)
     return handler
+
+
+def install_stdio_bridge(buffer: OutputBuffer | None = None):
+    """Tee stdout/stderr into the OutputBuffer with structured parsing."""
+    buf = buffer or get_server_buffer()
+    import sys
+    sys.stdout = _TeeWriter(sys.stdout, buf, "stdout")
+    sys.stderr = _TeeWriter(sys.stderr, buf, "stderr")

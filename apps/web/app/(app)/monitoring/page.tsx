@@ -139,7 +139,7 @@ export default function SystemHealthPage() {
         right={
           <div className="flex items-center gap-2">
             {lastUpdated && (
-              <span className="text-[11px] text-muted-foreground hidden sm:inline">Updated {lastUpdated}</span>
+              <span className="text-[11px] text-muted-foreground hidden sm:inline font-mono">Updated {lastUpdated}</span>
             )}
             <Button variant="outline" size="sm" onClick={() => fetchAll(true)} disabled={refreshing || !loaded}>
               {refreshing ? 'Refreshing...' : 'Refresh'}
@@ -147,391 +147,333 @@ export default function SystemHealthPage() {
           </div>
         }
       />
-      <div className="space-y-4">
+      <div className="space-y-3">
         {!loaded && (
-          <Card>
-            <CardHeader><CardTitle className="text-base">Status</CardTitle></CardHeader>
-            <CardContent>
-              <KpiGrid columns={4}>
-                <StatCard label="API" value={<Skeleton className="h-4 w-16" />} />
-                <StatCard label="Model" value={<Skeleton className="h-4 w-20" />} />
-                <StatCard label="Uptime" value={<Skeleton className="h-4 w-16" />} />
-                <StatCard label="Responses served" value={<Skeleton className="h-4 w-8" />} />
-              </KpiGrid>
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Card className="p-3"><CardContent className="p-0"><KpiGrid columns={4}>
+              <StatCard label="API" value={<Skeleton className="h-4 w-16" />} />
+              <StatCard label="Model" value={<Skeleton className="h-4 w-20" />} />
+              <StatCard label="Uptime" value={<Skeleton className="h-4 w-16" />} />
+              <StatCard label="Responses" value={<Skeleton className="h-4 w-8" />} />
+            </KpiGrid></CardContent></Card>
+            <Card className="p-3"><CardContent className="p-0"><KpiGrid columns={4}>
+              <StatCard label="CPU" value={<Skeleton className="h-4 w-12" />} />
+              <StatCard label="Memory" value={<Skeleton className="h-4 w-12" />} />
+              <StatCard label="Used" value={<Skeleton className="h-4 w-16" />} />
+              <StatCard label="Available" value={<Skeleton className="h-4 w-16" />} />
+            </KpiGrid></CardContent></Card>
+            <Card className="p-3"><CardContent className="p-0"><KpiGrid columns={4}>
+              <StatCard label="Items" value={<Skeleton className="h-4 w-8" />} />
+              <StatCard label="Topics" value={<Skeleton className="h-4 w-8" />} />
+              <StatCard label="Importance" value={<Skeleton className="h-4 w-12" />} />
+              <StatCard label="AI training" value={<Skeleton className="h-4 w-16" />} />
+            </KpiGrid></CardContent></Card>
+          </div>
         )}
 
-        {/* Status + Model — uses live SSE data for instant updates */}
-        {loaded && <Card>
-          <CardHeader><CardTitle className="text-base flex items-center gap-2">
-            Status
-            {connectionStatus === 'connected' && liveHealth && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-success/10 text-success text-[10px] font-medium">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-                live
-              </span>
-            )}
-          </CardTitle></CardHeader>
-          <CardContent>
-            <KpiGrid columns={4}>
-              <StatCard
-                label="API"
-                value={!loaded ? 'Loading...' : apiOk ? 'Healthy' : 'Error'}
-                icon={
-                  <span className={`inline-block w-2 h-2 rounded-full ${!loaded ? 'bg-warning' : apiOk ? 'bg-success' : 'bg-destructive'}`} />
-                }
-              />
-              <StatCard
-                label="Model"
-                value={!loaded ? '...' : (liveHealth?.model_loaded ?? detailed?.model_loaded) ? (liveHealth?.model_type || detailed?.model_type || 'Loaded') : 'Not loaded'}
-                icon={
-                  <span className={`inline-block w-2 h-2 rounded-full ${!loaded ? 'bg-warning' : (liveHealth?.model_loaded ?? detailed?.model_loaded) ? 'bg-success' : 'bg-warning'}`} />
-                }
-              />
-              <StatCard
-                label="Uptime"
-                value={!loaded ? '...' : formatUptime(liveHealth?.uptime_seconds ?? detailed?.uptime_seconds ?? 0)}
-              />
-              <StatCard
-                label="Responses served"
-                value={!loaded ? '...' : String(liveHealth?.inference_count ?? detailed?.inference?.inference_count ?? 0)}
-              />
-            </KpiGrid>
-          </CardContent>
-        </Card>}
-
-        {/* System Resources — uses live SSE data for CPU/memory */}
-        <Card>
-          <CardHeader><CardTitle className="text-base">System Resources</CardTitle></CardHeader>
-          <CardContent>
-            <KpiGrid columns={4}>
-              <StatCard
-                label="CPU"
-                value={liveHealth?.cpu_percent != null ? `${liveHealth.cpu_percent}%` : metrics ? `${metrics.cpu_percent}%` : '...'}
-                icon={
-                  <span className={`inline-block w-2 h-2 rounded-full ${(liveHealth?.cpu_percent ?? metrics?.cpu_percent ?? -1) < 0 ? 'bg-warning' : (liveHealth?.cpu_percent ?? metrics?.cpu_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />
-                }
-              />
-              <StatCard
-                label="Memory"
-                value={liveHealth?.memory_percent != null ? `${liveHealth.memory_percent}%` : metrics ? `${metrics.memory_percent}%` : '...'}
-                icon={
-                  <span className={`inline-block w-2 h-2 rounded-full ${(liveHealth?.memory_percent ?? metrics?.memory_percent ?? -1) < 0 ? 'bg-warning' : (liveHealth?.memory_percent ?? metrics?.memory_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />
-                }
-              />
-              <StatCard
-                label="Used"
-                value={metrics ? `${metrics.memory_used_gb.toFixed(1)} GB` : '...'}
-              />
-              <StatCard
-                label="Available"
-                value={detailed?.system?.memory_available_mb ? `${(detailed.system.memory_available_mb / 1024).toFixed(1)} GB` : '...'}
-              />
-            </KpiGrid>
-          </CardContent>
-        </Card>
-
-        {/* Knowledge Base */}
-        <Card>
-          <CardHeader><CardTitle className="text-base">Knowledge Base</CardTitle></CardHeader>
-          <CardContent>
-            <KpiGrid columns={4}>
-              <StatCard label="Items" value={knowledgeStats ? knowledgeStats.total_items.toString() : '...'} />
-              <StatCard label="Topics" value={knowledgeStats ? knowledgeStats.topic_count.toString() : '...'} />
-              <StatCard label="Avg Importance" value={knowledgeStats ? knowledgeStats.avg_importance.toFixed(2) : '...'} />
-              <StatCard
-                label="AI training"
-                value={!adapterStatus ? '...' : adapterStatus.adapter_exists ? 'Trained' : 'Not trained'}
-                icon={
-                  <span className={`inline-block w-2 h-2 rounded-full ${!adapterStatus ? 'bg-warning' : adapterStatus.adapter_exists ? 'bg-success' : 'bg-muted-foreground/50'}`} />
-                }
-              />
-            </KpiGrid>
-            {adapterStatus && adapterStatus.adapter_exists && (
-              <p className="text-xs text-muted-foreground mt-2">
-                Trained on {adapterStatus.fact_count} facts ({adapterStatus.total_facts_available} available)
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Auto-Trainer */}
-        {autoTrainStatus && (
-          <Card>
-            <CardHeader><CardTitle className="text-base">Auto-Trainer</CardTitle></CardHeader>
-            <CardContent>
-              <KpiGrid columns={4}>
-                <StatCard
-                  label="Status"
-                  value={autoTrainStatus.enabled ? 'Running' : 'Off'}
-                  icon={
-                    <span className={`inline-block w-2 h-2 rounded-full ${autoTrainStatus.enabled ? 'bg-success' : 'bg-muted-foreground/50'}`} />
-                  }
-                />
-                <StatCard label="Conversations" value={`${autoTrainStatus.pending_conversations} / ${autoTrainStatus.threshold}`} />
-                <StatCard label="Trains completed" value={autoTrainStatus.total_trains.toString()} />
-                <StatCard
-                  label="Last loss"
-                  value={autoTrainStatus.last_loss != null ? autoTrainStatus.last_loss.toFixed(4) : '...'}
-                />
-              </KpiGrid>
-              {autoTrainStatus.last_train && (
-                <p className="text-xs text-muted-foreground mt-2">
-                  Last trained: {new Date(autoTrainStatus.last_train).toLocaleString()}
-                  {autoTrainStatus.last_checkpoint && <> · {autoTrainStatus.last_checkpoint}</>}
-                </p>
-              )}
-              <p className="text-[11px] text-muted-foreground/50 mt-1">
-                {autoTrainStatus.session_count} conversations · {autoTrainStatus.response_log_count} log files · interval {autoTrainStatus.interval_s}s
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Training History */}
-        {trainingJobs.length > 0 && (
-          <Card>
-            <CardHeader><CardTitle className="text-base">Training History</CardTitle></CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {trainingJobs.slice(0, 10).map((job) => (
-                  <div key={job.id} className="flex items-center justify-between text-sm py-1 border-b last:border-0">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${
-                        job.status === 'completed' ? 'bg-success' :
-                        job.status === 'running' ? 'bg-primary animate-pulse' :
-                        job.status === 'failed' ? 'bg-destructive' :
-                        'bg-muted-foreground/50'
-                      }`} />
-                      <span className="truncate">{job.name || job.id}</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0 ml-4">
-                      {job.loss != null && <span>loss {job.loss.toFixed(3)}</span>}
-                      {job.epochs_completed != null && <span>ep {job.epochs_completed}</span>}
-                      <span>{job.status}</span>
-                      <span>{new Date(job.created_at).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                ))}
+        {/* Row 1: Status + Resources + Knowledge — 3-col grid */}
+        {loaded && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Card className="p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</span>
+                {connectionStatus === 'connected' && liveHealth && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-success/10 text-success text-[10px] font-medium">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+                    live
+                  </span>
+                )}
               </div>
-              {trainingJobs.length > 10 && (
-                <p className="text-[11px] text-muted-foreground/50 mt-2">
-                  + {trainingJobs.length - 10} more jobs
-                </p>
-              )}
-            </CardContent>
-          </Card>
+              <CardContent className="p-0">
+                <KpiGrid columns={2}>
+                  <StatCard
+                    label="API"
+                    value={!loaded ? '...' : <span className="font-mono">{apiOk ? 'Healthy' : 'Error'}</span>}
+                    icon={<span className={`inline-block w-2 h-2 rounded-full ${!loaded ? 'bg-warning' : apiOk ? 'bg-success' : 'bg-destructive'}`} />}
+                  />
+                  <StatCard
+                    label="Model"
+                    value={!loaded ? '...' : <span className="font-mono">{(liveHealth?.model_loaded ?? detailed?.model_loaded) ? (liveHealth?.model_type || detailed?.model_type || 'Loaded') : 'Not loaded'}</span>}
+                    icon={<span className={`inline-block w-2 h-2 rounded-full ${!loaded ? 'bg-warning' : (liveHealth?.model_loaded ?? detailed?.model_loaded) ? 'bg-success' : 'bg-warning'}`} />}
+                  />
+                  <StatCard
+                    label="Uptime"
+                    value={!loaded ? '...' : <span className="font-mono">{formatUptime(liveHealth?.uptime_seconds ?? detailed?.uptime_seconds ?? 0)}</span>}
+                  />
+                  <StatCard
+                    label="Responses"
+                    value={!loaded ? '...' : <span className="font-mono">{String(liveHealth?.inference_count ?? detailed?.inference?.inference_count ?? 0)}</span>}
+                  />
+                </KpiGrid>
+              </CardContent>
+            </Card>
+
+            <Card className="p-3">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Resources</span>
+              <CardContent className="p-0">
+                <KpiGrid columns={2}>
+                  <StatCard
+                    label="CPU"
+                    value={liveHealth?.cpu_percent != null ? <span className="font-mono">{liveHealth.cpu_percent}%</span> : metrics ? <span className="font-mono">{metrics.cpu_percent}%</span> : '...'}
+                    icon={<span className={`inline-block w-2 h-2 rounded-full ${(liveHealth?.cpu_percent ?? metrics?.cpu_percent ?? -1) < 0 ? 'bg-warning' : (liveHealth?.cpu_percent ?? metrics?.cpu_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />}
+                  />
+                  <StatCard
+                    label="Memory"
+                    value={liveHealth?.memory_percent != null ? <span className="font-mono">{liveHealth.memory_percent}%</span> : metrics ? <span className="font-mono">{metrics.memory_percent}%</span> : '...'}
+                    icon={<span className={`inline-block w-2 h-2 rounded-full ${(liveHealth?.memory_percent ?? metrics?.memory_percent ?? -1) < 0 ? 'bg-warning' : (liveHealth?.memory_percent ?? metrics?.memory_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />}
+                  />
+                  <StatCard
+                    label="Used"
+                    value={metrics ? <span className="font-mono">{metrics.memory_used_gb.toFixed(1)} GB</span> : '...'}
+                  />
+                  <StatCard
+                    label="Available"
+                    value={detailed?.system?.memory_available_mb ? <span className="font-mono">{(detailed.system.memory_available_mb / 1024).toFixed(1)} GB</span> : '...'}
+                  />
+                </KpiGrid>
+              </CardContent>
+            </Card>
+
+            <Card className="p-3">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Knowledge</span>
+              <CardContent className="p-0">
+                <KpiGrid columns={2}>
+                  <StatCard label="Items" value={knowledgeStats ? <span className="font-mono">{knowledgeStats.total_items.toString()}</span> : '...'} />
+                  <StatCard label="Topics" value={knowledgeStats ? <span className="font-mono">{knowledgeStats.topic_count.toString()}</span> : '...'} />
+                  <StatCard label="Importance" value={knowledgeStats ? <span className="font-mono">{knowledgeStats.avg_importance.toFixed(2)}</span> : '...'} />
+                  <StatCard
+                    label="AI training"
+                    value={!adapterStatus ? '...' : <span className="font-mono">{adapterStatus.adapter_exists ? 'Trained' : 'Not'}</span>}
+                    icon={<span className={`inline-block w-2 h-2 rounded-full ${!adapterStatus ? 'bg-warning' : adapterStatus.adapter_exists ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
+                  />
+                </KpiGrid>
+                {adapterStatus && adapterStatus.adapter_exists && (
+                  <p className="text-[11px] text-muted-foreground mt-1.5 font-mono">
+                    {adapterStatus.fact_count} facts ({adapterStatus.total_facts_available} avail)
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         )}
 
-        {/* Training Executor Pool */}
-        {executorStatus && executorStatus.initialized && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center justify-between">
-                <span>Training Pool</span>
-                <div className="flex gap-2">
+        {/* Row 2: Auto-Trainer + Quality + DPO — 3-col grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {autoTrainStatus && (
+            <Card className="p-3">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Auto-Trainer</span>
+              <CardContent className="p-0">
+                <KpiGrid columns={2}>
+                  <StatCard
+                    label="Status"
+                    value={autoTrainStatus.enabled ? <span className="font-mono">Running</span> : <span className="font-mono">Off</span>}
+                    icon={<span className={`inline-block w-2 h-2 rounded-full ${autoTrainStatus.enabled ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
+                  />
+                  <StatCard label="Queue" value={<span className="font-mono">{autoTrainStatus.pending_conversations}/{autoTrainStatus.threshold}</span>} />
+                  <StatCard label="Trains" value={<span className="font-mono">{autoTrainStatus.total_trains.toString()}</span>} />
+                  <StatCard label="Loss" value={autoTrainStatus.last_loss != null ? <span className="font-mono">{autoTrainStatus.last_loss.toFixed(4)}</span> : '...'} />
+                </KpiGrid>
+                {autoTrainStatus.last_train && (
+                  <p className="text-[11px] text-muted-foreground mt-1.5 font-mono">
+                    Last: {new Date(autoTrainStatus.last_train).toLocaleString()}
+                    {autoTrainStatus.last_checkpoint && <> · {autoTrainStatus.last_checkpoint}</>}
+                  </p>
+                )}
+                <p className="text-[10px] text-muted-foreground/50 mt-0.5 font-mono">
+                  {autoTrainStatus.session_count} sessions · {autoTrainStatus.response_log_count} logs · {autoTrainStatus.interval_s}s
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {benchQuality && benchQuality.status === 'ok' && (
+            <Card className="p-3">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Quality</span>
+              <CardContent className="p-0">
+                <KpiGrid columns={2}>
+                  <StatCard label="Coherence" value={<span className="font-mono">{benchQuality.coherence_score.toFixed(2)}</span>} icon={
+                    <span className={`inline-block w-2 h-2 rounded-full ${benchQuality.coherence_score > 0.7 ? 'bg-success' : benchQuality.coherence_score > 0.4 ? 'bg-warning' : 'bg-destructive'}`} />
+                  } />
+                  <StatCard label="Score" value={<span className="font-mono">{benchQuality.quality_score.toFixed(2)}</span>} icon={
+                    <span className={`inline-block w-2 h-2 rounded-full ${benchQuality.quality_score > 0.7 ? 'bg-success' : benchQuality.quality_score > 0.4 ? 'bg-warning' : 'bg-destructive'}`} />
+                  } />
+                  <StatCard label="Responses" value={<span className="font-mono">{benchQuality.total_responses.toString()}</span>} />
+                  <StatCard label="Repetition" value={<span className="font-mono">{(benchQuality.repetition_rate * 100).toFixed(1)}%</span>} />
+                </KpiGrid>
+                <div className="flex gap-3 mt-1.5 text-[11px] text-muted-foreground font-mono">
+                  <span>Avg: {benchQuality.avg_length.toFixed(1)}w</span>
+                  <span>Empty: {(benchQuality.empty_rate * 100).toFixed(1)}%</span>
+                  {benchStats && <span>Tokens: {benchStats.avg_tokens.toFixed(0)}</span>}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {(dpoStatus || visualStatus) && (
+            <Card className="p-3">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Feedback + Vision</span>
+              <CardContent className="p-0">
+                <KpiGrid columns={2}>
+                  <StatCard
+                    label="Feedback"
+                    value={dpoStatus ? <span className="font-mono">{dpoStatus.status}</span> : '...'}
+                    icon={<span className={`inline-block w-2 h-2 rounded-full ${!dpoStatus ? 'bg-warning' : dpoStatus.status === 'running' ? 'bg-warning' : dpoStatus.status === 'completed' ? 'bg-success' : dpoStatus.status === 'error' ? 'bg-destructive' : 'bg-muted-foreground/50'}`} />}
+                  />
+                  <StatCard
+                    label="Vision"
+                    value={visualStatus ? <span className="font-mono">{visualStatus.visual_loaded ? 'Yes' : 'No'}</span> : '...'}
+                    icon={<span className={`inline-block w-2 h-2 rounded-full ${!visualStatus ? 'bg-warning' : visualStatus.visual_loaded ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
+                  />
+                  <StatCard label="Accepted" value={dpoStatus ? <span className="font-mono">{dpoStatus.accepted_count.toString()}</span> : '...'} />
+                  <StatCard label="Rejected" value={dpoStatus ? <span className="font-mono">{dpoStatus.rejected_count.toString()}</span> : '...'} />
+                </KpiGrid>
+                <div className="mt-2">
+                  <Button
+                    size="sm"
+                    className="h-6 text-[11px]"
+                    disabled={dpoRunning || dpoStatus?.status === 'running'}
+                    onClick={async () => {
+                      setDpoRunning(true)
+                      try {
+                        await apiPost('/multimodal/dpo', {})
+                        await fetchAll()
+                      } catch (err) {
+                        logger.error('DPO training failed', { exception: String(err) })
+                      }
+                      setDpoRunning(false)
+                    }}
+                  >
+                    {dpoRunning || dpoStatus?.status === 'running' ? 'Running...' : 'Run feedback'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Row 3: Training History + Training Pool — 2-col grid */}
+        {(trainingJobs.length > 0 || (executorStatus && executorStatus.initialized)) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {trainingJobs.length > 0 && (
+              <Card className="p-3">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Training History</span>
+                <CardContent className="p-0">
+                  <div className="space-y-1">
+                    {trainingJobs.slice(0, 6).map((job) => (
+                      <div key={job.id} className="flex items-center justify-between text-xs py-0.5">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${
+                            job.status === 'completed' ? 'bg-success' :
+                            job.status === 'running' ? 'bg-primary animate-pulse' :
+                            job.status === 'failed' ? 'bg-destructive' :
+                            'bg-muted-foreground/50'
+                          }`} />
+                          <span className="truncate font-mono">{job.name || job.id}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground shrink-0 ml-2 font-mono">
+                          {job.loss != null && <span>{job.loss.toFixed(3)}</span>}
+                          {job.epochs_completed != null && <span>ep{job.epochs_completed}</span>}
+                          <span>{job.status}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {trainingJobs.length > 6 && (
+                    <p className="text-[10px] text-muted-foreground/50 mt-1 font-mono">+{trainingJobs.length - 6} more</p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {executorStatus && executorStatus.initialized && (
+              <Card className="p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Pool</span>
                   {executorStatus.total_tracked > 0 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-[11px] h-6"
-                      onClick={async () => {
-                        await systemController.purgeExecutorJobs(3600)
-                        fetchAll()
-                      }}
-                    >
-                      Purge old
+                    <Button variant="outline" size="sm" className="text-[10px] h-5" onClick={async () => { await systemController.purgeExecutorJobs(3600); fetchAll() }}>
+                      Purge
                     </Button>
                   )}
                 </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <KpiGrid columns={4}>
-                <StatCard
-                  label="Active jobs"
-                  value={executorStatus.active_jobs.toString()}
-                  icon={
-                    <span className={`inline-block w-2 h-2 rounded-full ${executorStatus.active_jobs > 0 ? 'bg-warning' : 'bg-success'}`} />
-                  }
-                />
-                <StatCard label="Max workers" value={executorStatus.max_workers.toString()} />
-                <StatCard label="Total tracked" value={executorStatus.total_tracked.toString()} />
-                <StatCard
-                  label="Queue"
-                  value={executorStatus.jobs.filter(j => j.status === 'queued').length.toString()}
-                />
-              </KpiGrid>
-              {executorStatus.jobs.length > 0 && (
-                <div className="mt-3 text-xs text-muted-foreground space-y-1">
-                  {executorStatus.jobs.slice(0, 5).map(j => {
-                    const displayStatus = j.cancel_requested && j.status === 'running' ? 'cancelling' : j.status
-                    return (
-                    <div key={j.job_id} className="flex items-center gap-2">
-                      <span className={`inline-block w-1.5 h-1.5 rounded-full ${
-                        displayStatus === 'running' ? 'bg-warning' :
-                        displayStatus === 'cancelling' ? 'bg-warning animate-pulse' :
-                        displayStatus === 'completed' ? 'bg-success' :
-                        displayStatus === 'failed' ? 'bg-destructive' :
-                        displayStatus === 'cancelled' ? 'bg-muted-foreground/50' :
-                        'bg-muted-foreground/30'
-                      }`} />
-                      <span className="font-mono">{j.job_id}</span>
-                      <span className="text-muted-foreground/60">{displayStatus}</span>
-                      {j.elapsed_s != null && <span>{j.elapsed_s.toFixed(1)}s</span>}
-                      {j.tree_id && <span className="text-muted-foreground/40">tree:{j.tree_id}</span>}
-                      {(j.status === 'running' || j.status === 'queued') && !j.cancel_requested && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-[10px] h-5 text-destructive hover:text-destructive ml-auto"
-                          onClick={async () => {
-                            await systemController.cancelExecutorJob(j.job_id)
-                            fetchAll()
-                          }}
-                        >
-                          Cancel
-                        </Button>
-                      )}
+                <CardContent className="p-0">
+                  <KpiGrid columns={4}>
+                    <StatCard
+                      label="Active"
+                      value={<span className="font-mono">{executorStatus.active_jobs.toString()}</span>}
+                      icon={<span className={`inline-block w-2 h-2 rounded-full ${executorStatus.active_jobs > 0 ? 'bg-warning' : 'bg-success'}`} />}
+                    />
+                    <StatCard label="Workers" value={<span className="font-mono">{executorStatus.max_workers.toString()}</span>} />
+                    <StatCard label="Tracked" value={<span className="font-mono">{executorStatus.total_tracked.toString()}</span>} />
+                    <StatCard label="Queue" value={<span className="font-mono">{executorStatus.jobs.filter(j => j.status === 'queued').length.toString()}</span>} />
+                  </KpiGrid>
+                  {executorStatus.jobs.length > 0 && (
+                    <div className="mt-2 text-[11px] text-muted-foreground space-y-0.5 font-mono">
+                      {executorStatus.jobs.slice(0, 4).map(j => {
+                        const ds = j.cancel_requested && j.status === 'running' ? 'cancelling' : j.status
+                        return (
+                        <div key={j.job_id} className="flex items-center gap-1.5">
+                          <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                            ds === 'running' ? 'bg-warning' : ds === 'cancelling' ? 'bg-warning animate-pulse' :
+                            ds === 'completed' ? 'bg-success' : ds === 'failed' ? 'bg-destructive' : 'bg-muted-foreground/30'
+                          }`} />
+                          <span>{j.job_id}</span>
+                          <span className="text-muted-foreground/60">{ds}</span>
+                          {j.elapsed_s != null && <span>{j.elapsed_s.toFixed(1)}s</span>}
+                          {(j.status === 'running' || j.status === 'queued') && !j.cancel_requested && (
+                            <Button variant="ghost" size="sm" className="text-[10px] h-4 text-destructive hover:text-destructive ml-auto"
+                              onClick={async () => { await systemController.cancelExecutorJob(j.job_id); fetchAll() }}>
+                              Cancel
+                            </Button>
+                          )}
+                        </div>
+                        )
+                      })}
+                      {executorStatus.jobs.length > 4 && <div className="text-muted-foreground/40">+{executorStatus.jobs.length - 4} more</div>}
                     </div>
-                    )
-                  })}
-                  {executorStatus.jobs.length > 5 && (
-                    <div className="text-muted-foreground/40">+{executorStatus.jobs.length - 5} more</div>
                   )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         )}
 
-        {/* Model Quality */}
-        {benchQuality && benchQuality.status === 'ok' && (
-          <Card>
-            <CardHeader><CardTitle className="text-base">Response quality</CardTitle></CardHeader>
-            <CardContent>
-              <KpiGrid columns={4}>
-                <StatCard label="Coherence" value={benchQuality.coherence_score.toFixed(2)} icon={
-                  <span className={`inline-block w-2 h-2 rounded-full ${benchQuality.coherence_score > 0.7 ? 'bg-success' : benchQuality.coherence_score > 0.4 ? 'bg-warning' : 'bg-destructive'}`} />
-                } />
-                <StatCard label="Quality Score" value={benchQuality.quality_score.toFixed(2)} icon={
-                  <span className={`inline-block w-2 h-2 rounded-full ${benchQuality.quality_score > 0.7 ? 'bg-success' : benchQuality.quality_score > 0.4 ? 'bg-warning' : 'bg-destructive'}`} />
-                } />
-                <StatCard label="Responses" value={benchQuality.total_responses.toString()} />
-                <StatCard label="Repetition" value={`${(benchQuality.repetition_rate * 100).toFixed(1)}%`} />
-              </KpiGrid>
-              <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
-                <span>Avg length: {benchQuality.avg_length.toFixed(1)} words</span>
-                <span>Empty rate: {(benchQuality.empty_rate * 100).toFixed(1)}%</span>
-                {benchStats && <span>Avg response length: {benchStats.avg_tokens.toFixed(0)}</span>}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* DPO / Visual Training */}
-        {dpoStatus || visualStatus ? (
-          <Card>
-            <CardHeader><CardTitle className="text-base">Model Training (Feedback + Vision model)</CardTitle></CardHeader>
-            <CardContent>
-              <KpiGrid columns={4}>
-                <StatCard
-                  label="Training feedback status"
-                  value={dpoStatus ? dpoStatus.status : '...'}
-                  icon={
-                    <span className={`inline-block w-2 h-2 rounded-full ${!dpoStatus ? 'bg-warning' : dpoStatus.status === 'running' ? 'bg-warning' : dpoStatus.status === 'completed' ? 'bg-success' : dpoStatus.status === 'error' ? 'bg-destructive' : 'bg-muted-foreground/50'}`}
-                    />
-                  }
-                />
-                <StatCard
-                  label="Feedback accepted"
-                  value={dpoStatus ? dpoStatus.accepted_count.toString() : '...'}
-                />
-                <StatCard
-                  label="Feedback rejected"
-                  value={dpoStatus ? dpoStatus.rejected_count.toString() : '...'}
-                />
-                <StatCard
-                  label="Vision model loaded"
-                  value={visualStatus ? (visualStatus.visual_loaded ? 'Yes' : 'No') : '...'}
-                  icon={
-                    <span className={`inline-block w-2 h-2 rounded-full ${!visualStatus ? 'bg-warning' : visualStatus.visual_loaded ? 'bg-success' : 'bg-muted-foreground/50'}`}
-                    />
-                  }
-                />
-              </KpiGrid>
-              {visualStatus?.training && (
-                <p className="text-xs text-muted-foreground mt-2">
-                  Vision model training: {visualStatus.training.status}
-                </p>
-              )}
-              {dpoStatus?.last_run && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Last feedback: {dpoStatus.last_run}
-                </p>
-              )}
-              <div className="mt-3">
-                <Button
-                  size="sm"
-                  disabled={dpoRunning || dpoStatus?.status === 'running'}
-                  onClick={async () => {
-                    setDpoRunning(true)
-                    try {
-                      await apiPost('/multimodal/dpo', {})
-                      await fetchAll()
-                    } catch (err) {
-                      logger.error('DPO training failed', { exception: String(err) })
-                    }
-                    setDpoRunning(false)
-                  }}
-                  aria-label="Run feedback training"
-                >
-                  {dpoRunning || dpoStatus?.status === 'running' ? 'Running...' : 'Run feedback'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {/* Real-time chart */}
+        {/* Row 4: Chart */}
         {chartHistory.length > 1 && (
-          <Card>
-            <CardHeader><CardTitle className="text-base">Real‑time Metrics (last {MAX_HISTORY}s)</CardTitle></CardHeader>
-            <CardContent>
-              <div className="h-48" role="img" aria-label="CPU and memory usage chart over time">
+          <Card className="p-3">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Real-time (last {MAX_HISTORY}s)</span>
+            <CardContent className="p-0">
+              <div className="h-40" role="img" aria-label="CPU and memory usage chart over time">
                 <SystemChart data={chartHistory} />
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* GPU + Disk + Server */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Row 5: GPU + Disk + Server */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <GpuCard gpu={detailed?.gpu as GPUInfo | undefined} />
           <DiskCard disk={disk ?? undefined} />
           <ServerInfoCard info={info ?? undefined} />
         </div>
 
-        {/* Server Output */}
-        <OutputCard />
+        {/* Row 6: Server Output + Activity */}
+        <OutputCard compact />
 
-        <ActivityTicker />
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Activity Log</CardTitle>
-          </CardHeader>
-          <CardContent className="max-h-[240px] overflow-y-auto">
-            <ErrorList />
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="md:col-span-2">
+            <ActivityTicker />
+          </div>
+          <Card className="p-3">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Errors</span>
+            <CardContent className="p-0 max-h-[200px] overflow-y-auto">
+              <ErrorList />
+            </CardContent>
+          </Card>
+        </div>
 
         {error && (
-          <Card className="border-destructive/50">
-            <CardContent className="py-3 text-sm text-destructive">
-              {error}
-            </CardContent>
+          <Card className="p-3 border-destructive/50">
+            <CardContent className="p-0 py-2 text-sm text-destructive">{error}</CardContent>
           </Card>
         )}
       </div>

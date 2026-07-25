@@ -17,6 +17,7 @@ import uuid
 from pathlib import Path
 from typing import List, Optional
 from datetime import datetime, timezone
+import re
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
@@ -193,18 +194,18 @@ async def ingest_frontend_logs(batch: FrontendLogBatch):
 
     for entry in batch.logs:
         lvl = level_map.get(entry.level, "info")
-        # Build context string from extras
-        ctx_parts = []
+        context: dict = {}
         if entry.context:
-            ctx_parts.extend(f"{k}={v}" for k, v in entry.context.items() if v is not None)
+            context.update(entry.context)
         if entry.exception:
-            ctx_parts.append(f"exception={entry.exception}")
-        ctx_str = (" " + " ".join(ctx_parts)) if ctx_parts else ""
+            context["exception"] = entry.exception
 
-        buf.append_text(
-            f"{entry.logger} {entry.message}{ctx_str}",
+        buf.append_log(
+            text=f"{entry.logger} {entry.message}",
             level=lvl,
             source=f"web.{entry.logger}",
+            tag="WEB",
+            context=context,
         )
 
     return success_response(data={"status": "ok", "ingested": len(batch.logs)})

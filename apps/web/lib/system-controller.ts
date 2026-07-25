@@ -65,6 +65,8 @@ export interface OutputLine {
   level: string
   source: string
   ts: number
+  tag?: string
+  context?: Record<string, unknown>
 }
 
 export interface OutputResponse {

@@ -4,68 +4,128 @@ import { useServerOutput } from '@/hooks/useServerOutput'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { IconDownload } from '@sloughgpt/strui'
+import type { OutputLine } from '@/lib/system-controller'
 
 interface OutputCardProps {
   title?: string
   height?: string
   tail?: number
   maxLines?: number
+  compact?: boolean
 }
 
-export function OutputCard({ title = 'Server Output', height = 'h-[180px]', tail, maxLines }: OutputCardProps) {
-  const { lines, streaming, clear, scrollRef, paused, togglePause, exportLines } = useServerOutput({ tail, maxLines })
+const LEVEL_COLOR: Record<string, string> = {
+  error: '#ef4444',
+  critical: '#ef4444',
+  warning: '#eab308',
+  debug: '#6b7280',
+}
+
+const LEVEL_ABBR: Record<string, string> = {
+  info: 'INF',
+  error: 'ERR',
+  warning: 'WRN',
+  debug: 'DBG',
+  critical: 'CRI',
+}
+
+const TAG_COLOR: Record<string, string> = {
+  START: '#818cf8',
+  REQ: '#6b7280',
+  INFRA: '#9ca3af',
+  MODEL: '#34d399',
+  SOUL: '#34d399',
+  INF: '#9ca3af',
+  WEB: '#9ca3af',
+}
+
+function formatTs(ts: number): string {
+  const d = new Date(ts * 1000)
+  const h = String(d.getHours()).padStart(2, '0')
+  const m = String(d.getMinutes()).padStart(2, '0')
+  const s = String(d.getSeconds()).padStart(2, '0')
+  return `${h}:${m}:${s}`
+}
+
+function LogLine({ line }: { line: OutputLine }) {
+  const ts = formatTs(line.ts)
+  const lvl = LEVEL_ABBR[line.level] ?? 'INF'
+  const lvlColor = LEVEL_COLOR[line.level] ?? '#a1a1aa'
+  const tagColor = line.tag ? (TAG_COLOR[line.tag] ?? '#71717a') : undefined
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base">{title}</CardTitle>
-          <div className="flex items-center gap-2">
-            <span className={`inline-block w-2 h-2 rounded-full ${paused ? 'bg-warning' : streaming ? 'bg-success animate-pulse' : 'bg-muted-foreground/50'}`} />
-            <span className="text-xs text-muted-foreground">{paused ? 'Paused' : streaming ? 'Live' : 'Off'}</span>
-            <Button variant="ghost" size="sm" onClick={togglePause} aria-label={paused ? 'Resume output' : 'Pause output'}>
-              {paused ? '▶' : '⏸'}
-            </Button>
-            {lines.length > 0 && (
-              <>
-                <Button variant="ghost" size="sm" onClick={() => exportLines('text')} aria-label="Export as log file">
-                  <IconDownload className="h-3 w-3" />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={clear} aria-label="Clear output">
-                  Clear
-                </Button>
-              </>
-            )}
-          </div>
+    <div className="flex font-mono text-[11px] leading-5 py-[1px]">
+      <span className="shrink-0 w-[70px] text-muted-foreground/50 tabular-nums">{ts}</span>
+      <span className="shrink-0 w-[32px] text-center font-semibold" style={{ color: lvlColor }}>{lvl}</span>
+      {line.tag ? (
+        <span className="shrink-0 w-[56px] text-center font-medium" style={{ color: tagColor }}>[{line.tag}]</span>
+      ) : (
+        <span className="shrink-0 w-[56px]" />
+      )}
+      {line.source ? (
+        <span className="shrink-0 text-muted-foreground/30 truncate max-w-[160px] pr-2">{line.source}</span>
+      ) : (
+        <span className="shrink-0 w-[160px]" />
+      )}
+      <span className={`flex-1 min-w-0 break-all ${line.level === 'error' || line.level === 'critical' ? 'text-destructive' : line.level === 'warning' ? 'text-warning' : ''}`}>
+        {line.text}
+      </span>
+    </div>
+  )
+}
+
+export function OutputCard({ title = 'Server Output', height, tail, maxLines, compact }: OutputCardProps) {
+  const { lines, streaming, clear, scrollRef, paused, togglePause, exportLines } = useServerOutput({ tail, maxLines })
+  const h = height ?? (compact ? 'h-[220px]' : 'h-[280px]')
+
+  const controls = (
+    <div className="flex items-center gap-2">
+      <span className={`inline-block w-2 h-2 rounded-full ${paused ? 'bg-warning' : streaming ? 'bg-success animate-pulse' : 'bg-muted-foreground/50'}`} />
+      <span className="text-[11px] text-muted-foreground font-mono">{paused ? 'Paused' : streaming ? 'Live' : 'Off'}</span>
+      <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={togglePause} aria-label={paused ? 'Resume output' : 'Pause output'}>
+        {paused ? '▶' : '⏸'}
+      </Button>
+      {lines.length > 0 && (
+        <>
+          <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={() => exportLines('text')} aria-label="Export as log file">
+            <IconDownload className="h-2.5 w-2.5" />
+          </Button>
+          <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={clear} aria-label="Clear output">
+            Clear
+          </Button>
+        </>
+      )}
+    </div>
+  )
+
+  return (
+    <Card className={compact ? 'p-3' : ''}>
+      {compact ? (
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{title}</span>
+          {controls}
         </div>
-      </CardHeader>
+      ) : (
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">{title}</CardTitle>
+            {controls}
+          </div>
+        </CardHeader>
+      )}
       <CardContent>
         <div
           ref={scrollRef}
-          className={`${height} overflow-y-auto font-mono text-xs bg-background border rounded-lg p-2 space-y-0.5`}
+          className={`${h} overflow-y-auto rounded-lg border bg-zinc-950 text-zinc-300 p-3`}
           role="log"
           aria-label="Server output"
         >
           {lines.length === 0 ? (
-            <div className="text-muted-foreground py-4 text-center text-xs">
+            <div className="text-zinc-500 py-4 text-center text-xs">
               {streaming ? 'Waiting for output...' : 'Output will appear here during server activity'}
             </div>
           ) : (
-            lines.map((line, i) => (
-              <div key={`${line.ts}-${i}`} className="flex gap-2 leading-tight">
-                <span className="text-muted-foreground shrink-0 w-14">
-                  {new Date(line.ts * 1000).toLocaleTimeString()}
-                </span>
-                <span className={`shrink-0 w-10 ${
-                  line.level === 'error' ? 'text-destructive' :
-                  line.level === 'warning' ? 'text-warning' :
-                  'text-muted-foreground'
-                }`}>
-                  {line.level}
-                </span>
-                <span className="flex-1 min-w-0 break-all">{line.text}</span>
-              </div>
-            ))
+            lines.map((line, i) => <LogLine key={`${line.ts}-${i}`} line={line} />)
           )}
         </div>
       </CardContent>
