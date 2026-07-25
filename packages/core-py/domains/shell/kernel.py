@@ -1100,9 +1100,12 @@ class Kernel:
         # Register built-in devices
         self._devices.register(NullDevice())
 
-        # Boot init process
-        init_proc = self.spawn_process("kernel-init", Priority.CRITICAL)
-        init_proc.transition(ProcessState.RUNNING)
+        # Boot init process (completes immediately — it's just the boot marker)
+        init_proc = self.spawn_process(
+            "kernel-init",
+            Priority.CRITICAL,
+            entry=lambda: "booted",
+        )
 
         msg = f"Kernel booted (pid={init_proc.pid}, memory={self._memory.capacity // (1024 * 1024)}MB)"
         logger.info(msg)
@@ -1301,12 +1304,44 @@ class Kernel:
     # --- Tick ---
 
     def tick(self) -> dict:
-        """Advance the kernel by one tick."""
+        """Advance the kernel by one tick.
+
+        If the scheduled process has an entry function and hasn't been started
+        yet, launches it in a background thread. When the entry completes,
+        the process transitions to ZOMBIE.
+        """
         if not self._running:
             return {"current_pid": None, "tick_count": self._tick_count}
 
         self._tick_count += 1
         proc = self._scheduler.tick()
+
+        # Launch process entry function if present and not yet started
+        if proc is not None and proc.entry is not None and proc._thread is None:
+            proc.transition(ProcessState.RUNNING)
+            proc.started_at = time.time()
+
+            def _run_proc(p: Process):
+                try:
+                    result = p.entry(*p.args, **p.kwargs)
+                    p.result = result
+                except Exception as exc:
+                    p.error = str(exc)
+                    logger.error("Process %d (%s) crashed: %s", p.pid, p.name, exc)
+                finally:
+                    p.finished_at = time.time()
+                    p.cpu_time_ms = (p.finished_at - (p.started_at or p.created_at)) * 1000
+                    p.transition(ProcessState.ZOMBIE)
+                    self._scheduler.complete(p.pid)
+                    for cb in self._on_process_done:
+                        try:
+                            cb(p)
+                        except Exception:
+                            pass
+
+            t = threading.Thread(target=_run_proc, args=(proc,), daemon=True, name=f"proc-{proc.pid}")
+            proc._thread = t
+            t.start()
 
         # Fire timer interrupt
         self._interrupts.vector.fire(Interrupt(

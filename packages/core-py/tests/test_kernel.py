@@ -484,3 +484,30 @@ class TestKernel:
         procs = k.list_processes()
         assert len(procs) == 2
         k.shutdown()
+
+    def test_process_entry_executes(self):
+        import time as _time
+        k = Kernel()
+        k.boot()
+        results = []
+        proc = k.spawn_process("task", entry=lambda: results.append(42))
+        k.tick()
+        _time.sleep(0.05)
+        k.tick()
+        _time.sleep(0.1)
+        assert results == [42]
+        assert proc.state.name == "ZOMBIE"
+        k.shutdown()
+
+    def test_process_error_captured(self):
+        import time as _time
+        k = Kernel()
+        k.boot()
+        proc = k.spawn_process("crasher", entry=lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+        k.tick()
+        _time.sleep(0.05)
+        k.tick()
+        _time.sleep(0.1)
+        assert proc.error == "boom"
+        assert proc.state.name == "ZOMBIE"
+        k.shutdown()
