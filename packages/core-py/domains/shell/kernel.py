@@ -1163,7 +1163,7 @@ class Kernel:
                 args = parts[1:]
 
                 if cmd == "help":
-                    cmds = "help, meminfo, procs, halt"
+                    cmds = "help, meminfo, procs, run, ls, cat, halt"
                     if stdout_fn:
                         stdout_fn(f"commands: {cmds}\n")
                 elif cmd == "meminfo":
@@ -1174,6 +1174,54 @@ class Kernel:
                     for p in kernel.list_processes():
                         if stdout_fn:
                             stdout_fn(f"  pid={p.pid} {p.name} {p.state.name}\n")
+                elif cmd == "run":
+                    if not args:
+                        if stdout_fn:
+                            stdout_fn("usage: run <program.asm>\n")
+                    else:
+                        prog_name = args[0]
+                        if stdout_fn:
+                            stdout_fn(f"loading {prog_name}...\n")
+                        try:
+                            from .vm import DiskProgramLoader, FlatFS, BlockDevice
+                            if not hasattr(kernel, '_block_device'):
+                                kernel._block_device = BlockDevice()
+                                kernel._fs = FlatFS(kernel._block_device)
+                            loader = DiskProgramLoader(kernel._fs)
+                            result = loader.run(prog_name, stdout_fn=stdout_fn)
+                            if stdout_fn:
+                                stdout_fn(f"done ({result['steps']} steps)\n")
+                        except Exception as e:
+                            if stdout_fn:
+                                stdout_fn(f"error: {e}\n")
+                elif cmd == "ls":
+                    if not hasattr(kernel, '_fs'):
+                        if stdout_fn:
+                            stdout_fn("no filesystem mounted\n")
+                    else:
+                        files = kernel._fs.list_files()
+                        if not files:
+                            if stdout_fn:
+                                stdout_fn("(empty)\n")
+                        else:
+                            for f in files:
+                                if stdout_fn:
+                                    stdout_fn(f"  {f}\n")
+                elif cmd == "cat":
+                    if not args:
+                        if stdout_fn:
+                            stdout_fn("usage: cat <file>\n")
+                    elif not hasattr(kernel, '_fs'):
+                        if stdout_fn:
+                            stdout_fn("no filesystem mounted\n")
+                    else:
+                        try:
+                            data = kernel._fs.read(args[0])
+                            if stdout_fn:
+                                stdout_fn(data.decode('utf-8', errors='replace').rstrip('\x00') + "\n")
+                        except Exception as e:
+                            if stdout_fn:
+                                stdout_fn(f"error: {e}\n")
                 elif cmd in ("halt", "exit", "quit"):
                     if stdout_fn:
                         stdout_fn("shutting down...\n")

@@ -347,6 +347,8 @@ class BlockDevice(Device):
         if not (0 <= sector_idx < self._num_sectors):
             raise DeviceFault(f"sector out of range: {sector_idx}")
         self._writes += 1
+        if isinstance(data, str):
+            data = data.encode('utf-8')
         self._sectors[sector_idx][:len(data)] = data[:self.SECTOR_SIZE]
 
     def read_block(self, sector_idx: int, size: int) -> bytes:
@@ -739,6 +741,9 @@ class Assembler:
         if current:
             result.append("".join(current))
         return result
+
+
+ProgramLoader = Assembler  # backward-compatible alias
 
 
 # ── VM Runner ────────────────────────────────────────────────────────────────
@@ -1382,6 +1387,62 @@ _OPCODE_TABLE = {
     "IN": _op_in, "OUT": _op_out,
     "SYSCALL": _op_syscall,
 }
+
+
+# ── Program Loader ───────────────────────────────────────────────────────────
+
+class DiskProgramLoader:
+    """Load and execute programs from a FlatFS filesystem.
+
+    Programs are stored as assembly source (.asm) files. The loader reads
+    the source, assembles it, and can execute it directly or return the
+    compiled instructions.
+    """
+
+    def __init__(self, filesystem: FlatFS):
+        self._fs = filesystem
+        self._assembler = Assembler()
+
+    def list_programs(self) -> list[str]:
+        """List all .asm files on the filesystem."""
+        return [f for f in self._fs.list_files() if f.endswith('.asm')]
+
+    def load_source(self, name: str) -> str:
+        """Read assembly source from filesystem."""
+        if not name.endswith('.asm'):
+            name = name + '.asm'
+        data = self._fs.read(name)
+        return data.decode('utf-8', errors='replace').rstrip('\x00')
+
+    def assemble(self, source: str) -> list:
+        """Assemble source into instructions."""
+        return self._assembler.assemble(source)
+
+    def run(self, name: str, max_steps: int = 10000,
+            stdin_fn=None, stdout_fn=None) -> dict:
+        """Load, assemble, and run a program. Returns output and stats."""
+        source = self.load_source(name)
+        instructions = self.assemble(source)
+
+        bus = DeviceBus()
+        if stdout_fn or stdin_fn:
+            bus.register_console(stdin_fn=stdin_fn, stdout_fn=stdout_fn)
+        cpu = CPU(devices=bus)
+        cpu.load_program(instructions)
+        output = cpu.run(max_steps=max_steps)
+
+        return {
+            "name": name,
+            "output": output,
+            "steps": cpu._step_count,
+            "source": source,
+        }
+
+    def save_program(self, name: str, source: str) -> None:
+        """Save assembly source to filesystem."""
+        if not name.endswith('.asm'):
+            name = name + '.asm'
+        self._fs.write(name, source.encode('utf-8'))
 
 
 # ── Integrated Virtual System ────────────────────────────────────────────────

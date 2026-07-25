@@ -586,3 +586,33 @@ class TestSyscall:
                 break
         assert any("via syscall" in line for line in output)
         k.shutdown()
+
+
+class TestDiskProgramLoader:
+    def test_list_programs(self):
+        from domains.shell.vm import BlockDevice, FlatFS, DiskProgramLoader
+        blk = BlockDevice(num_sectors=16)
+        fs = FlatFS(blk)
+        fs.write('hello.asm', 'HALT')
+        fs.write('data.txt', 'not a program')
+        loader = DiskProgramLoader(fs)
+        assert loader.list_programs() == ['hello.asm']
+
+    def test_load_and_run(self):
+        from domains.shell.vm import BlockDevice, FlatFS, DiskProgramLoader
+        blk = BlockDevice(num_sectors=16)
+        fs = FlatFS(blk)
+        fs.write('test.asm', 'LOAD_CONST R0, 42\nPRINT R0\nHALT')
+        loader = DiskProgramLoader(fs)
+        result = loader.run('test.asm')
+        assert result['output'] == ['42']
+        assert result['steps'] == 3
+
+    def test_save_and_load(self):
+        from domains.shell.vm import BlockDevice, FlatFS, DiskProgramLoader
+        blk = BlockDevice(num_sectors=16)
+        fs = FlatFS(blk)
+        loader = DiskProgramLoader(fs)
+        loader.save_program('mine.asm', 'NOP\nHALT')
+        source = loader.load_source('mine.asm')
+        assert 'NOP' in source

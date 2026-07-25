@@ -390,3 +390,35 @@ class TestBootAndShell:
         procs = k.list_processes()
         assert len(procs) == 3  # init + boot + shell
         k.shutdown()
+
+    def test_shell_runs_program_from_disk(self):
+        import time as _time
+        from domains.shell.vm import BlockDevice, FlatFS
+
+        blk = BlockDevice(num_sectors=32)
+        fs = FlatFS(blk)
+        fs.write('echo.asm', 'LOAD_CONST R0, "disk program"\nOUT 1, R0\nHALT')
+
+        output = []
+        inputs = ['run echo.asm', 'halt']
+        input_iter = iter(inputs)
+
+        k = Kernel()
+        k.boot()
+        k.register_devices()
+        k._block_device = blk
+        k._fs = fs
+
+        proc = k.spawn_kernel_shell(
+            stdin_fn=lambda: next(input_iter, 'halt'),
+            stdout_fn=lambda v: output.append(str(v)),
+        )
+
+        for _ in range(50):
+            k.tick()
+            _time.sleep(0.02)
+            if proc.state.name == 'ZOMBIE':
+                break
+
+        assert any("disk program" in line for line in output)
+        k.shutdown()
