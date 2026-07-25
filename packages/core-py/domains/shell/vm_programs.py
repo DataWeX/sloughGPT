@@ -7,7 +7,7 @@ from .vm import VMRunner
 # ── Example Programs ─────────────────────────────────────────────────────────
 
 HELLO_ASM = """\
-    LOAD_CONST R0, "Hello, AI Computer!"
+    LOAD_CONST R0, "Hello, AI Compteur!"
     PRINT R0
     HALT
 """
