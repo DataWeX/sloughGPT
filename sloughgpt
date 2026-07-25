@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
-# SloughGPT CLI wrapper — use instead of `pip install -e .`
+# SloughGPT — single entry point for the app.
+# For pip-installed users: `sloughgpt` console script (pyproject.toml) handles this.
 set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"
-exec python3 -m apps.cli.src.cli "$@"
+
+PYTHON=python3
+if [ -x "$DIR/.venv/bin/python" ]; then
+    PYTHON="$DIR/.venv/bin/python"
+fi
+
+exec "$PYTHON" "$DIR/cli.py" "$@"

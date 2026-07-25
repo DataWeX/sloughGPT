@@ -1,6 +1,7 @@
 'use client'
 
-import { create } from 'zustand'
+import { createStore } from 'zustand/vanilla'
+import { useStore } from 'zustand'
 
 export type ToastType = 'success' | 'error' | 'info'
 
@@ -18,7 +19,7 @@ interface ToastStore {
   clearToasts: () => void
 }
 
-export const useToastStore = create<ToastStore>((set, get) => ({
+const toastStore = createStore<ToastStore>((set, get) => ({
   toasts: [],
 
   addToast: (message, type = 'info', verbose) => {
@@ -42,3 +43,9 @@ export const useToastStore = create<ToastStore>((set, get) => ({
     set({ toasts: [] })
   },
 }))
+
+export const useToastStore = Object.assign(
+  <T>(selector: (state: ToastStore) => T): T =>
+    useStore(toastStore, selector),
+  { getState: toastStore.getState },
+)

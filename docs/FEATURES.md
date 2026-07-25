@@ -53,23 +53,23 @@
 
 | Tool | Command | Status |
 |------|---------|--------|
-| List datasets | `python3 cli.py datasets list` | ✅ Done |
-| Dataset stats | `python3 cli.py datasets stats <name>` | ✅ Done |
-| Search HuggingFace | `python3 cli.py datasets search <query>` | ✅ Done |
-| Search GitHub | `python3 cli.py datasets search <query> --source github` | ✅ Done |
+| List datasets | `./sloughgpt datasets list` | ✅ Done |
+| Dataset stats | `./sloughgpt datasets stats <name>` | ✅ Done |
+| Search HuggingFace | `./sloughgpt datasets search <query>` | ✅ Done |
+| Search GitHub | `./sloughgpt datasets search <query> --source github` | ✅ Done |
 | Search Books | `python3 api.py datasets/search/books?query=<title>` | ✅ Done |
-| Export dataset | `python3 cli.py datasets export <name>` | ✅ Done |
-| Import GitHub | `python3 cli.py datasets github <url> [name]` | ✅ Done |
-| Import HuggingFace | `python3 cli.py datasets hf <dataset_id> [name]` | ✅ Done |
-| Import URL | `python3 cli.py datasets url <url> <name>` | ✅ Done |
-| Data stats | `python3 cli.py data stats <path>` | ✅ Done |
-| Data validate | `python3 cli.py data validate <path>` | ✅ Done |
-| Train model | `python3 cli.py train --dataset <name>` | ✅ Done |
-| Multi-dataset | `python3 cli.py train --datasets shakespeare,code` | ✅ Done |
-| Dataset ratios | `python3 cli.py train --datasets shakespeare,code --ratios 0.7,0.3` | ✅ Done |
-| Feedback export | `python3 cli.py feedback-export -o data.jsonl` | ✅ Done |
-| Auto-train | `python3 cli.py autotrain start stop status` | ✅ Done |
-| Model presets | `python3 cli.py train --preset small medium large` | ✅ Done |
+| Export dataset | `./sloughgpt datasets export <name>` | ✅ Done |
+| Import GitHub | `./sloughgpt datasets github <url> [name]` | ✅ Done |
+| Import HuggingFace | `./sloughgpt datasets hf <dataset_id> [name]` | ✅ Done |
+| Import URL | `./sloughgpt datasets url <url> <name>` | ✅ Done |
+| Data stats | `./sloughgpt data stats <path>` | ✅ Done |
+| Data validate | `./sloughgpt data validate <path>` | ✅ Done |
+| Train model | `./sloughgpt train --dataset <name>` | ✅ Done |
+| Multi-dataset | `./sloughgpt train --datasets shakespeare,code` | ✅ Done |
+| Dataset ratios | `./sloughgpt train --datasets shakespeare,code --ratios 0.7,0.3` | ✅ Done |
+| Feedback export | `./sloughgpt feedback-export -o data.jsonl` | ✅ Done |
+| Auto-train | `./sloughgpt autotrain start stop status` | ✅ Done |
+| Model presets | `./sloughgpt train --preset small medium large` | ✅ Done |
 
 ## Quick Train Workflow
 

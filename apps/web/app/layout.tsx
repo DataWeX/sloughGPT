@@ -1,20 +1,20 @@
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
-import { JetBrains_Mono, Outfit } from 'next/font/google'
+import localFont from 'next/font/local'
 
 import { Providers } from './Providers'
 import { MODE_STORAGE_KEY, THEME_IDS, THEME_STORAGE_KEY } from '@/lib/theme-storage'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ErrorLifecycle } from '@/components/ErrorLifecycle'
 
-const outfit = Outfit({
-  subsets: ['latin'],
+const outfit = localFont({
+  src: '../public/fonts/outfit-latin.woff2',
   variable: '--font-outfit',
   display: 'swap',
 })
 
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
+const jetbrainsMono = localFont({
+  src: '../public/fonts/jetbrains-latin.woff2',
   variable: '--font-jetbrains-mono',
   display: 'swap',
 })

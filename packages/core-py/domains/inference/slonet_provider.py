@@ -1012,3 +1012,7 @@ class SloNetChatProvider:
             Decoded text
         """
         return self._tokenizer.decode(token_ids)
+
+
+# Backward-compat alias (tests patch this name)
+SlonetChatProvider = SloNetChatProvider

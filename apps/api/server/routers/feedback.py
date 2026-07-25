@@ -3,8 +3,8 @@ Feedback Router - MVC View layer
 """
 from fastapi import APIRouter, HTTPException, Request
 
-from schemas.feedback import FeedbackRequest
-from pydantic import BaseModel, Field, FeedbackResponse, FeedbackStats, ConversationCreate, ConversationUpdate, ConversationResponse
+from pydantic import BaseModel, Field
+from schemas.feedback import FeedbackRequest, FeedbackResponse, FeedbackStats, ConversationCreate, ConversationUpdate, ConversationResponse
 from schemas.common import success_response
 from controllers.feedback import get_feedback_controller
 

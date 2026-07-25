@@ -1,13 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle, Progress } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { catalogIdMatchesRuntime } from '@/lib/inference-display'
 import { generateController } from '@/lib/generate-controller'
 import { useLoadModel } from '@/lib/query/api-hooks'
 import { useToastStore } from '@/lib/toast-store'
+import { useConversionStatus, formatStage } from '@/hooks/useConversionStatus'
 import { logger } from '@/lib/dev-log'
 
 interface Model {
@@ -29,9 +30,12 @@ export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeI
   const [loadingModel, setLoadingModel] = useState<string | null>(null)
   const [warmingModel, setWarmingModel] = useState<string | null>(null)
   const [modelSearch, setModelSearch] = useState('')
+  const [trackedModel, setTrackedModel] = useState<string | null>(null)
+  const { status: conversionStatus } = useConversionStatus(trackedModel)
 
   const handleLoadModel = async (modelId: string) => {
     setLoadingModel(modelId)
+    setTrackedModel(modelId)
     try {
       const data = await loadModel(modelId)
       if (data.error) { addToast(data.error, 'error'); return }
@@ -47,6 +51,7 @@ export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeI
     } finally {
       setLoadingModel(null)
       setWarmingModel(null)
+      setTrackedModel(null)
       await onModelLoaded()
     }
   }
@@ -85,6 +90,7 @@ export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeI
                 const isLoading = loadingModel === model.id
                 const isLoaded = activeRuntimeId ? catalogIdMatchesRuntime(model.id, activeRuntimeId) : false
                 return (
+                  <>
                   <div
                     key={model.id}
                     className={cn("flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm",
@@ -110,11 +116,29 @@ export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeI
                         <Button size="sm" variant={isLoaded ? 'outline' : 'default'} className="h-7 text-xs px-3"
                           disabled={isLoading || warmingModel === model.id}
                           onClick={(e) => { e.stopPropagation(); handleLoadModel(model.id) }}>
-                          {isLoading ? '…' : warmingModel === model.id ? 'Warming…' : isLoaded ? 'Loaded' : 'Load'}
+                          {isLoading
+                            ? (conversionStatus && conversionStatus.stage !== 'idle'
+                                ? `${Math.round(conversionStatus.progress * 100)}%`
+                                : '…')
+                            : warmingModel === model.id ? 'Warming…' : isLoaded ? 'Loaded' : 'Load'}
                         </Button>
                       )}
                     </div>
                   </div>
+                  {/* Conversion progress bar */}
+                  {isLoading && conversionStatus && conversionStatus.stage !== 'idle' && conversionStatus.stage !== 'ready' && (
+                    <div key={`${model.id}-progress`} className="col-span-full mt-1">
+                      <Progress
+                        value={conversionStatus.progress * 100}
+                        size="xs"
+                        variant={conversionStatus.stage === 'error' ? 'error' : 'default'}
+                        label={formatStage(conversionStatus.stage)}
+                        showValue
+                      />
+                      <span className="text-[9px] text-muted-foreground ml-auto">{conversionStatus.elapsed_s.toFixed(0)}s</span>
+                    </div>
+                  )}
+                  </>
                 )
               })}
             </div>

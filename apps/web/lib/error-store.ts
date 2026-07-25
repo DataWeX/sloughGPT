@@ -1,6 +1,7 @@
 'use client'
 
-import { create } from 'zustand'
+import { createStore } from 'zustand/vanilla'
+import { useStore } from 'zustand'
 
 export type ErrorSeverity = 'error' | 'warning' | 'info'
 
@@ -90,7 +91,7 @@ interface ErrorStore {
   hasErrors: () => boolean
 }
 
-export const useErrorStore = create<ErrorStore>((set, get) => ({
+const errorStore = createStore<ErrorStore>((set, get) => ({
   errors: [],
   recentActivity: [],
   totalErrorCount: 0,
@@ -150,6 +151,12 @@ export const useErrorStore = create<ErrorStore>((set, get) => ({
 
   hasErrors: () => get().errors.length > 0,
 }))
+
+export const useErrorStore = Object.assign(
+  <T>(selector: (state: ErrorStore) => T): T =>
+    useStore(errorStore, selector),
+  { getState: errorStore.getState },
+)
 
 export function addGlobalError(err: unknown, source?: string, requestId?: string) {
   return useErrorStore.getState().addError(err, { source, requestId })

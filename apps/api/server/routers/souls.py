@@ -9,6 +9,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from typing import Optional, Any, Dict
 from pydantic import BaseModel
+import re
 import json, asyncio, numpy as np, logging
 
 from schemas.common import success_response, error_response
@@ -254,6 +255,15 @@ async def switch_soul(
                     ctx_core.set_system_prompt(soul_prompt)
             except Exception as e:
                 logger.warning("Failed to update context core system prompt on soul switch: %s", e, extra={"tag": "SOUL"})
+
+            # Update PersonalityProcessor with soul traits
+            try:
+                from domains.models.provider import update_personality_traits
+                personality = getattr(soul_info, "personality", {})
+                if personality:
+                    update_personality_traits(personality)
+            except Exception as e:
+                logger.debug("Failed to update personality processor: %s", e, extra={"tag": "SOUL"})
 
         # Load checkpoint into main model if requested
         if req.checkpoint_name:

@@ -69,11 +69,30 @@ class ModelLoader:
         Returns:
             LoadResult with provider, model, tokenizer, and metrics
         """
+        from domains.infrastructure.conversion_tracker import get_tracker, ConversionStage
+        tracker = get_tracker()
+
+        # Check if .slnc already exists — skip conversion stages
+        try:
+            from domains.infrastructure.safetensors_loader import _get_model_dir
+            cache_dir = _get_model_dir(model_id)
+            has_slnc = (cache_dir / "model.slnc").exists()
+        except Exception:
+            has_slnc = False
+
+        if not has_slnc:
+            tracker.start(model_id, stage=ConversionStage.DOWNLOADING, message="Loading model...")
+
         result = self._try_load_slnc(model_id, device, quantize, quant_bits, quant_mode)
         if result is not None:
+            tracker.update(model_id, stage=ConversionStage.LOADING, progress=0.95, message="Loading into memory...")
             if verify and result.success:
                 self._verify_model(result)
+            tracker.finish(model_id)
             return result
+
+        if not has_slnc:
+            tracker.fail(model_id, "No .slnc file found")
 
         return LoadResult(
             success=False,
@@ -151,14 +170,18 @@ class ModelLoader:
                 _find_safetensors,
                 load_model_config,
             )
+            from domains.infrastructure.conversion_tracker import get_tracker, ConversionStage
             import json as _json
             import struct
+
+            tracker = get_tracker()
 
             st_path = _find_safetensors(cache_dir)
             if st_path is None:
                 return None
 
             slnc_path = cache_dir / "model.slnc"
+            tracker.update(model_id, stage=ConversionStage.CONVERTING, message="Converting safetensors → .slnc...")
             logger.info("Converting %s to .slnc", st_path.name, extra={"tag": "MODEL"})
 
             config = load_model_config(model_id)
@@ -167,7 +190,8 @@ class ModelLoader:
             with open(str(st_path), "rb") as f:
                 header_len = struct.unpack("<Q", f.read(8))[0]
                 header = _json.loads(f.read(header_len))
-                for key, info in header.items():
+                total_tensors = len([k for k in header if not k.startswith("__")])
+                for i, (key, info) in enumerate(header.items()):
                     if key.startswith("__"):
                         continue
                     dtype_str = info["dtype"]
@@ -190,10 +214,24 @@ class ModelLoader:
                         weights[key] = np.frombuffer(raw, dtype=np.int32).reshape(info["shape"])
                     else:
                         weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
+                    # Update progress based on tensors read
+                    if total_tensors > 0:
+                        tracker.update(model_id, progress=(i + 1) / total_tensors * 0.7)  # 70% for reading
 
             from domains.infrastructure.slnc.compiler import SLNCCompiler
             compiler = SLNCCompiler()
+            tracker.update(model_id, message="Writing .slnc format...")
             compiler.compile_from_dict(config, weights, str(slnc_path))
+            tracker.update(model_id, progress=0.85)
+
+            # Protect the .slnc file from accidental deletion
+            tracker.update(model_id, stage=ConversionStage.PROTECTING, message="Protecting files...")
+            try:
+                from domains.infrastructure.model_protector import protect_model
+                protect_model(model_id, [str(slnc_path)])
+            except Exception:
+                pass
+            tracker.update(model_id, progress=0.95)
 
             logger.info("Converted to .slnc: %s", slnc_path, extra={"tag": "MODEL"})
             return slnc_path

@@ -14,7 +14,7 @@ import pytest
 
 from domains.shell.repl import ShellREPL, _CaptureOutput
 from domains.shell.io import capture_cmd
-from domains.shell.kernel import DaitRuntime
+from domains.shell.runtime import DaitRuntime
 from domains.shell.state import ShellState
 
 
@@ -264,7 +264,7 @@ sys.path.insert(0, {pkgs!r})
 from pathlib import Path
 from unittest.mock import patch
 from domains.shell.repl import ShellREPL, _CaptureOutput
-from domains.shell.kernel import DaitRuntime
+from domains.shell.runtime import DaitRuntime
 tmp = tempfile.mkdtemp()
 with open(Path(tmp) / "state.json", "w") as f:
     json.dump({{"version": 1, "first_run": False, "history": [], "aliases": {{}}, "env": {{}}, "cwd": os.getcwd()}}, f)

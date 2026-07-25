@@ -34,7 +34,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from .kernel import DaitRuntime
+from .runtime import DaitRuntime
 from .commands import ShellCommands
 from .state import ShellState
 from .window_manager import get_window_manager
@@ -412,7 +412,7 @@ class ShellREPL:
     def _complete_args_for(self, cmd: str) -> list[str]:
         """Return dynamic completion candidates for a given command."""
         try:
-            if cmd in ("load", "unload", "gen"):
+            if cmd in ("load", "unload", "gen", "protect", "unprotect"):
                 models = self.cmds.models()
                 return [m.get("name", m.get("id", "")) for m in models]
             if cmd in ("switch",):
@@ -1067,7 +1067,7 @@ class ShellREPL:
             pos += page_size
             if pos < len(lines):
                 try:
-                    resp = input(f"{_C_DIM}-- more ({pos}/{len(lines)} lines) --{_C_RESET} ")
+                    resp = self.io.read(f"{_C_DIM}-- more ({pos}/{len(lines)} lines) --{_C_RESET} ")
                     if resp.strip().lower() == "q":
                         break
                 except (EOFError, KeyboardInterrupt):
@@ -1437,6 +1437,8 @@ class ShellREPL:
                 "recall": "  recall <query>  — Search the knowledge base",
                 "checkpoints": "  checkpoints  — List training checkpoints (tab-completes names)",
                 "finetuned": "  finetuned  — List fine-tuned models",
+                "protect": "  protect <model>  — Protect model files from accidental deletion (read-only + manifest)",
+                "unprotect": "  unprotect <model>  — Remove protection from a model's files",
                 "train": "  train [dataset] | train status | train follow <id> | train stop <id>  — Training operations",
                 "finetuned": "  finetuned  — List fine-tuned model paths (tab-completes names)",
                 "gen": "  gen <prompt>  — Generate text via inference",
@@ -1840,17 +1842,68 @@ Examples:
         if not args:
             self._print("  Usage: load <model_name>")
             return
+        import sys
+        import time
         model_name = args.strip()
-        self._print(f"  Loading {model_name}...")
-        self._print("  (this may take 30-120s on CPU)")
-        result = self.cmds.load_model(model_name)
-        status = result.get("status", "?")
-        if status == "loaded":
-            self._print(f"  ✓ {model_name} loaded on {result.get('device', 'cpu')}")
-        elif status == "error":
-            self._print(f"  ✗ {result.get('error', 'Unknown error')}")
-        else:
-            self._print(self._dump_json(result))
+
+        try:
+            from domains.infrastructure.conversion_tracker import get_tracker, ConversionStage
+            from apps.cli.src.utils.progress import ProgressBar
+            tracker = get_tracker()
+
+            result_holder = [None]
+            import threading
+
+            def _load():
+                result_holder[0] = self.cmds.load_model(model_name)
+
+            t = threading.Thread(target=_load, daemon=True)
+            t.start()
+
+            bar = ProgressBar(total=100, desc=f"Loading {model_name}", width=30, show_eta=True)
+
+            while t.is_alive():
+                status = tracker.get(model_name)
+                if status:
+                    pct = int(status["progress"] * 100)
+                    stage = status["stage"]
+
+                    if stage in ("downloading", "converting", "protecting", "loading"):
+                        bar.desc = status["message"][:40]
+                        bar.set_progress(pct)
+                    elif stage == "ready":
+                        bar.set_progress(100)
+                        break
+                    elif stage == "error":
+                        bar.finish()
+                        self._print(f"  ✗ {status.get('error', 'Unknown error')}")
+                        return
+
+                time.sleep(0.15)
+
+            t.join()
+            bar.finish()
+
+            result = result_holder[0]
+            if result is None:
+                self._print(f"  ✗ Load failed")
+                return
+
+            status = result.get("status", "?")
+            if status == "loaded":
+                self._print(f"  ✓ {model_name} loaded on {result.get('device', 'cpu')}")
+            elif status == "error":
+                self._print(f"  ✗ {result.get('error', 'Unknown error')}")
+
+        except ImportError:
+            self._print(f"  Loading {model_name}...")
+            self._print("  (this may take 30-120s on CPU)")
+            result = self.cmds.load_model(model_name)
+            status = result.get("status", "?")
+            if status == "loaded":
+                self._print(f"  ✓ {model_name} loaded on {result.get('device', 'cpu')}")
+            elif status == "error":
+                self._print(f"  ✗ {result.get('error', 'Unknown error')}")
 
     def _cmd_unload(self, args: str = "") -> None:
         result = self.cmds.unload_model()
@@ -2061,6 +2114,49 @@ Examples:
             sz_str = f"{sz_bytes / 1048576:.0f}M"
             rows.append([name, f"{loss}", f"{ep}ep", sz_str])
         self._print(self._format_table(rows, ["Model", "Loss", "Epochs", "Size"]))
+
+    def _cmd_protect(self, args: str = "") -> None:
+        """Protect a model from accidental deletion: protect <model_id>"""
+        model_id = args.strip()
+        if not model_id:
+            self._print("  Usage: protect <model_id>")
+            self._print("  Makes model files read-only + drops .nomodeldelete marker")
+            return
+        try:
+            from domains.infrastructure.model_protector import protect_model
+            result = protect_model(model_id)
+            n = len(result["protected"])
+            errs = result["errors"]
+            if n:
+                self._print(f"  Protected {n} files for '{model_id}' (read-only + manifest)")
+            else:
+                self._print(f"  No files found to protect for '{model_id}'")
+            if errs:
+                for e in errs:
+                    self._print(f"  Warning: {e['error']}")
+        except Exception as e:
+            self._print(f"  Error: {e}")
+
+    def _cmd_unprotect(self, args: str = "") -> None:
+        """Remove protection from a model: unprotect <model_id>"""
+        model_id = args.strip()
+        if not model_id:
+            self._print("  Usage: unprotect <model_id>")
+            return
+        try:
+            from domains.infrastructure.model_protector import unprotect_model
+            result = unprotect_model(model_id)
+            n = result["unprotected"]
+            errs = result["errors"]
+            if n:
+                self._print(f"  Unprotected {n} files for '{model_id}'")
+            else:
+                self._print(f"  No protected files found for '{model_id}'")
+            if errs:
+                for e in errs:
+                    self._print(f"  Warning: {e['error']}")
+        except Exception as e:
+            self._print(f"  Error: {e}")
 
     def _cmd_train(self, args: str = "") -> None:
         """Train: train [dataset] | train status | train follow <id> | train stop <id> | train distill <dataset>"""
@@ -2485,7 +2581,7 @@ Examples:
     def _cmd_tutorial(self, args: str = "") -> None:
         """Interactive walkthrough of shell features."""
         w = self._print
-        _proceed = lambda: input(f"{_C_DIM}Press Enter to continue, or q to quit...{_C_RESET} ")
+        _proceed = lambda: self.io.read(f"{_C_DIM}Press Enter to continue, or q to quit...{_C_RESET} ")
 
         steps = [
             ("\u2728 Welcome to the tutorial!", [
@@ -3485,6 +3581,8 @@ Examples:
         "pbpaste": _cmd_pbpaste,
         "remember": _cmd_remember,
         "recall": _cmd_recall,
+        "protect": _cmd_protect,
+        "unprotect": _cmd_unprotect,
         "boot": _cmd_boot,
         "shutdown": _cmd_shutdown,
         "svc": _cmd_svc,

@@ -24,6 +24,10 @@ vi.mock('@sloughgpt/strui', () => {
     ),
     IconMore: () => <span data-testid="icon-more">more</span>,
     IconSettings: () => <span data-testid="icon-settings">settings</span>,
+    IconSearch: () => <span data-testid="icon-search">search</span>,
+    IconCopy: () => <span data-testid="icon-copy">copy</span>,
+    IconExport: () => <span data-testid="icon-export">export</span>,
+    IconDocument: () => <span data-testid="icon-document">document</span>,
   }
 })
 
@@ -89,22 +93,22 @@ describe('ChatMoreMenu', () => {
     expect(screen.getByText('Export Markdown')).toBeDefined()
   })
 
-  it('shows Copy to clipboard when onCopyMarkdown provided', () => {
+  it('shows Copy when onCopyMarkdown provided', () => {
     renderWithCtx({ onCopyMarkdown: vi.fn() })
     fireEvent.click(screen.getByLabelText('More options'))
-    expect(screen.getByText('Copy to clipboard')).toBeDefined()
+    expect(screen.getByText('Copy')).toBeDefined()
   })
 
-  it('does not show Copy to clipboard when onCopyMarkdown not provided', () => {
+  it('does not show Copy when onCopyMarkdown not provided', () => {
     renderWithCtx()
     fireEvent.click(screen.getByLabelText('More options'))
-    expect(screen.queryByText('Copy to clipboard')).toBeNull()
+    expect(screen.queryByText('Copy')).toBeNull()
   })
 
-  it('shows Save as dataset when onSaveAsDataset provided', () => {
+  it('shows Save as Dataset when onSaveAsDataset provided', () => {
     renderWithCtx({ onSaveAsDataset: vi.fn() })
     fireEvent.click(screen.getByLabelText('More options'))
-    expect(screen.getByText('Save as dataset')).toBeDefined()
+    expect(screen.getByText('Save as Dataset')).toBeDefined()
   })
 
   it('disables Export Markdown when hasMessages is false', () => {
@@ -145,11 +149,11 @@ describe('ChatMoreMenu', () => {
     expect(onSystemPrompt).toHaveBeenCalled()
   })
 
-  it('calls onSearchConversations when Search Conversations selected', () => {
+  it('calls onSearchConversations when Search selected', () => {
     const onSearchConversations = vi.fn()
     renderWithCtx({ onSearchConversations })
     fireEvent.click(screen.getByLabelText('More options'))
-    fireEvent.click(screen.getByText('Search Conversations'))
+    fireEvent.click(screen.getByText('Search'))
     expect(onSearchConversations).toHaveBeenCalled()
   })
 })

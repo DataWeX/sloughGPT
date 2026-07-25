@@ -4,14 +4,18 @@ Process-level isolation for model inference.
 Provides ModelWorkerProcess — runs any callable model in a child process
 with Queue-based RPC, timeout, crash detection, and automatic restart.
 
+Two worker backends:
+  - ``_hf_worker_main``: Legacy HuggingFace/PyTorch path (deprecated)
+  - ``_slo_worker_main``: SloNet pure-NumPy path (preferred)
+
 Architecture::
 
     API Process                Worker Process
-    ┌──────────────┐           ┌─────────────────┐
-    │ ProcessGuard │───req_q──▶│ ModelWorkerProcess │
-    │              │◀──resp_q──│  model.generate()  │
-    │ health Q     │───hb_q──▶│  (heartbeat tick)  │
-    └──────────────┘           └─────────────────┘
+    ┌──────────────┐           ┌──────────────────────┐
+    │ ProcessGuard │───req_q──▶│ ModelWorkerProcess   │
+    │              │◀──resp_q──│  slo/generate_numpy  │
+    │ health Q     │───hb_q──▶│  (heartbeat tick)    │
+    └──────────────┘           └──────────────────────┘
           │
           │ wraps
           ▼
@@ -50,164 +54,27 @@ class WorkerHealth:
     crash_count: int = 0
 
 
-def _worker_main(
+def _worker_loop(
     req_q: mp.Queue,
     resp_q: mp.Queue,
     hb_q: mp.Queue,
-    model_cls_path: str,
-    model_kwargs: dict,
     worker_id: str,
-    extra_sys_paths: Optional[list] = None,
+    generate_fn,
+    stream_fn,
+    cleanup_fn=None,
 ) -> None:
-    """Entry point for the worker subprocess.
+    """Shared request loop for both HF and SloNet workers.
 
-    Loads the model, then loops on request queue until ``stop`` sentinel.
+    Args:
+        req_q: Request queue (commands from parent)
+        resp_q: Response queue (tokens/results to parent)
+        hb_q: Heartbeat queue (health signals to parent)
+        worker_id: Human-readable worker name
+        generate_fn: ``fn(prompt, **kwargs) -> dict`` for non-streaming
+        stream_fn: ``fn(prompt, resp_q, **kwargs)`` for streaming (puts tokens directly)
+        cleanup_fn: Optional cleanup callable on shutdown
     """
-    if extra_sys_paths:
-        for p in extra_sys_paths:
-            if p not in sys.path:
-                sys.path.insert(0, p)
-    logger.info("Worker[%s]: started (pid=%d)", worker_id, os.getpid(),
-        extra={"tag": "INFRA"})
-
-    model = None
-    tokenizer = None
-
-    try:
-        # Dynamic import for the model class
-        import importlib
-        mod_path, cls_name = model_cls_path.rsplit(".", 1)
-        module = importlib.import_module(mod_path)
-        model_cls = getattr(module, cls_name)
-
-        model = model_cls(**model_kwargs)
-        # If model_cls returns (model, tokenizer) tuple, unpack
-        if isinstance(model, (list, tuple)) and len(model) == 2:
-            model, tokenizer = model
-
-        logger.info("Worker[%s]: model loaded (type=%s)", worker_id, type(model).__name__,
-            extra={"tag": "INFRA"})
-
-        # If the model has a .tokenizer or ._tokenizer attr, extract it
-        if tokenizer is None:
-            tokenizer = getattr(model, "tokenizer", None) or getattr(model, "_tokenizer", None)
-
-    except Exception as e:
-        logger.error("Worker[%s]: model load failed: %s", worker_id, e,
-            extra={"tag": "INFRA"})
-        resp_q.put_nowait(("error", f"Model load failed: {e}"))
-        hb_q.put_nowait(("dead", os.getpid()))
-        return
-
     hb_q.put_nowait(("ready", os.getpid()))
-
-    def _generate(
-        prompt: str,
-        max_new_tokens: int = 100,
-        temperature: float = 0.7,
-        top_p: float = 0.9,
-        top_k: int = 50,
-        repetition_penalty: float = 1.0,
-        **gen_kwargs: Any,
-    ) -> dict:
-        inputs = tokenizer(prompt, return_tensors="pt")  # noqa: F821
-        input_ids = inputs["input_ids"]
-        attention_mask = inputs.get("attention_mask")
-
-        device = getattr(model, "device", None)  # noqa: F821
-        if device is not None and device != "cpu":
-            input_ids = input_ids.to(device)
-            if attention_mask is not None:
-                attention_mask = attention_mask.to(device)
-
-        gen_kwargs.update(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            max_new_tokens=max_new_tokens,
-            do_sample=True,
-            temperature=temperature,
-            top_p=top_p,
-            top_k=top_k,
-            repetition_penalty=repetition_penalty,
-            pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,  # noqa: F821
-            eos_token_id=tokenizer.eos_token_id,  # noqa: F821
-        )
-        start = time.time()
-        output_ids = model.generate(**gen_kwargs)  # noqa: F821
-        elapsed_ms = (time.time() - start) * 1000
-        generated = output_ids[0][input_ids.shape[1]:]
-        text = tokenizer.decode(generated, skip_special_tokens=True)  # noqa: F821
-        return {
-            "text": text,
-            "tokens_generated": len(generated),
-            "elapsed_ms": round(elapsed_ms, 1),
-        }
-
-    def _generate_stream(
-        prompt: str,
-        max_new_tokens: int = 100,
-        temperature: float = 0.7,
-        top_p: float = 0.9,
-        top_k: int = 50,
-        repetition_penalty: float = 1.0,
-        **gen_kwargs: Any,
-    ) -> None:
-        """Generate tokens and stream each one through resp_q."""
-        from transformers import TextIteratorStreamer
-
-        inputs = tokenizer(prompt, return_tensors="pt")  # noqa: F821
-        input_ids = inputs["input_ids"]
-        attention_mask = inputs.get("attention_mask")
-
-        device = getattr(model, "device", None)  # noqa: F821
-        if device is not None and device != "cpu":
-            input_ids = input_ids.to(device)
-            if attention_mask is not None:
-                attention_mask = attention_mask.to(device)
-
-        streamer = TextIteratorStreamer(
-            tokenizer, skip_prompt=True, skip_special_tokens=True  # noqa: F821
-        )
-
-        gen_kwargs.update(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            max_new_tokens=max_new_tokens,
-            do_sample=True,
-            temperature=temperature,
-            top_p=top_p,
-            top_k=top_k,
-            repetition_penalty=repetition_penalty,
-            pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,  # noqa: F821
-            eos_token_id=tokenizer.eos_token_id,  # noqa: F821
-            streamer=streamer,
-        )
-
-        # Launch generation in background thread
-        thread = threading.Thread(target=model.generate, kwargs=gen_kwargs, daemon=True)  # noqa: F821
-        thread.start()
-
-        tokens_generated = 0
-        start = time.time()
-        for text in streamer:
-            try:
-                resp_q.put_nowait(("token", text))
-            except Exception:
-                break
-            tokens_generated += 1
-
-        thread.join(timeout=10)
-        elapsed_ms = (time.time() - start) * 1000
-
-        try:
-            resp_q.put_nowait(("result", {
-                "text": "",
-                "tokens_generated": tokens_generated,
-                "elapsed_ms": round(elapsed_ms, 1),
-            }))
-        except Exception:
-            pass
-
     requests_served = 0
 
     while True:
@@ -225,11 +92,11 @@ def _worker_main(
         if cmd == "generate":
             try:
                 prompt, kwargs = payload
-                result = _generate(prompt, **kwargs)
+                result = generate_fn(prompt, **kwargs)
                 try:
                     resp_q.put_nowait(("result", result))
                 except Exception as put_e:
-                    logger.error("Worker[%s]: resp_q.put_nowait failed: %s", worker_id, put_e,
+                    logger.error("Worker[%s]: resp_q.put failed: %s", worker_id, put_e,
                         extra={"tag": "INFRA"})
                     resp_q.put_nowait(("error", f"put failed: {put_e}"))
                 requests_served += 1
@@ -240,60 +107,391 @@ def _worker_main(
                 try:
                     resp_q.put_nowait(("error", f"{type(e).__name__}: {e}"))
                 except Exception:
-                    logger.error("Worker[%s]: failed to send error response", worker_id,
-                        extra={"tag": "INFRA"})
+                    pass
 
         if cmd == "generate_stream":
             try:
                 prompt, kwargs = payload
-                _generate_stream(prompt, **kwargs)
+                stream_fn(prompt, resp_q, **kwargs)
                 requests_served += 1
             except Exception as e:
                 tb = traceback.format_exc()
-                logger.error("Worker[%s]: generate_stream error: %s\n%s", worker_id, e, tb,
+                logger.error("Worker[%s]: stream error: %s\n%s", worker_id, e, tb,
                     extra={"tag": "INFRA"})
                 try:
                     resp_q.put_nowait(("error", f"{type(e).__name__}: {e}"))
                 except Exception:
-                    logger.error("Worker[%s]: failed to send error response", worker_id,
-                        extra={"tag": "INFRA"})
+                    pass
 
-    # Cleanup
-    del model
-    del tokenizer
+    if cleanup_fn:
+        try:
+            cleanup_fn()
+        except Exception:
+            pass
     gc.collect()
     hb_q.put_nowait(("dead", os.getpid()))
     logger.info("Worker[%s]: stopped", worker_id,
         extra={"tag": "INFRA"})
 
 
+# ---------------------------------------------------------------------------
+# SloNet worker (pure NumPy — no PyTorch dependency)
+# ---------------------------------------------------------------------------
+
+def _slo_worker_main(
+    req_q: mp.Queue,
+    resp_q: mp.Queue,
+    hb_q: mp.Queue,
+    slnc_path: str,
+    model_id: str,
+    worker_id: str,
+    quantize: bool = False,
+    quant_bits: int = 8,
+    quant_mode: str = "symmetric",
+    quant_clip: float = 0.999,
+    extra_sys_paths: Optional[list] = None,
+) -> None:
+    """Worker subprocess entry point for SloNet models (pure NumPy).
+
+    Loads via ``SloNetChatProvider.from_slnc()`` and streams via
+    ``generate_numpy_stream()``. Zero PyTorch dependency.
+    """
+    if extra_sys_paths:
+        for p in extra_sys_paths:
+            if p not in sys.path:
+                sys.path.insert(0, p)
+
+    logger.info("Worker[%s]: started (pid=%d, slo)", worker_id, os.getpid(),
+        extra={"tag": "INFRA"})
+
+    provider = None
+
+    try:
+        from domains.inference.slonet_provider import SloNetChatProvider
+
+        provider = SloNetChatProvider.from_slnc(
+            slnc_path,
+            model_id=model_id,
+            quantize=quantize,
+            quant_bits=quant_bits,
+            quant_mode=quant_mode,
+            quant_clip=quant_clip,
+        )
+        logger.info("Worker[%s]: SloNet model loaded (%s)", worker_id, model_id,
+            extra={"tag": "INFRA"})
+    except Exception as e:
+        logger.error("Worker[%s]: SloNet load failed: %s", worker_id, e,
+            extra={"tag": "INFRA"})
+        resp_q.put_nowait(("error", f"Model load failed: {e}"))
+        hb_q.put_nowait(("dead", os.getpid()))
+        return
+
+    import numpy as _np
+
+    def _generate(
+        prompt: str,
+        max_new_tokens: int = 100,
+        temperature: float = 0.7,
+        top_p: float = 0.9,
+        top_k: int = 50,
+        repetition_penalty: float = 1.0,
+        **_kwargs: Any,
+    ) -> dict:
+        token_ids = provider._tokenizer.encode(prompt)
+        input_ids = _np.array([token_ids], dtype=_np.int64)
+        start = time.time()
+        result = provider._model.generate_numpy(
+            input_ids,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
+            repetition_penalty=repetition_penalty,
+            eos_token=provider._tokenizer.eos_token_id or 0,
+        )
+        elapsed_ms = (time.time() - start) * 1000
+        generated = result[0].tolist()
+        text = provider._tokenizer.decode(generated)
+        return {
+            "text": text,
+            "tokens_generated": len(generated),
+            "elapsed_ms": round(elapsed_ms, 1),
+        }
+
+    def _stream(
+        prompt: str,
+        resp_q_inner: mp.Queue,
+        max_new_tokens: int = 100,
+        temperature: float = 0.7,
+        top_p: float = 0.9,
+        top_k: int = 50,
+        repetition_penalty: float = 1.0,
+        **_kwargs: Any,
+    ) -> None:
+        """Stream tokens via ``generate_numpy_stream()`` into resp_q."""
+        token_ids = provider._tokenizer.encode(prompt)
+        input_ids = _np.array([token_ids], dtype=_np.int64)
+        start = time.time()
+        tokens_generated = 0
+
+        for tok_id in provider._model.generate_numpy_stream(
+            input_ids,
+            max_new_tokens=max_new_tokens,
+            eos_token=provider._tokenizer.eos_token_id or 0,
+        ):
+            decoded = provider._tokenizer.decode([tok_id])
+            if decoded:
+                try:
+                    resp_q_inner.put_nowait(("token", decoded))
+                except Exception:
+                    break
+                tokens_generated += 1
+
+        elapsed_ms = (time.time() - start) * 1000
+        try:
+            resp_q_inner.put_nowait(("result", {
+                "text": "",
+                "tokens_generated": tokens_generated,
+                "elapsed_ms": round(elapsed_ms, 1),
+            }))
+        except Exception:
+            pass
+
+    def _cleanup():
+        nonlocal provider
+        provider = None
+
+    _worker_loop(req_q, resp_q, hb_q, worker_id, _generate, _stream, _cleanup)
+
+
+# ---------------------------------------------------------------------------
+# HF worker (legacy — requires PyTorch + transformers)
+# ---------------------------------------------------------------------------
+
+def _hf_worker_main(
+    req_q: mp.Queue,
+    resp_q: mp.Queue,
+    hb_q: mp.Queue,
+    model_cls_path: str,
+    model_kwargs: dict,
+    worker_id: str,
+    extra_sys_paths: Optional[list] = None,
+) -> None:
+    """Worker subprocess entry point for HuggingFace models (legacy).
+
+    Loads via dynamic import of ``model_cls_path`` and uses HF
+    ``model.generate()`` / ``TextIteratorStreamer``. Requires PyTorch.
+    """
+    if extra_sys_paths:
+        for p in extra_sys_paths:
+            if p not in sys.path:
+                sys.path.insert(0, p)
+    logger.info("Worker[%s]: started (pid=%d, hf)", worker_id, os.getpid(),
+        extra={"tag": "INFRA"})
+
+    model = None
+    tokenizer = None
+
+    try:
+        import importlib
+        mod_path, cls_name = model_cls_path.rsplit(".", 1)
+        module = importlib.import_module(mod_path)
+        model_cls = getattr(module, cls_name)
+
+        model = model_cls(**model_kwargs)
+        if isinstance(model, (list, tuple)) and len(model) == 2:
+            model, tokenizer = model
+
+        logger.info("Worker[%s]: HF model loaded (type=%s)", worker_id, type(model).__name__,
+            extra={"tag": "INFRA"})
+
+        if tokenizer is None:
+            tokenizer = getattr(model, "tokenizer", None) or getattr(model, "_tokenizer", None)
+
+    except Exception as e:
+        logger.error("Worker[%s]: HF model load failed: %s", worker_id, e,
+            extra={"tag": "INFRA"})
+        resp_q.put_nowait(("error", f"Model load failed: {e}"))
+        hb_q.put_nowait(("dead", os.getpid()))
+        return
+
+    def _generate(
+        prompt: str,
+        max_new_tokens: int = 100,
+        temperature: float = 0.7,
+        top_p: float = 0.9,
+        top_k: int = 50,
+        repetition_penalty: float = 1.0,
+        **gen_kwargs: Any,
+    ) -> dict:
+        inputs = tokenizer(prompt, return_tensors="pt")
+        input_ids = inputs["input_ids"]
+        attention_mask = inputs.get("attention_mask")
+
+        device = getattr(model, "device", None)
+        if device is not None and device != "cpu":
+            input_ids = input_ids.to(device)
+            if attention_mask is not None:
+                attention_mask = attention_mask.to(device)
+
+        gen_kwargs.update(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            max_new_tokens=max_new_tokens,
+            do_sample=True,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            repetition_penalty=repetition_penalty,
+            pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
+            eos_token_id=tokenizer.eos_token_id,
+        )
+        start = time.time()
+        output_ids = model.generate(**gen_kwargs)
+        elapsed_ms = (time.time() - start) * 1000
+        generated = output_ids[0][input_ids.shape[1]:]
+        text = tokenizer.decode(generated, skip_special_tokens=True)
+        return {
+            "text": text,
+            "tokens_generated": len(generated),
+            "elapsed_ms": round(elapsed_ms, 1),
+        }
+
+    def _stream(
+        prompt: str,
+        resp_q_inner: mp.Queue,
+        max_new_tokens: int = 100,
+        temperature: float = 0.7,
+        top_p: float = 0.9,
+        top_k: int = 50,
+        repetition_penalty: float = 1.0,
+        **gen_kwargs: Any,
+    ) -> None:
+        from transformers import TextIteratorStreamer
+
+        inputs = tokenizer(prompt, return_tensors="pt")
+        input_ids = inputs["input_ids"]
+        attention_mask = inputs.get("attention_mask")
+
+        device = getattr(model, "device", None)
+        if device is not None and device != "cpu":
+            input_ids = input_ids.to(device)
+            if attention_mask is not None:
+                attention_mask = attention_mask.to(device)
+
+        streamer = TextIteratorStreamer(
+            tokenizer, skip_prompt=True, skip_special_tokens=True
+        )
+
+        gen_kwargs.update(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            max_new_tokens=max_new_tokens,
+            do_sample=True,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            repetition_penalty=repetition_penalty,
+            pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
+            eos_token_id=tokenizer.eos_token_id,
+            streamer=streamer,
+        )
+
+        thread = threading.Thread(target=model.generate, kwargs=gen_kwargs, daemon=True)
+        thread.start()
+
+        tokens_generated = 0
+        start = time.time()
+        for text_chunk in streamer:
+            try:
+                resp_q_inner.put_nowait(("token", text_chunk))
+            except Exception:
+                break
+            tokens_generated += 1
+
+        thread.join(timeout=10)
+        elapsed_ms = (time.time() - start) * 1000
+
+        try:
+            resp_q_inner.put_nowait(("result", {
+                "text": "",
+                "tokens_generated": tokens_generated,
+                "elapsed_ms": round(elapsed_ms, 1),
+            }))
+        except Exception:
+            pass
+
+    def _cleanup():
+        nonlocal model, tokenizer
+        del model
+        del tokenizer
+        model = None
+        tokenizer = None
+
+    _worker_loop(req_q, resp_q, hb_q, worker_id, _generate, _stream, _cleanup)
+
+
 class ModelWorkerProcess:
     """Manages a model inference subprocess with Queue-based RPC.
 
-    Usage::
+    Two construction modes:
+
+    SloNet (preferred — pure NumPy, no PyTorch)::
+
+        worker = ModelWorkerProcess(
+            slnc_path="models/gpt2.slnc",
+            model_id="gpt2",
+            worker_id="gpt2",
+        )
+
+    HF/Legacy (requires PyTorch)::
 
         worker = ModelWorkerProcess(
             model_cls_path="transformers.AutoModelForCausalLM",
-            model_kwargs={"from_pretrained": "gpt2"},
+            model_kwargs={"pretrained_model_name_or_path": "gpt2"},
             worker_id="gpt2",
         )
-        worker.start()
-        result = worker.generate("Hello", max_new_tokens=50)
     """
 
     def __init__(
         self,
-        model_cls_path: str,
-        model_kwargs: dict,
         worker_id: str = "worker",
         generate_timeout: float = 120.0,
         extra_sys_paths: Optional[list] = None,
+        # SloNet mode (preferred)
+        slnc_path: Optional[str] = None,
+        model_id: Optional[str] = None,
+        quantize: bool = False,
+        quant_bits: int = 8,
+        quant_mode: str = "symmetric",
+        quant_clip: float = 0.999,
+        # HF/Legacy mode
+        model_cls_path: Optional[str] = None,
+        model_kwargs: Optional[dict] = None,
     ):
-        self.model_cls_path = model_cls_path
-        self.model_kwargs = model_kwargs
         self.worker_id = worker_id
         self._generate_timeout = generate_timeout
         self._extra_sys_paths = extra_sys_paths or []
+
+        # SloNet params
+        self._slnc_path = slnc_path
+        self._model_id = model_id or "default"
+        self._quantize = quantize
+        self._quant_bits = quant_bits
+        self._quant_mode = quant_mode
+        self._quant_clip = quant_clip
+
+        # HF params
+        self._model_cls_path = model_cls_path
+        self._model_kwargs = model_kwargs or {}
+
+        # Determine backend
+        self._use_slo = slnc_path is not None
+        if not self._use_slo and model_cls_path is None:
+            raise ValueError(
+                "ModelWorkerProcess requires either slnc_path (SloNet) or "
+                "model_cls_path (HF legacy)"
+            )
 
         self._req_q: Optional[mp.Queue] = None
         self._resp_q: Optional[mp.Queue] = None
@@ -301,7 +499,11 @@ class ModelWorkerProcess:
         self._process: Optional[mp.Process] = None
         self._health = WorkerHealth()
         self._started_at: float = 0.0
-        self._lock = mp.Lock() if hasattr(mp, "Lock") else None  # type: ignore
+
+    @property
+    def backend(self) -> str:
+        """Worker backend: ``'slo'`` or ``'hf'``."""
+        return "slo" if self._use_slo else "hf"
 
     # ── Lifecycle ──────────────────────────────────────────────────────
 
@@ -312,26 +514,41 @@ class ModelWorkerProcess:
                 extra={"tag": "INFRA"})
             return
 
-        self._req_q = mp.Queue()
-        self._resp_q = mp.Queue()
-        self._hb_q = mp.Queue()
+        self._req_q = _ctx.Queue()
+        self._resp_q = _ctx.Queue()
+        self._hb_q = _ctx.Queue()
 
         self._health = WorkerHealth()
         self._started_at = time.time()
 
-        self._process = _ctx.Process(
-            target=_worker_main,
-            args=(
+        if self._use_slo:
+            target = _slo_worker_main
+            args = (
                 self._req_q,
                 self._resp_q,
                 self._hb_q,
-                self.model_cls_path,
-                self.model_kwargs,
+                self._slnc_path,
+                self._model_id,
+                self.worker_id,
+                self._quantize,
+                self._quant_bits,
+                self._quant_mode,
+                self._quant_clip,
+                self._extra_sys_paths,
+            )
+        else:
+            target = _hf_worker_main
+            args = (
+                self._req_q,
+                self._resp_q,
+                self._hb_q,
+                self._model_cls_path,
+                self._model_kwargs,
                 self.worker_id,
                 self._extra_sys_paths,
-            ),
-            daemon=True,
-        )
+            )
+
+        self._process = _ctx.Process(target=target, args=args, daemon=True)
         self._process.start()
 
         self._health.pid = self._process.pid
@@ -339,7 +556,7 @@ class ModelWorkerProcess:
         self._health.started_at = self._started_at
 
         # Wait for ready signal
-        deadline = time.time() + 60.0
+        deadline = time.time() + 120.0
         ready = False
         while time.time() < deadline:
             try:
@@ -353,16 +570,16 @@ class ModelWorkerProcess:
             except queue.Empty:
                 if not self._process.is_alive():
                     break
-                # Poll heartbeat — worker sends "alive" every 0.5s once running
                 continue
 
         if not ready:
             raise RuntimeError(
-                f"Worker[{self.worker_id}]: failed to start within 60s"
+                f"Worker[{self.worker_id}]: failed to start within 120s"
             )
 
         logger.info(
-            "Worker[%s]: ready (pid=%d)", self.worker_id, self._process.pid,
+            "Worker[%s]: ready (pid=%d, backend=%s)",
+            self.worker_id, self._process.pid, self.backend,
             extra={"tag": "INFRA"},
         )
 

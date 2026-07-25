@@ -229,6 +229,133 @@ class TrainerConfig:
 
 
 # =============================================================================
+# Training State Serialization (for .soul metadata embedding)
+# =============================================================================
+
+
+def _make_json_safe(obj):
+    """Recursively convert numpy arrays / torch tensors to JSON-safe types."""
+    import numpy as _np
+    if isinstance(obj, _np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, _np.integer):
+        return int(obj)
+    if isinstance(obj, _np.floating):
+        return float(obj)
+    if isinstance(obj, dict):
+        return {k: _make_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_make_json_safe(v) for v in obj]
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    return obj
+
+
+def _load_soul_checkpoint(path: str) -> Optional[Dict[str, Any]]:
+    """Load a .soul checkpoint and return a dict compatible with _restore_from_checkpoint_bundle.
+
+    Returns:
+        Dict with keys: model_state_dict, step, epoch, optimizer_state_dict (optional),
+        scheduler_state_dict (optional), accumulation_step (optional).
+    """
+    from domains.inference.slo_format import load_soul
+
+    soul_profile, state_dict = load_soul(path)
+    result: Dict[str, Any] = {
+        "model_state_dict": state_dict,
+        "step": 0,
+        "epoch": 0,
+    }
+
+    # Extract training state embedded in metadata
+    training = soul_profile.metadata.get("training_state") if soul_profile.metadata else None
+    if isinstance(training, dict):
+        parsed = _parse_training_state_metadata({"training_state": training})
+        result["step"] = parsed.get("step", 0)
+        result["epoch"] = parsed.get("epoch", 0)
+        result["accumulation_step"] = parsed.get("accumulation_step", 0)
+        if "optimizer" in parsed:
+            result["optimizer_state_dict"] = parsed["optimizer"]
+        if "scheduler" in parsed:
+            result["scheduler_state_dict"] = parsed["scheduler"]
+
+    return result
+
+
+def _build_training_state_metadata(
+    optimizer=None, scheduler=None, step=0, epoch=0,
+    accumulation_step=0, params=None,
+) -> dict:
+    """Build a JSON-serializable dict of training state for embedding in .soul metadata.
+
+    Args:
+        optimizer: SloAdam / SloSGD / torch.optim.Optimizer (or None).
+        scheduler: SloLRScheduler / torch LR scheduler (or None).
+        step: Current global training step.
+        epoch: Current epoch.
+        accumulation_step: Current gradient accumulation step.
+        params: List of model parameters (for SloAdam/SloSGD name-based state).
+
+    Returns:
+        Dict ready to embed in soul.metadata["training_state"].
+    """
+    state: dict = {"step": step, "epoch": epoch, "accumulation_step": accumulation_step}
+    if optimizer is not None:
+        try:
+            opt_state = optimizer.state_dict(params=params) if params is not None else optimizer.state_dict()
+            state["optimizer"] = _make_json_safe(opt_state)
+        except Exception:
+            pass
+    if scheduler is not None:
+        try:
+            sched_state = scheduler.state_dict()
+            state["scheduler"] = _make_json_safe(sched_state)
+        except Exception:
+            pass
+    return state
+
+
+def _parse_training_state_metadata(metadata: dict) -> dict:
+    """Extract training state from .soul metadata (inverse of _build_...).
+
+    Converts nested lists back to numpy arrays where appropriate so that
+    optimizer.load_state_dict() can consume them.
+
+    Returns:
+        Dict with keys: step, epoch, accumulation_step, optimizer (optional),
+        scheduler (optional).
+    """
+    import numpy as _np
+
+    def _to_numpy(obj):
+        if isinstance(obj, list):
+            return _np.array(obj, dtype=_np.float64)
+        return obj
+
+    raw = metadata.get("training_state", {})
+    result: dict = {
+        "step": raw.get("step", 0),
+        "epoch": raw.get("epoch", 0),
+        "accumulation_step": raw.get("accumulation_step", 0),
+    }
+    opt_raw = raw.get("optimizer")
+    if isinstance(opt_raw, dict):
+        opt = dict(opt_raw)
+        hyper = opt.get("hyperparameters", {})
+        state = opt.get("state", {})
+        # Convert nested lists in state back to numpy arrays
+        converted_state = {}
+        for name, buffers in state.items():
+            converted_state[name] = {k: _to_numpy(v) for k, v in buffers.items()}
+        opt["state"] = converted_state
+        result["optimizer"] = opt
+    sched_raw = raw.get("scheduler")
+    if isinstance(sched_raw, dict):
+        result["scheduler"] = sched_raw
+    return result
+
+
+# =============================================================================
 # Checkpoint Manager
 # =============================================================================
 
@@ -310,6 +437,14 @@ class CheckpointManager:
             elif stoi is not None and itos is not None:
                 soul.metadata["chars"] = [itos[i] for i in range(len(stoi))]
 
+            # Embed training state so .soul is fully self-contained
+            soul.metadata["training_state"] = _build_training_state_metadata(
+                optimizer=optimizer, scheduler=scheduler,
+                step=step, epoch=epoch,
+                accumulation_step=0,
+                params=list(model.parameters()) if hasattr(model, "parameters") else None,
+            )
+
             save_soul(model, str(model_path), soul_profile=soul)
 
         except Exception as exc:
@@ -368,12 +503,14 @@ class CheckpointManager:
 
     @staticmethod
     def load_from_path(path: str, map_location: str = "cpu") -> Optional[Dict[str, Any]]:
-        """Load a training checkpoint from an explicit path (.pt file)."""
+        """Load a training checkpoint from an explicit path (.pt or .soul file)."""
         p = Path(path).expanduser()
         if not p.is_file():
             logger.warning("Checkpoint file not found: %s", p,
                 extra={"tag": "TRAIN"},)
             return None
+        if p.suffix == ".soul":
+            return _load_soul_checkpoint(str(p))
         return torch_load_checkpoint(str(p), map_location=map_location)
 
     def _cleanup_old_checkpoints(self):
@@ -953,7 +1090,8 @@ class SloughGPTTrainer:
         opt = normalized.get("optimizer_state_dict")
         if isinstance(opt, dict) and opt:
             try:
-                self.optimizer.load_state_dict(opt)
+                params = list(self.model.parameters()) if hasattr(self.model, "parameters") else None
+                self.optimizer.load_state_dict(opt, params=params)
             except Exception as exc:
                 logger.warning("Could not load optimizer_state_dict (fresh optimizer): %s", exc,
                     extra={"tag": "TRAIN"},)
@@ -977,6 +1115,7 @@ class SloughGPTTrainer:
 
         self.global_step = int(normalized.get("step", 0))
         self.current_epoch = int(normalized.get("epoch", 0))
+        self.accumulation_step = int(normalized.get("accumulation_step", 0))
 
         st = normalized.get("stoi")
         it = normalized.get("itos")
@@ -1326,6 +1465,16 @@ class SloughGPTTrainer:
                 soul.metadata["chars"] = [_itos[i] for i in range(len(_stoi))]
             soul.metadata["vocab_size"] = self.vocab_size
             soul.metadata["config"] = metadata["config"]
+
+            # Embed training state so .soul is fully self-contained
+            soul.metadata["training_state"] = _build_training_state_metadata(
+                optimizer=getattr(self, "optimizer", None),
+                scheduler=getattr(self, "scheduler", None),
+                step=getattr(self, "_step", 0),
+                epoch=getattr(self, "_epoch", 0),
+                accumulation_step=getattr(self, "accumulation_step", 0),
+                params=list(self.model.parameters()) if hasattr(self.model, "parameters") else None,
+            )
 
             output_path = path + ".soul"
             save_soul(self.model, output_path, soul_profile=soul)

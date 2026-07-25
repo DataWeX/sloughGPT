@@ -5,6 +5,7 @@ Uses ModelsController for business logic
 import asyncio
 import os
 import logging
+import re
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -680,3 +681,38 @@ async def dequantize_model(auth_user: dict = Depends(require_auth_if_enabled)):
         "model_type": model_type,
         "layers_reset": len(layers),
     })
+
+
+@router.get("/catalog")
+async def get_catalog():
+    """Get the persistent model catalog."""
+    from domains.infrastructure.model_catalog import get_model_catalog
+    catalog = get_model_catalog()
+    return success_response(data=catalog.list_all())
+
+
+@router.get("/catalog/stats")
+async def get_catalog_stats():
+    """Get catalog statistics."""
+    from domains.infrastructure.model_catalog import get_model_catalog
+    catalog = get_model_catalog()
+    return success_response(data=catalog.stats())
+
+
+@router.get("/conversion-status")
+async def get_conversion_status(model_id: Optional[str] = None):
+    """Get model conversion/download status.
+
+    Without model_id: returns all active conversions.
+    With model_id: returns status for that specific model.
+    """
+    from domains.infrastructure.conversion_tracker import get_tracker
+    tracker = get_tracker()
+
+    if model_id:
+        status = tracker.get(model_id)
+        if not status:
+            return success_response(data={"model_id": model_id, "stage": "idle", "progress": 0})
+        return success_response(data=status)
+
+    return success_response(data=tracker.get_active())

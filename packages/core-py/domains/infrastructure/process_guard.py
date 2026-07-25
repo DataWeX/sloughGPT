@@ -4,6 +4,21 @@ Process-level crash guard for model inference workers.
 Provides ProcessGuard — wraps ModelWorkerProcess with automatic crash
 detection, configurable restart policy, health monitoring, and lifecycle
 callbacks.
+
+Two construction modes:
+
+  SloNet (preferred — pure NumPy)::
+
+      guard = ProcessGuard(slnc_path="models/gpt2.slnc", model_id="gpt2")
+      guard.start()
+      result = guard.generate("Hello")
+
+  HF/Legacy (requires PyTorch)::
+
+      guard = ProcessGuard(
+          model_cls_path="transformers.AutoModelForCausalLM",
+          model_kwargs={"pretrained_model_name_or_path": "gpt2"},
+      )
 """
 
 import time
@@ -34,8 +49,6 @@ class ProcessGuard:
 
     def __init__(
         self,
-        model_cls_path: str,
-        model_kwargs: dict,
         worker_id: str = "guard",
         generate_timeout: float = 120.0,
         max_restarts: int = 3,
@@ -44,9 +57,17 @@ class ProcessGuard:
         extra_sys_paths: Optional[list] = None,
         max_concurrent: int = 1,
         memory_limit_mb: Optional[float] = None,
+        # SloNet mode (preferred)
+        slnc_path: Optional[str] = None,
+        model_id: Optional[str] = None,
+        quantize: bool = False,
+        quant_bits: int = 8,
+        quant_mode: str = "symmetric",
+        quant_clip: float = 0.999,
+        # HF/Legacy mode
+        model_cls_path: Optional[str] = None,
+        model_kwargs: Optional[dict] = None,
     ):
-        self.model_cls_path = model_cls_path
-        self.model_kwargs = model_kwargs
         self.worker_id = worker_id
         self.generate_timeout = generate_timeout
         self.max_restarts = max_restarts
@@ -54,6 +75,18 @@ class ProcessGuard:
         self.health_check_interval = health_check_interval
         self.extra_sys_paths = extra_sys_paths or []
         self.memory_limit_mb = memory_limit_mb
+
+        # SloNet params
+        self._slnc_path = slnc_path
+        self._model_id = model_id or "default"
+        self._quantize = quantize
+        self._quant_bits = quant_bits
+        self._quant_mode = quant_mode
+        self._quant_clip = quant_clip
+
+        # HF params
+        self.model_cls_path = model_cls_path
+        self.model_kwargs = model_kwargs or {}
 
         self._worker: Optional[Any] = None
         self._restart_count = 0
@@ -170,13 +203,27 @@ class ProcessGuard:
 
         if self._worker is not None:
             self._worker.stop()
-        self._worker = ModelWorkerProcess(
-            model_cls_path=self.model_cls_path,
-            model_kwargs=self.model_kwargs,
-            worker_id=self.worker_id,
-            generate_timeout=self.generate_timeout,
-            extra_sys_paths=self.extra_sys_paths,
-        )
+
+        if self._slnc_path is not None:
+            self._worker = ModelWorkerProcess(
+                slnc_path=self._slnc_path,
+                model_id=self._model_id,
+                worker_id=self.worker_id,
+                generate_timeout=self.generate_timeout,
+                extra_sys_paths=self.extra_sys_paths,
+                quantize=self._quantize,
+                quant_bits=self._quant_bits,
+                quant_mode=self._quant_mode,
+                quant_clip=self._quant_clip,
+            )
+        else:
+            self._worker = ModelWorkerProcess(
+                model_cls_path=self.model_cls_path,
+                model_kwargs=self.model_kwargs,
+                worker_id=self.worker_id,
+                generate_timeout=self.generate_timeout,
+                extra_sys_paths=self.extra_sys_paths,
+            )
         self._worker.start()
 
     def _monitor_loop(self) -> None:
@@ -219,10 +266,10 @@ def create_model_guard(
     generate_timeout: float = 120.0,
     max_concurrent: int = 1,
 ) -> ProcessGuard:
-    """Create a ProcessGuard for an HF model.
+    """Create a ProcessGuard for an HF model (legacy path).
 
     Convenience factory that configures the guard to load the model
-    in a subprocess via ``HFModelWorker``.
+    in a subprocess via HF ``model.generate()``.
 
     Args:
         model_id: HuggingFace model ID (e.g. "gpt2").
@@ -246,6 +293,60 @@ def create_model_guard(
         memory_limit_mb=memory_limit_mb,
         generate_timeout=generate_timeout,
         max_concurrent=max_concurrent,
+    )
+    guard.start()
+    return guard
+
+
+def create_slo_guard(
+    slnc_path: str,
+    model_id: str = "default",
+    worker_id: Optional[str] = None,
+    max_restarts: int = 3,
+    restart_delay: float = 2.0,
+    memory_limit_mb: Optional[float] = None,
+    generate_timeout: float = 120.0,
+    max_concurrent: int = 1,
+    quantize: bool = False,
+    quant_bits: int = 8,
+    quant_mode: str = "symmetric",
+    quant_clip: float = 0.999,
+) -> ProcessGuard:
+    """Create a ProcessGuard for a SloNet model (pure NumPy).
+
+    Loads the model in a subprocess via ``SloNetChatProvider.from_slnc()``
+    and streams via ``generate_numpy_stream()``. Zero PyTorch dependency.
+
+    Args:
+        slnc_path: Path to the .slnc weight file.
+        model_id: Model identifier (e.g. "gpt2").
+        worker_id: Optional worker name.
+        max_restarts: Max worker restarts before giving up.
+        restart_delay: Seconds to wait between restarts.
+        memory_limit_mb: Optional RSS memory limit (MB).
+        generate_timeout: Max seconds per generate() call.
+        max_concurrent: Max concurrent requests.
+        quantize: Apply quantization after loading.
+        quant_bits: Bits for quantization (8 or 4).
+        quant_mode: "symmetric" or "asymmetric".
+        quant_clip: Outlier clipping percentile.
+
+    Returns:
+        Started ProcessGuard instance.
+    """
+    guard = ProcessGuard(
+        slnc_path=slnc_path,
+        model_id=model_id,
+        worker_id=worker_id or f"slo-guard-{model_id.split('/')[-1]}",
+        max_restarts=max_restarts,
+        restart_delay=restart_delay,
+        memory_limit_mb=memory_limit_mb,
+        generate_timeout=generate_timeout,
+        max_concurrent=max_concurrent,
+        quantize=quantize,
+        quant_bits=quant_bits,
+        quant_mode=quant_mode,
+        quant_clip=quant_clip,
     )
     guard.start()
     return guard

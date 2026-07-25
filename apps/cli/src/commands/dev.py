@@ -10,7 +10,6 @@ import threading
 import webbrowser
 from pathlib import Path
 from collections import deque
-from typing import Optional
 
 from core.printer import printer
 from utils.formatting import format_time
@@ -49,6 +48,62 @@ def _check_api_ready(port: int) -> bool:
         return True
     except Exception:
         return False
+
+
+def _get_startup_progress(port: int) -> dict | None:
+    """Fetch startup progress from /health/startup-progress."""
+    try:
+        import urllib.request
+        import json
+        resp = urllib.request.urlopen(f"http://localhost:{port}/health/startup-progress", timeout=2)
+        data = json.loads(resp.read())
+        return data.get("data", data)
+    except Exception:
+        return None
+
+
+def _wait_for_api_with_progress(port: int, timeout: int = 90) -> bool:
+    """Wait for API with live ProgressBar showing startup phases."""
+    from utils.progress import ProgressBar
+
+    bar = ProgressBar(total=timeout, desc="Starting API", width=30, show_eta=True)
+    phase_names = {
+        "initializing": "Initializing",
+        "task_queue": "Task queue",
+        "config": "Config",
+        "loading_model": "Loading model",
+        "wandb_server": "W&B metrics",
+        "multimodal": "Multimodal",
+        "model_registry": "Model registry",
+        "registering_routers": "Routes",
+        "ready": "Ready",
+    }
+
+    for elapsed in range(timeout):
+        if _check_api_ready(port):
+            bar.set_progress(timeout)
+            bar.desc = "API ready"
+            bar.finish()
+            return True
+
+        progress = _get_startup_progress(port)
+        if progress:
+            phase = progress.get("phase", "initializing")
+            step = progress.get("step", 0)
+            total = progress.get("total", 9)
+            msg = progress.get("message", "")
+            name = phase_names.get(phase, phase)
+            bar.desc = f"[{step}/{total}] {name}"
+            bar.set_progress(min(elapsed, timeout - 1))
+        else:
+            bar.desc = "Waiting for API"
+            bar.set_progress(min(elapsed, timeout - 1))
+
+        time.sleep(1)
+
+    bar.desc = "Timed out"
+    bar.finish()
+    return False
 
 
 def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True):
@@ -205,7 +260,7 @@ def cmd_dev(args):
     finally:
         stop_event.set()
         _cleanup(api_proc, web_proc, api_port, web_port)
-        _print_summary(api_lines, web_lines, status)
+        _print_summary(api_lines, web_lines, status, api_port, web_port)
 
 
 def _cleanup(api_proc, web_proc, api_port, web_port):
@@ -225,18 +280,18 @@ def _cleanup(api_proc, web_proc, api_port, web_port):
     _kill_port(web_port)
 
 
-def _print_summary(api_lines, web_lines, status):
+def _print_summary(api_lines, web_lines, status, api_port=8000, web_port=3000):
     """Print a clean shutdown summary to the normal console."""
     printer.blank()
     printer.header("Dev Server Stopped")
 
     st = status.get("api", "error")
     color = "green" if st == "ready" else "red"
-    printer.status("API Server", f"http://localhost:{8000}", color if color == "green" else "error")
+    printer.status("API Server", f"http://localhost:{api_port}", color if color == "green" else "error")
 
     st = status.get("web", "error")
     color = "green" if st == "ready" else "red"
-    printer.status("Web Server", f"http://localhost:{3000}", color if color == "green" else "error")
+    printer.status("Web Server", f"http://localhost:{web_port}", color if color == "green" else "error")
 
     printer.blank()
     printer.info(f"API logs: {len(api_lines)} lines")
@@ -298,15 +353,7 @@ def _cmd_api_only(args):
     )
     api_thread.start()
 
-    printer.step("Waiting for API...")
-    ready = False
-    for _ in range(90):
-        if _check_api_ready(api_port):
-            ready = True
-            break
-        time.sleep(1)
-
-    if not ready:
+    if not _wait_for_api_with_progress(api_port):
         printer.error("API failed to start within 90s")
         printer.info("Last output:")
         for line in list(api_lines)[-20:]:
@@ -371,6 +418,16 @@ def _cmd_api_and_web(args):
 
     # ── Build env with model overrides ──────────────────────────
     env = os.environ.copy()
+
+    # Ensure nvm-installed node/npx/npm are on PATH for subprocesses
+    nvm_dir = os.environ.get("NVM_DIR", os.path.expanduser("~/.nvm"))
+    nvm_bin = os.path.join(nvm_dir, "versions", "node")
+    if os.path.isdir(nvm_bin):
+        for entry in os.listdir(nvm_bin):
+            candidate = os.path.join(nvm_bin, entry, "bin")
+            if os.path.isdir(candidate) and candidate not in env.get("PATH", ""):
+                env["PATH"] = candidate + os.pathsep + env.get("PATH", "")
+
     model = getattr(args, "model", None) or os.environ.get("SLOUGHGT_MODEL_PATH", "")
     if model:
         env["SLOUGHGT_MODEL_PATH"] = model
@@ -493,12 +550,7 @@ def _cmd_api_and_web(args):
     web_thread.start()
 
     # ── Wait for API readiness ────────────────────────────────────
-    printer.step("Waiting for API...")
-    for _ in range(90):
-        if _check_api_ready(api_port):
-            break
-        time.sleep(1)
-    else:
+    if not _wait_for_api_with_progress(api_port):
         printer.error("API failed to start within 90s")
         printer.info("Last API output:")
         for line in list(api_lines)[-20:]:
@@ -672,7 +724,7 @@ def cmd_api_status(args):
             printer.key_value("CPU", f"{data.get('system', {}).get('cpu_percent', 'N/A')}%")
             printer.key_value("Memory", f"{data.get('system', {}).get('memory_percent', 'N/A')}%")
     except Exception:
-        pass
+        printer.info("  (metrics endpoint not available)")
 
 
 def cmd_api_test(args):
@@ -775,143 +827,3 @@ def cmd_hf_serve(args):
         printer.error(f"API error: {e}")
         printer.info("Make sure the API server is running: python3 cli.py dev")
 
-
-def register(subparsers):
-    """Register dev commands with argparse subparser."""
-    # Dev server
-    dev_parser = subparsers.add_parser(
-        "dev",
-        help="Start API and Web servers (orchestrates uvicorn + npm)",
-    )
-    dev_parser.add_argument("--model", default=None, help="Model path (SLOUGHGT_MODEL_PATH)")
-    dev_parser.add_argument("--web-port", type=int, default=3000, help="Web dev server port")
-    dev_parser.add_argument("--watch-web", action="store_true", help="Watch web files for changes")
-    dev_parser.set_defaults(func=cmd_dev)
-
-    # Serve
-    serve_parser = subparsers.add_parser(
-        "serve",
-        help="Start HTTP inference server",
-    )
-    serve_parser.add_argument("--host", default="localhost", help="Bind address")
-    serve_parser.add_argument("--port", type=int, default=8000, help="API port")
-    serve_parser.add_argument("--model", metavar="PATH", help="Model to preload")
-    serve_parser.add_argument("--web", action="store_true", help="Start web UI and open browser")
-    serve_parser.add_argument("--web-port", type=int, default=3000, help="Web UI port")
-    serve_parser.set_defaults(func=cmd_serve)
-
-    # Health
-    health_parser = subparsers.add_parser(
-        "health",
-        help="Check API health",
-    )
-    health_parser.set_defaults(func=cmd_health)
-
-    # API status
-    api_status_parser = subparsers.add_parser(
-        "api-status",
-        help="Show detailed API status",
-    )
-    api_status_parser.set_defaults(func=cmd_api_status)
-
-    # API test
-    api_test_parser = subparsers.add_parser(
-        "api-test",
-        help="Test API endpoints",
-    )
-    api_test_parser.add_argument("--auth", action="store_true", help="Test authentication")
-    api_test_parser.set_defaults(func=cmd_api_test)
-
-    # API auth
-    api_auth_parser = subparsers.add_parser(
-        "api-auth",
-        help="Test API authentication",
-    )
-    api_auth_parser.set_defaults(func=cmd_api_auth)
-
-    # HF serve
-    hf_serve_parser = subparsers.add_parser(
-        "hf-serve",
-        help="Serve a HuggingFace model via API",
-    )
-    hf_serve_parser.add_argument("model", help="Model name (e.g. gpt2)")
-    hf_serve_parser.add_argument("--mode", choices=["api", "local"], default="local", help="Load mode")
-    hf_serve_parser.add_argument("--device", default="auto", help="Device (auto, cuda, cpu, mps)")
-    hf_serve_parser.set_defaults(func=cmd_hf_serve)
-
-    # Docker
-    docker_parser = subparsers.add_parser(
-        "docker",
-        help="Docker compose workflows (start, stop, status, logs, build, shell)",
-    )
-    docker_sub = docker_parser.add_subparsers(dest="docker_cmd", metavar="SUBCOMMAND")
-
-    def _docker_compose_file():
-        return _repo_root() / "infra" / "docker" / "docker-compose.yml"
-
-    def _docker_action(action: str, a):
-        import subprocess
-        compose = _docker_compose_file()
-        if not compose.is_file():
-            printer.error(f"Compose file not found: {compose}")
-            return
-
-        if action == "start":
-            profile = []
-            if getattr(a, "dev", False):
-                profile = ["--profile", "dev"]
-            elif getattr(a, "gpu", False):
-                profile = ["--profile", "gpu"]
-            printer.step("Starting Docker services...")
-            subprocess.run(["docker", "compose", "-f", str(compose), "up", "-d", *profile])
-            printer.success("Services started")
-            subprocess.run(["docker", "compose", "-f", str(compose), "ps"])
-
-        elif action == "stop":
-            printer.step("Stopping Docker services...")
-            subprocess.run(["docker", "compose", "-f", str(compose), "down"])
-            printer.success("Services stopped")
-
-        elif action == "status":
-            subprocess.run(["docker", "compose", "-f", str(compose), "ps"])
-
-        elif action == "logs":
-            cmd = ["docker", "compose", "-f", str(compose), "logs", "-f"]
-            if getattr(a, "service", None):
-                cmd.append(a.service)
-            subprocess.run(cmd)
-
-        elif action == "build":
-            cmd = ["docker", "compose", "-f", str(compose), "build"]
-            if getattr(a, "no_cache", False):
-                cmd.append("--no-cache")
-            printer.step("Building Docker images...")
-            subprocess.run(cmd)
-            printer.success("Build complete")
-
-        elif action == "shell":
-            service = getattr(a, "service", "api")
-            subprocess.run(["docker", "compose", "-f", str(compose), "exec", service, "/bin/bash"])
-
-    docker_start = docker_sub.add_parser("start", help="Start services")
-    docker_start.add_argument("--gpu", action="store_true", help="Use GPU")
-    docker_start.add_argument("--dev", action="store_true", help="Development mode")
-    docker_start.set_defaults(func=lambda a: _docker_action("start", a))
-
-    docker_stop = docker_sub.add_parser("stop", help="Stop services")
-    docker_stop.set_defaults(func=lambda a: _docker_action("stop", a))
-
-    docker_status = docker_sub.add_parser("status", help="Show status")
-    docker_status.set_defaults(func=lambda a: _docker_action("status", a))
-
-    docker_logs = docker_sub.add_parser("logs", help="Show logs")
-    docker_logs.add_argument("service", nargs="?", help="Service name")
-    docker_logs.set_defaults(func=lambda a: _docker_action("logs", a))
-
-    docker_build = docker_sub.add_parser("build", help="Build images")
-    docker_build.add_argument("--no-cache", action="store_true", help="Build without cache")
-    docker_build.set_defaults(func=lambda a: _docker_action("build", a))
-
-    docker_shell = docker_sub.add_parser("shell", help="Shell into container")
-    docker_shell.add_argument("service", default="api", nargs="?", help="Service name")
-    docker_shell.set_defaults(func=lambda a: _docker_action("shell", a))

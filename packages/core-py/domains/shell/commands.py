@@ -267,7 +267,6 @@ class ShellCommands:
         })
 
     @staticmethod
-    @staticmethod
     def chat(messages: list[dict[str, str]]) -> dict[str, Any]:
         """Send a chat message."""
         return _api_post("/chat", {"messages": messages})

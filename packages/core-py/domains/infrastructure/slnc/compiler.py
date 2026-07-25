@@ -161,6 +161,13 @@ class SLNCCompiler:
             models_dir.mkdir(exist_ok=True)
             output = str(models_dir / f"{model_id.replace('/', '_')}.slnc")
 
+        # Auto-protect: chmod444 + manifest + marker
+        try:
+            from domains.infrastructure.model_protector import protect_model
+            protect_model(model_id, [output])
+        except Exception as e:
+            logger.debug("Could not protect .slnc file: %s", e)
+
         return self.compile_from_dict(config, weights, output)
 
     def compile_from_dict(

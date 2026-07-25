@@ -2991,6 +2991,57 @@ class SloSGD:
             p.data -= self.lr*g
             p.grad = None
 
+    def state_dict(self, params=None):
+        """Serialize optimizer state by parameter name (not id).
+
+        Args:
+            params: List of parameters to include. If None, returns only
+                hyperparameters (no per-param state).
+
+        Returns:
+            Dict with 'hyperparameters' and 'state' (name-keyed buffers).
+        """
+        state = {"hyperparameters": {
+            "lr": self.lr, "momentum": self.momentum,
+            "max_grad_norm": self.max_grad_norm,
+        }, "state": {}}
+        if params is None:
+            return state
+        for i, p in enumerate(params):
+            name = getattr(p, "name", f"param_{i}")
+            pid = id(p)
+            if pid in self._v:
+                buf = self._v[pid]
+                state["state"][name] = (
+                    buf.tolist() if isinstance(buf, np.ndarray)
+                    else buf.detach().cpu().tolist() if hasattr(buf, "detach")
+                    else buf
+                )
+        return state
+
+    def load_state_dict(self, state_dict, params=None):
+        """Restore optimizer state by parameter name.
+
+        Args:
+            state_dict: Dict from state_dict().
+            params: List of parameters to match against state keys.
+        """
+        hyper = state_dict.get("hyperparameters", {})
+        self.lr = hyper.get("lr", self.lr)
+        self.momentum = hyper.get("momentum", self.momentum)
+        self.max_grad_norm = hyper.get("max_grad_norm", self.max_grad_norm)
+        if params is None:
+            return
+        saved_state = state_dict.get("state", {})
+        self._v.clear()
+        for i, p in enumerate(params):
+            name = getattr(p, "name", f"param_{i}")
+            if name in saved_state:
+                buf = saved_state[name]
+                if isinstance(buf, list):
+                    buf = np.array(buf, dtype=np.float64)
+                self._v[id(p)] = buf
+
 
 class SloAdam:
     def __init__(self, lr=0.001, b1=0.9, b2=0.999, eps=1e-8, weight_decay=0.0, max_grad_norm=None):
@@ -3028,6 +3079,68 @@ class SloAdam:
             upd = lr*mh/(self._sqrt(vh)+eps)
             if upd.shape != p.data.shape: upd = upd.sum(axis=0)
             p.data -= upd; p.grad = None
+
+    def state_dict(self, params=None):
+        """Serialize optimizer state by parameter name (not id).
+
+        Args:
+            params: List of parameters to include. If None, returns only
+                hyperparameters and timestep (no per-param state).
+
+        Returns:
+            Dict with 'hyperparameters', 't', and 'state' (name-keyed buffers).
+        """
+        state = {"hyperparameters": {
+            "lr": self.lr, "b1": self.b1, "b2": self.b2, "eps": self.eps,
+            "weight_decay": self.weight_decay, "max_grad_norm": self.max_grad_norm,
+        }, "t": self._t, "state": {}}
+        if params is None:
+            return state
+        for i, p in enumerate(params):
+            name = getattr(p, "name", f"param_{i}")
+            pid = id(p)
+            entry = {}
+            if pid in self._m:
+                buf = self._m[pid]
+                entry["m"] = (buf.tolist() if isinstance(buf, np.ndarray)
+                    else buf.detach().cpu().tolist() if hasattr(buf, "detach") else buf)
+            if pid in self._v:
+                buf = self._v[pid]
+                entry["v"] = (buf.tolist() if isinstance(buf, np.ndarray)
+                    else buf.detach().cpu().tolist() if hasattr(buf, "detach") else buf)
+            if entry:
+                state["state"][name] = entry
+        return state
+
+    def load_state_dict(self, state_dict, params=None):
+        """Restore optimizer state by parameter name.
+
+        Args:
+            state_dict: Dict from state_dict().
+            params: List of parameters to match against state keys.
+        """
+        hyper = state_dict.get("hyperparameters", {})
+        self.lr = hyper.get("lr", self.lr)
+        self.b1 = hyper.get("b1", self.b1)
+        self.b2 = hyper.get("b2", self.b2)
+        self.eps = hyper.get("eps", self.eps)
+        self.weight_decay = hyper.get("weight_decay", self.weight_decay)
+        self.max_grad_norm = hyper.get("max_grad_norm", self.max_grad_norm)
+        self._t = state_dict.get("t", self._t)
+        if params is None:
+            return
+        saved_state = state_dict.get("state", {})
+        self._m.clear(); self._v.clear()
+        for i, p in enumerate(params):
+            name = getattr(p, "name", f"param_{i}")
+            if name in saved_state:
+                entry = saved_state[name]
+                if "m" in entry:
+                    buf = entry["m"]
+                    self._m[id(p)] = (np.array(buf, dtype=np.float64) if isinstance(buf, list) else buf)
+                if "v" in entry:
+                    buf = entry["v"]
+                    self._v[id(p)] = (np.array(buf, dtype=np.float64) if isinstance(buf, list) else buf)
 
 
 # =============================================================================
@@ -3469,6 +3582,17 @@ class SloTransformer(SloNet):
             loss_t = cross_entropy(logits.reshape(-1, self.vocab_size), Tensor(t.reshape(-1)))
             return logits, loss_t
         return logits, None
+
+    def forward_pass(self, input_ids: "np.ndarray") -> "ForwardPassResult":
+        """Unified forward pass interface for NPU integration."""
+        from domains.inference.forward_pass import ForwardPassResult
+        if input_ids.ndim == 1:
+            input_ids = input_ids.reshape(1, -1)
+        logits, _ = self.forward(input_ids)
+        return ForwardPassResult(
+            logits=logits.data,
+            engine="numpy",
+        )
 
     @no_grad()
     def generate(

@@ -276,10 +276,43 @@ class StartupOrchestrator:
                 from domains.models.provider import setup_providers
 
                 registry = get_model_registry()
+
+                # Create process guard if enabled
+                process_guard = None
+                if cfg.enable_process_guard:
+                    try:
+                        from domains.infrastructure.process_guard import ProcessGuard
+                        from domains.infrastructure.safetensors_loader import _get_model_dir
+
+                        slnc_path = str(_get_model_dir(server_state.model_type) / "model.slnc")
+                        import os
+                        if os.path.exists(slnc_path):
+                            process_guard = ProcessGuard(
+                                slnc_path=slnc_path,
+                                model_id=server_state.model_type,
+                                worker_id=f"slo-{server_state.model_type.split('/')[-1]}",
+                                max_restarts=3,
+                                restart_delay=2.0,
+                                generate_timeout=120.0,
+                                quantize=cfg.quantize_slonet,
+                                quant_bits=cfg.quant_bits,
+                                quant_mode=cfg.quant_mode,
+                                quant_clip=cfg.quant_clip,
+                            )
+                            process_guard.start()
+                            logger.info("ProcessGuard started for %s", server_state.model_type,
+                                extra={"tag": "START"})
+                        else:
+                            logger.info("ProcessGuard skipped: no .slnc file at %s", slnc_path,
+                                extra={"tag": "START"})
+                    except Exception as e:
+                        logger.warning("ProcessGuard creation failed: %s", e, extra={"tag": "START"})
+
                 if server_state.model is not None and server_state.tokenizer is not None:
                     registry.register(
                         server_state.model_type, server_state.model, server_state.tokenizer,
                         make_default=True, generate_timeout=120.0,
+                        process_guard=process_guard,
                     )
 
                 slonet_id = cfg.autoload_model if cfg.autoload_model else None
@@ -293,6 +326,16 @@ class StartupOrchestrator:
                     quant_bits=cfg.quant_bits,
                     quant_mode=cfg.quant_mode,
                 )
+                # Sync current soul traits to PersonalityProcessor
+                try:
+                    from domains.inference.slo_manager import get_slo_manager
+                    from domains.models.provider import update_personality_traits
+                    mgr = get_slo_manager()
+                    current = mgr.get_current_soul()
+                    if current and hasattr(current, "personality") and current.personality:
+                        update_personality_traits(current.personality)
+                except Exception as e:
+                    logger.debug("Failed to sync soul traits to personality processor: %s", e, extra={"tag": "START"})
                 logger.info("Model loaded + providers registered: %s", server_state.model_type, extra={"tag": "START"})
             except Exception as e:
                 logger.error("Post-load registration failed: %s", e, exc_info=True, extra={"tag": "START"})
@@ -306,6 +349,20 @@ class StartupOrchestrator:
             task.result()
         except Exception as e:
             logger.error("Model load task failed: %s", e, exc_info=True, extra={"tag": "START"})
+
+        # Sync to persistent model catalog
+        try:
+            import state as server_state
+            from domains.infrastructure.model_catalog import get_model_catalog
+            catalog = get_model_catalog()
+            catalog.sync_from_disk()
+            if hasattr(server_state, "model_type") and server_state.model_type:
+                catalog.mark_loaded(
+                    server_state.model_type,
+                    device=getattr(server_state, "device", "cpu"),
+                )
+        except Exception as e:
+            logger.debug("Model catalog sync failed: %s", e, extra={"tag": "START"})
 
     async def _phase3_wandb(self):
         """Start W&B metrics server (if available)."""

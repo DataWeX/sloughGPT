@@ -5,6 +5,7 @@ All operations use the vector-store-backed KnowledgeMemory (the same store
 used by entity_extractor, soul engine prompt injection, and chat enrichment).
 """
 import json
+import re
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
 from pydantic import BaseModel, Field
 from typing import Optional, List

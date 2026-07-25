@@ -19,4 +19,4 @@ Example:
 python3 scripts/tools/performance_test.py --test latency --runs 5 --tokens 20
 ```
 
-Core training flows remain **`python3 cli.py train`** and **`python3 train_sloughgpt.py`** at the repo root.
+Core training flows remain **`./sloughgpt train`** and **`python3 train_sloughgpt.py`** at the repo root.

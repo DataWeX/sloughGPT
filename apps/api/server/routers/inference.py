@@ -36,7 +36,6 @@ import asyncio
 import datetime
 import uuid
 import time
-from threading import Thread
 
 
 class CreateSessionRequest(BaseModel):
@@ -257,8 +256,8 @@ def _start_background_flush() -> None:
             await asyncio.sleep(10)
             try:
                 await flush_dirty_sessions()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Background session flush failed: %s", e)
     try:
         _background_flush_task = asyncio.create_task(_flush_loop())
     except RuntimeError:
@@ -535,6 +534,8 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                     provider_messages[i]["content"] = content_parts
                     break
 
+        # Vision processing handled by ProviderRouter pipeline
+
         session_id = req.session_id or f"session_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
 
         session_data = _get_session(session_id)
@@ -554,8 +555,8 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                 kmem = get_knowledge_memory()
                 if kmem.stats().get("total_items", 0) == 0 and not req.knowledge:
                     skip_context = True
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Knowledge memory check failed: %s", e)
         if ctx_core and req.use_context_core and not skip_context:
             ctx_core.set_session_id(session_id)
             ctx_core.add_message("user", user_msg)
@@ -648,32 +649,30 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                 data={"context": context_info},
                 message=f"{len(context_info.get('layers', []))} context layers")
 
-        # ── Knowledge enrichment from KnowledgeMemory (offload to thread to avoid event loop deadlock) ──
+        # ── Knowledge enrichment via KnowledgeProcessor ──
         knowledge_retrieved = []
         try:
             enrichment = await asyncio.to_thread(_enrich_knowledge, user_msg, False, 5)
             if enrichment.get("facts"):
                 knowledge_retrieved = enrichment["facts"]
-                k_text = "\n".join(f"- {f}" for f in enrichment["facts"])
-                provider_messages.insert(0, {
-                    "role": "system",
-                    "content": f"Use the following context to answer the question:\n{k_text}"
-                })
         except Exception as e:
             logger.debug("Knowledge enrichment failed: %s", e)
+
+        # Merge: auto-retrieved + user-injected knowledge
+        all_knowledge = knowledge_retrieved + (req.knowledge or [])
+        if all_knowledge:
+            try:
+                from domains.models.provider import KnowledgeProcessor, apply_processors
+                k_proc = KnowledgeProcessor(knowledge=all_knowledge)
+                provider_messages = await apply_processors(provider_messages, [k_proc])
+            except Exception as e:
+                logger.debug("Knowledge processor failed: %s", e)
 
         try:
             from domains.models.provider import get_provider
             provider = get_provider("default")
 
             if provider is not None:
-                if req.knowledge:
-                    knowledge_str = "\n".join(f"- {k}" for k in req.knowledge)
-                    provider_messages.insert(0, {
-                        "role": "system",
-                        "content": f"Use the following context to answer:\n{knowledge_str}"
-                    })
-
                 full_response = ""
                 logger.debug("chat_stream: about to call provider.chat_stream()")
                 try:
@@ -732,7 +731,8 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                 tokens = len(full_response.split())
                 elapsed_ms = (datetime.datetime.now() - start_time).total_seconds() * 1000
                 get_server_state().record_inference(tokens=tokens, elapsed_ms=elapsed_ms, model=req.model)
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to record inference metrics: %s", e)
                 pass
 
             # Save response (memory cache + async disk flush)
@@ -843,8 +843,8 @@ async def chat(req: ChatRequest) -> ChatResponse:
                 raise HTTPException(status_code=503, detail="Model is degraded — circuit breaker open. Please wait or reload the model.")
     except HTTPException:
         raise
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Circuit breaker check failed: %s", e)
 
     user_msg = _extract_user_message(req.messages)
     if not user_msg:
@@ -854,6 +854,16 @@ async def chat(req: ChatRequest) -> ChatResponse:
 
     # Build messages list for domain
     messages = [{"role": m.role, "content": m.content} for m in req.messages]
+
+    # Process images — format as multimodal content parts for the last user message
+    if req.images:
+        content_parts = [{"type": "text", "text": user_msg}]
+        for img_data in req.images:
+            content_parts.append({"type": "image_url", "image_url": {"url": img_data}})
+        for i in range(len(messages) - 1, -1, -1):
+            if messages[i]["role"] == "user":
+                messages[i]["content"] = content_parts
+                break
 
     # Use ChatDomain for generation + logging
     chat_domain = get_chat_domain()

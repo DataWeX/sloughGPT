@@ -6,6 +6,7 @@ import logging
 import time
 from pathlib import Path
 from typing import Optional
+import re
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query
 from pydantic import BaseModel

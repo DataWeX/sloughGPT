@@ -109,53 +109,17 @@ export function ModelDropdown({
           <span className="truncate max-w-[48px] sm:max-w-[64px]" title={loadingModel || currentModel || 'Select a model to load'}>
             {loadingModel ? shortModelName(loadingModel) : currentModel ? shortModelName(currentModel) : 'Select model'}
           </span>
-          {dlProgress?.status === 'downloading' && (
-            <>
-              {dlProgress.eta_seconds != null && dlProgress.eta_seconds > 0 && (
-                <span className="text-[9px] text-muted-foreground shrink-0 hidden sm:inline">{Math.round(dlProgress.eta_seconds)}s</span>
-              )}
-              <span className={cn("text-[10px] font-medium shrink-0 tabular-nums", dlProgress.percentage > 0 ? "text-warning" : "text-muted-foreground")}>
-                {dlProgress.percentage > 0 ? `${dlProgress.percentage.toFixed(0)}%` : '...'}
-              </span>
-            </>
+          {dlProgress?.status === 'downloading' && dlProgress.percentage != null && dlProgress.percentage > 0 && (
+            <span className="text-[10px] font-medium shrink-0 tabular-nums text-warning">
+              {dlProgress.percentage.toFixed(0)}%
+            </span>
           )}
           <IconChevronDown className="h-2.5 w-2.5 opacity-40 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[200px] max-h-[300px] overflow-y-auto">
-        {loadingModel && dlProgress?.status === 'downloading' && (
-          <div className="px-3 pt-2 pb-1.5 space-y-1">
-            <div className="h-1.5 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={dlProgress.percentage || 0} aria-valuemin={0} aria-valuemax={100} aria-label={`Download progress: ${dlProgress.percentage?.toFixed(0) || 0}%`}>
-              <div
-                className="h-full bg-warning rounded-full transition-all duration-500"
-                style={{ width: `${Math.max(2, dlProgress.percentage || 0)}%` }}
-              />
-            </div>
-            <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
-              <span className="tabular-nums">
-                {dlProgress.percentage?.toFixed(0) || '0'}%
-              </span>
-              {dlProgress.speed_mb_per_sec != null && dlProgress.speed_mb_per_sec > 0 && (
-                <span className="tabular-nums">{dlProgress.speed_mb_per_sec.toFixed(1)} MB/s</span>
-              )}
-              {dlProgress.eta_seconds != null && dlProgress.eta_seconds > 0 && (
-                <span className="tabular-nums">{Math.round(dlProgress.eta_seconds)}s left</span>
-              )}
-            </div>
-            {dlProgress.current_file && (
-              <div className="text-[9px] text-muted-foreground/60 truncate max-w-[220px]" title={dlProgress.current_file}>
-                {dlProgress.current_file.split('/').pop()}
-              </div>
-            )}
-            {dlProgress.files_total != null && dlProgress.files_total > 1 && (
-              <div className="text-[9px] text-muted-foreground/40 tabular-nums">
-                {dlProgress.files_completed || 0} / {dlProgress.files_total} files
-              </div>
-            )}
-          </div>
-        )}
         {loadingModel && (
-          <div className="h-0.5 bg-muted rounded-full mx-2 mb-1 overflow-hidden shrink-0">
+          <div className="h-0.5 bg-muted rounded-full mx-2 mt-2 mb-1 overflow-hidden shrink-0">
             <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: '60%' }} />
           </div>
         )}

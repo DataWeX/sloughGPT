@@ -27,37 +27,37 @@ Self-hosted LLM infrastructure with local model training, inference, and experim
 ### CLI Commands
 ```bash
 # Quick train + generate (auto-optimized)
-python3 cli.py quick --steps 100 --prompt "Hello world"
+./sloughgpt quick --steps 100 --prompt "Hello world"
 
 # Char-level training: merges config.yaml with flags (see apps/cli/README.md)
-python3 cli.py train --dataset shakespeare --epochs 3 --checkpoint-dir ckpts
+./sloughgpt train --dataset shakespeare --epochs 3 --checkpoint-dir ckpts
 
 # Char-LM perplexity (fair when stoi/itos/chars are on the checkpoint, e.g. cli.py train step_*.pt)
-python3 cli.py eval --checkpoint models/sloughgpt.pt --data datasets/shakespeare/input.txt
+./sloughgpt eval --checkpoint models/sloughgpt.pt --data datasets/shakespeare/input.txt
 # python3 -m domains.training.lm_eval_char --checkpoint PATH --data PATH [--json]
 # docs/policies/CONTRIBUTING.md — Checkpoint vocabulary (char LM)
 
 # Benchmark inference
-python3 cli.py benchmark -m gpt2 -d mps
+./sloughgpt benchmark -m gpt2 -d mps
 
 # Check optimizations
-python3 cli.py optimize
+./sloughgpt optimize
 
 # System info
-python3 cli.py system
+./sloughgpt system
 
 # Generate text (local: models/sloughgpt.sou, else newest models/*.sou, else sloughgpt_finetuned.pt)
-python3 cli.py generate "Hello world"
-python3 cli.py gen "Hello world"   # alias
+./sloughgpt generate "Hello world"
+./sloughgpt gen "Hello world"   # alias
 
 # Interactive chat (starts the API with uvicorn if it is not already running)
-python3 cli.py chat
+./sloughgpt chat
 
 # Interactive chat + auto-load a model first
-python3 cli.py chat --auto-model gpt2
+./sloughgpt chat --auto-model gpt2
 
 # Same, but pin HF local load device (forwarded to POST /models/load)
-python3 cli.py chat --auto-model gpt2 --device mps --load-mode local
+./sloughgpt chat --auto-model gpt2 --device mps --load-mode local
 ```
 
 ### Start Server
@@ -124,7 +124,7 @@ Recommended order: **§2** (dataset; default Shakespeare → `datasets/shakespea
 Then a typical one-shot chat + model load is:
 
 ```bash
-python3 cli.py chat --auto-model gpt2
+./sloughgpt chat --auto-model gpt2
 ```
 
 If your editor reformats the notebook JSON on save, prefer small cell edits or restore with `git checkout -- sloughgpt_colab.ipynb` to avoid large diffs.
@@ -312,9 +312,9 @@ curl -X POST http://localhost:8000/model/export \
 curl http://localhost:8000/model/export/formats
 
 # CLI export examples (see cli.py export --help; -f is an alias for --format)
-python3 cli.py export models/sloughgpt.pt -f safetensors
-python3 cli.py export models/sloughgpt.pt -f gguf_q4_k_m --quantize Q4_K_M  # mobile
-python3 cli.py export models/sloughgpt.pt -f onnx --seq-len 128            # cross-platform
+./sloughgpt export models/sloughgpt.pt -f safetensors
+./sloughgpt export models/sloughgpt.pt -f gguf_q4_k_m --quantize Q4_K_M  # mobile
+./sloughgpt export models/sloughgpt.pt -f onnx --seq-len 128            # cross-platform
 ```
 
 ### Soul Engine

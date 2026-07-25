@@ -28,211 +28,190 @@ describe('ModeBar', () => {
     onCreateStyleChange: vi.fn(),
   }
 
-  it('renders all three mode buttons', () => {
+  it('renders mode trigger with current mode label', () => {
     render(<ModeBar {...defaultProps} />)
-    expect(screen.getAllByText('💬 Chat').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('✍️ Write').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('⚖️ Decide').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Chat')).toBeInTheDocument()
+    expect(screen.getByText('💬')).toBeInTheDocument()
   })
 
-  it('shows Chat as active by default', () => {
-    render(<ModeBar {...defaultProps} />)
-    expect(screen.getAllByText('💬 Chat')[0]).toHaveAttribute('aria-pressed', 'true')
-  })
-
-  it('calls onModeChange when Write is clicked', () => {
-    const onModeChange = vi.fn()
-    render(<ModeBar {...defaultProps} onModeChange={onModeChange} />)
-    fireEvent.click(screen.getAllByText('✍️ Write')[0])
-    expect(onModeChange).toHaveBeenCalledWith('write')
-  })
-
-  it('shows tone chips in write mode', () => {
+  it('shows sub-options for write mode', () => {
     render(<ModeBar {...defaultProps} mode="write" />)
-    expect(screen.getAllByText('Friendly').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Tone')).toBeInTheDocument()
+    expect(screen.getByText('Friendly')).toBeInTheDocument()
+    expect(screen.getByText('Email')).toBeInTheDocument()
   })
 
-  it('shows type chips in write mode', () => {
-    render(<ModeBar {...defaultProps} mode="write" />)
-    expect(screen.getAllByText('Email').length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('calls onToneChange when a tone chip is clicked', () => {
+  it('calls onToneChange when a tone pill is clicked', () => {
     const onToneChange = vi.fn()
     render(<ModeBar {...defaultProps} mode="write" onToneChange={onToneChange} />)
-    fireEvent.click(screen.getAllByText('Funny')[0])
+    fireEvent.click(screen.getByText('Funny'))
     expect(onToneChange).toHaveBeenCalledWith('Funny')
   })
 
-  it('calls onTypeChange when a type chip is clicked', () => {
+  it('calls onTypeChange when a type pill is clicked', () => {
     const onTypeChange = vi.fn()
     render(<ModeBar {...defaultProps} mode="write" onTypeChange={onTypeChange} />)
-    fireEvent.click(screen.getAllByText('Poem')[0])
+    fireEvent.click(screen.getByText('Poem'))
     expect(onTypeChange).toHaveBeenCalledWith('Poem')
   })
 
   it('highlights the selected tone', () => {
     render(<ModeBar {...defaultProps} mode="write" tone="Professional" />)
-    expect(screen.getAllByText('Professional')[0]).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getAllByText('Friendly')[0]).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByText('Professional')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('Friendly')).toHaveAttribute('aria-pressed', 'false')
   })
 
-  it('shows decide structure chips in decide mode', () => {
+  it('shows decide sub-options in decide mode', () => {
     render(<ModeBar {...defaultProps} mode="decide" />)
-    expect(screen.getAllByText('Pros & Cons').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Comparison').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Deep Analysis').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Output')).toBeInTheDocument()
+    expect(screen.getByText('Pros & Cons')).toBeInTheDocument()
+    expect(screen.getByText('Comparison')).toBeInTheDocument()
+    expect(screen.getByText('Deep Analysis')).toBeInTheDocument()
   })
 
   it('calls onDecideStructureChange when clicked', () => {
     const onDecideStructureChange = vi.fn()
     render(<ModeBar {...defaultProps} mode="decide" onDecideStructureChange={onDecideStructureChange} />)
-    fireEvent.click(screen.getAllByText('Comparison')[0])
+    fireEvent.click(screen.getByText('Comparison'))
     expect(onDecideStructureChange).toHaveBeenCalledWith('Comparison')
   })
 
   it('highlights selected decide structure', () => {
     render(<ModeBar {...defaultProps} mode="decide" decideStructure="Deep Analysis" />)
-    expect(screen.getAllByText('Deep Analysis')[0]).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getAllByText('Pros & Cons')[0]).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByText('Deep Analysis')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('Pros & Cons')).toHaveAttribute('aria-pressed', 'false')
   })
 
-  it('hides write chips in chat mode', () => {
+  it('hides write sub-options in chat mode', () => {
     render(<ModeBar {...defaultProps} mode="chat" />)
-    expect(screen.queryAllByText('Friendly')).toHaveLength(0)
+    expect(screen.queryByText('Tone')).not.toBeInTheDocument()
+    expect(screen.queryByText('Friendly')).not.toBeInTheDocument()
   })
 
-  it('hides decide chips in write mode', () => {
+  it('hides decide sub-options in write mode', () => {
     render(<ModeBar {...defaultProps} mode="write" />)
-    expect(screen.queryAllByText('Pros & Cons')).toHaveLength(0)
+    expect(screen.queryByText('Pros & Cons')).not.toBeInTheDocument()
   })
 
-  it('hides write chips in decide mode', () => {
+  it('hides write sub-options in decide mode', () => {
     render(<ModeBar {...defaultProps} mode="decide" />)
-    expect(screen.queryAllByText('Friendly')).toHaveLength(0)
+    expect(screen.queryByText('Friendly')).not.toBeInTheDocument()
   })
 
-  it('shows explain mode button and difficulty chips', () => {
+  it('shows explain difficulty sub-options', () => {
     render(<ModeBar {...defaultProps} mode="explain" />)
-    expect(screen.getAllByText('🔍 Explain').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Simple').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Moderate').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Expert').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Level')).toBeInTheDocument()
+    expect(screen.getByText('Simple')).toBeInTheDocument()
+    expect(screen.getByText('Moderate')).toBeInTheDocument()
+    expect(screen.getByText('Expert')).toBeInTheDocument()
   })
 
-  it('calls onDifficultyChange when a difficulty chip is clicked', () => {
+  it('calls onDifficultyChange when clicked', () => {
     const onDifficultyChange = vi.fn()
     render(<ModeBar {...defaultProps} mode="explain" onDifficultyChange={onDifficultyChange} />)
-    fireEvent.click(screen.getAllByText('Expert')[0])
+    fireEvent.click(screen.getByText('Expert'))
     expect(onDifficultyChange).toHaveBeenCalledWith('Expert')
   })
 
-  it('shows translate mode button and language pair chips', () => {
+  it('shows translate language pair sub-options', () => {
     render(<ModeBar {...defaultProps} mode="translate" />)
-    expect(screen.getAllByText('🌐 Translate').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('EN→ES').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('EN→FR').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('EN→DE').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('To')).toBeInTheDocument()
+    expect(screen.getByText('EN→ES')).toBeInTheDocument()
+    expect(screen.getByText('EN→FR')).toBeInTheDocument()
+    expect(screen.getByText('EN→DE')).toBeInTheDocument()
   })
 
-  it('calls onLangPairChange when a language chip is clicked', () => {
+  it('calls onLangPairChange when clicked', () => {
     const onLangPairChange = vi.fn()
     render(<ModeBar {...defaultProps} mode="translate" onLangPairChange={onLangPairChange} />)
-    fireEvent.click(screen.getAllByText('EN→FR')[0])
+    fireEvent.click(screen.getByText('EN→FR'))
     expect(onLangPairChange).toHaveBeenCalledWith('EN→FR')
   })
 
-  it('hides explain chips in chat mode', () => {
+  it('hides explain sub-options in chat mode', () => {
     render(<ModeBar {...defaultProps} mode="chat" />)
-    expect(screen.queryAllByText('Moderate')).toHaveLength(0)
+    expect(screen.queryByText('Moderate')).not.toBeInTheDocument()
   })
 
-  it('hides translate chips in write mode', () => {
+  it('hides translate sub-options in write mode', () => {
     render(<ModeBar {...defaultProps} mode="write" />)
-    expect(screen.queryAllByText('EN→ES')).toHaveLength(0)
+    expect(screen.queryByText('EN→ES')).not.toBeInTheDocument()
   })
 
-  it('shows brainstorm mode button and topic chips', () => {
+  it('shows brainstorm topic sub-options', () => {
     render(<ModeBar {...defaultProps} mode="brainstorm" />)
-    expect(screen.getAllByText('💡 Brainstorm').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Name Ideas').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Gift Ideas').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Plan an Event').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Topic')).toBeInTheDocument()
+    expect(screen.getByText('Name Ideas')).toBeInTheDocument()
+    expect(screen.getByText('Gift Ideas')).toBeInTheDocument()
+    expect(screen.getByText('Plan an Event')).toBeInTheDocument()
   })
 
-  it('calls onBrainstormTopicChange when a topic chip is clicked', () => {
+  it('calls onBrainstormTopicChange when clicked', () => {
     const onBrainstormTopicChange = vi.fn()
     render(<ModeBar {...defaultProps} mode="brainstorm" onBrainstormTopicChange={onBrainstormTopicChange} />)
-    fireEvent.click(screen.getAllByText('Weekend Plans')[0])
+    fireEvent.click(screen.getByText('Weekend Plans'))
     expect(onBrainstormTopicChange).toHaveBeenCalledWith('Weekend Plans')
   })
 
-  it('hides brainstorm chips in chat mode', () => {
+  it('hides brainstorm sub-options in chat mode', () => {
     render(<ModeBar {...defaultProps} mode="chat" />)
-    expect(screen.queryAllByText('Name Ideas')).toHaveLength(0)
-    expect(screen.queryAllByText('Gift Ideas')).toHaveLength(0)
+    expect(screen.queryByText('Name Ideas')).not.toBeInTheDocument()
+    expect(screen.queryByText('Gift Ideas')).not.toBeInTheDocument()
   })
 
-  it('shows wellness mode button and type chips', () => {
+  it('shows wellness type sub-options', () => {
     render(<ModeBar {...defaultProps} mode="wellness" />)
-    expect(screen.getAllByText('🧘 Wellness').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Sleep Story').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Meditation').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Type')).toBeInTheDocument()
+    expect(screen.getByText('Sleep Story')).toBeInTheDocument()
+    expect(screen.getByText('Meditation')).toBeInTheDocument()
   })
 
-  it('calls onWellnessTypeChange when a wellness chip is clicked', () => {
+  it('calls onWellnessTypeChange when clicked', () => {
     const onWellnessTypeChange = vi.fn()
     render(<ModeBar {...defaultProps} mode="wellness" onWellnessTypeChange={onWellnessTypeChange} />)
-    fireEvent.click(screen.getAllByText('Breathing')[0])
+    fireEvent.click(screen.getByText('Breathing'))
     expect(onWellnessTypeChange).toHaveBeenCalledWith('Breathing')
   })
 
-  it('hides wellness chips in chat mode', () => {
+  it('hides wellness sub-options in chat mode', () => {
     render(<ModeBar {...defaultProps} mode="chat" />)
-    expect(screen.queryAllByText('Sleep Story')).toHaveLength(0)
-    expect(screen.queryAllByText('Meditation')).toHaveLength(0)
+    expect(screen.queryByText('Sleep Story')).not.toBeInTheDocument()
+    expect(screen.queryByText('Meditation')).not.toBeInTheDocument()
   })
 
-  it('shows create mode button', () => {
-    render(<ModeBar {...defaultProps} mode="chat" />)
-    expect(screen.getAllByText('🎨 Create').length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('shows read mode button', () => {
-    render(<ModeBar {...defaultProps} mode="chat" />)
-    expect(screen.getAllByText('📄 Read').length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('shows talk mode button', () => {
-    render(<ModeBar {...defaultProps} mode="chat" />)
-    expect(screen.getAllByText('🎙️ Talk').length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('shows style chips in create mode', () => {
+  it('shows create style sub-options', () => {
     render(<ModeBar {...defaultProps} mode="create" />)
-    expect(screen.getAllByText('Realistic').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Cartoon').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Watercolor').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Sketch').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Fantasy').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Style')).toBeInTheDocument()
+    expect(screen.getByText('Realistic')).toBeInTheDocument()
+    expect(screen.getByText('Cartoon')).toBeInTheDocument()
+    expect(screen.getByText('Watercolor')).toBeInTheDocument()
+    expect(screen.getByText('Sketch')).toBeInTheDocument()
+    expect(screen.getByText('Fantasy')).toBeInTheDocument()
   })
 
-  it('calls onCreateStyleChange when a style chip is clicked', () => {
+  it('calls onCreateStyleChange when clicked', () => {
     const onCreateStyleChange = vi.fn()
     render(<ModeBar {...defaultProps} mode="create" onCreateStyleChange={onCreateStyleChange} />)
-    fireEvent.click(screen.getAllByText('Watercolor')[0])
+    fireEvent.click(screen.getByText('Watercolor'))
     expect(onCreateStyleChange).toHaveBeenCalledWith('Watercolor')
   })
 
   it('highlights selected style', () => {
     render(<ModeBar {...defaultProps} mode="create" createStyle="Fantasy" />)
-    expect(screen.getAllByText('Fantasy')[0]).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getAllByText('Realistic')[0]).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByText('Fantasy')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('Realistic')).toHaveAttribute('aria-pressed', 'false')
   })
 
-  it('hides style chips in chat mode', () => {
+  it('hides create sub-options in chat mode', () => {
     render(<ModeBar {...defaultProps} mode="chat" />)
-    expect(screen.queryAllByText('Realistic')).toHaveLength(0)
-    expect(screen.queryAllByText('Cartoon')).toHaveLength(0)
+    expect(screen.queryByText('Realistic')).not.toBeInTheDocument()
+    expect(screen.queryByText('Cartoon')).not.toBeInTheDocument()
+  })
+
+  it('updates trigger label when mode changes', () => {
+    const { rerender } = render(<ModeBar {...defaultProps} mode="chat" />)
+    expect(screen.getByText('Chat')).toBeInTheDocument()
+    rerender(<ModeBar {...defaultProps} mode="write" />)
+    expect(screen.getByText('Write')).toBeInTheDocument()
   })
 })

@@ -8,7 +8,7 @@ Run **`python3`** examples from the **repository root** after `python3 -m pip in
 
 ```bash
 # Export a model in GGUF format optimized for mobile
-python3 cli.py export models/sloughgpt.safetensors -f gguf
+./sloughgpt export models/sloughgpt.safetensors -f gguf
 
 # Or fine-tune a HuggingFace model and export
 python3 apps/api/server/training/router.py  # via POST /training/hf-start (see docs/routers.md)
@@ -96,7 +96,7 @@ for await (const chunk of session.prompt('Tell me a story', {
 
 ```bash
 # Export a model in GGUF format
-python3 cli.py export models/sloughgpt.safetensors -f gguf
+./sloughgpt export models/sloughgpt.safetensors -f gguf
 ```
 
 ## Platform-Specific Notes

@@ -83,7 +83,7 @@ python3 -m pytest tests/ -q
 # or (uses .venv when present): ./run.sh python3 -m pytest tests/ -q
 
 # CLI (repo root)
-python3 cli.py --help
+./sloughgpt --help
 python3 apps/cli/cli.py --help
 # `cli.py train` / `cli.py generate` saves & local .sou resolution: apps/cli/README.md
 

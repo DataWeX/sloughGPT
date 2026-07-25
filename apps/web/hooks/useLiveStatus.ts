@@ -16,8 +16,8 @@
 
 'use client'
 
-import { useEffect, useRef, useState, useCallback, useSyncExternalStore } from 'react'
-import { create } from 'zustand'
+import { useEffect, useState } from 'react'
+import { createStore } from 'zustand/vanilla'
 import { createSSEStream, type SSEEnvelope } from '@/lib/sse-client'
 import { modelController, type HealthStatus } from '@/lib/model-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
@@ -74,7 +74,7 @@ const FALLBACK_POLL_MS = 8000
 const MAX_FAILURES_BEFORE_RELOAD = 6
 const RELOAD_DELAY_MS = 2000
 
-export const liveStatusStore = create<LiveStatusState>((set) => ({
+export const liveStatusStore = createStore<LiveStatusState>((set) => ({
   connectionStatus: 'connecting',
   health: null,
   healthLegacy: null,
@@ -263,19 +263,10 @@ export function useLiveStatus() {
 }
 
 // Re-export the store selector for non-hook usage
+import { useStore } from 'zustand'
+
 function useLiveStatusStore<T>(selector: (s: LiveStatusState) => T): T {
-  const selectorRef = useRef(selector)
-  selectorRef.current = selector
-
-  const subscribe = useCallback(
-    (onStoreChange: () => void) => liveStatusStore.subscribe(() => onStoreChange()),
-    [],
-  )
-
-  return useSyncExternalStore(
-    subscribe,
-    () => selectorRef.current(liveStatusStore.getState()),
-  )
+  return useStore(liveStatusStore, selector)
 }
 
 export { useLiveStatusStore }

@@ -17,7 +17,7 @@ import pytest
 import requests
 
 from domains.shell.repl import ShellREPL, _CaptureOutput
-from domains.shell.kernel import DaitRuntime
+from domains.shell.runtime import DaitRuntime
 
 
 _API_AVAILABLE: bool | None = None
@@ -151,7 +151,7 @@ def test_subprocess_shell_cmd():
 from pathlib import Path
 from unittest.mock import patch
 from domains.shell.repl import ShellREPL, _CaptureOutput
-from domains.shell.kernel import DaitRuntime
+from domains.shell.runtime import DaitRuntime
 import tempfile, json, os
 tmp = tempfile.mkdtemp()
 with open(Path(tmp) / "state.json", "w") as f:

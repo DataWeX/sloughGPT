@@ -6,7 +6,7 @@ This document maps **today’s argparse CLI** to a future **terminal UI (TUI)** 
 
 - **One session**: persistent context (repo root, device, API base URL, last checkpoint / `.sou`, optional job id).
 - **Same backends**: reuse **`SloughGPTTrainer`**, **`train_sloughgpt`**, **`domains.training.export`**, **`SoulEngine`**, **`apps/api/server`** HTTP contracts — not a second trainer.
-- **Stable non-interactive CLI**: keep **`sloughgpt`** / **`python3 cli.py`** for scripts and CI; add **`sloughgpt-tui`** or **`sloughgpt interactive`** as an optional entry.
+- **Stable non-interactive CLI**: keep **`sloughgpt`** / **`./sloughgpt`** for scripts and CI; add **`sloughgpt-tui`** or **`sloughgpt interactive`** as an optional entry.
 
 ## Current codebase inventory
 

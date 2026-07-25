@@ -21,7 +21,7 @@ python3 -m pip install -e ".[dev]"
 
 ### 2. Quick Training (CLI)
 ```bash
-python3 cli.py quick --steps 100 --prompt "Hello world"
+./sloughgpt quick --steps 100 --prompt "Hello world"
 ```
 
 ### 3. Start API Server
@@ -52,21 +52,21 @@ curl -s -X POST http://localhost:8000/models/load \
 ### Training
 ```bash
 # Quick train + generate (auto-optimized)
-python3 cli.py quick --steps 100 --prompt "The future is"
+./sloughgpt quick --steps 100 --prompt "The future is"
 
 # Custom model config
-python3 cli.py quick --epochs 3 --batch 64 --embed 256 --layers 6
+./sloughgpt quick --epochs 3 --batch 64 --embed 256 --layers 6
 
 # CPU only (no optimizations)
-python3 cli.py quick --no-optimize
+./sloughgpt quick --no-optimize
 
 # Full char-level trainer: merges config.yaml with CLI flags (intervals, device, dropout, LoRA, checkpoints, …)
-python3 cli.py train --dataset shakespeare --epochs 3 --checkpoint-dir ckpts
+./sloughgpt train --dataset shakespeare --epochs 3 --checkpoint-dir ckpts
 # Module entrypoint (no config.yaml merge; --dropout / --lora-alpha on main): python3 -m domains.training.train_pipeline --data datasets/shakespeare/input.txt --epochs 3
 # FP16 mixed-precision preset (after merge): add --optimized
-# API job: python3 cli.py train --api --dataset shakespeare --epochs 2
+# API job: ./sloughgpt train --api --dataset shakespeare --epochs 2
 # Char-LM perplexity on held-out text (fair when checkpoint embeds stoi/itos/chars — e.g. cli.py train step_*.pt):
-#   python3 cli.py eval --checkpoint models/sloughgpt.pt --data datasets/shakespeare/input.txt
+#   ./sloughgpt eval --checkpoint models/sloughgpt.pt --data datasets/shakespeare/input.txt
 #   python3 -m domains.training.lm_eval_char --checkpoint PATH --data PATH [--json]
 # Weights-only bundles without stoi: eval rebuilds vocab from --data (see eval warning). See docs/policies/CONTRIBUTING.md (Checkpoint vocabulary).
 # Details: apps/cli/README.md
@@ -75,33 +75,33 @@ python3 cli.py train --dataset shakespeare --epochs 3 --checkpoint-dir ckpts
 ### Inference
 ```bash
 # Generate text (local: uses models/sloughgpt.sou if present, else newest models/*.sou, else models/sloughgpt_finetuned.pt)
-python3 cli.py generate "Hello world" --max-tokens 100
+./sloughgpt generate "Hello world" --max-tokens 100
 # Short alias:
-python3 cli.py gen "Hello world" --max-tokens 100
+./sloughgpt gen "Hello world" --max-tokens 100
 
 # Interactive chat (auto-start API if needed)
-python3 cli.py chat
+./sloughgpt chat
 
 # Interactive chat with model preload (recommended)
-python3 cli.py chat --auto-model gpt2
+./sloughgpt chat --auto-model gpt2
 
 # HuggingFace model
-python3 cli.py hf-serve gpt2
+./sloughgpt hf-serve gpt2
 
 # Download model
-python3 cli.py hf-download gpt2
+./sloughgpt hf-download gpt2
 ```
 
 ### Benchmarking
 ```bash
 # Benchmark inference
-python3 cli.py benchmark -m gpt2 -d mps -t latency
+./sloughgpt benchmark -m gpt2 -d mps -t latency
 
 # Full benchmark suite
-python3 cli.py benchmark -m gpt2 -d mps -t all
+./sloughgpt benchmark -m gpt2 -d mps -t all
 
 # Check GPU optimizations
-python3 cli.py optimize
+./sloughgpt optimize
 ```
 
 ### Model Export
@@ -110,67 +110,67 @@ Export targets (ONNX, GGUF, `.sou`, …) do not preserve native char `stoi` / `i
 
 ```bash
 # Export a checkpoint on disk (-f / --format; see cli.py export --help)
-python3 cli.py export models/sloughgpt.pt -f onnx --seq-len 128
-python3 cli.py export models/sloughgpt.pt -f safetensors
+./sloughgpt export models/sloughgpt.pt -f onnx --seq-len 128
+./sloughgpt export models/sloughgpt.pt -f safetensors
 
 # GGUF-style exports support --quantize (Q4_K_M, Q5_K_M, Q8_0, F16, F32)
-python3 cli.py export models/sloughgpt.pt -f gguf_q4_k_m --quantize Q4_K_M
+./sloughgpt export models/sloughgpt.pt -f gguf_q4_k_m --quantize Q4_K_M
 ```
 
 ### System
 ```bash
 # System info
-python3 cli.py system
+./sloughgpt system
 
 # Health check
-python3 cli.py health
+./sloughgpt health
 
 # Docker management
-python3 cli.py docker status
-python3 cli.py docker logs
+./sloughgpt docker status
+./sloughgpt docker logs
 
 # Environment check
-python3 cli.py config check
+./sloughgpt config check
 
 # Configuration validation
-python3 cli.py config validate
+./sloughgpt config validate
 
 # Generate secrets
-python3 cli.py config generate --type all
+./sloughgpt config generate --type all
 
 # Disk summary (models/, datasets/, checkpoints/, data/experiments/, …)
-python3 cli.py stats
+./sloughgpt stats
 
 # One path: line/char stats or validate
-python3 cli.py data stats datasets/shakespeare/input.txt
-python3 cli.py data validate datasets/shakespeare
+./sloughgpt data stats datasets/shakespeare/input.txt
+./sloughgpt data validate datasets/shakespeare
 
 # List datasets
-python3 cli.py datasets
+./sloughgpt datasets
 
 # List model artifacts under models/ (.pt, .safetensors, .sou) + HF hints
-python3 cli.py models
+./sloughgpt models
 
 # Built-in personality presets
-python3 cli.py personalities
+./sloughgpt personalities
 
 # Inspect a checkpoint file (tensor layout)
-python3 cli.py info models/sloughgpt.pt
+./sloughgpt info models/sloughgpt.pt
 ```
 
 ### API Management
 ```bash
 # Check API status
-python3 cli.py api-status
+./sloughgpt api-status
 
 # Test API endpoints
-python3 cli.py api-test
+./sloughgpt api-test
 
 # Test authentication
-python3 cli.py api-auth
+./sloughgpt api-auth
 
 # Compare models
-python3 cli.py compare
+./sloughgpt compare
 ```
 
 ---
@@ -296,7 +296,7 @@ curl -X POST http://localhost:8000/benchmark/run \
 
 ### Verify GPU
 ```bash
-python3 cli.py optimize
+./sloughgpt optimize
 ```
 
 ---
@@ -384,10 +384,10 @@ open -a Docker
 ### Out of memory?
 ```bash
 # Smaller batch size
-python3 cli.py quick --batch 8
+./sloughgpt quick --batch 8
 
 # Or export a smaller artifact (example: GGUF with 4-bit)
-python3 cli.py export models/sloughgpt.pt -f gguf_q4_k_m --quantize Q4_K_M
+./sloughgpt export models/sloughgpt.pt -f gguf_q4_k_m --quantize Q4_K_M
 ```
 
 ---
@@ -425,7 +425,7 @@ SloughGPT/
 
 ## Next Steps
 
-1. **Run the notebook**: `jupyter notebook sloughgpt_colab.ipynb` (in Colab: install → **§2** dataset → **§3–§6** → pick one of **§7** manual loop, **§7b** `train_sloughgpt()`, or optional **`SloughGPTTrainer`**; then e.g. `python3 cli.py chat --auto-model gpt2`). For a **fast local full execute**, use `./scripts/run_colab_notebook_smoke.sh` or **`make colab-smoke`** (**`make help`**, **README.md** → *Google Colab*; install **`jupyter`** / **`python3 -m nbconvert`** as documented there).
+1. **Run the notebook**: `jupyter notebook sloughgpt_colab.ipynb` (in Colab: install → **§2** dataset → **§3–§6** → pick one of **§7** manual loop, **§7b** `train_sloughgpt()`, or optional **`SloughGPTTrainer`**; then e.g. `./sloughgpt chat --auto-model gpt2`). For a **fast local full execute**, use `./scripts/run_colab_notebook_smoke.sh` or **`make colab-smoke`** (**`make help`**, **README.md** → *Google Colab*; install **`jupyter`** / **`python3 -m nbconvert`** as documented there).
 2. **Try different datasets**: Shakespeare, **`tiny`** (small on-disk slice), or a path to your own `.txt`
 3. **Explore model architecture**: Section 5 in the notebook
 4. **Deploy with Docker**: See Docker section above

@@ -77,14 +77,14 @@ export function ActivityTicker({ className, onExpand }: ActivityTickerProps) {
         'inline-block h-1.5 w-1.5 rounded-full shrink-0',
         flash ? 'bg-destructive animate-pulse' : 'bg-destructive/60',
       )} />
-      <span className="font-medium tabular-nums">{errorCount}</span>
+      <span className="font-medium tabular-nums font-mono">{errorCount}</span>
       {latest && (
         <>
           <span className="truncate opacity-70">·</span>
           <span className="truncate flex-1 min-w-0" title={latest.message}>
             {latest.title !== 'Error' ? latest.title : latest.message.slice(0, 40)}
           </span>
-          <span className="shrink-0 opacity-50 tabular-nums">{timeAgo(latest.timestamp)}</span>
+          <span className="shrink-0 opacity-50 tabular-nums font-mono">{timeAgo(latest.timestamp)}</span>
         </>
       )}
     </button>
@@ -117,7 +117,7 @@ export function ErrorList({ className }: { className?: string }) {
   return (
     <div className={cn('space-y-1', className)}>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs text-muted-foreground">
+        <span className="text-xs text-muted-foreground font-mono">
           {errors.length} unique error{errors.length !== 1 ? 's' : ''}
         </span>
         <button onClick={clearErrors} className="text-xs text-muted-foreground hover:text-foreground">
@@ -130,13 +130,13 @@ export function ErrorList({ className }: { className?: string }) {
             <div className="font-medium truncate flex items-center gap-1.5">
               {e.title}
               {e.count > 1 && (
-                <span className="inline-flex items-center px-1 py-0.5 rounded-full bg-muted text-[9px] tabular-nums">
+                <span className="inline-flex items-center px-1 py-0.5 rounded-full bg-muted text-[9px] tabular-nums font-mono">
                   ×{e.count}
                 </span>
               )}
             </div>
             <div className="truncate opacity-80">{e.message}</div>
-            <div className="text-[10px] opacity-60 mt-0.5">
+            <div className="text-[10px] opacity-60 mt-0.5 font-mono">
               {timeAgo(e.timestamp)}
               {e.source && <> · {e.source}</>}
             </div>
