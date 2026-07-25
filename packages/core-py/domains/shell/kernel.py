@@ -1133,6 +1133,93 @@ class Kernel:
         )
         return proc
 
+    def spawn_kernel_shell(self, stdin_fn=None, stdout_fn=None) -> Process:
+        """Spawn a simple kernel shell process.
+
+        A minimal command loop that processes commands via the kernel's
+        built-in dispatch. Commands: help, meminfo, procs, halt.
+        """
+        kernel = self
+
+        def _kernel_shell_entry():
+            prompt = "ai-compteur> "
+            if stdout_fn:
+                stdout_fn(prompt)
+
+            while True:
+                if stdin_fn:
+                    line = stdin_fn()
+                else:
+                    break
+
+                line = line.strip()
+                if not line:
+                    if stdout_fn:
+                        stdout_fn(prompt)
+                    continue
+
+                parts = line.split()
+                cmd = parts[0].lower()
+                args = parts[1:]
+
+                if cmd == "help":
+                    cmds = "help, meminfo, procs, halt"
+                    if stdout_fn:
+                        stdout_fn(f"commands: {cmds}\n")
+                elif cmd == "meminfo":
+                    info = kernel._memory.stats()
+                    if stdout_fn:
+                        stdout_fn(f"blocks: {info.get('block_count', 0)}\n")
+                elif cmd == "procs":
+                    for p in kernel.list_processes():
+                        if stdout_fn:
+                            stdout_fn(f"  pid={p.pid} {p.name} {p.state.name}\n")
+                elif cmd in ("halt", "exit", "quit"):
+                    if stdout_fn:
+                        stdout_fn("shutting down...\n")
+                    break
+                else:
+                    if stdout_fn:
+                        stdout_fn(f"unknown: {cmd}\n")
+
+                if stdout_fn:
+                    stdout_fn(prompt)
+
+        proc = self.spawn_process(
+            "kernel-shell",
+            priority=Priority.NORMAL,
+            entry=_kernel_shell_entry,
+        )
+        return proc
+
+    def spawn_vm_process(self, name: str, source: str,
+                         stdin_fn=None, stdout_fn=None,
+                         priority: Priority = Priority.NORMAL) -> Process:
+        """Spawn a process that runs VM assembly code.
+
+        Creates a VirtualSystem, loads the assembled program, and executes
+        it in a background thread. I/O goes through the console device.
+        """
+        from .vm import VirtualSystem
+
+        output_log: list[str] = []
+
+        def _vm_entry():
+            vs = VirtualSystem(
+                stdin_fn=stdin_fn,
+                stdout_fn=stdout_fn or (lambda v: output_log.append(str(v))),
+            )
+            vs.load_program(source)
+            vs.run()
+
+        proc = self.spawn_process(
+            name,
+            priority=priority,
+            entry=_vm_entry,
+            metadata={"source": source, "output_log": output_log},
+        )
+        return proc
+
     def shutdown(self) -> str:
         if not self._running:
             return "Already shut down"

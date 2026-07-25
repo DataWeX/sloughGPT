@@ -511,3 +511,44 @@ class TestKernel:
         assert proc.error == "boom"
         assert proc.state.name == "ZOMBIE"
         k.shutdown()
+
+    def test_spawn_kernel_shell(self):
+        import time as _time
+        output = []
+        inputs = ['help', 'halt']
+        input_iter = iter(inputs)
+
+        k = Kernel()
+        k.boot()
+        proc = k.spawn_kernel_shell(
+            stdin_fn=lambda: next(input_iter, 'halt'),
+            stdout_fn=lambda v: output.append(v),
+        )
+        for _ in range(20):
+            k.tick()
+            _time.sleep(0.02)
+            if proc.state.name == 'ZOMBIE':
+                break
+
+        assert any("help" in line or "commands" in line for line in output)
+        assert any("shutting down" in line for line in output)
+        k.shutdown()
+
+    def test_spawn_vm_process(self):
+        import time as _time
+        k = Kernel()
+        k.boot()
+        k.register_devices()
+        proc = k.spawn_vm_process(
+            'test-vm',
+            'LOAD_CONST R0, 99\nOUT 1, R0\nHALT',
+        )
+        for _ in range(10):
+            k.tick()
+            _time.sleep(0.05)
+            if proc.state.name == 'ZOMBIE':
+                break
+
+        log = proc.metadata.get('output_log', [])
+        assert '99' in log
+        k.shutdown()

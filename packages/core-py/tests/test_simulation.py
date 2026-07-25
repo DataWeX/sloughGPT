@@ -353,3 +353,40 @@ class TestBootAndShell:
         _time.sleep(0.05)
         assert proc.state.name in ("RUNNING", "READY")
         k.shutdown()
+
+    def test_full_boot_shell_pipeline(self):
+        import time as _time
+        output = []
+        inputs = ['help', 'halt']
+        input_iter = iter(inputs)
+
+        k = Kernel()
+        k.boot()
+        k.register_devices()
+
+        # Boot process
+        k.spawn_vm_process(
+            'boot',
+            'LOAD_CONST R0, "AI Compteur v0.1"\nOUT 1, R0\nHALT',
+            stdout_fn=lambda v: output.append(v),
+        )
+
+        # Shell process
+        k.spawn_kernel_shell(
+            stdin_fn=lambda: next(input_iter, 'halt'),
+            stdout_fn=lambda v: output.append(v),
+        )
+
+        for _ in range(50):
+            k.tick()
+            _time.sleep(0.02)
+            if all(p.state.name == 'ZOMBIE' for p in k.list_processes() if p.name != 'kernel-init'):
+                break
+
+        assert any("AI Compteur" in line for line in output)
+        assert any("commands" in line for line in output)
+        assert any("shutting down" in line for line in output)
+
+        procs = k.list_processes()
+        assert len(procs) == 3  # init + boot + shell
+        k.shutdown()
