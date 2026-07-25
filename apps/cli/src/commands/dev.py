@@ -425,6 +425,9 @@ def _cmd_api_and_web(args):
     # ── Build env with model overrides ──────────────────────────
     env = os.environ.copy()
 
+    # Suppress GNOME keyring warnings (epiphany secret storage)
+    env["GIO_USE_PORTAL"] = "0"
+
     # Ensure nvm-installed node/npx/npm are on PATH for subprocesses
     nvm_dir = os.environ.get("NVM_DIR", os.path.expanduser("~/.nvm"))
     nvm_bin = os.path.join(nvm_dir, "versions", "node")
@@ -441,6 +444,10 @@ def _cmd_api_and_web(args):
     for k in ("SLO_AUTOLOAD_MODEL", "SLO_API_PORT", "HF_TOKEN"):
         if k in os.environ:
             env[k] = os.environ[k]
+
+    # Set NEXTAUTH_URL to suppress NextAuth warning
+    if "NEXTAUTH_URL" not in env:
+        env["NEXTAUTH_URL"] = f"http://localhost:{web_port}"
 
     # ── Stream buffers ──────────────────────────────────────────
     api_lines: deque = deque(maxlen=_LOG_BUF)

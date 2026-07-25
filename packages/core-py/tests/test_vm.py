@@ -654,11 +654,15 @@ class TestX86Bootloader:
         from domains.shell.vm_programs import X86_BOOTLOADER_ASM
         assert "[BITS 16]" in X86_BOOTLOADER_ASM
         assert "0xAA55" in X86_BOOTLOADER_ASM
+        assert "gdt_" in X86_BOOTLOADER_ASM
+        assert "protected_mode" in X86_BOOTLOADER_ASM
 
     def test_kernel_source_valid(self):
         from domains.shell.vm_programs import X86_KERNEL_ASM
-        assert "[BITS 16]" in X86_KERNEL_ASM
+        assert "[BITS 32]" in X86_KERNEL_ASM
         assert "kernel_start" in X86_KERNEL_ASM
+        assert "vga_print" in X86_KERNEL_ASM
+        assert "timer_handler" in X86_KERNEL_ASM
 
     def test_export_binary(self):
         from domains.shell.vm_programs import export_x86_binary, X86_BOOTLOADER_ASM
@@ -674,6 +678,24 @@ class TestX86Bootloader:
         assert len(image) == 1024 * 1024
         assert image[:512] == boot
         assert image[512:1536] == kernel
+
+    def test_bootloader_has_gdt(self):
+        from domains.shell.vm_programs import X86_BOOTLOADER_ASM
+        assert "gdt_code" in X86_BOOTLOADER_ASM
+        assert "gdt_data" in X86_BOOTLOADER_ASM
+        assert "lgdt" in X86_BOOTLOADER_ASM
+
+    def test_kernel_has_vga(self):
+        from domains.shell.vm_programs import X86_KERNEL_ASM
+        assert "VGA_BUFFER" in X86_KERNEL_ASM
+        assert "vga_print" in X86_KERNEL_ASM
+        assert "vga_clear" in X86_KERNEL_ASM
+
+    def test_kernel_has_interrupts(self):
+        from domains.shell.vm_programs import X86_KERNEL_ASM
+        assert "timer_handler" in X86_KERNEL_ASM
+        assert "keyboard_handler" in X86_KERNEL_ASM
+        assert "iret" in X86_KERNEL_ASM
 
 
 class TestVGA:

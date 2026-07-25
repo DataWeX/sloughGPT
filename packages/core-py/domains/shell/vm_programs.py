@@ -342,8 +342,8 @@ SHELL_ASM = """\
 
 X86_BOOTLOADER_ASM = """\
 ; AI Compteur x86 Bootloader
-; 512-byte MBR that prints banner and loads kernel
-; Assembles to real x86-16 machine code
+; 512-byte MBR with protected mode setup
+; Loads kernel and switches to 32-bit protected mode
 
 [BITS 16]
 [ORG 0x7C00]
@@ -366,7 +366,7 @@ start:
 
     ; Load kernel from disk (sector 1+)
     mov ah, 0x02        ; BIOS read sectors
-    mov al, 4           ; 4 sectors (2KB kernel)
+    mov al, 8           ; 8 sectors (4KB kernel)
     mov ch, 0           ; cylinder 0
     mov cl, 2           ; sector 2 (after MBR)
     mov dh, 0           ; head 0
@@ -375,8 +375,22 @@ start:
     int 0x13
     jc disk_error
 
-    ; Jump to kernel
-    jmp 0x0000:0x1000
+    ; Enable A20 line
+    in al, 0x92
+    or al, 2
+    out 0x92, al
+
+    ; Load GDT
+    cli
+    lgdt [gdt_descriptor]
+
+    ; Switch to protected mode (set PE bit in CR0)
+    mov eax, cr0
+    or eax, 1
+    mov cr0, eax
+
+    ; Far jump to flush CPU pipeline and load CS
+    jmp 0x08:protected_mode
 
 disk_error:
     mov si, msg_disk_err
@@ -394,46 +408,236 @@ print_string:
 .done:
     ret
 
+; ── GDT ──────────────────────────────────────────────────────────────────
+
+gdt_start:
+
+gdt_null:       ; Null descriptor (required)
+    dd 0x0
+    dd 0x0
+
+gdt_code:       ; Code segment: base=0, limit=4GB, execute/read
+    dw 0xFFFF   ; Limit (bits 0-15)
+    dw 0x0000   ; Base (bits 0-15)
+    db 0x00     ; Base (bits 16-23)
+    db 10011010b ; Access: present, ring 0, code, readable
+    db 11001111b ; Flags: 4GB, 32-bit + Limit (bits 16-19)
+    db 0x00     ; Base (bits 24-31)
+
+gdt_data:       ; Data segment: base=0, limit=4GB, read/write
+    dw 0xFFFF   ; Limit (bits 0-15)
+    dw 0x0000   ; Base (bits 0-15)
+    db 0x00     ; Base (bits 16-23)
+    db 10010010b ; Access: present, ring 0, data, writable
+    db 11001111b ; Flags: 4GB, 32-bit + Limit (bits 16-19)
+    db 0x00     ; Base (bits 24-31)
+
+gdt_end:
+
+gdt_descriptor:
+    dw gdt_end - gdt_start - 1   ; GDT size
+    dd gdt_start                   ; GDT address
+
+; ── Messages ─────────────────────────────────────────────────────────────
+
 msg_boot:     db "AI Compteur Bootloader", 13, 10, 0
-msg_version:  db "v0.1 - Loading kernel...", 13, 10, 0
+msg_version:  db "v0.2 - Protected Mode", 13, 10, 0
 msg_disk_err: db "Disk read error!", 13, 10, 0
 
 ; Pad to 510 bytes + boot signature
 times 510-($-$$) db 0
 dw 0xAA55
+
+
+; ── 32-bit Protected Mode ────────────────────────────────────────────────
+
+[BITS 32]
+protected_mode:
+    ; Set up segment registers for protected mode
+    mov ax, 0x10        ; Data segment selector
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+    mov esp, 0x90000    ; Stack at 0x90000
+
+    ; Set up IDT (basic exceptions + timer + keyboard)
+    lidt [idt_descriptor]
+
+    ; Jump to kernel
+    jmp 0x1000
+
+; ── IDT ──────────────────────────────────────────────────────────────────
+
+idt_start:
+    ; 256 entries × 8 bytes = 2048 bytes
+    times 256 db 0, 0, 0, 0, 0, 0, 0, 0
+
+idt_end:
+
+idt_descriptor:
+    dw idt_end - idt_start - 1   ; IDT size
+    dd idt_start                   ; IDT address
+
+; ── Padding ──────────────────────────────────────────────────────────────
+
+times 1024-($-$$) db 0           ; Pad to 1KB total
 """
 
 X86_KERNEL_ASM = """\
-; AI Compteur x86 Kernel Stub
-; Loaded by bootloader at 0x1000
-; Prints kernel banner and halts
+; AI Compteur x86 Kernel
+; Loaded by bootloader at 0x1000 in 32-bit protected mode
+; Features: VGA output, keyboard input, timer
 
-[BITS 16]
+[BITS 32]
 [ORG 0x1000]
 
+; ── Constants ────────────────────────────────────────────────────────────
+
+VGA_BUFFER    equ 0xB8000
+VGA_COLS      equ 80
+VGA_ROWS      equ 25
+
+; ── Kernel Entry Point ──────────────────────────────────────────────────
+
 kernel_start:
-    mov si, msg_kernel
-    call print_string
+    ; Clear screen
+    call vga_clear
 
-    mov si, msg_ready
-    call print_string
+    ; Print kernel banner via VGA
+    mov esi, msg_kernel
+    mov edi, VGA_BUFFER
+    mov ah, 0x0A        ; Green on black
+    call vga_print
 
-    ; Hang forever
-    jmp $
+    ; Print ready message
+    mov esi, msg_ready
+    add edi, VGA_COLS * 2   ; Next line
+    mov ah, 0x07        ; Light gray on black
+    call vga_print
 
-print_string:
-    lodsb
-    or al, al
-    jz .done
-    mov ah, 0x0E
-    mov bh, 0
-    int 0x10
-    jmp print_string
-.done:
+    ; Print protected mode confirmation
+    mov esi, msg_pmode
+    add edi, VGA_COLS * 2   ; Next line
+    mov ah, 0x0B        ; Light cyan on black
+    call vga_print
+
+    ; Print interrupt enabled message
+    mov esi, msg_irq
+    add edi, VGA_COLS * 2   ; Next line
+    mov ah, 0x0E        ; Yellow on black
+    call vga_print
+
+    ; Set up timer (PIT channel 0, mode 3, freq 100Hz)
+    mov al, 0x36        ; Channel 0, lobyte/hibyte, rate generator
+    out 0x43, al
+    mov al, 0x9B        ; Low byte of 1193 (100Hz)
+    out 0x40, al
+    mov al, 0x04        ; High byte
+    out 0x40, al
+
+    ; Enable keyboard IRQ (IRQ1)
+    in al, 0x21
+    and al, 0xFD        ; Clear bit 1 (keyboard)
+    out 0x21, al
+
+    ; Enable interrupts
+    sti
+
+    ; Print timer message
+    mov esi, msg_timer
+    add edi, VGA_COLS * 2   ; Next line
+    mov ah, 0x0C        ; Light red on black
+    call vga_print
+
+    ; Main kernel loop
+kernel_loop:
+    hlt                 ; Wait for interrupt
+    jmp kernel_loop
+
+; ── VGA Functions ────────────────────────────────────────────────────────
+
+vga_print:
+    ; ESI = string address, EDI = VGA buffer position, AH = color attribute
+    push eax
+    push ebx
+.vga_loop:
+    lodsb               ; Load byte from [ESI] into AL
+    test al, al
+    jz .vga_done
+    cmp al, 10          ; Newline?
+    je .vga_newline
+    stosw               ; Store AX at [EDI], advance EDI by 2
+    jmp .vga_loop
+.vga_newline:
+    ; Move to next line
+    push eax
+    mov eax, edi
+    sub eax, VGA_BUFFER
+    mov ebx, VGA_COLS * 2
+    xor edx, edx
+    div ebx             ; EAX = current row
+    inc eax             ; Next row
+    mul ebx             ; EAX = offset of next row
+    add eax, VGA_BUFFER
+    mov edi, eax
+    pop eax
+    jmp .vga_loop
+.vga_done:
+    pop ebx
+    pop eax
     ret
 
-msg_kernel: db "AI Compteur Kernel", 13, 10, 0
-msg_ready:  db "System ready.", 13, 10, 0
+vga_clear:
+    ; Clear entire screen
+    push edi
+    push ecx
+    mov edi, VGA_BUFFER
+    mov ecx, VGA_COLS * VGA_ROWS
+    mov ax, 0x0720      ; Space with light gray attribute
+    rep stosw
+    pop ecx
+    pop edi
+    ret
+
+; ── Interrupt Handlers ──────────────────────────────────────────────────
+
+; Timer interrupt handler (IRQ0)
+timer_handler:
+    push eax
+    inc dword [tick_count]
+    ; Send EOI to PIC
+    mov al, 0x20
+    out 0x20, al
+    pop eax
+    iret
+
+; Keyboard interrupt handler (IRQ1)
+keyboard_handler:
+    push eax
+    in al, 0x60         ; Read scancode
+    mov [last_scancode], al
+    ; Send EOI to PIC
+    mov al, 0x20
+    out 0x20, al
+    pop eax
+    iret
+
+; ── Data ────────────────────────────────────────────────────────────────
+
+msg_kernel: db "AI Compteur Kernel v0.2", 0
+msg_ready:  db "Protected mode active.", 0
+msg_pmode:  db "VGA: 80x25, 16 colors.", 0
+msg_irq:    db "Interrupts enabled.", 0
+msg_timer:  db "Timer + keyboard ready.", 0
+
+tick_count:   dd 0
+last_scancode: db 0
+
+; ── Padding ─────────────────────────────────────────────────────────────
+
+times 4096-($-$$) db 0          ; Pad to 4KB total
 """
 
 

@@ -30,7 +30,7 @@ logger = logging.getLogger("slo.middleware")
 REQUEST_TIMEOUT_SECONDS = 60.0
 
 # Paths that are always slow during cold start — suppress SLOW log for these
-_COLD_START_PATHS = {"/health", "/models", "/souls", "/chat/sessions", "/training/jobs"}
+_COLD_START_PATHS = {"/health", "/health/stream", "/models", "/models/hf", "/souls", "/chat/sessions", "/training/jobs"}
 
 
 class RequestTimeoutMiddleware(BaseHTTPMiddleware):
@@ -75,7 +75,7 @@ class RequestTimingMiddleware(BaseHTTPMiddleware):
             ctx = {"method": request.method, "path": path, "status": sc, "elapsed": f"{elapsed:.2f}s"}
 
             # Suppress SLOW log for cold-start paths on first load
-            if path in _COLD_START_PATHS and elapsed < 30.0:
+            if path in _COLD_START_PATHS and elapsed < 60.0:
                 logger.debug("COLD %s %s %d (%.2fs)", request.method, path, sc, elapsed)
             elif sc >= 500:
                 logger.error(
