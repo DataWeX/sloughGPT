@@ -15,6 +15,10 @@ import {
   IconExport,
   IconAlert,
   IconBrain,
+  IconTokenizer,
+  IconAgents,
+  IconVision,
+  IconFile,
 } from '@/components/icons/NavIcons'
 import { routeMatchesPath } from '@/lib/route-match'
 import { ThemeSwitcher } from './ThemeSwitcher'
@@ -37,12 +41,18 @@ const sections: NavSection[] = [
       { path: '/training', key: 'nav.training', Icon: IconTraining },
       { path: '/knowledge', key: 'nav.knowledge', Icon: IconSearch },
       { path: '/datasets', key: 'nav.datasets', Icon: IconBrain },
+      { path: '/infer', key: 'nav.infer', Icon: IconTokenizer },
     ],
   },
   {
     items: [
       { path: '/models', key: 'nav.models', Icon: IconModels },
+      { path: '/conversations', key: 'nav.conversations', Icon: IconChat },
       { path: '/compare', key: 'nav.compare', Icon: IconCompare },
+      { path: '/agents', key: 'nav.agents', Icon: IconAgents },
+      { path: '/multimodal', key: 'nav.multimodal', Icon: IconVision },
+      { path: '/files', key: 'nav.files', Icon: IconFile },
+      { path: '/tokenizer', key: 'nav.tokenizer', Icon: IconTokenizer },
       { path: '/export', key: 'nav.export', Icon: IconExport },
       { path: '/monitoring', key: 'nav.monitoring', Icon: IconActivity },
       { path: '/errors', key: 'nav.errors', Icon: IconAlert },

@@ -70,6 +70,7 @@ const translations: Record<Locale, Translations> = {
     'nav.agents': 'Agents',
     'nav.files': 'Files',
     'nav.errors': 'Errors',
+    'nav.infer': 'Inference',
 
     // Home page
     'home.title': 'Home',
@@ -242,6 +243,7 @@ const translations: Record<Locale, Translations> = {
     'nav.agents': 'Agentes',
     'nav.files': 'Archivos',
     'nav.errors': 'Errores',
+    'nav.infer': 'Inferencia',
 
     'home.title': 'Inicio',
     'home.subtitle.connecting': 'Conectando...',
@@ -401,6 +403,7 @@ const translations: Record<Locale, Translations> = {
     'nav.agents': 'Agents',
     'nav.files': 'Fichiers',
     'nav.errors': 'Erreurs',
+    'nav.infer': 'Inférence',
     'home.title': 'Accueil',
     'home.subtitle.connecting': 'Connexion...',
     'home.subtitle.ready': 'Prêt',
@@ -559,6 +562,7 @@ const translations: Record<Locale, Translations> = {
     'nav.agents': 'Agenten',
     'nav.files': 'Dateien',
     'nav.errors': 'Fehler',
+    'nav.infer': 'Inferenz',
     'home.title': 'Startseite',
     'home.subtitle.connecting': 'Verbinde...',
     'home.subtitle.ready': 'Bereit',
@@ -717,6 +721,7 @@ const translations: Record<Locale, Translations> = {
     'nav.agents': '智能体',
     'nav.files': '文件',
     'nav.errors': '错误',
+    'nav.infer': '推理',
     'home.title': '首页',
     'home.subtitle.connecting': '连接中...',
     'home.subtitle.ready': '准备就绪',

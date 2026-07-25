@@ -40,6 +40,8 @@ export function CommandPalette() {
       { id: 'nav-agents', label: 'Agents', description: 'Manage AI agents', icon: '🤖', category: 'navigation', run: () => router.push('/agents') },
       { id: 'nav-vision', label: 'Multimodal', description: 'Image analysis and generation', icon: '🎨', category: 'navigation', run: () => router.push('/multimodal') },
       { id: 'nav-files', label: 'Files', description: 'Uploaded file manager', icon: '📁', category: 'navigation', run: () => router.push('/files') },
+      { id: 'nav-infer', label: 'Inference', description: 'Generate, embed, tokenize', icon: '⚡', category: 'navigation', run: () => router.push('/infer') },
+      { id: 'nav-tokenizer', label: 'Tokenizer', description: 'Vocabulary and merge rules', icon: '🔤', category: 'navigation', run: () => router.push('/tokenizer') },
       { id: 'nav-compare', label: 'Compare', description: 'Side-by-side model metrics', icon: '⚖️', category: 'navigation', run: () => router.push('/compare') },
       { id: 'nav-settings', label: 'Settings', description: 'App settings', icon: '⚙️', category: 'navigation', run: () => router.push('/settings') },
       { id: 'nav-advanced', label: 'Advanced', description: 'Monitoring, tokenizer, benchmarks', icon: '🔧', category: 'navigation', run: () => router.push('/monitoring') },

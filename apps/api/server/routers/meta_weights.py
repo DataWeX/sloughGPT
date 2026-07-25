@@ -24,12 +24,6 @@ class MetaWeightResponse(BaseModel):
     based_on_samples: int = 0
 
 
-@router.get("/ping")
-async def ping():
-    """Health check for meta-weights sub-system."""
-    return success_response(data={"status": "ok"})
-
-
 @router.post("/get", response_model=MetaWeightResponse)
 async def get_meta_weights(request: GetMetaWeightsRequest, req: Request):
     """Get meta-weight adjustments based on similar past feedback."""
