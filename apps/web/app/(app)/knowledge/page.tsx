@@ -15,6 +15,7 @@ import { knowledgeController, type KnowledgeItem, type KnowledgeStats, type Topi
 import { useToastStore } from '@/lib/toast-store'
 import { EmbedderTrainingCard } from '@/components/knowledge/EmbedderTrainingCard'
 import { KnowledgeOperationsCard } from '@/components/knowledge/KnowledgeOperationsCard'
+import { ReviewCard } from '@/components/knowledge/ReviewCard'
 
 export default function KnowledgePage() {
   const [items, setItems] = useState<KnowledgeItem[]>([])
@@ -30,7 +31,9 @@ export default function KnowledgePage() {
   const [adapterStatus, setAdapterStatus] = useState<AdapterStatus | null>(null)
   const [trainingAdapter, setTrainingAdapter] = useState(false)
   const [suggestedTopic, setSuggestedTopic] = useState<string | null>(null)
+  const [autoLabel, setAutoLabel] = useState<{ label: string; confidence: number } | null>(null)
   const suggestTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  const labelTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [stats, setStats] = useState<KnowledgeStats | null>(null)
   const [topics, setTopics] = useState<TopicCount[]>([])
@@ -301,6 +304,9 @@ export default function KnowledgePage() {
         {/* Embedder Training */}
         <EmbedderTrainingCard />
 
+        {/* Spaced Repetition Reviews */}
+        <ReviewCard />
+
         {/* Add new knowledge */}
         <Card>
           <CardHeader>
@@ -313,23 +319,44 @@ export default function KnowledgePage() {
                 value={newContent}
                 onChange={e => {
                   setNewContent(e.target.value)
+                  setAutoLabel(null)
                   if (autoTag && e.target.value.trim().length > 5) {
                     clearTimeout(suggestTimerRef.current)
+                    clearTimeout(labelTimerRef.current)
                     suggestTimerRef.current = setTimeout(async () => {
                       try {
                         const res = await knowledgeController.suggestTopic(e.target.value.trim())
                         setSuggestedTopic(res.topic)
                       } catch { setSuggestedTopic(null) }
                     }, 300)
+                    labelTimerRef.current = setTimeout(async () => {
+                      try {
+                        const res = await knowledgeController.label(e.target.value.trim())
+                        setAutoLabel({ label: res.label, confidence: res.confidence })
+                      } catch { setAutoLabel(null) }
+                    }, 500)
                   } else {
                     setSuggestedTopic(null)
+                    setAutoLabel(null)
                   }
                 }}
                 aria-label="Knowledge content"
               />
-              {suggestedTopic && (
-                <div className="text-xs text-muted-foreground flex items-center gap-1.5 animate-in fade-in slide-in-from-top-1">
-                  <span className="opacity-70">Suggested topic:</span> <span className="font-medium text-primary">{suggestedTopic}</span>
+              {(suggestedTopic || autoLabel) && (
+                <div className="flex items-center gap-3 flex-wrap text-xs animate-in fade-in slide-in-from-top-1">
+                  {suggestedTopic && (
+                    <span className="text-muted-foreground flex items-center gap-1.5">
+                      <span className="opacity-70">Topic:</span>
+                      <span className="font-medium text-primary">{suggestedTopic}</span>
+                    </span>
+                  )}
+                  {autoLabel && (
+                    <span className="text-muted-foreground flex items-center gap-1.5">
+                      <span className="opacity-70">Type:</span>
+                      <span className="font-medium text-primary">{autoLabel.label}</span>
+                      <span className="opacity-50">({(autoLabel.confidence * 100).toFixed(0)}%)</span>
+                    </span>
+                  )}
                 </div>
               )}
               <div className="flex items-center gap-3 flex-wrap">

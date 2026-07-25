@@ -198,4 +198,16 @@ export const knowledgeController = {
   }> {
     return apiGet('/knowledge/embedder-status')
   },
+
+  async getDueReviews(): Promise<{ due_ids: string[]; stats: { due_count: number; total_scheduled: number } }> {
+    return apiGet('/knowledge/reviews/due')
+  },
+
+  async scheduleReview(itemId: string, performance: number): Promise<{ item_id: string; next_review: number }> {
+    return apiPost(`/knowledge/reviews/${encodeURIComponent(itemId)}/schedule?performance=${performance}`)
+  },
+
+  async label(text: string): Promise<{ label: string; confidence: number; reason: string; scores: Record<string, number> }> {
+    return apiGet(`/knowledge/label?text=${encodeURIComponent(text)}`)
+  },
 }
