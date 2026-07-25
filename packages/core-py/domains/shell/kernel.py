@@ -1194,20 +1194,55 @@ class Kernel:
 
     def spawn_vm_process(self, name: str, source: str,
                          stdin_fn=None, stdout_fn=None,
-                         priority: Priority = Priority.NORMAL) -> Process:
+                         priority: Priority = Priority.NORMAL,
+                         use_syscalls: bool = False) -> Process:
         """Spawn a process that runs VM assembly code.
 
         Creates a VirtualSystem, loads the assembled program, and executes
         it in a background thread. I/O goes through the console device.
+        If use_syscalls=True, wires SYSCALL instruction to kernel's syscall table.
         """
-        from .vm import VirtualSystem
+        from .vm import VirtualSystem, set_syscall_handler
 
         output_log: list[str] = []
+        kernel = self
+
+        def _handle_syscall(num, args):
+            from .kernel_syscall import SyscallNumber
+            if num == SyscallNumber.CONSOLE_WRITE:
+                val = args[0]
+                if stdout_fn:
+                    stdout_fn(str(val) + "\n")
+                else:
+                    output_log.append(str(val))
+                return 0
+            elif num == SyscallNumber.CONSOLE_READ:
+                if stdin_fn:
+                    return stdin_fn()
+                return ""
+            elif num == SyscallNumber.EXIT:
+                return -1
+            elif num == SyscallNumber.MALLOC:
+                block = kernel._memory.allocate(
+                    shape=(args[0],) if args[0] else (1,),
+                    dtype="float32",
+                )
+                return block.block_id
+            elif num == SyscallNumber.FREE:
+                kernel._memory.free_block(args[0])
+                return 0
+            elif num == SyscallNumber.UPTIME:
+                return int(kernel.uptime * 1000)
+            elif num == SyscallNumber.STATS:
+                return kernel.info()
+            return 0
 
         def _vm_entry():
+            handler = _handle_syscall if use_syscalls else None
             vs = VirtualSystem(
                 stdin_fn=stdin_fn,
                 stdout_fn=stdout_fn or (lambda v: output_log.append(str(v))),
+                syscall_handler=handler,
             )
             vs.load_program(source)
             vs.run()

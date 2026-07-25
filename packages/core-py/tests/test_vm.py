@@ -528,3 +528,61 @@ class TestVirtualSystem:
         assert "pc" in status
         assert "carry_flag" in status
         assert "block" in status["devices"]
+
+
+class TestFlatFS:
+    def test_write_read(self):
+        from domains.shell.vm import BlockDevice, FlatFS
+        blk = BlockDevice(num_sectors=16)
+        fs = FlatFS(blk)
+        fs.write("test.txt", b"hello world")
+        assert fs.read("test.txt")[:11] == b"hello world"
+
+    def test_list_files(self):
+        from domains.shell.vm import BlockDevice, FlatFS
+        blk = BlockDevice(num_sectors=16)
+        fs = FlatFS(blk)
+        fs.write("a.txt", b"aaa")
+        fs.write("b.txt", b"bbb")
+        assert sorted(fs.list_files()) == ["a.txt", "b.txt"]
+
+    def test_delete(self):
+        from domains.shell.vm import BlockDevice, FlatFS
+        blk = BlockDevice(num_sectors=16)
+        fs = FlatFS(blk)
+        fs.write("del.txt", b"bye")
+        assert fs.delete("del.txt")
+        assert not fs.exists("del.txt")
+        assert not fs.delete("del.txt")
+
+    def test_reload_persists(self):
+        from domains.shell.vm import BlockDevice, FlatFS
+        blk = BlockDevice(num_sectors=16)
+        fs = FlatFS(blk)
+        fs.write("persist.txt", b"data")
+        fs2 = FlatFS(blk)
+        assert "persist.txt" in fs2.list_files()
+        assert fs2.read("persist.txt")[:4] == b"data"
+
+
+class TestSyscall:
+    def test_syscall_print(self):
+        import time as _time
+        from domains.shell.kernel import Kernel
+        output = []
+        k = Kernel()
+        k.boot()
+        k.register_devices()
+        proc = k.spawn_vm_process(
+            'sc-test',
+            'LOAD_CONST R0, "via syscall"\nLOAD_CONST R7, 111\nSYSCALL\nHALT',
+            stdout_fn=lambda v: output.append(v),
+            use_syscalls=True,
+        )
+        for _ in range(10):
+            k.tick()
+            _time.sleep(0.05)
+            if proc.state.name == 'ZOMBIE':
+                break
+        assert any("via syscall" in line for line in output)
+        k.shutdown()

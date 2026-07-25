@@ -146,6 +146,7 @@ OPCODES = {
     "RET":        "                   pop call stack",
     "LOOP":       "Rd, label          Rd -= 1; if Rd != 0: PC = label",
     "HALT":       "                   stop execution",
+    "SYSCALL":    "                   R0=handler(R7, [R0..R5])",
     "DEV_OPEN":   "Rd, name           Rd = device handle",
     "DEV_CALL":   "Rd, H, method, args...  Rd = device.method(*args)",
     "DEV_CLOSE":  "H                  release device handle",
@@ -365,6 +366,112 @@ class BlockDevice(Device):
         if method == "write_block":
             return self.write_block(*args)
         return super().call(method, *args)
+
+
+class FlatFS:
+    """Simple flat filesystem on top of a BlockDevice.
+
+    File table stored in sector 0 (4 bytes: num_files, then per-file entry):
+      [2 bytes: name_len] [name bytes] [2 bytes: start_sector] [2 bytes: num_sectors]
+
+    File data starts at sector 1. Max 32 files, max 32 chars per name.
+    """
+
+    MAX_FILES = 32
+    MAX_NAME = 32
+    TABLE_SECTOR = 0
+    DATA_START = 1
+
+    def __init__(self, block_device: BlockDevice):
+        self._block = block_device
+        self._files: dict[str, tuple[int, int]] = {}  # name -> (start_sector, num_sectors)
+        self._load_table()
+
+    def _load_table(self):
+        raw = bytes(self._block.read_sector(self.TABLE_SECTOR))
+        if raw[:2] == b'\x00\x00':
+            return
+        n = int.from_bytes(raw[:2], 'big')
+        pos = 2
+        for _ in range(n):
+            name_len = int.from_bytes(raw[pos:pos+2], 'big')
+            pos += 2
+            name = raw[pos:pos+name_len].decode('utf-8', errors='replace')
+            pos += name_len
+            start = int.from_bytes(raw[pos:pos+2], 'big')
+            pos += 2
+            count = int.from_bytes(raw[pos:pos+2], 'big')
+            pos += 2
+            self._files[name] = (start, count)
+
+    def _save_table(self):
+        data = len(self._files).to_bytes(2, 'big')
+        for name, (start, count) in self._files.items():
+            name_bytes = name.encode('utf-8')[:self.MAX_NAME]
+            data += len(name_bytes).to_bytes(2, 'big')
+            data += name_bytes
+            data += start.to_bytes(2, 'big')
+            data += count.to_bytes(2, 'big')
+        # Pad to sector size
+        data = data.ljust(self._block.SECTOR_SIZE, b'\x00')
+        self._block.write_sector(self.TABLE_SECTOR, data)
+
+    def list_files(self) -> list[str]:
+        return list(self._files.keys())
+
+    def exists(self, name: str) -> bool:
+        return name in self._files
+
+    def write(self, name: str, data: bytes) -> None:
+        """Write data to a file, allocating sectors as needed."""
+        sectors_needed = (len(data) + self._block.SECTOR_SIZE - 1) // self._block.SECTOR_SIZE
+
+        # Find free sectors (simple: use sectors after all existing files)
+        used = set()
+        for _, (_, count) in self._files.items():
+            for s in range(self.DATA_START, self.DATA_START + count):
+                used.add(s)
+
+        free_sectors = []
+        s = self.DATA_START
+        while len(free_sectors) < sectors_needed:
+            if s not in used:
+                free_sectors.append(s)
+            s += 1
+            if s >= self._block._num_sectors:
+                raise DeviceFault("no space on disk")
+
+        # Write data sectors
+        for i, sector_idx in enumerate(free_sectors):
+            chunk = data[i * self._block.SECTOR_SIZE:(i + 1) * self._block.SECTOR_SIZE]
+            self._block.write_sector(sector_idx, chunk)
+
+        self._files[name] = (free_sectors[0], sectors_needed)
+        self._save_table()
+
+    def read(self, name: str) -> bytes:
+        """Read entire file contents."""
+        if name not in self._files:
+            raise DeviceFault(f"file not found: {name}")
+        start, count = self._files[name]
+        data = b''
+        for i in range(count):
+            data += bytes(self._block.read_sector(start + i))
+        return data
+
+    def delete(self, name: str) -> bool:
+        """Delete a file and free its sectors."""
+        if name not in self._files:
+            return False
+        del self._files[name]
+        self._save_table()
+        return True
+
+    def size(self, name: str) -> int:
+        if name not in self._files:
+            return 0
+        _, count = self._files[name]
+        return count * self._block.SECTOR_SIZE
 
 
 class DeviceBus:
@@ -1098,6 +1205,51 @@ def _op_halt(cpu, ops):
     raise Halt()
 
 
+# ── System Calls ─────────────────────────────────────────────────────────────
+
+# Syscall numbers (match kernel_syscall.SyscallNumber)
+SYS_PRINT = 111
+SYS_EXIT = 2
+SYS_ALLOC = 20
+SYS_FREE = 21
+SYS_OPEN = 120
+SYS_READ = 121
+SYS_WRITE = 122
+SYS_CLOSE = 123
+SYS_UPTIME = 200
+SYS_STATS = 201
+
+# Kernel-provided syscall handler (set by Kernel or VirtualSystem)
+_syscall_handler = None
+
+
+def set_syscall_handler(handler):
+    """Set the global syscall handler function.
+
+    The handler receives (syscall_num, args) and returns a value.
+    """
+    global _syscall_handler
+    _syscall_handler = handler
+
+
+def _op_syscall(cpu, ops):
+    """SYSCALL — software interrupt for kernel services.
+
+    Convention:
+      R7 = syscall number
+      R0-R5 = arguments
+      R0 = return value
+    """
+    num = int(cpu.regs[7])
+    args = [cpu.regs[i] for i in range(6)]
+
+    if _syscall_handler is not None:
+        result = _syscall_handler(num, args)
+        cpu.regs[0] = result if result is not None else 0
+    else:
+        cpu.regs[0] = 0
+
+
 # ── Data Movement ────────────────────────────────────────────────────────────
 
 def _op_load_const(cpu, ops):
@@ -1228,6 +1380,7 @@ _OPCODE_TABLE = {
     "FCMP": _op_fcmp,
     "ALLOC": _op_alloc, "MEMINFO": _op_meminfo,
     "IN": _op_in, "OUT": _op_out,
+    "SYSCALL": _op_syscall,
 }
 
 
@@ -1240,7 +1393,7 @@ class VirtualSystem:
     """
 
     def __init__(self, enable_block: bool = False, enable_console: bool = True,
-                 stdin_fn=None, stdout_fn=None):
+                 stdin_fn=None, stdout_fn=None, syscall_handler=None):
         self.memory = Memory()
         self.bus = DeviceBus()
 
@@ -1251,6 +1404,9 @@ class VirtualSystem:
             self.bus.register("block", self.block)
 
         self.cpu = CPU(memory=self.memory, devices=self.bus)
+
+        if syscall_handler is not None:
+            set_syscall_handler(syscall_handler)
 
     def load_program(self, source: str) -> int:
         """Assemble and load program. Returns instruction count."""
