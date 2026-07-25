@@ -473,3 +473,14 @@ class TestKernel:
         assert len(result["trace"]) > 0
         assert result["output"] == ["30"]
         k.shutdown()
+
+    def test_spawn_shell(self):
+        k = Kernel()
+        k.boot()
+        proc = k.spawn_shell()
+        assert proc.name == "shell"
+        assert proc.state.name == "READY"
+        assert proc.pid == 2
+        procs = k.list_processes()
+        assert len(procs) == 2
+        k.shutdown()

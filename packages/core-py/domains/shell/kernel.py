@@ -1108,6 +1108,28 @@ class Kernel:
         logger.info(msg)
         return msg
 
+    def spawn_shell(self, shell_class: Any = None, **kwargs: Any) -> Process:
+        """Spawn the interactive shell as a kernel process.
+
+        If shell_class is None, lazily imports ShellREPL. The shell runs
+        as a NORMAL priority process — it gets scheduled by the kernel's
+        tick loop.
+        """
+        if shell_class is None:
+            from .repl import ShellREPL
+            shell_class = ShellREPL
+
+        def _shell_entry():
+            shell = shell_class(**kwargs)
+            shell.run()
+
+        proc = self.spawn_process(
+            "shell",
+            priority=Priority.NORMAL,
+            entry=_shell_entry,
+        )
+        return proc
+
     def shutdown(self) -> str:
         if not self._running:
             return "Already shut down"
