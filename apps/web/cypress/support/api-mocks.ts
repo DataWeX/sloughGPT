@@ -56,21 +56,6 @@ Cypress.Commands.add('mockSystem', () => {
   }).as('detailedHealth')
 })
 
-Cypress.Commands.add('mockTokenizer', () => {
-  cy.intercept('GET', `${api}/tokenizer/stats`, {
-    statusCode: 200,
-    body: { vocab_size: 50257, merges_count: 50000, pad_token: '<|endoftext|>', unk_token: '<|endoftext|>', max_length: 1024, base_chars: 128, merged_subwords: 50129, total_merges: 50000, special_tokens: 3 },
-  }).as('tokenizerStats')
-  cy.intercept('GET', `${api}/tokenizer/sample`, {
-    statusCode: 200,
-    body: { samples: [
-      { word: 'the', tokens: ['the'], ids: [0], count: 523 },
-      { word: 'quick', tokens: ['quick'], ids: [1], count: 87 },
-      { word: 'brown', tokens: ['brown'], ids: [2], count: 42 },
-    ]},
-  }).as('tokenizerSamples')
-})
-
 Cypress.Commands.add('mockKnowledge', (items: string[] = []) => {
   const knowledgeItems = items.map((content, i) => ({
     id: `k${i + 1}`,
@@ -100,7 +85,6 @@ Cypress.Commands.add('mockAll', () => {
   cy.mockModels()
   cy.mockDatasets()
   cy.mockSystem()
-  cy.mockTokenizer()
   cy.mockVisual()
 })
 
@@ -170,14 +154,4 @@ Cypress.Commands.add('mockAgents', (overrides: any[] = []) => {
   cy.intercept('PUT', `${api}/agents/*`, { statusCode: 200, body: agents[0] }).as('agentsUpdate')
   cy.intercept('DELETE', `${api}/agents/*`, { statusCode: 200, body: { status: 'deleted' } }).as('agentsDelete')
   cy.intercept('POST', `${api}/agents/*/execute`, { statusCode: 200, body: { response: 'This is a simulated agent response.', tools_used: [] } }).as('agentsExecute')
-})
-
-Cypress.Commands.add('mockExport', () => {
-  cy.intercept('GET', `${api}/models`, { statusCode: 200, body: [
-    { id: 'gpt2', name: 'gpt2', loaded: true, size_gb: 0.5 },
-    { id: 'qwen', name: 'Qwen2.5-0.5B-Instruct', loaded: false, size_gb: 1.2 },
-  ]}).as('exportModels')
-  cy.intercept('GET', `${api}/health`, { statusCode: 200, body: { status: 'healthy', model_loaded: true, model_type: 'gpt2' } }).as('exportHealth')
-  cy.intercept('GET', `${api}/models/export/formats`, { statusCode: 200, body: { formats: ['sou', 'onnx', 'gguf'] } }).as('exportFormats')
-  cy.intercept('POST', `${api}/models/export`, { statusCode: 200, body: { status: 'exported', format: 'sou', files: ['models/exported/model.sou'] } }).as('modelExport')
 })

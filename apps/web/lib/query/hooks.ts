@@ -37,6 +37,7 @@ import {
   subscribeQuery,
   isStale as checkStale,
 } from './client'
+import { logger } from '@/lib/dev-log'
 
 // ─── useQuery ───────────────────────────────────────────────────────────────
 
@@ -184,7 +185,7 @@ export function useMutation<T, V = void>(
     [],
   )
 
-  const mutate = useCallback((vars: V) => { mutateAsync(vars).catch((e) => console.error('[mutation] failed:', e)) }, [mutateAsync])
+  const mutate = useCallback((vars: V) => { mutateAsync(vars).catch((e) => logger.error('[mutation] failed', { exception: String(e) })) }, [mutateAsync])
 
   const reset = useCallback(() => {
     setState({ isLoading: false, error: null })

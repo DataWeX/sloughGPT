@@ -79,7 +79,7 @@ export default function PersonalitiesCard({
                     <Badge label="Active" variant="success" />
                   ) : (
                     <Button variant="outline" size="sm" className="h-7 text-xs px-2" disabled={switchingSoul === s.name} onClick={() => onSwitch(s.name)}>
-                      {switchingSoul === s.name ? '...' : 'Switch'}
+                      {switchingSoul === s.name ? <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" /> : 'Switch'}
                     </Button>
                   )}
                 </div>

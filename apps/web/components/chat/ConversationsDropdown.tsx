@@ -1,9 +1,8 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import Link from 'next/link'
 import { cn, Button } from '@sloughgpt/strui'
-import { IconMessage, IconStar, IconPin, IconChat, IconPlus, IconChevronRight } from '@sloughgpt/strui'
+import { IconMessage, IconStar, IconPin, IconChat, IconPlus } from '@sloughgpt/strui'
 import { useChatToolbarContext } from '@/contexts/ChatToolbarContext'
 import type { Conversation } from '@/lib/session-controller'
 import { formatDate, truncateMessage } from '@/lib/conversations-utils'
@@ -123,15 +122,6 @@ export function ConversationsDropdown() {
               </>
             )}
           </div>
-
-          <Link
-            href="/conversations"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-1 px-3 py-2 border-t border-border/50 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
-          >
-            View all messages
-            <IconChevronRight className="h-3 w-3" />
-          </Link>
         </div>
       )}
     </div>

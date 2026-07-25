@@ -10,6 +10,7 @@ import { IconSend, IconBrain, IconCopy, IconX } from '@sloughgpt/strui'
 import { Spinner } from '@sloughgpt/strui'
 import { generateController } from '@/lib/generate-controller'
 import { useToastStore } from '@/lib/toast-store'
+import type { ModelEntry } from '@/lib/types/models'
 
 interface OutputResult {
   model: string
@@ -20,7 +21,7 @@ interface OutputResult {
 }
 
 interface OutputComparisonCardProps {
-  models: { id: string; name: string }[]
+  models: ModelEntry[]
 }
 
 export default function OutputComparisonCard({ models }: OutputComparisonCardProps) {

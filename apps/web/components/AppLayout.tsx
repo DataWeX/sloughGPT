@@ -20,8 +20,17 @@ import { KeyboardShortcutsModal } from '@/components/KeyboardShortcutsModal'
 import { DebugOverlay } from '@/components/DebugOverlay'
 import { WhatsNewDialog } from '@/components/WhatsNewDialog'
 import { initLiveStatus } from '@/hooks/useLiveStatus'
+import { ConvSidebarProvider, useConvSidebar } from '@/contexts/ConvSidebarContext'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <ConvSidebarProvider>
+      <AppLayoutInner>{children}</AppLayoutInner>
+    </ConvSidebarProvider>
+  )
+}
+
+function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [portalMounted, setPortalMounted] = useState(false)
@@ -33,6 +42,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const dismissToast = useToastStore(s => s.dismissToast)
   const clearToasts = useToastStore(s => s.clearToasts)
   const apiStatus = useApiMonitor(s => s.status)
+  const { open: convOpen, navCollapsed, toggleNav, setNavCollapsed } = useConvSidebar()
   useGlobalShortcuts()
 
   // Initialize live health SSE stream (replaces useBackendWatcher)
@@ -120,8 +130,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Desktop sidebar */}
-        <div className="sl-app-sidebar-desktop">
-          <Sidebar variant="desktop" />
+        <div className="sl-app-sidebar-desktop" data-collapsed={navCollapsed ? 'true' : undefined}>
+          <Sidebar variant="desktop" collapsed={navCollapsed} onToggleCollapse={toggleNav} />
         </div>
 
         {/* Main content area */}

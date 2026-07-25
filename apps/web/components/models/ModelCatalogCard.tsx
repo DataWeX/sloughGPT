@@ -74,7 +74,7 @@ export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeI
           <div className="text-center py-8 text-sm text-muted-foreground">No models available</div>
         ) : (
           <>
-            {models.length > 6 && (
+            {models.length > 3 && (
               <div className="mb-3">
                 <input
                   type="text"
@@ -90,9 +90,8 @@ export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeI
                 const isLoading = loadingModel === model.id
                 const isLoaded = activeRuntimeId ? catalogIdMatchesRuntime(model.id, activeRuntimeId) : false
                 return (
-                  <>
+                  <div key={model.id}>
                   <div
-                    key={model.id}
                     className={cn("flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm",
                       isLoaded ? "border-primary/40 bg-primary/5" : "border-border/60")}
                     onClick={() => router.push(`/model/${encodeURIComponent(model.id)}`)}
@@ -138,7 +137,7 @@ export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeI
                       <span className="text-[9px] text-muted-foreground ml-auto">{conversionStatus.elapsed_s.toFixed(0)}s</span>
                     </div>
                   )}
-                  </>
+                  </div>
                 )
               })}
             </div>

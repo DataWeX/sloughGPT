@@ -542,57 +542,277 @@ Set via `NEXT_PUBLIC_API_URL` env var or defaults to `http://localhost:8000`.
 
 ---
 
-## Page Design Pattern (UX First + Strui Aligned)
+## UI Design System — Noir Violet
 
-Every page must follow this template — no custom styling, no mixed patterns:
+### Design Philosophy
 
-### Page Structure
+Five principles, in priority order:
+1. **Clarity** — every element communicates its purpose instantly; no guessing
+2. **Consistency** — identical patterns across all pages; same component = same behavior
+3. **Feedback** — every user action gets a visible response within 100ms
+4. **Affordance** — interactive elements look interactive; non-interactive don't
+5. **Accessibility** — WCAG 2.2 AA minimum; keyboard-navigable; screen-reader aware
+
+### Color System
+
+All colors are RGB triples (`124 82 196`), consumed via `rgb(var(--token))` or `color-mix()`. Never use hex/hsl directly in components.
+
+#### Palette — "Noir Violet"
+
+| Role | Light | Dark | Tailwind class |
+|------|-------|------|----------------|
+| **Primary** | `124 82 196` (violet) | `192 170 244` (lilac) | `text-primary`, `bg-primary` |
+| **Accent** | `236 145 95` (terracotta) | `240 176 130` (peach) | `text-accent`, `bg-accent` |
+| **Success** | `52 176 125` (green) | `72 192 140` | `text-success`, `bg-success` |
+| **Warning** | `236 168 60` (amber) | `240 192 80` | `text-warning`, `bg-warning` |
+| **Destructive** | `220 80 90` (red) | `235 100 110` | `text-destructive`, `bg-destructive` |
+| **Background** | `248 246 252` (cream) | `17 15 24` (charcoal) | `bg-background` |
+| **Card** | `255 255 255` | `28 25 38` | `bg-card` |
+| **Border** | `228 224 242` | `52 46 72` | `border-border` |
+| **Muted** | `244 242 248` | `38 34 52` | `bg-muted` |
+| **Muted FG** | `130 122 150` | `150 140 172` | `text-muted-foreground` |
+| **Ring** | `124 82 196` | `192 170 244` | `ring-ring` |
+
+#### Semantic State Colors
+
+| State | Color | Usage |
+|-------|-------|-------|
+| **Success** | `success` | Completed actions, active status dots, "Loaded" badges |
+| **Warning** | `warning` | In-progress states, "Model loading" indicators |
+| **Error** | `destructive` | Failed actions, validation errors, delete confirmations |
+| **Info** | `primary` | Links, focus rings, active navigation |
+| **Disabled** | `muted-foreground` at 40% opacity | Unavailable controls |
+
+#### Shadow Depth System
+
+| Token | Light | Dark | Usage |
+|-------|-------|------|-------|
+| `--shadow-sm` | `rgba(25,22,36, 0.06)` | `rgba(0,0,0, 0.25)` | Subtle card lift |
+| `--shadow-md` | `rgba(25,22,36, 0.08)` | `rgba(0,0,0, 0.35)` | Dropdown menus, popovers |
+| `--shadow-lg` | `rgba(25,22,36, 0.10)` | `rgba(0,0,0, 0.45)` | Dialogs, modals |
+| `--shadow-xl` | `rgba(25,22,36, 0.14)` | `rgba(0,0,0, 0.55)` | Command palette, toast |
+
+### Typography
+
+**Fonts:** Outfit (sans, 400/500/600/700), JetBrains Mono (mono, 400/500) — served locally from `/public/fonts/`.
+
+#### Type Scale
+
+| Role | Class | Size | Weight | Usage |
+|------|-------|------|--------|-------|
+| **Page title** | `sl-h1` / `AppRouteHeaderLead` | `text-2xl md:text-3xl` | 600 | One per page |
+| **Section title** | `text-base font-medium` | `text-base` | 500 | Card headers, section dividers |
+| **Card title** | `CardTitle className="text-base"` | `text-base` | 500 | Always inside `CardHeader` |
+| **Body** | `text-sm` | `text-sm` (14px) | 400 | Primary content text |
+| **Caption/meta** | `text-xs text-muted-foreground` | `text-xs` | 400 | Timestamps, secondary info |
+| **Label** | `text-xs font-medium uppercase tracking-wider` | `text-xs` | 500 | Form labels, KPI labels |
+| **Code** | `font-mono text-xs` | `text-xs` | 400 | Inline code, technical values |
+| **Badge/Chip** | `text-[10px] font-medium` | `10px` | 500 | Status badges, tags |
+
+#### Rules
+- Never use `text-lg` or `text-2xl` in page body — only in `AppRouteHeaderLead`
+- Page titles use `AppRouteHeaderLead` — never raw `<h1>`
+- Section titles are always `text-base font-medium` — no exceptions
+- Muted text: `text-muted-foreground` — never hardcoded gray hex
+
+### Spacing & Layout
+
+#### Page Layout
+
 ```
-Page: <div className="sl-page mx-auto max-w-4xl">
-  Header: <AppRouteHeader left={<AppRouteHeaderLead title="Page Title" />} />
-  Content: <div className="space-y-4"> (or grid)
-    Card: <Card><CardHeader><CardTitle className="text-base">Title</CardTitle></CardHeader>
-      <CardContent>...</CardContent>
-    </Card>
+<div className="sl-page mx-auto max-w-4xl">
+  <AppRouteHeader left={<AppRouteHeaderLead title="..." subtitle="..." />} />
+  <div className="space-y-4">
+    <Card> ... </Card>
+    <Card> ... </Card>
+  </div>
+</div>
 ```
 
-### Typography Rules
-- Page title: `<AppRouteHeaderLead title="..." />` (h1 via sl-h1)
-- Section titles: `text-base font-medium`
-- Body: `text-sm`
-- Secondary/meta: `text-xs text-muted-foreground`
-- Never use arbitrary padding like `px-8` or `p-10` in pages — use sl-page defaults
+- `sl-page`: provides responsive padding (`p-4 md:p-6 lg:p-8`)
+- `max-w-4xl` (896px): max content width for readability
+- `space-y-4` (16px): gap between cards/sections
+- Never use arbitrary padding (`px-8`, `p-10`) in page body
 
-### Component Usage
-| Element | Component |
-|---------|-----------|
-| Page wrapper | `sl-page mx-auto max-w-4xl` |
-| Page header | `AppRouteHeader + AppRouteHeaderLead` |
-| Section card | `Card > CardHeader > CardTitle > CardContent` |
-| Buttons | `Button size="sm"` for inline, `Button` for standalone |
-| Input | `Input` with `text-sm` |
-| Stat display | `KpiGrid > StatCard` from strui |
-| Data table | `ListRow` or `FoldSection` from strui |
-| Loading | `Skeleton` or `animate-pulse bg-muted` |
-| Empty state | `EmptyCard` from strui or `Card className="border-dashed py-8"` |
+#### Component Spacing Tokens
 
-### Design Don'ts
-- ❌ Custom `px-8 py-6` in page body
-- ❌ `text-lg` or `text-2xl` in page body text (use `text-sm` / `text-base`)
-- ❌ Inline style objects
-- ❌ Mixing Card styles — always `CardHeader > CardTitle + CardContent`
-- ✅ Use `sl-page` padding, `space-y-4` between sections, `grid gap-4` for layouts
+| Token | Value | Usage |
+|-------|-------|-------|
+| `gap-1` | 4px | Tight: icon + text, inline badges |
+| `gap-2` | 8px | Default: card inner elements, button groups |
+| `gap-3` | 12px | Comfortable: list items, form fields |
+| `gap-4` | 16px | Section gap: between cards, page sections |
+| `p-2` | 8px | Compact card padding |
+| `p-3` | 12px | Default card padding, nav items |
+| `p-4` | 16px | Generous card padding, dialogs |
 
-### Example Compliant Page
+#### Touch Targets
+
+- Minimum: `h-11` (44px) — Apple HIG / Material requirement
+- Buttons: `h-7` (28px) inline, `h-9` (36px) default, `h-10` (40px) prominent, `h-11` (44px) primary CTA
+- Icons: `h-4 w-4` (16px) inline, `h-5 w-5` (20px) standalone, `h-6 w-6` (24px) prominent
+- Icon-only buttons: always `h-7 w-7` minimum with `aria-label`
+
+#### Border Radius
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| `rounded-none` | 0px | Nav links, sidebar items |
+| `rounded` | 4px | Inputs, small buttons |
+| `rounded-md` | 6px | Buttons, default (`--radius`) |
+| `rounded-lg` | 8px | Cards, panels, modals |
+| `rounded-xl` | 12px | AI chat bubbles |
+| `rounded-full` | 9999px | Avatars, status dots, scrollbar thumbs |
+
+### Component States (Definitive)
+
+Every interactive element must implement these states. Missing states = broken UX.
+
+#### Button States
+
+| State | Visual | Behavior | CSS |
+|-------|--------|----------|-----|
+| **Default** | Solid background, full opacity | Clickable | `bg-primary text-primary-foreground` |
+| **Hover** | 8% darker background, cursor pointer | Shows interactivity | `hover:bg-primary/90` |
+| **Active/Pressed** | 12% darker, slight scale-down | Confirms click | `active:scale-[0.98]` |
+| **Focus** | 2px ring offset, 2px ring | Keyboard navigation | `focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2` |
+| **Disabled** | 40% opacity, `cursor-not-allowed` | Cannot interact | `disabled:opacity-40 disabled:pointer-events-none` |
+| **Loading** | Spinner replaces label, disabled | Prevents double-click | `disabled` + inline `<span className="animate-spin ..." />` |
+| **Success** | Brief green flash (1.5s) → reverts | Action confirmed | Toast notification, not inline change |
+
+#### Input States
+
+| State | Visual | Behavior |
+|-------|--------|----------|
+| **Default** | `border-border bg-background text-sm` | Ready for input |
+| **Hover** | `border-border/80` (subtle lighten) | Shows interactivity |
+| **Focus** | `ring-2 ring-primary/30 border-primary/50` | Active field |
+| **Error** | `border-destructive ring-destructive/20` + red message below | Invalid input |
+| **Disabled** | `opacity-40 cursor-not-allowed bg-muted` | Cannot edit |
+| **Placeholder** | `text-muted-foreground/50` | Hint text |
+
+#### Card States
+
+| State | Visual | Behavior |
+|-------|--------|----------|
+| **Default** | `border-border bg-card` | Static content |
+| **Interactive** | `hover:-translate-y-0.5 hover:shadow-md cursor-pointer` | Clickable card |
+| **Active/Selected** | `border-primary/40 bg-primary/5` | Currently selected |
+| **Loading** | `animate-pulse bg-muted/50` skeleton children | Content loading |
+| **Error** | `border-destructive/40 bg-destructive/5` | Error condition |
+
+#### Navigation States
+
+| State | Visual | Behavior |
+|-------|--------|----------|
+| **Default** | `text-foreground/78` | Inactive nav item |
+| **Hover** | `bg-primary/10 text-primary` | Shows interactivity |
+| **Active** | `bg-primary/[0.13] font-medium text-primary` | Current page |
+| **Focus** | `ring-2 ring-ring ring-offset-2` | Keyboard nav |
+
+#### Badge/Chip States
+
+| State | Visual | Usage |
+|-------|--------|-------|
+| **Default** | `bg-secondary text-secondary-foreground` | Neutral tag |
+| **Success** | `bg-success/15 text-success` | Active, loaded, complete |
+| **Warning** | `bg-warning/15 text-warning` | In progress, attention |
+| **Error** | `bg-destructive/15 text-destructive` | Failed, error |
+| **Primary** | `bg-primary/15 text-primary` | Selected, highlighted |
+
+#### Toggle/Switch States
+
+| State | Visual | Behavior |
+|-------|--------|----------|
+| **Off** | `bg-muted` track, thumb left | Default off |
+| **On** | `bg-primary` track, thumb right | Active on |
+| **Hover** | Subtle brightness shift | Shows interactivity |
+| **Disabled** | `opacity-40` both track and thumb | Cannot toggle |
+| **Focus** | Ring around the control | Keyboard accessible |
+
+### Empty States
+
+Every list, table, or data view must have an empty state:
+
 ```tsx
-export default function Page() {
+<div className="text-center py-8 text-sm text-muted-foreground">
+  No models available. Load one in the Models page first.
+</div>
+```
+
+Or using strui:
+```tsx
+<EmptyCard icon={<IconModel />} title="No models" description="Load a model to get started" />
+```
+
+Rules:
+- Always explain *why* it's empty
+- Provide a clear next action when possible
+- Never show a blank screen
+
+### Loading States
+
+| Pattern | Usage | Implementation |
+|---------|-------|----------------|
+| **Skeleton** | Page/card content loading | `<Skeleton className="h-28 rounded-lg" />` or `animate-pulse bg-muted` |
+| **Spinner** | Button action in progress | `<span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />` |
+| **Inline dots** | Background process | `<LoadingDots />` from strui |
+| **Progress bar** | Known-duration operation | `<Progress value={75} />` from strui |
+
+Rules:
+- Skeletons must approximate the actual content shape
+- Spinners replace button labels, not appearing next to them
+- Never show a blank screen while loading — always a skeleton or spinner
+
+### Error States
+
+| Pattern | Usage | Implementation |
+|---------|-------|----------------|
+| **Inline error** | Form validation | Red border + message below input |
+| **Toast** | Non-blocking error | `addToast(message, 'error')` |
+| **Error banner** | Page-level failure | `<ErrorBanner message="..." onRetry={...} />` |
+| **Empty error** | Data fetch failure | "Couldn't load X. [Retry]" |
+
+Rules:
+- Error messages must be human-readable, not technical
+- Always provide a recovery action (retry, dismiss, fix)
+- Never show stack traces or error codes to users
+- Use `destructive` color, never `warning` for errors
+
+### Accessibility Requirements
+
+| Requirement | Implementation |
+|-------------|---------------|
+| **Focus visible** | `focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2` on all interactive elements |
+| **Keyboard nav** | All actions reachable via Tab/Enter/Escape; no mouse-only interactions |
+| **ARIA labels** | Icon-only buttons: `aria-label="..."`; dialogs: `role="dialog" aria-modal="true"` |
+| **Color contrast** | 4.5:1 for text, 3:1 for large text and UI components (WCAG AA) |
+| **Target size** | Minimum 24x24px for all interactive elements (WCAG 2.2) |
+| **Screen reader** | Status changes use `aria-live="polite"`; hidden decorative elements use `aria-hidden="true"` |
+| **Reduced motion** | Respect `prefers-reduced-motion` for all animations |
+
+### Page Template (Canonical)
+
+```tsx
+'use client'
+
+import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+
+export default function PageName() {
   return (
     <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader left={<AppRouteHeaderLead title="Models" />} />
+      <AppRouteHeader
+        left={<AppRouteHeaderLead title="Page Title" subtitle="Optional subtitle" />}
+      />
       <div className="space-y-4">
         <Card>
-          <CardHeader><CardTitle className="text-base">Active Models</CardTitle></CardHeader>
-          <CardContent>...</CardContent>
+          <CardHeader>
+            <CardTitle className="text-base">Section Title</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm">Body text here.</p>
+          </CardContent>
         </Card>
       </div>
     </div>
@@ -600,16 +820,40 @@ export default function Page() {
 }
 ```
 
+### Design Don'ts
+
+- ❌ Custom `px-8 py-6` in page body
+- ❌ `text-lg` or `text-2xl` in body text
+- ❌ Inline style objects (`style={{ ... }}`)
+- ❌ Hardcoded colors (`#7c52c4`, `rgb(124, 82, 196)`)
+- ❌ Missing `aria-label` on icon-only buttons
+- ❌ Cards without `CardHeader > CardTitle + CardContent` structure
+- ❌ Blank screens (always skeleton/spinner/empty state)
+- ❌ Error messages without recovery action
+- ❌ Interactive elements without hover/focus/disabled states
+- ❌ `console.log` in production components
+- ✅ `sl-page mx-auto max-w-4xl` wrapper
+- ✅ `space-y-4` between sections
+- ✅ `text-sm` for body, `text-xs text-muted-foreground` for meta
+- ✅ `Button size="sm"` for inline actions
+- ✅ All colors via CSS custom properties (`rgb(var(--primary))`)
+
 ### Strui Components to Import First
+
+Before building any UI, check if strui has it:
 - `FoldSection` — collapsible sections
 - `StatCard` / `KpiGrid` — dashboard stats
 - `SearchInput` — search with icon
 - `EmptyCard` — empty state placeholder
-- `Chip` — status badges
+- `Chip` / `Chips` — status badges, tag groups
 - `SectionHeader` — section dividers
 - `ListRow` — table/list rows
 - `Skeleton` — loading placeholders
-- `CustomScrollbar` — auto-hiding scrollbar container with fade effect (`components/ui/custom-scrollbar.tsx`)
+- `StatusDot` — colored status indicators
+- `EmptyState` — full-page empty states
+- `CopyButton` — one-click copy with feedback
+- `KeyValueList` — key-value display pairs
+- `InlineBanner` — inline notification messages
 
 ## Implemented Features
 
@@ -817,159 +1061,59 @@ class ClassName:
 
 ---
 
-## UI Library (`@/components/ui`)
+## UI Component Library (`@sloughgpt/strui`)
 
-### Import Pattern
-```tsx
-import { Button, Card, SearchInput, IconStar, StatCard, KpiGrid } from '@/components/ui'
-```
-
-### Components by Category
-
-#### Buttons
-| Component | Purpose | Props |
-|----------|---------|-------|
-| `Button` | Primary action button | `variant`, `size`, `onClick` |
-| `IconButton` | Icon-only button | `icon`, `label`, `onClick` |
-| `ActionButton` | CTA with icon | `icon`, `label`, `onClick`, `variant` |
-
-#### Cards & Layout
-| Component | Purpose | Props |
-|----------|---------|-------|
-| `Card` | Container | `className` |
-| `CardHeader` | Header section | - |
-| `CardTitle` | Title | - |
-| `CardContent` | Body | - |
-| `SectionHeader` | Section label | `title` |
-| `SectionList` | List container | - |
-| `SectionBox` | Boxed section | - |
-| `SectionScroll` | Scroll wrapper | - |
-| `CardDeck` | Titled card | `title`, `description`, `footer` |
-
-#### Inputs
-| Component | Purpose | Props |
-|----------|---------|-------|
-| `Input` | Text input | - |
-| `SearchInput` | Search with icon | `value`, `onChange`, `placeholder` |
-| `Textarea` | Multi-line | - |
-
-#### Form Controls
-| Component | Purpose | Props |
-|----------|---------|-------|
-| `Slider` | Range input | `value`, `onChange`, `min`, `max` |
-| `RangeSlider` | Dual handle | `value`, `onChange` |
-| `Toggle` | On/off switch | `checked`, `onChange`, `label` |
-| `FieldGroup` | Label wrapper | `label`, `description`, `error` |
-| `ToggleGroup` | Button group | `value`, `onChange`, `options` |
-| `Tabs` | Tab navigation | `value`, `onChange`, `tabs` |
-
-#### Tags & Badges
-| Component | Purpose | Props |
-|----------|---------|-------|
-| `Chip` | Tag/pill | `label`, `selected`, `onClick`, `removable` |
-| `Chips` | Multiple tags | `value`, `onChange`, `options` |
-| `Badge` | Status indicator | `label`, `variant` |
-| `TagInput` | Input tags | `value`, `onChange`, `placeholder` |
-
-#### Display
-| Component | Purpose | Props |
-|----------|---------|-------|
-| `StatCard` | Metric card | `label`, `value`, `icon`, `trend` |
-| `KpiGrid` | Grid layout | `columns` |
-| `ListRow` | List item | `label`, `value`, `action` |
-| `ListSection` | Grouped list | `title` |
-| `Skeleton` | Loading place | `className` |
-| `LoadingDots` | Animation | - |
-| `ProgressBar` | Progress | `value`, `max`, `variant` |
-| `Spinner` | Loading spin | `size` |
-
-#### Specialized
-| Component | Purpose | Props |
-|----------|---------|-------|
-| `Avatar` | User image | `src`, `fallback`, `size` |
-| `AvatarGroup` | Multiple avatars | `avatars`, `max` |
-| `Divider` | Separator | `label` |
-| `EmptyState` | No content | `icon`, `title`, `description`, `action` |
-| `Pagination` | Page nav | `page`, `total`, `pageSize`, `onChange` |
-
-#### Icons (40+)
-```
-IconSearch, IconPlus, IconStar, IconPin, IconMenu
-IconSettings, IconCheck, IconX, IconCopy, IconRefresh
-IconTrash, IconEdit, IconMessage, IconSend, IconUser
-IconHome, IconFolder, IconDocument, IconDownload
-IconUpload, IconModel, IconBrain, IconHeart
-IconThumbUp, IconThumbDown, IconEye, IconInfo
-IconAlert, IconCheckCircle, IconError, IconFilter
-IconSort, IconMore, IconClock
-```
-
-### Design Tokens
-
-#### Font Sizes
-| Token | Size | Usage |
-|-------|------|-------|
-| `[10px]` | 10px | Labels, badges |
-| `[11px]` | 11px | Small text |
-| `text-xs` | 12px | Body |
-| `text-sm` | 14px | Headings |
-| `text-base` | 16px | Titles |
-
-#### Colors
-| Token | Usage |
-|-------|-------|
-| `primary` | Main actions |
-| `success` | Positive |
-| `warning` | Caution |
-| `error` | Error |
-| `muted-foreground` | Secondary |
-
-#### Spacing
-| Token | Value |
-|-------|-------|
-| `p-1` / `px-1` | 4px |
-| `p-2` / `px-2` | 8px |
-| `p-3` / `px-3` | 12px |
-| `p-4` / `px-4` | 16px |
-
-#### Border Radius
-| Token | Value |
-|-------|-------|
-| `rounded` | 4px |
-| `rounded-md` | 6px |
-| `rounded-lg` | 8px |
-| `rounded-full` | 9999px |
-
-### Examples
+All UI components live in the `packages/strui/` package. Import from the package directly:
 
 ```tsx
-// Basic card
-<Card>
-  <CardHeader>
-    <CardTitle>Title</CardTitle>
-  </CardHeader>
-  <CardContent>Content</CardContent>
-</Card>
-
-// Search with filters
-<SearchInput value={search} onChange={setSearch} placeholder="Search..." />
-<Tabs value={filter} onChange={setFilter} tabs={[{value: 'all', label: 'All'}, {value: 'active', label: 'Active'}]} />
-
-// Stats grid
-<KpiGrid columns={4}>
-  <StatCard label="Users" value={123} trend={{value: 12, positive: true}} />
-  <StatCard label="Revenue" value="$4.5k" trend={{value: 8, positive: true}} />
-</KpiGrid>
-
-// Tags/Chips
-<Chips value={selected} onChange={setSelected} options={[{value: 'a', label: 'Option A'}, {value: 'b', label: 'Option B'}]} />
-
-// With icon
-<Button onClick={handleClick}>
-  <IconStar className="w-4 h-4" />
-  Star
-</Button>
+import { Button, Card, CardHeader, CardTitle, CardContent, SearchInput, StatCard, KpiGrid } from '@sloughgpt/strui'
 ```
+
+### Component Quick Reference
+
+| Category | Components |
+|----------|-----------|
+| **Buttons** | `Button` (variants: `default`, `secondary`, `outline`, `ghost`, `destructive`, `menu`; sizes: `sm`, `default`, `lg`, `icon`, `icon-sm`) |
+| **Cards** | `Card`, `CardHeader`, `CardTitle`, `CardContent`, `CardFooter`, `CardDescription` |
+| **Forms** | `Input`, `SearchInput`, `Textarea`, `Label`, `Checkbox`, `Switch`, `Slider`, `RangeSlider`, `Select`, `Tabs`, `ToggleGroup` |
+| **Display** | `StatCard`, `KpiGrid`, `ListRow`, `Skeleton`, `LoadingDots`, `Spinner`, `Progress`, `Badge`, `Chip`, `Chips`, `Avatar`, `EmptyCard`, `EmptyState` |
+| **Overlay** | `Dialog`, `AlertDialog`, `DropdownMenu`, `Popover`, `Tooltip`, `Collapsible` |
+| **Feedback** | `Toast`, `ErrorPanel`, `InlineBanner`, `StatusDot`, `ModelStatusPill` |
+| **Layout** | `Separator`, `Divider`, `FoldSection`, `SectionHeader`, `Breadcrumbs`, `Pagination` |
+| **AI** | `MessageBubble`, `ChatThread`, `PromptComposer`, `TypingIndicator`, `ToolCallCard`, `ReasoningPanel`, `TokenMeter`, `ModelPicker`, `Citation` |
+| **Icons** | 50+ icons: `IconSearch`, `IconPlus`, `IconCheck`, `IconX`, `IconRefresh`, `IconTrash`, `IconSettings`, `IconChat`, `IconBrain`, etc. |
+
+### Composed Components (Higher-Level)
+
+| Component | Purpose |
+|-----------|---------|
+| `PageHeader` | Standard page header with title + actions |
+| `AppShell` | Full app layout with sidebar + content |
+| `NavRail` | Vertical navigation rail |
+| `FormField` | Label + input + error message wrapper |
+| `SettingsRow` | Settings page row (label + control) |
+| `CopyButton` | One-click copy with visual feedback |
+| `KeyValueList` | Structured key-value display |
+| `StepIndicator` | Multi-step progress |
+| `Timeline` | Event timeline |
+| `ThemeColorPicker` | Theme accent color selector |
+
+### Design Tokens (CSS Custom Properties)
+
+Colors stored as RGB triples for Tailwind `/opacity` modifier support:
+```css
+/* Usage */
+color: rgb(var(--primary));
+background: color-mix(in srgb, rgb(var(--primary)) 13%, transparent);
+border-color: rgb(var(--border));
+```
+
+Full token list: see `globals.css` `:root` and `html.dark` sections. Key tokens:
+- `--primary`, `--secondary`, `--muted`, `--accent`, `--success`, `--warning`, `--destructive`
+- `--background`, `--card`, `--popover`, `--border`, `--input`, `--ring`
+- `--foreground`, `--card-foreground`, `--muted-foreground`, `--primary-foreground`
+- `--shadow-sm` through `--shadow-xl`
+- `--radius` (6px default)
 
 ---
 

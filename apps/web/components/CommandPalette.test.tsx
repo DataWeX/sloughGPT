@@ -59,9 +59,9 @@ describe('CommandPalette', () => {
     render(<CommandPalette />)
     fireEvent.keyDown(window, { key: 'k', metaKey: true })
     const input = screen.getByPlaceholderText('Search conversations, models, pages...')
-    fireEvent.change(input, { target: { value: 'Chat' } })
-    expect(screen.getByText('Chat')).toBeDefined()
-    expect(screen.queryByText('Datasets')).toBeNull()
+    fireEvent.change(input, { target: { value: 'New' } })
+    expect(screen.getByText('New Chat')).toBeDefined()
+    expect(screen.queryByText('Export Chat')).toBeNull()
   })
 
   it('shows "No results" for unmatched query', () => {
@@ -78,10 +78,9 @@ describe('CommandPalette', () => {
     const input = screen.getByPlaceholderText('Search conversations, models, pages...')
     fireEvent.keyDown(input, { key: 'ArrowDown' })
     fireEvent.keyDown(input, { key: 'ArrowDown' })
-    fireEvent.keyDown(input, { key: 'ArrowDown' })
     fireEvent.keyDown(input, { key: 'Enter' })
-    // Third ArrowDown selects "Teaching" (training) at index 3
-    expect(mockPush).toHaveBeenCalledWith('/training')
+    // Second ArrowDown selects "Search Conversations" (index 1), Enter runs it
+    expect(mockPush).not.toHaveBeenCalled()
   })
 
   it('loads recent sessions on mount', () => {

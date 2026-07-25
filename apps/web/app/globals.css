@@ -223,9 +223,31 @@ html {
   display: none;
   height: 100%;
   flex-shrink: 0;
+  width: var(--sidebar-width);
+  transition: width 200ms ease;
+}
+.sl-app-sidebar-desktop[data-collapsed="true"] {
+  width: 3.5rem;
 }
 @media (min-width: 1024px) {
   .sl-app-sidebar-desktop {
+    display: flex;
+  }
+}
+
+/* Conversation sidebar column — second column between nav and main */
+.sl-app-conv-sidebar {
+  display: none;
+  height: 100%;
+  flex-shrink: 0;
+  width: 16rem;
+  border-right: 1px solid color-mix(in srgb, rgb(var(--border)) 50%, transparent);
+}
+.sl-app-conv-sidebar[data-open="true"] {
+  display: flex;
+}
+@media (min-width: 1024px) {
+  .sl-app-conv-sidebar[data-open="true"] {
     display: flex;
   }
 }

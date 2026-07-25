@@ -1,16 +1,20 @@
 'use client'
 
 import { memo } from 'react'
-import { ConversationsDropdown } from './ConversationsDropdown'
+import { cn } from '@sloughgpt/strui'
 import { ChatSearchBar } from './ChatSearchBar'
 import { ModelDropdown } from './ModelDropdown'
 import { SoulSelectorDropdown } from './SoulSelectorDropdown'
 import { ChatMoreMenu } from './ChatMoreMenu'
-import { IconSearch, IconMenu } from '@sloughgpt/strui'
+import { IconSearch, IconMenu, IconPlus } from '@sloughgpt/strui'
 import { useChatToolbarContext } from '@/contexts/ChatToolbarContext'
 
 export const ChatToolbar = memo(function ChatToolbar() {
   const ctx = useChatToolbarContext()
+
+  const currentName = ctx.conversations.conversations.find(
+    c => c.session_id === ctx.conversations.sessionIdRef.current
+  )?.name
 
   return (
     <div className="z-10 flex items-center justify-end lg:justify-center px-2 py-1.5 border-b border-border/30 shrink-0 bg-background/80 backdrop-blur-sm gap-1.5">
@@ -23,16 +27,15 @@ export const ChatToolbar = memo(function ChatToolbar() {
       </button>
 
       <button
-        className="flex lg:hidden items-center justify-center h-6 w-6 rounded-md hover:bg-muted/60 transition-colors text-muted-foreground"
+        className="flex lg:hidden items-center justify-center h-7 w-7 rounded-md hover:bg-muted/60 transition-colors text-muted-foreground"
         onClick={ctx.conversations.onNewChat}
         aria-label="New chat"
         title="New chat"
       >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
+        <IconPlus className="w-4 h-4" />
       </button>
 
-      <ConversationsDropdown />
-      <div className={'sm:flex flex-1 sm:flex-initial ' + (ctx.search.showMobile ? 'flex' : 'hidden')}>
+      <div className={cn('sm:flex flex-1 sm:flex-initial', ctx.search.showMobile ? 'flex' : 'hidden')}>
         <ChatSearchBar />
       </div>
 
@@ -43,6 +46,12 @@ export const ChatToolbar = memo(function ChatToolbar() {
       >
         <IconSearch className="w-4 h-4" />
       </button>
+
+      {currentName && (
+        <span className="hidden lg:block text-xs text-muted-foreground truncate max-w-[120px] shrink-0">
+          {currentName}
+        </span>
+      )}
 
       <div className="flex items-center gap-1 sm:gap-1.5">
         <ModelDropdown />

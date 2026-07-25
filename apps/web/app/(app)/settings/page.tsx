@@ -2,6 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
+import { useState, useEffect, useCallback } from 'react'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import {
   AlertDialog,
@@ -18,12 +19,13 @@ import { Button } from '@sloughgpt/strui'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Textarea } from '@sloughgpt/strui'
 import { Slider } from '@sloughgpt/strui'
-import { StatusDot } from '@sloughgpt/strui'
+import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { ToggleGroup as ToggleGroupRadix, ToggleGroupItem } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { useSettings, useUpdateSettings } from '@/lib/store'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
-import Link from 'next/link'
+import { systemController, type DetailedHealth, type SystemMetrics, type DiskUsage, type SystemInfo } from '@/lib/system-controller'
+import { formatUptime } from '@/lib/chat-utils'
 
 function SettingsSlider({
   label, value, onChange, min, max, step, formatValue,
@@ -53,6 +55,30 @@ export default function SettingsPage() {
   const updateSettings = useUpdateSettings()
   const addToast = useToastStore(s => s.addToast)
   const { healthLegacy: apiHealth } = useLiveStatus()
+  const [detailed, setDetailed] = useState<DetailedHealth | null>(null)
+  const [metrics, setMetrics] = useState<SystemMetrics | null>(null)
+  const [disk, setDisk] = useState<DiskUsage | null>(null)
+  const [info, setInfo] = useState<SystemInfo | null>(null)
+
+  const fetchHealth = useCallback(async () => {
+    const [d, m, dk, inf] = await Promise.allSettled([
+      systemController.getDetailedHealth(),
+      systemController.getMetrics(),
+      systemController.getDisk(),
+      systemController.getInfo(),
+    ])
+    if (d.status === 'fulfilled') setDetailed(d.value)
+    if (m.status === 'fulfilled') setMetrics(m.value)
+    if (dk.status === 'fulfilled') setDisk(dk.value)
+    if (inf.status === 'fulfilled') setInfo(inf.value)
+  }, [])
+
+  useEffect(() => { fetchHealth() }, [fetchHealth])
+
+  const isOnline = apiHealth !== null && apiHealth !== 'offline'
+  const apiOk = isOnline && (apiHealth.status === 'healthy' || detailed?.status === 'healthy')
+  const modelLoaded = isOnline && (apiHealth.model_loaded || detailed?.model_loaded)
+  const modelType = isOnline ? (apiHealth.model_type || detailed?.model_type) : null
 
   const clearChat = () => {
     localStorage.removeItem('man_current_conversation')
@@ -150,26 +176,6 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Knowledge base */}
-        <Link href="/knowledge" className="block">
-          <Card className="cursor-pointer hover:border-primary/30 transition-colors">
-            <CardHeader>
-              <CardTitle className="text-base">Knowledge base</CardTitle>
-              <CardDescription>Store, edit, and browse facts the AI can reference</CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
-
-        {/* Tokenizer */}
-        <Link href="/tokenizer" className="block">
-          <Card className="cursor-pointer hover:border-primary/30 transition-colors">
-            <CardHeader>
-              <CardTitle className="text-base">Tokenizer</CardTitle>
-              <CardDescription>Byte-pair encoding — explore vocab, tokens, merges</CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
-
         {/* Chat commands reference */}
         <Card>
           <CardHeader>
@@ -205,31 +211,78 @@ export default function SettingsPage() {
         </Card>
 
         {/* System health */}
-        <Link href="/monitoring" className="block">
-          <Card className="cursor-pointer hover:border-primary/30 transition-colors">
-            <CardHeader>
-              <CardTitle className="text-base">System health</CardTitle>
-              <CardDescription>Backend status and resource usage</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-3 text-sm">
-                <StatusDot
-                  tone={
-                    apiHealth === null ? 'warning' :
-                    apiHealth === 'offline' ? 'destructive' :
-                    'success'
-                  }
-                />
-                <span>{
-                  apiHealth === null ? 'Connecting…' :
-                  apiHealth === 'offline' ? 'Server offline' :
-                  apiHealth.model_loaded ? `${apiHealth.model_type} loaded` :
-                  'Online, no model loaded'
-                }</span>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">System health</CardTitle>
+            <CardDescription>Backend status and resource usage</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Top row: API + Model + Uptime + Responses */}
+            <KpiGrid columns={4}>
+              <StatCard
+                label="API"
+                value={<span className="font-mono">{apiOk ? 'Healthy' : 'Error'}</span>}
+                icon={<span className={`inline-block w-2 h-2 rounded-full ${apiOk ? 'bg-success' : 'bg-destructive'}`} />}
+              />
+              <StatCard
+                label="Model"
+                value={<span className="font-mono text-xs">{modelLoaded ? (modelType || 'Loaded') : 'None'}</span>}
+                icon={<span className={`inline-block w-2 h-2 rounded-full ${modelLoaded ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
+              />
+              <StatCard
+                label="Uptime"
+                value={<span className="font-mono">{formatUptime(detailed?.uptime_seconds ?? 0)}</span>}
+              />
+              <StatCard
+                label="Responses"
+                value={<span className="font-mono">{String(detailed?.inference?.inference_count ?? 0)}</span>}
+              />
+            </KpiGrid>
+
+            {/* Resource rows */}
+            <div className="grid grid-cols-2 gap-4">
+              <StatCard
+                label="CPU"
+                value={<span className="font-mono">{metrics ? `${metrics.cpu_percent}%` : '...'}</span>}
+                icon={<span className={`inline-block w-2 h-2 rounded-full ${(metrics?.cpu_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />}
+              />
+              <StatCard
+                label="Memory"
+                value={<span className="font-mono">{metrics ? `${metrics.memory_used_gb.toFixed(1)} / ${metrics.memory_total_gb.toFixed(0)} GB` : '...'}</span>}
+                icon={<span className={`inline-block w-2 h-2 rounded-full ${(metrics?.memory_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <StatCard
+                label="Disk"
+                value={<span className="font-mono">{disk ? `${disk.used_gb.toFixed(0)} / ${disk.total_gb.toFixed(0)} GB` : '...'}</span>}
+                icon={<span className={`inline-block w-2 h-2 rounded-full ${(disk?.percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />}
+              />
+              <StatCard
+                label="GPU"
+                value={<span className="font-mono text-xs">{detailed?.gpu ? `${detailed.gpu.backend.toUpperCase()} · ${detailed.gpu.tier}` : 'None'}</span>}
+                icon={<span className={`inline-block w-2 h-2 rounded-full ${detailed?.gpu ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
+              />
+            </div>
+
+            {/* Platform info */}
+            {info && (
+              <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground font-mono flex flex-wrap gap-x-4 gap-y-1">
+                <span>{info.platform} {info.platform_release}</span>
+                <span>{info.architecture}</span>
+                <span>{info.processor}</span>
+                <span>{info.cpu_count} cores</span>
               </div>
-            </CardContent>
-          </Card>
-        </Link>
+            )}
+
+            <div className="flex items-center justify-between">
+              <Button variant="ghost" size="sm" className="text-xs" onClick={fetchHealth}>
+                Refresh health
+              </Button>
+              <span className="text-[10px] text-muted-foreground font-mono">v1.0.0</span>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Export / Import settings */}
         <Card>
@@ -286,7 +339,7 @@ export default function SettingsPage() {
             <CardTitle className="text-base text-destructive">Danger zone</CardTitle>
             <CardDescription>Irreversible actions</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">Clear chat history</p>
@@ -308,33 +361,30 @@ export default function SettingsPage() {
                 </AlertDialogContent>
               </AlertDialog>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Reset all settings */}
-        <Card className="border-destructive/30">
-          <CardHeader>
-            <CardTitle className="text-base text-destructive">Reset all settings</CardTitle>
-            <CardDescription>Restore all settings to their defaults</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button type="button" variant="destructive" size="sm">Reset</Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Reset all settings?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will clear your theme preference, default model settings, and custom instructions. Chat history is not affected.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={resetAllSettings} className="bg-destructive text-destructive-foreground">Reset</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <div className="border-t border-border/30" />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Reset all settings</p>
+                <p className="text-xs text-muted-foreground">Restore theme, model defaults, and custom instructions to defaults</p>
+              </div>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button type="button" variant="destructive" size="sm">Reset</Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Reset all settings?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will clear your theme preference, default model settings, and custom instructions. Chat history is not affected.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={resetAllSettings} className="bg-destructive text-destructive-foreground">Reset</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           </CardContent>
         </Card>
       </div>

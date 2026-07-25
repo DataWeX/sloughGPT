@@ -110,8 +110,7 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
           aria-busy={loading}
         >
           {messages.map((message, index) => {
-            const originalIndex = index
-            const isLast = originalIndex === messages.length - 1
+            const isLast = index === messages.length - 1
             const showRegenerate = isLast && message.role === 'assistant' && onRegenerate
             const isStreaming = loading && isLast && message.role === 'assistant'
             const prevMsg = index > 0 ? messages[index - 1] : null

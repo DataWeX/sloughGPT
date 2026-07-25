@@ -436,7 +436,7 @@ export default function HomePage() {
           </div>
         </Link>
         <Link
-          href="/knowledge"
+          href="/datasets"
           className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/50 to-transparent p-3 sm:p-5 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
         >
           <div className="flex items-center gap-2 sm:gap-3">
@@ -444,8 +444,8 @@ export default function HomePage() {
               <IconSearch className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs sm:text-sm font-semibold">Knowledge</p>
-              <p className="hidden sm:block text-xs text-muted-foreground mt-0.5">Teach your agent facts</p>
+              <p className="text-xs sm:text-sm font-semibold">Datasets</p>
+              <p className="hidden sm:block text-xs text-muted-foreground mt-0.5">Manage training data</p>
             </div>
           </div>
           <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">

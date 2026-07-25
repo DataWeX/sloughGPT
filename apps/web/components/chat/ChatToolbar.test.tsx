@@ -7,6 +7,8 @@ vi.mock('@sloughgpt/strui', () => {
   return {
     IconSearch: iconMock('search'),
     IconMenu: iconMock('menu'),
+    IconPlus: iconMock('plus'),
+    cn: (...args: unknown[]) => args.filter(Boolean).join(' '),
   }
 })
 
@@ -129,7 +131,6 @@ describe('ChatToolbar', () => {
 
   it('renders all core subcomponents', () => {
     renderToolbar()
-    expect(screen.getByTestId('conversations-dropdown')).toBeDefined()
     expect(screen.getByTestId('chat-search-bar')).toBeDefined()
     expect(screen.getByTestId('model-dropdown')).toBeDefined()
     expect(screen.getByTestId('soul-selector-dropdown')).toBeDefined()

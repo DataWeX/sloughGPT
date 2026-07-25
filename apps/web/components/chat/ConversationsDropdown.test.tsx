@@ -88,12 +88,6 @@ describe('ConversationsDropdown', () => {
     expect(onNewChat).toHaveBeenCalled()
   })
 
-  it('has View all messages link', () => {
-    renderWithCtx()
-    fireEvent.click(screen.getByLabelText('Conversations'))
-    expect(screen.getByText('View all messages')).toBeDefined()
-  })
-
   it('shows badge count when conversations exist', () => {
     renderWithCtx()
     const btn = screen.getByLabelText('Conversations')

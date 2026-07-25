@@ -94,7 +94,7 @@ describe('StatusBar', () => {
   it('links to monitoring page', () => {
     render(<StatusBar />)
     const link = screen.getByRole('link')
-    expect(link.getAttribute('href')).toBe('/monitoring')
+    expect(link.getAttribute('href')).toBe('/settings')
   })
 
   it('dispatches toggle-whatsnew event when whats-new button is clicked', () => {

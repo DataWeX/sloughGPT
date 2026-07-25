@@ -40,6 +40,7 @@ import { ChatProvider } from '@/contexts/ChatContext'
 import { ChatToolbarProvider } from '@/contexts/ChatToolbarContext'
 import { useChatToolbarValue } from '@/hooks/useChatToolbarValue'
 import { useChatHealthValue, useChatModelValue, useChatUIValue } from '@/hooks/useChatContextValue'
+import { useConvSidebar } from '@/contexts/ConvSidebarContext'
 
 
 const VoiceChatMode = dynamicNext(() => import('@/components/chat/VoiceChatMode').then(m => m.VoiceChatMode), { ssr: false })
@@ -90,6 +91,12 @@ export default function ChatPage() {
   const [searchConversationsQuery, setSearchConversationsQuery] = useState('')
 
   const { bookmarks, addBookmark, removeBookmark, isBookmarked, clearAll } = useChatBookmarks()
+
+  const { setOpen: setConvSidebarOpen } = useConvSidebar()
+  useEffect(() => {
+    setConvSidebarOpen(true)
+    return () => { setConvSidebarOpen(false) }
+  }, [setConvSidebarOpen])
 
   const chat = useChatMessages({
     model: model.model,
@@ -451,7 +458,7 @@ export default function ChatPage() {
         open={ui.sidebarOpen}
         onClose={() => ui.setSidebarOpen(false)}
       />
-      <main className="flex flex-1 min-h-0 overflow-hidden rounded-none lg:rounded-lg border border-border/30 bg-[hsl(var(--chat-bg))] shadow-sm" aria-label="Chat">
+      <main className="flex flex-1 min-h-0 overflow-hidden rounded-none lg:rounded-lg border border-border/30 bg-[rgb(var(--chat-bg))] shadow-sm" aria-label="Chat">
         <div className="flex flex-col flex-1 min-h-0 min-w-0 max-w-full overflow-hidden">
           <ChatToolbarProvider value={toolbarValue}>
             <ChatToolbar />

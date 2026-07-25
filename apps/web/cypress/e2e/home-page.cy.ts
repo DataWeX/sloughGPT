@@ -15,14 +15,12 @@ describe('Home page - dashboard', () => {
   it('shows quick actions with agent-forward labels', () => {
     cy.contains('Start chatting').should('be.visible')
     cy.contains('Personalities').should('be.visible')
-    cy.contains('Knowledge').should('be.visible')
     cy.contains('Teach me').should('be.visible')
     cy.contains('Datasets').should('be.visible')
   })
 
   it('links quick actions to correct routes', () => {
     cy.contains('a', 'Personalities').should('have.attr', 'href', '/models')
-    cy.contains('a', 'Knowledge').should('have.attr', 'href', '/knowledge')
     cy.contains('a', 'Teach me').should('have.attr', 'href', '/training')
   })
 })

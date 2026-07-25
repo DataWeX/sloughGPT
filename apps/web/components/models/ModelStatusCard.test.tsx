@@ -9,7 +9,7 @@ describe('ModelStatusCard', () => {
 
   const base = {
     isOnline: true,
-    health: { model_loaded: true, model_type: 'gpt2', inference_count: 42 },
+    health: { status: 'healthy', model_loaded: true, model_type: 'gpt2', inference_count: 42, summary: 'ok' },
     currentSoul: 'friendly',
     activeCheckpoint: null,
     modelsCount: 5,

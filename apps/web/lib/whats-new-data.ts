@@ -29,21 +29,12 @@ export const whatsNewItems: WhatsNewItem[] = [
   },
   {
     id: 'conversations-dropdown',
-    title: 'Conversations in navbar',
-    description: 'Chat sidebar moved to a dropdown in the header — recent messages, starred conversations, and a link to view all, without taking up screen space.',
+    title: 'Conversations in sidebar',
+    description: 'Chat history accessible from the conversation sidebar — recent messages, starred conversations, all without leaving the chat view.',
     icon: '💬',
     date: '2026-05-27',
     href: '/chat',
     tags: ['UI', 'Navigation'],
-  },
-  {
-    id: 'conversations-page',
-    title: 'Conversations page',
-    description: 'Full conversation browser with search, star/pin/rename, export (MD/JSON), and batch select & delete. Access from sidebar or chat header.',
-    icon: '📋',
-    date: '2026-05-27',
-    href: '/conversations',
-    tags: ['Page', 'Management'],
   },
   {
     id: 'model-comparison',
@@ -51,7 +42,7 @@ export const whatsNewItems: WhatsNewItem[] = [
     description: 'Side-by-side benchmark results across models. Compare throughput, latency, P95, P99, and memory usage. Best values are highlighted.',
     icon: '📊',
     date: '2026-05-27',
-    href: '/compare',
+    href: '/models',
     tags: ['Benchmark', 'Models'],
   },
   {
@@ -78,7 +69,7 @@ export const whatsNewItems: WhatsNewItem[] = [
     description: 'Real-time coherence, quality, and repetition scores alongside system health. Polls every 5 seconds on the monitoring page.',
     icon: '📈',
     date: '2026-05-26',
-    href: '/monitoring',
+    href: '/settings',
     tags: ['Monitoring', 'Quality'],
   },
   {
@@ -87,7 +78,7 @@ export const whatsNewItems: WhatsNewItem[] = [
     description: 'Quality KPIs (coherence, repetition, avg length) on the System Health page. See how your model performs over time.',
     icon: '🏆',
     date: '2026-05-26',
-    href: '/monitoring',
+    href: '/settings',
     tags: ['Monitoring'],
   },
   {
@@ -105,7 +96,7 @@ export const whatsNewItems: WhatsNewItem[] = [
     description: 'Select multiple conversations with checkboxes, then delete them all at once. With Select All and inline count display.',
     icon: '🗑️',
     date: '2026-05-27',
-    href: '/conversations',
+    href: '/chat',
     tags: ['Management', 'UX'],
   },
   {

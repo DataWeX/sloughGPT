@@ -170,13 +170,10 @@ export default function TrainingPage() {
             <EvalReportCard />
 
             <JobHistoryCard allJobs={form.allJobs} checkpoints={checkpoints} loadingTimedOut={loadingTimedOut} onRetry={() => { setLoadingTimedOut(false); void checkpoints.fetchJobs() }} />
+
+            <OutputCard />
           </div>
         )}
-      </div>
-
-      {/* Server Output */}
-      <div className="mt-4">
-        <OutputCard />
       </div>
 
       <TestModelDialog

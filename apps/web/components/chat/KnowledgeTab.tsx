@@ -208,10 +208,10 @@ export function KnowledgeTab({
       )}
 
       <a
-        href="/knowledge"
+        href="/datasets"
         className="block text-center text-[10px] text-muted-foreground hover:text-foreground pt-1 border-t border-border/30 transition-colors"
       >
-        Browse knowledge base →
+        Browse datasets →
       </a>
     </div>
   )

@@ -15,9 +15,6 @@ declare namespace Cypress {
     /** Mock /system/* and /health/detailed endpoints */
     mockSystem(): Chainable<null>
 
-    /** Mock /tokenizer/* endpoints */
-    mockTokenizer(): Chainable<null>
-
     /** Mock /knowledge CRUD endpoints */
     mockKnowledge(items?: string[]): Chainable<null>
 
@@ -32,8 +29,5 @@ declare namespace Cypress {
 
     /** Mock /agents CRUD and execute endpoints */
     mockAgents(overrides?: any[]): Chainable<null>
-
-    /** Mock /models/export/formats and /models/export endpoints */
-    mockExport(): Chainable<null>
   }
 }

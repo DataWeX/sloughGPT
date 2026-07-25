@@ -30,22 +30,6 @@ export function CommandPalette() {
   }, [])
 
   const actions: CommandAction[] = useMemo(() => {
-    const nav: CommandAction[] = [
-      { id: 'nav-chat', label: 'Chat', description: 'Talk to your agent', icon: '💬', category: 'navigation', run: () => router.push('/chat') },
-      { id: 'nav-conversations', label: 'Conversations', description: 'Browse chat history', icon: '📋', category: 'navigation', run: () => router.push('/conversations') },
-      { id: 'nav-models', label: 'Personalities', description: 'Switch agent personality', icon: '🧠', category: 'navigation', run: () => router.push('/models') },
-      { id: 'nav-training', label: 'Teaching', description: 'Teach your agent new things', icon: '🎓', category: 'navigation', run: () => router.push('/training') },
-      { id: 'nav-datasets', label: 'Datasets', description: 'Manage training data', icon: '📊', category: 'navigation', run: () => router.push('/datasets') },
-      { id: 'nav-knowledge', label: 'Knowledge', description: 'Agent memory', icon: '📚', category: 'navigation', run: () => router.push('/knowledge') },
-      { id: 'nav-agents', label: 'Agents', description: 'Manage AI agents', icon: '🤖', category: 'navigation', run: () => router.push('/agents') },
-      { id: 'nav-vision', label: 'Multimodal', description: 'Image analysis and generation', icon: '🎨', category: 'navigation', run: () => router.push('/multimodal') },
-      { id: 'nav-files', label: 'Files', description: 'Uploaded file manager', icon: '📁', category: 'navigation', run: () => router.push('/files') },
-      { id: 'nav-infer', label: 'Inference', description: 'Generate, embed, tokenize', icon: '⚡', category: 'navigation', run: () => router.push('/infer') },
-      { id: 'nav-tokenizer', label: 'Tokenizer', description: 'Vocabulary and merge rules', icon: '🔤', category: 'navigation', run: () => router.push('/tokenizer') },
-      { id: 'nav-compare', label: 'Compare', description: 'Side-by-side model metrics', icon: '⚖️', category: 'navigation', run: () => router.push('/compare') },
-      { id: 'nav-settings', label: 'Settings', description: 'App settings', icon: '⚙️', category: 'navigation', run: () => router.push('/settings') },
-      { id: 'nav-advanced', label: 'Advanced', description: 'Monitoring, tokenizer, benchmarks', icon: '🔧', category: 'navigation', run: () => router.push('/monitoring') },
-    ]
     const acts: CommandAction[] = [
       { id: 'act-newchat', label: 'New Chat', description: 'Start a new conversation', icon: '➕', category: 'action', run: () => { window.dispatchEvent(new CustomEvent('new-chat')); router.push('/chat') } },
       { id: 'act-search', label: 'Search Conversations', description: 'Search across all conversations', icon: '🔍', category: 'action', run: () => { setOpen(false); window.dispatchEvent(new CustomEvent('search-conversations')) } },
@@ -54,7 +38,7 @@ export function CommandPalette() {
     const conv: CommandAction[] = recentSessions.map(s => ({
       id: `conv-${s.id}`, label: s.name, description: 'Open conversation', icon: '💭', category: 'conversation' as const, run: () => router.push(`/chat?session=${s.id}`),
     }))
-    return [...nav, ...acts, ...conv]
+    return [...acts, ...conv]
   }, [router, recentSessions])
 
   const filtered = useMemo(() => {

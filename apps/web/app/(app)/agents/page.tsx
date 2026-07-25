@@ -282,7 +282,7 @@ export default function AgentsPage() {
                         </div>
                         <div className="flex gap-1 shrink-0 ml-2">
                           <Button size="sm" variant="ghost" onClick={() => startEdit(agent)}>Edit</Button>
-                          <Button size="sm" variant="destructive" onClick={() => handleDelete(agent.id)}>
+                           <Button size="sm" variant="destructive" onClick={() => handleDelete(agent.id)} aria-label={`Delete ${agent.name}`}>
                             <IconTrash className="h-3.5 w-3.5" />
                           </Button>
                         </div>
@@ -372,9 +372,9 @@ export default function AgentsPage() {
             {orchPhase && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className={`inline-block h-2 w-2 rounded-full ${
-                  orchPhase === 'COMPLETE' ? 'bg-green-500' :
-                  orchPhase === 'ERROR' ? 'bg-red-500' :
-                  'bg-amber-500 animate-pulse'
+                  orchPhase === 'COMPLETE' ? 'bg-success' :
+                  orchPhase === 'ERROR' ? 'bg-destructive' :
+                  'bg-warning animate-pulse'
                 }`} />
                 {orchPhase === 'PLAN' && 'Planning subtasks...'}
                 {orchPhase === 'EXECUTE' && `Executing level ${orchLevel}/${orchTotalLevels}...`}
@@ -393,9 +393,9 @@ export default function AgentsPage() {
                   return (
                     <div key={task.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
                       <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${
-                        status === 'completed' ? 'bg-green-500' :
-                        status === 'in_progress' ? 'bg-amber-500 animate-pulse' :
-                        status === 'failed' ? 'bg-red-500' :
+                        status === 'completed' ? 'bg-success' :
+                        status === 'in_progress' ? 'bg-warning animate-pulse' :
+                        status === 'failed' ? 'bg-destructive' :
                         'bg-muted-foreground/30'
                       }`} />
                       <span className="font-medium text-xs min-w-[64px] text-muted-foreground">{task.agent}</span>
@@ -419,7 +419,7 @@ export default function AgentsPage() {
 
             {/* Error */}
             {orchError && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
                 {orchError}
               </div>
             )}

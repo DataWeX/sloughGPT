@@ -31,11 +31,10 @@ const SHORTCUTS: Shortcut[] = [
 
   // Navigation shortcuts
   { keys: ['Ctrl', '1'], description: 'Chat', category: 'Navigation' },
-  { keys: ['Ctrl', '2'], description: 'Personalities', category: 'Navigation' },
-  { keys: ['Ctrl', '3'], description: 'Knowledge', category: 'Navigation' },
-  { keys: ['Ctrl', '4'], description: 'Teach me', category: 'Navigation' },
-  { keys: ['Ctrl', '5'], description: 'Datasets', category: 'Navigation' },
-  { keys: ['Ctrl', 'Shift', 'A'], description: 'Advanced (monitoring, tokenizer)', category: 'Navigation' },
+  { keys: ['Ctrl', '2'], description: 'Training', category: 'Navigation' },
+  { keys: ['Ctrl', '3'], description: 'Datasets', category: 'Navigation' },
+  { keys: ['Ctrl', '4'], description: 'Models', category: 'Navigation' },
+  { keys: ['Ctrl', 'Shift', 'A'], description: 'Settings', category: 'Navigation' },
 ]
 
 function KeyboardKey({ k, 'aria-describedby': ariaDescribedBy }: { k: string; 'aria-describedby'?: string }) {

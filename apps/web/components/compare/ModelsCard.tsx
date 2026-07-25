@@ -6,13 +6,7 @@ import { Badge } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
 import { IconCheck, IconTrash } from '@sloughgpt/strui'
 import type { BenchmarkResult } from '@/lib/benchmark-controller'
-
-interface ModelEntry {
-  id: string
-  name: string
-  loaded: boolean
-  sizeGb?: number
-}
+import type { ModelEntry } from '@/lib/types/models'
 
 interface ModelsCardProps {
   models: ModelEntry[]

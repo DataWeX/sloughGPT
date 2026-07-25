@@ -6,9 +6,8 @@ import { useRouter } from 'next/navigation'
 const NAV_SHORTCUTS: Record<string, string> = {
   '1': '/chat',
   '2': '/training',
-  '3': '/knowledge',
-  '4': '/datasets',
-  '5': '/models',
+  '3': '/datasets',
+  '4': '/models',
 }
 
 export function useGlobalShortcuts() {
@@ -44,7 +43,7 @@ export function useGlobalShortcuts() {
       if (ctrl && e.shiftKey && e.key === 'A') {
         e.preventDefault()
         closeIfOpen()
-        router.push('/monitoring')
+        router.push('/settings')
         return
       }
 

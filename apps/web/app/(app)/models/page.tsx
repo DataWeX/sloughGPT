@@ -1,7 +1,8 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
+import type { ModelEntry } from '@/lib/types/models'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
@@ -10,6 +11,7 @@ import { useToastStore } from '@/lib/toast-store'
 import { modelDisplayName } from '@/lib/inference-display'
 import { modelController } from '@/lib/model-controller'
 import { soulsController } from '@/lib/souls-controller'
+import { benchmarkController, type BenchmarkResult } from '@/lib/benchmark-controller'
 import ModelStatusCard from '@/components/models/ModelStatusCard'
 import ComposableLayersCard from '@/components/models/ComposableLayersCard'
 import PersonalitiesCard from '@/components/models/PersonalitiesCard'
@@ -18,6 +20,10 @@ import ModelCatalogCard from '@/components/models/ModelCatalogCard'
 import ModelPlaygroundCard from '@/components/models/ModelPlaygroundCard'
 import ModelCacheCard from '@/components/models/ModelCacheCard'
 import QuantizationCard from '@/components/models/QuantizationCard'
+import ModelsCard from '@/components/compare/ModelsCard'
+import ComparisonTableCard from '@/components/compare/ComparisonTableCard'
+import SummaryCard from '@/components/compare/SummaryCard'
+import dynamicNext from 'next/dynamic'
 import {
   useModels,
   useSouls,
@@ -26,9 +32,12 @@ import {
   useSwitchSoul,
 } from '@/lib/query/api-hooks'
 
+const OutputComparisonCard = dynamicNext<{ models: ModelEntry[] }>(() => import('@/components/compare/OutputComparisonCard'), { ssr: false })
+const VisualComparisonCard = dynamicNext(() => import('@/components/compare/VisualComparisonCard'), { ssr: false })
+
 export default function ModelsPage() {
   const [switchingSoul, setSwitchingSoul] = useState<string | null>(null)
-  const [traitWeights, setTraitWeights] = useState<Record<string, any> | null>(null)
+  const [traitWeights, setTraitWeights] = useState<Record<string, Record<string, number>> | null>(null)
   const { healthLegacy: health } = useLiveStatus()
   const refreshHealth = useCallback(async () => {
     await modelController.getHealth()
@@ -37,7 +46,7 @@ export default function ModelsPage() {
 
   const { data: modelsData, isLoading: modelsLoading, refetch: refetchModels } = useModels()
   const { data: soulsData, isLoading: soulsLoading, refetch: refetchSouls } = useSouls()
-  const { data: currentSoulData, isLoading: currentSoulLoading, refetch: refetchCurrentSoul } = useCurrentSoul()
+  const { data: currentSoulData, refetch: refetchCurrentSoul } = useCurrentSoul()
   const { data: checkpointsData, isLoading: checkpointsLoading, refetch: refetchCheckpoints } = useCheckpoints()
   const { mutateAsync: switchSoul } = useSwitchSoul()
 
@@ -79,6 +88,53 @@ export default function ModelsPage() {
 
   const [refreshing, setRefreshing] = useState(false)
   const [cacheUsage, setCacheUsage] = useState<{ total_gb: number; model_count: number } | null>(null)
+  const [compareResults, setCompareResults] = useState<Record<string, BenchmarkResult | null>>({})
+  const [compareRunning, setCompareRunning] = useState<Set<string>>(new Set())
+  const [compareLoading, setCompareLoading] = useState(true)
+
+  const compareModels: ModelEntry[] = useMemo(() => {
+    const healthObj = health && health !== 'offline' ? health : null
+    return (models ?? []).map(m => ({
+      id: m.id || m.name,
+      name: (m.id || m.name).replace(/^hf\//, ''),
+      loaded: m.loaded || (healthObj?.model_type?.includes(m.id || m.name) ?? false),
+      sizeGb: m.size_gb,
+    }))
+  }, [models, health])
+
+  useEffect(() => { setCompareLoading(modelsLoading) }, [modelsLoading])
+
+  const runBenchmark = async (modelId: string) => {
+    setCompareRunning(prev => new Set(prev).add(modelId))
+    setCompareResults(prev => ({ ...prev, [modelId]: null }))
+    try {
+      const result = await benchmarkController.run({ model: modelId })
+      setCompareResults(prev => ({ ...prev, [modelId]: result }))
+    } catch {
+      setCompareResults(prev => ({ ...prev, [modelId]: { error: 'Failed' } as BenchmarkResult }))
+      addToast(`Benchmark failed for ${modelId}`, 'error')
+    } finally { setCompareRunning(prev => { const n = new Set(prev); n.delete(modelId); return n }) }
+  }
+
+  const runAllBenchmarks = async () => { await Promise.allSettled(compareModels.map(m => runBenchmark(m.id))) }
+
+  const clearCompareResult = (modelId: string) => setCompareResults(prev => { const n = { ...prev }; delete n[modelId]; return n })
+
+  const completedCompareResults = useMemo(() => Object.entries(compareResults).filter(([, r]) => r !== null && !r!.error) as [string, BenchmarkResult][], [compareResults])
+
+  const bestMetrics: Record<string, number> = useMemo(() => {
+    if (completedCompareResults.length === 0) return { throughput: 0, latency: Infinity, p95: Infinity, params: 0 }
+    return {
+      throughput: Math.max(...completedCompareResults.map(([, r]) => r.throughput_tokens_per_sec)),
+      latency: Math.min(...completedCompareResults.map(([, r]) => r.inference_time_ms)),
+      p95: Math.min(...completedCompareResults.map(([, r]) => r.latency_p95_ms ?? Infinity)),
+      params: Math.max(...completedCompareResults.map(([, r]) => r.num_parameters)),
+    }
+  }, [completedCompareResults])
+
+  const chartData = useMemo(() => completedCompareResults
+    .map(([modelId, r]) => ({ name: compareModels.find(m => m.id === modelId)?.name || modelId, throughput: r.throughput_tokens_per_sec, latency: r.inference_time_ms, memory: r.memory_mb }))
+    .sort((a, b) => b.throughput - a.throughput), [completedCompareResults, compareModels])
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -94,7 +150,8 @@ export default function ModelsPage() {
     addToast('Refreshed', 'success')
   }
 
-  useEffect(() => { fetchTraitWeights(); modelController.getCacheUsage().then(setCacheUsage).catch(() => {}) }, [fetchTraitWeights])
+  useEffect(() => { fetchTraitWeights() }, [fetchTraitWeights])
+  useEffect(() => { modelController.getCacheUsage().then(setCacheUsage).catch(() => {}) }, [])
 
   const isOnline = health !== null && health !== 'offline'
   const subtitle = health === null ? 'Connecting...'
@@ -157,6 +214,26 @@ export default function ModelsPage() {
           health={health}
           onRefresh={() => modelController.getCacheUsage().then(setCacheUsage).catch(() => {})}
         />
+
+        {/* Comparison section */}
+        <div className="mt-6 pt-6 border-t border-border/30">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-base font-medium">Model Comparison</h2>
+              <p className="text-xs text-muted-foreground">Side-by-side benchmark results across models</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={runAllBenchmarks} disabled={compareLoading || compareRunning.size > 0}>
+              <IconRefresh className="h-3.5 w-3.5 mr-1" /> Benchmark all
+            </Button>
+          </div>
+          <div className="space-y-4">
+            <ModelsCard models={compareModels} loading={compareLoading} results={compareResults} running={compareRunning} onBenchmark={runBenchmark} onClear={clearCompareResult} />
+            <ComparisonTableCard completedResults={completedCompareResults} models={compareModels} bestMetrics={bestMetrics} />
+            <SummaryCard completedResults={completedCompareResults} models={compareModels} />
+            <OutputComparisonCard models={compareModels} />
+            <VisualComparisonCard chartData={chartData} />
+          </div>
+        </div>
       </div>
 
 

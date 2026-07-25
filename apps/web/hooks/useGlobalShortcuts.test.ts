@@ -45,22 +45,22 @@ describe('useGlobalShortcuts', () => {
     expect(mockPush).toHaveBeenCalledWith('/training')
   })
 
-  it('Ctrl+3 navigates to /knowledge', () => {
+  it('Ctrl+3 navigates to /datasets', () => {
     renderHook(() => useGlobalShortcuts())
     keydown('3', { ctrl: true })
-    expect(mockPush).toHaveBeenCalledWith('/knowledge')
-  })
-
-  it('Ctrl+4 navigates to /datasets', () => {
-    renderHook(() => useGlobalShortcuts())
-    keydown('4', { ctrl: true })
     expect(mockPush).toHaveBeenCalledWith('/datasets')
   })
 
-  it('Ctrl+5 navigates to /models', () => {
+  it('Ctrl+4 navigates to /models', () => {
+    renderHook(() => useGlobalShortcuts())
+    keydown('4', { ctrl: true })
+    expect(mockPush).toHaveBeenCalledWith('/models')
+  })
+
+  it('Ctrl+5 does nothing (no mapping)', () => {
     renderHook(() => useGlobalShortcuts())
     keydown('5', { ctrl: true })
-    expect(mockPush).toHaveBeenCalledWith('/models')
+    expect(mockPush).not.toHaveBeenCalled()
   })
 
   it('Ctrl+n dispatches new-chat event', () => {
@@ -72,10 +72,10 @@ describe('useGlobalShortcuts', () => {
     window.removeEventListener('new-chat', fn)
   })
 
-  it('Ctrl+Shift+A navigates to /monitoring', () => {
+  it('Ctrl+Shift+A navigates to /settings', () => {
     renderHook(() => useGlobalShortcuts())
     keydown('A', { ctrl: true, shift: true })
-    expect(mockPush).toHaveBeenCalledWith('/monitoring')
+    expect(mockPush).toHaveBeenCalledWith('/settings')
   })
 
   it('Ctrl+Shift+F dispatches search-conversations event', () => {

@@ -234,19 +234,6 @@ describe('ConversationSidebar', () => {
     expect(screen.getByTestId('icon-star')).toBeDefined()
   })
 
-  it('renders View all conversations link', () => {
-    render(<ConversationSidebar {...defaultProps} />)
-    const link = screen.getByText('View all conversations')
-    expect(link).toBeDefined()
-  })
-
-  it('calls onClose when view all conversations clicked', () => {
-    render(<ConversationSidebar {...defaultProps} />)
-    const link = screen.getByText('View all conversations')
-    fireEvent.click(link)
-    expect(onClose).toHaveBeenCalled()
-  })
-
   it('handles Enter key on conversation row', () => {
     const conversations = [createConv('1')]
     render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
