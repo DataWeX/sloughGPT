@@ -1163,7 +1163,7 @@ class Kernel:
                 args = parts[1:]
 
                 if cmd == "help":
-                    cmds = "help, meminfo, procs, run, ls, cat, halt"
+                    cmds = "help, meminfo, procs, run, ls, cat, write, halt"
                     if stdout_fn:
                         stdout_fn(f"commands: {cmds}\n")
                 elif cmd == "meminfo":
@@ -1219,6 +1219,23 @@ class Kernel:
                             data = kernel._fs.read(args[0])
                             if stdout_fn:
                                 stdout_fn(data.decode('utf-8', errors='replace').rstrip('\x00') + "\n")
+                        except Exception as e:
+                            if stdout_fn:
+                                stdout_fn(f"error: {e}\n")
+                elif cmd == "write":
+                    if len(args) < 2:
+                        if stdout_fn:
+                            stdout_fn("usage: write <file> <content>\n")
+                    elif not hasattr(kernel, '_fs'):
+                        if stdout_fn:
+                            stdout_fn("no filesystem mounted\n")
+                    else:
+                        fname = args[0]
+                        content = " ".join(args[1:])
+                        try:
+                            kernel._fs.write(fname, content.encode('utf-8'))
+                            if stdout_fn:
+                                stdout_fn(f"wrote {len(content)} bytes to {fname}\n")
                         except Exception as e:
                             if stdout_fn:
                                 stdout_fn(f"error: {e}\n")

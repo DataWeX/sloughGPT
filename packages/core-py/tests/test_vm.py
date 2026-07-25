@@ -588,7 +588,65 @@ class TestSyscall:
         k.shutdown()
 
 
-class TestDiskProgramLoader:
+class TestIRQ:
+    def test_irq_fires(self):
+        from domains.shell.vm import CPU, Assembler, IRQDevice
+        fired = []
+        cpu = CPU()
+        irq = IRQDevice()
+        cpu.register_irq(0, lambda c: fired.append("timer"))
+
+        for i in range(15):
+            irq.tick(cpu)
+        cpu._process_irqs()
+        assert len(fired) == 1  # fires at tick 10
+
+    def test_keyboard_irq(self):
+        from domains.shell.vm import CPU, IRQDevice
+        cpu = CPU()
+        irq = IRQDevice()
+        cpu.register_irq(1, lambda c: fired.append("key"))
+        fired = []
+
+        irq.push_key(ord('A'))
+        cpu.fire_irq(1)
+        cpu._process_irqs()
+        assert fired == ["key"]
+        assert irq.read_key() == ord('A')
+
+
+class TestShellWrite:
+    def test_write_file(self):
+        import time as _time
+        from domains.shell.kernel import Kernel
+        from domains.shell.vm import BlockDevice, FlatFS
+
+        blk = BlockDevice(num_sectors=32)
+        fs = FlatFS(blk)
+
+        output = []
+        inputs = ['write note.txt hello world', 'cat note.txt', 'halt']
+        input_iter = iter(inputs)
+
+        k = Kernel()
+        k.boot()
+        k.register_devices()
+        k._block_device = blk
+        k._fs = fs
+
+        proc = k.spawn_kernel_shell(
+            stdin_fn=lambda: next(input_iter, 'halt'),
+            stdout_fn=lambda v: output.append(str(v)),
+        )
+        for _ in range(50):
+            k.tick()
+            _time.sleep(0.02)
+            if proc.state.name == 'ZOMBIE':
+                break
+
+        assert any("wrote" in line for line in output)
+        assert any("hello world" in line for line in output)
+        k.shutdown()
     def test_list_programs(self):
         from domains.shell.vm import BlockDevice, FlatFS, DiskProgramLoader
         blk = BlockDevice(num_sectors=16)

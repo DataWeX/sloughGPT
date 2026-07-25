@@ -313,6 +313,47 @@ class FileDevice(Device):
         return super().call(method, *args)
 
 
+class IRQDevice(Device):
+    """Interrupt request device — fires timer and keyboard interrupts.
+
+    Registers IRQ handlers on a CPU. When tick() is called, fires timer IRQ.
+    Keyboard input is queued and fires keyboard IRQ.
+    """
+
+    TIMER_IRQ = 0
+    KEYBOARD_IRQ = 1
+
+    def __init__(self):
+        self._tick_count = 0
+        self._key_queue: list = []
+
+    def info(self):
+        return {"type": "irq", "ticks": self._tick_count, "keys_pending": len(self._key_queue)}
+
+    def tick(self, cpu):
+        """Fire timer interrupt every tick."""
+        self._tick_count += 1
+        if self._tick_count % 10 == 0:
+            cpu.fire_irq(self.TIMER_IRQ)
+
+    def push_key(self, key):
+        """Queue a keypress and fire keyboard interrupt."""
+        self._key_queue.append(key)
+
+    def read_key(self):
+        """Read next key from queue (returns 0 if empty)."""
+        if self._key_queue:
+            return self._key_queue.pop(0)
+        return 0
+
+    def call(self, method, *args):
+        if method == "tick":
+            return self._tick_count
+        if method == "read_key":
+            return self.read_key()
+        return super().call(method, *args)
+
+
 class BlockDevice(Device):
     """Sector-based block storage — 512-byte sectors.
 
@@ -527,6 +568,8 @@ class CPU:
         self._output = []
         self._tracing = False
         self._trace = []
+        self._irq_handlers: dict[int, callable] = {}
+        self._irq_pending: list[int] = []
 
     def load_program(self, instructions):
         self._instructions = list(instructions)
@@ -536,6 +579,22 @@ class CPU:
         self._running = False
         self._step_count = 0
         self._trace.clear()
+
+    def register_irq(self, irq_num: int, handler: callable) -> None:
+        """Register an interrupt handler for IRQ number."""
+        self._irq_handlers[irq_num] = handler
+
+    def fire_irq(self, irq_num: int) -> None:
+        """Queue an interrupt to be processed."""
+        self._irq_pending.append(irq_num)
+
+    def _process_irqs(self):
+        """Process pending interrupts."""
+        while self._irq_pending:
+            irq = self._irq_pending.pop(0)
+            handler = self._irq_handlers.get(irq)
+            if handler:
+                handler(self)
 
     def step(self):
         if self.pc >= len(self._instructions):
@@ -563,6 +622,7 @@ class CPU:
             self._max_instructions = max_steps
         self._running = True
         while self._running and self._step_count < self._max_instructions:
+            self._process_irqs()
             if not self.step():
                 break
         if self._step_count >= self._max_instructions:
