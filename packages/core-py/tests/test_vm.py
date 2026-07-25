@@ -479,3 +479,52 @@ class TestConsoleIO:
         cpu.load_program(insts)
         cpu.run()
         assert cpu.regs[0] == 7
+
+
+class TestBlockDevice:
+    def test_read_write_sector(self):
+        from domains.shell.vm import BlockDevice
+        blk = BlockDevice(num_sectors=4)
+        blk.write_sector(0, b"hello world")
+        data = blk.read_sector(0)
+        assert bytes(data[:11]) == b"hello world"
+
+    def test_sector_stats(self):
+        from domains.shell.vm import BlockDevice
+        blk = BlockDevice(num_sectors=4)
+        blk.write_sector(0, b"x" * 512)
+        blk.read_sector(0)
+        info = blk.info()
+        assert info["reads"] == 1
+        assert info["writes"] == 1
+
+    def test_out_of_range(self):
+        from domains.shell.vm import BlockDevice, DeviceFault
+        blk = BlockDevice(num_sectors=4)
+        with pytest.raises(DeviceFault):
+            blk.read_sector(10)
+
+
+class TestVirtualSystem:
+    def test_run_program(self):
+        from domains.shell.vm import VirtualSystem
+        vs = VirtualSystem()
+        vs.load_program("LOAD_CONST R0, 42\nPRINT R0\nHALT")
+        out = vs.run()
+        assert out == ["42"]
+
+    def test_carry_flag(self):
+        from domains.shell.vm import VirtualSystem
+        vs = VirtualSystem()
+        vs.load_program("LOAD_CONST R0, 4294967295\nLOAD_CONST R1, 1\nIADD R2, R0, R1\nHALT")
+        vs.run()
+        assert vs.cpu._carry_flag is True
+        assert vs.cpu.regs[2] == 0
+
+    def test_status(self):
+        from domains.shell.vm import VirtualSystem
+        vs = VirtualSystem(enable_block=True)
+        status = vs.status()
+        assert "pc" in status
+        assert "carry_flag" in status
+        assert "block" in status["devices"]

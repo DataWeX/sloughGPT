@@ -258,6 +258,61 @@ class ConsoleDevice(Device):
         return super().call(method, *args)
 
 
+class BlockDevice(Device):
+    """Sector-based block storage — 512-byte sectors.
+
+    Provides read_sector/write_sector for raw I/O and read_block/write_block
+    for higher-level access. Tracks I/O statistics.
+    """
+
+    SECTOR_SIZE = 512
+
+    def __init__(self, num_sectors: int = 256):
+        self._sectors = [bytearray(self.SECTOR_SIZE) for _ in range(num_sectors)]
+        self._num_sectors = num_sectors
+        self._reads = 0
+        self._writes = 0
+
+    def info(self):
+        return {
+            "type": "block",
+            "sectors": self._num_sectors,
+            "sector_size": self.SECTOR_SIZE,
+            "reads": self._reads,
+            "writes": self._writes,
+        }
+
+    def read_sector(self, sector_idx: int) -> bytearray:
+        if not (0 <= sector_idx < self._num_sectors):
+            raise DeviceFault(f"sector out of range: {sector_idx}")
+        self._reads += 1
+        return self._sectors[sector_idx]
+
+    def write_sector(self, sector_idx: int, data: bytes) -> None:
+        if not (0 <= sector_idx < self._num_sectors):
+            raise DeviceFault(f"sector out of range: {sector_idx}")
+        self._writes += 1
+        self._sectors[sector_idx][:len(data)] = data[:self.SECTOR_SIZE]
+
+    def read_block(self, sector_idx: int, size: int) -> bytes:
+        data = self.read_sector(sector_idx)
+        return bytes(data[:size])
+
+    def write_block(self, sector_idx: int, data: bytes) -> None:
+        self.write_sector(sector_idx, data)
+
+    def call(self, method, *args):
+        if method == "read_sector":
+            return self.read_sector(*args)
+        if method == "write_sector":
+            return self.write_sector(*args)
+        if method == "read_block":
+            return self.read_block(*args)
+        if method == "write_block":
+            return self.write_block(*args)
+        return super().call(method, *args)
+
+
 class DeviceBus:
     """Device registry and generic dispatch."""
 
@@ -297,6 +352,7 @@ class CPU:
         self.pc = 0
         self.sp = STACK_BASE
         self._cmp_flag = 0
+        self._carry_flag = False
         self._call_stack = []
         self._stack = {}
         self._memory = memory or Memory()
@@ -566,11 +622,17 @@ Assembler.load = Assembler.assemble
 
 def _op_iadd(cpu, ops):
     cpu._check_arity(ops, 3)
-    cpu.regs[cpu._reg(ops[0])] = int(cpu._val(ops[1])) + int(cpu._val(ops[2]))
+    a, b = int(cpu._val(ops[1])), int(cpu._val(ops[2]))
+    result = a + b
+    cpu._carry_flag = result > 0xFFFFFFFF
+    cpu.regs[cpu._reg(ops[0])] = result & 0xFFFFFFFF
 
 def _op_isub(cpu, ops):
     cpu._check_arity(ops, 3)
-    cpu.regs[cpu._reg(ops[0])] = int(cpu._val(ops[1])) - int(cpu._val(ops[2]))
+    a, b = int(cpu._val(ops[1])), int(cpu._val(ops[2]))
+    result = a - b
+    cpu._carry_flag = result < 0
+    cpu.regs[cpu._reg(ops[0])] = result
 
 def _op_imul(cpu, ops):
     cpu._check_arity(ops, 3)
@@ -1113,6 +1175,53 @@ _OPCODE_TABLE = {
     "ALLOC": _op_alloc, "MEMINFO": _op_meminfo,
     "IN": _op_in, "OUT": _op_out,
 }
+
+
+# ── Integrated Virtual System ────────────────────────────────────────────────
+
+class VirtualSystem:
+    """Integrated virtual computer — CPU + Memory + DeviceBus + optional devices.
+
+    Wires together the components into a single runnable system.
+    """
+
+    def __init__(self, enable_block: bool = False, enable_console: bool = True):
+        self.memory = Memory()
+        self.bus = DeviceBus()
+
+        if enable_console:
+            self.bus.register_console()
+        if enable_block:
+            self.block = BlockDevice()
+            self.bus.register("block", self.block)
+
+        self.cpu = CPU(memory=self.memory, devices=self.bus)
+
+    def load_program(self, source: str) -> int:
+        """Assemble and load program. Returns instruction count."""
+        assembler = Assembler()
+        instructions = assembler.assemble(source)
+        self.cpu.load_program(instructions)
+        return len(instructions)
+
+    def run(self, max_steps: int = 10000) -> list[str]:
+        """Run the loaded program. Returns printed output."""
+        return self.cpu.run(max_steps=max_steps)
+
+    def status(self) -> dict:
+        return {
+            "pc": self.cpu.pc,
+            "sp": self.cpu.sp,
+            "regs": list(self.cpu.regs),
+            "cmp_flag": self.cpu._cmp_flag,
+            "carry_flag": self.cpu._carry_flag,
+            "steps": self.cpu._step_count,
+            "devices": self.bus.list_devices(),
+            "heap_entries": len(self.memory._heap),
+        }
+
+    def reset(self) -> None:
+        self.cpu = CPU(memory=self.memory, devices=self.bus)
 
 
 # ── Re-exports from submodules ──────────────────────────────────────────────
