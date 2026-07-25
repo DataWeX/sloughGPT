@@ -649,6 +649,145 @@ class TestShellWrite:
         k.shutdown()
 
 
+class TestX86Assembler:
+    def test_nop(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        code = asm.assemble("nop")
+        assert code == b'\x90'
+
+    def test_hlt(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        code = asm.assemble("hlt")
+        assert code == b'\xf4'
+
+    def test_cli_sti(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        assert asm.assemble("cli") == b'\xfa'
+        assert asm.assemble("sti") == b'\xfb'
+
+    def test_ret(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        assert asm.assemble("ret") == b'\xc3'
+
+    def test_mov_reg_imm(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        code = asm.assemble("mov eax, 1")
+        assert code[0] == 0xB8  # MOV EAX, imm32
+
+    def test_mov_reg_reg(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        code = asm.assemble("mov eax, ebx")
+        assert len(code) == 2
+        assert code[0] == 0x89  # MOV r/m32, r32
+        assert code[1] == 0xD8  # ModR/M: reg=ebx(3), rm=eax(0)
+
+    def test_int(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        code = asm.assemble("int 0x10")
+        assert code == b'\xcd\x10'
+
+    def test_push_reg(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        code = asm.assemble("push eax")
+        assert code[0] == 0x50  # PUSH EAX
+
+    def test_pop_reg(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        code = asm.assemble("pop eax")
+        assert code[0] == 0x58  # POP EAX
+
+    def test_jmp(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        code = asm.assemble("jmp 0x100")
+        assert code[0] == 0xE9  # JMP near
+
+    def test_add_reg_imm(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        code = asm.assemble("add eax, 1")
+        assert code[0] == 0x83  # ADD r32, imm8
+
+    def test_label(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        code = asm.assemble("start:\n  nop\n  jmp start")
+        assert code[0] == 0x90  # NOP
+        assert code[1] == 0xEB  # JMP short
+        # Offset should be -3 (back to start)
+        offset = code[2]  # 1-byte signed
+        assert offset == 0xFD  # -3 in unsigned
+
+    def test_bits_directive(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        asm.assemble("[BITS 32]\nnop")
+        assert asm._bits == 32
+
+    def test_org_directive(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        asm.assemble("[ORG 0x1000]\nnop")
+        assert asm._org == 0x1000
+
+    def test_db_string(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        code = asm.assemble('db "Hello", 0')
+        assert code == b'Hello\x00'
+
+    def test_db_bytes(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        code = asm.assemble("db 0x90, 0x90, 0x90")
+        assert code == b'\x90\x90\x90'
+
+    def test_dw(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        code = asm.assemble("dw 0xAA55")
+        assert code == b'\x55\xAA'
+
+    def test_dd(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        code = asm.assemble("dd 0x12345678")
+        assert code == b'\x78\x56\x34\x12'
+
+    def test_times(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        code = asm.assemble("times 3 nop")
+        assert code == b'\x90\x90\x90'
+
+    def test_mov_al_imm(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        code = asm.assemble("mov al, 0x41")
+        assert code[0] == 0xB0  # MOV AL, imm8
+
+    def test_in_al(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        code = asm.assemble("in al, 0x60")
+        assert code == b'\xe4\x60'
+
+    def test_out(self):
+        from domains.shell.vm import X86Assembler
+        asm = X86Assembler()
+        code = asm.assemble("out 0x20, al")
+        assert code == b'\xe6\x20'
+
+
 class TestX86Bootloader:
     def test_bootloader_source_valid(self):
         from domains.shell.vm_programs import X86_BOOTLOADER_ASM

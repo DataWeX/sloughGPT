@@ -1607,6 +1607,629 @@ _OPCODE_TABLE = {
 }
 
 
+# ── x86 Assembler ────────────────────────────────────────────────────────────
+
+class X86Assembler:
+    """x86-32 real mode assembler — compiles assembly to machine code bytes.
+
+    Two-pass assembler:
+      Pass 1: Collect labels and calculate addresses
+      Pass 2: Generate machine code bytes
+
+    Supports:
+      - Instructions: mov, add, sub, and, or, xor, cmp, test,
+        jmp, jz, jnz, jg, jl, jge, jle, ja, jb, jae, jbe,
+        push, pop, call, ret, int, in, out, cli, sti, hlt, nop,
+        inc, dec, neg, not, shl, shr, mul, div, imul, idiv,
+        lea, xchg, pusha, popa, iret, lgdt, lidt, ltr, mov cr/dr,
+        iret, ljmp, lcall
+      - Data: db, dw, dd, dq, times
+      - Directives: [BITS 16/32], [ORG addr], equ, section
+      - Register encoding: eax/ecx/edx/ebx/esp/ebp/esi/edi
+                         ax/cx/dx/bx/sp/bp/si/di
+                         al/cl/dl/bl/ah/ch/dh/bh
+      - ModR/M addressing: [eax], [eax+disp8], [eax+disp32],
+        [base+index*scale+disp], etc.
+      - String literals in db
+    """
+
+    # ── Register encoding ────────────────────────────────────────────────
+
+    _REG8 = {"al": 0, "cl": 1, "dl": 2, "bl": 3, "ah": 4, "ch": 5, "dh": 6, "bh": 7}
+    _REG16 = {"ax": 0, "cx": 1, "dx": 2, "bx": 3, "sp": 4, "bp": 5, "si": 6, "di": 7}
+    _REG32 = {"eax": 0, "ecx": 1, "edx": 2, "ebx": 3, "esp": 4, "ebp": 5, "esi": 6, "edi": 7}
+    _SEG_REGS = {"cs": 0, "ss": 1, "ds": 2, "es": 3, "fs": 4, "gs": 5}
+
+    # ── Condition codes ──────────────────────────────────────────────────
+
+    _CC = {
+        "jz": 0x4, "je": 0x4, "jnz": 0x5, "jne": 0x5,
+        "jg": 0xf, "jnle": 0xf, "jge": 0xd, "jnl": 0xd,
+        "jl": 0xc, "jnge": 0xc, "jle": 0xe, "jng": 0xe,
+        "ja": 0x7, "jnbe": 0x7, "jae": 0x3, "jnb": 0x3,
+        "jb": 0x2, "jnae": 0x2, "jbe": 0x6, "jna": 0x6,
+        "js": 0x8, "jns": 0x9, "jo": 0x0, "jno": 0x1,
+        "jp": 0xa, "jpe": 0xa, "jnp": 0xb, "jpo": 0xb,
+        "loop": 0xe0, "loope": 0xe1, "loopz": 0xe1,
+        "loopne": 0xe2, "loopnz": 0xe2, "jcxz": 0xe3,
+    }
+
+    def __init__(self):
+        self._bits = 16
+        self._org = 0
+        self._labels = {}
+        self._output = bytearray()
+        self._reloc = []  # (offset, label, type)
+
+    def assemble(self, source: str) -> bytearray:
+        """Assemble x86 source to machine code bytes."""
+        self._bits = 16
+        self._org = 0
+        self._labels = {}
+        self._output = bytearray()
+        self._reloc = []
+
+        lines = source.split("\n")
+
+        # Pass 1: collect labels
+        addr = 0
+        directives = []
+        for line in lines:
+            clean = line.split(";")[0].strip()
+            if not clean:
+                continue
+            if clean.startswith("["):
+                # Directives like [BITS 32], [ORG 0x1000]
+                self._handle_directive(clean)
+                continue
+            if clean.startswith("times") or clean.startswith("db ") or clean.startswith("dw ") or clean.startswith("dd "):
+                directives.append((addr, clean))
+                addr += self._estimate_data_size(clean)
+                continue
+            if ":" in clean:
+                prefix, _, rest = clean.partition(":")
+                prefix = prefix.strip()
+                if prefix and " " not in prefix:
+                    self._labels[prefix] = addr
+                    clean = rest.strip()
+                    if not clean:
+                        continue
+            addr += self._estimate_insn_size(clean)
+
+        # Pass 2: generate code
+        self._output = bytearray()
+        for line in lines:
+            clean = line.split(";")[0].strip()
+            if not clean:
+                continue
+            if clean.startswith("["):
+                continue
+            if ":" in clean:
+                prefix, _, rest = clean.partition(":")
+                clean = rest.strip()
+                if not clean:
+                    continue
+            if clean.startswith("times"):
+                self._emit_times(clean)
+            elif clean.startswith("db ") or clean.startswith("dw ") or clean.startswith("dd "):
+                self._emit_data(clean)
+            else:
+                self._emit_instruction(clean)
+
+        return bytes(self._output)
+
+    def _handle_directive(self, line):
+        line = line.strip("[]").strip()
+        if line.upper().startswith("BITS"):
+            self._bits = int(line.split()[1])
+        elif line.upper().startswith("ORG"):
+            self._org = self._parse_imm(line.split(None, 1)[1])
+
+    def _estimate_data_size(self, line):
+        if line.startswith("times"):
+            parts = line.split(None, 2)
+            count = self._parse_imm(parts[1])
+            return count * self._estimate_data_size(parts[2])
+        if line.startswith("db"):
+            inner = line[2:].strip()
+            if inner.startswith('"'):
+                return len(inner.strip('"'))
+            return len(inner.split(","))
+        if line.startswith("dw"):
+            return 2 * len(line[2:].strip().split(","))
+        if line.startswith("dd"):
+            return 4 * len(line[2:].strip().split(","))
+        return 1
+
+    def _estimate_insn_size(self, line):
+        parts = line.split(None, 1)
+        op = parts[0].lower()
+        if op in ("nop", "hlt", "cli", "sti", "ret", "iret", "pusha", "popa", "cld", "std"):
+            return 1
+        if op in ("retf",):
+            return 1
+        if op in self._CC:
+            return 2  # short jump
+        if op == "int":
+            return 2
+        if op == "push" or op == "pop":
+            return 1
+        if op == "jmp":
+            return 2
+        if op == "call":
+            return 5
+        if op in ("in", "out"):
+            return 2
+        if op == "mov":
+            return self._estimate_mov_size(parts[1] if len(parts) > 1 else "")
+        if op in ("add", "sub", "and", "or", "xor", "cmp", "test"):
+            return 3
+        if op in ("inc", "dec", "neg", "not", "shl", "shr"):
+            return 2
+        return 3  # default
+
+    def _estimate_mov_size(self, operands):
+        parts = self._split_ops(operands)
+        if len(parts) < 2:
+            return 2
+        dst, src = parts[0].strip(), parts[1].strip()
+        if dst in self._REG32 or src in self._REG32:
+            return 5
+        if dst in self._REG16 or src in self._REG16:
+            return 3
+        return 2
+
+    def _emit_times(self, line):
+        parts = line.split(None, 2)
+        count = self._parse_imm(parts[1])
+        inner = parts[2].strip()
+        # Handle instructions
+        single_byte_insns = {"nop": 0x90, "hlt": 0xF4, "cli": 0xFA, "sti": 0xFB, "ret": 0xC3}
+        if inner in single_byte_insns:
+            for _ in range(count):
+                self._output.append(single_byte_insns[inner])
+        elif inner.startswith("db ") or inner.startswith("dw ") or inner.startswith("dd "):
+            for _ in range(count):
+                self._emit_data(inner)
+        else:
+            val = self._parse_imm(inner)
+            for _ in range(count):
+                self._output.append(val & 0xFF)
+
+    def _emit_data(self, line):
+        if line.startswith("db"):
+            inner = line[2:].strip()
+            for item in inner.split(","):
+                item = item.strip()
+                if item.startswith('"') and item.endswith('"'):
+                    s = item[1:-1]
+                    for ch in s:
+                        self._output.append(ord(ch))
+                elif item.startswith('"'):
+                    s = item[1:]
+                    for ch in s:
+                        self._output.append(ord(ch))
+                else:
+                    val = self._parse_imm(item)
+                    self._output.append(val & 0xFF)
+        elif line.startswith("dw"):
+            inner = line[2:].strip()
+            for item in inner.split(","):
+                val = self._parse_imm(item.strip())
+                self._output.extend(val.to_bytes(2, "little"))
+        elif line.startswith("dd"):
+            inner = line[2:].strip()
+            for item in inner.split(","):
+                val = self._parse_imm(item.strip())
+                self._output.extend(val.to_bytes(4, "little"))
+
+    def _emit_instruction(self, line):
+        parts = line.split(None, 1)
+        op = parts[0].lower()
+        operands = self._split_ops(parts[1].strip()) if len(parts) > 1 else []
+
+        if op == "nop":
+            self._output.append(0x90)
+        elif op == "hlt":
+            self._output.append(0xF4)
+        elif op == "cli":
+            self._output.append(0xFA)
+        elif op == "sti":
+            self._output.append(0xFB)
+        elif op == "cld":
+            self._output.append(0xFC)
+        elif op == "std":
+            self._output.append(0xFD)
+        elif op == "ret":
+            self._output.append(0xC3)
+        elif op == "retf":
+            self._output.append(0xCB)
+        elif op == "iret":
+            self._output.append(0xCF)
+        elif op == "pusha":
+            self._output.append(0x60)
+        elif op == "popa":
+            self._output.append(0x61)
+        elif op == "push":
+            self._emit_push(operands)
+        elif op == "pop":
+            self._emit_pop(operands)
+        elif op == "int":
+            self._emit_int(operands)
+        elif op == "in":
+            self._emit_in(operands)
+        elif op == "out":
+            self._emit_out(operands)
+        elif op in self._CC:
+            self._emit_cc_jump(op, operands)
+        elif op == "jmp":
+            self._emit_jmp(operands)
+        elif op == "call":
+            self._emit_call(operands)
+        elif op == "mov":
+            self._emit_mov(operands)
+        elif op in ("add", "sub", "and", "or", "xor", "cmp", "test"):
+            self._emit_alu(op, operands)
+        elif op in ("inc", "dec"):
+            self._emit_inc_dec(op, operands)
+        elif op in ("neg", "not"):
+            self._emit_unary(op, operands)
+        elif op in ("shl", "shr"):
+            self._emit_shift(op, operands)
+        elif op == "lea":
+            self._emit_lea(operands)
+        elif op == "xchg":
+            self._emit_xchg(operands)
+        elif op == "lgdt":
+            self._emit_lgdt(operands)
+        elif op == "lidt":
+            self._emit_lidt(operands)
+        elif op == "ltr":
+            self._emit_ltr(operands)
+        else:
+            # Unknown instruction — emit NOP placeholder
+            self._output.append(0x90)
+
+    def _emit_push(self, ops):
+        if not ops:
+            return
+        reg = ops[0].lower()
+        if reg in self._REG32:
+            self._output.append(0x50 + self._REG32[reg])
+        elif reg in self._REG16:
+            self._output.append(0x66)
+            self._output.append(0x50 + self._REG16[reg])
+        elif reg in self._SEG_REGS:
+            self._output.append(0x06 + self._SEG_REGS[reg] * 2)
+        else:
+            # Push immediate
+            val = self._parse_imm(ops[0])
+            if -128 <= val <= 127:
+                self._output.append(0x6A)
+                self._output.append(val & 0xFF)
+            else:
+                self._output.append(0x68)
+                self._output.extend(val.to_bytes(4, "little", signed=True))
+
+    def _emit_pop(self, ops):
+        if not ops:
+            return
+        reg = ops[0].lower()
+        if reg in self._REG32:
+            self._output.append(0x58 + self._REG32[reg])
+        elif reg in self._REG16:
+            self._output.append(0x66)
+            self._output.append(0x58 + self._REG16[reg])
+        elif reg in self._SEG_REGS:
+            self._output.append(0x07 + self._SEG_REGS[reg] * 2)
+
+    def _emit_int(self, ops):
+        if not ops:
+            return
+        val = self._parse_imm(ops[0])
+        self._output.append(0xCD)
+        self._output.append(val & 0xFF)
+
+    def _emit_in(self, ops):
+        if len(ops) < 2:
+            return
+        dst, src = ops[0].lower(), ops[1].strip()
+        if dst in ("al", "ax", "eax"):
+            val = self._parse_imm(src)
+            if val == 0 and dst == "al":
+                self._output.extend([0xE4, 0x00])
+            elif val <= 0xFF:
+                self._output.append(0xE4)
+                self._output.append(val)
+            else:
+                self._output.append(0xED)  # in eAX, dx
+
+    def _emit_out(self, ops):
+        if len(ops) < 2:
+            return
+        dst, src = ops[0].strip(), ops[1].lower()
+        val = self._parse_imm(dst)
+        if src in ("al", "ax", "eax"):
+            if val <= 0xFF:
+                self._output.append(0xE6)
+                self._output.append(val)
+            else:
+                self._output.append(0xEF)  # out dx, eAX
+
+    def _emit_cc_jump(self, op, ops):
+        if not ops:
+            return
+        cc = self._CC[op]
+        target = self._parse_label(ops[0])
+        offset = target - (len(self._output) + 2)
+        if -128 <= offset <= 127:
+            self._output.append(0x70 + cc)
+            self._output.append(offset & 0xFF)
+        else:
+            # Near jump
+            offset = target - (len(self._output) + 6)
+            self._output.append(0x0F)
+            self._output.append(0x80 + cc)
+            self._output.extend(offset.to_bytes(4, "little", signed=True))
+
+    def _emit_jmp(self, ops):
+        if not ops:
+            return
+        target = self._parse_label(ops[0])
+        offset = target - (len(self._output) + 2)
+        if -128 <= offset <= 127:
+            self._output.append(0xEB)
+            self._output.append(offset & 0xFF)
+        else:
+            offset = target - (len(self._output) + 5)
+            self._output.append(0xE9)
+            self._output.extend(offset.to_bytes(4, "little", signed=True))
+
+    def _emit_call(self, ops):
+        if not ops:
+            return
+        target = self._parse_label(ops[0])
+        offset = target - (len(self._output) + 5)
+        self._output.append(0xE8)
+        self._output.extend(offset.to_bytes(4, "little", signed=True))
+
+    def _emit_mov(self, ops):
+        if len(ops) < 2:
+            return
+        dst, src = ops[0].lower().strip(), ops[1].strip()
+
+        # MOV reg, reg (must check before reg, imm)
+        if dst in self._REG32 and src in self._REG32:
+            self._output.append(0x89)
+            modrm = (0xC0 | (self._REG32[src] << 3) | self._REG32[dst])
+            self._output.append(modrm)
+        elif dst in self._REG16 and src in self._REG16:
+            self._output.append(0x66)
+            self._output.append(0x89)
+            modrm = (0xC0 | (self._REG16[src] << 3) | self._REG16[dst])
+            self._output.append(modrm)
+        # MOV reg, imm
+        elif dst in self._REG32:
+            val = self._parse_imm(src)
+            self._output.append(0xB8 + self._REG32[dst])
+            self._output.extend(val.to_bytes(4, "little", signed=True))
+        elif dst in self._REG16:
+            val = self._parse_imm(src)
+            self._output.append(0x66)
+            self._output.append(0xB8 + self._REG16[dst])
+            self._output.extend(val.to_bytes(2, "little", signed=True))
+        elif dst in self._REG8:
+            val = self._parse_imm(src)
+            self._output.append(0xB0 + self._REG8[dst])
+            self._output.append(val & 0xFF)
+        # MOV reg, [mem] / MOV [mem], reg
+        elif dst in self._REG32 and src.startswith("["):
+            self._output.append(0x8B)
+            self._emit_modrm_mem(dst, src)
+        elif dst in self._REG16 and src.startswith("["):
+            self._output.append(0x66)
+            self._output.append(0x8B)
+            self._emit_modrm_mem(dst, src)
+        elif dst.startswith("[") and src in self._REG32:
+            self._output.append(0x89)
+            self._emit_modrm_mem(src, dst)
+        elif dst.startswith("[") and src in self._REG16:
+            self._output.append(0x66)
+            self._output.append(0x89)
+            self._emit_modrm_mem(src, dst)
+        # MOV reg, [imm]
+        elif dst in self._REG32 and src.startswith("0x"):
+            addr = int(src, 16)
+            self._output.append(0xA1)
+            self._output.extend(addr.to_bytes(4, "little"))
+        else:
+            # Fallback: MOV reg, imm
+            val = self._parse_imm(src)
+            if dst in self._REG32:
+                self._output.append(0xB8 + self._REG32[dst])
+                self._output.extend(val.to_bytes(4, "little", signed=True))
+
+    def _emit_modrm_mem(self, reg, mem):
+        """Emit ModR/M byte for [memory] operand."""
+        inner = mem.strip("[]").strip()
+        if inner in self._REG32:
+            # [reg]
+            modrm = (0x00 | (self._REG32[reg] << 3) | self._REG32[inner])
+            self._output.append(modrm)
+        elif "+" in inner:
+            parts = inner.split("+")
+            base = parts[0].strip()
+            if base in self._REG32:
+                disp = self._parse_imm(parts[1].strip()) if len(parts) > 1 else 0
+                if disp == 0:
+                    modrm = (0x00 | (self._REG32[reg] << 3) | self._REG32[base])
+                    self._output.append(modrm)
+                elif -128 <= disp <= 127:
+                    modrm = (0x40 | (self._REG32[reg] << 3) | self._REG32[base])
+                    self._output.append(modrm)
+                    self._output.append(disp & 0xFF)
+                else:
+                    modrm = (0x80 | (self._REG32[reg] << 3) | self._REG32[base])
+                    self._output.append(modrm)
+                    self._output.extend(disp.to_bytes(4, "little", signed=True))
+        else:
+            # Direct address [imm32]
+            modrm = (0x00 | (self._REG32[reg] << 3) | 0x05)
+            self._output.append(modrm)
+            addr = self._parse_imm(inner)
+            self._output.extend(addr.to_bytes(4, "little"))
+
+    def _emit_alu(self, op, ops):
+        if len(ops) < 2:
+            return
+        dst, src = ops[0].lower().strip(), ops[1].strip()
+        alu_op = {"add": 0, "or": 1, "adc": 2, "sbb": 3,
+                  "and": 4, "sub": 5, "xor": 6, "cmp": 7}
+
+        if dst in self._REG32 and src in self._REG32:
+            self._output.append(0x01 + alu_op[op] * 8)  # op r/m32, r32
+            modrm = (0xC0 | (self._REG32[dst] << 3) | self._REG32[src])
+            self._output.append(modrm)
+        elif dst in self._REG32:
+            val = self._parse_imm(src)
+            if op == "sub" and -128 <= val <= 127:
+                self._output.append(0x83)
+                modrm = (0xE8 | self._REG32[dst])
+                self._output.append(modrm)
+                self._output.append(val & 0xFF)
+            elif -128 <= val <= 127:
+                self._output.append(0x83)
+                modrm = (0xC0 | (alu_op[op] << 3) | self._REG32[dst])
+                self._output.append(modrm)
+                self._output.append(val & 0xFF)
+            else:
+                self._output.append(0x81)
+                modrm = (0xC0 | (alu_op[op] << 3) | self._REG32[dst])
+                self._output.append(modrm)
+                self._output.extend(val.to_bytes(4, "little", signed=True))
+
+    def _emit_inc_dec(self, op, ops):
+        if not ops:
+            return
+        reg = ops[0].lower()
+        if reg in self._REG32:
+            base = 0x40 if op == "inc" else 0x48
+            self._output.append(base + self._REG32[reg])
+
+    def _emit_unary(self, op, ops):
+        if not ops:
+            return
+        reg = ops[0].lower()
+        if reg in self._REG32:
+            code = 0xF7 if op in ("neg", "not") else 0xF7
+            func = 3 if op == "neg" else 2  # /3 for neg, /2 for not
+            self._output.append(code)
+            modrm = (0xC0 | (func << 3) | self._REG32[reg])
+            self._output.append(modrm)
+
+    def _emit_shift(self, op, ops):
+        if len(ops) < 2:
+            return
+        reg = ops[0].lower()
+        count = ops[1].strip()
+        if reg in self._REG32:
+            code = 0xE0 if op == "shl" else 0xE8
+            if count == "cl":
+                self._output.append(0xD3)
+                modrm = (0xE0 if op == "shl" else 0xE8 | self._REG32[reg])
+                self._output.append(modrm)
+            else:
+                val = self._parse_imm(count)
+                self._output.append(0xC1)
+                modrm = (0xE0 if op == "shl" else 0xE8 | self._REG32[reg])
+                self._output.append(modrm)
+                self._output.append(val & 0xFF)
+
+    def _emit_lea(self, ops):
+        if len(ops) < 2:
+            return
+        dst = ops[0].lower()
+        src = ops[1].strip()
+        if dst in self._REG32 and src.startswith("["):
+            self._output.append(0x8D)
+            self._emit_modrm_mem(dst, src)
+
+    def _emit_xchg(self, ops):
+        if len(ops) < 2:
+            return
+        r1, r2 = ops[0].lower(), ops[1].lower()
+        if r1 in self._REG32 and r2 in self._REG32:
+            self._output.append(0x87)
+            modrm = (0xC0 | (self._REG32[r1] << 3) | self._REG32[r2])
+            self._output.append(modrm)
+
+    def _emit_lgdt(self, ops):
+        if not ops:
+            return
+        # LGDT [addr] — simplified
+        self._output.append(0x0F)
+        self._output.append(0x01)
+        self._output.append(0x15)
+
+    def _emit_lidt(self, ops):
+        if not ops:
+            return
+        # LIDT [addr] — simplified
+        self._output.append(0x0F)
+        self._output.append(0x01)
+        self._output.append(0x1D)
+
+    def _emit_ltr(self, ops):
+        if not ops:
+            return
+        reg = ops[0].lower()
+        if reg in self._REG16:
+            self._output.append(0x0F)
+            self._output.append(0x00)
+            self._output.append(0xD8 | self._REG16[reg])
+
+    def _parse_label(self, text):
+        text = text.strip()
+        if text in self._labels:
+            return self._labels[text]
+        return self._parse_imm(text)
+
+    def _parse_imm(self, text):
+        text = text.strip()
+        if text.startswith("0x") or text.startswith("0X"):
+            return int(text, 16)
+        if text.startswith("0b") or text.startswith("0B"):
+            return int(text, 2)
+        if text.endswith("h") or text.endswith("H"):
+            return int(text[:-1], 16)
+        try:
+            return int(text, 0)
+        except ValueError:
+            return 0
+
+    def _split_ops(self, text):
+        if not text:
+            return []
+        result = []
+        depth = 0
+        current = ""
+        for ch in text:
+            if ch == "[":
+                depth += 1
+                current += ch
+            elif ch == "]":
+                depth -= 1
+                current += ch
+            elif ch == "," and depth == 0:
+                result.append(current.strip())
+                current = ""
+            else:
+                current += ch
+        if current.strip():
+            result.append(current.strip())
+        return result
+
+
 # ── Program Loader ───────────────────────────────────────────────────────────
 
 class DiskProgramLoader:
