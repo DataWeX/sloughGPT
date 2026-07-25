@@ -1298,9 +1298,12 @@ def docker_shell(service):
 @click.option("--d-model", default=64, type=int, help="Model dimension (mock model)")
 @click.option("--vocab-size", default=256, type=int, help="Vocabulary size (mock model)")
 @click.option("--profile", is_flag=True, help="Show detailed timing profile")
+@click.option("--run-asm", "asm_source", default=None, help="Run VM assembly program instead of inference")
+@click.option("--self-test", "do_self_test", is_flag=True, help="Run built-in VM self-test")
 @click.pass_context
 def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
-             layers: int, d_model: int, vocab_size: int, profile: bool):
+             layers: int, d_model: int, vocab_size: int, profile: bool,
+             asm_source: str | None, do_self_test: bool):
     """Boot the kernel, load a model, run inference, and print metrics."""
     from rich.console import Console
     from rich.table import Table
@@ -1310,6 +1313,44 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
 
     console = Console()
     console.print("\n[bold cyan]Kernel Simulation[/bold cyan]\n")
+
+    # ── Self-test mode ──
+    if do_self_test:
+        from domains.shell.vm import self_test
+        console.print("[bold]Running VM self-test...[/bold]\n")
+        results = self_test()
+        for line in results:
+            console.print(line)
+        console.print()
+        return
+
+    # ── Run assembly mode ──
+    if asm_source:
+        from domains.shell.vm import VMRunner
+        console.print(f"[bold]Running VM assembly...[/bold]\n")
+        runner = VMRunner()
+        t0 = time.perf_counter()
+        output = runner.assemble_and_run(asm_source, trace=profile)
+        elapsed = time.perf_counter() - t0
+        for line in output:
+            console.print(f"  {line}")
+        console.print(f"\n  [dim]Completed in {elapsed*1000:.2f}ms, {runner.cpu._step_count} steps[/dim]")
+        if profile:
+            trace = runner.cpu.get_trace()
+            if trace:
+                prof_table = Table(title="Execution Trace", show_header=True, header_style="bold blue")
+                prof_table.add_column("Step", justify="right")
+                prof_table.add_column("PC", justify="right")
+                prof_table.add_column("Instruction")
+                prof_table.add_column("Registers")
+                for entry in trace[:50]:
+                    regs = ", ".join(f"{k}={v}" for k, v in entry.registers.items())
+                    prof_table.add_row(str(entry.cycle), str(entry.pc), entry.instruction, regs)
+                if len(trace) > 50:
+                    prof_table.add_row("...", "", f"({len(trace)-50} more)", "")
+                console.print(prof_table)
+        console.print()
+        return
 
     # ── Boot ──
     t0 = time.perf_counter()
