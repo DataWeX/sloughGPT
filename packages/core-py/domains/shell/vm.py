@@ -228,6 +228,36 @@ class Device:
         return {"type": "base", "methods": []}
 
 
+class ConsoleDevice(Device):
+    """Console I/O device — port 0 for stdin, port 1 for stdout.
+
+    Registered as "0" (stdin) and "1" (stdout) on the device bus so that
+    IN R0, 0 reads a line and OUT 1, R0 prints it.
+    """
+
+    def __init__(self, port: int, stdin_fn=None, stdout_fn=None):
+        self._port = port
+        self._stdin_fn = stdin_fn or (lambda: "")
+        self._stdout_fn = stdout_fn or (lambda v: None)
+        self._buffer: list = []
+
+    def info(self):
+        return {"type": "console", "port": self._port, "status": 1}
+
+    def write(self, value):
+        self._stdout_fn(value)
+
+    def read(self):
+        return self._stdin_fn()
+
+    def call(self, method, *args):
+        if method == "read":
+            return self.read()
+        if method == "write":
+            return self.write(*args)
+        return super().call(method, *args)
+
+
 class DeviceBus:
     """Device registry and generic dispatch."""
 
@@ -236,6 +266,11 @@ class DeviceBus:
 
     def register(self, name, device):
         self._devices[name] = device
+
+    def register_console(self, stdin_fn=None, stdout_fn=None):
+        """Register console I/O on ports 0 (stdin) and 1 (stdout)."""
+        self._devices["0"] = ConsoleDevice(0, stdin_fn=stdin_fn, stdout_fn=stdout_fn)
+        self._devices["1"] = ConsoleDevice(1, stdin_fn=stdin_fn, stdout_fn=stdout_fn)
 
     def open(self, name):
         if name not in self._devices:
@@ -653,7 +688,18 @@ def _op_in(cpu, ops):
     try:
         device = cpu._devices._devices.get(str(port))
         if device:
-            cpu.regs[cpu._reg(ops[0])] = device.info().get("status", 0)
+            if hasattr(device, 'read'):
+                val = device.read()
+                try:
+                    val = int(val)
+                except (ValueError, TypeError):
+                    try:
+                        val = float(val)
+                    except (ValueError, TypeError):
+                        pass
+                cpu.regs[cpu._reg(ops[0])] = val
+            else:
+                cpu.regs[cpu._reg(ops[0])] = device.info().get("status", 0)
         else:
             cpu.regs[cpu._reg(ops[0])] = 0
     except Exception:

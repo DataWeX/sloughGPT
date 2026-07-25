@@ -452,3 +452,30 @@ class TestMemoryOpcodes:
         cpu.load_program(insts)
         cpu.run()
         assert cpu.regs[1] >= 1
+
+
+class TestConsoleIO:
+    def test_out_writes(self):
+        from domains.shell.vm import CPU as VMCPU, Assembler, DeviceBus
+
+        output = []
+        bus = DeviceBus()
+        bus.register_console(stdout_fn=lambda v: output.append(str(v)))
+
+        cpu = VMCPU(devices=bus)
+        insts = Assembler().assemble("OUT 1, 42\nOUT 1, 99\nHALT")
+        cpu.load_program(insts)
+        cpu.run()
+        assert output == ["42", "99"]
+
+    def test_in_reads(self):
+        from domains.shell.vm import CPU as VMCPU, Assembler, DeviceBus
+
+        bus = DeviceBus()
+        bus.register_console(stdin_fn=lambda: "7")
+
+        cpu = VMCPU(devices=bus)
+        insts = Assembler().assemble("IN R0, 0\nOUT 1, R0\nHALT")
+        cpu.load_program(insts)
+        cpu.run()
+        assert cpu.regs[0] == 7
