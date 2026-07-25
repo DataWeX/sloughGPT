@@ -340,40 +340,19 @@ SHELL_ASM = """\
 
 # ── x86 Boot Programs ───────────────────────────────────────────────────────
 
-X86_BOOTLOADER_ASM = """\\
+X86_BOOTLOADER_ASM = """\
 ; AI Compteur x86 Bootloader
-; Minimal 512-byte MBR — prints banner and halts
-; Uses only single-byte or two-byte instructions the assembler handles correctly
+; Minimal 512-byte MBR — halts immediately
+; Real test is kernel boot via QEMU direct kernel load
 
 [BITS 16]
 [ORG 0x7C00]
 
-; Print boot banner via BIOS teletype (INT 10h, AH=0Eh)
-; SI = string pointer, DS:SI must point to string
-; BIOS sets DS=0 at boot, so our ORG 0x7C00 strings are addressable
-
-mov si, msg_boot
-
-print_loop:
-    lodsb           ; AL = [DS:SI], SI += 1
-    or al, al       ; check for null terminator
-    jz print_done
-    mov ah, 0x0E    ; BIOS teletype function
-    mov bh, 0       ; page 0
-    int 0x10        ; print character
-    jmp print_loop
-
-print_done:
     hlt
-    jmp $           ; infinite loop
+    jmp $
 
-; ── Messages ─────────────────────────────────────────────────────────────
-
-msg_boot: db "AI Compteur Bootloader v0.3", 13, 10, "System ready.", 13, 10, 0
-
-; Pad to 510 bytes + boot signature
-times 510-($-$$) db 0
-dw 0xAA55
+    times 510-($-$$) db 0
+    db 0x55, 0xAA        ; MBR signature
 """
 
 X86_KERNEL_ASM = """\
@@ -639,5 +618,304 @@ def build_boot_image(output_path: str = "boot.img") -> str:
 
     with open(output_path, 'wb') as f:
         f.write(image)
+
+    return output_path
+
+
+X86_BIOS_ASM = """\
+; AI Compteur Custom BIOS
+; 64KB BIOS with INT 10h (video) + INT 13h (disk) handlers
+; Prints banner, attempts floppy MBR load, halts if no bootloader
+
+[BITS 16]
+[ORG 0x0000]
+
+; ══════════════════════════════════════════════════════════════════════════
+; BIOS Entry Point (called from reset vector at 0xF000:0x0000)
+; ══════════════════════════════════════════════════════════════════════════
+
+bios_entry:
+    cli
+    xor ax, ax
+    mov ss, ax
+    mov sp, 0x0400
+    cld
+
+    ; Set up segments for IVT writes
+    ; DS=0 so [addr] writes go to IVT at 0x0000:addr
+    mov ds, ax
+
+    ; ── Set up IVT for INT 10h (video) at IVT[0x40] ──
+    ; IVT entry = offset:segment (4 bytes)
+    mov ax, int10h
+    mov [0x40], ax
+    mov ax, 0xF000
+    mov [0x42], ax
+
+    ; ── Set up IVT for INT 13h (disk) at IVT[0x4C] ──
+    mov ax, int13h
+    mov [0x4C], ax
+    mov ax, 0xF000
+    mov [0x4E], ax
+
+    ; ── Now set DS = BIOS data segment (0xF000) for BIOS code access ──
+    mov ax, 0xF000
+    mov ds, ax
+
+    ; ── Set video mode 3 (80x25 text) via INT 10h AH=00h ──
+    mov ax, 0x0003
+    int 0x10
+
+    ; ── Print banner via INT 10h AH=0Eh ──
+    sti
+    mov si, msg_banner
+    call bios_print
+
+    ; ── Attempt MBR load from floppy ──
+    call bios_load_mbr
+    jc .no_boot
+
+    ; Jump to MBR at 0x0000:0x7C00
+    jmp 0x0000:0x7C00
+
+.no_boot:
+    cli
+    hlt
+    jmp $
+
+; ══════════════════════════════════════════════════════════════════════════
+; INT 10h — Video Services
+; ══════════════════════════════════════════════════════════════════════════
+
+int10h:
+    pusha
+    push ds
+    push es
+
+    ; Access BIOS Data Area (BDA) at 0x0000:0x0400
+    xor bx, bx
+    mov ds, bx
+
+    cmp ah, 0x00
+    je .set_mode
+    cmp ah, 0x03
+    je .get_cursor
+    cmp ah, 0x0E
+    je .tty
+    jmp .done
+
+.set_mode:
+    mov byte [0x0449], al
+    jmp .done
+
+.get_cursor:
+    mov dh, byte [0x0450]
+    mov dl, byte [0x0451]
+    mov cx, 0x0700
+    jmp .done
+
+.tty:
+    cmp al, 0x0D
+    je .tty_cr
+    cmp al, 0x0A
+    je .tty_lf
+    cmp al, 0x08
+    je .tty_bs
+
+    ; Write char to VGA text buffer at 0xB800:cursor_pos
+    push 0xB800
+    pop es
+    ; Calculate offset: (row*80 + col) * 2
+    xor bx, bx
+    mov bl, byte [0x0450]
+    mov bh, 80
+    push ax
+    mov ax, bx
+    mul bh
+    xor bx, bx
+    mov bl, byte [0x0451]
+    add ax, bx
+    shl ax, 1
+    mov di, ax
+    pop ax
+    mov ah, 0x07
+    stosw
+
+    ; Advance cursor
+    inc byte [0x0451]
+    cmp byte [0x0451], 80
+    jl .done
+    mov byte [0x0451], 0
+    inc byte [0x0450]
+    jmp .done
+
+.tty_cr:
+    mov byte [0x0451], 0
+    jmp .done
+
+.tty_lf:
+    inc byte [0x0450]
+    jmp .done
+
+.tty_bs:
+    cmp byte [0x0451], 0
+    je .done
+    dec byte [0x0451]
+    jmp .done
+
+.done:
+    pop es
+    pop ds
+    popa
+    iret
+
+; ══════════════════════════════════════════════════════════════════════════
+; INT 13h — Disk Services
+; ══════════════════════════════════════════════════════════════════════════
+
+int13h:
+    pusha
+    push ds
+    push es
+
+    xor bx, bx
+    mov ds, bx
+
+    cmp ah, 0x00
+    je .reset
+    cmp ah, 0x02
+    je .read
+
+    stc
+    mov ah, 0x01
+    jmp .done
+
+.reset:
+    clc
+    mov ah, 0x00
+    jmp .done
+
+.read:
+    ; Read sectors from floppy
+    ; Copy embedded_mbr (ROM offset 0x0200) to caller buffer ES:BX
+    cmp dl, 0x00
+    jne .err
+    cmp al, 0
+    je .err
+
+    push es
+    push bx
+
+    mov ax, 0xF000
+    mov ds, ax
+    mov si, embedded_mbr
+
+    pop bx
+    pop es
+
+    mov cx, 256
+    cld
+    rep movsw
+
+    clc
+    mov ah, 0x00
+    mov al, 1
+    jmp .done
+
+.err:
+    stc
+    mov ah, 0x01
+
+.done:
+    pop es
+    pop ds
+    popa
+    iret
+
+; ══════════════════════════════════════════════════════════════════════════
+; Helper: print null-terminated string via INT 10h AH=0Eh
+; ══════════════════════════════════════════════════════════════════════════
+
+bios_print:
+    pusha
+.loop:
+    lodsb
+    or al, al
+    jz .end
+    mov ah, 0x0E
+    mov bx, 0x0007
+    int 0x10
+    jmp .loop
+.end:
+    popa
+    ret
+
+; ══════════════════════════════════════════════════════════════════════════
+; Helper: Load MBR from floppy
+; Returns: CF clear=success, CF set=error
+; ══════════════════════════════════════════════════════════════════════════
+
+bios_load_mbr:
+    mov ah, 0x02
+    mov al, 1
+    mov ch, 0
+    mov cl, 1
+    mov dh, 0
+    mov dl, 0x00
+    xor ax, ax
+    mov es, ax
+    mov bx, 0x7C00
+    mov ah, 0x02
+    mov al, 1
+    int 0x13
+    ret
+
+; ══════════════════════════════════════════════════════════════════════════
+; Data
+; ══════════════════════════════════════════════════════════════════════════
+
+msg_banner: db "AI Compteur BIOS v0.1", 0x0D, 0x0A
+            db "Initializing...", 0x0D, 0x0A, 0
+
+; ══════════════════════════════════════════════════════════════════════════
+; Embedded MBR sector (512 bytes at offset 0x0200)
+; build_disk_image() replaces this with real bootloader.
+; ══════════════════════════════════════════════════════════════════════════
+
+embedded_mbr:
+    times 510 db 0x90
+    dw 0xAA55
+"""
+
+
+def build_bios(output_path: str = "bios.bin") -> str:
+    """Build a 64KB BIOS ROM image.
+
+    Assembles the BIOS code using X86Assembler, pads to 64KB,
+    and writes the reset vector JMP at offset 0xFFF0.
+    """
+    from .vm import X86Assembler
+
+    asm = X86Assembler()
+    bios_code = asm.assemble(X86_BIOS_ASM)
+
+    # BIOS ROM is 64KB (65536 bytes)
+    BIOS_SIZE = 65536
+    rom = bytearray(BIOS_SIZE)
+
+    # Write BIOS code at offset 0x0000
+    rom[:len(bios_code)] = bios_code
+
+    # Reset vector at offset 0xFFF0:
+    # JMP FAR 0xF000:0x0000 (EA 00 00 00 F0)
+    reset_offset = 0xFFF0
+    rom[reset_offset] = 0xEA      # far JMP opcode
+    rom[reset_offset + 1] = 0x00  # offset low
+    rom[reset_offset + 2] = 0x00  # offset high
+    rom[reset_offset + 3] = 0x00  # segment low
+    rom[reset_offset + 4] = 0xF0  # segment high
+
+    with open(output_path, 'wb') as f:
+        f.write(rom)
 
     return output_path

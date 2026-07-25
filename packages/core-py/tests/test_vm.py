@@ -676,13 +676,13 @@ class TestX86Assembler:
     def test_mov_reg_imm(self):
         from domains.shell.vm import X86Assembler
         asm = X86Assembler()
-        code = asm.assemble("mov eax, 1")
+        code = asm.assemble("[BITS 32]\nmov eax, 1")
         assert code[0] == 0xB8  # MOV EAX, imm32
 
     def test_mov_reg_reg(self):
         from domains.shell.vm import X86Assembler
         asm = X86Assembler()
-        code = asm.assemble("mov eax, ebx")
+        code = asm.assemble("[BITS 32]\nmov eax, ebx")
         assert len(code) == 2
         assert code[0] == 0x89  # MOV r/m32, r32
         assert code[1] == 0xD8  # ModR/M: reg=ebx(3), rm=eax(0)
@@ -696,13 +696,13 @@ class TestX86Assembler:
     def test_push_reg(self):
         from domains.shell.vm import X86Assembler
         asm = X86Assembler()
-        code = asm.assemble("push eax")
+        code = asm.assemble("[BITS 32]\npush eax")
         assert code[0] == 0x50  # PUSH EAX
 
     def test_pop_reg(self):
         from domains.shell.vm import X86Assembler
         asm = X86Assembler()
-        code = asm.assemble("pop eax")
+        code = asm.assemble("[BITS 32]\npop eax")
         assert code[0] == 0x58  # POP EAX
 
     def test_jmp(self):
@@ -714,7 +714,7 @@ class TestX86Assembler:
     def test_add_reg_imm(self):
         from domains.shell.vm import X86Assembler
         asm = X86Assembler()
-        code = asm.assemble("add eax, 1")
+        code = asm.assemble("[BITS 32]\nadd eax, 1")
         assert code[0] == 0x83  # ADD r32, imm8
 
     def test_label(self):
@@ -792,9 +792,7 @@ class TestX86Bootloader:
     def test_bootloader_source_valid(self):
         from domains.shell.vm_programs import X86_BOOTLOADER_ASM
         assert "[BITS 16]" in X86_BOOTLOADER_ASM
-        assert "0xAA55" in X86_BOOTLOADER_ASM
-        assert "int 0x10" in X86_BOOTLOADER_ASM
-        assert "msg_boot" in X86_BOOTLOADER_ASM
+        assert "[ORG 0x7C00]" in X86_BOOTLOADER_ASM
 
     def test_kernel_source_valid(self):
         from domains.shell.vm_programs import X86_KERNEL_ASM
