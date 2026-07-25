@@ -123,7 +123,9 @@ def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True)
                 clean = line.rstrip("\n\r")
                 lines.append(clean)
                 if echo:
-                    print(f"  \033[90m│\033[0m {clean}", flush=True)
+                    # Use \r prefix to clear any progress bar before printing
+                    sys.stdout.write(f"\r\033[90m│\033[0m {clean}\n")
+                    sys.stdout.flush()
             else:
                 break
     except ValueError:

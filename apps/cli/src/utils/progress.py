@@ -63,7 +63,11 @@ class ProgressBar:
         self.current = self.total
         self._render()
         if self._is_tty:
-            sys.stdout.write("\n")
+            # Clear the progress bar line and print final status
+            if self._last_rendered:
+                pad_len = max(0, len(self._last_rendered) + 2)
+                sys.stdout.write(f"\r{' ' * pad_len}\r")
+            sys.stdout.write(f"{self._last_rendered}\n")
             sys.stdout.flush()
         self._last_rendered = ""
 
@@ -114,9 +118,12 @@ class ProgressBar:
         line = " ".join(parts)
 
         if self._is_tty:
-            # TTY: overwrite in-place using \r + space padding
-            pad_len = max(0, len(self._last_rendered) - len(line))
-            sys.stdout.write(f"\r{line}{' ' * pad_len}\r")
+            # TTY: clear previous line completely, then print on fresh line
+            # This prevents progress bar from overlapping with log output
+            if self._last_rendered:
+                pad_len = max(0, len(self._last_rendered) + 2)
+                sys.stdout.write(f"\r{' ' * pad_len}\r")
+            sys.stdout.write(f"\r{line}")
             sys.stdout.flush()
         else:
             # Non-TTY (piped/redirected): just print the line
