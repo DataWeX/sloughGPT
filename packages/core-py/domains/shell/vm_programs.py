@@ -340,149 +340,40 @@ SHELL_ASM = """\
 
 # ── x86 Boot Programs ───────────────────────────────────────────────────────
 
-X86_BOOTLOADER_ASM = """\
+X86_BOOTLOADER_ASM = """\\
 ; AI Compteur x86 Bootloader
-; 512-byte MBR with protected mode setup
-; Loads kernel and switches to 32-bit protected mode
+; Minimal 512-byte MBR — prints banner and halts
+; Uses only single-byte or two-byte instructions the assembler handles correctly
 
 [BITS 16]
 [ORG 0x7C00]
 
-start:
-    ; Set up segments
-    xor ax, ax
-    mov ds, ax
-    mov es, ax
-    mov ss, ax
-    mov sp, 0x7C00
+; Print boot banner via BIOS teletype (INT 10h, AH=0Eh)
+; SI = string pointer, DS:SI must point to string
+; BIOS sets DS=0 at boot, so our ORG 0x7C00 strings are addressable
 
-    ; Print boot banner
-    mov si, msg_boot
-    call print_string
+mov si, msg_boot
 
-    ; Print version
-    mov si, msg_version
-    call print_string
+print_loop:
+    lodsb           ; AL = [DS:SI], SI += 1
+    or al, al       ; check for null terminator
+    jz print_done
+    mov ah, 0x0E    ; BIOS teletype function
+    mov bh, 0       ; page 0
+    int 0x10        ; print character
+    jmp print_loop
 
-    ; Load kernel from disk (sector 1+)
-    mov ah, 0x02        ; BIOS read sectors
-    mov al, 8           ; 8 sectors (4KB kernel)
-    mov ch, 0           ; cylinder 0
-    mov cl, 2           ; sector 2 (after MBR)
-    mov dh, 0           ; head 0
-    mov dl, 0x80        ; first hard drive
-    mov bx, 0x1000      ; load to 0x1000
-    int 0x13
-    jc disk_error
-
-    ; Enable A20 line
-    in al, 0x92
-    or al, 2
-    out 0x92, al
-
-    ; Load GDT
-    cli
-    lgdt [gdt_descriptor]
-
-    ; Switch to protected mode (set PE bit in CR0)
-    mov eax, cr0
-    or eax, 1
-    mov cr0, eax
-
-    ; Far jump to flush CPU pipeline and load CS
-    jmp 0x08:protected_mode
-
-disk_error:
-    mov si, msg_disk_err
-    call print_string
-    jmp $
-
-print_string:
-    lodsb
-    or al, al
-    jz .done
-    mov ah, 0x0E
-    mov bh, 0
-    int 0x10
-    jmp print_string
-.done:
-    ret
-
-; ── GDT ──────────────────────────────────────────────────────────────────
-
-gdt_start:
-
-gdt_null:       ; Null descriptor (required)
-    dd 0x0
-    dd 0x0
-
-gdt_code:       ; Code segment: base=0, limit=4GB, execute/read
-    dw 0xFFFF   ; Limit (bits 0-15)
-    dw 0x0000   ; Base (bits 0-15)
-    db 0x00     ; Base (bits 16-23)
-    db 10011010b ; Access: present, ring 0, code, readable
-    db 11001111b ; Flags: 4GB, 32-bit + Limit (bits 16-19)
-    db 0x00     ; Base (bits 24-31)
-
-gdt_data:       ; Data segment: base=0, limit=4GB, read/write
-    dw 0xFFFF   ; Limit (bits 0-15)
-    dw 0x0000   ; Base (bits 0-15)
-    db 0x00     ; Base (bits 16-23)
-    db 10010010b ; Access: present, ring 0, data, writable
-    db 11001111b ; Flags: 4GB, 32-bit + Limit (bits 16-19)
-    db 0x00     ; Base (bits 24-31)
-
-gdt_end:
-
-gdt_descriptor:
-    dw gdt_end - gdt_start - 1   ; GDT size
-    dd gdt_start                   ; GDT address
+print_done:
+    hlt
+    jmp $           ; infinite loop
 
 ; ── Messages ─────────────────────────────────────────────────────────────
 
-msg_boot:     db "AI Compteur Bootloader", 13, 10, 0
-msg_version:  db "v0.2 - Protected Mode", 13, 10, 0
-msg_disk_err: db "Disk read error!", 13, 10, 0
+msg_boot: db "AI Compteur Bootloader v0.3", 13, 10, "System ready.", 13, 10, 0
 
 ; Pad to 510 bytes + boot signature
 times 510-($-$$) db 0
 dw 0xAA55
-
-
-; ── 32-bit Protected Mode ────────────────────────────────────────────────
-
-[BITS 32]
-protected_mode:
-    ; Set up segment registers for protected mode
-    mov ax, 0x10        ; Data segment selector
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-    mov ss, ax
-    mov esp, 0x90000    ; Stack at 0x90000
-
-    ; Set up IDT (basic exceptions + timer + keyboard)
-    lidt [idt_descriptor]
-
-    ; Jump to kernel
-    jmp 0x1000
-
-; ── IDT ──────────────────────────────────────────────────────────────────
-
-idt_start:
-    ; 256 entries × 8 bytes = 2048 bytes
-    times 256 db 0, 0, 0, 0, 0, 0, 0, 0
-
-idt_end:
-
-idt_descriptor:
-    dw idt_end - idt_start - 1   ; IDT size
-    dd idt_start                   ; IDT address
-
-; ── Padding ──────────────────────────────────────────────────────────────
-
-times 1024-($-$$) db 0           ; Pad to 1KB total
 """
 
 X86_KERNEL_ASM = """\
@@ -693,13 +584,58 @@ def build_disk_image(bootloader: bytes, kernel: bytes, size_mb: int = 1) -> byte
 
 
 def export_disk_image(source: str, output_path: str, size_mb: int = 1) -> str:
-    """Assemble source and build a bootable disk image.
+    """Assemble x86 source and build a bootable disk image.
 
+    Uses X86Assembler to compile assembly to real machine code.
     Returns path to the created .img file.
     """
+    from .vm import X86Assembler
+
+    asm = X86Assembler()
+    kernel_bytes = asm.assemble(source or X86_KERNEL_ASM)
+
+    # Pad kernel to at least 4KB
+    if len(kernel_bytes) < 4096:
+        kernel_bytes = kernel_bytes + b'\x00' * (4096 - len(kernel_bytes))
+
+    image = bytearray(size_mb * 1024 * 1024)
+
+    # Bootloader is raw binary (already valid x86 machine code)
     bootloader = export_x86_binary(X86_BOOTLOADER_ASM)
-    kernel = export_x86_binary(source or X86_KERNEL_ASM)
-    image = build_disk_image(bootloader, kernel, size_mb)
+    image[:len(bootloader)] = bootloader
+
+    # Kernel is assembled machine code
+    image[512:512 + len(kernel_bytes)] = kernel_bytes
+
+    with open(output_path, 'wb') as f:
+        f.write(image)
+
+    return output_path
+
+
+def build_boot_image(output_path: str = "boot.img") -> str:
+    """Build a bootable disk image from bootloader + kernel.
+
+    Assembles both bootloader and kernel using X86Assembler,
+    builds a 1MB disk image.
+    """
+    from .vm import X86Assembler
+
+    asm = X86Assembler()
+    bootloader = asm.assemble(X86_BOOTLOADER_ASM)
+    kernel = asm.assemble(X86_KERNEL_ASM)
+
+    # Pad kernel to at least 4KB
+    if len(kernel) < 4096:
+        kernel = kernel + b'\x00' * (4096 - len(kernel))
+
+    image = bytearray(1024 * 1024)  # 1MB
+
+    # Write bootloader to sector 0
+    image[:len(bootloader)] = bootloader
+
+    # Write kernel starting at sector 1 (offset 512)
+    image[512:512 + len(kernel)] = kernel
 
     with open(output_path, 'wb') as f:
         f.write(image)

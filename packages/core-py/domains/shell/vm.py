@@ -1781,8 +1781,11 @@ class X86Assembler:
 
     def _emit_times(self, line):
         parts = line.split(None, 2)
-        count = self._parse_imm(parts[1])
+        expr = parts[1].strip()
         inner = parts[2].strip()
+        # Resolve $ (current position) and $$ (section start = 0)
+        expr = expr.replace("$$", "0").replace("$", str(len(self._output)))
+        count = self._eval_expr(expr)
         # Handle instructions
         single_byte_insns = {"nop": 0x90, "hlt": 0xF4, "cli": 0xFA, "sti": 0xFB, "ret": 0xC3}
         if inner in single_byte_insns:
@@ -2193,6 +2196,22 @@ class X86Assembler:
         if text in self._labels:
             return self._labels[text]
         return self._parse_imm(text)
+
+    def _eval_expr(self, text):
+        """Evaluate a simple arithmetic expression with +, -, *, /, parentheses."""
+        text = text.strip()
+        # Replace hex literals
+        import re
+        text = re.sub(r'0[xX]([0-9a-fA-F]+)', lambda m: str(int(m.group(1), 16)), text)
+        text = re.sub(r'0[bB]([01]+)', lambda m: str(int(m.group(1), 2)), text)
+        text = re.sub(r'([0-9]+)[hH]', lambda m: str(int(m.group(1), 16)), text)
+        # Only allow digits, operators, parentheses, spaces
+        if re.match(r'^[\d\s\+\-\*\/\(\)]+$', text):
+            try:
+                return int(eval(text))
+            except:
+                return 0
+        return 0
 
     def _parse_imm(self, text):
         text = text.strip()
