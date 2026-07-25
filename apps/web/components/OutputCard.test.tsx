@@ -36,8 +36,8 @@ describe('OutputCard', () => {
   it('renders level labels', async () => {
     const { OutputCard } = await import('@/components/OutputCard')
     render(<OutputCard />)
-    expect(screen.getByText('info')).toBeInTheDocument()
-    expect(screen.getByText('error')).toBeInTheDocument()
+    expect(screen.getByText('INF')).toBeInTheDocument()
+    expect(screen.getByText('ERR')).toBeInTheDocument()
   })
 
   it('renders pause and export buttons', async () => {
