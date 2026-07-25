@@ -115,6 +115,8 @@ def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True)
         stop: threading.Event to signal shutdown.
         echo: if True, print each line to stdout in real-time.
     """
+    from datetime import datetime
+
     try:
         for line in iter(stream.readline, ""):
             if stop.is_set():
@@ -123,9 +125,10 @@ def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True)
                 clean = line.rstrip("\n\r")
                 lines.append(clean)
                 if echo:
+                    # Add timestamp to all output
+                    ts = datetime.now().strftime("%H:%M:%S")
                     # Clear any progress bar on current line, then print log
-                    # Use \r to go to start of line, clear with spaces, then print
-                    sys.stdout.write(f"\r\033[2K\033[90m│\033[0m {clean}\n")
+                    sys.stdout.write(f"\r\033[2K\033[90m│\033[0m {ts} {clean}\n")
                     sys.stdout.flush()
             else:
                 break
