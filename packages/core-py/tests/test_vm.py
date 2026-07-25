@@ -48,13 +48,12 @@ class TestProgramLoader:
             JMP target
             NOP
         target:
-            HLT
+            HALT
         """)
-        # JMP target → target resolves to index 2
         assert len(insts) == 3
         assert insts[0].opcode == "JMP"
         assert insts[0].operands == [2]
-        assert insts[2].opcode == "HLT"
+        assert insts[2].opcode == "HALT"
 
     def test_forward_label(self):
         loader = ProgramLoader()
@@ -63,7 +62,7 @@ class TestProgramLoader:
             JZ end
             NOP
         end:
-            HLT
+            HALT
         """)
         assert insts[0].opcode == "JZ"
         assert insts[0].operands == [2]
@@ -94,14 +93,14 @@ class TestVirtualCPU:
     def test_load_program_sets_pc(self):
         cpu = VirtualCPU()
         loader = ProgramLoader()
-        insts = loader.load("start: MOV R0, 0\nHLT")
+        insts = loader.load("start: MOV R0, 0\nHALT")
         cpu.load_program(insts)
         assert cpu.pc == 0
 
     def test_execute_mov_immediate(self):
         cpu = VirtualCPU()
         loader = ProgramLoader()
-        insts = loader.load("MOV R5, 42\nHLT")
+        insts = loader.load("MOV R5, 42\nHALT")
         cpu.load_program(insts)
         cpu.run()
         assert cpu.regs[5] == 42
@@ -109,7 +108,7 @@ class TestVirtualCPU:
     def test_execute_mov_register(self):
         cpu = VirtualCPU()
         loader = ProgramLoader()
-        insts = loader.load("MOV R0, 10\nMOV R1, R0\nHLT")
+        insts = loader.load("MOV R0, 10\nMOV R1, R0\nHALT")
         cpu.load_program(insts)
         cpu.run()
         assert cpu.regs[1] == 10
@@ -117,7 +116,7 @@ class TestVirtualCPU:
     def test_execute_add(self):
         cpu = VirtualCPU()
         loader = ProgramLoader()
-        insts = loader.load("MOV R0, 3\nADD R0, R0, 4\nHLT")
+        insts = loader.load("MOV R0, 3\nADD R0, R0, 4\nHALT")
         cpu.load_program(insts)
         cpu.run()
         assert cpu.regs[0] == 7
@@ -125,7 +124,7 @@ class TestVirtualCPU:
     def test_execute_sub(self):
         cpu = VirtualCPU()
         loader = ProgramLoader()
-        insts = loader.load("MOV R0, 10\nSUB R0, R0, 3\nHLT")
+        insts = loader.load("MOV R0, 10\nSUB R0, R0, 3\nHALT")
         cpu.load_program(insts)
         cpu.run()
         assert cpu.regs[0] == 7
@@ -133,7 +132,7 @@ class TestVirtualCPU:
     def test_execute_mul(self):
         cpu = VirtualCPU()
         loader = ProgramLoader()
-        insts = loader.load("MOV R0, 6\nMUL R0, R0, 7\nHLT")
+        insts = loader.load("MOV R0, 6\nMUL R0, R0, 7\nHALT")
         cpu.load_program(insts)
         cpu.run()
         assert cpu.regs[0] == 42
@@ -146,11 +145,11 @@ class TestVirtualCPU:
             MOV R0, 99
         skip:
             MOV R0, 42
-            HLT
+            HALT
         """)
         cpu.load_program(insts)
         cpu.run()
-        assert cpu.regs[0] == 42  # skipped MOV R0, 99
+        assert cpu.regs[0] == 42
 
     def test_execute_jz_taken(self):
         cpu = VirtualCPU()
@@ -162,7 +161,7 @@ class TestVirtualCPU:
             MOV R0, 99
         skip:
             MOV R0, 42
-            HLT
+            HALT
         """)
         cpu.load_program(insts)
         cpu.run()
@@ -175,10 +174,10 @@ class TestVirtualCPU:
             MOV R0, 1
             CMP R0, 0
             JNZ skip
-            HLT
+            HALT
         skip:
             MOV R0, 42
-            HLT
+            HALT
         """)
         cpu.load_program(insts)
         cpu.run()
@@ -189,7 +188,7 @@ class TestVirtualCPU:
         loader = ProgramLoader()
         insts = loader.load("""
             CALL fn
-            HLT
+            HALT
         fn:
             MOV R0, 42
             RET
@@ -202,7 +201,6 @@ class TestVirtualCPU:
         cpu = VirtualCPU()
         cpu._max_instructions = 10
         loader = ProgramLoader()
-        # Infinite loop
         insts = loader.load("""
         loop:
             JMP loop
@@ -216,10 +214,10 @@ class TestVirtualCPU:
         loader = ProgramLoader()
         insts = loader.load("""
             MOV R0, 5
-            LOOP R0, done
+        loop:
+            LOOP R0, loop
             NOP
-        done:
-            HLT
+            HALT
         """)
         cpu.load_program(insts)
         cpu.run()
@@ -233,7 +231,7 @@ class TestVirtualCPU:
                                     ("ISHR", 8, 3, 1)]:
             cpu = VirtualCPU()
             loader = ProgramLoader()
-            code = f"MOV R0, {a}\n{op} R0, R0, {b}\nHLT"
+            code = f"MOV R0, {a}\n{op} R0, R0, {b}\nHALT"
             insts = loader.load(code)
             cpu.load_program(insts)
             cpu.run()
@@ -242,7 +240,7 @@ class TestVirtualCPU:
     def test_cmp_sets_flag_equal(self):
         cpu = VirtualCPU()
         loader = ProgramLoader()
-        insts = loader.load("MOV R0, 5\nCMP R0, 5\nHLT")
+        insts = loader.load("MOV R0, 5\nCMP R0, 5\nHALT")
         cpu.load_program(insts)
         cpu.run()
         assert cpu._cmp_flag == 0
@@ -250,7 +248,7 @@ class TestVirtualCPU:
     def test_cmp_sets_flag_less(self):
         cpu = VirtualCPU()
         loader = ProgramLoader()
-        insts = loader.load("MOV R0, 3\nSUB R0, R0, 5\nHLT")
+        insts = loader.load("MOV R0, 3\nCMP R0, 5\nHALT")
         cpu.load_program(insts)
         cpu.run()
         assert cpu._cmp_flag == -1
@@ -272,10 +270,10 @@ class TestVirtualCPU:
             CMP R0, {b}
             {jmp} jump
             MOV R0, 0
-            HLT
+            HALT
         jump:
             MOV R0, 1
-            HLT
+            HALT
             """
             insts = loader.load(code)
             cpu.load_program(insts)
@@ -295,12 +293,12 @@ class TestVMRunner:
 
     def test_mov_immediate(self):
         runner = VMRunner()
-        output = runner.assemble_and_run("MOV R0, 42\nHLT")
+        output = runner.assemble_and_run("MOV R0, 42\nHALT")
         assert runner.cpu.regs[0] == 42
 
     def test_register_to_register(self):
         runner = VMRunner()
-        output = runner.assemble_and_run("MOV R0, 10\nMOV R1, R0\nHLT")
+        output = runner.assemble_and_run("MOV R0, 10\nMOV R1, R0\nHALT")
         assert runner.cpu.regs[1] == 10
 
     def test_infinite_loop_terminates(self):
@@ -315,7 +313,7 @@ class TestVMRunner:
             STORE R0, 100
             MOV R1, 0
             LOAD R1, 100
-            HLT
+            HALT
         """)
         assert runner.cpu.regs[1] == 42
 
@@ -332,7 +330,8 @@ class TestVMRunner:
 
     def test_cpu_get_trace(self):
         runner = VMRunner()
-        runner.assemble_and_run("MOV R0, 42\nHLT")
+        output = runner.assemble_and_run("MOV R0, 42\nHALT", trace=True)
         trace = runner.cpu.get_trace()
-        assert len(trace) >= 1
-        assert trace[0].registers["R0"] == 42
+        assert len(trace) >= 2
+        assert trace[0].pc == 0
+        assert trace[1].registers.get("R0") == 42

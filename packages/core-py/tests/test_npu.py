@@ -602,13 +602,13 @@ class TestNPURefCounting:
         """Two concurrent forwards each hold a ref — unload fails."""
         import threading
         npu = self._make_npu_with_model()
-        barrier = threading.Barrier(2)
+        barrier = threading.Barrier(3)
         results = []
 
         def slow_forward():
             npu._acquire_ref("m")
-            barrier.wait()  # both threads hold ref now
-            barrier.wait()  # wait for unload attempt
+            barrier.wait()  # all 3 parties sync: threads + main
+            barrier.wait()  # wait for unload attempt to complete
             npu._release_ref("m")
             results.append("done")
 
@@ -616,7 +616,7 @@ class TestNPURefCounting:
         t2 = threading.Thread(target=slow_forward)
         t1.start()
         t2.start()
-        barrier.wait()  # both threads hold ref
+        barrier.wait()  # sync with both threads
 
         result = npu.unload_model("m")
         assert not result.success
