@@ -23,7 +23,8 @@ Or via CLI:
 
 from typing import Optional
 
-from .kernel import DaitRuntime, Kernel, Process, ProcessState, Resource
+from .kernel import Kernel, Process, ProcessState  # noqa: F401
+from .runtime import DaitRuntime, Resource  # noqa: F401
 from .repl import ShellREPL
 from .commands import ShellCommands
 from .state import ShellState
@@ -33,7 +34,8 @@ from .permissions import ShellPermissions, Risk
 from .window_manager import WindowManager, get_window_manager, reset_window_manager
 from .init import InitSystem, ServiceDef, ServiceInstance, ServiceManager, get_init_system, reset_init_system
 from .devices import DeviceManager, AIDevice, create_default_devices
-from .vm import VirtualCPU, VMRunner, ProgramLoader, Instruction, VMFault, Halt, MemFault, InsFault, SysFault, HELLO_ASM, COUNTER_ASM, FIB_ASM, COLLATZ_ASM, self_test
+from .vm import VirtualCPU, VMRunner, ProgramLoader, Instruction, VMFault, Halt, MemFault, InsFault, SysFault
+from .vm_programs import HELLO_ASM, COUNTER_ASM, FIB_ASM, COLLATZ_ASM, self_test
 from .vfs import VFS, VFSEntry, VFSGeneratedFile, VFSDirectory, get_vfs, reset_vfs
 
 

@@ -10,7 +10,6 @@ import sys
 import os
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict
 
 import click
 
@@ -1283,6 +1282,161 @@ def docker_build(no_cache):
 @click.argument("service", default="api")
 def docker_shell(service):
     _docker_action("shell", _ns(service=service))
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Simulate — boot kernel, load model, run inference, dump metrics
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.command(help="Boot kernel, load model, run inference — hardware simulator")
+@click.option("--model", default="mock", help="Model name to load (default: mock)")
+@click.option("--prompt", default="Hello, world", help="Prompt for generation")
+@click.option("--max-tokens", default=20, type=int, help="Max tokens to generate")
+@click.option("--iterations", default=1, type=int, help="Number of inference iterations")
+@click.option("--layers", default=2, type=int, help="Number of transformer layers (mock model)")
+@click.option("--d-model", default=64, type=int, help="Model dimension (mock model)")
+@click.option("--vocab-size", default=256, type=int, help="Vocabulary size (mock model)")
+@click.option("--profile", is_flag=True, help="Show detailed timing profile")
+@click.pass_context
+def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
+             layers: int, d_model: int, vocab_size: int, profile: bool):
+    """Boot the kernel, load a model, run inference, and print metrics."""
+    from rich.console import Console
+    from rich.table import Table
+    from rich.panel import Panel
+    import time
+    import numpy as np
+
+    console = Console()
+    console.print("\n[bold cyan]Kernel Simulation[/bold cyan]\n")
+
+    # ── Boot ──
+    t0 = time.perf_counter()
+    from domains.shell.kernel import Kernel
+    k = Kernel()
+    boot_msg = k.boot()
+    t_boot = time.perf_counter() - t0
+    console.print(f"  [green]✓[/green] Booted in {t_boot*1000:.1f}ms — {boot_msg}")
+
+    try:
+        # ── Register devices ──
+        k.register_devices()
+        console.print(f"  [green]✓[/green] {k.devices.stats()['total_devices']} devices registered")
+
+        # ── Load model ──
+        t1 = time.perf_counter()
+        if model == "mock":
+            class MockModel:
+                def __init__(self):
+                    self.call_count = 0
+                    self.total_tokens = 0
+                def __call__(self, input_ids):
+                    self.call_count += 1
+                    self.total_tokens += input_ids.size
+                    return np.random.randn(input_ids.shape[0], input_ids.shape[1], vocab_size).astype(np.float32)
+                def generate_numpy(self, prompt, max_tokens=10, temperature=1.0, **kw):
+                    self.call_count += 1
+                    self.total_tokens += max_tokens
+                    return list(range(10, 10 + max_tokens))
+                def forward(self, inputs):
+                    self.call_count += 1
+                    ids = inputs.get("input_ids", np.zeros((1, 10), dtype=np.int64))
+                    self.total_tokens += ids.size
+                    return {"logits": np.random.randn(ids.shape[0], ids.shape[1], vocab_size).astype(np.float32)}
+            mock = MockModel()
+            k.engine.load_model(model, mock)
+        else:
+            # Try loading real model via NPU
+            from domains.shell.kernel_npu import NPUDevice
+            npu = NPUDevice(name="npu")
+            npu.open()
+            npu.load_model(model, f"huggingface:{model}")
+            k.engine.load_model(model, npu)
+        t_load = time.perf_counter() - t1
+        console.print(f"  [green]✓[/green] Model '{model}' loaded in {t_load*1000:.1f}ms")
+
+        # ── Tokenize ──
+        t2 = time.perf_counter()
+        tokens = k.tokenize(prompt)
+        t_tok = time.perf_counter() - t2
+        console.print(f"  [green]✓[/green] Tokenized '{prompt[:40]}...' → {len(tokens)} tokens in {t_tok*1000:.2f}ms")
+
+        # ── Create inference process ──
+        from domains.shell.kernel_neural import NeuralProcessType
+        proc = k.create_neural_process("sim-infer", NeuralProcessType.INFERENCE, model_name=model)
+
+        # ── Warmup ──
+        input_ids = np.array([tokens])
+        _ = k.forward(proc, {"input_ids": input_ids})
+
+        # ── Inference iterations ──
+        latencies = []
+        tokens_generated = []
+        for i in range(iterations):
+            t3 = time.perf_counter()
+            gen = k.generate(model, prompt, max_tokens=max_tokens)
+            t_inf = time.perf_counter() - t3
+            latencies.append(t_inf)
+            tokens_generated.append(gen["token_count"] if gen else 0)
+
+        # ── Metrics ──
+        avg_latency = sum(latencies) / len(latencies)
+        total_tokens = sum(tokens_generated)
+        throughput = total_tokens / sum(latencies) if sum(latencies) > 0 else 0
+
+        # ── KV Cache ──
+        cache = k.create_kv_cache("sim-cache", num_layers=layers, head_dim=d_model // 4)
+        cache.initialize(num_heads=4)
+        for step in range(min(10, max_tokens)):
+            k0 = np.random.randn(4, d_model // 4)
+            v0 = np.random.randn(4, d_model // 4)
+            cache.update(step % layers, k0, v0)
+            cache.advance(1)
+
+        # ── Neural stats ──
+        ns = k.neural_stats()
+
+        # ── Kernel stats ──
+        ks = k.stats()
+
+        # ── Print results ──
+        console.print()
+
+        # Summary table
+        table = Table(title="Simulation Results", show_header=True, header_style="bold magenta")
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", justify="right", style="green")
+        table.add_row("Boot time", f"{t_boot*1000:.1f}ms")
+        table.add_row("Model load", f"{t_load*1000:.1f}ms")
+        table.add_row("Tokenize", f"{t_tok*1000:.2f}ms")
+        table.add_row("Tokens in prompt", str(len(tokens)))
+        table.add_row("Iterations", str(iterations))
+        table.add_row("Avg latency", f"{avg_latency*1000:.1f}ms")
+        table.add_row("Total tokens generated", str(total_tokens))
+        table.add_row("Throughput", f"{throughput:.1f} tok/s")
+        table.add_row("Processes", str(ks["process_count"]))
+        table.add_row("KV cache layers", str(ns["kv_caches"]))
+        table.add_row("KV cache memory", f"{ns['gradient_accumulator']['step_count']} steps")
+        table.add_row("Uptime", f"{k.uptime:.2f}s")
+        console.print(table)
+
+        if profile:
+            prof_table = Table(title="Per-Iteration Profile", show_header=True, header_style="bold blue")
+            prof_table.add_column("Iter", justify="right")
+            prof_table.add_column("Latency", justify="right")
+            prof_table.add_column("Tokens", justify="right")
+            prof_table.add_column("tok/s", justify="right")
+            for i, (lat, tok) in enumerate(zip(latencies, tokens_generated)):
+                tps = tok / lat if lat > 0 else 0
+                prof_table.add_row(str(i + 1), f"{lat*1000:.1f}ms", str(tok), f"{tps:.1f}")
+            console.print(prof_table)
+
+        console.print(f"\n[bold green]Simulation complete.[/bold green]\n")
+
+    finally:
+        k.shutdown()
+        console.print("  [dim]Kernel shut down.[/dim]")
 
 
 # ═══════════════════════════════════════════════════════════════════════
