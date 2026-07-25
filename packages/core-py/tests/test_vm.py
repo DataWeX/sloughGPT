@@ -335,3 +335,120 @@ class TestVMRunner:
         assert len(trace) >= 2
         assert trace[0].pc == 0
         assert trace[1].registers.get("R0") == 42
+
+
+# ── New ISA Opcodes ─────────────────────────────────────────────────────────
+
+
+class TestStackOpcodes:
+    def test_push_pop(self):
+        cpu = VirtualCPU()
+        loader = ProgramLoader()
+        insts = loader.load("MOV R0, 42\nPUSH R0\nMOV R0, 0\nPOP R1\nHALT")
+        cpu.load_program(insts)
+        cpu.run()
+        assert cpu.regs[0] == 0
+        assert cpu.regs[1] == 42
+        assert cpu.sp == STACK_BASE
+
+    def test_push_pop_multiple(self):
+        cpu = VirtualCPU()
+        loader = ProgramLoader()
+        insts = loader.load("""
+            MOV R0, 10
+            MOV R1, 20
+            PUSH R0
+            PUSH R1
+            POP R2
+            POP R3
+            HALT
+        """)
+        cpu.load_program(insts)
+        cpu.run()
+        assert cpu.regs[2] == 20
+        assert cpu.regs[3] == 10
+
+    def test_push_overflow(self):
+        cpu = VirtualCPU()
+        cpu.sp = 0
+        loader = ProgramLoader()
+        insts = loader.load("MOV R0, 1\nPUSH R0\nHALT")
+        cpu.load_program(insts)
+        with pytest.raises(InsFault, match="stack overflow"):
+            cpu.run()
+
+    def test_pop_underflow(self):
+        cpu = VirtualCPU()
+        loader = ProgramLoader()
+        insts = loader.load("POP R0\nHALT")
+        cpu.load_program(insts)
+        with pytest.raises(InsFault, match="stack underflow"):
+            cpu.run()
+
+
+class TestFloatALU:
+    def test_fadd(self):
+        cpu = VirtualCPU()
+        loader = ProgramLoader()
+        insts = loader.load("LOAD_CONST R0, 3.14\nLOAD_CONST R1, 2.0\nFADD R2, R0, R1\nHALT")
+        cpu.load_program(insts)
+        cpu.run()
+        assert abs(cpu.regs[2] - 5.14) < 0.001
+
+    def test_fsub(self):
+        cpu = VirtualCPU()
+        loader = ProgramLoader()
+        insts = loader.load("LOAD_CONST R0, 5.0\nLOAD_CONST R1, 3.0\nFSUB R2, R0, R1\nHALT")
+        cpu.load_program(insts)
+        cpu.run()
+        assert cpu.regs[2] == 2.0
+
+    def test_fmul(self):
+        cpu = VirtualCPU()
+        loader = ProgramLoader()
+        insts = loader.load("LOAD_CONST R0, 3.0\nLOAD_CONST R1, 4.0\nFMUL R2, R0, R1\nHALT")
+        cpu.load_program(insts)
+        cpu.run()
+        assert cpu.regs[2] == 12.0
+
+    def test_fdiv(self):
+        cpu = VirtualCPU()
+        loader = ProgramLoader()
+        insts = loader.load("LOAD_CONST R0, 10.0\nLOAD_CONST R1, 4.0\nFDIV R2, R0, R1\nHALT")
+        cpu.load_program(insts)
+        cpu.run()
+        assert cpu.regs[2] == 2.5
+
+    def test_fdiv_by_zero(self):
+        cpu = VirtualCPU()
+        loader = ProgramLoader()
+        insts = loader.load("LOAD_CONST R0, 1.0\nLOAD_CONST R1, 0.0\nFDIV R2, R0, R1\nHALT")
+        cpu.load_program(insts)
+        with pytest.raises(InsFault, match="division by zero"):
+            cpu.run()
+
+    def test_fcmp(self):
+        cpu = VirtualCPU()
+        loader = ProgramLoader()
+        insts = loader.load("LOAD_CONST R0, 1.0\nLOAD_CONST R1, 2.0\nFCMP R0, R1\nHALT")
+        cpu.load_program(insts)
+        cpu.run()
+        assert cpu._cmp_flag == -1
+
+
+class TestMemoryOpcodes:
+    def test_alloc(self):
+        cpu = VirtualCPU()
+        loader = ProgramLoader()
+        insts = loader.load("ALLOC R0, 100\nHALT")
+        cpu.load_program(insts)
+        cpu.run()
+        assert cpu.regs[0] == 100
+
+    def test_meminfo(self):
+        cpu = VirtualCPU()
+        loader = ProgramLoader()
+        insts = loader.load("ALLOC R0, 50\nMEMINFO R1\nHALT")
+        cpu.load_program(insts)
+        cpu.run()
+        assert cpu.regs[1] >= 1

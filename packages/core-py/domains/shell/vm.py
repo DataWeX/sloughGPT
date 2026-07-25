@@ -150,6 +150,17 @@ OPCODES = {
     "DEV_CALL":   "Rd, H, method, args...  Rd = device.method(*args)",
     "DEV_CLOSE":  "H                  release device handle",
     "DEV_INFO":   "Rd, H              Rd = device.info()",
+    "PUSH":       "Rs                 stack.push(Rs); sp -= 1",
+    "POP":        "Rd                 sp += 1; Rd = stack[sp]",
+    "FADD":       "Rd, Ra, Rb         Rd = float(Ra) + float(Rb)",
+    "FSUB":       "Rd, Ra, Rb         Rd = float(Ra) - float(Rb)",
+    "FMUL":       "Rd, Ra, Rb         Rd = float(Ra) * float(Rb)",
+    "FDIV":       "Rd, Ra, Rb         Rd = float(Ra) / float(Rb)",
+    "FCMP":       "Ra, Rb             set CMP_FLAG for floats",
+    "ALLOC":      "Rd, size           Rd = heap.alloc(size)",
+    "MEMINFO":    "Rd                 Rd = heap.usage()",
+    "IN":         "Rd, port           Rd = bus.read_io(port)",
+    "OUT":        "port, Rs           bus.write_io(port, Rs)",
 }
 
 
@@ -249,8 +260,10 @@ class CPU:
     def __init__(self, memory=None, devices=None):
         self.regs = [0] * NUM_REGS
         self.pc = 0
+        self.sp = STACK_BASE
         self._cmp_flag = 0
         self._call_stack = []
+        self._stack = {}
         self._memory = memory or Memory()
         self._devices = devices or DeviceBus()
         self._instructions = []
@@ -571,6 +584,91 @@ def _op_icmp(cpu, ops):
     cpu._check_arity(ops, 2)
     a, b = int(cpu._val(ops[0])), int(cpu._val(ops[1]))
     cpu._cmp_flag = -1 if a < b else (1 if a > b else 0)
+
+
+# ── Float ALU ──────────────────────────────────────────────────────────────
+
+def _op_fadd(cpu, ops):
+    cpu._check_arity(ops, 3)
+    cpu.regs[cpu._reg(ops[0])] = float(cpu._val(ops[1])) + float(cpu._val(ops[2]))
+
+def _op_fsub(cpu, ops):
+    cpu._check_arity(ops, 3)
+    cpu.regs[cpu._reg(ops[0])] = float(cpu._val(ops[1])) - float(cpu._val(ops[2]))
+
+def _op_fmul(cpu, ops):
+    cpu._check_arity(ops, 3)
+    cpu.regs[cpu._reg(ops[0])] = float(cpu._val(ops[1])) * float(cpu._val(ops[2]))
+
+def _op_fdiv(cpu, ops):
+    cpu._check_arity(ops, 3)
+    b = float(cpu._val(ops[2]))
+    if b == 0:
+        raise InsFault("division by zero")
+    cpu.regs[cpu._reg(ops[0])] = float(cpu._val(ops[1])) / b
+
+def _op_fcmp(cpu, ops):
+    cpu._check_arity(ops, 2)
+    a, b = float(cpu._val(ops[0])), float(cpu._val(ops[1]))
+    cpu._cmp_flag = -1 if a < b else (1 if a > b else 0)
+
+
+# ── Stack Operations ───────────────────────────────────────────────────────
+
+def _op_push(cpu, ops):
+    cpu._check_arity(ops, 1)
+    if cpu.sp <= 0:
+        raise InsFault("stack overflow")
+    cpu.sp -= 1
+    cpu._stack[cpu.sp] = cpu._val(ops[0])
+
+def _op_pop(cpu, ops):
+    cpu._check_arity(ops, 1)
+    if cpu.sp >= STACK_BASE:
+        raise InsFault("stack underflow")
+    cpu.regs[cpu._reg(ops[0])] = cpu._stack[cpu.sp]
+    cpu.sp += 1
+
+
+# ── Memory Operations ──────────────────────────────────────────────────────
+
+def _op_alloc(cpu, ops):
+    cpu._check_arity(ops, 2)
+    size = int(cpu._val(ops[1]))
+    name = f"_alloc_{cpu._step_count}"
+    cpu._memory.store(name, np.zeros(size, dtype=np.float64))
+    cpu.regs[cpu._reg(ops[0])] = size
+
+def _op_meminfo(cpu, ops):
+    cpu._check_arity(ops, 1)
+    usage = cpu._memory.usage()
+    cpu.regs[cpu._reg(ops[0])] = usage.get("entries", 0)
+
+
+# ── I/O Operations ─────────────────────────────────────────────────────────
+
+def _op_in(cpu, ops):
+    cpu._check_arity(ops, 2)
+    port = int(cpu._val(ops[1]))
+    try:
+        device = cpu._devices._devices.get(str(port))
+        if device:
+            cpu.regs[cpu._reg(ops[0])] = device.info().get("status", 0)
+        else:
+            cpu.regs[cpu._reg(ops[0])] = 0
+    except Exception:
+        cpu.regs[cpu._reg(ops[0])] = 0
+
+def _op_out(cpu, ops):
+    cpu._check_arity(ops, 2)
+    port = int(cpu._val(ops[0]))
+    val = cpu._val(ops[1])
+    try:
+        device = cpu._devices._devices.get(str(port))
+        if device and hasattr(device, 'write'):
+            device.write(val)
+    except Exception:
+        pass
 
 
 # ── Tensor ALU ───────────────────────────────────────────────────────────────
@@ -963,6 +1061,11 @@ _OPCODE_TABLE = {
     "CALL": _op_call, "RET": _op_ret, "LOOP": _op_loop, "HALT": _op_halt,
     "DEV_OPEN": _op_dev_open, "DEV_CALL": _op_dev_call,
     "DEV_CLOSE": _op_dev_close, "DEV_INFO": _op_dev_info,
+    "PUSH": _op_push, "POP": _op_pop,
+    "FADD": _op_fadd, "FSUB": _op_fsub, "FMUL": _op_fmul, "FDIV": _op_fdiv,
+    "FCMP": _op_fcmp,
+    "ALLOC": _op_alloc, "MEMINFO": _op_meminfo,
+    "IN": _op_in, "OUT": _op_out,
 }
 
 
