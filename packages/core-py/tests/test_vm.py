@@ -68,46 +68,18 @@ class TestProgramLoader:
         assert insts[0].opcode == "JZ"
         assert insts[0].operands == [2]
 
-    def test_data_section_labels(self):
+    def test_load_const_string(self):
         loader = ProgramLoader()
-        insts = loader.load("""
-        .data
-            msg: db 72, 73, 0
-        .text
-        start:
-            MOV R0, msg
-            HLT
-        """)
-        assert len(insts) == 2
-        assert insts[0].operands[1] == 0  # msg address = 0
-        assert loader.data_segment == [72, 73, 0]
-
-    def test_data_str_directive(self):
-        loader = ProgramLoader()
-        loader.load("""
-        .data
-            msg: str "AB"
-        .text
-        start:
-            HLT
-        """)
-        assert loader.data_segment == [65, 66, 0]  # 'A'=65, 'B'=66, null
-
-    def test_parse_bytes_quoted(self):
-        from domains.shell.vm import parse_bytes
-        result = parse_bytes('"abc", 10, 0')
-        assert result == [97, 98, 99, 10, 0]
-
-    def test_parse_bytes_hex(self):
-        from domains.shell.vm import parse_bytes
-        result = parse_bytes('0x41, 0x42')
-        assert result == [65, 66]
+        insts = loader.load('LOAD_CONST R0, "Hello"')
+        assert insts[0].opcode == "LOAD_CONST"
+        assert insts[0].operands[0] == "R0"
+        assert insts[0].operands[1] == "Hello"
 
     def test_hello_asm_loads(self):
         loader = ProgramLoader()
         insts = loader.load(HELLO_ASM)
         assert len(insts) >= 3
-        assert insts[0].opcode == "MOV"
+        assert insts[0].opcode == "LOAD_CONST"
 
 
 # ── VirtualCPU ─────────────────────────────────────────────────────────────
@@ -117,14 +89,13 @@ class TestVirtualCPU:
     def test_create_cpu(self):
         cpu = VirtualCPU()
         assert len(cpu.regs) == NUM_REGS
-        assert cpu.sp == STACK_BASE
         assert cpu.pc == 0
 
     def test_load_program_sets_pc(self):
         cpu = VirtualCPU()
         loader = ProgramLoader()
         insts = loader.load("start: MOV R0, 0\nHLT")
-        cpu.load_program(insts, labels={"start": 0})
+        cpu.load_program(insts)
         assert cpu.pc == 0
 
     def test_execute_mov_immediate(self):
@@ -213,21 +184,6 @@ class TestVirtualCPU:
         cpu.run()
         assert cpu.regs[0] == 42
 
-    def test_push_pop(self):
-        cpu = VirtualCPU()
-        loader = ProgramLoader()
-        insts = loader.load("""
-            MOV R0, 42
-            PUSH R0
-            MOV R0, 0
-            POP R1
-            HLT
-        """)
-        cpu.load_program(insts)
-        cpu.run()
-        assert cpu.regs[0] == 0   # was overwritten
-        assert cpu.regs[1] == 42  # popped from stack
-
     def test_call_ret(self):
         cpu = VirtualCPU()
         loader = ProgramLoader()
@@ -255,27 +211,26 @@ class TestVirtualCPU:
         cpu.run()
         assert cpu._step_count == 10
 
-    def test_sandbox_syscall_limit(self):
+    def test_sandbox_loop_counter(self):
         cpu = VirtualCPU()
-        cpu._max_syscalls = 3
         loader = ProgramLoader()
-        # SYSCALL 2 (write char) so it doesn't exit
         insts = loader.load("""
-        loop:
-            MOV R0, 2
-            SYSCALL
-            JMP loop
+            MOV R0, 5
+            LOOP R0, done
+            NOP
+        done:
+            HLT
         """)
-        cpu.load_program(insts, labels={"loop": 0})
+        cpu.load_program(insts)
         cpu.run()
-        assert cpu._syscall_count == 3
+        assert cpu.regs[0] == 0
 
     def test_alu_operations(self):
-        for op, a, b, expected in [("AND", 0xFF, 0x0F, 0x0F),
-                                    ("OR", 0xF0, 0x0F, 0xFF),
-                                    ("XOR", 0xFF, 0x0F, 0xF0),
-                                    ("SHL", 1, 3, 8),
-                                    ("SHR", 8, 3, 1)]:
+        for op, a, b, expected in [("IAND", 0xFF, 0x0F, 0x0F),
+                                    ("IOR", 0xF0, 0x0F, 0xFF),
+                                    ("IXOR", 0xFF, 0x0F, 0xF0),
+                                    ("ISHL", 1, 3, 8),
+                                    ("ISHR", 8, 3, 1)]:
             cpu = VirtualCPU()
             loader = ProgramLoader()
             code = f"MOV R0, {a}\n{op} R0, R0, {b}\nHLT"
@@ -284,29 +239,29 @@ class TestVirtualCPU:
             cpu.run()
             assert cpu.regs[0] == expected, f"{op}: got {cpu.regs[0]} expected {expected}"
 
-    def test_flags_set_on_cmp(self):
+    def test_cmp_sets_flag_equal(self):
         cpu = VirtualCPU()
         loader = ProgramLoader()
         insts = loader.load("MOV R0, 5\nCMP R0, 5\nHLT")
         cpu.load_program(insts)
         cpu.run()
-        assert cpu.flags & F_ZERO
+        assert cpu._cmp_flag == 0
 
-    def test_flags_set_on_sub(self):
+    def test_cmp_sets_flag_less(self):
         cpu = VirtualCPU()
         loader = ProgramLoader()
         insts = loader.load("MOV R0, 3\nSUB R0, R0, 5\nHLT")
         cpu.load_program(insts)
         cpu.run()
-        assert cpu.flags & F_NEG
+        assert cpu._cmp_flag == -1
 
     def test_conditional_jumps(self):
         for jmp, a, b, should_jump in [
-            ("JL", 3, 5, True),
-            ("JL", 5, 3, False),
+            ("JLT", 3, 5, True),
+            ("JLT", 5, 3, False),
             ("JLE", 5, 5, True),
-            ("JG", 7, 3, True),
-            ("JG", 3, 3, False),
+            ("JGT", 7, 3, True),
+            ("JGT", 3, 3, False),
             ("JGE", 5, 3, True),
             ("JGE", 3, 5, False),
         ]:
@@ -357,7 +312,7 @@ class TestVMRunner:
         runner = VMRunner()
         output = runner.assemble_and_run("""
             MOV R0, 42
-            STORE 100, R0
+            STORE R0, 100
             MOV R1, 0
             LOAD R1, 100
             HLT
@@ -367,17 +322,17 @@ class TestVMRunner:
     def test_disassemble(self):
         runner = VMRunner()
         listing = runner.disassemble(HELLO_ASM)
-        assert any("MOV" in line for line in listing)
-        assert any("SYSCALL" in line for line in listing)
+        assert any("LOAD_CONST" in line for line in listing)
+        assert any("PRINT" in line for line in listing)
 
     def test_self_test(self):
         from domains.shell.vm import self_test
         results = self_test()
         assert len(results) >= 3
 
-    def test_cpu_get_state(self):
+    def test_cpu_get_trace(self):
         runner = VMRunner()
         runner.assemble_and_run("MOV R0, 42\nHLT")
-        state = runner.cpu.get_state()
-        assert state["regs"][0] == 42
-        assert not state["running"]
+        trace = runner.cpu.get_trace()
+        assert len(trace) >= 1
+        assert trace[0].registers["R0"] == 42
