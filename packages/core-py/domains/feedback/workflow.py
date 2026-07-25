@@ -21,6 +21,7 @@ from .database import FeedbackDB, get_feedback_db
 from .meta_weights import MetaWeightManager, get_meta_weight_manager
 from .online_train import OnlineLoRAUpdater, get_online_lora_updater
 from .per_user_lora import PerUserLoRAStore, get_per_user_lora
+from domains.infrastructure.training_pipeline import TrainingDataPipeline, get_pipeline
 
 
 @dataclass
@@ -75,6 +76,8 @@ class FeedbackWorkflowManager:
             self.lora_store.min_feedback_for_aggregation = self.config.min_feedback_for_aggregation
 
         self.lora_updater = lora_updater or get_online_lora_updater()
+
+        self._pipeline: Optional[TrainingDataPipeline] = None
 
         self._running = False
         self._scheduler_thread: Optional[threading.Thread] = None
@@ -160,6 +163,22 @@ class FeedbackWorkflowManager:
             user_id=user_id,
             feedback_signal=1.0 if rating == "thumbs_up" else -1.0,
         )
+
+        # ── Training data pipeline — persist conversation for future training ──
+        try:
+            if self._pipeline is None:
+                self._pipeline = get_pipeline()
+            conv_id = self._pipeline.add_conversation(
+                session_id=conversation_id or "unknown",
+                user_message=user_message,
+                assistant_message=assistant_response,
+                model="unknown",
+                feedback=rating,
+            )
+            if conv_id:
+                self._pipeline.add_feedback(conv_id, rating)
+        except Exception as e:
+            logger.debug("Training pipeline record failed: %s", e)
 
         self._stats["feedback_recorded"] += 1
 

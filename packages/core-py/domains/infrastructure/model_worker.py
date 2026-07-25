@@ -488,10 +488,7 @@ class ModelWorkerProcess:
         # Determine backend
         self._use_slo = slnc_path is not None
         if not self._use_slo and model_cls_path is None:
-            raise ValueError(
-                "ModelWorkerProcess requires either slnc_path (SloNet) or "
-                "model_cls_path (HF legacy)"
-            )
+            model_cls_path = "domains.infrastructure.hf_model_worker.hf_model_loader"
 
         self._req_q: Optional[mp.Queue] = None
         self._resp_q: Optional[mp.Queue] = None

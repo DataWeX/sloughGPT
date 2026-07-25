@@ -26,6 +26,19 @@ def _get_executor_stats() -> Optional[Dict[str, Any]]:
         return None
 
 
+def _get_mps_monitor_info() -> Optional[Dict[str, Any]]:
+    """Get MPS GPU memory monitor status if available."""
+    try:
+        from domains.infrastructure.mps_monitor import get_mps_monitor
+        mon = get_mps_monitor()
+        return {
+            "usage": round(mon.get_usage(), 3),
+            "locked_to_cpu": mon.is_locked_to_cpu(),
+        }
+    except Exception:
+        return None
+
+
 def _is_model_loading() -> bool:
     """Check if the server is currently loading a model in the background.
 
@@ -314,6 +327,7 @@ class HealthController:
                 "memory_available_mb": mem.available // (1024 * 1024),
             },
             "gpu": gpu_info,
+            "mps_monitor": _get_mps_monitor_info(),
             "model_loaded": model_loaded,
             "model_loading": not model_loaded and _is_model_loading(),
             "model_type": model_type,

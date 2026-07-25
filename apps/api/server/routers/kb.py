@@ -157,6 +157,17 @@ def add_knowledge(req: KnowledgeCreate):
     from domains.learner.knowledge import KnowledgeFact
     memory = _get_memory()
     topic = req.topic if not req.auto_tag else _auto_tag(req.content)
+
+    # Auto-label semantic category if not set
+    label = ""
+    try:
+        from domains.infrastructure.truth_labeler import get_truth_labeler
+        labeler = get_truth_labeler()
+        lr = labeler.label(req.content)
+        label = lr.label
+    except Exception:
+        pass
+
     fact = KnowledgeFact(
         content=req.content,
         topic=topic,
@@ -164,7 +175,7 @@ def add_knowledge(req: KnowledgeCreate):
         importance=req.importance,
     )
     memory.add_fact(fact)
-    return success_response(data={"status": "stored", "content": req.content, "topic": topic})
+    return success_response(data={"status": "stored", "content": req.content, "topic": topic, "label": label})
 
 
 @router.patch("/{item_id}")
@@ -721,3 +732,43 @@ async def embedder_status():
         "trained": exists,
         "info": info,
     }
+
+
+# ── Spaced repetition for knowledge review ────────────────────────────
+
+_spaced_rep_scheduler = None
+
+def _get_spaced_rep():
+    global _spaced_rep_scheduler
+    if _spaced_rep_scheduler is None:
+        from domains.infrastructure.spaced_repetition_engine import SpacedRepetitionScheduler
+        _spaced_rep_scheduler = SpacedRepetitionScheduler()
+    return _spaced_rep_scheduler
+
+
+@router.get("/reviews/due")
+def get_due_reviews():
+    """Get knowledge items that are due for review."""
+    scheduler = _get_spaced_rep()
+    due_ids = scheduler.get_due_reviews()
+    stats = scheduler.get_review_stats()
+    return success_response(data={"due_ids": due_ids, "stats": stats})
+
+
+@router.post("/reviews/{item_id}/schedule")
+def schedule_review(item_id: str, performance: float = Query(0.8, ge=0.0, le=1.0)):
+    """Record a review performance and schedule next review."""
+    scheduler = _get_spaced_rep()
+    next_time = scheduler.schedule_review(item_id, performance)
+    return success_response(data={"item_id": item_id, "next_review": next_time})
+
+
+# ── Knowledge labeler ─────────────────────────────────────────────────
+
+@router.get("/label")
+def label_text(text: str = Query(..., min_length=1)):
+    """Classify text into semantic category (factual, procedural, etc.)."""
+    from domains.infrastructure.truth_labeler import get_truth_labeler
+    labeler = get_truth_labeler()
+    result = labeler.label(text)
+    return success_response(data=result.to_dict())
