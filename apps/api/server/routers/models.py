@@ -114,7 +114,6 @@ def _model_display_name(model_id: str) -> str:
         "microsoft/Phi-3.5-mini-instruct" → "Phi 3.5 Mini Instruct"
         "meta-llama/Llama-3-8B" → "Llama 3 8B"
     """
-    import re
     name = model_id.split("/")[-1] if "/" in model_id else model_id
 
     # Strip cache prefix: "models--Qwen--Qwen2.5..." → "Qwen2.5..."

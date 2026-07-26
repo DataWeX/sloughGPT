@@ -467,7 +467,6 @@ def _chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str
     small paragraphs up to chunk_size. Oversized paragraphs are split
     at sentence boundaries. Returns chunks >= 20 characters.
     """
-    import re
     paragraphs = re.split(r'\n\s*\n', text)
     paragraphs = [p.strip() for p in paragraphs if p.strip()]
 

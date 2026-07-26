@@ -24,14 +24,13 @@ const translations: Record<Locale, Translations> = {
     'nav.agents': 'Agents',
     'home.subtitle.offline': 'API not reachable',
     'home.apiOffline.title': 'API not reachable',
+    'home.apiOffline.body': 'API server at {url} is not reachable',
     'home.stats.status': 'Status',
     'home.stats.models': 'Models',
     'home.stats.personality': 'Personality',
     'chat.send': 'Send',
     'sidebar.close': 'Close menu',
     'sidebar.home': 'Home',
-    'models.subtitle.loaded': '{model} loaded',
-    'training.jobsCompleted': '{completed} / {total} jobs completed',
   },
 
   es: {
@@ -55,8 +54,7 @@ const translations: Record<Locale, Translations> = {
     'chat.send': 'Enviar',
     'sidebar.close': 'Cerrar menú',
     'sidebar.home': 'Inicio',
-    'models.subtitle.loaded': '{model} cargado',
-    'training.jobsCompleted': '{completed} / {total} trabajos completados',
+    'home.apiOffline.body': 'El servidor API en {url} no es accesible',
   },
 
   fr: {
@@ -80,8 +78,7 @@ const translations: Record<Locale, Translations> = {
     'chat.send': 'Envoyer',
     'sidebar.close': 'Fermer le menu',
     'sidebar.home': 'Accueil',
-    'models.subtitle.loaded': '{model} chargé',
-    'training.jobsCompleted': '{completed} / {total} travaux terminés',
+    'home.apiOffline.body': 'Le serveur API à {url} est inaccessible',
   },
 
   de: {
@@ -105,8 +102,7 @@ const translations: Record<Locale, Translations> = {
     'chat.send': 'Senden',
     'sidebar.close': 'Menü schließen',
     'sidebar.home': 'Startseite',
-    'models.subtitle.loaded': '{model} geladen',
-    'training.jobsCompleted': '{completed} / {total} Aufgaben abgeschlossen',
+    'home.apiOffline.body': 'API-Server unter {url} ist nicht erreichbar',
   },
 
   zh: {
@@ -130,8 +126,7 @@ const translations: Record<Locale, Translations> = {
     'chat.send': '发送',
     'sidebar.close': '关闭菜单',
     'sidebar.home': '首页',
-    'models.subtitle.loaded': '{model} 已加载',
-    'training.jobsCompleted': '{completed} / {total} 个任务已完成',
+    'home.apiOffline.body': 'API 服务器 {url} 不可达',
   },
 }
 

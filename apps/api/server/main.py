@@ -217,9 +217,8 @@ def get_meta_weight_manager():
 # These symbols used to be defined inline but now live in the ``server/infrastructure/``
 # package.  The re-exports below ensure zero-changes for existing callers.
 
-from config import gen_config as gen_config_reexport  # noqa: E402, F401
-gen_config = gen_config_reexport
-server_state.gen_config = gen_config
+from config import gen_config as gen_config_reexport  # noqa: E402
+server_state.gen_config = gen_config_reexport
 
 from infrastructure.auth import get_jwt_auth, get_audit_logger  # noqa: E402
 jwt_auth = get_jwt_auth()
@@ -232,8 +231,6 @@ JWT_SECRET = _sec.jwt_secret
 JWT_ALGORITHM = _sec.jwt_algorithm
 JWT_EXPIRATION_HOURS = _sec.jwt_expiration_hours
 VALID_API_KEYS = _sec.valid_api_keys
-
-from pydantic import BaseModel  # noqa: E402
 
 
 def find_available_port(start_port: int = 8000, max_attempts: int = 10) -> int:

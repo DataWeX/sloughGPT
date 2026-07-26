@@ -64,7 +64,7 @@ describe('t function', () => {
         <LocaleReader fn={(x) => { t = x.t }} />
       </LocaleProvider>
     )
-    expect(t!('models.subtitle.loaded', { model: 'gpt2' })).toBe('gpt2 loaded')
+    expect(t!('home.apiOffline.body', { url: 'http://localhost:8000' })).toBe('API server at http://localhost:8000 is not reachable')
   })
 
   it('interpolates multiple params', () => {
@@ -74,7 +74,7 @@ describe('t function', () => {
         <LocaleReader fn={(x) => { t = x.t }} />
       </LocaleProvider>
     )
-    expect(t!('training.jobsCompleted', { completed: '3', total: '5' })).toBe('3 / 5 jobs completed')
+    expect(t!('home.apiOffline.body', { url: 'http://example.com:9000' })).toBe('API server at http://example.com:9000 is not reachable')
   })
 })
 

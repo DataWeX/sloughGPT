@@ -341,7 +341,6 @@ def _extract_text(content: bytes, ext: str) -> tuple[str, int]:
 
 def _chunk_text(text: str, max_chars: int = 500) -> list[str]:
     """Split text into chunks at sentence boundaries."""
-    import re
     sentences = re.split(r'(?<=[.!?])\s+', text)
     chunks = []
     current = ""

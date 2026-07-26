@@ -80,7 +80,6 @@ def _clear_disk():
 
 def _fingerprint(message: str) -> str:
     """Create a stable fingerprint for deduplication (ignore numbers/IDs)."""
-    import re
     normalized = re.sub(r'\d+', 'N', message.lower())
     normalized = re.sub(r'[a-f0-9]{8,}', 'ID', normalized)
     return hashlib.md5(normalized.encode()).hexdigest()[:12]
