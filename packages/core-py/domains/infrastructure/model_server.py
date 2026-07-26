@@ -68,17 +68,17 @@ class SessionKVCache:
         """
         with self._lock:
             entry = self._caches.get(session_id)
-            if entry is None:
-                return None, 0
-            cached_ids, cached_pkv, _ = entry
-            prefix_len = 0
-            for a, b in zip(cached_ids, current_ids):
-                if a != b:
-                    break
-                prefix_len += 1
-            if prefix_len == 0:
-                return None, 0
-            return cached_pkv, prefix_len
+        if entry is None:
+            return None, 0
+        cached_ids, cached_pkv, _ = entry
+        prefix_len = 0
+        for a, b in zip(cached_ids, current_ids):
+            if a != b:
+                break
+            prefix_len += 1
+        if prefix_len == 0:
+            return None, 0
+        return cached_pkv, prefix_len
 
     def store(self, session_id: str, token_ids: list[int], past_key_values: Any) -> None:
         """Store ``past_key_values`` keyed by session + token IDs."""

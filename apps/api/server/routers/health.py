@@ -23,28 +23,28 @@ HEALTH_STREAM_INTERVAL = 3.0
 async def health():
     """Basic health check"""
     ctrl = get_health_controller()
-    return success_response(data=ctrl.get_basic_health())
+    return success_response(data=await asyncio.to_thread(ctrl.get_basic_health))
 
 
 @router.get("/live")
 async def liveness():
     """Kubernetes liveness probe"""
     ctrl = get_health_controller()
-    return success_response(data=ctrl.get_liveness())
+    return success_response(data=await asyncio.to_thread(ctrl.get_liveness))
 
 
 @router.get("/ready")
 async def readiness():
     """Kubernetes readiness probe"""
     ctrl = get_health_controller()
-    return success_response(data=ctrl.get_readiness())
+    return success_response(data=await asyncio.to_thread(ctrl.get_readiness))
 
 
 @router.get("/detailed")
 async def detailed_health():
     """Detailed health with system metrics"""
     ctrl = get_health_controller()
-    return success_response(data=ctrl.get_detailed_health())
+    return success_response(data=await asyncio.to_thread(ctrl.get_detailed_health))
 
 
 @router.get("/startup-progress")
@@ -62,7 +62,7 @@ async def debug_info():
     Includes request/error history, path latencies, inference metrics, and request rate.
     """
     ctrl = get_health_controller()
-    detailed = ctrl.get_detailed_health()
+    detailed = await asyncio.to_thread(ctrl.get_detailed_health)
     return success_response(data={
         "model_loaded": detailed.get("model_loaded", False),
         "model_type": detailed.get("model_type"),
@@ -117,7 +117,7 @@ async def health_summary():
     summary, and per-check diagnoses. No raw numbers in user-facing text.
     """
     ctrl = get_health_controller()
-    detailed = ctrl.get_detailed_health()
+    detailed = await asyncio.to_thread(ctrl.get_detailed_health)
     hs = detailed.get("health_score", {})
     return success_response(data={
         "score": hs.get("score", 0),
@@ -188,7 +188,7 @@ async def health_stream(request: Request):
             if await request.is_disconnected():
                 break
             try:
-                snapshot = _build_health_snapshot(ctrl)
+                snapshot = await asyncio.to_thread(_build_health_snapshot, ctrl)
                 envelope = {
                     "stream": "health",
                     "phase": "HEALTH",

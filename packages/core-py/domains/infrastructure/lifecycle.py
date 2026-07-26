@@ -167,6 +167,33 @@ def _topological_sort(hooks: list[StartupHook]) -> list[StartupHook]:
     return ordered
 
 
+def _dependency_levels(hooks: list[StartupHook]) -> list[list[StartupHook]]:
+    """Group hooks into dependency levels for parallel execution.
+
+    Level 0 = no dependencies, level 1 = depends only on level 0, etc.
+    Hooks within the same level can run concurrently.
+    """
+    by_name: dict[str, StartupHook] = {h.name: h for h in hooks}
+    resolved: set[str] = set()
+    levels: list[list[StartupHook]] = []
+    remaining = list(hooks)
+
+    while remaining:
+        # Find hooks whose deps are all resolved
+        level = [h for h in remaining if all(d in resolved or d not in by_name for d in h.depends_on)]
+        if not level:
+            # Break cycle: put remaining in one level
+            level = remaining
+            logger.warning("Dependency cycle in parallel startup — running remaining hooks sequentially",
+                           extra={"tag": "INFRA"})
+        levels.append(level)
+        for h in level:
+            resolved.add(h.name)
+            remaining.remove(h)
+
+    return levels
+
+
 # ── Event names ──
 
 EVT_PHASE_CHANGED = "lifecycle.phase_changed"
@@ -433,32 +460,87 @@ class LifecycleManager:
             self._drain_event = asyncio.Event()
 
         filtered = self._filter_hooks_for_profile(self._startup_hooks, self._profile)
-        ordered = _topological_sort(filtered)
+        levels = _dependency_levels(filtered)
         results: list[_HookResult] = []
         all_ok = True
 
-        for hook in ordered:
-            self._emit_sync(EVT_HOOK_STARTED, {"hook": hook.name})
-            started = time.time()
-            try:
-                await asyncio.wait_for(hook.handler(), timeout=hook.timeout)
-                elapsed = time.time() - started
-                results.append(_HookResult(name=hook.name, success=True, elapsed=elapsed))
-                self._emit_sync(EVT_HOOK_COMPLETED, {"hook": hook.name, "elapsed": round(elapsed, 3)})
-                logger.info("Startup hook %s completed in %.2fs", hook.name, elapsed,
+        for level in levels:
+            if len(level) == 1:
+                hook = level[0]
+                self._emit_sync(EVT_HOOK_STARTED, {"hook": hook.name})
+                started = time.time()
+                try:
+                    await asyncio.wait_for(hook.handler(), timeout=hook.timeout)
+                    elapsed = time.time() - started
+                    results.append(_HookResult(name=hook.name, success=True, elapsed=elapsed))
+                    self._emit_sync(EVT_HOOK_COMPLETED, {"hook": hook.name, "elapsed": round(elapsed, 3)})
+                    logger.info("Startup hook %s completed in %.2fs", hook.name, elapsed,
+                        extra={"tag": "INFRA"})
+                except asyncio.TimeoutError:
+                    elapsed = time.time() - started
+                    error = f"timed out after {hook.timeout:.0f}s"
+                    results.append(_HookResult(name=hook.name, success=False, elapsed=elapsed, error=error))
+                    self._emit_sync(EVT_HOOK_FAILED, {"hook": hook.name, "error": error, "elapsed": round(elapsed, 3)})
+                    logger.error("Startup hook %s %s", hook.name, error,
+                        extra={"tag": "INFRA"})
+                    if hook.critical:
+                        all_ok = False
+                        break
+                except Exception as exc:
+                    elapsed = time.time() - started
+                    error = str(exc)
+                    results.append(_HookResult(name=hook.name, success=False, elapsed=elapsed, error=error))
+                    self._emit_sync(EVT_HOOK_FAILED, {"hook": hook.name, "error": error, "elapsed": round(elapsed, 3)})
+                    logger.error("Startup hook %s failed: %s", hook.name, exc,
+                        extra={"tag": "INFRA"})
+                    if hook.critical:
+                        all_ok = False
+                        break
+            else:
+                # Run independent hooks in parallel
+                names = [h.name for h in level]
+                logger.info("Startup: running %d hooks in parallel: %s", len(level), ", ".join(names),
                     extra={"tag": "INFRA"})
-            except asyncio.TimeoutError:
-                elapsed = time.time() - started
-                error = f"timed out after {hook.timeout:.0f}s"
-                results.append(_HookResult(name=hook.name, success=False, elapsed=elapsed, error=error))
-                self._emit_sync(EVT_HOOK_FAILED, {"hook": hook.name, "error": error, "elapsed": round(elapsed, 3)})
-                logger.error("Startup hook %s %s", hook.name, error,
-                    extra={"tag": "INFRA"})
-                if hook.critical:
-                    all_ok = False
+                level_started = time.time()
+
+                async def _run_hook(h: StartupHook) -> _HookResult:
+                    self._emit_sync(EVT_HOOK_STARTED, {"hook": h.name})
+                    started = time.time()
+                    try:
+                        await asyncio.wait_for(h.handler(), timeout=h.timeout)
+                        elapsed = time.time() - started
+                        self._emit_sync(EVT_HOOK_COMPLETED, {"hook": h.name, "elapsed": round(elapsed, 3)})
+                        logger.info("Startup hook %s completed in %.2fs", h.name, elapsed,
+                            extra={"tag": "INFRA"})
+                        return _HookResult(name=h.name, success=True, elapsed=elapsed)
+                    except asyncio.TimeoutError:
+                        elapsed = time.time() - started
+                        error = f"timed out after {h.timeout:.0f}s"
+                        self._emit_sync(EVT_HOOK_FAILED, {"hook": h.name, "error": error, "elapsed": round(elapsed, 3)})
+                        logger.error("Startup hook %s %s", h.name, error, extra={"tag": "INFRA"})
+                        return _HookResult(name=h.name, success=False, elapsed=elapsed, error=error)
+                    except Exception as exc:
+                        elapsed = time.time() - started
+                        error = str(exc)
+                        self._emit_sync(EVT_HOOK_FAILED, {"hook": h.name, "error": error, "elapsed": round(elapsed, 3)})
+                        logger.error("Startup hook %s failed: %s", h.name, exc, extra={"tag": "INFRA"})
+                        return _HookResult(name=h.name, success=False, elapsed=elapsed, error=error)
+
+                level_results = await asyncio.gather(*[_run_hook(h) for h in level])
+                level_elapsed = time.time() - level_started
+                logger.info("Startup: parallel level (%s) completed in %.2fs",
+                    ", ".join(names), level_elapsed, extra={"tag": "INFRA"})
+                results.extend(level_results)
+
+                # Check critical failures
+                for r in level_results:
+                    if not r.success:
+                        hook = next(h for h in level if h.name == r.name)
+                        if hook.critical:
+                            all_ok = False
+                            break
+                if not all_ok:
                     break
-            except Exception as exc:
-                elapsed = time.time() - started
                 error = str(exc)
                 results.append(_HookResult(name=hook.name, success=False, elapsed=elapsed, error=error))
                 self._emit_sync(EVT_HOOK_FAILED, {"hook": hook.name, "error": error, "elapsed": round(elapsed, 3)})

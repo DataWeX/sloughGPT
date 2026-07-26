@@ -239,12 +239,11 @@ async def _flush_session_to_disk(session_id: str) -> None:
 
 
 async def flush_dirty_sessions() -> int:
-    """Flush all dirty sessions to disk. Returns count flushed."""
+    """Flush all dirty sessions to disk concurrently. Returns count flushed."""
     dirty = list(_session_dirty)
     if not dirty:
         return 0
-    for sid in dirty:
-        await _flush_session_to_disk(sid)
+    await asyncio.gather(*[_flush_session_to_disk(sid) for sid in dirty], return_exceptions=True)
     return len(dirty)
 
 
@@ -711,36 +710,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
 
             full_response = "".join(full_response_parts)
 
-            # Log response for benchmarking
-            try:
-                from domains.feedback.response_tracker import get_response_tracker
-                tracker = get_response_tracker()
-                duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
-                tracker.log(
-                    user_message=user_msg or "",
-                    assistant_response=full_response,
-                    model=req.model,
-                    config={"temperature": req.temperature, "max_tokens": req.max_tokens},
-                    session_id=session_id,
-                    user_id=req.user_id or "default",
-                    tokens_generated=len(full_response.split()),
-                    duration_ms=duration_ms,
-                    has_images=bool(req.images),
-                )
-            except Exception as e:
-                logger.debug("ResponseTracker.log failed: %s", e)
-
-            # Record inference metrics
-            try:
-                from domains.infrastructure.server_state import get_server_state
-                tokens = len(full_response.split())
-                elapsed_ms = (datetime.datetime.now() - start_time).total_seconds() * 1000
-                get_server_state().record_inference(tokens=tokens, elapsed_ms=elapsed_ms, model=req.model)
-            except Exception as e:
-                logger.debug("Failed to record inference metrics: %s", e)
-                pass
-
-            # Save response (memory cache + async disk flush)
+            # Save response (memory cache + async disk flush) — must happen before parallel tasks
             # Skip if session was deleted while we were generating
             if session_id not in _session_deleted:
                 session_data["messages"].append({
@@ -753,16 +723,56 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
             else:
                 logger.info("Session %s was deleted during generation, skipping save", session_id, extra={"tag": "INF"})
 
+            # Fire independent post-generation tasks concurrently
+            duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
+            tokens = len(full_response.split())
+            _post_gen_tasks = []
+
+            # Response tracking
+            try:
+                from domains.feedback.response_tracker import get_response_tracker
+                tracker = get_response_tracker()
+                _post_gen_tasks.append(asyncio.to_thread(
+                    tracker.log,
+                    user_message=user_msg or "",
+                    assistant_response=full_response,
+                    model=req.model,
+                    config={"temperature": req.temperature, "max_tokens": req.max_tokens},
+                    session_id=session_id,
+                    user_id=req.user_id or "default",
+                    tokens_generated=tokens,
+                    duration_ms=duration_ms,
+                    has_images=bool(req.images),
+                ))
+            except Exception as e:
+                logger.debug("ResponseTracker.log failed: %s", e)
+
+            # Record inference metrics
+            try:
+                from domains.infrastructure.server_state import get_server_state
+                _post_gen_tasks.append(asyncio.to_thread(
+                    get_server_state().record_inference,
+                    tokens=tokens, elapsed_ms=duration_ms, model=req.model,
+                ))
+            except Exception as e:
+                logger.debug("Failed to record inference metrics: %s", e)
+
             # Update ContextCore with response
             if ctx_core and req.use_context_core:
-                ctx_core.add_response(full_response, model=req.model)
+                _post_gen_tasks.append(asyncio.to_thread(ctx_core.add_response, full_response, model=req.model))
 
-            # Feed conversation pair to continual learner (fire-and-forget)
+            # Feed conversation pair to continual learner
             try:
                 from domains.learner import get_learner
-                get_learner().ingest_conversation([(user_msg, full_response)])
+                _post_gen_tasks.append(asyncio.to_thread(
+                    get_learner().ingest_conversation, [(user_msg, full_response)]
+                ))
             except Exception as e:
                 logger.debug("Continual learner ingest failed: %s", e)
+
+            # Await all post-generation tasks (don't fail the request if one errors)
+            if _post_gen_tasks:
+                await asyncio.gather(*_post_gen_tasks, return_exceptions=True)
 
             # Auto-extract entities and relationships into knowledge base
             try:
