@@ -41,7 +41,6 @@ vi.mock('@/lib/toast-store', () => ({ useToastStore: (sel?: any) => sel ? sel(mo
 vi.mock('@/lib/api-monitor-store', () => ({ useApiMonitor: (sel?: any) => sel ? sel(mockApiMonitor) : mockApiMonitor }))
 
 vi.mock('@/hooks/useGlobalShortcuts', () => ({ useGlobalShortcuts: vi.fn() }))
-vi.mock('@/hooks/useBackendWatcher', () => ({ useBackendWatcher: vi.fn() }))
 vi.mock('@/hooks/useLiveStatus', () => ({ initLiveStatus: vi.fn(() => vi.fn()) }))
 
 import AppLayout from './AppLayout'

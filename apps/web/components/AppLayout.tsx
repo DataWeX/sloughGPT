@@ -45,7 +45,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const { open: convOpen, navCollapsed, toggleNav, setNavCollapsed } = useConvSidebar()
   useGlobalShortcuts()
 
-  // Initialize live health SSE stream (replaces useBackendWatcher)
+  // Initialize live health SSE stream
   useEffect(() => {
     return initLiveStatus()
   }, [])

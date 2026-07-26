@@ -1,7 +1,6 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { logger } from '@/lib/dev-log'
 import { useEffect, useCallback, useMemo, useState } from 'react'
 import dynamicNext from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -26,7 +25,6 @@ import { generationConfigController } from '@/lib/generation-config-controller'
 import { useFeedbackStore } from '@/lib/feedback-store'
 import { useToastStore } from '@/lib/toast-store'
 import { useSettings } from '@/lib/store'
-import { apiPost } from '@/lib/http-client'
 import { imagesController } from '@/lib/images-controller'
 import { chatDB } from '@/lib/db'
 import type { ImageStyle } from '@/lib/images-controller'
@@ -238,10 +236,6 @@ export default function ChatPage() {
     model.fetchInitialData(healthModel)
     agents.fetchInitialData()
   }, [fetchStats, fetchAdapterStats, health, model, agents])
-
-  useEffect(() => {
-    apiPost('/vector/init', { provider: 'chromadb', dimension: 384 }).catch((e) => logger.debug('Vector init failed', e))
-  }, [])
 
   // ── Flyweights: clearChat / selectAgent with toast ────────────────────────
 
