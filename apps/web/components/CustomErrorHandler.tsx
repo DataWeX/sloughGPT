@@ -64,7 +64,7 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
               <IconAlert className="h-5 w-5 text-destructive" />
             </div>
             <div className="flex-1 min-w-0">
-              <CardTitle className="text-base font-semibold">
+              <CardTitle className="text-base">
                 {isNetworkError ? 'Connection Error' :
                  isAuthError ? 'Authentication Error' :
                  isNotFoundError ? 'Page Not Found' :

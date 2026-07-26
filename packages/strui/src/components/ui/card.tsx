@@ -38,7 +38,7 @@ CardHeader.displayName = 'CardHeader'
 
 const CardTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadingElement> & { as?: ElementType }>(
   ({ className, as: Component = 'h3', ...props }, ref) => (
-    <Component ref={ref} className={cn('text-base font-semibold leading-none tracking-tight', className)} {...props} />
+    <Component ref={ref} className={cn('text-base font-medium leading-none tracking-tight', className)} {...props} />
   )
 )
 CardTitle.displayName = 'CardTitle'
