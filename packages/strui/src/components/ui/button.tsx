@@ -5,23 +5,23 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '../../lib/cn'
 
 export const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all duration-200 ease-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all duration-200 ease-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-40 active:scale-[0.98]',
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground shadow-sm hover:opacity-90 hover:shadow-md',
+        default: 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:shadow-md',
         secondary:
           'border border-border bg-secondary text-secondary-foreground shadow-sm hover:bg-primary/8 hover:text-primary hover:border-primary/25',
         ghost: 'text-muted-foreground hover:text-foreground hover:bg-accent/8',
         outline:
           'border border-border bg-transparent text-foreground shadow-sm hover:bg-primary/8 hover:text-primary hover:border-primary/25',
-        destructive: 'bg-destructive text-destructive-foreground shadow-sm hover:opacity-90',
+        destructive: 'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90',
         success: 'bg-success/15 text-success border border-success/25 shadow-sm hover:bg-success/25',
         warning: 'bg-warning/15 text-warning border border-warning/25 shadow-sm hover:bg-warning/25',
-        menu: 'text-foreground hover:bg-primary/8 hover:text-primary focus-visible:ring-primary/40',
-        bare: 'text-foreground hover:text-primary focus-visible:ring-primary/40',
+        menu: 'text-foreground hover:bg-primary/8 hover:text-primary focus-visible:ring-ring',
+        bare: 'text-foreground hover:text-primary focus-visible:ring-ring',
         select:
-          'text-foreground hover:bg-primary/8 focus-visible:ring-primary/40 border border-border/50 px-2 py-1 rounded-lg',
+          'text-foreground hover:bg-primary/8 focus-visible:ring-ring border border-border/50 px-2 py-1 rounded-lg',
         link: 'text-primary underline-offset-4 hover:underline p-0 h-auto',
       },
       size: {

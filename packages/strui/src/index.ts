@@ -11,7 +11,7 @@ export { Button, buttonVariants, type ButtonProps } from './components/ui/button
 export { Badge, badgeVariants, type BadgeProps } from './components/ui/badge'
 
 // Card
-export { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from './components/ui/card'
+export { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription, cardVariants } from './components/ui/card'
 
 // Input
 export { Input, inputFieldClassName, type InputProps } from './components/ui/input'

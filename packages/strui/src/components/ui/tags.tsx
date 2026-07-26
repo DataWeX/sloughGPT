@@ -12,7 +12,7 @@ interface ChipProps {
   icon?: ReactNode
   removable?: boolean
   onRemove?: () => void
-  variant?: 'default' | 'outline' | 'solid'
+  variant?: 'default' | 'outline' | 'solid' | 'success' | 'warning' | 'error'
   size?: 'xs' | 'sm' | 'default'
   disabled?: boolean
   className?: string
@@ -37,13 +37,22 @@ export function Chip({
   const variantStyles = {
     default: selected
       ? 'bg-primary text-primary-foreground shadow-sm'
-      : 'bg-primary/10 text-primary hover:bg-primary/20',
+      : 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
     outline: selected
       ? 'border border-primary bg-primary/10 text-primary'
       : 'border border-border bg-transparent text-foreground hover:border-primary/40 hover:text-primary',
     solid: selected
       ? 'bg-primary text-primary-foreground'
       : 'bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground',
+    success: selected
+      ? 'bg-success text-white shadow-sm'
+      : 'bg-success/15 text-success hover:bg-success/25',
+    warning: selected
+      ? 'bg-warning text-white shadow-sm'
+      : 'bg-warning/15 text-warning hover:bg-warning/25',
+    error: selected
+      ? 'bg-destructive text-white shadow-sm'
+      : 'bg-destructive/15 text-destructive hover:bg-destructive/25',
   }
 
   const sizeStyles = {
@@ -64,7 +73,7 @@ export function Chip({
         variantStyles[variant],
         sizeStyles[size],
         onClick && !disabled && 'cursor-pointer',
-        disabled && 'opacity-50 cursor-not-allowed',
+        disabled && 'opacity-40 cursor-not-allowed',
         className,
       )}
     >
@@ -190,7 +199,7 @@ export function TagInput({
         'flex flex-wrap items-center gap-1.5 min-h-10 px-2 py-1.5 rounded-lg border border-input bg-background',
         'transition-[border-color,box-shadow] duration-200',
         'focus-within:ring-2 focus-within:ring-primary/40 focus-within:ring-offset-2 focus-within:border-primary/60',
-        disabled && 'cursor-not-allowed opacity-50',
+        disabled && 'cursor-not-allowed opacity-40',
         className,
       )}
       onClick={() => inputRef.current?.focus()}
