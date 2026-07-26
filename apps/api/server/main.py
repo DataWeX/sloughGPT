@@ -97,9 +97,6 @@ logging.root.addFilter(_ClientExtensionFilter())
 # ── Config ──────────────────────────────────────────────────────────
 from config import GenerationConfig, ServerConfig  # noqa: E402
 
-gen_config = GenerationConfig.from_env()
-server_state.gen_config = gen_config
-
 cfg = ServerConfig.from_env()
 
 # Wire new typed config system alongside existing config for migration
@@ -123,7 +120,6 @@ except Exception as exc:
 async def lifespan(app_inst: FastAPI):
     """Delegate startup phases to ``StartupOrchestrator``."""
     try:
-        import os
         from infrastructure.startup import StartupOrchestrator
 
         profile = os.environ.get("SLO_STARTUP_PROFILE", "full")
@@ -148,8 +144,8 @@ async def lifespan(app_inst: FastAPI):
         try:
             from domains.training.auto_trainer import stop_auto_trainer
             stop_auto_trainer()
-        except Exception:
-            pass
+        except (ImportError, AttributeError) as e:
+            logger.debug("Auto-trainer shutdown skipped: %s", e)
 
         await orch.shutdown()
     except Exception as exc:
@@ -238,33 +234,6 @@ JWT_EXPIRATION_HOURS = _sec.jwt_expiration_hours
 VALID_API_KEYS = _sec.valid_api_keys
 
 from pydantic import BaseModel  # noqa: E402
-
-
-class LoadModelRequest(BaseModel):
-    """Request schema for ``POST /models/load`` — kept here for import compatibility."""
-
-    model_id: str
-    mode: Optional[str] = "local"
-    device: Optional[str] = "auto"
-
-
-def _load_hf_model_core(request: LoadModelRequest) -> Dict[str, Any]:
-    """Load HuggingFace model via ModelsController (SloNet-only)."""
-    try:
-        from controllers.models import get_models_controller
-
-        ctrl = get_models_controller()
-        result = ctrl.load_model(request.model_id, request.device or "auto")
-
-        if result.get("status") == "error":
-            logger.warning("Failed to load model %s: %s", request.model_id, result.get("error"), extra={"tag": "START"})
-            return result
-
-        server_state.model_type = request.model_id
-        return result
-    except Exception as e:
-        logger.error("_load_hf_model_core failed: %s", e, exc_info=True, extra={"tag": "START"})
-        return {"status": "error", "error": str(e)}
 
 
 def find_available_port(start_port: int = 8000, max_attempts: int = 10) -> int:

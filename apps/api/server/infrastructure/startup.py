@@ -204,12 +204,6 @@ class StartupOrchestrator:
 
     async def run(self):
         """Execute all startup phases via the lifecycle manager."""
-        try:
-            from domains.infrastructure.event_bus import EventBus
-            bus = EventBus(max_history=200)
-        except Exception:
-            bus = None
-
         # Initialize lifecycle manager
         await self._init_lifecycle()
 
@@ -219,14 +213,6 @@ class StartupOrchestrator:
             profile_enum = StartupProfile(self._profile)
         except ValueError:
             profile_enum = StartupProfile.FULL
-
-        # Register health gate for background model load
-        import state as server_state
-        if self._lifecycle is not None:
-            self._lifecycle.register_gate(
-                "model_loaded",
-                lambda: self._is_model_loaded()
-            )
 
         # Run sequential phases via lifecycle manager
         if self._lifecycle is not None:
@@ -248,10 +234,7 @@ class StartupOrchestrator:
         so routers register immediately and the server accepts requests.
         Requests that need the model get a "model still loading" response.
         """
-        import asyncio
-        from config import ServerConfig
-
-        cfg = ServerConfig.from_env()
+        cfg = self._config
 
         raw = cfg.autoload_model
         if not raw or raw.lower() in ("false", "0", "none", "no", "off", "disable"):
@@ -285,7 +268,6 @@ class StartupOrchestrator:
                         from domains.infrastructure.safetensors_loader import _get_model_dir
 
                         slnc_path = str(_get_model_dir(server_state.model_type) / "model.slnc")
-                        import os
                         if os.path.exists(slnc_path):
                             process_guard = ProcessGuard(
                                 slnc_path=slnc_path,
@@ -404,7 +386,7 @@ class StartupOrchestrator:
                 except Exception as e:
                     logger.warning("Phase: W&B server skipped: %s", e, extra={"tag": "START"})
 
-            asyncio.create_task(_start())
+            self._wandb_task = asyncio.create_task(_start())
         except Exception as e:
             logger.warning("Phase: W&B unavailable: %s", e, extra={"tag": "START"})
 

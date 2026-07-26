@@ -36,6 +36,12 @@ import asyncio
 import datetime
 import uuid
 import time
+import sys as _sys
+
+# Ensure server parent dir is on path for host_metrics import (used in /info)
+_server_parent = str(Path(__file__).parent.parent)
+if _server_parent not in _sys.path:
+    _sys.path.insert(0, _server_parent)
 
 
 class CreateSessionRequest(BaseModel):
@@ -81,7 +87,6 @@ _session_repo = FileRepository[dict](
     serializer=_SessionDictSerializer(),
     key_suffix=".json",
 )
-_session_repo.enable_cache(ttl_seconds=2.0)
 
 _session_cache: Optional[list] = None
 _session_cache_ts: float = 0
@@ -370,8 +375,6 @@ async def generate_stream(req: GenerateRequest, request: Request) -> StreamingRe
 @router.get("/info")
 async def get_info():
     """Get detailed server info."""
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent.parent))
     from host_metrics import sample_host_metrics_async
     import state as server_state
 
@@ -673,7 +676,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
             provider = get_provider("default")
 
             if provider is not None:
-                full_response = ""
+                full_response_parts: list[str] = []
                 logger.debug("chat_stream: about to call provider.chat_stream()")
                 try:
                     try:
@@ -692,7 +695,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                                 logger.info("Client disconnected from chat stream (request)", extra={"tag": "INF", "context": {"session_id": session_id}})
                                 return
                             if token:
-                                full_response += token
+                                full_response_parts.append(token)
                                 yield sse_token("chat", token)
                         yield sse_token("chat", "", done=True)
                     except GeneratorExit:
@@ -705,6 +708,8 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                     return
             else:
                 yield sse_error("chat", "STREAMING", "No inference provider loaded")
+
+            full_response = "".join(full_response_parts)
 
             # Log response for benchmarking
             try:
