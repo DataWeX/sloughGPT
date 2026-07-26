@@ -186,22 +186,3 @@ export function createSSEStream(options: SSEStreamOptions): SSEStream {
     },
   }
 }
-
-/**
- * Convenience: create a health SSE stream that auto-reconnects forever.
- * Returns parsed health envelopes.
- */
-export function createHealthStream(
-  onEvent: (envelope: SSEEnvelope) => void,
-  onError?: (error: Error) => void,
-): SSEStream {
-  return createSSEStream({
-    url: '/health/stream',
-    onEvent,
-    onError,
-    reconnect: true,
-    maxReconnects: Infinity,
-    baseReconnectMs: 3000,
-    maxReconnectMs: 15_000,
-  })
-}

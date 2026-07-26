@@ -20,10 +20,6 @@ setupApiMocks()
 import {
   startDownload,
   getDownloadStatus,
-  listDownloads,
-  cancelDownload,
-  verifyDownload,
-  retryDownload,
 } from './download-controller'
 
 describe('startDownload', () => {
@@ -64,73 +60,5 @@ describe('getDownloadStatus', () => {
     apiClient.apiGet.mockResolvedValue({ model_id: 'org/model', status: 'complete' })
     await getDownloadStatus('org/model')
     expect(apiClient.apiGet).toHaveBeenCalledWith('/models/download/org%2Fmodel')
-  })
-})
-
-describe('listDownloads', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('GETs /models/downloads and returns downloads map', async () => {
-    apiClient.apiGet.mockResolvedValue({
-      downloads: {
-        gpt2: { model_id: 'gpt2', status: 'complete', percentage: 100 },
-        llama: { model_id: 'llama', status: 'queued', percentage: 0 },
-      },
-    })
-    const result = await listDownloads()
-    expect(result.gpt2.status).toBe('complete')
-    expect(result.llama.status).toBe('queued')
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/models/downloads')
-  })
-})
-
-describe('cancelDownload', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('POSTs to /models/download/{modelId}/cancel', async () => {
-    apiClient.apiPost.mockResolvedValue({ status: 'cancelled' })
-    await cancelDownload('gpt2')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/models/download/gpt2/cancel')
-  })
-})
-
-describe('verifyDownload', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('POSTs to /models/download/{modelId}/verify', async () => {
-    apiClient.apiPost.mockResolvedValue({
-      status: 'verified',
-      model_id: 'gpt2',
-      verified: true,
-      size_on_disk: '500MB',
-    })
-    const result = await verifyDownload('gpt2')
-    expect(result.status).toBe('verified')
-    expect(result.verified).toBe(true)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/models/download/gpt2/verify')
-  })
-
-  it('returns corrupt status when verification fails', async () => {
-    apiClient.apiPost.mockResolvedValue({
-      status: 'corrupt',
-      model_id: 'gpt2',
-      verified: false,
-      missing_files: ['model.safetensors'],
-      missing_files_count: 1,
-    })
-    const result = await verifyDownload('gpt2')
-    expect(result.verified).toBe(false)
-    expect(result.missing_files).toContain('model.safetensors')
-  })
-})
-
-describe('retryDownload', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('POSTs to /models/download/{modelId}/retry', async () => {
-    apiClient.apiPost.mockResolvedValue({ status: 'restarted' })
-    const result = await retryDownload('gpt2')
-    expect(result.status).toBe('restarted')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/models/download/gpt2/retry')
   })
 })

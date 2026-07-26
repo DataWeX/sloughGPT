@@ -40,4 +40,4 @@ export type { UserAdapterStats, UserAdapterInfo } from './user-adapters-controll
 export type { GenerateRequest, GenerateResponse } from './generate-controller'
 
 export { startDownload, getDownloadStatus } from './download-controller'
-export type { DownloadProgress, VerifyResult } from './download-controller'
+export type { DownloadProgress } from './download-controller'
