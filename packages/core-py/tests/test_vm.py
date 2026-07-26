@@ -722,10 +722,10 @@ class TestX86Assembler:
         asm = X86Assembler()
         code = asm.assemble("start:\n  nop\n  jmp start")
         assert code[0] == 0x90  # NOP
-        assert code[1] == 0xEB  # JMP short
-        # Offset should be -3 (back to start)
-        offset = code[2]  # 1-byte signed
-        assert offset == 0xFD  # -3 in unsigned
+        assert code[1] == 0xE9  # JMP near (always near in 16-bit for pass consistency)
+        # Offset should be -4 (back to start, relative to end of 3-byte instruction)
+        offset = int.from_bytes(code[2:4], "little", signed=True)
+        assert offset == -4
 
     def test_bits_directive(self):
         from domains.shell.vm import X86Assembler

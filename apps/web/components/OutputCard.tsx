@@ -15,10 +15,10 @@ interface OutputCardProps {
 }
 
 const LEVEL_COLOR: Record<string, string> = {
-  error: '#ef4444',
-  critical: '#ef4444',
-  warning: '#eab308',
-  debug: '#6b7280',
+  error: 'rgb(var(--destructive))',
+  critical: 'rgb(var(--destructive))',
+  warning: 'rgb(var(--warning))',
+  debug: 'rgb(var(--muted-foreground))',
 }
 
 const LEVEL_ABBR: Record<string, string> = {
@@ -30,13 +30,13 @@ const LEVEL_ABBR: Record<string, string> = {
 }
 
 const TAG_COLOR: Record<string, string> = {
-  START: '#818cf8',
-  REQ: '#6b7280',
-  INFRA: '#9ca3af',
-  MODEL: '#34d399',
-  SOUL: '#34d399',
-  INF: '#9ca3af',
-  WEB: '#9ca3af',
+  START: 'rgb(var(--primary))',
+  REQ: 'rgb(var(--muted-foreground))',
+  INFRA: 'rgb(var(--muted-foreground))',
+  MODEL: 'rgb(var(--success))',
+  SOUL: 'rgb(var(--success))',
+  INF: 'rgb(var(--muted-foreground))',
+  WEB: 'rgb(var(--muted-foreground))',
 }
 
 function formatTs(ts: number): string {
@@ -50,8 +50,8 @@ function formatTs(ts: number): string {
 function LogLine({ line }: { line: OutputLine }) {
   const ts = formatTs(line.ts)
   const lvl = LEVEL_ABBR[line.level] ?? 'INF'
-  const lvlColor = LEVEL_COLOR[line.level] ?? '#a1a1aa'
-  const tagColor = line.tag ? (TAG_COLOR[line.tag] ?? '#71717a') : undefined
+  const lvlColor = LEVEL_COLOR[line.level] ?? 'rgb(var(--muted-foreground))'
+  const tagColor = line.tag ? (TAG_COLOR[line.tag] ?? 'rgb(var(--muted-foreground))') : undefined
 
   return (
     <div className="flex font-mono text-[11px] leading-5 py-[1px]">

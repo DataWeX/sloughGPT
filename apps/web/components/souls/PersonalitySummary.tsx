@@ -12,9 +12,9 @@ const GROUP_LABELS: Record<string, string> = {
 }
 
 const GROUP_COLORS: Record<string, string> = {
-  personality: '#8b5cf6',
-  cognition: '#3b82f6',
-  emotion: '#ec4899',
+  personality: 'rgb(var(--primary))',
+  cognition: 'rgb(var(--chart-4))',
+  emotion: 'rgb(var(--destructive))',
 }
 
 const GROUP_ICONS: Record<string, string> = {

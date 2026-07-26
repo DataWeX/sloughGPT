@@ -42,7 +42,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const dismissToast = useToastStore(s => s.dismissToast)
   const clearToasts = useToastStore(s => s.clearToasts)
   const apiStatus = useApiMonitor(s => s.status)
-  const { open: convOpen, navCollapsed, toggleNav, setNavCollapsed } = useConvSidebar()
+  const { open: convOpen, navCollapsed, toggleNav, setNavCollapsed, toggleConv } = useConvSidebar()
   useGlobalShortcuts()
 
   // Initialize live health SSE stream
@@ -55,6 +55,18 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     window.addEventListener('toggle-shortcuts', handler)
     return () => window.removeEventListener('toggle-shortcuts', handler)
   }, [])
+
+  useEffect(() => {
+    const handler = () => toggleNav()
+    window.addEventListener('toggle-nav-sidebar', handler)
+    return () => window.removeEventListener('toggle-nav-sidebar', handler)
+  }, [toggleNav])
+
+  useEffect(() => {
+    const handler = () => toggleConv()
+    window.addEventListener('toggle-conv-sidebar', handler)
+    return () => window.removeEventListener('toggle-conv-sidebar', handler)
+  }, [toggleConv])
 
   useEffect(() => {
     const handler = () => setShowWhatsNew(true)

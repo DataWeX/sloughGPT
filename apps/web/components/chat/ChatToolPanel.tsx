@@ -28,7 +28,7 @@ export function ChatToolPanel({ open, onClose, sessionId, bookmarks = [], onRemo
       id="chat-tool-panel"
       className={cn(
         'border-l border-border/50 bg-background overflow-hidden transition-all duration-200 flex flex-col',
-        open ? 'w-72 min-w-[16rem] lg:relative lg:w-72 fixed right-0 top-0 bottom-0 z-50 shadow-xl lg:shadow-none' : 'w-0 min-w-0',
+        open ? 'w-[var(--tool-panel-width)] min-w-[var(--tool-panel-width)] lg:relative lg:w-[var(--tool-panel-width)] fixed right-0 top-0 bottom-0 z-50 shadow-xl lg:shadow-none' : 'w-0 min-w-0',
       )}
     >
       {open && (

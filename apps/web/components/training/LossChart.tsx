@@ -81,10 +81,10 @@ export function LossChart({ data, rewardData, height = 200, showLegend = true, l
               yAxisId="reward"
               orientation="right"
               tick={{ fontSize: 11 }}
-              stroke="hsl(142, 71%, 45%)"
+              stroke="rgb(var(--success))"
               tickLine={false}
               domain={['auto', 'auto']}
-              label={{ value: 'Reward', angle: 90, position: 'insideRight', offset: 4, style: { fontSize: 10, fill: 'hsl(142, 71%, 45%)' } }}
+              label={{ value: 'Reward', angle: 90, position: 'insideRight', offset: 4, style: { fontSize: 10, fill: 'rgb(var(--success))' } }}
             />
           )}
           <Tooltip
@@ -126,7 +126,7 @@ export function LossChart({ data, rewardData, height = 200, showLegend = true, l
               yAxisId="reward"
               type="monotone"
               dataKey="reward"
-              stroke="hsl(142, 71%, 45%)"
+              stroke="rgb(var(--success))"
               strokeWidth={1.5}
               dot={false}
               name="Reward"

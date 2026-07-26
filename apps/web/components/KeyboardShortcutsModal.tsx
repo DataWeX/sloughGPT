@@ -35,6 +35,10 @@ const SHORTCUTS: Shortcut[] = [
   { keys: ['Ctrl', '3'], description: 'Datasets', category: 'Navigation' },
   { keys: ['Ctrl', '4'], description: 'Models', category: 'Navigation' },
   { keys: ['Ctrl', 'Shift', 'A'], description: 'Settings', category: 'Navigation' },
+
+  // Sidebar shortcuts
+  { keys: ['Ctrl', '\\'], description: 'Toggle navigation sidebar', category: 'Sidebar' },
+  { keys: ['Ctrl', 'Shift', '\\'], description: 'Toggle conversation sidebar', category: 'Sidebar' },
 ]
 
 function KeyboardKey({ k, 'aria-describedby': ariaDescribedBy }: { k: string; 'aria-describedby'?: string }) {

@@ -69,6 +69,7 @@ export function PDFUpload({ onAnalysis, onError, disabled }: PDFUploadProps) {
         onClick={() => inputRef.current?.click()}
         disabled={disabled || uploading}
         title="Upload PDF for analysis"
+        aria-label="Upload PDF for analysis"
         className="relative"
       >
         {uploading ? (

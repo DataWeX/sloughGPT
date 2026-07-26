@@ -334,10 +334,10 @@ export function ConversationSidebar({ collapsed, onToggleCollapse, ...props }: C
       <aside
         className={cn(
           "hidden lg:flex shrink-0 flex-col border-r border-border/40 bg-background/80 transition-all duration-200 ease-in-out overflow-hidden",
-          collapsed ? "w-0 border-r-0" : "w-64"
+          collapsed ? "w-0 border-r-0" : "w-[var(--conv-sidebar-width)]"
         )}
       >
-        <div className={cn("min-w-[256px] h-full", collapsed && "pointer-events-none")}>
+        <div className={cn("min-w-[var(--conv-sidebar-width)] h-full", collapsed && "pointer-events-none")}>
           <SidebarContent {...props} isDrawer={false} onToggleCollapse={onToggleCollapse} />
         </div>
       </aside>
@@ -349,7 +349,7 @@ export function ConversationSidebar({ collapsed, onToggleCollapse, ...props }: C
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={onClose}
           />
-          <aside className="absolute inset-y-0 left-0 w-72 flex flex-col bg-background shadow-xl">
+          <aside className="absolute inset-y-0 left-0 w-[var(--conv-sidebar-width)] flex flex-col bg-background shadow-xl">
             <SidebarContent {...props} isDrawer={true} />
           </aside>
         </div>
@@ -475,19 +475,19 @@ function ConvRow({
         {onArchive && !editing && (
           <button
             onClick={onArchive}
-            className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-warning"
+            className="h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-warning"
             aria-label="Archive"
           >
-            <IconFolder className="h-3 w-3" />
+            <IconFolder className="h-2.5 w-2.5" />
           </button>
         )}
         {onDelete && !editing && (
           <button
             onClick={onDelete}
-            className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-destructive"
+            className="h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-destructive"
             aria-label={`Delete ${c.name}`}
           >
-            <IconX className="h-3 w-3" />
+            <IconX className="h-2.5 w-2.5" />
           </button>
         )}
       </div>

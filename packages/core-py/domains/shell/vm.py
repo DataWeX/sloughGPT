@@ -1640,6 +1640,8 @@ class X86Assembler:
     _REG16 = {"ax": 0, "cx": 1, "dx": 2, "bx": 3, "sp": 4, "bp": 5, "si": 6, "di": 7}
     _REG32 = {"eax": 0, "ecx": 1, "edx": 2, "ebx": 3, "esp": 4, "ebp": 5, "esi": 6, "edi": 7}
     _SEG_REGS = {"es": 0, "cs": 1, "ss": 2, "ds": 3, "fs": 4, "gs": 5}
+    _CTRL_REGS = {"cr0": 0, "cr1": 1, "cr2": 2, "cr3": 3, "cr4": 4, "cr5": 5, "cr6": 6, "cr7": 7}
+    _DBG_REGS = {"dr0": 0, "dr1": 1, "dr2": 2, "dr3": 3, "dr4": 4, "dr5": 5, "dr6": 6, "dr7": 7}
 
     # ── Condition codes ──────────────────────────────────────────────────
 
@@ -1671,7 +1673,12 @@ class X86Assembler:
         self._reloc = []  # (offset, label, type)
 
     def assemble(self, source: str) -> bytearray:
-        """Assemble x86 source to machine code bytes."""
+        """Assemble x86 source to machine code bytes.
+
+        Multi-pass converging assembler:
+          Each pass generates code using current labels, then re-records labels.
+          Repeats until label addresses stabilize (or max 10 passes).
+        """
         self._bits = 16
         self._org = 0
         self._labels = {}
@@ -1680,54 +1687,49 @@ class X86Assembler:
 
         lines = source.split("\n")
 
-        # Pass 1: collect labels
-        addr = self._org
-        directives = []
-        for line in lines:
-            clean = line.split(";")[0].strip()
-            if not clean:
-                continue
-            if clean.startswith("["):
-                # Directives like [BITS 32], [ORG 0x1000]
-                self._handle_directive(clean)
-                addr = self._org
-                continue
-            if clean.startswith("times") or clean.startswith("db ") or clean.startswith("dw ") or clean.startswith("dd "):
-                directives.append((addr, clean))
-                addr += self._estimate_data_size(clean)
-                continue
-            if ":" in clean:
-                prefix, _, rest = clean.partition(":")
-                prefix = prefix.strip()
-                if prefix and " " not in prefix:
-                    self._labels[prefix] = addr
-                    clean = rest.strip()
-                    if not clean:
-                        continue
-            if clean.startswith("times") or clean.startswith("db ") or clean.startswith("dw ") or clean.startswith("dd "):
-                addr += self._estimate_data_size(clean)
-            else:
-                addr += self._estimate_insn_size(clean)
+        prev_labels = {}
+        for iteration in range(10):
+            self._output = bytearray()
+            self._bits = 16
+            self._org = 0
+            self._pass = max(iteration, 1)
 
-        # Pass 2: generate code
-        self._output = bytearray()
-        for line in lines:
-            clean = line.split(";")[0].strip()
-            if not clean:
-                continue
-            if clean.startswith("["):
-                continue
-            if ":" in clean:
-                prefix, _, rest = clean.partition(":")
-                clean = rest.strip()
+            for line in lines:
+                clean = line.split(";")[0].strip()
                 if not clean:
                     continue
-            if clean.startswith("times"):
-                self._emit_times(clean)
-            elif clean.startswith("db ") or clean.startswith("dw ") or clean.startswith("dd "):
-                self._emit_data(clean)
-            else:
-                self._emit_instruction(clean)
+                if clean.startswith("["):
+                    self._handle_directive(clean)
+                    continue
+                if ":" in clean:
+                    colon_idx = clean.index(":")
+                    after_colon = clean[colon_idx + 1:colon_idx + 2]
+                    if after_colon and after_colon not in (" ", "\t", ""):
+                        pass
+                    else:
+                        prefix, _, rest = clean.partition(":")
+                        if prefix and " " not in prefix:
+                            self._labels[prefix] = self._org + len(self._output)
+                        clean = rest.strip()
+                        if not clean:
+                            continue
+                if " equ " in clean.lower():
+                    parts_eq = clean.split(None, 2)
+                    if len(parts_eq) >= 3:
+                        const_name = parts_eq[0].strip()
+                        const_val = self._parse_imm(parts_eq[2].strip())
+                        self._labels[const_name] = const_val
+                    continue
+                elif clean.startswith("times"):
+                    self._emit_times(clean)
+                elif clean.startswith("db ") or clean.startswith("dw ") or clean.startswith("dd "):
+                    self._emit_data(clean)
+                else:
+                    self._emit_instruction(clean)
+
+            if self._labels == prev_labels:
+                break
+            prev_labels = dict(self._labels)
 
         return bytes(self._output)
 
@@ -1738,11 +1740,14 @@ class X86Assembler:
         elif line.upper().startswith("ORG"):
             self._org = self._parse_imm(line.split(None, 1)[1])
 
+    def _estimate_times_size(self, line):
+        parts = line.split(None, 2)
+        count = self._parse_imm(parts[1])
+        return count * self._estimate_data_size(parts[2])
+
     def _estimate_data_size(self, line):
         if line.startswith("times"):
-            parts = line.split(None, 2)
-            count = self._parse_imm(parts[1])
-            return count * self._estimate_data_size(parts[2])
+            return self._estimate_times_size(line)
         if line.startswith("db"):
             inner = line[2:].strip()
             total = 0
@@ -1767,6 +1772,8 @@ class X86Assembler:
         if op in ("nop", "hlt", "cli", "sti", "ret", "iret", "pusha", "popa", "cld", "std",
                    "lodsb", "lodsw", "stosb", "stosw", "movsb", "movsw", "cmpsb", "scasb"):
             return 1
+        if op == "rep":
+            return 2  # rep prefix + string instruction
         if op in ("retf",):
             return 1
         if op in self._CC:
@@ -1782,8 +1789,15 @@ class X86Assembler:
         if op == "pop":
             return 1
         if op == "jmp":
-            return 2
+            # Far jump: jmp seg:off → EA off16 seg16 = 5 bytes
+            if len(parts) > 1 and ":" in parts[1] and not parts[1].strip().startswith("["):
+                return 5
+            if self._bits == 16:
+                return 3  # jmp rel16 (worst case in 16-bit mode)
+            return 2  # jmp rel8 (short jump, always 2 bytes)
         if op == "call":
+            if self._bits == 16:
+                return 3  # call rel16 in 16-bit mode
             return 5
         if op in ("in", "out"):
             return 2
@@ -1919,7 +1933,7 @@ class X86Assembler:
             self._emit_alu(op, operands)
         elif op in ("inc", "dec"):
             self._emit_inc_dec(op, operands)
-        elif op in ("neg", "not"):
+        elif op in ("neg", "not", "mul", "imul", "div", "idiv"):
             self._emit_unary(op, operands)
         elif op in ("shl", "shr"):
             self._emit_shift(op, operands)
@@ -1949,6 +1963,35 @@ class X86Assembler:
             self._output.append(0xA6)
         elif op == "scasb":
             self._output.append(0xAE)
+        elif op == "rep":
+            # rep prefix + string instruction
+            self._output.append(0xF3)
+            inner = operands[0].lower() if operands else ""
+            if inner == "movsb":
+                self._output.append(0xA4)
+            elif inner == "movsw":
+                if self._pfx("ax"):
+                    self._output.append(0x66)
+                self._output.append(0xA5)
+            elif inner == "stosb":
+                self._output.append(0xAA)
+            elif inner == "stosw":
+                if self._pfx("ax"):
+                    self._output.append(0x66)
+                self._output.append(0xAB)
+            elif inner == "lodsb":
+                self._output.append(0xAC)
+            elif inner == "lodsw":
+                if self._pfx("ax"):
+                    self._output.append(0x66)
+                self._output.append(0xAD)
+            elif inner == "cmpsb":
+                self._output.append(0xA6)
+            elif inner == "scasb":
+                self._output.append(0xAE)
+            else:
+                # Unknown rep target — just emit prefix
+                pass
         elif op == "lgdt":
             self._emit_lgdt(operands)
         elif op == "lidt":
@@ -2059,12 +2102,31 @@ class X86Assembler:
             return
         cc = self._CC[op]
         target = self._parse_label(ops[0])
+
+        # Special opcodes: loop/jcxz use their own encoding (0xE0-0xE3)
+        if cc >= 0xE0:
+            offset = target - (self._org + len(self._output) + 2)
+            if -128 <= offset <= 127:
+                self._output.append(cc)
+                self._output.append(offset & 0xFF)
+            else:
+                # Near jump for loop/jcxz (not standard, but use JMP)
+                self._output.append(0xEB)
+                near_offset = target - (self._org + len(self._output) + 2)
+                self._output.append(near_offset & 0xFF)
+            return
+
         offset = target - (self._org + len(self._output) + 2)
         if -128 <= offset <= 127:
             self._output.append(0x70 + cc)
             self._output.append(offset & 0xFF)
+        elif self._bits == 16:
+            # In 16-bit mode, use JMP near (EB) as fallback to keep 2-byte estimate
+            self._output.append(0xEB)
+            near_offset = target - (self._org + len(self._output) + 2)
+            self._output.append(near_offset & 0xFF)
         else:
-            # Near jump
+            # Near jump in 32-bit mode
             offset = target - (self._org + len(self._output) + 6)
             self._output.append(0x0F)
             self._output.append(0x80 + cc)
@@ -2073,23 +2135,56 @@ class X86Assembler:
     def _emit_jmp(self, ops):
         if not ops:
             return
-        target = self._parse_label(ops[0])
-        offset = target - (self._org + len(self._output) + 2)
-        if -128 <= offset <= 127:
-            self._output.append(0xEB)
-            self._output.append(offset & 0xFF)
-        else:
-            offset = target - (self._org + len(self._output) + 5)
+        target_str = ops[0].strip()
+        # Far jump: jmp seg:off
+        if ":" in target_str and not target_str.startswith("["):
+            seg_str, _, off_str = target_str.partition(":")
+            seg_val = self._parse_label(seg_str)
+            off_val = self._parse_label(off_str)
+            if self._bits == 16:
+                # 16-bit mode: need 0x66 prefix for 32-bit offset
+                # (required when jumping to a 32-bit code segment for PM switch)
+                self._output.append(0x66)
+                self._output.append(0xEA)
+                self._output.extend(off_val.to_bytes(4, "little"))
+                self._output.extend(seg_val.to_bytes(2, "little"))
+            else:
+                # 32-bit mode: 16-bit offset is default, need 0x66 for 16-bit offset
+                self._output.append(0xEA)
+                self._output.extend(off_val.to_bytes(4, "little"))
+                self._output.extend(seg_val.to_bytes(2, "little"))
+            return
+        target = self._parse_label(target_str)
+        if self._bits == 16:
+            # Always use near jump (3 bytes) in 16-bit mode to keep
+            # code sizes stable across assembly passes.
+            offset = target - (self._org + len(self._output) + 3)
             self._output.append(0xE9)
-            self._output.extend(offset.to_bytes(4, "little", signed=True))
+            self._output.extend(offset.to_bytes(2, "little", signed=True))
+        else:
+            offset = target - (self._org + len(self._output) + 2)
+            if -128 <= offset <= 127:
+                self._output.append(0xEB)
+                self._output.append(offset & 0xFF)
+            else:
+                offset = target - (self._org + len(self._output) + 5)
+                self._output.append(0xE9)
+                self._output.extend(offset.to_bytes(4, "little", signed=True))
 
     def _emit_call(self, ops):
         if not ops:
             return
         target = self._parse_label(ops[0])
-        offset = target - (self._org + len(self._output) + 5)
-        self._output.append(0xE8)
-        self._output.extend(offset.to_bytes(4, "little", signed=True))
+        if self._bits == 16:
+            # call rel16: E8 + 2-byte offset = 3 bytes
+            offset = target - (self._org + len(self._output) + 3)
+            self._output.append(0xE8)
+            self._output.extend(offset.to_bytes(2, "little", signed=True))
+        else:
+            # call rel32: E8 + 4-byte offset = 5 bytes
+            offset = target - (self._org + len(self._output) + 5)
+            self._output.append(0xE8)
+            self._output.extend(offset.to_bytes(4, "little", signed=True))
 
     def _emit_mov(self, ops):
         if len(ops) < 2:
@@ -2123,6 +2218,72 @@ class X86Assembler:
             self._output.append(0x89)
             modrm = (0xC0 | (self._REG16[src] << 3) | self._REG16[dst])
             self._output.append(modrm)
+        # MOV reg, CRn / MOV CRn, reg (control register moves)
+        elif dst in self._REG32 and src in self._CTRL_REGS:
+            # MOV r32, CRn — opcode 0F 20, ModRM with reg=CRn, rm=r32
+            self._output.append(0x0F)
+            self._output.append(0x20)
+            modrm = (0xC0 | (self._CTRL_REGS[src] << 3) | self._REG32[dst])
+            self._output.append(modrm)
+        elif dst in self._CTRL_REGS and src in self._REG32:
+            # MOV CRn, r32 — opcode 0F 22, ModRM with reg=CRn, rm=r32
+            self._output.append(0x0F)
+            self._output.append(0x22)
+            modrm = (0xC0 | (self._CTRL_REGS[dst] << 3) | self._REG32[src])
+            self._output.append(modrm)
+        # MOV reg, DRn / MOV DRn, reg (debug register moves)
+        elif dst in self._REG32 and src in self._DBG_REGS:
+            # MOV r32, DRn — opcode 0F 21, ModRM with reg=DRn, rm=r32
+            self._output.append(0x0F)
+            self._output.append(0x21)
+            modrm = (0xC0 | (self._DBG_REGS[src] << 3) | self._REG32[dst])
+            self._output.append(modrm)
+        elif dst in self._DBG_REGS and src in self._REG32:
+            # MOV DRn, r32 — opcode 0F 23, ModRM with reg=DRn, rm=r32
+            self._output.append(0x0F)
+            self._output.append(0x23)
+            modrm = (0xC0 | (self._DBG_REGS[dst] << 3) | self._REG32[src])
+            self._output.append(modrm)
+        # MOV [mem], imm — size-prefixed memory stores (C6/C7 /0)
+        elif dst.startswith("byte") and "[" in dst:
+            val = self._parse_imm(src)
+            mem = dst[4:].strip()
+            inner = mem.strip("[]")
+            self._output.append(0xC6)  # MOV r/m8, imm8
+            if "+" in inner:
+                # [reg+disp] or [label+reg] — use _emit_modrm_mem with reg=eax (encoding 0 = /0)
+                self._emit_modrm_mem("eax", mem)
+            else:
+                # [disp32] direct address
+                self._output.append(0x05)  # /0, [disp32]
+                addr = self._parse_imm(inner)
+                self._output.extend(addr.to_bytes(4, "little"))
+            self._output.append(val & 0xFF)
+        elif dst.startswith("word") and "[" in dst:
+            val = self._parse_imm(src)
+            mem = dst[4:].strip()
+            inner = mem.strip("[]")
+            self._output.append(0x66)  # operand-size prefix
+            self._output.append(0xC7)  # MOV r/m16, imm16
+            if "+" in inner:
+                self._emit_modrm_mem("eax", mem)
+            else:
+                self._output.append(0x05)  # /0, [disp32]
+                addr = self._parse_imm(inner)
+                self._output.extend(addr.to_bytes(4, "little"))
+            self._output.extend(struct.pack("<H", val & 0xFFFF))
+        elif dst.startswith("dword") and "[" in dst:
+            val = self._parse_imm(src)
+            mem = dst[5:].strip()
+            inner = mem.strip("[]")
+            self._output.append(0xC7)  # MOV r/m32, imm32
+            if "+" in inner:
+                self._emit_modrm_mem("eax", mem)
+            else:
+                self._output.append(0x05)  # /0, [disp32]
+                addr = self._parse_imm(inner)
+                self._output.extend(addr.to_bytes(4, "little"))
+            self._output.extend(val.to_bytes(4, "little", signed=True))
         # MOV reg, imm (resolve labels) — must come after [mem] checks
         elif dst in self._REG32 and not src.startswith("["):
             val = self._parse_label(src)
@@ -2136,6 +2297,9 @@ class X86Assembler:
                 self._output.append(0x66)
             self._output.append(0xB8 + self._REG16[dst])
             self._output.extend(struct.pack("<H", val & 0xFFFF))
+        elif dst in self._REG8 and src.startswith("["):
+            self._output.append(0x8A)
+            self._emit_modrm_mem(dst, src)
         elif dst in self._REG8:
             val = self._parse_imm(src)
             self._output.append(0xB0 + self._REG8[dst])
@@ -2169,6 +2333,9 @@ class X86Assembler:
             else:
                 self._output.append(0x89)
                 self._emit_modrm_mem(src, dst)
+        elif dst.startswith("[") and src in self._REG8:
+            self._output.append(0x88)
+            self._emit_modrm_mem(src, dst)
         # MOV reg, [imm] — direct address load
         elif dst in self._REG32 and (src.startswith("0x") or (src.startswith("[") and src[1:-1].strip().startswith("0x"))):
             inner = src.strip("[]") if src.startswith("[") else src
@@ -2192,29 +2359,54 @@ class X86Assembler:
     def _emit_modrm_mem(self, reg, mem):
         """Emit ModR/M byte for [memory] operand."""
         inner = mem.strip("[]").strip()
+        # Resolve register encoding (works for both 8-bit and 32-bit registers)
+        reg_enc = self._REG32.get(reg, self._REG8.get(reg, 0))
         if inner in self._REG32:
             # [reg]
-            modrm = (0x00 | (self._REG32[reg] << 3) | self._REG32[inner])
+            modrm = (0x00 | (reg_enc << 3) | self._REG32[inner])
             self._output.append(modrm)
         elif "+" in inner:
             parts = inner.split("+")
             base = parts[0].strip()
+            other = parts[1].strip() if len(parts) > 1 else ""
+            # Check which part is a register
             if base in self._REG32:
-                disp = self._parse_imm(parts[1].strip()) if len(parts) > 1 else 0
+                # [reg + imm/label]
+                disp = self._parse_imm(other) if other else 0
                 if disp == 0:
-                    modrm = (0x00 | (self._REG32[reg] << 3) | self._REG32[base])
+                    modrm = (0x00 | (reg_enc << 3) | self._REG32[base])
                     self._output.append(modrm)
                 elif -128 <= disp <= 127:
-                    modrm = (0x40 | (self._REG32[reg] << 3) | self._REG32[base])
+                    modrm = (0x40 | (reg_enc << 3) | self._REG32[base])
                     self._output.append(modrm)
                     self._output.append(disp & 0xFF)
                 else:
-                    modrm = (0x80 | (self._REG32[reg] << 3) | self._REG32[base])
+                    modrm = (0x80 | (reg_enc << 3) | self._REG32[base])
                     self._output.append(modrm)
                     self._output.extend(disp.to_bytes(4, "little", signed=True))
+            elif other in self._REG32:
+                # [reg + label] — swapped order like "input_buf + ebx"
+                disp = self._parse_imm(base) if base else 0
+                if disp == 0:
+                    modrm = (0x00 | (reg_enc << 3) | self._REG32[other])
+                    self._output.append(modrm)
+                elif -128 <= disp <= 127:
+                    modrm = (0x40 | (reg_enc << 3) | self._REG32[other])
+                    self._output.append(modrm)
+                    self._output.append(disp & 0xFF)
+                else:
+                    modrm = (0x80 | (reg_enc << 3) | self._REG32[other])
+                    self._output.append(modrm)
+                    self._output.extend(disp.to_bytes(4, "little", signed=True))
+            else:
+                # [label + label] — treat as direct address sum
+                addr = self._parse_imm(inner)
+                modrm = (0x00 | (reg_enc << 3) | 0x05)
+                self._output.append(modrm)
+                self._output.extend(addr.to_bytes(4, "little"))
         else:
             # Direct address [imm32]
-            modrm = (0x00 | (self._REG32[reg] << 3) | 0x05)
+            modrm = (0x00 | (reg_enc << 3) | 0x05)
             self._output.append(modrm)
             addr = self._parse_imm(inner)
             self._output.extend(addr.to_bytes(4, "little"))
@@ -2265,7 +2457,15 @@ class X86Assembler:
         # reg, imm
         elif dst in self._REG32:
             val = self._parse_imm(src)
-            if op == "sub" and -128 <= val <= 127:
+            if op == "test":
+                # TEST r/m32, imm32 — F7 /0 id
+                if self._pfx(dst):
+                    self._output.append(0x66)
+                self._output.append(0xF7)
+                modrm = (0xC0 | (0 << 3) | self._REG32[dst])
+                self._output.append(modrm)
+                self._output.extend(val.to_bytes(4, "little", signed=True))
+            elif op == "sub" and -128 <= val <= 127:
                 if self._pfx(dst):
                     self._output.append(0x66)
                 self._output.append(0x83)
@@ -2288,7 +2488,15 @@ class X86Assembler:
                 self._output.extend(val.to_bytes(4, "little", signed=True))
         elif dst in self._REG16:
             val = self._parse_imm(src)
-            if -128 <= val <= 127:
+            if op == "test":
+                # TEST r/m16, imm16 — F7 /0 iw
+                if self._pfx(dst):
+                    self._output.append(0x66)
+                self._output.append(0xF7)
+                modrm = (0xC0 | (0 << 3) | self._REG16[dst])
+                self._output.append(modrm)
+                self._output.extend(struct.pack("<H", val & 0xFFFF))
+            elif -128 <= val <= 127:
                 if self._pfx(dst):
                     self._output.append(0x66)
                 self._output.append(0x83)
@@ -2304,7 +2512,13 @@ class X86Assembler:
                 self._output.extend(val.to_bytes(2, "little", signed=True))
         elif dst in self._REG8:
             val = self._parse_imm(src)
-            if -128 <= val <= 127:
+            if op == "test":
+                # TEST r/m8, imm8 — F6 /0 ib
+                self._output.append(0xF6)
+                modrm = (0xC0 | (0 << 3) | self._REG8[dst])
+                self._output.append(modrm)
+                self._output.append(val & 0xFF)
+            elif -128 <= val <= 127:
                 self._output.append(0x80)
                 modrm = (0xC0 | (alu_op[op] << 3) | self._REG8[dst])
                 self._output.append(modrm)
@@ -2319,6 +2533,7 @@ class X86Assembler:
         if not ops:
             return
         reg = ops[0].lower()
+        # inc/dec register — 40+rd / 48+rd
         if reg in self._REG32:
             if self._pfx(reg):
                 self._output.append(0x66)
@@ -2329,12 +2544,25 @@ class X86Assembler:
                 self._output.append(0x66)
             base = 0x40 if op == "inc" else 0x48
             self._output.append(base + self._REG16[reg])
+        # inc/dec dword [mem] / word [mem] — FF /0 or FF /1
+        elif "[" in reg:
+            func = 0 if op == "inc" else 1
+            mem = reg
+            # strip size prefix
+            for pfx in ("dword", "word", "byte"):
+                if mem.startswith(pfx):
+                    mem = mem[len(pfx):].strip()
+            self._output.append(0xFF)
+            modrm = (0x00 | (func << 3) | 0x05)  # /0 or /1, [disp32]
+            self._output.append(modrm)
+            addr = self._parse_imm(mem.strip("[]"))
+            self._output.extend(addr.to_bytes(4, "little"))
 
     def _emit_unary(self, op, ops):
         if not ops:
             return
         reg = ops[0].lower()
-        func = 3 if op == "neg" else 2
+        func = {"not": 2, "neg": 3, "mul": 4, "imul": 5, "div": 6, "idiv": 7}.get(op, 2)
         if reg in self._REG32:
             if self._pfx(reg):
                 self._output.append(0x66)
@@ -2405,18 +2633,37 @@ class X86Assembler:
     def _emit_lgdt(self, ops):
         if not ops:
             return
-        # LGDT [addr] — simplified
+        # LGDT [addr] — 0F 01 /2 with ModR/M for [disp32]
+        # In 16-bit mode, r/m=101 with mod=00 means [DI], not [disp32].
+        # We must emit 0x67 address-size prefix to use 32-bit addressing
+        # so that r/m=101 with mod=00 means [disp32].
+        if self._bits == 16:
+            self._output.append(0x67)
         self._output.append(0x0F)
         self._output.append(0x01)
         self._output.append(0x15)
+        # Parse the memory operand [label] → emit 32-bit displacement
+        addr_str = ops[0].strip()
+        if addr_str.startswith("[") and addr_str.endswith("]"):
+            addr_str = addr_str[1:-1]
+        addr = self._parse_label(addr_str)
+        self._output.extend(addr.to_bytes(4, "little"))
 
     def _emit_lidt(self, ops):
         if not ops:
             return
-        # LIDT [addr] — simplified
+        # LIDT [addr] — 0F 01 /3 with ModR/M for [disp32]
+        # Same as LGDT: need 0x67 prefix in 16-bit mode for [disp32] addressing.
+        if self._bits == 16:
+            self._output.append(0x67)
         self._output.append(0x0F)
         self._output.append(0x01)
         self._output.append(0x1D)
+        addr_str = ops[0].strip()
+        if addr_str.startswith("[") and addr_str.endswith("]"):
+            addr_str = addr_str[1:-1]
+        addr = self._parse_label(addr_str)
+        self._output.extend(addr.to_bytes(4, "little"))
 
     def _emit_ltr(self, ops):
         if not ops:
@@ -2433,6 +2680,24 @@ class X86Assembler:
             return self._org + len(self._output)
         if text in self._labels:
             return self._labels[text]
+        # Always resolve numeric literals (hex, binary, decimal) even in pass 1
+        if text.startswith("0x") or text.startswith("0X"):
+            return int(text, 16)
+        if text.startswith("0b") or text.startswith("0B"):
+            return int(text, 2)
+        # Only treat as hex literal if the prefix is purely hex digits (e.g. "10h", "FFh")
+        import re
+        if re.match(r'^[0-9a-fA-F]+[hH]$', text):
+            return int(text[:-1], 16)
+        if re.match(r'^[01]+[bB]$', text):
+            return int(text[:-1], 2)
+        try:
+            return int(text, 0)
+        except ValueError:
+            pass
+        # In pass 1, forward references to labels use placeholder (0)
+        if getattr(self, '_pass', 2) == 1:
+            return 0
         return self._parse_imm(text)
 
     def _eval_expr(self, text):
@@ -2453,16 +2718,52 @@ class X86Assembler:
 
     def _parse_imm(self, text):
         text = text.strip()
+        # Character literals: 'A', '0', '\n', etc.
+        if (text.startswith("'") and text.endswith("'")) or (text.startswith('"') and text.endswith('"')):
+            inner = text[1:-1]
+            if len(inner) == 1:
+                return ord(inner)
+            elif inner == '\\n':
+                return 10
+            elif inner == '\\r':
+                return 13
+            elif inner == '\\t':
+                return 9
+            elif inner == '\\0':
+                return 0
+            elif inner == '\\\\':
+                return 92
+            elif inner.startswith('\\x'):
+                return int(inner[2:], 16)
+            return ord(inner[0]) if inner else 0
         if text.startswith("0x") or text.startswith("0X"):
             return int(text, 16)
         if text.startswith("0b") or text.startswith("0B"):
             return int(text, 2)
         if text.endswith("h") or text.endswith("H"):
             return int(text[:-1], 16)
+        if text.endswith("b") or text.endswith("B"):
+            return int(text[:-1], 2)
         try:
             return int(text, 0)
         except ValueError:
-            return 0
+            pass
+        # Try direct label lookup (no recursion through _parse_label)
+        if text == "$":
+            return self._org + len(self._output)
+        if text in self._labels:
+            return self._labels[text]
+        # Try arithmetic expression with label references
+        import re
+        expr = text
+        for name, addr in self._labels.items():
+            expr = re.sub(r'\b' + re.escape(name) + r'\b', str(addr), expr)
+        if re.match(r'^[\d\s\+\-\*\/\(\)]+$', expr):
+            try:
+                return int(eval(expr))
+            except Exception:
+                pass
+        return 0
 
     def _split_ops(self, text):
         if not text:

@@ -11,9 +11,9 @@ interface TraitEditorProps {
 }
 
 const GROUPS: { key: string; label: string; color: string }[] = [
-  { key: 'personality', label: 'Personality', color: '#8b5cf6' },
-  { key: 'cognition', label: 'Cognition', color: '#3b82f6' },
-  { key: 'emotion', label: 'Emotion', color: '#ec4899' },
+  { key: 'personality', label: 'Personality', color: 'rgb(var(--primary))' },
+  { key: 'cognition', label: 'Cognition', color: 'rgb(var(--chart-4))' },
+  { key: 'emotion', label: 'Emotion', color: 'rgb(var(--destructive))' },
 ]
 
 function formatTraitName(name: string): string {

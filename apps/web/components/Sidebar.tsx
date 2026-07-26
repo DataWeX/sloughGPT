@@ -45,7 +45,7 @@ const sections: NavSection[] = [
   },
 ]
 
-const NAV_ICON = 'h-[1.125rem] w-[1.125rem] shrink-0'
+const NAV_ICON = 'h-4 w-4 shrink-0'
 
 export type SidebarVariant = 'desktop' | 'drawer'
 
@@ -65,7 +65,7 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
 
   const navLinkClass = (active: boolean) =>
     cn(
-      'group relative flex min-h-[2.5rem] items-center gap-3 rounded-lg py-2 text-sm transition-colors duration-200 ease-smooth',
+      'group relative flex min-h-11 items-center gap-3 rounded-lg py-2 text-sm transition-colors duration-200 ease-smooth',
       isCollapsed ? 'justify-center px-2' : 'px-3',
       active
         ? 'bg-primary/[0.13] font-medium text-primary dark:bg-primary/[0.11]'
@@ -75,12 +75,14 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
   const afterNav = onNavigate ? () => onNavigate() : undefined
 
   return (
-    <div className="relative flex h-dvh shrink-0 overflow-visible">
+    <div
+      className="relative flex h-dvh w-full transition-[width] duration-200 ease-in-out"
+    >
       <aside
         className={cn(
-          'sl-sidebar-surface flex shrink-0 flex-col',
+          'sl-sidebar-surface flex flex-col w-full min-w-0 overflow-hidden',
           isDrawer
-            ? 'h-full w-full min-w-0 pb-[max(0px,env(safe-area-inset-bottom))]'
+            ? 'h-full pb-[max(0px,env(safe-area-inset-bottom))]'
             : 'h-dvh',
         )}
         data-collapsed={isCollapsed ? 'true' : undefined}
@@ -88,8 +90,8 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
       >
         <div
           className={cn(
-            'flex h-[3.25rem] shrink-0 items-center border-b border-border/30 dark:border-border/50',
-            isDrawer ? 'gap-1 px-2' : 'px-3',
+            'flex h-[var(--app-mobile-header-h)] shrink-0 items-center border-b border-border/30 dark:border-border/50',
+            isDrawer ? 'gap-1 px-2' : isCollapsed ? 'w-fit justify-center px-2' : 'px-3',
           )}
         >
           {isDrawer ? (
@@ -122,11 +124,11 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
         <nav
           className={cn(
             'flex min-h-0 flex-1 flex-col',
-            isCollapsed ? 'p-2' : 'p-3',
+            isCollapsed ? 'w-fit p-2' : 'p-3',
           )}
           aria-label="Primary"
         >
-          <div className="min-h-0 flex-1 overscroll-contain overflow-y-auto scrollbar-hide">
+          <div className={cn('min-h-0 flex-1 overscroll-contain overflow-y-auto scrollbar-hide', isCollapsed && 'w-fit')}>
             {sections.map((section, si) => (
               <div key={si}>
                 {si > 0 && (
@@ -142,6 +144,7 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
                           aria-current={active ? 'page' : undefined}
                           className={navLinkClass(active)}
                           onClick={afterNav}
+                          title={isCollapsed ? t(item.key) : undefined}
                         >
                           <item.Icon
                             className={cn(NAV_ICON, active ? 'opacity-100' : 'opacity-90 dark:opacity-80')}
@@ -161,7 +164,7 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
         </nav>
 
         {!isDrawer && (
-          <div className="shrink-0 border-t border-border/50 px-3 py-3">
+          <div className={cn('shrink-0 border-t border-border/50 px-3 py-3', isCollapsed && 'w-fit')}>
             <ThemeSwitcher />
           </div>
         )}
@@ -177,7 +180,7 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
             'group/tab absolute top-1/2 z-20 flex h-[4.5rem] w-[1.15rem] -translate-y-1/2 items-center justify-center',
             'rounded-r-md cursor-pointer',
             'transition-all duration-300 ease-[cubic-bezier(222,133,0,1)]',
-            'hover:h-[5rem]',
+            'hover:w-[1.4rem]',
             /* Sit on the right edge, protruding outside the sidebar border */
             'right-0 translate-x-[calc(100%-1px)]',
             /* 3D gradient background */

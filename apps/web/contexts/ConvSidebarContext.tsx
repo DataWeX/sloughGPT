@@ -1,6 +1,14 @@
 'use client'
 
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useState, useEffect, type ReactNode } from 'react'
+
+const CONV_COLLAPSED_KEY = 'sloughgpt:conv-sidebar-collapsed'
+const NAV_COLLAPSED_KEY = 'sloughgpt:nav-sidebar-collapsed'
+
+function readBool(key: string): boolean {
+  if (typeof window === 'undefined') return false
+  try { return localStorage.getItem(key) === 'true' } catch { return false }
+}
 
 interface ConvSidebarContextValue {
   open: boolean
@@ -24,11 +32,19 @@ export function useConvSidebar() {
 
 export function ConvSidebarProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
-  const [convCollapsed, setConvCollapsed] = useState(false)
-  const [navCollapsed, setNavCollapsed] = useState(false)
+  const [convCollapsed, setConvCollapsed] = useState(() => readBool(CONV_COLLAPSED_KEY))
+  const [navCollapsed, setNavCollapsed] = useState(() => readBool(NAV_COLLAPSED_KEY))
   const toggle = useCallback(() => setOpen(v => !v), [])
   const toggleConv = useCallback(() => setConvCollapsed(v => !v), [])
   const toggleNav = useCallback(() => setNavCollapsed(v => !v), [])
+
+  useEffect(() => {
+    try { localStorage.setItem(CONV_COLLAPSED_KEY, String(convCollapsed)) } catch {}
+  }, [convCollapsed])
+
+  useEffect(() => {
+    try { localStorage.setItem(NAV_COLLAPSED_KEY, String(navCollapsed)) } catch {}
+  }, [navCollapsed])
 
   return (
     <ConvSidebarContext.Provider value={{ open, toggle, setOpen, convCollapsed, toggleConv, setConvCollapsed, navCollapsed, toggleNav, setNavCollapsed }}>

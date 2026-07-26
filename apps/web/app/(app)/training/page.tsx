@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Button } from '@sloughgpt/strui'
-import { Card, CardContent } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { Tabs } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
@@ -147,10 +147,12 @@ export default function TrainingPage() {
             <TrainingDataCard />
 
             {!session.trainingRunning && !checkpoints.loadingCheckpoints && checkpoints.checkpoints.length === 0 && form.allJobs.length === 0 && (
-              <Card className="border-dashed py-8">
-                <CardContent className="text-center space-y-3">
-                  <p className="text-sm text-muted-foreground">No training activity yet.</p>
-                  <div className="text-xs text-muted-foreground/70 space-y-1.5 max-w-sm mx-auto text-left">
+              <Card className="border-dashed">
+                <CardHeader>
+                  <CardTitle className="text-base text-muted-foreground">No training activity yet</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="text-xs text-muted-foreground/70 space-y-1.5 max-w-sm text-left">
                     <p>Pick a dataset above and click <span className="font-medium text-foreground">Start training</span></p>
                     <p>Use <span className="font-medium text-foreground">Paste text</span> to train on your own content</p>
                     <p>Conversation-format data (JSONL) trains better than plain text</p>

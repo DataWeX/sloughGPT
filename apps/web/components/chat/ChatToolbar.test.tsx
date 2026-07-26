@@ -12,10 +12,6 @@ vi.mock('@sloughgpt/strui', () => {
   }
 })
 
-vi.mock('./ConversationsDropdown', () => ({
-  ConversationsDropdown: () => <div data-testid="conversations-dropdown" />,
-}))
-
 vi.mock('./ChatSearchBar', () => ({
   ChatSearchBar: () => <div data-testid="chat-search-bar" />,
 }))

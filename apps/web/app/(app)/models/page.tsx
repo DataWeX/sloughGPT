@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import type { ModelEntry } from '@/lib/types/models'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
-import { Button } from '@sloughgpt/strui'
+import { Button, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useToastStore } from '@/lib/toast-store'
@@ -216,24 +216,28 @@ export default function ModelsPage() {
         />
 
         {/* Comparison section */}
-        <div className="mt-6 pt-6 border-t border-border/30">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-base font-medium">Model Comparison</h2>
-              <p className="text-xs text-muted-foreground">Side-by-side benchmark results across models</p>
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base">Model Comparison</CardTitle>
+                <p className="text-xs text-muted-foreground">Side-by-side benchmark results across models</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={runAllBenchmarks} disabled={compareLoading || compareRunning.size > 0}>
+                <IconRefresh className="h-3.5 w-3.5 mr-1" /> Benchmark all
+              </Button>
             </div>
-            <Button variant="outline" size="sm" onClick={runAllBenchmarks} disabled={compareLoading || compareRunning.size > 0}>
-              <IconRefresh className="h-3.5 w-3.5 mr-1" /> Benchmark all
-            </Button>
-          </div>
-          <div className="space-y-4">
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
             <ModelsCard models={compareModels} loading={compareLoading} results={compareResults} running={compareRunning} onBenchmark={runBenchmark} onClear={clearCompareResult} />
             <ComparisonTableCard completedResults={completedCompareResults} models={compareModels} bestMetrics={bestMetrics} />
             <SummaryCard completedResults={completedCompareResults} models={compareModels} />
             <OutputComparisonCard models={compareModels} />
             <VisualComparisonCard chartData={chartData} />
           </div>
-        </div>
+        </CardContent>
+      </Card>
       </div>
 
 

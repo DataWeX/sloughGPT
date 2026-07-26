@@ -58,6 +58,9 @@
   /* App shell */
   --app-mobile-header-h: 3.25rem;
   --sidebar-width: 15.75rem;
+  --sidebar-collapsed-width: 3.5rem;
+  --conv-sidebar-width: 16rem;
+  --tool-panel-width: 18rem;
   /* Chat column max width — ~80ch at default scale; scales with font */
   --chat-thread-max: min(100%, 52rem);
   --chat-bg: 246 242 237;
@@ -227,27 +230,10 @@ html {
   transition: width 200ms ease;
 }
 .sl-app-sidebar-desktop[data-collapsed="true"] {
-  width: 3.5rem;
+  width: var(--sidebar-collapsed-width);
 }
 @media (min-width: 1024px) {
   .sl-app-sidebar-desktop {
-    display: flex;
-  }
-}
-
-/* Conversation sidebar column — second column between nav and main */
-.sl-app-conv-sidebar {
-  display: none;
-  height: 100%;
-  flex-shrink: 0;
-  width: 16rem;
-  border-right: 1px solid color-mix(in srgb, rgb(var(--border)) 50%, transparent);
-}
-.sl-app-conv-sidebar[data-open="true"] {
-  display: flex;
-}
-@media (min-width: 1024px) {
-  .sl-app-conv-sidebar[data-open="true"] {
     display: flex;
   }
 }

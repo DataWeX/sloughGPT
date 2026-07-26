@@ -61,6 +61,22 @@ export function useGlobalShortcuts() {
         return
       }
 
+      // Toggle nav sidebar collapse: Ctrl+\
+      if (ctrl && !e.shiftKey && e.key === '\\') {
+        e.preventDefault()
+        closeIfOpen()
+        window.dispatchEvent(new CustomEvent('toggle-nav-sidebar'))
+        return
+      }
+
+      // Toggle conversation sidebar collapse: Ctrl+Shift+\
+      if (ctrl && e.shiftKey && e.key === '\\') {
+        e.preventDefault()
+        closeIfOpen()
+        window.dispatchEvent(new CustomEvent('toggle-conv-sidebar'))
+        return
+      }
+
       if (!isInput && e.key === '?' && !ctrl) {
         e.preventDefault()
         // `?` toggles the dialog itself — no closeIfOpen needed, toggle-shortcuts handles it
