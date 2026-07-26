@@ -365,8 +365,15 @@ class StartupOrchestrator:
             logger.debug("Model catalog sync failed: %s", e, extra={"tag": "START"})
 
     async def _phase3_wandb(self):
-        """Start W&B metrics server (if available)."""
-        STARTUP_PHASE.update(phase="wandb_server", step=5, total=9, message="Starting W&B metrics server...")
+        """Start W&B metrics server (disabled by default to save RAM).
+
+        Enable with SLO_WANDB=1 environment variable.
+        """
+        STARTUP_PHASE.update(phase="wandb_server", step=5, total=9, message="W&B: disabled by default")
+        enabled = os.environ.get("SLO_WANDB", "").lower() in ("1", "true", "yes")
+        if not enabled:
+            logger.info("Phase: W&B skipped (enable with SLO_WANDB=1)", extra={"tag": "START"})
+            return
         try:
             from domains.ops.wandb_server import start_wandb_server_background
 
@@ -402,26 +409,13 @@ class StartupOrchestrator:
             logger.warning("Phase: W&B unavailable: %s", e, extra={"tag": "START"})
 
     async def _phase4_multimodal(self):
-        """Initialize multimodal engine (if available)."""
-        STARTUP_PHASE.update(phase="multimodal", step=6, total=9, message="Initializing multimodal engine...")
-        try:
+        """Initialize multimodal engine (lazy — skipped at startup to save RAM).
 
-            def _init():
-                try:
-                    speech = os.environ.get("SPEECH_SERVER", "").lower() in ("1", "true", "yes")
-                    if speech:
-                        from domains.multimodal import initialize_multimodal
-                        initialize_multimodal(speech_server=True, vision_model="slonet")
-                    else:
-                        from domains.multimodal import get_multimodal_manager
-                        get_multimodal_manager().initialize(vision_model="slonet")
-                    logger.info("Phase 4/6: multimodal initialized", extra={"tag": "START"})
-                except Exception as e:
-                    logger.warning("Phase 4/6: multimodal skipped: %s", e, extra={"tag": "START"})
-
-            asyncio.create_task(asyncio.to_thread(_init))
-        except Exception as e:
-            logger.warning("Phase 4/6: multimodal init failed: %s", e, extra={"tag": "START"})
+        The multimodal engine (VisionCNN + models) is loaded on first use
+        via the /multimodal/* endpoints, not at server startup.
+        """
+        STARTUP_PHASE.update(phase="multimodal", step=6, total=9, message="Multimodal: lazy-load enabled")
+        logger.info("Phase 4/6: multimodal deferred to first use (saves ~200MB RAM)", extra={"tag": "START"})
 
     async def _phase5_model_registry(self):
         """Initialize model registry."""

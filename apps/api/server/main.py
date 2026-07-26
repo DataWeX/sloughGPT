@@ -137,6 +137,11 @@ async def lifespan(app_inst: FastAPI):
         except Exception as e:
             logger.warning("AutoTrainer startup failed (non-fatal): %s", e, extra={"tag": "START"})
 
+        # Start background daemons (moved from pre-uvicorn to post-startup)
+        _start_feedback_workflow()
+        _start_health_monitor()
+        _start_watchdog()
+
         yield
 
         # Stop auto-trainer
@@ -446,9 +451,8 @@ if __name__ == "__main__":
     except Exception:
         pass
 
-    _start_feedback_workflow()
-    _start_health_monitor()
-    _start_watchdog()
+    # Background daemons start AFTER uvicorn binds (moved from pre-uvicorn)
+    # They are now started in the lifespan context below.
     logger.info("Starting SloughGPT server", extra={"context": {"port": bind_port, "reload": args.reload}, "tag": "START"})
 
     # Optional web frontend

@@ -56,7 +56,7 @@ class ProcessGuard:
         health_check_interval: float = 1.0,
         extra_sys_paths: Optional[list] = None,
         max_concurrent: int = 1,
-        memory_limit_mb: Optional[float] = None,
+        memory_limit_mb: Optional[float] = 4096.0,
         # SloNet mode (preferred)
         slnc_path: Optional[str] = None,
         model_id: Optional[str] = None,

@@ -56,7 +56,7 @@ class ServerConfig:
     autoload_model: str = "Qwen/Qwen2.5-0.5B-Instruct"
     autoload_device: str = "auto"
     use_slonet: bool = False
-    quantize_slonet: bool = True  # int8 quantization enabled by default
+    quantize_slonet: bool = True  # int8 quantization enabled by default (saves ~50% RAM)
     quant_bits: int = 8
     quant_mode: str = "symmetric"
     quant_clip: float = 0.999
@@ -96,7 +96,7 @@ class ServerConfig:
             autoload_model=os.getenv("SLO_AUTOLOAD_MODEL", "Qwen/Qwen2.5-0.5B-Instruct").strip(),
             autoload_device=(os.getenv("SLO_AUTOLOAD_DEVICE") or "auto").strip(),
             use_slonet=os.getenv("SLO_USE_SLONET", "0").strip().lower() in ("1", "true", "yes"),
-            quantize_slonet=os.getenv("SLO_QUANTIZE", "").lower() in ("1", "true", "yes"),
+            quantize_slonet=os.getenv("SLO_QUANTIZE", "true").lower() in ("1", "true", "yes"),
             quant_bits=int(os.getenv("SLO_QUANT_BITS", "8")),
             quant_mode=os.getenv("SLO_QUANT_MODE", "symmetric").strip(),
             quant_clip=float(os.getenv("SLO_QUANT_CLIP", "0.999")),

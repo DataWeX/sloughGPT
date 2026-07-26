@@ -51,7 +51,7 @@ class InferencePool:
                     import os
                     import multiprocessing
                     # Auto-size to CPU count, capped at 8 to avoid oversubscription
-                    default_workers = min(multiprocessing.cpu_count(), 8)
+                    default_workers = min(multiprocessing.cpu_count() // 2, 4)
                     max_workers = int(os.environ.get("SLO_INFERENCE_POOL_SIZE", default_workers))
                     cls._instance = cls(max_workers=max_workers)
         return cls._instance

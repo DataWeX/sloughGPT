@@ -53,7 +53,7 @@ class SessionKVCache:
     entries are kept (LRU eviction).
     """
 
-    def __init__(self, max_sessions: int = 100, ttl: float = 1800.0):
+    def __init__(self, max_sessions: int = 20, ttl: float = 600.0):
         self._caches: dict[str, Any] = {}
         self._max_sessions = max_sessions
         self._ttl = ttl
@@ -309,10 +309,17 @@ def _has_mps() -> bool:
 def _mps_oom_recovery() -> None:
     """Clear MPS cache and potentially force CPU fallback."""
     try:
-        gc.collect()
         from domains.infrastructure.ml_types import mps as ml_mps
         if _has_mps():
             ml_mps.empty_cache()
+    except Exception:
+        pass
+
+
+def _schedule_gc() -> None:
+    """Schedule gc.collect() in a background thread to avoid blocking the event loop."""
+    try:
+        Thread(target=gc.collect, daemon=True).start()
     except Exception:
         pass
 
@@ -1087,8 +1094,7 @@ class ModelServer:
                                 obj.clear()
                     except Exception as e:
                         logger.debug("KV cache clear for %s failed: %s", attr, e)
-            import gc
-            gc.collect()
+            _schedule_gc()
         except Exception as e:
             logger.debug("KV cache cleanup failed: %s", e)
 
@@ -1609,7 +1615,7 @@ class ModelServer:
                 del old
             except Exception:
                 pass
-        gc.collect()
+            _schedule_gc()
         self._check_device()
         self.set_status(ModelStatus.READY)
         logger.info("ModelServer[%s]: model swapped", self.model_id, extra={"tag": "MODEL"})
