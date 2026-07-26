@@ -759,10 +759,6 @@ async def stream(request: Request):
         global _auto_train_cancel_event, _auto_train_pause_event
         from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
 
-        _auto_train_cancel_event = threading.Event()
-        _auto_train_pause_event = threading.Event()
-        _complete_enqueued[0] = False
-
         method = state.config.get("method", "slonet")
 
         if method == "chat-trained":

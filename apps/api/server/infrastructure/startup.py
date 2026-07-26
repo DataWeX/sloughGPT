@@ -97,9 +97,10 @@ class StartupOrchestrator:
 
             # Resolve profile enum
             try:
-                profile_enum = StartupProfile(self._profile)
+                self._profile_enum = StartupProfile(self._profile)
             except ValueError:
-                profile_enum = StartupProfile.FULL
+                self._profile_enum = StartupProfile.FULL
+            profile_enum = self._profile_enum
 
             full_only: frozenset[StartupProfile] = frozenset({StartupProfile.FULL})
             quick_plus: frozenset[StartupProfile] = frozenset(
@@ -178,6 +179,9 @@ class StartupOrchestrator:
             self._lifecycle.register_shutdown_hook(
                 ShutdownHook("pool_shutdown", self._shutdown_pool, depends_on=[], timeout=10.0),
             )
+            self._lifecycle.register_shutdown_hook(
+                ShutdownHook("executor_shutdown", self._shutdown_executor, depends_on=[], timeout=10.0),
+            )
 
             # Health gates
             self._lifecycle.register_gate("model_loaded", lambda: self._is_model_loaded())
@@ -207,12 +211,8 @@ class StartupOrchestrator:
         # Initialize lifecycle manager
         await self._init_lifecycle()
 
-        from domains.infrastructure.lifecycle import StartupProfile
-
-        try:
-            profile_enum = StartupProfile(self._profile)
-        except ValueError:
-            profile_enum = StartupProfile.FULL
+        # Reuse profile enum resolved in _init_lifecycle
+        profile_enum = getattr(self, '_profile_enum', StartupProfile.FULL)
 
         # Run sequential phases via lifecycle manager
         if self._lifecycle is not None:

@@ -49,8 +49,6 @@ def _is_model_loading() -> bool:
         import state as server_state
         if server_state.model is not None:
             return False
-        # If model isn't loaded but server is up, it's probably still loading
-        from datetime import datetime
         uptime = (datetime.now() - _health_start_time).total_seconds()
         return uptime < 90
     except Exception:
@@ -59,13 +57,21 @@ def _is_model_loading() -> bool:
 
 def _get_model_info() -> Tuple[bool, Optional[str]]:
     """Get model info from registry, controller, or server_state."""
+    loaded, model_type, _ = _get_model_info_with_registry()
+    return loaded, model_type
+
+
+def _get_model_info_with_registry() -> Tuple[bool, Optional[str], Dict[str, Any]]:
+    """Get model info and registry health in a single query."""
+    registry_health: Dict[str, Any] = {}
+
     # Check ModelRegistry first (most authoritative)
     try:
         from domains.infrastructure.model_registry import get_model_registry
         registry = get_model_registry()
-        health = registry.health_summary()
-        if health["healthy"] and health["default_model"]:
-            return True, health["default_model"]
+        registry_health = registry.health_summary()
+        if registry_health.get("healthy") and registry_health.get("default_model"):
+            return True, registry_health["default_model"], registry_health
     except ImportError:
         pass
 
@@ -75,7 +81,7 @@ def _get_model_info() -> Tuple[bool, Optional[str]]:
         ctrl = get_models_controller()
         current = ctrl.get_current_model()
         if current:
-            return True, current.get("model_id")
+            return True, current.get("model_id"), registry_health
     except ImportError:
         pass
 
@@ -83,11 +89,11 @@ def _get_model_info() -> Tuple[bool, Optional[str]]:
     try:
         import state as server_state
         if server_state.model is not None:
-            return True, server_state.model_type
+            return True, server_state.model_type, registry_health
     except ImportError:
         pass
 
-    return False, None
+    return False, None, registry_health
 
 
 def _get_lifecycle_info() -> Dict[str, Any]:
@@ -141,6 +147,7 @@ def _get_quantization_info() -> Dict[str, Any]:
 def _build_status_message(
     model_loaded: bool,
     model_type: Optional[str],
+    model_loading: bool,
     current_soul: Optional[str],
     request_count: int,
     error_count: int,
@@ -163,7 +170,7 @@ def _build_status_message(
             + f". Served {request_count} requests."
             + (f" {error_count} errors." if error_count > 0 else "")
         )
-    elif _is_model_loading():
+    elif model_loading:
         msg = "Loading model weights — this takes about a minute on first start."
     else:
         msg = f"Server running, no model loaded. Profile: {profile}."
@@ -176,7 +183,6 @@ class HealthController:
     _CACHE_TTL = 2.0  # seconds
 
     def __init__(self):
-        self._start_time = datetime.now()
         self._cache: Dict[str, Any] = {}
         self._cache_time: float = 0.0
 
@@ -199,7 +205,7 @@ class HealthController:
 
         # Status message from lifecycle + model state
         result["status_message"] = _build_status_message(
-            model_loaded, model_type, None, 0, 0, lifecycle,
+            model_loaded, model_type, model_loading, None, 0, 0, lifecycle,
         )
 
         if model_loaded:
@@ -230,11 +236,12 @@ class HealthController:
         if self._cache and (now - self._cache_time) < self._CACHE_TTL:
             return self._cache
 
-        cpu = psutil.cpu_percent(interval=0.1)
+        cpu = psutil.cpu_percent(interval=None)
         mem = psutil.virtual_memory()
-        model_loaded, model_type = _get_model_info()
+        model_loaded, model_type, registry_health = _get_model_info_with_registry()
         inference_stats = _get_inference_stats()
-        uptime = (datetime.now() - self._start_time).total_seconds()
+        model_loading = not model_loaded and _is_model_loading()
+        uptime = (datetime.now() - _health_start_time).total_seconds()
 
         gpu_info: Dict[str, Any] = {}
         try:
@@ -249,15 +256,6 @@ class HealthController:
             }
         except Exception as e:
             gpu_info = {"backend": "unknown", "error": str(e)}
-
-        # Add ModelRegistry health if available
-        registry_health: Dict[str, Any] = {}
-        try:
-            from domains.infrastructure.model_registry import get_model_registry
-            reg = get_model_registry()
-            registry_health = reg.health_summary()
-        except Exception:
-            pass
 
         # Add ServerState counters if available
         try:
@@ -329,7 +327,7 @@ class HealthController:
             "gpu": gpu_info,
             "mps_monitor": _get_mps_monitor_info(),
             "model_loaded": model_loaded,
-            "model_loading": not model_loaded and _is_model_loading(),
+            "model_loading": model_loading,
             "model_type": model_type,
             "soul": current_soul,
             "inference": inference_stats,
@@ -338,7 +336,7 @@ class HealthController:
             "lifecycle": lifecycle,
             "training_pool": _get_executor_stats(),
             "status_message": _build_status_message(
-                model_loaded, model_type, current_soul,
+                model_loaded, model_type, model_loading, current_soul,
                 request_count, error_count, lifecycle,
             ),
         }
