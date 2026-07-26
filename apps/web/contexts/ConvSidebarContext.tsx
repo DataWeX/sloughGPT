@@ -6,6 +6,9 @@ interface ConvSidebarContextValue {
   open: boolean
   toggle: () => void
   setOpen: (v: boolean) => void
+  convCollapsed: boolean
+  toggleConv: () => void
+  setConvCollapsed: (v: boolean) => void
   navCollapsed: boolean
   toggleNav: () => void
   setNavCollapsed: (v: boolean) => void
@@ -21,12 +24,14 @@ export function useConvSidebar() {
 
 export function ConvSidebarProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
+  const [convCollapsed, setConvCollapsed] = useState(false)
   const [navCollapsed, setNavCollapsed] = useState(false)
   const toggle = useCallback(() => setOpen(v => !v), [])
+  const toggleConv = useCallback(() => setConvCollapsed(v => !v), [])
   const toggleNav = useCallback(() => setNavCollapsed(v => !v), [])
 
   return (
-    <ConvSidebarContext.Provider value={{ open, toggle, setOpen, navCollapsed, toggleNav, setNavCollapsed }}>
+    <ConvSidebarContext.Provider value={{ open, toggle, setOpen, convCollapsed, toggleConv, setConvCollapsed, navCollapsed, toggleNav, setNavCollapsed }}>
       {children}
     </ConvSidebarContext.Provider>
   )

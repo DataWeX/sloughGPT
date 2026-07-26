@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
-import { IconPlus, IconStar, IconPin, IconChat, IconX, IconSearch, IconFolder, IconSort, IconCheck } from '@sloughgpt/strui'
+import { IconPlus, IconStar, IconPin, IconChat, IconX, IconSearch, IconFolder, IconSort, IconCheck, IconChevronLeft } from '@sloughgpt/strui'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -23,6 +23,8 @@ interface ConversationSidebarProps {
   onRenameConversation?: (id: string, name: string) => void
   open: boolean
   onClose: () => void
+  collapsed?: boolean
+  onToggleCollapse?: () => void
 }
 
 function SidebarContent({
@@ -38,6 +40,7 @@ function SidebarContent({
   onRenameConversation,
   onClose,
   isDrawer,
+  onToggleCollapse,
 }: {
   conversations: Conversation[]
   currentConversationId?: string
@@ -51,6 +54,7 @@ function SidebarContent({
   onRenameConversation?: (id: string, name: string) => void
   onClose?: () => void
   isDrawer?: boolean
+  onToggleCollapse?: () => void
 }) {
   const SORT_KEY = 'sloughgpt:sidebar-sort'
 
@@ -140,6 +144,16 @@ function SidebarContent({
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border/50 shrink-0">
         <div className="flex items-center gap-1">
+          {!isDrawer && onToggleCollapse && (
+            <button
+              onClick={onToggleCollapse}
+              className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              aria-label="Collapse sidebar"
+              title="Collapse"
+            >
+              <IconChevronLeft className="h-3 w-3" />
+            </button>
+          )}
           <span className="text-xs font-medium text-foreground">Conversations</span>
           <div className="relative">
             <button
@@ -216,9 +230,21 @@ function SidebarContent({
       )}
       <div className="flex-1 overflow-y-auto overscroll-contain px-1.5 py-1">
         {conversations.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-8 px-3">
-            No conversations yet. Click + New to start.
-          </p>
+          <div className="flex flex-col items-center justify-center py-6 px-3 gap-2">
+            <IconChat className="h-5 w-5 text-muted-foreground/30" />
+            <p className="text-[11px] text-muted-foreground/60 text-center leading-relaxed">
+              No conversations yet
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { onNewChat(); onClose?.() }}
+              className="text-[11px] h-6 px-2 gap-1 text-primary hover:text-primary/80"
+            >
+              <IconPlus className="h-3 w-3" />
+              Start chatting
+            </Button>
+          </div>
         ) : q && filtered.length === 0 ? (
           <div className="text-center py-6 px-3 space-y-3">
             <p className="text-xs text-muted-foreground">
@@ -299,14 +325,21 @@ function SidebarContent({
   )
 }
 
-export function ConversationSidebar(props: ConversationSidebarProps) {
+export function ConversationSidebar({ collapsed, onToggleCollapse, ...props }: ConversationSidebarProps) {
   const { open, onClose } = props
 
   return (
     <>
-      {/* Desktop: always visible */}
-      <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r border-border/40 bg-background/80">
-        <SidebarContent {...props} isDrawer={false} />
+      {/* Desktop: collapsible aside */}
+      <aside
+        className={cn(
+          "hidden lg:flex shrink-0 flex-col border-r border-border/40 bg-background/80 transition-all duration-200 ease-in-out overflow-hidden",
+          collapsed ? "w-0 border-r-0" : "w-64"
+        )}
+      >
+        <div className={cn("min-w-[256px] h-full", collapsed && "pointer-events-none")}>
+          <SidebarContent {...props} isDrawer={false} onToggleCollapse={onToggleCollapse} />
+        </div>
       </aside>
 
       {/* Mobile: drawer overlay */}

@@ -92,7 +92,7 @@ export default function ChatPage() {
 
   const { bookmarks, addBookmark, removeBookmark, isBookmarked, clearAll } = useChatBookmarks()
 
-  const { setOpen: setConvSidebarOpen } = useConvSidebar()
+  const { setOpen: setConvSidebarOpen, convCollapsed, toggleConv } = useConvSidebar()
   useEffect(() => {
     setConvSidebarOpen(true)
     return () => { setConvSidebarOpen(false) }
@@ -457,6 +457,8 @@ export default function ChatPage() {
         onRenameConversation={chat.renameSession}
         open={ui.sidebarOpen}
         onClose={() => ui.setSidebarOpen(false)}
+        collapsed={convCollapsed}
+        onToggleCollapse={toggleConv}
       />
       <main className="flex flex-1 min-h-0 overflow-hidden rounded-none lg:rounded-lg border border-border/30 bg-[rgb(var(--chat-bg))] shadow-sm" aria-label="Chat">
         <div className="flex flex-col flex-1 min-h-0 min-w-0 max-w-full overflow-hidden">
