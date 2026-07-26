@@ -62,7 +62,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(({ className, type, error
       className={cn(
         inputFieldClassName,
         'h-10',
-        error && 'border-destructive/60 focus-visible:ring-destructive/40 hover:border-destructive/70',
+        error && 'border-destructive focus-visible:ring-destructive/20 hover:border-destructive/80',
         className,
       )}
       ref={ref}
