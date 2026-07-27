@@ -1044,42 +1044,42 @@ class CMOSDevice(Device):
         self._cmos[reg] = val & 0xFF
 
     def _refresh_rtc(self):
-        """Update RTC register bytes from host system clock."""
-        import time as _time
-        t = _time.time() + self._offset
-        parts = _time.gmtime(t)
+        """Update RTC register bytes from the self-contained clock."""
+        if self._clock is None:
+            return
+        parts = self._clock.decode()
         reg_b = self._cmos[self.REG_STATUS_B]
         binary = bool(reg_b & 0x04)    # DM bit: 0=BCD, 1=binary
         h24 = bool(reg_b & 0x02)       # 24/12 bit: 0=12h, 1=24h
 
         if binary:
-            self._cmos[self.REG_SECONDS] = parts.tm_sec & 0xFF
-            self._cmos[self.REG_MINUTES] = parts.tm_min & 0xFF
-            self._cmos[self.REG_DAY] = parts.tm_mday & 0xFF
-            self._cmos[self.REG_MONTH] = parts.tm_mon & 0xFF
-            self._cmos[self.REG_YEAR] = parts.tm_year % 100
-            self._cmos[self.REG_WEEKDAY] = (parts.tm_wday + 1) & 0xFF  # 1=Sun
+            self._cmos[self.REG_SECONDS] = parts["second"] & 0xFF
+            self._cmos[self.REG_MINUTES] = parts["minute"] & 0xFF
+            self._cmos[self.REG_DAY] = parts["day"] & 0xFF
+            self._cmos[self.REG_MONTH] = parts["month"] & 0xFF
+            self._cmos[self.REG_YEAR] = parts["year"] % 100
+            self._cmos[self.REG_WEEKDAY] = (parts["weekday"] + 1) & 0xFF  # 1=Sun
             if h24:
-                self._cmos[self.REG_HOURS] = parts.tm_hour & 0xFF
+                self._cmos[self.REG_HOURS] = parts["hour"] & 0xFF
             else:
-                h12 = parts.tm_hour % 12
+                h12 = parts["hour"] % 12
                 if h12 == 0:
                     h12 = 12
-                self._cmos[self.REG_HOURS] = h12 | (0x80 if parts.tm_hour >= 12 else 0)
+                self._cmos[self.REG_HOURS] = h12 | (0x80 if parts["hour"] >= 12 else 0)
         else:
-            self._cmos[self.REG_SECONDS] = self._to_bcd(parts.tm_sec)
-            self._cmos[self.REG_MINUTES] = self._to_bcd(parts.tm_min)
-            self._cmos[self.REG_DAY] = self._to_bcd(parts.tm_mday)
-            self._cmos[self.REG_MONTH] = self._to_bcd(parts.tm_mon)
-            self._cmos[self.REG_YEAR] = self._to_bcd(parts.tm_year % 100)
-            self._cmos[self.REG_WEEKDAY] = (parts.tm_wday + 1) & 0xFF
+            self._cmos[self.REG_SECONDS] = self._to_bcd(parts["second"])
+            self._cmos[self.REG_MINUTES] = self._to_bcd(parts["minute"])
+            self._cmos[self.REG_DAY] = self._to_bcd(parts["day"])
+            self._cmos[self.REG_MONTH] = self._to_bcd(parts["month"])
+            self._cmos[self.REG_YEAR] = self._to_bcd(parts["year"] % 100)
+            self._cmos[self.REG_WEEKDAY] = (parts["weekday"] + 1) & 0xFF
             if h24:
-                self._cmos[self.REG_HOURS] = self._to_bcd(parts.tm_hour)
+                self._cmos[self.REG_HOURS] = self._to_bcd(parts["hour"])
             else:
-                h12 = parts.tm_hour % 12
+                h12 = parts["hour"] % 12
                 if h12 == 0:
                     h12 = 12
-                self._cmos[self.REG_HOURS] = self._to_bcd(h12) | (0x80 if parts.tm_hour >= 12 else 0)
+                self._cmos[self.REG_HOURS] = self._to_bcd(h12) | (0x80 if parts["hour"] >= 12 else 0)
 
     def _to_bcd(self, val: int) -> int:
         """Convert an integer (0–99) to BCD."""
@@ -1125,9 +1125,10 @@ class CMOSDevice(Device):
         }
 
     def get_unix_time(self) -> int:
-        """Return Unix timestamp from host clock."""
-        import time as _time
-        return int(_time.time() + self._offset)
+        """Return Unix timestamp from the self-contained clock."""
+        if self._clock is None:
+            return 0
+        return int(self._clock.seconds_now())
 
     def read_cmos(self, offset: int) -> int:
         """Read a raw CMOS byte (bypasses I/O port interface)."""
@@ -6794,7 +6795,8 @@ class X86VirtualSystem:
         # I/O devices
         self._serial = SerialDevice(cpu=self._cpu)
         self._mouse = MouseDevice()
-        self._rtc = CMOSDevice(cpu=self._cpu)
+        self._clock = ClockDevice(freq=timer_hz)
+        self._rtc = CMOSDevice(cpu=self._cpu, clock=self._clock)
         self._disk = DiskDevice(block_device=self._block)
         self._nic = NICDevice()
 
@@ -6811,6 +6813,7 @@ class X86VirtualSystem:
             scheduler=self._scheduler,
             syscall_handler=self._syscall,
             target_hz=timer_hz,
+            clock=self._clock,
         )
 
         # Register INT 0x80 handler
