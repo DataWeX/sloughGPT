@@ -97,7 +97,7 @@ class SmartGroup(click.Group):
         formatter.write_usage(path, "[OPTIONS] COMMAND [ARGS]...")
 
     def format_help(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
-        """Custom help format with color-coded groups."""
+        """Custom help format with color-coded groups and examples."""
         # Title
         from rich.console import Console
         console = Console(highlight=False)
@@ -114,28 +114,50 @@ class SmartGroup(click.Group):
         # Description
         console.print("  [dim]Train, chat, serve, and manage AI models[/]\n")
 
-        # Commands grouped by category
+        # Commands grouped by category with examples and tips
         self._format_grouped_commands(ctx, console)
 
         # Global options
-        console.print("\n  [bold]Global Options:[/]")
+        console.print("  [bold]Global Options:[/]")
         console.print("    [cyan]--host[/]       API hostname (default: localhost)")
         console.print("    [cyan]--port[/]       API port (default: 8000)")
         console.print("    [cyan]-c, --config[/] Config path (default: config.yaml)")
+        console.print("    [cyan]--yes, -y[/]    Skip all confirmations")
         console.print("    [cyan]--help[/]       Show this help message")
-
         console.print()
 
     def _format_grouped_commands(self, ctx: click.Context, console) -> None:
-        """Format commands grouped by category."""
-        # Define command categories
+        """Format commands grouped by category with examples and tips."""
+        # Define command categories with descriptions
         categories = {
-            "Start Here": ["start", "chat", "shell", "tui", "dev", "serve"],
-            "Models": ["model"],
-            "Training": ["train"],
-            "Data": ["dataset"],
-            "System": ["system"],
-            "Docker": ["docker"],
+            "Getting Started": {
+                "cmds": ["start", "chat", "shell", "tui"],
+                "desc": "New here? Start with these",
+            },
+            "Server": {
+                "cmds": ["dev", "serve", "hf-serve"],
+                "desc": "Run inference API",
+            },
+            "Models": {
+                "cmds": ["model", "personality"],
+                "desc": "Load, switch, and manage AI models",
+            },
+            "Training": {
+                "cmds": ["train", "checkpoint", "adapter", "feedback"],
+                "desc": "Fine-tune and evaluate models",
+            },
+            "Data": {
+                "cmds": ["dataset", "knowledge"],
+                "desc": "Import and manage training data",
+            },
+            "System": {
+                "cmds": ["system", "completion", "simulate"],
+                "desc": "Environment and diagnostics",
+            },
+            "Docker": {
+                "cmds": ["docker"],
+                "desc": "Containerized deployment",
+            },
         }
 
         # Get all commands
@@ -151,11 +173,11 @@ class SmartGroup(click.Group):
         # Track which commands we've printed
         printed = set()
 
-        for category, cmd_names in categories.items():
-            category_cmds = [(n, commands[n]) for n in cmd_names if n in commands]
-            if category_cmds:
-                console.print(f"\n    [bold yellow]{category}[/]")
-                for name, cmd in category_cmds:
+        for cat_name, cat_info in categories.items():
+            cat_cmds = [(n, commands[n]) for n in cat_info["cmds"] if n in commands]
+            if cat_cmds:
+                console.print(f"\n    [bold yellow]{cat_name}[/] [dim]— {cat_info['desc']}[/]")
+                for name, cmd in cat_cmds:
                     help_text = cmd.get_short_help_str(limit=50)
                     if help_text:
                         console.print(f"      [cyan]{name:<16}[/] [dim]{help_text}[/]")
@@ -163,16 +185,35 @@ class SmartGroup(click.Group):
                         console.print(f"      [cyan]{name}[/]")
                     printed.add(name)
 
-        # Print any remaining commands
+        # Print any remaining commands (hidden ones like hf-serve)
         remaining = [(n, commands[n]) for n in sorted(commands.keys()) if n not in printed]
         if remaining:
-            console.print("\n    [bold yellow]Other[/]")
+            console.print("\n    [bold yellow]Advanced[/]")
             for name, cmd in remaining:
+                if getattr(cmd, "hidden", False):
+                    continue
                 help_text = cmd.get_short_help_str(limit=50)
                 if help_text:
                     console.print(f"      [cyan]{name:<16}[/] [dim]{help_text}[/]")
                 else:
                     console.print(f"      [cyan]{name}[/]")
+
+        # Print examples
+        console.print("\n  [bold]Examples:[/]")
+        console.print("    [dim]sloughgpt chat[/]                     Start chatting")
+        console.print("    [dim]sloughgpt model download gpt2[/]     Download a model")
+        console.print("    [dim]sloughgpt model status[/]             Check model cache")
+        console.print("    [dim]sloughgpt train dataset shakespeare[/] Train on dataset")
+        console.print("    [dim]sloughgpt shell[/]                    Interactive shell")
+        console.print()
+
+        # Print tips
+        console.print("  [bold]Tips:[/]")
+        console.print("    [dim]• Use fuzzy matching — 'sloughgpt md' finds 'model'[/]")
+        console.print("    [dim]• Set SLO_AUTO_DOWNLOAD=1 to skip download confirmations[/]")
+        console.print("    [dim]• Run 'sloughgpt shell' for 40+ built-in commands[/]")
+        console.print("    [dim]• Add --yes/-y to skip all confirmations[/]")
+        console.print()
 
         console.print()
 
