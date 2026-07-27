@@ -3211,6 +3211,30 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
 
 
 def import_from_sou(path: str) -> SloNet:
+    from pathlib import Path as _Path
+    p = _Path(path)
+    if not p.exists():
+        points_path = p.with_suffix(".points.json")
+        if points_path.exists():
+            from domains.infrastructure.pugqeep.model_tree import load_from_points
+            tree, meta = load_from_points(str(p))
+            net = SloTransformer(
+                vocab_size=meta.get("metadata", {}).get("vocab_size", 256),
+                n_embed=meta.get("metadata", {}).get("n_embed", 64),
+                n_layer=meta.get("metadata", {}).get("n_layer", 2),
+                n_head=meta.get("metadata", {}).get("n_head", 4),
+                block_size=meta.get("metadata", {}).get("block_size", 32),
+                use_rope=meta.get("metadata", {}).get("use_rope", True),
+            )
+            weights = {}
+            for name in tree._weight_shapes:
+                arr = tree.get_weight(name)
+                if arr is not None:
+                    weights[name] = arr
+            if weights:
+                net.load_state_dict(weights, strict=False)
+            return net
+        raise FileNotFoundError(f"Not found: {path}")
     with open(path, "rb") as f:
         raw = f.read()
 
