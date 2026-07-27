@@ -57,13 +57,15 @@
 :root {
   /* App shell */
   --app-mobile-header-h: 3.25rem;
-  --sidebar-width: 15.75rem;
-  --sidebar-collapsed-width: 3.5rem;
+  --sidebar-width: 13rem;
+  --sidebar-collapsed-width: 3rem;
   --conv-sidebar-width: 16rem;
   --tool-panel-width: 18rem;
   /* Chat column max width — ~80ch at default scale; scales with font */
   --chat-thread-max: min(100%, 52rem);
   --chat-bg: 246 242 237;
+  /* Content area max width for large screens */
+  --content-max-width: 80rem;
   color-scheme: light;
 
   /* Light — warm cream paper with violet undertone */
@@ -323,7 +325,7 @@ html {
  */
 .sl-main-container {
   width: 100%;
-  max-width: var(--content-max-width, 72rem);
+  max-width: var(--content-max-width);
   margin-left: auto;
   margin-right: auto;
 }

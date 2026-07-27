@@ -64,7 +64,7 @@
 :root {
   --font-outfit: 'Outfit', system-ui, sans-serif;
   --font-jetbrains-mono: 'JetBrains Mono', ui-monospace, monospace;
-  --sidebar-width: 15.75rem;
+  --sidebar-width: 13rem;
   --chat-thread-max: min(100%, 48rem);
   color-scheme: light;
   --background: 248 246 252;
