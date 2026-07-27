@@ -1,4 +1,4 @@
-.PHONY: api api-daemon api-stop web tsc lint test-py test-web test dev install build precommit test-repo-root colab-smoke colab-test
+.PHONY: api api-daemon api-stop web tsc lint test-py test-py-training test-web test dev install build precommit test-repo-root colab-smoke colab-test
 
 # ── Dev Servers ──────────────────────────────────────────
 api:
@@ -35,6 +35,9 @@ test-py-fast:
 
 test-py-slow:
 	cd packages/core-py && .venv/bin/python -m pytest -m slow $(ARGS)
+
+test-py-training:
+	cd packages/core-py && .venv/bin/python -m pytest tests/test_training_sequence.py tests/test_training_status.py tests/test_trainer_protocol.py tests/test_auto_trainer.py tests/test_distillation.py tests/test_distill_gpt2.py tests/test_video_trainer.py tests/test_mobile_training_store.py -x -q $(ARGS)
 
 test-py-all:
 	cd packages/core-py && .venv/bin/python -m pytest -m "" $(ARGS)

@@ -364,3 +364,98 @@ def get_training_executor() -> TrainingExecutor:
         _instance = TrainingExecutor(max_workers=max_workers)
         logger.info("TrainingExecutor created (workers=%d)", max_workers, extra={"tag": "TRAIN"})
         return _instance
+
+
+# ── Checkpoint Compression ──────────────────────────────────────────────
+
+
+def compress_checkpoint(
+    soul_path: str,
+    n_clusters: int = 16,
+    output_dir: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Compress a ``.soul`` checkpoint into PointLibrary vectors.
+
+    Args:
+        soul_path: Path to the ``.soul`` checkpoint file.
+        n_clusters: Number of VQ clusters for compression.
+        output_dir: Directory for the ``.points.json`` library file.
+            Defaults to the same directory as *soul_path*.
+
+    Returns:
+        Dict with ``point_count``, ``compression_ratio``,
+        ``total_raw_bytes``, ``total_compressed_bytes``,
+        ``library_path``, and ``meta_path`` — or ``None`` on failure.
+    """
+    import json
+    from pathlib import Path
+
+    from domains.training.export import export_to_sou
+
+    soul_file = Path(soul_path)
+    if not soul_file.exists():
+        logger.warning("Checkpoint not found: %s", soul_path, extra={"tag": "TRAIN"})
+        return None
+
+    try:
+        from domains.infrastructure.pugqeep import PointCompressor
+        from domains.infrastructure.pugqeep.library import PointLibrary
+        from domains.training.slonet import SloTransformer, import_from_sou
+    except ImportError as exc:
+        logger.warning("Pugqeep/SloNet not available: %s", exc, extra={"tag": "TRAIN"})
+        return None
+
+    try:
+        model = import_from_sou(str(soul_file))
+        if model is None:
+            return None
+        state_dict = model.state_dict()
+    except Exception as exc:
+        logger.warning("Failed to load model from %s: %s", soul_path, exc, extra={"tag": "TRAIN"})
+        return None
+
+    out_dir = Path(output_dir) if output_dir else soul_file.parent
+    out_dir.mkdir(parents=True, exist_ok=True)
+    lib_name = soul_file.stem
+    lib_path = out_dir / f"{lib_name}.points.json"
+
+    compressor = PointCompressor()
+    library = PointLibrary(name=lib_name, storage_dir=out_dir)
+
+    total_raw = 0
+    total_compressed = 0
+    for name, weights in state_dict.items():
+        import numpy as np
+        if not isinstance(weights, np.ndarray):
+            weights = np.asarray(weights, dtype=np.float32)
+        total_raw += weights.nbytes
+        point = compressor.compress_cluster(
+            weights, name, n_clusters=n_clusters,
+        )
+        total_compressed += len(point.to_bytes()) if hasattr(point, "to_bytes") else weights.nbytes
+        library.add(point)
+
+    library.save(lib_path)
+
+    meta = {
+        "source": str(soul_file),
+        "n_clusters": n_clusters,
+        "point_count": len(library.points) if hasattr(library, "points") else 0,
+        "total_raw_bytes": total_raw,
+        "total_compressed_bytes": total_compressed,
+        "compression_ratio": total_raw / max(total_compressed, 1),
+    }
+    meta_path = out_dir / f"{lib_name}.meta.json"
+    meta_path.write_text(json.dumps(meta, indent=2, default=str))
+
+    stats = {
+        **meta,
+        "library_path": str(lib_path),
+        "meta_path": str(meta_path),
+    }
+    logger.info(
+        "Compressed %s → %d points (%.1fx ratio)",
+        soul_file.name, stats["point_count"], stats["compression_ratio"],
+        extra={"tag": "TRAIN"},
+    )
+    return stats

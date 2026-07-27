@@ -11,6 +11,20 @@ cd "$REPO_ROOT"
 python3 -m pytest packages/core-py/tests/ -q --tb=short -p no:cacheprovider || FAILURES=$((FAILURES + 1))
 
 echo ""
+echo "=== Root-level Python tests ==="
+python3 -m pytest tests/ \
+  --override-ini="testpaths=tests" \
+  --override-ini="addopts=" \
+  --ignore=tests/test_checkpoint_utils.py \
+  --ignore=tests/test_knowledge_graph.py \
+  --ignore=tests/test_lm_eval_char.py \
+  --ignore=tests/test_rag.py \
+  --ignore=tests/test_train_sloughgpt_generate_text.py \
+  --ignore=tests/test_train_sloughgpt_resume.py \
+  --ignore=tests/server/ \
+  -q --tb=short || FAILURES=$((FAILURES + 1))
+
+echo ""
 echo "=== Server API tests ==="
 cd "$REPO_ROOT/apps/api/server"
 python3 -m pytest tests/ -q --tb=short -p no:cacheprovider || FAILURES=$((FAILURES + 1))

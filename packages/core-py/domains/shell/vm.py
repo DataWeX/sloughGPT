@@ -999,6 +999,11 @@ class CMOSDevice(Device):
     def write_cmos(self, offset: int, val: int):
         """Write a raw CMOS byte (bypasses I/O port interface)."""
         if 0 <= offset < self.CMOS_SIZE:
+            if offset == self.REG_STATUS_A or offset == self.REG_STATUS_C:
+                return  # read-only
+            if offset == self.REG_STATUS_D:
+                self._cmos[offset] = (val & 0x80) | (self._cmos[offset] & 0x7F)
+                return
             self._cmos[offset] = val & 0xFF
 
     def set_offset(self, seconds: float):
