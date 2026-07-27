@@ -2590,17 +2590,19 @@ class X86Assembler:
             return
         reg = ops[0].lower()
         count = ops[1].strip()
+        # /4 = SHL, /5 = SHR
+        ext = 4 if op == "shl" else 5
         if reg in self._REG32:
             if self._pfx(reg):
                 self._output.append(0x66)
             if count == "cl":
                 self._output.append(0xD3)
-                modrm = (0xE0 if op == "shl" else 0xE8 | self._REG32[reg])
+                modrm = 0xC0 | (ext << 3) | self._REG32[reg]
                 self._output.append(modrm)
             else:
                 val = self._parse_imm(count)
                 self._output.append(0xC1)
-                modrm = (0xE0 if op == "shl" else 0xE8 | self._REG32[reg])
+                modrm = 0xC0 | (ext << 3) | self._REG32[reg]
                 self._output.append(modrm)
                 self._output.append(val & 0xFF)
         elif reg in self._REG16:
@@ -2608,12 +2610,12 @@ class X86Assembler:
                 self._output.append(0x66)
             if count == "cl":
                 self._output.append(0xD3)
-                modrm = (0xE0 if op == "shl" else 0xE8 | self._REG16[reg])
+                modrm = 0xC0 | (ext << 3) | self._REG16[reg]
                 self._output.append(modrm)
             else:
                 val = self._parse_imm(count)
                 self._output.append(0xC1)
-                modrm = (0xE0 if op == "shl" else 0xE8 | self._REG16[reg])
+                modrm = 0xC0 | (ext << 3) | self._REG16[reg]
                 self._output.append(modrm)
                 self._output.append(val & 0xFF)
 
@@ -2861,7 +2863,10 @@ def _scancode_to_char(sc: int) -> str:
     """Convert a PS/2 set-1 make scancode to character. Returns 0 if unknown."""
     if 0 <= sc < len(_SCANDATA):
         ch = _SCANDATA[sc]
-        return ch if isinstance(ch, str) else '\0'
+        if isinstance(ch, str):
+            return ch
+        if isinstance(ch, int) and ch != 0:
+            return chr(ch)
     return '\0'
 
 
@@ -4324,7 +4329,7 @@ import threading
 # Minimal x86 kernel shell assembly — reads keyboard, echoes to screen
 _SHELL_ASM = """\
 [BITS 32]
-org 0x1000
+[ORG 0x1000]
 
 start:
     sti
@@ -4399,8 +4404,8 @@ putchar:
     push edi
     mov edi, [cursor]
     shl edi, 1
-    mov [0xB8000 + edi], al
-    mov byte [0xB8000 + edi + 1], 0x07
+    mov [edi + 0xB8000], al
+    mov byte [edi + 0xB8001], 0x07
     inc dword [cursor]
     pop edi
     ret
@@ -4608,6 +4613,1042 @@ class VirtualSystem:
 
     def reset(self) -> None:
         self.cpu = CPU(memory=self.memory, devices=self.bus)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# OS Layer — processes, scheduling, syscalls, memory management
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+# ── Page Frame Allocator ─────────────────────────────────────────────────────
+
+class PageFrameAllocator:
+    """Bitmap-based physical page frame allocator.
+
+    Manages a flat 32-bit address space divided into 4 KB pages.  The bitmap
+    tracks which frames are allocated.  Supports first-fit allocation and
+    coalescing on free.
+
+    Memory layout (default 4 MB):
+        0x000000 - 0x000FFF  Page 0   (reserved / IVT / BDA)
+        0x001000 - 0x001FFF  Page 1   (reserved / GDT)
+        ...
+        0x004000 - 0x004FFF  Page 4   (keyboard buffer area)
+        ...
+        0x0F0000 - 0x0FFFFF  Page 240  (VGA region — not allocatable)
+        0x100000 - ...       Page 256+ (high memory)
+    """
+
+    PAGE_SIZE = 0x1000  # 4 KB
+
+    def __init__(self, total_memory: int = 4 * 1024 * 1024,
+                 reserved_ranges: list[tuple[int, int]] | None = None):
+        """Initialize the page frame allocator.
+
+        Args:
+            total_memory: Total physical memory in bytes.
+            reserved_ranges: List of (start, end) byte ranges to mark reserved.
+        """
+        self._total_memory = total_memory
+        self._total_frames = total_memory // self.PAGE_SIZE
+        # Bitmap: 1 bit per frame. 1 = allocated, 0 = free.
+        self._bitmap = bytearray((self._total_frames + 7) // 8)
+        self._allocated_count = 0
+
+        # Reserve page 0 (IVT/BDA area) always
+        self._mark_reserved(0)
+
+        # Reserve caller-specified ranges
+        if reserved_ranges:
+            for start, end in reserved_ranges:
+                start_frame = start // self.PAGE_SIZE
+                end_frame = (end + self.PAGE_SIZE - 1) // self.PAGE_SIZE
+                for f in range(start_frame, min(end_frame, self._total_frames)):
+                    self._mark_reserved(f)
+
+    def _mark_reserved(self, frame: int):
+        """Mark a frame as allocated (reserved)."""
+        byte_idx = frame >> 3
+        bit_idx = frame & 7
+        if byte_idx < len(self._bitmap):
+            if not (self._bitmap[byte_idx] & (1 << bit_idx)):
+                self._bitmap[byte_idx] |= (1 << bit_idx)
+                self._allocated_count += 1
+
+    def _is_allocated(self, frame: int) -> bool:
+        byte_idx = frame >> 3
+        bit_idx = frame & 7
+        return bool(self._bitmap[byte_idx] & (1 << bit_idx))
+
+    def alloc(self, count: int = 1) -> int | None:
+        """Allocate contiguous page frames. Returns base address or None."""
+        if count <= 0:
+            return None
+        run = 0
+        start = 0
+        for f in range(self._total_frames):
+            if not self._is_allocated(f):
+                if run == 0:
+                    start = f
+                run += 1
+                if run == count:
+                    for i in range(start, start + count):
+                        self._mark_reserved(i)
+                    return start * self.PAGE_SIZE
+            else:
+                run = 0
+        return None
+
+    def free(self, address: int, count: int = 1):
+        """Free page frames starting at address."""
+        frame = address // self.PAGE_SIZE
+        for i in range(frame, frame + count):
+            byte_idx = i >> 3
+            bit_idx = i & 7
+            if byte_idx < len(self._bitmap) and (self._bitmap[byte_idx] & (1 << bit_idx)):
+                self._bitmap[byte_idx] &= ~(1 << bit_idx)
+                self._allocated_count -= 1
+
+    def free_single(self, address: int):
+        """Free a single page frame."""
+        self.free(address, 1)
+
+    @property
+    def free_frames(self) -> int:
+        return self._total_frames - self._allocated_count
+
+    @property
+    def free_bytes(self) -> int:
+        return self.free_frames * self.PAGE_SIZE
+
+    @property
+    def used_frames(self) -> int:
+        return self._allocated_count
+
+    @property
+    def total_frames(self) -> int:
+        return self._total_frames
+
+    def stats(self) -> dict:
+        return {
+            "total_frames": self._total_frames,
+            "allocated": self._allocated_count,
+            "free": self.free_frames,
+            "total_bytes": self._total_memory,
+            "free_bytes": self.free_bytes,
+            "page_size": self.PAGE_SIZE,
+        }
+
+
+# ── Process Control Block ───────────────────────────────────────────────────
+
+class ProcessState:
+    """Process lifecycle states."""
+    CREATED = "created"
+    READY = "ready"
+    RUNNING = "running"
+    WAITING = "waiting"    # blocked on I/O
+    TERMINATED = "terminated"
+
+
+class ProcessControlBlock:
+    """Per-process state for context switching.
+
+    Stores the full CPU register state so a process can be suspended
+    and resumed transparently.
+    """
+
+    _next_pid = 1
+
+    def __init__(self, name: str = "unnamed", priority: int = 0):
+        self.pid = ProcessControlBlock._next_pid
+        ProcessControlBlock._next_pid += 1
+        self.name = name
+        self.priority = priority
+        self.state = ProcessState.CREATED
+
+        # Register state (saved on context switch)
+        self.eax = 0
+        self.ecx = 0
+        self.edx = 0
+        self.ebx = 0
+        self.esp = 0
+        self.ebp = 0
+        self.esi = 0
+        self.edi = 0
+        self.eip = 0
+        self.eflags = 0x00000002  # bit 1 always set
+
+        # Memory
+        self.stack_base = 0       # start of stack region
+        self.stack_size = 0       # size in bytes
+        self.heap_base = 0        # start of heap region
+        self.heap_size = 0
+
+        # I/O
+        self.stdin_fd = -1
+        self.stdout_fd = -1
+
+        # Scheduling
+        self.time_slice = 0       # remaining ticks in current quantum
+        self.total_ticks = 0      # total CPU ticks consumed
+        self.wait_ticks = 0       # ticks spent waiting
+
+        # Accounting
+        self.exit_code = 0
+        self.children: list[int] = []  # child PIDs
+        self.parent_pid = 0
+
+    def save_from_cpu(self, cpu: X86CPU):
+        """Save CPU registers into this PCB."""
+        self.eax = cpu._regs[0]
+        self.ecx = cpu._regs[1]
+        self.edx = cpu._regs[2]
+        self.ebx = cpu._regs[3]
+        self.esp = cpu._regs[4]
+        self.ebp = cpu._regs[5]
+        self.esi = cpu._regs[6]
+        self.edi = cpu._regs[7]
+        self.eip = cpu._eip
+        self.eflags = cpu._eflags
+
+    def restore_to_cpu(self, cpu: X86CPU):
+        """Restore PCB registers into CPU."""
+        cpu._regs[0] = self.eax & 0xFFFFFFFF
+        cpu._regs[1] = self.ecx & 0xFFFFFFFF
+        cpu._regs[2] = self.edx & 0xFFFFFFFF
+        cpu._regs[3] = self.ebx & 0xFFFFFFFF
+        cpu._regs[4] = self.esp & 0xFFFFFFFF
+        cpu._regs[5] = self.ebp & 0xFFFFFFFF
+        cpu._regs[6] = self.esi & 0xFFFFFFFF
+        cpu._regs[7] = self.edi & 0xFFFFFFFF
+        cpu._eip = self.eip & 0xFFFFFFFF
+        cpu._eflags = self.eflags & 0xFFFFFFFF
+
+    def __repr__(self):
+        return (f"PCB(pid={self.pid}, name={self.name!r}, "
+                f"state={self.state}, eip=0x{self.eip:08X})")
+
+
+# ── Process Table ────────────────────────────────────────────────────────────
+
+class ProcessTable:
+    """Central process table — the kernel's view of all processes."""
+
+    def __init__(self):
+        self._processes: dict[int, ProcessControlBlock] = {}
+        self._by_name: dict[str, list[int]] = {}
+
+    def create(self, name: str = "unnamed", priority: int = 0) -> ProcessControlBlock:
+        """Create a new process. Returns the PCB."""
+        pcb = ProcessControlBlock(name=name, priority=priority)
+        self._processes[pcb.pid] = pcb
+        self._by_name.setdefault(name, []).append(pcb.pid)
+        return pcb
+
+    def get(self, pid: int) -> ProcessControlBlock | None:
+        return self._processes.get(pid)
+
+    def get_by_name(self, name: str) -> list[ProcessControlBlock]:
+        pids = self._by_name.get(name, [])
+        return [self._processes[p] for p in pids if p in self._processes]
+
+    def remove(self, pid: int) -> ProcessControlBlock | None:
+        pcb = self._processes.pop(pid, None)
+        if pcb:
+            name_list = self._by_name.get(pcb.name, [])
+            if pid in name_list:
+                name_list.remove(pid)
+            if not name_list:
+                self._by_name.pop(pcb.name, None)
+        return pcb
+
+    def all(self) -> list[ProcessControlBlock]:
+        return list(self._processes.values())
+
+    def by_state(self, state: str) -> list[ProcessControlBlock]:
+        return [p for p in self._processes.values() if p.state == state]
+
+    def count(self) -> int:
+        return len(self._processes)
+
+    def alive_count(self) -> int:
+        return sum(1 for p in self._processes.values()
+                   if p.state != ProcessState.TERMINATED)
+
+
+# ── Scheduler ────────────────────────────────────────────────────────────────
+
+class Scheduler:
+    """Round-robin preemptive scheduler.
+
+    Uses a time quantum (tick count).  When a process exhausts its quantum,
+    it is preempted and moved to the back of the ready queue.
+
+    Integration: call `tick(cpu)` from the PIT interrupt handler.  It saves
+    the current process, advances the quantum, and context-switches if needed.
+    """
+
+    def __init__(self, process_table: ProcessTable, quantum: int = 10):
+        self._ptable = process_table
+        self._quantum = quantum
+        self._current_pid: int | None = None
+        self._ready_queue: list[int] = []  # PIDs in ready order
+        self._tick_count = 0
+
+    @property
+    def current(self) -> ProcessControlBlock | None:
+        if self._current_pid is None:
+            return None
+        return self._ptable.get(self._current_pid)
+
+    def enqueue(self, pid: int):
+        """Add a process to the ready queue."""
+        if pid not in self._ready_queue:
+            pcb = self._ptable.get(pid)
+            if pcb and pcb.state != ProcessState.TERMINATED:
+                self._ready_queue.append(pid)
+                pcb.state = ProcessState.READY
+                pcb.time_slice = self._quantum
+
+    def dequeue(self) -> int | None:
+        """Remove and return the next process from the ready queue."""
+        if self._ready_queue:
+            return self._ready_queue.pop(0)
+        return None
+
+    def start(self, cpu: X86CPU):
+        """Start scheduling — pick the first process and load it."""
+        pid = self.dequeue()
+        if pid is None:
+            return
+        self._current_pid = pid
+        pcb = self._ptable.get(pid)
+        if pcb:
+            pcb.state = ProcessState.RUNNING
+            pcb.time_slice = self._quantum
+            pcb.restore_to_cpu(cpu)
+
+    def tick(self, cpu: X86CPU):
+        """Called on every timer interrupt. Handles preemption."""
+        self._tick_count += 1
+        current = self.current
+        if current is None:
+            # Try to pick a new process
+            self.start(cpu)
+            return
+
+        current.total_ticks += 1
+        current.time_slice -= 1
+
+        if current.time_slice <= 0:
+            # Quantum expired — preempt
+            self._preempt(cpu)
+
+    def _preempt(self, cpu: X86CPU):
+        """Save current process, put it at back of ready queue, switch."""
+        current = self.current
+        if current is None:
+            return
+
+        current.save_from_cpu(cpu)
+        current.state = ProcessState.READY
+        current.time_slice = self._quantum
+
+        # Put at back of ready queue
+        self._ready_queue.append(current.pid)
+
+        # Pick next process
+        self._current_pid = None
+        self.start(cpu)
+
+    def switch_to(self, cpu: X86CPU, pid: int) -> bool:
+        """Explicitly switch to a specific process. Returns True on success."""
+        pcb = self._ptable.get(pid)
+        if pcb is None or pcb.state == ProcessState.TERMINATED:
+            return False
+
+        # Save current
+        current = self.current
+        if current and current.state == ProcessState.RUNNING:
+            current.save_from_cpu(cpu)
+            current.state = ProcessState.READY
+            current.time_slice = self._quantum
+            self._ready_queue.append(current.pid)
+
+        # Remove target from ready queue if present
+        if pid in self._ready_queue:
+            self._ready_queue.remove(pid)
+
+        # Switch
+        self._current_pid = pid
+        pcb.state = ProcessState.RUNNING
+        pcb.time_slice = self._quantum
+        pcb.restore_to_cpu(cpu)
+        return True
+
+    def exit_current(self, cpu: X86CPU, exit_code: int = 0):
+        """Terminate the current process and switch to next."""
+        current = self.current
+        if current is None:
+            return
+
+        current.save_from_cpu(cpu)
+        current.state = ProcessState.TERMINATED
+        current.exit_code = exit_code
+        self._current_pid = None
+
+        # Pick next process
+        self.start(cpu)
+
+    def block_current(self, cpu: X86CPU):
+        """Block current process (e.g. waiting for I/O)."""
+        current = self.current
+        if current is None:
+            return
+
+        current.save_from_cpu(cpu)
+        current.state = ProcessState.WAITING
+        current.time_slice = self._quantum
+        self._current_pid = None
+
+        # Pick next process
+        self.start(cpu)
+
+    def unblock(self, pid: int):
+        """Move a blocked process back to ready queue."""
+        pcb = self._ptable.get(pid)
+        if pcb and pcb.state == ProcessState.WAITING:
+            self.enqueue(pid)
+
+    def stats(self) -> dict:
+        return {
+            "tick_count": self._tick_count,
+            "quantum": self._quantum,
+            "current_pid": self._current_pid,
+            "ready_queue": list(self._ready_queue),
+            "ready_count": len(self._ready_queue),
+            "processes": self._ptable.alive_count(),
+        }
+
+
+# ── Syscall Handler (INT 0x80) ──────────────────────────────────────────────
+
+class X86SyscallHandler:
+    """INT 0x80 syscall dispatcher for x86.
+
+    Convention:
+        EAX = syscall number
+        EBX = arg1
+        ECX = arg2
+        EDX = arg3
+        ESI = arg4
+        EDI = arg5
+        Return: EAX
+
+    Syscall numbers:
+        1  - exit          (EBX = exit code)
+        2  - read          (EBX = fd, ECX = buf_addr, EDX = count) → EAX = bytes read
+        3  - write         (EBX = fd, ECX = buf_addr, EDX = count) → EAX = bytes written
+        4  - open          (EBX = name_addr, ECX = mode) → EAX = fd
+        5  - close         (EBX = fd)
+        6  - fork          () → EAX = child pid
+        7  - exec          (EBX = name_addr) → EAX = 0 ok, -1 error
+        8  - wait          () → EAX = child pid
+        9  - brk           (EBX = new_heap_end) → EAX = 0 ok
+        10 - getpid        () → EAX = pid
+        11 - sbrk          (EBX = increment) → EAX = old_break
+        12 - yield         ()
+        13 - kill          (EBX = pid, ECX = signal)
+        14 - gettimeofday  (EBX = buf_addr) → EAX = ticks
+        15 - malloc        (EBX = size) → EAX = addr
+        16 - free          (EBX = addr)
+        17 - readdir       (EBX = buf_addr, ECX = max_entries) → EAX = count
+        18 - uname         (EBX = buf_addr)
+    """
+
+    SYS_EXIT = 1
+    SYS_READ = 2
+    SYS_WRITE = 3
+    SYS_OPEN = 4
+    SYS_CLOSE = 5
+    SYS_FORK = 6
+    SYS_EXEC = 7
+    SYS_WAIT = 8
+    SYS_BRK = 9
+    SYS_GETPID = 10
+    SYS_SBRK = 11
+    SYS_YIELD = 12
+    SYS_KILL = 13
+    SYS_GETTIMEOFDAY = 14
+    SYS_MALLOC = 15
+    SYS_FREE = 16
+    SYS_READDIR = 17
+    SYS_UNAME = 18
+
+    def __init__(self, cpu: X86CPU, process_table: ProcessTable,
+                 scheduler: Scheduler, memory: 'PageFrameAllocator',
+                 filesystem: FlatFS | None = None):
+        self._cpu = cpu
+        self._ptable = process_table
+        self._scheduler = scheduler
+        self._memory = memory
+        self._fs = filesystem
+
+        # Simple heap: address → size
+        self._heap: dict[int, int] = {}
+        self._heap_break = 0x400000  # 4 MB default heap start
+
+        # File descriptor table per process (fd → filename)
+        self._fd_table: dict[int, str] = {}
+        self._next_fd = 3  # 0=stdin, 1=stdout, 2=stderr reserved
+
+        # Clock ticks
+        self._ticks = 0
+
+    def handle(self):
+        """Dispatch syscall based on EAX. Called from INT 0x80 handler."""
+        num = self._cpu._regs[0]  # EAX
+        arg1 = self._cpu._regs[3]  # EBX
+        arg2 = self._cpu._regs[1]  # ECX
+        arg3 = self._cpu._regs[2]  # EDX
+        arg4 = self._cpu._regs[6]  # ESI
+        arg5 = self._cpu._regs[7]  # EDI
+
+        handlers = {
+            self.SYS_EXIT: lambda: self._sys_exit(arg1),
+            self.SYS_READ: lambda: self._sys_read(arg1, arg2, arg3),
+            self.SYS_WRITE: lambda: self._sys_write(arg1, arg2, arg3),
+            self.SYS_OPEN: lambda: self._sys_open(arg1, arg2),
+            self.SYS_CLOSE: lambda: self._sys_close(arg1),
+            self.SYS_FORK: lambda: self._sys_fork(),
+            self.SYS_EXEC: lambda: self._sys_exec(arg1),
+            self.SYS_WAIT: lambda: self._sys_wait(),
+            self.SYS_BRK: lambda: self._sys_brk(arg1),
+            self.SYS_GETPID: lambda: self._sys_getpid(),
+            self.SYS_SBRK: lambda: self._sys_sbrk(arg1),
+            self.SYS_YIELD: lambda: self._sys_yield(),
+            self.SYS_KILL: lambda: self._sys_kill(arg1, arg2),
+            self.SYS_GETTIMEOFDAY: lambda: self._sys_gettimeofday(arg1),
+            self.SYS_MALLOC: lambda: self._sys_malloc(arg1),
+            self.SYS_FREE: lambda: self._sys_free(arg1),
+            self.SYS_READDIR: lambda: self._sys_readdir(arg1, arg2),
+            self.SYS_UNAME: lambda: self._sys_uname(arg1),
+        }
+
+        handler = handlers.get(num)
+        if handler:
+            result = handler()
+            self._cpu._regs[0] = result & 0xFFFFFFFF  # EAX = return
+        else:
+            self._cpu._regs[0] = 0xFFFFFFFF  # -1 = unknown syscall
+
+    def tick(self):
+        """Increment clock. Called by PIT."""
+        self._ticks += 1
+
+    def _read_string(self, addr: int) -> str:
+        """Read a null-terminated string from CPU memory."""
+        chars = []
+        for _ in range(1024):
+            b = self._cpu._read8(addr)
+            if b == 0:
+                break
+            chars.append(chr(b))
+            addr += 1
+        return ''.join(chars)
+
+    def _write_string(self, addr: int, s: str):
+        """Write a string to CPU memory (null-terminated)."""
+        for ch in s:
+            self._cpu._write8(addr, ord(ch) & 0xFF)
+            addr += 1
+        self._cpu._write8(addr, 0)
+
+    # ── Syscall implementations ───────────────────────────────────────────
+
+    def _sys_exit(self, code: int) -> int:
+        self._scheduler.exit_current(self._cpu, exit_code=code)
+        return 0
+
+    def _sys_read(self, fd: int, buf_addr: int, count: int) -> int:
+        if fd < 0 or count <= 0:
+            return -1
+        if fd == 0:
+            # stdin — read from keyboard buffer
+            read = 0
+            for _ in range(count):
+                ch = self._cpu._read8(0x400)
+                if ch == 0:
+                    break
+                self._cpu._write8(buf_addr, ch)
+                self._cpu._write8(0x400, 0)  # consume
+                buf_addr += 1
+                read += 1
+            return read
+        elif self._fs and fd in self._fd_table:
+            filename = self._fd_table[fd]
+            data = self._fs.read(filename)
+            to_read = min(count, len(data))
+            for i in range(to_read):
+                self._cpu._write8(buf_addr + i, data[i])
+            return to_read
+        return -1
+
+    def _sys_write(self, fd: int, buf_addr: int, count: int) -> int:
+        if fd < 0 or count <= 0:
+            return -1
+        data = bytes(self._cpu._read8(buf_addr + i) for i in range(count))
+        if fd == 1 or fd == 2:
+            # stdout/stderr — write to console
+            text = data.decode('ascii', errors='replace')
+            print(text, end='', flush=True)
+            return count
+        elif self._fs and fd in self._fd_table:
+            filename = self._fd_table[fd]
+            existing = self._fs.read(filename)
+            self._fs.write(filename, existing + data)
+            return count
+        return -1
+
+    def _sys_open(self, name_addr: int, mode: int) -> int:
+        if not self._fs:
+            return -1
+        filename = self._read_string(name_addr)
+        if not filename:
+            return -1
+        # mode: 0=read, 1=write, 2=create+write
+        if mode == 0 and not self._fs.exists(filename):
+            return -1
+        fd = self._next_fd
+        self._next_fd += 1
+        self._fd_table[fd] = filename
+        if mode == 2:
+            if not self._fs.exists(filename):
+                self._fs.write(filename, b'')
+        return fd
+
+    def _sys_close(self, fd: int) -> int:
+        if fd in self._fd_table:
+            del self._fd_table[fd]
+            return 0
+        return -1
+
+    def _sys_fork(self) -> int:
+        current = self._scheduler.current
+        if current is None:
+            return -1
+        # Allocate stack for child
+        child_stack = self._memory.alloc(4)  # 4 pages = 16 KB
+        if child_stack is None:
+            return -1
+
+        child = self._ptable.create(name=current.name + "_child",
+                                     priority=current.priority)
+        child.parent_pid = current.pid
+        current.children.append(child.pid)
+
+        # Copy registers (fork returns 0 in child, child_pid in parent)
+        child.eax = 0  # child return value
+        child.ecx = current.ecx
+        child.edx = current.edx
+        child.ebx = current.ebx
+        child.esp = child_stack + 0x4000  # top of child stack
+        child.ebp = current.ebp
+        child.esi = current.esi
+        child.edi = current.edi
+        child.eip = current.eip  # same instruction pointer
+        child.eflags = current.eflags
+
+        child.stack_base = child_stack
+        child.stack_size = 0x4000
+        child.heap_base = current.heap_base
+        child.heap_size = current.heap_size
+
+        self._scheduler.enqueue(child.pid)
+        return child.pid  # parent gets child PID
+
+    def _sys_exec(self, name_addr: int) -> int:
+        if not self._fs:
+            return -1
+        filename = self._read_string(name_addr)
+        if not self._fs.exists(filename):
+            return -1
+        # Load and execute in current process context
+        data = self._fs.read(filename)
+        source = data.decode('utf-8', errors='replace')
+        # TODO: proper exec — load binary into process memory
+        return 0
+
+    def _sys_wait(self) -> int:
+        current = self._scheduler.current
+        if current is None:
+            return -1
+        # Check if any child is terminated
+        for child_pid in list(current.children):
+            child = self._ptable.get(child_pid)
+            if child and child.state == ProcessState.TERMINATED:
+                current.children.remove(child_pid)
+                self._ptable.remove(child_pid)
+                return child_pid
+        # No terminated child — block until one exits
+        self._scheduler.block_current(self._cpu)
+        return 0
+
+    def _sys_brk(self, new_end: int) -> int:
+        current = self._scheduler.current
+        if current is None:
+            return -1
+        current.heap_break = new_end
+        return 0
+
+    def _sys_getpid(self) -> int:
+        current = self._scheduler.current
+        return current.pid if current else 0
+
+    def _sys_sbrk(self, increment: int) -> int:
+        current = self._scheduler.current
+        if current is None:
+            return -1
+        old_break = self._heap_break
+        self._heap_break += increment
+        return old_break
+
+    def _sys_yield(self) -> int:
+        self._scheduler.tick(self._cpu)
+        return 0
+
+    def _sys_kill(self, pid: int, signal: int) -> int:
+        pcb = self._ptable.get(pid)
+        if pcb is None:
+            return -1
+        if signal == 9:  # SIGKILL
+            self._scheduler.exit_current(self._cpu, exit_code=-1)
+            return 0
+        return 0
+
+    def _sys_gettimeofday(self, buf_addr: int) -> int:
+        if buf_addr:
+            self._cpu._write32(buf_addr, self._ticks)
+            self._cpu._write32(buf_addr + 4, 0)  # seconds (high)
+        return self._ticks
+
+    def _sys_malloc(self, size: int) -> int:
+        if size <= 0:
+            return 0
+        # Align to 16 bytes
+        aligned = (size + 15) & ~15
+        # Find free region in heap
+        heap_start = 0x400000
+        addr = heap_start
+        while addr < heap_start + 0x100000:  # 1 MB heap limit
+            if addr not in self._heap:
+                self._heap[addr] = aligned
+                return addr
+            addr += self._heap[addr]
+            addr = (addr + 15) & ~15
+        return 0  # out of memory
+
+    def _sys_free(self, addr: int) -> int:
+        if addr in self._heap:
+            del self._heap[addr]
+            return 0
+        return -1
+
+    def _sys_readdir(self, buf_addr: int, max_entries: int) -> int:
+        if not self._fs:
+            return 0
+        files = self._fs.list_files()
+        count = min(len(files), max_entries)
+        for i in range(count):
+            self._write_string(buf_addr + i * 32, files[i][:31])
+        return count
+
+    def _sys_uname(self, buf_addr: int) -> int:
+        """Write system info to buffer. Simple Linux-like uname."""
+        info = {
+            "sysname": "SloughOS",
+            "nodename": "sloughvm",
+            "release": "0.1.0",
+            "version": "#1 SMP",
+            "machine": "i686",
+        }
+        offset = 0
+        for field in ["sysname", "nodename", "release", "version", "machine"]:
+            self._write_string(buf_addr + offset, info[field])
+            offset += 65  # Linux struct utsname field size
+        return 0
+
+
+# ── PIT (Programmable Interval Timer) ───────────────────────────────────────
+
+class PITDevice:
+    """Intel 8254 Programmable Interval Timer.
+
+    I/O ports:
+        0x40 - Channel 0 data (counter)
+        0x41 - Channel 1 data
+        0x42 - Channel 2 data
+        0x43 - Command register
+
+    Default frequency: 100 Hz (10 ms per tick).  Fires IRQ 0 to the CPU
+    on each tick.  The scheduler and syscall handler both advance on this.
+    """
+
+    BASE_PORT = 0x40
+    CMD_PORT = 0x43
+    FREQ = 1193182  # Base PIT frequency in Hz
+
+    def __init__(self, cpu: X86CPU, scheduler: Scheduler,
+                 syscall_handler: X86SyscallHandler | None = None,
+                 target_hz: int = 100):
+        self._cpu = cpu
+        self._scheduler = scheduler
+        self._syscall = syscall_handler
+        self._target_hz = target_hz
+        self._tick_count = 0
+        self._divider = self.FREQ // target_hz
+
+        # Counter channels (3 channels, each 16-bit)
+        self._counters = [self._divider, self._divider, self._divider]
+        self._latch = [0, 0, 0]  # latched values
+
+        # Register I/O ports
+        for i in range(3):
+            cpu.register_io_in(self.BASE_PORT + i, lambda ch=i: self._read_counter(ch))
+            cpu.register_io_out(self.BASE_PORT + i, lambda val, ch=i: self._write_counter(ch, val))
+        cpu.register_io_out(self.CMD_PORT, self._write_command)
+
+    def _read_counter(self, channel: int) -> int:
+        if self._latch[channel]:
+            val = self._latch[channel] & 0xFF
+            self._latch[channel] >>= 8
+            return val
+        return self._counters[channel] & 0xFF
+
+    def _write_counter(self, channel: int, val: int):
+        self._counters[channel] = (self._counters[channel] & 0xFF00) | (val & 0xFF)
+
+    def _write_command(self, val: int):
+        channel = (val >> 6) & 3
+        if channel < 3:
+            self._latch[channel] = self._counters[channel]
+
+    def tick(self):
+        """Called every instruction cycle. Fires IRQ when counter reaches 0."""
+        for ch in range(3):
+            self._counters[ch] -= 1
+            if self._counters[ch] <= 0:
+                self._counters[ch] = self._divider
+                if ch == 0:
+                    # Channel 0 → IRQ 0 (timer)
+                    self._tick_count += 1
+                    if self._syscall:
+                        self._syscall.tick()
+                    self._scheduler.tick(self._cpu)
+
+
+# ── X86 Virtual System (OS-integrated) ──────────────────────────────────────
+
+class X86VirtualSystem:
+    """Integrated x86 virtual computer with OS layer.
+
+    Wires together: X86CPU + memory allocator + process table +
+    scheduler + syscalls + PIT + VGA + keyboard + filesystem.
+
+    Usage::
+
+        vs = X86VirtualSystem()
+        vs.load_kernel(kernel_asm)
+        vs.run(max_cycles=100000)
+
+    Or for a shell::
+
+        vs = X86VirtualSystem()
+        vs.start_shell(shell_asm)
+    """
+
+    def __init__(self, memory_size: int = 4 * 1024 * 1024,
+                 filesystem: FlatFS | None = None,
+                 timer_hz: int = 100,
+                 quantum: int = 10):
+        # Memory allocator
+        # Reserve: 0-0x40000 (low 256 KB), 0xB8000-0xC0000 (VGA)
+        self._allocator = PageFrameAllocator(
+            total_memory=memory_size,
+            reserved_ranges=[
+                (0, 0x40000),
+                (0xB8000, 0xC0000),
+            ]
+        )
+
+        # Filesystem
+        if filesystem is not None:
+            self._fs = filesystem
+        else:
+            self._block = BlockDevice()
+            self._fs = FlatFS(self._block)
+
+        # Process table + scheduler
+        self._ptable = ProcessTable()
+        self._scheduler = Scheduler(self._ptable, quantum=quantum)
+
+        # CPU
+        self._cpu = X86CPU(memory_size=memory_size)
+
+        # Syscall handler
+        self._syscall = X86SyscallHandler(
+            cpu=self._cpu,
+            process_table=self._ptable,
+            scheduler=self._scheduler,
+            memory=self._allocator,
+            filesystem=self._fs,
+        )
+
+        # PIT timer
+        self._pit = PITDevice(
+            cpu=self._cpu,
+            scheduler=self._scheduler,
+            syscall_handler=self._syscall,
+            target_hz=timer_hz,
+        )
+
+        # Register INT 0x80 handler
+        self._cpu.register_handler(0x80, self._syscall.handle)
+
+        # Keyboard interrupt handler
+        def _keyboard_handler():
+            pass  # Default handler already built into X86CPU
+
+        self._cpu.register_handler(1, _keyboard_handler)
+
+        # Kernel process (PID 1)
+        self._kernel = self._ptable.create(name="kernel", priority=10)
+        self._kernel.state = ProcessState.RUNNING
+        self._kernel.stack_base = memory_size - 0x10000
+        self._kernel.stack_size = 0x10000
+        self._kernel.eip = 0x1000  # kernel loads at 0x1000
+        self._kernel.esp = memory_size - 4
+        self._scheduler._current_pid = self._kernel.pid
+
+    @property
+    def cpu(self) -> X86CPU:
+        return self._cpu
+
+    @property
+    def scheduler(self) -> Scheduler:
+        return self._scheduler
+
+    @property
+    def process_table(self) -> ProcessTable:
+        return self._ptable
+
+    @property
+    def filesystem(self) -> FlatFS:
+        return self._fs
+
+    def load_kernel(self, source: str, org: int = 0x1000):
+        """Assemble and load kernel code."""
+        asm = X86Assembler()
+        code = asm.assemble(source)
+        self._cpu.load(code, org)
+        self._kernel.eip = org
+        self._kernel.esp = self._cpu._mem_size - 4
+
+    def spawn(self, name: str, source: str, org: int = 0x100000) -> int | None:
+        """Assemble a user program and spawn it as a new process.
+
+        Returns the new PID, or None on failure.
+        """
+        # Allocate memory for the process
+        code = X86Assembler().assemble(source)
+        code_size = len(code)
+        # Round up to page boundary
+        pages_needed = (code_size + 0x1000) // 0x1000 + 1  # code + stack
+        base = self._allocator.alloc(pages_needed)
+        if base is None:
+            return None
+
+        # Load code at the base address
+        self._cpu._mem[base:base + code_size] = code
+
+        # Create process
+        pcb = self._ptable.create(name=name)
+        pcb.eip = base
+        pcb.stack_base = base + code_size
+        pcb.stack_size = pages_needed * 0x1000 - code_size
+        pcb.esp = pcb.stack_base + pcb.stack_size - 4
+
+        self._scheduler.enqueue(pcb.pid)
+        return pcb.pid
+
+    def run(self, max_cycles: int = 100000):
+        """Run the system for N CPU cycles (instructions)."""
+        self._kernel.eip = 0x1000
+        self._kernel.esp = self._cpu._mem_size - 4
+        self._kernel.restore_to_cpu(self._cpu)
+
+        cycles = 0
+        while cycles < max_cycles:
+            # Run a batch of instructions
+            batch = min(1000, max_cycles - cycles)
+            for _ in range(batch):
+                if not self._cpu.step():
+                    return cycles
+                # PIT tick every 100 instructions (simulates timer)
+                if cycles % 100 == 0:
+                    self._pit.tick()
+                cycles += 1
+
+            # Check if kernel is the only process
+            alive = self._ptable.alive_count()
+            if alive <= 1 and self._scheduler.current is None:
+                break
+
+        return cycles
+
+    def status(self) -> dict:
+        """Return comprehensive system status."""
+        return {
+            "cpu": {
+                "eip": self._cpu._eip,
+                "esp": self._cpu._regs[4],
+                "eax": self._cpu._regs[0],
+                "eflags": f"0x{self._cpu._eflags:08X}",
+            },
+            "memory": self._allocator.stats(),
+            "scheduler": self._scheduler.stats(),
+            "processes": {
+                "total": self._ptable.count(),
+                "alive": self._ptable.alive_count(),
+                "list": [
+                    {"pid": p.pid, "name": p.name, "state": p.state,
+                     "eip": f"0x{p.eip:08X}"}
+                    for p in self._ptable.all()
+                ],
+            },
+            "pit_ticks": self._pit._tick_count,
+            "syscall_ticks": self._syscall._ticks,
+        }
+
+    def reset(self):
+        """Reset the entire system."""
+        self._allocator = PageFrameAllocator(
+            total_memory=self._cpu._mem_size,
+            reserved_ranges=[(0, 0x40000), (0xB8000, 0xC0000)],
+        )
+        self._ptable = ProcessTable()
+        self._scheduler = Scheduler(self._ptable,
+                                     quantum=self._pit._divider if hasattr(self, '_pit') else 10)
+        self._cpu = X86CPU(memory_size=self._cpu._mem_size)
+        # Re-register everything...
+        self._syscall = X86SyscallHandler(
+            cpu=self._cpu, process_table=self._ptable,
+            scheduler=self._scheduler, memory=self._allocator,
+            filesystem=self._fs,
+        )
+        self._kernel = self._ptable.create(name="kernel", priority=10)
+        self._kernel.state = ProcessState.RUNNING
 
 
 # ── Re-exports from submodules ──────────────────────────────────────────────
