@@ -5,7 +5,6 @@ SerialDevice, MouseDevice, CMOSDevice, DiskDevice, NICDevice.
 """
 
 import pytest
-import time as _time
 from domains.shell.vm import (
     PageFrameAllocator, ProcessControlBlock, ProcessState,
     ProcessTable, Scheduler, X86SyscallHandler, PITDevice,
@@ -828,6 +827,123 @@ class TestMouseDevice:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# ClockDevice
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestClockDevice:
+    def test_init_default_epoch(self):
+        c = ClockDevice()
+        assert c.ticks == 0
+        assert c.freq == 100
+        # Default epoch is Jan 1, 1900 (negative Unix timestamp)
+        assert c.seconds_now() == ClockDevice.EPOCH_1900
+
+    def test_init_custom_freq(self):
+        c = ClockDevice(freq=1000)
+        assert c.freq == 1000
+
+    def test_tick_counter(self):
+        c = ClockDevice(freq=100)
+        assert c.ticks == 0
+        c.tick()
+        assert c.ticks == 1
+        for _ in range(99):
+            c.tick()
+        assert c.ticks == 100
+
+    def test_seconds_now(self):
+        c = ClockDevice(freq=100)
+        c._epoch = 1000
+        c.tick()  # +0.01s at 100 Hz
+        assert c.seconds_now() == 1000.01
+        c.tick()
+        assert c.seconds_now() == 1000.02
+
+    def test_set_time(self):
+        c = ClockDevice(freq=100)
+        c.set_time(2000, 1, 1, 0, 0, 0)
+        assert c.ticks == 0
+        t = c.decode()
+        assert t["year"] == 2000
+        assert t["month"] == 1
+        assert t["day"] == 1
+        assert t["hour"] == 0
+        assert t["minute"] == 0
+        assert t["second"] == 0
+
+    def test_decode_round_trip(self):
+        """Encode then decode should produce the same date."""
+        c = ClockDevice()
+        for year, month, day, h, m, s in [
+            (1970, 1, 1, 0, 0, 0),
+            (2000, 2, 29, 23, 59, 59),
+            (2024, 6, 15, 14, 30, 45),
+            (1999, 12, 31, 12, 0, 0),
+            (2038, 1, 19, 3, 14, 7),
+        ]:
+            c.set_time(year, month, day, h, m, s)
+            t = c.decode()
+            assert t["year"] == year, f"year mismatch for {year}-{month}-{day}"
+            assert t["month"] == month
+            assert t["day"] == day
+            assert t["hour"] == h
+            assert t["minute"] == m
+            assert t["second"] == s
+
+    def test_decode_weekday(self):
+        """Jan 1 1970 was a Thursday (weekday=3 in ISO: 0=Mon)."""
+        c = ClockDevice()
+        c.set_time(1970, 1, 1, 0, 0, 0)
+        t = c.decode()
+        assert t["weekday"] == 3  # Thursday
+
+    def test_leap_year_feb_29(self):
+        c = ClockDevice()
+        c.set_time(2024, 2, 29, 12, 0, 0)
+        t = c.decode()
+        assert t["month"] == 2
+        assert t["day"] == 29
+
+    def test_non_leap_year_clamp(self):
+        """_decode_unix clamps to >= 1970, so timestamps before 1970 decode to 1970."""
+        c = ClockDevice()
+        c._epoch = -1000  # before 1970
+        t = c.decode()
+        assert t["year"] >= 1970
+
+    def test_date_to_unix_known_value(self):
+        """2000-01-01 00:00:00 UTC = 946684800."""
+        ts = ClockDevice._date_to_unix(2000, 1, 1, 0, 0, 0)
+        assert ts == 946684800
+
+    def test_is_leap(self):
+        assert ClockDevice._is_leap(2000)   # century divisible by 400
+        assert ClockDevice._is_leap(2024)   # divisible by 4
+        assert not ClockDevice._is_leap(1900)  # century not div by 400
+        assert not ClockDevice._is_leap(1970)
+
+    def test_days_in_month(self):
+        assert ClockDevice._days_in_month(2024, 1) == 31
+        assert ClockDevice._days_in_month(2024, 2) == 29  # leap
+        assert ClockDevice._days_in_month(2023, 2) == 28  # non-leap
+        assert ClockDevice._days_in_month(2024, 4) == 30
+
+    def test_pit_drives_clock(self):
+        """PITDevice.tick() should advance the ClockDevice when counter reaches 0."""
+        cpu = X86CPU()
+        ptable = ProcessTable()
+        sched = Scheduler(ptable)
+        clock = ClockDevice(freq=100)
+        pit = PITDevice(cpu=cpu, scheduler=sched, target_hz=100, clock=clock)
+        assert clock.ticks == 0
+        # Set channel 0 counter to 1 so it fires on first tick
+        pit._counters[0] = 1
+        pit.tick()
+        # Counter was 1, decremented to 0 → fired IRQ0 → clock.tick() called
+        assert clock.ticks == 1
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # CMOSDevice
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -992,7 +1108,8 @@ class TestCMOSDevice:
         # Set 12-hour mode (clear bit 1 of Reg B)
         dev.write_cmos(0x0B, 0x00)
         t = dev.get_time()
-        assert 0 <= t["hour"] <= 12
+        # get_time() converts back to 24h internally, so hour is always 0-23
+        assert t["hour"] == self._REF_HOUR
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1186,10 +1303,14 @@ class TestSyscallMouseIO:
 
 class TestSyscallRTC:
     def test_rtc_gettime(self):
+        import time as _time_mod
         vs = X86VirtualSystem(memory_size=0x100000)
+        # Set clock to current wall-clock time
+        now = int(_time_mod.time())
+        vs._clock._epoch = now
+        vs._clock._ticks = 0
         buf_addr = 0x90000
         result = vs._syscall._sys_rtc_gettime(buf_addr)
-        now = int(_time.time())
         assert abs(result - now) <= 2
         # Verify written to memory
         val = vs.cpu._read32(buf_addr)

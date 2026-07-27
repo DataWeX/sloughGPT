@@ -1112,8 +1112,9 @@ class CMOSDevice(Device):
             elif not is_pm and hour == 12:
                 hour = 0
 
+        year_raw = self._cmos[self.REG_YEAR] if binary else self._from_bcd(self._cmos[self.REG_YEAR])
         return {
-            "year": 2000 + self._cmos[self.REG_YEAR] if self._cmos[self.REG_YEAR] < 100 else self._cmos[self.REG_YEAR],
+            "year": 2000 + year_raw if year_raw < 100 else year_raw,
             "month": self._cmos[self.REG_MONTH] if binary else self._from_bcd(self._cmos[self.REG_MONTH]),
             "day": self._cmos[self.REG_DAY] if binary else self._from_bcd(self._cmos[self.REG_DAY]),
             "hour": hour,

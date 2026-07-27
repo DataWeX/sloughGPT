@@ -23,6 +23,7 @@ import os
 import re
 import sys
 import json
+import time
 import stat
 import shutil
 import logging
@@ -172,6 +173,7 @@ class ShellREPL:
         self._dir_stack: list[str] = []
         self._chat_session_id: str | None = None
         self._chat_history: list[dict[str, str]] = []
+        self._completion_cache: dict[str, tuple[float, list[str]]] = {}
 
         if _HAS_READLINE:
             self._setup_readline()
@@ -338,7 +340,8 @@ class ShellREPL:
                     logger.warning("rc line %d: %s", line_no, e, extra={"tag": "INFRA"})
 
     def _render_prompt(self) -> str:
-        """Expand PS1 escapes: \\h=host, \\w=cwd, \\t=time, \\u=user, \\s=shell, \\#=cmd count."""
+        """Expand PS1 escapes: \\h=host, \\w=cwd, \\t=time, \\u=user, \\s=shell, \\#=cmd count,
+        \\m=model, \\S=soul."""
         s = self._env.get("PS1", "\u03bb")
         s = s.replace("\\h", os.uname().nodename.split(".")[0])
         s = s.replace("\\w", os.getcwd().replace(str(Path.home()), "~"))
@@ -347,9 +350,54 @@ class ShellREPL:
         s = s.replace("\\s", "sloughgpt")
         s = s.replace("\\#", str(self._cmd_count + 1))
         s = s.replace("\\n", "\n")
+        s = s.replace("\\m", self._get_current_model())
+        s = s.replace("\\S", self._get_current_soul())
         if self._last_exit_code != 0:
             s = f"{_C_RED}[{self._last_exit_code}]{_C_RESET} {s}"
         return s
+
+    def _get_current_model(self) -> str:
+        """Fetch loaded model name (cached 30s)."""
+        now = time.monotonic()
+        entry = self._completion_cache.get("__model__")
+        if entry is not None:
+            ts, val = entry
+            if now - ts < 30.0:
+                return val
+        try:
+            import requests
+            r = requests.get(f"http://localhost:8000/health", timeout=2)
+            if r.status_code == 200:
+                data = r.json()
+                model = data.get("model", data.get("model_name", ""))
+                if model:
+                    val = str(model).split("/")[-1]
+                    self._completion_cache["__model__"] = (now, val)
+                    return val
+        except Exception:
+            pass
+        return ""
+
+    def _get_current_soul(self) -> str:
+        """Fetch active soul name (cached 30s)."""
+        now = time.monotonic()
+        entry = self._completion_cache.get("__soul__")
+        if entry is not None:
+            ts, val = entry
+            if now - ts < 30.0:
+                return val
+        try:
+            import requests
+            r = requests.get(f"http://localhost:8000/souls/current", timeout=2)
+            if r.status_code == 200:
+                data = r.json()
+                soul = data.get("name", "")
+                if soul:
+                    self._completion_cache["__soul__"] = (now, soul)
+                    return soul
+        except Exception:
+            pass
+        return ""
 
     def _update_color_state(self) -> None:
         """Sync ANSI color support with environment."""
@@ -410,7 +458,23 @@ class ShellREPL:
             return None
 
     def _complete_args_for(self, cmd: str) -> list[str]:
-        """Return dynamic completion candidates for a given command."""
+        """Return dynamic completion candidates for a given command.
+
+        Uses a 30-second TTL cache to avoid HTTP calls on every Tab press.
+        """
+        now = time.monotonic()
+        cache_key = cmd
+        entry = self._completion_cache.get(cache_key)
+        if entry is not None:
+            ts, values = entry
+            if now - ts < 30.0:
+                return values
+        values = self._complete_args_for_uncached(cmd)
+        self._completion_cache[cache_key] = (now, values)
+        return values
+
+    def _complete_args_for_uncached(self, cmd: str) -> list[str]:
+        """Fetch fresh completion candidates (no cache)."""
         try:
             if cmd in ("load", "unload", "gen", "protect", "unprotect"):
                 models = self.cmds.models()
@@ -428,7 +492,6 @@ class ShellREPL:
                 ft = self.cmds.finetuned_models()
                 return [m.get("model_name", "") for m in ft]
             if cmd == "train":
-                # Subcommand completion: status, follow, stop, distill, hf, auto, load, del
                 return ["status", "follow", "stop", "distill", "hf", "auto", "load", "del"]
             if cmd in ("permit", "deny"):
                 from .permissions import _DANGEROUS, _CRITICAL
@@ -438,7 +501,6 @@ class ShellREPL:
                 return candidates
         except Exception:
             pass
-        # Fallback: file/directory path completion
         return self._complete_path("")
 
     def _complete_path(self, prefix: str) -> list[str]:
