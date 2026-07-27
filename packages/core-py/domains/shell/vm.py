@@ -954,7 +954,6 @@ class CMOSDevice(Device):
       get_unix_time() -> int  — Unix timestamp
       read_cmos(offset) -> int — read raw CMOS byte
       write_cmos(offset, val)  — write raw CMOS byte
-      set_offset(seconds)     — adjust time offset (for testing)
       set_binary_mode(flag)   — True=binary, False=BCD (default)
     """
 
@@ -1146,9 +1145,6 @@ class CMOSDevice(Device):
                 return
             self._cmos[offset] = val & 0xFF
 
-    def set_offset(self, seconds: float):
-        self._offset = seconds
-
     def set_binary_mode(self, binary: bool):
         """Switch between BCD (False, default) and binary (True) mode."""
         if binary:
@@ -1173,9 +1169,6 @@ class CMOSDevice(Device):
             return self.read_cmos(args[0])
         if method == "write_cmos":
             self.write_cmos(args[0], args[1])
-            return True
-        if method == "set_offset":
-            self.set_offset(args[0])
             return True
         if method == "set_binary_mode":
             self.set_binary_mode(args[0])
