@@ -99,8 +99,8 @@ export function TrainingFormCard({
                 </div>
               )}
               {session.paused && (
-                <div className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5 mt-1">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
+                <div className="text-xs text-warning flex items-center gap-1.5 mt-1">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-warning" />
                   Training paused
                 </div>
               )}

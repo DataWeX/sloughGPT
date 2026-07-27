@@ -82,20 +82,20 @@ export default function HomePage() {
 
       {apiStatus === 'offline' ? (
         startup ? (
-          <Card className="border-amber-500/35 bg-amber-500/5">
+          <Card className="border-warning/35 bg-warning/5">
             <CardHeader>
               <CardTitle className="text-base">Starting up… ({startup.step}/{startup.total})</CardTitle>
             </CardHeader>
             <CardContent className="text-sm space-y-2">
               <p>{startup.message}</p>
               <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                <div className="h-full bg-amber-400 transition-all duration-500" style={{width: `${(startup.step / startup.total) * 100}%`}} />
+                <div className="h-full bg-warning transition-all duration-500" style={{width: `${(startup.step / startup.total) * 100}%`}} />
               </div>
               <p className="text-xs text-muted-foreground">Server may take 90s on first cold start (PyTorch import).</p>
             </CardContent>
           </Card>
         ) : (
-          <Card className="border-amber-500/35 bg-amber-500/5">
+          <Card className="border-warning/35 bg-warning/5">
             <CardHeader>
               <CardTitle className="text-base">{t('home.apiOffline.title')}</CardTitle>
             </CardHeader>
@@ -214,7 +214,7 @@ export default function HomePage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 text-center">
               <div className="flex flex-col items-center gap-1">
                 <div className="flex justify-center">
-                  <span className={`w-2 h-2 rounded-full ${health && health !== 'offline' && health.status === 'healthy' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                  <span className={`w-2 h-2 rounded-full ${health && health !== 'offline' && health.status === 'healthy' ? 'bg-success' : 'bg-warning'}`} />
                 </div>
                 <div className="space-y-0">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">API</p>
