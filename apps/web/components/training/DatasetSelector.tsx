@@ -8,13 +8,18 @@ import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 
 export function datasetLabel(ds: Dataset): string {
   const size = ds.size != null ? `${(ds.size / 1024).toFixed(1)} KB` : ''
+  const parts: string[] = [ds.name]
+
   if (ds.type === 'vlm' && ds.vlm_metadata) {
-    return `${ds.name} (VLM: ${ds.vlm_metadata.image_count} images, ${size})`
+    parts.push('VLM', `${ds.vlm_metadata.image_count} images`)
+  } else if (ds.samples && ds.samples > 0) {
+    parts.push(`${ds.samples.toLocaleString()} samples`)
   }
-  const suffix = ds.samples && ds.samples > 0
-    ? ` (${ds.samples.toLocaleString()} samples, ${size})`
-    : ` (${size})`
-  return `${ds.name}${suffix}`
+
+  if (ds.source) parts.push(ds.source)
+  if (size) parts.push(size)
+
+  return parts.join(' · ')
 }
 
 export function DatasetSelector({

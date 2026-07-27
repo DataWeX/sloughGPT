@@ -64,15 +64,38 @@ export function JobHistoryCard({
                 if (hrs < 24) return `${hrs}h ago`
                 return `${Math.floor(hrs / 24)}d ago`
               })()
+              const elapsed = (() => {
+                if (!job.created_at) return ''
+                const end = job.finished_at ? new Date(job.finished_at).getTime() : Date.now()
+                const diff = end - new Date(job.created_at).getTime()
+                const secs = Math.floor(diff / 1000)
+                if (secs < 60) return `${secs}s`
+                const mins = Math.floor(secs / 60)
+                return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`
+              })()
               return (
               <div key={job.id} role="button" tabIndex={0} className="flex items-center justify-between px-4 py-3 text-sm cursor-pointer hover:bg-muted/20 transition-colors" onClick={() => router.push(`/training/job/${job.id}`)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/training/job/${job.id}`) } }} aria-label={`View job ${job.name || job.id}`}>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{job.name || job.id}</p>
-                  {job.status_message ? (
-                    <p className="text-xs text-muted-foreground mt-0.5">{job.status_message}</p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground mt-0.5">{job.status} &middot; {relativeTime}</p>
-                  )}
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    {job.model && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{job.model}</span>
+                    )}
+                    {job.dataset && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium">{job.dataset}</span>
+                    )}
+                    {job.loss != null && (
+                      <span className="text-[10px] text-muted-foreground">loss {job.loss.toFixed(4)}</span>
+                    )}
+                    {job.current_epoch != null && job.epochs != null && (
+                      <span className="text-[10px] text-muted-foreground">epoch {job.current_epoch}/{job.epochs}</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {job.status_message || (
+                      <>{job.status} · {relativeTime}{elapsed && <> · {elapsed}</>}</>
+                    )}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 ml-3" onClick={e => e.stopPropagation()}>
                   {job.status === 'running' && (

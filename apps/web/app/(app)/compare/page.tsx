@@ -42,6 +42,8 @@ export default function ComparePage() {
           name: (m.id || m.name).replace(/^hf\//, ''),
           loaded: m.loaded || (health?.model_type?.includes(m.id || m.name) ?? false),
           sizeGb: m.size_gb,
+          source: m.source,
+          type: m.type,
         }))
         setModels(entries)
       } catch { addToast('Failed to load models', 'error')

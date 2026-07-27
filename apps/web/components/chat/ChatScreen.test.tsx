@@ -110,4 +110,33 @@ describe('ChatScreen', () => {
     expect(separators[0]).toHaveAttribute('aria-label', 'Yesterday')
     expect(separators[1]).toHaveAttribute('aria-label', 'Today')
   })
+
+  it('renders all messages without duplicate key issues', () => {
+    const messages = Array.from({ length: 20 }, (_, i) => msg(`m${i}`, i % 2 === 0 ? 'user' : 'assistant', `Message ${i}`))
+    render(<ChatScreen messages={messages} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
+    const bubbles = screen.getAllByTestId('msg-bubble')
+    expect(bubbles).toHaveLength(20)
+  })
+
+  it('renders interleaved user/assistant messages in correct order', () => {
+    const messages = [
+      msg('m1', 'user', 'Hello'),
+      msg('m2', 'assistant', 'Hi there'),
+      msg('m3', 'user', 'How are you?'),
+      msg('m4', 'assistant', 'Good, thanks!'),
+    ]
+    render(<ChatScreen messages={messages} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
+    const bubbles = screen.getAllByTestId('msg-bubble')
+    expect(bubbles[0].textContent).toContain('Hello')
+    expect(bubbles[1].textContent).toContain('Hi there')
+    expect(bubbles[2].textContent).toContain('How are you?')
+    expect(bubbles[3].textContent).toContain('Good, thanks!')
+  })
+
+  it('shows streaming indicator on last assistant message during loading', () => {
+    const messages = [msg('m1', 'user', 'Hi'), msg('m2', 'assistant', 'Hello')]
+    render(<ChatScreen messages={messages} loading={true} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
+    const bubbles = screen.getAllByTestId('msg-bubble')
+    expect(bubbles).toHaveLength(2)
+  })
 })

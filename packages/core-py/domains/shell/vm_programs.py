@@ -417,15 +417,15 @@ boot_start:
 
 bios_print:
     pusha
-.loop:
+bios_print_loop:
     lodsb
     or al, al
-    jz .done
+    jz bios_print_done
     mov ah, 0x0E
     mov bx, 0x0007
     int 0x10
-    jmp .loop
-.done:
+    jmp bios_print_loop
+bios_print_done:
     popa
     ret
 
@@ -504,7 +504,7 @@ msg_err:    db "Failed to load kernel from floppy.", 0x0D, 0x0A, 0
 X86_KERNEL_ASM = """\
 ; AI Compteur x86 Kernel
 ; Loaded by bootloader at 0x1000 in 32-bit protected mode
-; Features: VGA output, keyboard input, timer
+; Features: VGA text output, PS/2 keyboard input, PIT timer
 
 [BITS 32]
 [ORG 0x1000]
@@ -518,73 +518,65 @@ VGA_ROWS      equ 25
 ; ── Kernel Entry Point ──────────────────────────────────────────────────
 
 kernel_start:
-    ; ── Minimal serial test: write 'A' to COM1 immediately ──
-    mov dx, 0x3F8          ; COM1 data register
-    mov al, 0x41           ; 'A'
-    out dx, al
+    ; ── Set up IDT ──
+    call setup_idt
 
-    ; ── Initialize COM1 serial port (115200 baud, 8N1) ──
-    mov dx, 0x3F9
-    mov al, 0x00
-    out dx, al
+    ; ── Set up PIC (remap IRQ 0-15 to INT 32-47) ──
+    call setup_pic
 
-    mov dx, 0x3FB
-    mov al, 0x80
-    out dx, al
-    mov dx, 0x3F8
-    mov al, 0x01
-    out dx, al
-    mov dx, 0x3F9
-    mov al, 0x00
-    out dx, al
-    mov dx, 0x3FB
-    mov al, 0x03
-    out dx, al
-    mov dx, 0x3FA
-    mov al, 0xC7
-    out dx, al
-    mov dx, 0x3FC
-    mov al, 0x0B
-    out dx, al
+    ; ── Set up PIT Channel 0 for ~100 Hz timer (IRQ0) ──
+    call setup_pit
 
-    ; ── Print banner to serial ──
-    mov esi, msg_banner_serial
-    call serial_print
+    ; ── Clear VGA screen ──
+    call vga_clear
 
-    ; VGA calls disabled until VGA_BUFFER addressing fixed in PM
-    ; call vga_clear
+    ; ── Print banner to VGA ──
+    mov esi, msg_banner
+    mov edi, 0
+    mov ah, 0x07
+    call vga_print
 
-    ; ── Print shell prompt to serial ──
-    mov esi, msg_shell_serial
-    call serial_print
+    ; ── Print shell prompt ──
+    mov esi, msg_prompt
+    mov edi, VGA_COLS * 2    ; Row 1
+    mov ah, 0x07
+    call vga_print
+
+    ; ── Enable interrupts ──
+    sti
 
 ; ── Interactive shell loop ──
-; Reads characters from COM1, echoes them back,
-; handles basic commands
+; Reads characters from keyboard buffer [0x400]
 shell_loop:
-    ; Try to read a character from serial (non-blocking)
-    call serial_read
+    ; Check keyboard buffer at [0x400]
+    mov al, [0x400]
     test al, al
     jz shell_loop           ; No character, keep polling
 
-    ; Got a character in AL
-    ; Echo it back
-    push eax
-    call serial_write
-    pop eax
+    ; Got a character in AL — clear buffer
+    mov byte [0x400], 0
 
-    ; Store in input buffer
-    cmp al, 13              ; Enter?
+    ; Echo to VGA at cursor position
+    mov bl, al              ; Save character
+    call vga_putchar
+
+    ; Handle special keys
+    cmp bl, 0x0D            ; Enter?
     je shell_enter
-    cmp al, 10              ; Linefeed?
-    je shell_enter
+    cmp bl, 0x08            ; Backspace?
+    je shell_backspace
 
     ; Buffer the character
+    push ebx                ; Save character (bl) on stack
     mov ebx, [input_pos]
     cmp ebx, 127
-    jge shell_loop          ; Buffer full, ignore
-    mov [input_buf + ebx], al
+    jge shell_loop_buf_full
+    pop ecx                 ; Restore character into cl
+    mov [input_buf + ebx], cl
     inc dword [input_pos]
+    jmp shell_loop
+shell_loop_buf_full:
+    pop ebx                 ; Clean up stack
     jmp shell_loop
 
 shell_enter:
@@ -592,11 +584,8 @@ shell_enter:
     mov ebx, [input_pos]
     mov byte [input_buf + ebx], 0
 
-    ; Echo newline to serial
-    mov al, 13
-    call serial_write
-    mov al, 10
-    call serial_write
+    ; Newline on VGA
+    call vga_newline
 
     ; Check for commands
     ; "help" command
@@ -623,29 +612,96 @@ shell_enter:
     call str_cmp
     je cmd_do_clear
 
-    ; Unknown command - print error
+    ; "echo" command (prefix match - has arguments)
+    mov esi, input_buf
+    mov edi, cmd_echo
+    call str_starts_with
+    je cmd_do_echo
+
+    ; "peek" command (prefix match - has arguments)
+    mov esi, input_buf
+    mov edi, cmd_peek
+    call str_starts_with
+    je cmd_do_peek
+
+    ; "poke" command (prefix match - has arguments)
+    mov esi, input_buf
+    mov edi, cmd_poke
+    call str_starts_with
+    je cmd_do_poke
+
+    ; "uptime" command
+    mov esi, input_buf
+    mov edi, cmd_uptime
+    call str_cmp
+    je cmd_do_uptime
+
+    ; "meminfo" command
+    mov esi, input_buf
+    mov edi, cmd_meminfo
+    call str_cmp
+    je cmd_do_meminfo
+
+    ; "peekd" command (prefix match - has arguments)
+    mov esi, input_buf
+    mov edi, cmd_peekd
+    call str_starts_with
+    je cmd_do_peekd
+
+    ; "version" command
+    mov esi, input_buf
+    mov edi, cmd_version
+    call str_cmp
+    je cmd_do_version
+
+    ; "dump" command (prefix match - has arguments)
+    mov esi, input_buf
+    mov edi, cmd_dump
+    call str_starts_with
+    je cmd_do_dump
+
+    ; Unknown command
     mov esi, msg_unknown
-    call serial_print
+    mov ah, 0x07
+    call vga_print
 
     ; Reset input buffer
     mov dword [input_pos], 0
 
     ; Print prompt again
     mov esi, msg_prompt
-    call serial_print
+    mov ah, 0x07
+    call vga_print
+    jmp shell_loop
+
+shell_backspace:
+    mov ebx, [input_pos]
+    test ebx, ebx
+    jz shell_loop           ; Nothing to delete
+    dec dword [input_pos]
+    ; Erase on screen: BS SP BS
+    mov al, 0x08
+    call vga_putchar
+    mov al, ' '
+    call vga_putchar
+    mov al, 0x08
+    call vga_putchar
     jmp shell_loop
 
 cmd_do_help:
     mov esi, msg_help
-    call serial_print
+    mov ah, 0x07
+    call vga_print
     mov dword [input_pos], 0
     mov esi, msg_prompt
-    call serial_print
+    mov ah, 0x07
+    call vga_print
     jmp shell_loop
 
 cmd_do_reboot:
     mov esi, msg_rebooting
-    call serial_print
+    mov ah, 0x07
+    call vga_print
     ; Triple fault to reboot
     lidt [idt_zero]
     int 3
@@ -654,238 +710,579 @@ cmd_do_reboot:
 cmd_do_ticks:
     ; Print tick count as decimal
     mov eax, [tick_count]
-    call print_uint32_serial
-    mov al, 13
-    call serial_write
-    mov al, 10
-    call serial_write
+    call print_uint32_vga
+    call vga_newline
     mov dword [input_pos], 0
     mov esi, msg_prompt
-    call serial_print
+    mov ah, 0x07
+    call vga_print
     jmp shell_loop
 
 cmd_do_clear:
-    ; Send ANSI clear screen
-    mov esi, msg_ansi_clear
-    call serial_print
     call vga_clear
     mov dword [input_pos], 0
     mov esi, msg_prompt
-    call serial_print
+    mov ah, 0x07
+    call vga_print
     jmp shell_loop
 
-; ── Serial Functions ──────────────────────────────────────────────────────
+; ── echo: print everything after "echo " ──────────────────────────────────
+cmd_do_echo:
+    ; Skip "echo " (5 chars)
+    mov esi, input_buf + 5
+    mov ah, 0x07
+    call vga_print
+    call vga_newline
+    mov dword [input_pos], 0
+    mov esi, msg_prompt
+    mov ah, 0x07
+    call vga_print
+    jmp shell_loop
 
-serial_init:
-    ; Initialize COM1 (115200 baud, 8N1)
-    mov dx, 0x3F9
-    mov al, 0x00
-    out dx, al
-    mov dx, 0x3FB
-    mov al, 0x80
-    out dx, al
-    mov dx, 0x3F8
-    mov al, 0x01
-    out dx, al
-    mov dx, 0x3F9
-    mov al, 0x00
-    out dx, al
-    mov dx, 0x3FB
-    mov al, 0x03
-    out dx, al
-    mov dx, 0x3FA
-    mov al, 0xC7
-    out dx, al
-    mov dx, 0x3FC
-    mov al, 0x0B
-    out dx, al
-    ret
-
-serial_write:
-    ; Write character in AL to COM1
-    push edx
-    push ax
-    mov dx, 0x3FD           ; Line status register (0x3F8+5)
-.wait: in al, dx            ; Read line status
-    test al, 0x20           ; Bit 5 = transmitter holding register empty
-    jz .wait                ; Loop until ready
-    pop ax
-    mov dx, 0x3F8           ; Data register
-    out dx, al
-    pop edx
-    ret
-
-serial_read:
-    ; Read character from COM1 into AL (0 if nothing available)
-    push edx
-    mov dx, 0x3FD           ; Line status register (0x3F8+5)
-    in al, dx
-    test al, 1              ; Bit 0 = data ready
-    jz .no_data
-    mov dx, 0x3F8           ; Data register
-    in al, dx
-    pop edx
-    ret
-.no_data:
-    xor al, al
-    pop edx
-    ret
-
-serial_print:
-    ; Print null-terminated string at ESI to COM1
-    pusha
-.loop:
-    lodsb
-    test al, al
-    jz .done
-    call serial_write
-    jmp .loop
-.done:
-    popa
-    ret
-
-; ── Utility Functions ─────────────────────────────────────────────────────
-
-str_cmp:
-    ; Compare strings at ESI and EDI, ZF=1 if equal
-    pusha
-.loop:
-    mov al, [esi]
-    mov bl, [edi]
-    cmp al, bl
-    jne .ne
-    test al, al
-    jz .eq                  ; Both null = equal
-    inc esi
-    inc edi
-    jmp .loop
-.ne:
-    or al, 1            ; Set ZF=0 (al is always nonzero here)
-    popa
-    ret
-.eq:
-    xor ax, ax              ; Set ZF=1
-    test ax, 1
-    popa
-    ret
-
-print_uint32_serial:
-    ; Print EAX as unsigned decimal to serial
-    pusha
-    mov ecx, 10
-    xor ebx, ebx            ; Digit count
-.digit_loop:
-    xor edx, edx
-    div ecx                 ; EAX = quotient, EDX = remainder
-    push edx                ; Save digit
-    inc ebx
-    test eax, eax
-    jnz .digit_loop
-.print_loop:
+; ── peek ADDR: read byte at hex address and print it ─────────────────────
+cmd_do_peek:
+    ; Parse hex address after "peek " (5 bytes offset)
+    mov esi, input_buf + 5
+    call parse_hex_byte
+    ; EBX = address, now read the byte from that address
+    mov al, [ebx]
+    movzx eax, al
+    push eax
+    mov esi, msg_peek_prefix
+    mov ah, 0x07
+    call vga_print
     pop eax
-    add al, '0'
-    call serial_write
-    dec ebx
-    jnz .print_loop
-    popa
+    call vga_print_hex_byte
+    call vga_newline
+    mov dword [input_pos], 0
+    mov esi, msg_prompt
+    mov ah, 0x07
+    call vga_print
+    jmp shell_loop
+
+; ── poke ADDR VAL: write byte to hex address ─────────────────────────────
+cmd_do_poke:
+    ; Parse first hex value (address) after "poke " (5 bytes offset)
+    mov esi, input_buf + 5
+    call parse_hex_byte
+    ; EBX = address, ESI advanced past first arg
+    push ebx
+    ; ESI now points past the first arg (after space or null)
+    call parse_hex_byte
+    ; AL = value to write
+    pop ebx
+    mov [ebx], al
+    mov dword [input_pos], 0
+    mov esi, msg_prompt
+    mov ah, 0x07
+    call vga_print
+    jmp shell_loop
+
+; ── uptime: show seconds since boot ──────────────────────────────────────
+cmd_do_uptime:
+    mov eax, [tick_count]
+    xor edx, edx
+    mov ebx, 100
+    div ebx                 ; EAX = ticks / 100 = seconds
+    call print_uint32_vga
+    mov esi, msg_seconds
+    mov ah, 0x07
+    call vga_print
+    mov dword [input_pos], 0
+    mov esi, msg_prompt
+    mov ah, 0x07
+    call vga_print
+    jmp shell_loop
+
+; ── meminfo: show memory range ───────────────────────────────────────────
+cmd_do_meminfo:
+    mov esi, msg_meminfo
+    mov ah, 0x07
+    call vga_print
+    mov dword [input_pos], 0
+    mov esi, msg_prompt
+    mov ah, 0x07
+    call vga_print
+    jmp shell_loop
+
+; ── peekd ADDR: read 32-bit dword at hex address and print as hex ───────
+cmd_do_peekd:
+    mov esi, input_buf + 6
+    call parse_hex_byte
+    mov edx, ebx
+    mov eax, [edx]
+    push eax
+    mov esi, msg_peek_prefix
+    mov ah, 0x07
+    call vga_print
+    pop eax
+    shr eax, 16
+    call vga_print_hex_byte
+    pop eax
+    call vga_print_hex_byte
+    call vga_newline
+    mov dword [input_pos], 0
+    mov esi, msg_prompt
+    mov ah, 0x07
+    call vga_print
+    jmp shell_loop
+
+; ── version: show kernel version string ──────────────────────────────────
+cmd_do_version:
+    mov esi, msg_version
+    mov ah, 0x07
+    call vga_print
+    mov dword [input_pos], 0
+    mov esi, msg_prompt
+    mov ah, 0x07
+    call vga_print
+    jmp shell_loop
+
+; ── dump ADDR LEN: hex dump LEN bytes starting at ADDR ───────────────────
+cmd_do_dump:
+    mov esi, input_buf + 5
+    call parse_hex_byte
+    mov edx, ebx
+    mov esi, input_buf
+    ; Find space after address to get length
+dump_find_space:
+    lodsb
+    cmp al, ' '
+    jne dump_find_space
+    call parse_hex_byte
+    mov ecx, ebx
+    cmp ecx, 0
+    je dump_done
+    cmp ecx, 64
+    jbe dump_loop
+    mov ecx, 64
+dump_loop:
+    push ecx
+    push edx
+    mov al, [edx]
+    call vga_print_hex_byte
+    mov al, ' '
+    call vga_putchar
+    pop edx
+    pop ecx
+    inc edx
+    dec ecx
+    jnz dump_loop
+dump_done:
+    call vga_newline
+    mov dword [input_pos], 0
+    mov esi, msg_prompt
+    mov ah, 0x07
+    call vga_print
+    jmp shell_loop
+
+; ── IDT Setup ────────────────────────────────────────────────────────────
+
+setup_idt:
+    mov edi, 0x800
+    mov ecx, 256
+    xor eax, eax
+idt_clear_loop:
+    mov dword [edi], eax
+    mov dword [edi+4], eax
+    add edi, 8
+    dec ecx
+    jnz idt_clear_loop
+
+    ; INT 32 = IRQ0 (timer) — handler at timer_handler
+    ; IDT entry for INT 32 at base + 32*8 = 0x800 + 0x100 = 0x900
+    mov edi, 0x900
+    mov eax, timer_handler
+    mov word [edi], ax          ; Offset low
+    mov word [edi+2], 0x08      ; Segment selector (code)
+    mov byte [edi+4], 0x00      ; Reserved
+    mov byte [edi+5], 0x8E      ; Present, Ring 0, 32-bit interrupt gate
+    shr eax, 16
+    mov word [edi+6], ax        ; Offset high
+
+    ; INT 33 = IRQ1 (keyboard) — handler at keyboard_handler
+    ; IDT entry for INT 33 at base + 33*8 = 0x800 + 0x108 = 0x908
+    mov edi, 0x908
+    mov eax, keyboard_handler
+    mov word [edi], ax
+    mov word [edi+2], 0x08
+    mov byte [edi+4], 0x00
+    mov byte [edi+5], 0x8E
+    shr eax, 16
+    mov word [edi+6], ax
+
+    ; Load IDT register
+    lidt [idt_desc]
+    ret
+
+; ── PIC Setup ────────────────────────────────────────────────────────────
+
+setup_pic:
+    ; Remap PIC1: IRQ 0-7 → INT 32-39
+    ; Remap PIC2: IRQ 8-15 → INT 40-47
+    mov al, 0x11              ; ICW1: init + ICW4 needed
+    out 0x20, al              ; PIC1 command
+    out 0xA0, al              ; PIC2 command
+
+    mov al, 0x20              ; PIC1: IRQ 0 starts at INT 32
+    out 0x21, al
+    mov al, 0x28              ; PIC2: IRQ 8 starts at INT 40
+    out 0xA1, al
+
+    mov al, 0x04              ; PIC1: slave on IRQ2
+    out 0x21, al
+    mov al, 0x02              ; PIC2: cascade identity
+    out 0xA1, al
+
+    mov al, 0x01              ; ICW4: 8086 mode
+    out 0x21, al
+    out 0xA1, al
+
+    ; Mask all IRQs except IRQ0 (timer) and IRQ1 (keyboard)
+    mov al, 0xFC              ; 11111100 = enable IRQ0, IRQ1
+    out 0x21, al
+    mov al, 0xFF              ; Mask all PIC2 IRQs
+    out 0xA1, al
+    ret
+
+; ── PIT Setup ────────────────────────────────────────────────────────────
+
+setup_pit:
+    ; PIT Channel 0: ~100 Hz (divisor = 11932 ≈ 1193182 / 100)
+    mov al, 0x36              ; Channel 0, lo/hi, square wave
+    out 0x43, al
+    mov eax, 11932            ; Divisor for ~100 Hz
+    out 0x40, al              ; Low byte
+    mov al, ah
+    out 0x40, al              ; High byte
     ret
 
 ; ── VGA Functions ────────────────────────────────────────────────────────
 
-vga_print:
-    ; ESI = string address, EDI = VGA buffer position, AH = color attribute
+vga_putchar:
+    push edi
+    mov edi, [vga_cursor]
+    shl edi, 1
+    add edi, VGA_BUFFER
+    mov [edi], al
+    mov byte [edi+1], 0x07
+    inc dword [vga_cursor]
+    cmp dword [vga_cursor], VGA_COLS * VGA_ROWS
+    jb vga_put_done
+    call vga_scroll
+vga_put_done:
+    pop edi
+    ret
+
+vga_newline:
     push eax
     push ebx
-.vga_loop:
-    lodsb                   ; Load byte from [ESI] into AL
-    test al, al
-    jz .vga_done
-    cmp al, 10              ; Newline?
-    je .vga_newline
-    stosw                   ; Store AX at [EDI], advance EDI by 2
-    jmp .vga_loop
-.vga_newline:
-    push eax
-    mov eax, edi
-    sub eax, VGA_BUFFER
-    mov ebx, VGA_COLS * 2
+    mov eax, [vga_cursor]
+    mov ebx, VGA_COLS
     xor edx, edx
-    div ebx                 ; EAX = current row
-    inc eax                 ; Next row
-    mul ebx                 ; EAX = offset of next row
-    add eax, VGA_BUFFER
-    mov edi, eax
-    pop eax
-    jmp .vga_loop
-.vga_done:
+    div ebx
+    inc eax
+    mul ebx
+    mov [vga_cursor], eax
     pop ebx
     pop eax
     ret
 
-vga_clear:
+vga_scroll:
+    pusha
+    mov esi, VGA_BUFFER + VGA_COLS * 2
+    mov edi, VGA_BUFFER
+    mov ecx, VGA_COLS * 24
+    cld
+    rep movsb
+    mov ecx, VGA_COLS
+    mov ax, 0x0720
+    rep stosw
+    mov dword [vga_cursor], VGA_COLS * 24
+    popa
+    ret
+
+vga_print:
+    pusha
+vga_print_loop:
+    lodsb
+    test al, al
+    jz vga_print_done
+    cmp al, 10
+    je vga_print_newline
     push edi
-    push ecx
+    mov edi, [vga_cursor]
+    shl edi, 1
+    add edi, VGA_BUFFER
+    mov [edi], al
+    mov [edi+1], ah
+    inc dword [vga_cursor]
+    cmp dword [vga_cursor], VGA_COLS * VGA_ROWS
+    jb vga_print_no_scroll
+    call vga_scroll
+vga_print_no_scroll:
+    pop edi
+    jmp vga_print_loop
+vga_print_newline:
+    call vga_newline
+    jmp vga_print_loop
+vga_print_done:
+    popa
+    ret
+
+vga_clear:
+    pusha
     mov edi, VGA_BUFFER
     mov ecx, VGA_COLS * VGA_ROWS
-    mov ax, 0x0720          ; Space with light gray attribute
+    mov ax, 0x0720
     cld
     rep stosw
-    pop ecx
-    pop edi
+    mov dword [vga_cursor], 0
+    popa
     ret
 
 ; ── Interrupt Handlers ──────────────────────────────────────────────────
 
-; Timer interrupt handler (IRQ0)
+; Timer interrupt handler (IRQ0 → INT 32)
 timer_handler:
     push eax
     inc dword [tick_count]
     mov al, 0x20
-    out 0x20, al
+    out 0x20, al            ; Send EOI to PIC1
     pop eax
     iret
 
-; Keyboard interrupt handler (IRQ1)
+; Keyboard interrupt handler (IRQ1 → INT 33)
 keyboard_handler:
     push eax
-    in al, 0x60             ; Read scancode
-    mov [last_scancode], al
+    push ebx
+    push esi
+    in al, 0x60             ; Read scancode from keyboard controller
+    ; Convert scancode to ASCII via lookup table
+    mov bl, al
+    and bl, 0x7F
+    cmp bl, 0x3A
+    jge kbd_done
+    mov esi, scancode_table
+    add esi, ebx
+    mov bl, [esi]
+    test bl, bl
+    jz kbd_done
+    test al, 0x80
+    jnz kbd_done
+    mov [0x400], bl
+kbd_done:
     mov al, 0x20
     out 0x20, al
+    pop esi
+    pop ebx
     pop eax
     iret
+
+; ── Utility Functions ───────────────────────────────────────────────────
+
+str_cmp:
+    pusha
+str_cmp_loop:
+    mov al, [esi]
+    mov bl, [edi]
+    cmp al, bl
+    jne str_cmp_ne
+    test al, al
+    jz str_cmp_eq
+    inc esi
+    inc edi
+    jmp str_cmp_loop
+str_cmp_ne:
+    popa
+    or eax, 1
+    ret
+str_cmp_eq:
+    popa
+    xor eax, eax
+    ret
+
+; ── str_starts_with: check if [ESI] starts with [EDI] prefix ─────────────
+; Returns ZF=1 if prefix matches, ZF=0 otherwise
+str_starts_with:
+    pusha
+str_sw_loop:
+    mov al, [edi]
+    test al, al
+    jz str_sw_match       ; End of prefix = match
+    mov bl, [esi]
+    cmp al, bl
+    jne str_sw_no_match
+    inc esi
+    inc edi
+    jmp str_sw_loop
+str_sw_match:
+    popa
+    xor eax, eax
+    ret
+str_sw_no_match:
+    popa
+    or eax, 1
+    ret
+
+print_uint32_vga:
+    pusha
+    mov ecx, 10
+    xor ebx, ebx
+print_uint32_digit_loop:
+    xor edx, edx
+    div ecx
+    push edx
+    inc ebx
+    test eax, eax
+    jnz print_uint32_digit_loop
+print_uint32_print_loop:
+    pop eax
+    add al, '0'
+    call vga_putchar
+    dec ebx
+    jnz print_uint32_print_loop
+    popa
+    ret
+
+; ── vga_print_hex_byte: print AL as 2 hex digits ─────────────────────────
+vga_print_hex_byte:
+    push eax
+    shr al, 4
+    call vga_print_hex_nibble
+    pop eax
+    and al, 0x0F
+    call vga_print_hex_nibble
+    ret
+
+; ── vga_print_hex_nibble: print low 4 bits of AL as hex ──────────────────
+vga_print_hex_nibble:
+    cmp al, 10
+    jl vga_hex_digit
+    add al, 0x57
+    jmp vga_hex_show
+vga_hex_digit:
+    add al, 0x30
+vga_hex_show:
+    call vga_putchar
+    ret
+
+; ── parse_hex_byte: parse hex ASCII chars from [ESI] → AL, EBX ──────────
+; Skips leading whitespace. Parses 1-8 hex digits. ESI advances past parsed chars.
+parse_hex_byte:
+    xor ebx, ebx
+    xor ecx, ecx          ; digit count
+    ; Skip whitespace
+parse_hex_skip_ws:
+    lodsb
+    cmp al, ' '
+    je parse_hex_skip_ws
+    cmp al, 0
+    je parse_hex_done
+    ; First char is non-space, non-null — process it
+    dec esi                ; back up one (lodsb already advanced)
+parse_hex_loop:
+    lodsb
+    cmp al, ' '
+    je parse_hex_done
+    cmp al, 0
+    je parse_hex_done
+    ; Convert hex char to value
+    cmp al, '0'
+    jl parse_hex_done
+    cmp al, '9'
+    jle parse_hex_digit_num
+    cmp al, 'A'
+    jl parse_hex_done
+    cmp al, 'F'
+    jle parse_hex_digit_upper
+    cmp al, 'a'
+    jl parse_hex_done
+    cmp al, 'f'
+    jg parse_hex_done
+    sub al, 0x57
+    jmp parse_hex_store
+parse_hex_digit_num:
+    sub al, 0x30
+    jmp parse_hex_store
+parse_hex_digit_upper:
+    sub al, 0x37
+    jmp parse_hex_store
+parse_hex_store:
+    shl ebx, 4
+    or bl, al
+    inc ecx
+    jmp parse_hex_loop
+parse_hex_done:
+    ; Return lowest byte in AL, full value in EBX
+    mov al, bl
+    ret
 
 ; ── Data ────────────────────────────────────────────────────────────────
 
-msg_banner_serial: db "AI Compteur v0.3 - Serial Console Active", 13, 10, 0
-msg_shell_serial:  db "Type 'help' for commands.", 13, 10, 0
-msg_prompt:        db "> ", 0
-msg_kernel:   db "AI Compteur Kernel v0.3", 0
-msg_serial:   db "Serial: 115200 baud, 8N1", 0
-msg_ready:    db "Protected mode active.", 0
-msg_pmode:    db "VGA: 80x25, 16 colors.", 0
-msg_irq:      db "Interrupts enabled.", 0
-msg_help:     db "Commands:", 13, 10
-              db "  help    - Show this help", 13, 10
-              db "  ticks   - Show timer tick count", 13, 10
-              db "  clear   - Clear serial screen", 13, 10
-              db "  reboot  - Reboot the system", 13, 10, 0
-msg_rebooting: db "Rebooting...", 13, 10, 0
-msg_unknown:  db "Unknown command. Type 'help'.", 13, 10, 0
-msg_ansi_clear: db 27, "[2J", 27, "[H", 0  ; ESC[2J ESC[H
+msg_banner:   db "AI Compteur v0.5 - VGA + Keyboard + Shell", 10, 0
+msg_prompt:   db "> ", 0
+msg_help:     db "Commands:", 10
+              db "  help           - Show this help", 10
+              db "  echo <text>    - Print text", 10
+              db "  peek <addr>    - Read byte at hex address", 10
+              db "  peekd <addr>   - Read dword (4 bytes) at hex address", 10
+              db "  poke <a> <v>   - Write byte to hex address", 10
+              db "  dump <a> <n>   - Hex dump n bytes (max 64)", 10
+              db "  ticks          - Show timer tick count", 10
+              db "  uptime         - Show seconds since boot", 10
+              db "  meminfo        - Show memory info", 10
+              db "  version        - Show kernel version", 10
+              db "  clear          - Clear screen", 10
+              db "  reboot         - Reboot the system", 10, 0
+msg_rebooting: db "Rebooting...", 10, 0
+msg_unknown:  db "Unknown command. Type 'help'.", 10, 0
+msg_peek_prefix: db "0x", 0
+msg_seconds:  db " seconds", 10, 0
+msg_meminfo:  db "Memory: 0x00000000 - 0x000FFFFF (1MB flat)", 10
+              db "VGA buffer: 0x000B8000", 10
+              db "KBD buffer: 0x00000400", 10
+              db "IDT:        0x00000800", 10
+              db "Code:       0x00001000", 10, 0
+msg_version: db "AI Compteur Kernel v0.5", 10
+              db "Architecture: x86 (32-bit protected mode)", 10
+              db "Features: VGA, Keyboard, IDT, PIT", 10, 0
 
 cmd_help:   db "help", 0
+cmd_echo:   db "echo", 0
+cmd_peek:   db "peek", 0
+cmd_poke:   db "poke", 0
 cmd_reboot: db "reboot", 0
 cmd_ticks:  db "ticks", 0
+cmd_uptime: db "uptime", 0
+cmd_meminfo: db "meminfo", 0
 cmd_clear:  db "clear", 0
+cmd_peekd:  db "peekd", 0
+cmd_version: db "version", 0
+cmd_dump:   db "dump", 0
+
+; ── IDT ─────────────────────────────────────────────────────────────────
+
+idt_desc:
+    dw 256 * 8 - 1          ; IDT limit
+    dd 0x800                 ; IDT base address
 
 idt_zero:   dw 0, 0, 0     ; Null IDT for triple fault reboot
 
+; ── Scancode Lookup Table (US QWERTY) ───────────────────────────────────
+
+scancode_table:
+    db 0,  27, '1','2','3','4','5','6','7','8','9','0','-','=', 8, 9   ; 0x00-0x0F
+    db 'q','w','e','r','t','y','u','i','o','p','[',']', 13, 0         ; 0x10-0x1D
+    db 'a','s','d','f','g','h','j','k','l',';','\'','`', 0, '\\'       ; 0x1E-0x2B
+    db 'z','x','c','v','b','n','m',',','.','/', 0, '*', 0, ' '        ; 0x2C-0x39
+
+; ── Variables ───────────────────────────────────────────────────────────
+
 input_buf:  times 128 db 0
 input_pos:  dd 0
-
-tick_count:   dd 0
-last_scancode: db 0
+tick_count: dd 0
+vga_cursor: dd 0
 
 ; ── Padding ─────────────────────────────────────────────────────────────
 

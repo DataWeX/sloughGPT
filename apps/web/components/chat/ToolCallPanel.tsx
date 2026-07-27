@@ -24,9 +24,9 @@ function ToolCallCard({ event }: { event: ToolCallEvent }) {
   return (
     <Card className={cn(
       'border px-3 py-2 text-xs transition-colors',
-      event.status === 'executing' && 'border-blue-400/30 bg-blue-50/40 dark:bg-blue-950/20',
-      event.status === 'success' && 'border-green-400/30 bg-green-50/40 dark:bg-green-950/20',
-      event.status === 'error' && 'border-red-400/30 bg-red-50/40 dark:bg-red-950/20',
+      event.status === 'executing' && 'border-primary/30 bg-primary/5',
+      event.status === 'success' && 'border-success/30 bg-success/5',
+      event.status === 'error' && 'border-destructive/30 bg-destructive/5',
     )}>
       <button
         className="flex w-full items-center justify-between gap-2 text-left"
@@ -36,18 +36,17 @@ function ToolCallCard({ event }: { event: ToolCallEvent }) {
           <ToolIcon name={event.tool} />
           <span className="font-medium capitalize truncate">{event.tool}</span>
           {event.status === 'executing' && (
-            <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
               Running...
             </span>
           )}
           {event.status === 'success' && (
-            <span className="text-green-600 dark:text-green-400">
-              Done {event.duration_ms ? `(${(event.duration_ms / 1000).toFixed(1)}s)` : ''}
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-success/10 text-success font-medium">
+              Done {event.duration_ms ? `${(event.duration_ms / 1000).toFixed(1)}s` : ''}
             </span>
           )}
           {event.status === 'error' && (
-            <span className="text-red-600 dark:text-red-400">Failed</span>
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive font-medium">Failed</span>
           )}
         </div>
         {(event.output || event.error) && (
@@ -57,7 +56,7 @@ function ToolCallCard({ event }: { event: ToolCallEvent }) {
       {expanded && (event.output || event.error) && (
         <pre className="mt-2 overflow-x-auto rounded bg-muted/50 p-2 text-[11px] leading-relaxed whitespace-pre-wrap">
           {event.error ? (
-            <span className="text-red-600 dark:text-red-400">{event.error}</span>
+            <span className="text-destructive">{event.error}</span>
           ) : (
             event.output
           )}

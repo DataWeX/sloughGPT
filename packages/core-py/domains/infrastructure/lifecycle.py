@@ -541,13 +541,6 @@ class LifecycleManager:
                             break
                 if not all_ok:
                     break
-                error = str(exc)
-                results.append(_HookResult(name=hook.name, success=False, elapsed=elapsed, error=error))
-                self._emit_sync(EVT_HOOK_FAILED, {"hook": hook.name, "error": error, "elapsed": round(elapsed, 3)})
-                logger.exception("Startup hook %s failed: %s", hook.name, error, extra={"tag": "INFRA"})
-                if hook.critical:
-                    all_ok = False
-                    break
 
         self._last_startup_results = results
         async with self._lock:

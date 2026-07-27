@@ -36,6 +36,7 @@ vi.mock('@/lib/db', () => ({
 }))
 
 vi.mock('@sloughgpt/strui', () => ({
+  cn: (...args: any[]) => args.filter(Boolean).join(' '),
   Button: ({ children, onClick, variant, size, className, ...rest }: any) => (
     <button onClick={onClick} className={className} data-variant={variant} data-size={size} {...rest}>{children}</button>
   ),

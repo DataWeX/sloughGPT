@@ -145,6 +145,9 @@ def _repo_root() -> Path:
 
 def cmd_dev(args):
     """Start API and Web servers with a live TUI dashboard."""
+    # ── Pre-flight: check if model needs download ─────────
+    _preflight_model_check(args)
+
     root = _repo_root()
     model = getattr(args, "model", None) or os.environ.get("SLOUGHGT_MODEL_PATH", "")
     api_port = getattr(args, "port", 8000)
@@ -310,7 +313,13 @@ def cmd_serve(args):
 
     With --web: starts full FastAPI server + Next.js web UI and opens browser.
     Without --web: starts the full FastAPI server only (API-only mode).
+
+    Before starting, checks if the autoload model needs downloading and
+    prompts the user for confirmation if it's over 50 MB.
     """
+    # ── Pre-flight: check if model needs download ─────────
+    _preflight_model_check(args)
+
     web = getattr(args, "web", False)
 
     if web:
@@ -319,6 +328,29 @@ def cmd_serve(args):
 
     # ── API-only mode ────────────────────────────────────
     _cmd_api_only(args)
+
+
+def _preflight_model_check(args):
+    """Check if the configured autoload model is cached; prompt if download needed.
+
+    Respects ``--auto-download`` flag and ``SLO_AUTO_DOWNLOAD`` env var.
+    """
+    model_id = (
+        getattr(args, "model", None)
+        or os.environ.get("SLO_AUTOLOAD_MODEL", "")
+        or os.environ.get("SLOUGHGT_MODEL_PATH", "")
+    )
+    if not model_id:
+        return
+
+    # Only check HuggingFace IDs (local paths don't need download)
+    if "/" in model_id or not Path(model_id).exists():
+        from core.permissions import PermissionsManager
+
+        pm = PermissionsManager(auto_yes=getattr(args, "auto_download", False))
+        if not pm.confirm_autoload_download(model_id):
+            printer.info("Server start cancelled")
+            raise SystemExit(0)
 
 
 def _cmd_api_only(args):

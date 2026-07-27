@@ -45,20 +45,36 @@ export function SoulSelectorDropdown() {
 
         <div className="border-t border-border/40" />
 
-        <div className="py-1 max-h-48 overflow-y-auto">
-          {souls.map((s) => (
-            <DropdownMenuItem
-              key={s.name}
-              onSelect={() => onSelect(s)}
-              className="justify-between text-xs px-3 py-1.5"
-            >
-              <div className="flex items-center gap-2">
-                <IconHeart className="h-3 w-3 text-muted-foreground shrink-0" />
-                <span className="capitalize">{s.name}</span>
-              </div>
-              {currentSoul?.name === s.name && <IconCheck className="h-3 w-3 text-primary shrink-0" />}
-            </DropdownMenuItem>
-          ))}
+        <div className="py-1 max-h-56 overflow-y-auto">
+          {souls.map((s) => {
+            const isActive = currentSoul?.name === s.name
+            return (
+              <DropdownMenuItem
+                key={s.name}
+                onSelect={() => onSelect(s)}
+                className={`flex items-start gap-2 px-3 py-2 text-xs ${isActive ? 'bg-primary/8' : ''}`}
+              >
+                <IconHeart className={`h-3 w-3 mt-0.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium capitalize truncate">{s.name}</div>
+                  {s.description && (
+                    <div className="text-[10px] text-muted-foreground truncate mt-0.5">{s.description}</div>
+                  )}
+                  {s.traits && s.traits.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {s.traits.slice(0, 3).map((t) => (
+                        <span key={t} className="text-[9px] px-1 py-0 rounded bg-muted text-muted-foreground">{t}</span>
+                      ))}
+                      {s.traits.length > 3 && (
+                        <span className="text-[9px] text-muted-foreground">+{s.traits.length - 3}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {isActive && <IconCheck className="h-3 w-3 text-primary shrink-0 mt-0.5" />}
+              </DropdownMenuItem>
+            )
+          })}
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -118,4 +118,54 @@ describe('ModelDropdown', () => {
     expect(ping).toBeDefined()
     mockCtx.model.generating = false
   })
+
+  it('download progress bar uses actual percentage not hardcoded', () => {
+    mockCtx.model.loading = 'gpt2'
+    mockCtx.model.downloadProgress = { gpt2: { percentage: 73, status: 'downloading', speed_mb_per_sec: 15, eta_seconds: 10 } }
+    render(<ModelDropdown />)
+    const bar = document.querySelector('[style*="width: 73%"]')
+    expect(bar).not.toBeNull()
+    mockCtx.model.loading = null
+    mockCtx.model.downloadProgress = {}
+  })
+
+  it('download progress bar falls back to 100% when no percentage', () => {
+    mockCtx.model.loading = 'gpt2'
+    mockCtx.model.downloadProgress = { gpt2: { status: 'loading', percentage: 0 } }
+    render(<ModelDropdown />)
+    const bar = document.querySelector('[style*="width: 100%"]')
+    expect(bar).not.toBeNull()
+    mockCtx.model.loading = null
+    mockCtx.model.downloadProgress = {}
+  })
+
+  it('strips org prefix from model names in dropdown items', () => {
+    mockCtx.model.availableModels = ['Qwen/Qwen2.5-0.5B-Instruct', 'gpt2']
+    render(<ModelDropdown variant="panel" />)
+    expect(screen.getByText('Qwen2.5-0.5B-Instruct')).toBeDefined()
+    expect(screen.getByText('gpt2')).toBeDefined()
+    mockCtx.model.availableModels = ['gpt2', 'gpt2-medium', 'gpt2-large']
+  })
+
+  it('shows warning dot when model is loading', () => {
+    mockCtx.model.loading = 'gpt2'
+    render(<ModelDropdown />)
+    const dot = document.querySelector('.animate-pulse')
+    expect(dot).not.toBeNull()
+    mockCtx.model.loading = null
+  })
+
+  it('shows success dot when model is loaded', () => {
+    render(<ModelDropdown />)
+    const dots = document.querySelectorAll('.bg-success')
+    expect(dots.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('shows muted dot when no model is loaded', () => {
+    mockCtx.model.current = null
+    render(<ModelDropdown />)
+    const dots = document.querySelectorAll('.bg-muted-foreground\\/30')
+    expect(dots.length).toBeGreaterThanOrEqual(1)
+    mockCtx.model.current = 'gpt2'
+  })
 })

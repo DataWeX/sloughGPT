@@ -574,3 +574,105 @@ class TestOSIntegration:
         sched.tick(cpu)
         sched.tick(cpu)
         assert sched.current is p1  # back to p1
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# X86SyscallHandler — exec syscall
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestSyscallExec:
+    def _setup_with_process(self, source_code: str, filename: str = "test.asm"):
+        """Create a virtual system, write a file to FS, and spawn a worker."""
+        vs = X86VirtualSystem(memory_size=0x100000, timer_hz=100)
+        vs.filesystem.write(filename, source_code.encode("utf-8"))
+        pid = vs.spawn("worker", "mov eax, 99\nhlt")
+        assert pid is not None
+        vs.scheduler.start(vs.cpu)
+        return vs
+
+    def _exec_filename(self, vs, filename: str) -> int:
+        """Write filename into CPU memory at a safe address and call exec."""
+        name_addr = 0x80000  # safe area in low memory
+        vs.cpu._mem[name_addr:name_addr + len(filename)] = filename.encode("ascii")
+        vs.cpu._mem[name_addr + len(filename)] = 0  # null terminator
+        return vs._syscall._sys_exec(name_addr)
+
+    def test_exec_replaces_process_code(self):
+        vs = self._setup_with_process("mov eax, 42\nhlt")
+        result = self._exec_filename(vs, "test.asm")
+        assert result == 0
+        current = vs.scheduler.current
+        assert current is not None
+        assert current.eip > 0
+        assert current.esp > current.eip
+
+    def test_exec_assembles_and_loads(self):
+        source = "[BITS 32]\nmov eax, 123\nmov ebx, 456\nhlt"
+        vs = self._setup_with_process(source)
+        result = self._exec_filename(vs, "test.asm")
+        assert result == 0
+        current = vs.scheduler.current
+        current.restore_to_cpu(vs.cpu)
+        vs.cpu.step()  # mov eax, 123
+        assert vs.cpu._regs[0] == 123
+        vs.cpu.step()  # mov ebx, 456
+        assert vs.cpu._regs[3] == 456
+
+    def test_exec_resets_registers(self):
+        source = "mov eax, 77\nhlt"
+        vs = self._setup_with_process(source)
+        current = vs.scheduler.current
+        current.eax = 999
+        current.ecx = 888
+        current.edx = 777
+        result = self._exec_filename(vs, "test.asm")
+        assert result == 0
+        current = vs.scheduler.current
+        assert current.eax == 0
+        assert current.ecx == 0
+        assert current.edx == 0
+
+    def test_exec_file_not_found(self):
+        vs = X86VirtualSystem(memory_size=0x100000, timer_hz=100)
+        pid = vs.spawn("worker", "hlt")
+        vs.scheduler.start(vs.cpu)
+        result = self._exec_filename(vs, "nonexistent.asm")
+        assert result == -1
+
+    def test_exec_no_filesystem(self):
+        vs = X86VirtualSystem(memory_size=0x100000, timer_hz=100)
+        vs._syscall._fs = None
+        result = vs._syscall._sys_exec(0x1000)
+        assert result == -1
+
+    def test_exec_noop_program(self):
+        """Exec a minimal program — verifies code loads and PCB is updated."""
+        vs = self._setup_with_process("mov eax, 1\nhlt")
+        vs.filesystem.write("minimal.asm", b"[BITS 32]\nhlt")
+        result = self._exec_filename(vs, "minimal.asm")
+        assert result == 0
+        current = vs.scheduler.current
+        # PCB should have been reset
+        assert current.eax == 0
+        assert current.ecx == 0
+        assert current.eip > 0
+        assert current.esp > current.eip
+
+    def test_exec_frees_old_memory(self):
+        vs = self._setup_with_process("mov eax, 1\nhlt")
+        current = vs.scheduler.current
+        old_stack = current.stack_base
+        assert old_stack > 0
+        result = self._exec_filename(vs, "test.asm")
+        assert result == 0
+        current = vs.scheduler.current
+        assert current.stack_base > 0
+
+    def test_exec_program_runs_after(self):
+        vs = self._setup_with_process("nop\nmov eax, 999\nhlt")
+        result = self._exec_filename(vs, "test.asm")
+        assert result == 0
+        current = vs.scheduler.current
+        current.restore_to_cpu(vs.cpu)
+        vs.cpu.run(max_steps=10)
+        assert vs.cpu._regs[0] == 999

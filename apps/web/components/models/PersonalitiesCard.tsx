@@ -64,14 +64,21 @@ export default function PersonalitiesCard({
                       <SelectTrigger className="h-7 text-xs w-auto min-w-[3.5rem] px-2">
                         <SelectValue placeholder="Switch" />
                       </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__base__">Switch</SelectItem>
-                        {soulCheckpoints.map((cp: Checkpoint) => (
-                          <SelectItem key={cp.name} value={cp.name}>
-                            {cp.name}{activeCheckpoint === cp.name ? ' (active)' : ''}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
+                        <SelectContent>
+                          <SelectItem value="__base__">Switch (base)</SelectItem>
+                          {soulCheckpoints.map((cp: Checkpoint) => {
+                            const loss = cp.final_train_loss ?? cp.loss
+                            const date = cp.born_at ? new Date(cp.born_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
+                            const meta = [loss != null ? `loss ${loss.toFixed(2)}` : null, date].filter(Boolean).join(' · ')
+                            return (
+                              <SelectItem key={cp.name} value={cp.name}>
+                                <span>{cp.name}</span>
+                                {meta && <span className="text-muted-foreground ml-1.5">{meta}</span>}
+                                {activeCheckpoint === cp.name && <span className="text-primary ml-1">✓</span>}
+                              </SelectItem>
+                            )
+                          })}
+                        </SelectContent>
                     </Select>
                   ) : checkpointsLoading ? (
                     <span className="text-xs text-muted-foreground animate-pulse">loading&hellip;</span>

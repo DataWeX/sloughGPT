@@ -211,6 +211,8 @@ async def list_hf_models(q: Optional[str] = None):
     Models come from two sources:
     1. HuggingFace Hub API (top 50 text-generation by downloads, or curated fallback)
     2. Local HF cache — any model that has safetensors files on disk
+
+    Sizes are computed in parallel to avoid sequential blocking on Hub API calls.
     """
     ctrl = get_models_controller()
     model_ids = ctrl.list_hf_models(q)
@@ -232,21 +234,14 @@ async def list_hf_models(q: Optional[str] = None):
     models_out = []
     seen_ids = set()
 
+    # Collect all model IDs to process (hub list + local cache extras)
+    all_model_ids = []
     for m in model_ids:
         mid = m["model_id"] if isinstance(m, dict) else m
-        seen_ids.add(mid)
-        size_gb = compute_model_size_gb(mid)
-        models_out.append({
-            "id": mid,
-            "name": _model_display_name(mid),
-            "hf_model_id": mid,
-            "source": "huggingface",
-            "size_mb": size_gb * 1024 if size_gb is not None else None,
-            "size_gb": size_gb,
-            "cached": _is_cached(mid),
-        })
+        if mid not in seen_ids:
+            seen_ids.add(mid)
+            all_model_ids.append(mid)
 
-    # Scan local HF cache for models not in the Hub list
     if not q and _hf_cache_dir.exists():
         try:
             for entry in _hf_cache_dir.iterdir():
@@ -255,18 +250,42 @@ async def list_hf_models(q: Optional[str] = None):
                 cached_id = _cache_model_id(entry.name)
                 if cached_id and cached_id not in seen_ids:
                     seen_ids.add(cached_id)
-                    size_gb = compute_model_size_gb(cached_id)
-                    models_out.append({
-                        "id": cached_id,
-                        "name": _model_display_name(cached_id),
-                        "hf_model_id": cached_id,
-                        "source": "huggingface",
-                        "size_mb": size_gb * 1024 if size_gb is not None else None,
-                        "size_gb": size_gb,
-                        "cached": _is_cached(cached_id),
-                    })
+                    all_model_ids.append(cached_id)
         except Exception:
             pass
+
+    # Compute sizes in parallel (each call may hit HF Hub API)
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    size_results: dict[str, Optional[float]] = {}
+    cached_results: dict[str, bool] = {}
+
+    def _compute_one(mid: str):
+        return mid, compute_model_size_gb(mid), _is_cached(mid)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = {pool.submit(_compute_one, mid): mid for mid in all_model_ids}
+        for future in as_completed(futures):
+            try:
+                mid, size_gb, cached = future.result()
+                size_results[mid] = size_gb
+                cached_results[mid] = cached
+            except Exception:
+                mid = futures[future]
+                size_results[mid] = None
+                cached_results[mid] = False
+
+    # Build output in original order
+    for mid in all_model_ids:
+        size_gb = size_results.get(mid)
+        models_out.append({
+            "id": mid,
+            "name": _model_display_name(mid),
+            "hf_model_id": mid,
+            "source": "huggingface",
+            "size_mb": size_gb * 1024 if size_gb is not None else None,
+            "size_gb": size_gb,
+            "cached": cached_results.get(mid, False),
+        })
 
     return success_response(data=models_out, meta={"q": q})
 

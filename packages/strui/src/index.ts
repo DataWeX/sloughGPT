@@ -96,7 +96,7 @@ export {
 export { StatCard, KpiGrid, ListRow, ListSection, EmptyCard, Skeleton, LoadingDots } from './components/ui/display'
 
 // Specialized components
-export { Avatar, AvatarGroup, ProgressBar, Spinner, Divider, CardDeck, Pagination, SearchField, EmptyState } from './components/ui/specialized'
+export { Avatar, AvatarGroup, Spinner, Divider, CardDeck, Pagination, SearchField, EmptyState } from './components/ui/specialized'
 
 // Tags
 export { Chip, Chips, TagInput } from './components/ui/tags'
@@ -129,6 +129,7 @@ export { InlineBanner, bannerVariants, type InlineBannerProps } from './componen
 export { Toolbar, type ToolbarProps } from './components/composed/toolbar'
 export { CopyButton, type CopyButtonProps } from './components/composed/copy-button'
 export { KeyValueList, type KeyValueListProps, type KeyValueItem } from './components/composed/key-value-list'
+export { ProgressBar, type ProgressBarProps } from './components/composed/progress-bar'
 export { StepIndicator, type StepIndicatorProps } from './components/composed/step-indicator'
 export { SectionHeader, type SectionHeaderProps } from './components/composed/section-header'
 export { ScrollPanel, type ScrollPanelProps } from './components/composed/scroll-panel'

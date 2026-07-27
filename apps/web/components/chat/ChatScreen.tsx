@@ -128,7 +128,6 @@ export const ChatScreen = forwardRef<HTMLDivElement, ChatScreenProps>(
                 </div>
               )}
               <MessageBubble
-                key={message.id}
                 messageId={message.id}
                 content={message.content}
                 role={message.role}

@@ -241,7 +241,7 @@ export default function AgentsPage() {
               <EmptyCard message="No agents yet" action={null} />
             ) : (
               agents.map(agent => (
-                <div key={agent.id} className="rounded-lg border p-3 space-y-2">
+                <div key={agent.id} className={`rounded-lg border p-3 space-y-2 transition-colors ${execAgentId === agent.id ? 'bg-primary/[0.08] border-primary/40' : 'border-border/60 hover:bg-muted/50'}`}>
                   {editingId === agent.id ? (
                     <div className="space-y-2">
                       <Input value={editName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditName(e.target.value)} placeholder="Name" />
@@ -290,14 +290,14 @@ export default function AgentsPage() {
                       {agent.tools.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {agent.tools.map(t => (
-                            <span key={t} className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                            <span key={t} className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
                               {t.replace(/_/g, ' ')}
                             </span>
                           ))}
                         </div>
                       )}
                       {agent.instructions && (
-                        <p className="text-xs text-muted-foreground/70 line-clamp-2">{agent.instructions}</p>
+                        <p className="text-[10px] text-muted-foreground/70 line-clamp-2">{agent.instructions}</p>
                       )}
                       {/* Inline execute */}
                       <div className="pt-1">

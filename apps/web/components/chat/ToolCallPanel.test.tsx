@@ -31,7 +31,7 @@ describe('ToolCallPanel', () => {
 
   it('shows output when expanded', () => {
     render(<ToolCallPanel events={[{ tool: 'calculator', status: 'success', output: '42', duration_ms: 50 }]} />)
-    expect(screen.getByText(/\(0\.1s\)/)).toBeTruthy()
+    expect(screen.getByText(/0\.1s/)).toBeTruthy()
   })
 
   it('renders multiple events in order', () => {

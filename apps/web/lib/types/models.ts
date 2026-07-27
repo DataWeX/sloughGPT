@@ -3,4 +3,6 @@ export interface ModelEntry {
   name: string
   loaded: boolean
   sizeGb?: number
+  source?: string
+  type?: string
 }

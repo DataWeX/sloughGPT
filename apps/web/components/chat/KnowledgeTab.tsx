@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Button } from '@sloughgpt/strui'
+import { cn, Button } from '@sloughgpt/strui'
 import { IconX } from '@sloughgpt/strui'
 import { chatDB, type KnowledgeItem } from '@/lib/db'
 import { logger } from '@/lib/dev-log'
@@ -172,9 +172,19 @@ export function KnowledgeTab({
               ) : (
                 <>
                   <span>{item.content.length > 200 ? item.content.slice(0, 200) + '...' : item.content}</span>
-                  <span className="ml-1 text-[9px] text-muted-foreground/50">
-                    {backendContentIds.has(item.content) ? '✓' : '…'}
-                  </span>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className={cn(
+                      "text-[9px] px-1.5 py-0.5 rounded font-medium",
+                      backendContentIds.has(item.content) ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
+                    )}>
+                      {backendContentIds.has(item.content) ? 'Synced' : 'Local'}
+                    </span>
+                    {item.timestamp && (
+                      <span className="text-[9px] text-muted-foreground/50">
+                        {new Date(item.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                      </span>
+                    )}
+                  </div>
                   <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => { setEditingId(item.id); setEditText(item.content) }}

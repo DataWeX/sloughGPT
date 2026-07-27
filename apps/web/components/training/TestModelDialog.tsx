@@ -52,9 +52,9 @@ export function TestModelDialog({
         {result && (
           <div className="space-y-2">
             {result.error && (
-              <div className="rounded-md border border-red-500/30 bg-red-500/5 p-3">
-                <p className="text-[10px] text-red-500 uppercase tracking-wider mb-1">Error</p>
-                <p className="text-xs font-mono text-red-500">{result.error}</p>
+              <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
+                <p className="text-[10px] text-destructive uppercase tracking-wider mb-1">Error</p>
+                <p className="text-xs font-mono text-destructive">{result.error}</p>
               </div>
             )}
 

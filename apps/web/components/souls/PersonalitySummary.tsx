@@ -100,7 +100,7 @@ export default function PersonalitySummary({ traitWeights, currentSoulName }: Pe
   const overall = totalCount > 0 ? Math.round(totalVal / totalCount) : 0
 
   const ratingColor = (v: number) =>
-    v >= 75 ? 'text-green-400' : v >= 55 ? 'text-amber-400' : 'text-red-400'
+    v >= 75 ? 'text-success' : v >= 55 ? 'text-warning' : 'text-destructive'
 
   return (
     <>

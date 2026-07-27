@@ -105,28 +105,194 @@ def _cmd_models_info(args):
                 printer.key_value(str(k), str(v))
 
 
+def _interactive_download_select():
+    """Show an interactive fuzzy-searchable list of popular HuggingFace models.
+
+    Queries the HuggingFace Hub API for trending text-generation models,
+    displays them in a curses-based fuzzy selector, and returns the selected
+    model ID. Returns None if the user cancels.
+
+    Returns:
+        Selected model ID string, or None if cancelled.
+    """
+    import curses
+    import requests
+
+    printer.step("Fetching popular models from HuggingFace Hub...")
+
+    try:
+        resp = requests.get(
+            "https://huggingface.co/api/models",
+            params={
+                "pipeline_tag": "text-generation",
+                "sort": "downloads",
+                "direction": "-1",
+                "limit": 50,
+            },
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            printer.error(f"Failed to fetch models: HTTP {resp.status_code}")
+            return None
+        raw_models = resp.json()
+    except Exception as e:
+        printer.error(f"Failed to fetch models: {e}")
+        return None
+
+    # Build list: (display_name, model_id, downloads)
+    model_list = []
+    for m in raw_models:
+        mid = m.get("modelId") or m.get("id", "")
+        if not mid:
+            continue
+        downloads = m.get("downloads", 0)
+        tags = m.get("tags", [])
+        # Short display: model name + download count
+        dl_str = f"{downloads:,}" if downloads else "?"
+        model_list.append((f"{mid}  ({dl_str} downloads)", mid, downloads))
+
+    if not model_list:
+        printer.info("No models found")
+        return None
+
+    # Sort by downloads descending
+    model_list.sort(key=lambda x: x[2], reverse=True)
+
+    # ── curses fuzzy selector ──
+    def _run_selector(stdscr):
+        curses.curs_set(0)
+        curses.use_default_colors()
+        stdscr.nodelay(False)
+
+        height, width = stdscr.getmaxyx()
+        query = ""
+        selected = 0
+        scroll_offset = 0
+
+        while True:
+            stdscr.clear()
+            stdscr.addstr(0, 0, " Download Model from HuggingFace ", curses.A_REVERSE)
+            stdscr.addstr(2, 0, f" Search: {query}_")
+            stdscr.addstr(3, 0, "─" * min(width - 1, 60))
+
+            # Fuzzy filter
+            filtered = [
+                (display, mid, dl)
+                for display, mid, dl in model_list
+                if query.lower() in mid.lower() or query.lower() in display.lower()
+            ]
+
+            if not filtered:
+                stdscr.addstr(5, 0, " No matching models — type to search")
+                key = stdscr.getch()
+                if key == 27:
+                    return None
+                elif key == 263 or key == 127:
+                    query = query[:-1]
+                elif 32 <= key <= 126:
+                    query += chr(key)
+                continue
+
+            selected = min(selected, len(filtered) - 1)
+            if selected < scroll_offset:
+                scroll_offset = selected
+            if selected >= scroll_offset + height - 6:
+                scroll_offset = selected - height + 7
+
+            max_display = height - 6
+            for i, (display, mid, dl) in enumerate(filtered[scroll_offset:scroll_offset + max_display]):
+                line_y = 5 + i
+                prefix = "▸ " if i + scroll_offset == selected else "  "
+                label = f"{prefix}{display}"
+                if len(label) > width - 1:
+                    label = label[:width - 4] + "..."
+                if i + scroll_offset == selected:
+                    stdscr.addstr(line_y, 0, label, curses.A_REVERSE)
+                else:
+                    stdscr.addstr(line_y, 0, label)
+
+            footer = f" {len(filtered)} models  ↑↓ navigate  Enter select  ESC cancel  / search"
+            stdscr.addstr(height - 1, 0, footer[:width - 1])
+
+            key = stdscr.getch()
+            if key == 27:
+                return None
+            elif key in (10, 13):
+                return filtered[selected]
+            elif key == 259:
+                selected = max(0, selected - 1)
+            elif key == 258:
+                selected = min(len(filtered) - 1, selected + 1)
+            elif key == 338 or key == 261:
+                selected = min(len(filtered) - 1, selected + 10)
+            elif key == 339 or key == 260:
+                selected = max(0, selected - 10)
+            elif key == 263 or key == 127:
+                query = query[:-1]
+            elif 32 <= key <= 126:
+                query += chr(key)
+
+    try:
+        result = curses.wrapper(_run_selector)
+    except Exception as e:
+        printer.error(f"Selector error: {e}")
+        return None
+
+    if result is None:
+        printer.info("Selection cancelled")
+        return None
+
+    name, model_id, _ = result
+    printer.success(f"Selected: {model_id}")
+    return model_id
+
+
 def _cmd_models_download(args):
-    """Download a HuggingFace model with progress tracking."""
-    import sys
-    import time
-    from pathlib import Path
+    """Download a HuggingFace model with size confirmation and live progress.
+
+    Enforces the bandwidth policy: queries HuggingFace Hub for model size,
+    shows a Rich panel with the estimate, and requires user confirmation
+    for downloads over 50 MB. Use ``--yes`` or ``SLO_AUTO_DOWNLOAD=1``
+    to skip the prompt.
+
+    Shows a live ``rich.progress`` bar with percentage, speed, ETA, and
+    current filename. Ctrl+C cancels gracefully.
+
+    If no model_id is provided, shows an interactive fuzzy-searchable list
+    of popular text-generation models from HuggingFace Hub.
+
+    Side effects:
+        - May download model files to HF cache directory
+        - Prints to stdout via Rich panels and progress bars
+    """
+    from core.permissions import PermissionsManager
+    from rich.console import Console
+    from rich.progress import (
+        Progress,
+        SpinnerColumn,
+        BarColumn,
+        TextColumn,
+        TimeRemainingColumn,
+        TransferSpeedColumn,
+        MofNCompleteColumn,
+    )
+
+    # ── Interactive model selection if no model_id ──────────
+    if not getattr(args, "model_id", None):
+        model_id = _interactive_download_select()
+        if not model_id:
+            return
+        args.model_id = model_id
 
     printer.header("Download Model")
     printer.key_value("Model ID", args.model_id)
     printer.blank()
 
+    console = Console(highlight=False)
+
     try:
-        from domains.training.huggingface.model_map import get_model_info
         from domains.infrastructure.download_manager import get_download_manager
         import asyncio
-
-        info = get_model_info(args.model_id)
-        if info:
-            printer.key_value("Name", info.name)
-            printer.key_value("Description", info.description)
-            printer.key_value("Parameters", f"{info.params:,}")
-            printer.key_value("Context", str(info.context_length))
-            printer.blank()
 
         mgr = get_download_manager()
 
@@ -134,52 +300,172 @@ def _cmd_models_download(args):
             printer.success(f"Model already cached: {args.model_id}")
             return
 
-        printer.step("Starting download...")
+        # ── Confirmation gate ──────────────────────────────
+        pm = PermissionsManager(auto_yes=getattr(args, "yes", False))
+        if not pm.confirm_download(args.model_id):
+            printer.info("Download cancelled by user")
+            return
+
+        # ── Live progress bar ──────────────────────────────
+        cancel_requested = False
+        progress_task_id = None
+        current_file = ""
+
+        progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(bar_width=30),
+            MofNCompleteColumn(),
+            TransferSpeedColumn(),
+            TimeRemainingColumn(),
+            console=console,
+        )
 
         def _render_progress(progress_dict):
-            status = progress_dict.get("status", "")
+            nonlocal current_file
             pct = progress_dict.get("percentage", 0)
-            speed = progress_dict.get("speed_mb_per_sec", 0)
-            eta = progress_dict.get("eta_seconds", 0)
-            current_file = progress_dict.get("current_file", "")
-            downloaded_gb = progress_dict.get("bytes_downloaded", 0) / (1024 ** 3)
-            total_gb = progress_dict.get("total_bytes", 0) / (1024 ** 3)
+            downloaded = progress_dict.get("bytes_downloaded", 0)
+            total = progress_dict.get("total_bytes", 0)
+            fname = progress_dict.get("current_file", "")
+            if fname:
+                current_file = fname.split("/")[-1][:40]
 
-            bar_width = 40
-            filled = int(bar_width * min(pct, 100) / 100)
-            bar = "█" * filled + "░" * (bar_width - filled)
-
-            sys.stdout.write("\r")
-            sys.stdout.write(f"  [{bar}] {pct:5.1f}%  {downloaded_gb:.2f}/{total_gb:.2f} GB  {speed:.1f} MB/s")
-            if eta > 0:
-                sys.stdout.write(f"  ETA: {int(eta)}s")
-            if current_file:
-                sys.stdout.write(f"\n  ↳ {current_file}")
-            sys.stdout.flush()
+            if progress_task_id is not None and total > 0:
+                progress.update(
+                    progress_task_id,
+                    completed=downloaded,
+                    total=total,
+                    description=current_file or "Downloading",
+                )
 
         async def _do_download():
+            nonlocal progress_task_id
             mgr.on_progress(args.model_id, _render_progress)
-            result = await mgr.download(args.model_id)
-            return result
+
+            with progress:
+                progress_task_id = progress.add_task(
+                    "Downloading", total=None, completed=0
+                )
+                result = await mgr.download(args.model_id)
+                return result
 
         result = asyncio.run(_do_download())
-        sys.stdout.write("\n\n")
 
         if result.get("status") == "complete":
-            printer.success(f"Downloaded in {result.get('elapsed_seconds', '?')}s → {result.get('cache_dir', '')}")
+            printer.success(
+                f"Downloaded in {result.get('elapsed_seconds', '?')}s "
+                f"→ {result.get('cache_dir', '')}"
+            )
         elif result.get("status") == "failed":
             printer.error(f"Download failed: {result.get('error', 'unknown error')}")
         elif result.get("status") == "cancelled":
-            printer.warn("Download cancelled")
+            printer.warning("Download cancelled")
     except KeyboardInterrupt:
-        printer.warn("Download interrupted by user")
+        printer.warning("Download interrupted by user")
         try:
-            from domains.infrastructure.download_manager import get_download_manager
-            get_download_manager().cancel(args.model_id)
+            mgr = get_download_manager()
+            mgr.cancel(args.model_id)
         except Exception:
             pass
     except Exception as e:
         printer.error(f"Download failed: {e}")
+
+
+def _cmd_models_status(args):
+    """Show status of all cached/downloaded HuggingFace models.
+
+    Scans the HuggingFace cache directory for downloaded models, shows
+    their sizes, and indicates whether each has been converted to .slnc
+    format. Useful for managing disk space and verifying downloads.
+    """
+    from rich.console import Console
+    from rich.table import Table
+
+    console = Console(highlight=False)
+
+    hf_cache = Path.home() / ".cache" / "huggingface" / "hub"
+    if not hf_cache.exists():
+        printer.info("No HuggingFace cache found")
+        printer.key_value("Cache path", str(hf_cache))
+        return
+
+    # Scan for model directories
+    models = []
+    for entry in sorted(hf_cache.iterdir()):
+        if not entry.name.startswith("models--") or not entry.is_dir():
+            continue
+        model_id = entry.name[len("models--"):].replace("--", "/")
+
+        # Calculate total size of weight files
+        total_bytes = 0
+        file_count = 0
+        has_slnc = False
+        has_safetensors = False
+
+        for f in entry.rglob("*"):
+            if not f.is_file():
+                continue
+            try:
+                size = f.stat().st_size
+            except OSError:
+                continue
+            if size < 1024:
+                continue
+            if f.suffix in (".safetensors", ".bin", ".slnc", ".pt", ".onnx"):
+                total_bytes += size
+                file_count += 1
+                if f.suffix == ".slnc":
+                    has_slnc = True
+                if f.suffix == ".safetensors":
+                    has_safetensors = True
+
+        if total_bytes == 0:
+            continue
+
+        # Determine format status
+        if has_slnc:
+            status = "[green].slnc[/]"
+        elif has_safetensors:
+            status = "[yellow]safetensors[/]"
+        else:
+            status = "[dim]other[/]"
+
+        models.append({
+            "id": model_id,
+            "size": total_bytes,
+            "files": file_count,
+            "status": status,
+        })
+
+    if not models:
+        printer.info("No cached models found")
+        printer.key_value("Cache path", str(hf_cache))
+        return
+
+    # Sort by size descending
+    models.sort(key=lambda m: m["size"], reverse=True)
+
+    total_cache = sum(m["size"] for m in models)
+
+    printer.header(f"Cached Models ({len(models)} models, {format_size(total_cache)} total)")
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Model", style="cyan")
+    table.add_column("Size", justify="right")
+    table.add_column("Files", justify="right")
+    table.add_column("Format")
+
+    for m in models:
+        table.add_row(
+            m["id"],
+            format_size(m["size"]),
+            str(m["files"]),
+            m["status"],
+        )
+
+    console.print(table)
+    console.print()
+    console.print(f"  [dim]Cache: {hf_cache}[/]")
 
 
 def _cmd_models_compare(args):
@@ -680,9 +966,14 @@ def register(subparsers):
     info_parser.set_defaults(func=_cmd_models_info)
 
     # Download
-    download_parser = models_sub.add_parser("download", help="Download model from HuggingFace")
-    download_parser.add_argument("model_id", help="HuggingFace model ID (e.g., gpt2)")
+    download_parser = models_sub.add_parser("download", help="Download model from HuggingFace (interactive if no model given)")
+    download_parser.add_argument("model_id", nargs="?", default=None, help="HuggingFace model ID (e.g., gpt2) — omit for interactive selection")
+    download_parser.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompt")
     download_parser.set_defaults(func=_cmd_models_download)
+
+    # Status
+    status_parser = models_sub.add_parser("status", help="Show cached/downloaded models with sizes")
+    status_parser.set_defaults(func=_cmd_models_status)
 
     # Compare
     compare_parser = models_sub.add_parser("compare", help="Compare models or benchmarks")
@@ -745,6 +1036,7 @@ def register(subparsers):
     # Standalone aliases for backward compat (forward to models subcommands)
     hf_download_parser = subparsers.add_parser("hf-download", help="Download model from HuggingFace")
     hf_download_parser.add_argument("model_id", help="HuggingFace model ID")
+    hf_download_parser.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompt")
     hf_download_parser.set_defaults(func=_cmd_models_download)
 
     info_parser = subparsers.add_parser("info", help="Show model checkpoint info")

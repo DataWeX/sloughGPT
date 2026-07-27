@@ -307,7 +307,10 @@ export default function HomePage() {
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0" />
                   <span className="text-xs truncate flex-1">{s.name}</span>
+                  {s.starred && <span className="text-[10px] shrink-0">★</span>}
+                  {s.pinned && <span className="text-[10px] text-primary shrink-0">📌</span>}
                   <span className="text-[10px] text-muted-foreground shrink-0">
+                    {s.message_count != null && <span>{s.message_count}m · </span>}
                     {(() => {
                       const d = Date.now() - new Date(s.updated_at).getTime()
                       const m = Math.floor(d / 60000)
@@ -361,9 +364,14 @@ export default function HomePage() {
             <IconMessage className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium truncate">{recentSessions[0].name}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-medium truncate">{recentSessions[0].name}</p>
+              {recentSessions[0].starred && <span className="text-[10px]">★</span>}
+              {recentSessions[0].pinned && <span className="text-[10px] text-primary">📌</span>}
+            </div>
             <p className="text-[10px] text-muted-foreground">
-              Last conversation · {new Date(recentSessions[0].updated_at).toLocaleDateString()}
+              {recentSessions[0].message_count != null && <span>{recentSessions[0].message_count} messages · </span>}
+              {new Date(recentSessions[0].updated_at).toLocaleDateString()}
             </p>
           </div>
           <IconChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-primary/60 transition-colors" />
@@ -515,7 +523,16 @@ export default function HomePage() {
               {recentSessions.map(s => (
                 <Link key={s.id} href={`/chat?id=${s.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors">
                   <IconMessage className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                  <span className="text-sm truncate flex-1">{s.name}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm truncate">{s.name}</span>
+                      {s.starred && <span className="text-[10px] shrink-0">★</span>}
+                      {s.pinned && <span className="text-[10px] text-primary shrink-0">📌</span>}
+                    </div>
+                    {s.message_count != null && s.message_count > 0 && (
+                      <p className="text-[10px] text-muted-foreground">{s.message_count} messages</p>
+                    )}
+                  </div>
                   <span className="text-[10px] text-muted-foreground shrink-0">
                     {new Date(s.updated_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                   </span>

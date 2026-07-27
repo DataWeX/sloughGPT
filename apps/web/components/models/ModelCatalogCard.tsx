@@ -101,11 +101,20 @@ export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeI
                   >
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium truncate">{model.name || model.id}</div>
-                      <div className="flex items-center gap-2 mt-0.5">
+                      {model.description && (
+                        <div className="text-[10px] text-muted-foreground/70 truncate mt-0.5">{model.description}</div>
+                      )}
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                         {model.params && <span className="text-[10px] text-muted-foreground font-mono">{model.params}</span>}
                         {model.size_gb && <span className="text-[10px] text-muted-foreground">{(model.size_gb).toFixed(1)} GB</span>}
-                        {isLoaded && <span className="text-[10px] text-primary font-medium">Loaded</span>}
-                        {!isLoaded && model.cached && <span className="text-[10px] text-success/70">Cached</span>}
+                        {model.source && model.source !== 'local' && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{model.source}</span>
+                        )}
+                        {isLoaded && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">Loaded</span>}
+                        {!isLoaded && model.cached && <span className="text-[10px] px-1.5 py-0.5 rounded bg-success/10 text-success font-medium">Cached</span>}
+                        {model.tags && model.tags.slice(0, 2).map(tag => (
+                          <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium">{tag}</span>
+                        ))}
                       </div>
                     </div>
                     <div className="flex gap-1 shrink-0 ml-2">

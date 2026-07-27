@@ -156,4 +156,103 @@ describe('ChatMoreMenu', () => {
     fireEvent.click(screen.getByText('Search'))
     expect(onSearchConversations).toHaveBeenCalled()
   })
+
+  it('renders agent section when agents are present', () => {
+    const ctx = makeCtx()
+    ctx.agent.agents = [
+      { id: 'a1', name: 'Researcher', description: 'Finds info', instructions: '', capabilities: ['search', 'read'] },
+    ]
+    render(
+      <ChatToolbarProvider value={ctx}>
+        <ChatMoreMenu />
+      </ChatToolbarProvider>
+    )
+    fireEvent.click(screen.getByLabelText('More options'))
+    expect(screen.getByText('Researcher')).toBeDefined()
+    expect(screen.getByText('Finds info')).toBeDefined()
+    expect(screen.getByText('2 capabilities')).toBeDefined()
+  })
+
+  it('shows active checkmark for current agent', () => {
+    const ctx = makeCtx()
+    ctx.agent.agents = [
+      { id: 'a1', name: 'Researcher', description: '', instructions: '', capabilities: [] },
+      { id: 'a2', name: 'Writer', description: '', instructions: '', capabilities: [] },
+    ]
+    ctx.agent.current = { id: 'a1', name: 'Researcher', description: '', instructions: '' }
+    render(
+      <ChatToolbarProvider value={ctx}>
+        <ChatMoreMenu />
+      </ChatToolbarProvider>
+    )
+    fireEvent.click(screen.getByLabelText('More options'))
+    expect(screen.getByText('Agent — Researcher')).toBeDefined()
+  })
+
+  it('hides agent section when no agents', () => {
+    renderWithCtx()
+    fireEvent.click(screen.getByLabelText('More options'))
+    expect(screen.queryByText('Agent')).toBeNull()
+  })
+
+  it('calls agent.onSelect when agent clicked', () => {
+    const ctx = makeCtx()
+    const onSelect = vi.fn()
+    ctx.agent.agents = [{ id: 'a1', name: 'Researcher', description: '', instructions: '', capabilities: [] }]
+    ctx.agent.onSelect = onSelect
+    render(
+      <ChatToolbarProvider value={ctx}>
+        <ChatMoreMenu />
+      </ChatToolbarProvider>
+    )
+    fireEvent.click(screen.getByLabelText('More options'))
+    fireEvent.click(screen.getByText('Researcher'))
+    expect(onSelect).toHaveBeenCalled()
+  })
+
+  it('renders Local Engine toggle', () => {
+    renderWithCtx()
+    fireEvent.click(screen.getByLabelText('More options'))
+    expect(screen.getByText('Local Engine')).toBeDefined()
+  })
+
+  it('calls localEngine.onToggle when Local Engine clicked', () => {
+    const ctx = makeCtx()
+    const onToggle = vi.fn()
+    ctx.localEngine.onToggle = onToggle
+    render(
+      <ChatToolbarProvider value={ctx}>
+        <ChatMoreMenu />
+      </ChatToolbarProvider>
+    )
+    fireEvent.click(screen.getByLabelText('More options'))
+    fireEvent.click(screen.getByText('Local Engine'))
+    expect(onToggle).toHaveBeenCalled()
+  })
+
+  it('shows loading indicator when localEngine.loading is true', () => {
+    const ctx = makeCtx()
+    ctx.localEngine.loading = true
+    render(
+      <ChatToolbarProvider value={ctx}>
+        <ChatMoreMenu />
+      </ChatToolbarProvider>
+    )
+    fireEvent.click(screen.getByLabelText('More options'))
+    const pulseEl = document.querySelector('.animate-pulse')
+    expect(pulseEl).toBeTruthy()
+  })
+
+  it('shows checkmark icon when localEngine.useLocal is true', () => {
+    const ctx = makeCtx()
+    ctx.localEngine.useLocal = true
+    render(
+      <ChatToolbarProvider value={ctx}>
+        <ChatMoreMenu />
+      </ChatToolbarProvider>
+    )
+    fireEvent.click(screen.getByLabelText('More options'))
+    const checkEl = document.querySelector('.bg-primary.border-primary')
+    expect(checkEl).toBeTruthy()
+  })
 })

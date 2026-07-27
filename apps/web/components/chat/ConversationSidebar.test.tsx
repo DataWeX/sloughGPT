@@ -219,7 +219,7 @@ describe('ConversationSidebar', () => {
   it('shows conversation metadata (msg count, date)', () => {
     const conversations = [createConv('1')]
     render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
-    expect(screen.getByText(/1 msgs/)).toBeDefined()
+    expect(screen.getByText('1')).toBeDefined()
   })
 
   it('shows pin icon for pinned conversations', () => {

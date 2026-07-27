@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
 import { trainingController } from '@/lib/controllers'
@@ -241,8 +241,8 @@ export function TrainFromSessionsCard() {
         {status.enabled && (
           <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <span className="relative flex h-1.5 w-1.5 shrink-0">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500/60" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-green-500" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/60" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
             </span>
             Auto-training on
           </span>
@@ -351,7 +351,10 @@ export function TrainFromSessionsCard() {
                 {sessions.slice(0, 15).map(s => (
                   <label
                     key={s.id}
-                    className="flex items-center gap-2 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer py-0.5"
+                    className={cn(
+                      "flex items-center gap-2 text-[11px] cursor-pointer py-1 px-1.5 rounded transition-colors",
+                      selectedSessions.has(s.id) ? "bg-primary/[0.08] text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                    )}
                   >
                     <input
                       type="checkbox"
@@ -359,9 +362,9 @@ export function TrainFromSessionsCard() {
                       onChange={() => toggleSession(s.id)}
                       className="h-3 w-3 rounded border-border"
                     />
-                    <span className="truncate flex-1">{s.name}</span>
+                    <span className="truncate flex-1 font-medium">{s.name}</span>
                     {s.messages && (
-                      <span className="text-[10px] text-muted-foreground/50 shrink-0">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium shrink-0">
                         {s.messages.length} msgs
                       </span>
                     )}

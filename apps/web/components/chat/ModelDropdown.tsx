@@ -61,24 +61,30 @@ export function ModelDropdown({
           ) : availableModels.map(m => {
             const info = modelInfoMap[m]
             const sl = sizeLabel(info)
+            const isCached = info?.cached
             return (
               <button
                 key={m}
                 onClick={() => onSelectModel(m)}
                 className={cn(
-                  'w-full text-left px-2 py-1 rounded text-xs transition-colors flex items-center justify-between font-mono',
-                  isLoaded(m) ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted/80',
+                  'w-full text-left px-2 py-1 rounded text-xs transition-colors flex items-center justify-between',
+                  isLoaded(m) ? 'bg-primary/[0.08] text-primary font-medium' : 'hover:bg-muted/80',
                 )}
                 title={`${m}${sl ? ` — ${sl}` : ''}`}
               >
                 <div className="min-w-0 flex-1">
-                  <span className="truncate block">{shortModelName(m)}</span>
+                  <span className={cn("truncate block", !isLoaded(m) && "font-mono")}>{shortModelName(m)}</span>
                   {modelDescriptions[m] && (
                     <span className="text-[9px] text-muted-foreground/60 block truncate">{modelDescriptions[m]}</span>
                   )}
                 </div>
-                <span className="text-[10px] text-muted-foreground/60 ml-1 shrink-0">{sl}</span>
-                {isLoaded(m) && <IconCheck className="h-3 w-3 shrink-0 ml-1" />}
+                <div className="flex items-center gap-1 shrink-0 ml-1">
+                  {sl && <span className="text-[10px] text-muted-foreground/60">{sl}</span>}
+                  {isCached && !isLoaded(m) && (
+                    <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-medium">cached</span>
+                  )}
+                  {isLoaded(m) && <IconCheck className="h-3 w-3" />}
+                </div>
               </button>
             )
           })}
@@ -120,7 +126,10 @@ export function ModelDropdown({
       <DropdownMenuContent align="end" className="min-w-[200px] max-h-[300px] overflow-y-auto">
         {loadingModel && (
           <div className="h-0.5 bg-muted rounded-full mx-2 mt-2 mb-1 overflow-hidden shrink-0">
-            <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: '60%' }} />
+            <div
+              className="h-full bg-primary rounded-full transition-[width] duration-300"
+              style={{ width: dlProgress?.percentage != null && dlProgress.percentage > 0 ? `${dlProgress.percentage}%` : '100%' }}
+            />
           </div>
         )}
         {currentModel && onUnloadModel && (

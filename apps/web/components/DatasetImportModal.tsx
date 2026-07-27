@@ -58,6 +58,8 @@ export function DatasetImportModal({
   const [searchResults, setSearchResults] = useState<GitHubRepo[]>([])
   const [bookResults, setBookResults] = useState<BookResult[]>([])
   const [searching, setSearching] = useState(false)
+  const [selectedBook, setSelectedBook] = useState<BookResult | null>(null)
+  const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null)
 
   const resetForm = () => {
     setUrl('')
@@ -69,6 +71,8 @@ export function DatasetImportModal({
     setSuccess(null)
     setSearchResults([])
     setBookResults([])
+    setSelectedBook(null)
+    setSelectedRepo(null)
   }
 
   const handleOpenChange = (newOpen: boolean) => {
@@ -129,17 +133,17 @@ export function DatasetImportModal({
           break
 
         case 'isbn':
-          if (bookResults.length > 0) {
-            throw new Error('Select a book from the search results')
-          }
           if (!url.trim()) {
             throw new Error('Enter a search term or ISBN')
+          }
+          if (!selectedBook && !url.trim().match(/^\d{10,13}$/)) {
+            throw new Error('Select a book from the results, or enter a valid ISBN')
           }
           if (!name.trim()) {
             throw new Error('Dataset name is required')
           }
           result = await datasetController.importFromISBN({
-            isbn: url.trim(),
+            isbn: selectedBook?.isbn || url.trim(),
             name: name.trim(),
           })
           break
@@ -215,6 +219,7 @@ export function DatasetImportModal({
   }
 
   const selectRepo = (repo: GitHubRepo) => {
+    setSelectedRepo(repo)
     setUrl(repo.url)
     setName(repo.name)
     setSearchResults([])
@@ -222,7 +227,7 @@ export function DatasetImportModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Import Dataset</DialogTitle>
           <DialogDescription>
@@ -230,7 +235,7 @@ export function DatasetImportModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-4 overflow-y-auto flex-1 min-h-0">
           <fieldset>
             <legend className="sr-only">Import source</legend>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -242,6 +247,8 @@ export function DatasetImportModal({
                     setSource(option.value)
                     setSearchResults([])
                     setBookResults([])
+                    setSelectedBook(null)
+                    setSelectedRepo(null)
                   }}
                   className={`h-auto flex-col items-start p-3 ${
                     source === option.value ? 'border-primary' : ''
@@ -260,84 +267,158 @@ export function DatasetImportModal({
           {source === 'github' && (
             <div className="space-y-3">
               <div>
-                <Label htmlFor="github-url">GitHub Repository URL</Label>
-                <Input
-                  id="github-url"
-                  placeholder="https://github.com/user/repo"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  className="mt-1"
-                />
+                <Label htmlFor="github-search">Search for a repository</Label>
+                <div className="flex gap-2 mt-1">
+                  <Input
+                    id="github-search"
+                    placeholder="e.g. shakespeare dataset, python tutorials"
+                    value={url}
+                    onChange={(e) => {
+                      setUrl(e.target.value)
+                      if (selectedRepo) setSelectedRepo(null)
+                    }}
+                    className="flex-1"
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={handleSearch} disabled={searching || !url.trim()} aria-busy={searching}>
+                    {searching ? <Spinner className="w-4 h-4" /> : 'Search'}
+                  </Button>
+                </div>
               </div>
-
-              {searchResults.length > 0 && (
-                <div className="max-h-40 overflow-y-auto rounded-md border" role="listbox" aria-label="Search results">
-                  {searchResults.map((repo) => (
-                    <Button
-                      key={repo.id}
-                      variant="ghost"
-                      onClick={() => selectRepo(repo)}
-                      className="flex w-full items-center justify-between border-b px-3 py-2 text-left last:border-b-0"
-                    >
-                      <div>
-                        <div className="font-medium">{repo.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {repo.full_name}
-                        </div>
-                      </div>
-                      <Badge variant="secondary">{repo.stars} stars</Badge>
-                    </Button>
-                  ))}
+              {selectedRepo && (
+                <div className="flex items-center gap-2 rounded-md bg-primary/5 border border-primary/20 px-3 py-2 text-sm">
+                  <IconCheck className="w-4 h-4 text-primary shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <span className="font-medium truncate">{selectedRepo.full_name}</span>
+                    {selectedRepo.description && (
+                      <span className="text-muted-foreground ml-2 truncate">— {selectedRepo.description}</span>
+                    )}
+                  </div>
+                  <span className="text-muted-foreground shrink-0">{selectedRepo.stars} ★</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="ml-auto shrink-0 h-6 px-2 text-xs"
+                    onClick={() => {
+                      setSelectedRepo(null)
+                      setUrl('')
+                      setName('')
+                    }}
+                  >
+                    Clear
+                  </Button>
                 </div>
               )}
-
-              <Button type="button" variant="outline" size="sm" onClick={handleSearch} disabled={searching} aria-busy={searching}>
-                {searching ? 'Searching...' : 'Search'}
-              </Button>
             </div>
+          )}
+
+          {source === 'github' && searchResults.length > 0 && (
+            <div className="max-h-48 overflow-y-auto rounded-md border" role="listbox" aria-label="Repository search results">
+              {searchResults.map((repo) => (
+                <Button
+                  key={repo.id}
+                  variant="ghost"
+                  onClick={() => selectRepo(repo)}
+                  className={`flex w-full items-start justify-between border-b px-3 py-2.5 text-left last:border-b-0 ${
+                    selectedRepo?.id === repo.id ? 'bg-primary/10' : ''
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium truncate">{repo.full_name}</div>
+                    {repo.description && (
+                      <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                        {repo.description}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 mt-1">
+                      {repo.language && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">{repo.language}</Badge>
+                      )}
+                      <span className="text-[10px] text-muted-foreground">{repo.stars} ★</span>
+                    </div>
+                  </div>
+                </Button>
+              ))}
+            </div>
+          )}
+
+          {source === 'github' && !searching && searchResults.length === 0 && url.trim() && (
+            <p className="text-xs text-muted-foreground">Type a search term and click Search to find repositories.</p>
           )}
 
           {source === 'isbn' && (
             <div className="space-y-3">
               <div>
                 <Label htmlFor="isbn-search">Search by title or ISBN</Label>
-                <Input
-                  id="isbn-search"
-                  placeholder="e.g. The Hobbit or 9780547928227"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  className="mt-1"
-                />
+                <div className="flex gap-2 mt-1">
+                  <Input
+                    id="isbn-search"
+                    placeholder="e.g. The Hobbit or 9780547928227"
+                    value={url}
+                    onChange={(e) => {
+                      setUrl(e.target.value)
+                      if (selectedBook) setSelectedBook(null)
+                    }}
+                    className="flex-1"
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={handleSearch} disabled={searching || !url.trim()} aria-busy={searching}>
+                    {searching ? <Spinner className="w-4 h-4" /> : 'Search'}
+                  </Button>
+                </div>
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={handleSearch} disabled={searching} aria-busy={searching}>
-                {searching ? 'Searching...' : 'Search'}
-              </Button>
+              {selectedBook && (
+                <div className="flex items-center gap-2 rounded-md bg-primary/5 border border-primary/20 px-3 py-2 text-sm">
+                  <IconCheck className="w-4 h-4 text-primary shrink-0" />
+                  <span className="font-medium truncate">{selectedBook.title}</span>
+                  <span className="text-muted-foreground shrink-0">{selectedBook.isbn}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="ml-auto shrink-0 h-6 px-2 text-xs"
+                    onClick={() => {
+                      setSelectedBook(null)
+                      setUrl('')
+                      setName('')
+                    }}
+                  >
+                    Clear
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
           {source === 'isbn' && bookResults.length > 0 && (
-            <div className="max-h-40 overflow-y-auto rounded-md border">
+            <div className="max-h-48 overflow-y-auto rounded-md border" role="listbox" aria-label="Book search results">
               {bookResults.map((book) => (
                 <Button
                   key={book.key}
                   variant="ghost"
                   onClick={() => {
+                    setSelectedBook(book)
                     setName(book.title)
                     setUrl(book.isbn)
                     setBookResults([])
                   }}
-                  className="flex w-full items-center justify-between border-b px-3 py-2 text-left last:border-b-0"
+                  className={`flex w-full items-center justify-between border-b px-3 py-2 text-left last:border-b-0 ${
+                    selectedBook?.key === book.key ? 'bg-primary/10' : ''
+                  }`}
                 >
-                  <div>
-                    <div className="font-medium">{book.title}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium truncate">{book.title}</div>
                     <div className="text-xs text-muted-foreground">
                       {book.author} {book.year && `(${book.year})`}
                     </div>
                   </div>
-                  <Badge variant="secondary">{book.isbn}</Badge>
+                  <Badge variant="secondary" className="shrink-0 ml-2">{book.isbn}</Badge>
                 </Button>
               ))}
             </div>
+          )}
+
+          {source === 'isbn' && !searching && bookResults.length === 0 && url.trim() && !selectedBook && (
+            <p className="text-xs text-muted-foreground">Type a title or ISBN and click Search to find books.</p>
           )}
 
           {source === 'huggingface' && (

@@ -86,7 +86,7 @@ describe('DatasetImportModal', () => {
 
   it('shows GitHub URL input when GitHub source selected', () => {
     render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
-    expect(screen.getByLabelText('GitHub Repository URL')).toBeDefined()
+    expect(screen.getByLabelText('Search for a repository')).toBeDefined()
   })
 
   it('shows HuggingFace ID input when HF source selected', () => {
@@ -151,7 +151,7 @@ describe('DatasetImportModal', () => {
   it('shows loading state during GitHub import', async () => {
     mocks.mockImportFromGitHub.mockImplementation(() => new Promise(() => {}))
     render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
-    const urlInput = screen.getByLabelText('GitHub Repository URL')
+    const urlInput = screen.getByLabelText('Search for a repository')
     fireEvent.change(urlInput, { target: { value: 'https://github.com/user/repo' } })
     fireEvent.click(screen.getByText('Import'))
     await waitFor(() => {
@@ -162,7 +162,7 @@ describe('DatasetImportModal', () => {
   it('shows success message after import', async () => {
     mocks.mockImportFromGitHub.mockResolvedValue({ dataset_id: 'my-dataset', message: 'Imported 5 files (12,345 chars)' })
     render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
-    const urlInput = screen.getByLabelText('GitHub Repository URL')
+    const urlInput = screen.getByLabelText('Search for a repository')
     fireEvent.change(urlInput, { target: { value: 'https://github.com/user/repo' } })
     fireEvent.click(screen.getByText('Import'))
     expect(await screen.findByText('Imported 5 files (12,345 chars)')).toBeDefined()
@@ -173,7 +173,7 @@ describe('DatasetImportModal', () => {
     mocks.mockImportFromGitHub.mockResolvedValue({ dataset_id: 'my-dataset', message: 'done' })
     vi.useFakeTimers()
     render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={onComplete} />)
-    const urlInput = screen.getByLabelText('GitHub Repository URL')
+    const urlInput = screen.getByLabelText('Search for a repository')
     fireEvent.change(urlInput, { target: { value: 'https://github.com/user/repo' } })
     fireEvent.click(screen.getByText('Import'))
     await vi.waitFor(() => {
@@ -198,11 +198,11 @@ describe('DatasetImportModal', () => {
       ],
     })
     render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
-    const urlInput = screen.getByLabelText('GitHub Repository URL')
+    const urlInput = screen.getByLabelText('Search for a repository')
     fireEvent.change(urlInput, { target: { value: 'user/test-repo' } })
     fireEvent.click(screen.getByText('Search'))
     await waitFor(() => {
-      expect(screen.getByText('test-repo')).toBeDefined()
+      expect(screen.getByText('user/test-repo')).toBeDefined()
     })
   })
 
@@ -213,15 +213,15 @@ describe('DatasetImportModal', () => {
       ],
     })
     render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
-    const urlInput = screen.getByLabelText('GitHub Repository URL')
+    const urlInput = screen.getByLabelText('Search for a repository')
     fireEvent.change(urlInput, { target: { value: 'user/test-repo' } })
     fireEvent.click(screen.getByText('Search'))
     await waitFor(() => {
-      expect(screen.getByText('test-repo')).toBeDefined()
+      expect(screen.getByText('user/test-repo')).toBeDefined()
     })
-    fireEvent.click(screen.getByText('test-repo'))
+    fireEvent.click(screen.getByText('user/test-repo'))
     await waitFor(() => {
-      expect(screen.queryByText('test-repo')).not.toBeInTheDocument()
+      expect(screen.queryByRole('listbox', { name: 'Repository search results' })).not.toBeInTheDocument()
     })
   })
 
@@ -242,6 +242,6 @@ describe('DatasetImportModal', () => {
     fireEvent.change(screen.getByLabelText('Server Path'), { target: { value: '/some/path' } })
     rerender(<DatasetImportModal open={true} onOpenChange={onClose} onImportComplete={() => {}} />)
     fireEvent.click(screen.getByText('GitHub'))
-    expect(screen.getByLabelText('GitHub Repository URL')).toBeDefined()
+    expect(screen.getByLabelText('Search for a repository')).toBeDefined()
   })
 })

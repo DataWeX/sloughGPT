@@ -43,7 +43,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
     }
 
     if (finalStatus !== 'granted') {
-      console.log('Push notification permission denied');
+      if (__DEV__) console.log('Push notification permission denied');
       return null;
     }
 

@@ -232,7 +232,7 @@ export default function ChatPage() {
   useEffect(() => {
     fetchStats()
     fetchAdapterStats()
-    const healthModel = health && health !== 'offline' && health.model_loaded ? health.model_type : undefined
+    const healthModel = health && health !== 'offline' && (health.model_loaded || health.model_type) ? health.model_type : undefined
     model.fetchInitialData(healthModel)
     agents.fetchInitialData()
   }, [fetchStats, fetchAdapterStats, health, model, agents])

@@ -21,21 +21,29 @@ export function ChatMoreMenu() {
             <div className="px-3 py-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
               Agent {ctx.agent.current && `— ${ctx.agent.current.name}`}
             </div>
-            {ctx.agent.agents.map(a => (
-              <DropdownMenuItem key={a.id || a.name} onSelect={() => ctx.agent.onSelect(a)}>
-                <span className={cn('mr-2 h-4 w-4 inline-flex items-center justify-center',
-                  ctx.agent.current?.id === a.id || ctx.agent.current?.name === a.name
-                    ? 'text-primary' : 'text-muted-foreground/40'
-                )}>
-                  {ctx.agent.current?.id === a.id || ctx.agent.current?.name === a.name ? (
-                    <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-                  ) : (
-                    <div className="w-3.5 h-3.5 rounded-full border border-current" />
-                  )}
-                </span>
-                {a.name}
-              </DropdownMenuItem>
-            ))}
+            {ctx.agent.agents.map(a => {
+              const isActive = ctx.agent.current?.id === a.id || ctx.agent.current?.name === a.name
+              return (
+                <DropdownMenuItem key={a.id || a.name} onSelect={() => ctx.agent.onSelect(a)} className={`flex items-start gap-2 px-3 py-2 ${isActive ? 'bg-primary/8' : ''}`}>
+                  <span className={`mt-0.5 h-4 w-4 shrink-0 inline-flex items-center justify-center ${isActive ? 'text-primary' : 'text-muted-foreground/40'}`}>
+                    {isActive ? (
+                      <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                    ) : (
+                      <div className="w-3.5 h-3.5 rounded-full border border-current" />
+                    )}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium truncate">{a.name}</div>
+                    {a.description && (
+                      <div className="text-[10px] text-muted-foreground truncate mt-0.5">{a.description}</div>
+                    )}
+                    {a.capabilities && a.capabilities.length > 0 && (
+                      <span className="text-[9px] text-muted-foreground mt-1 inline-block">{a.capabilities.length} capabilities</span>
+                    )}
+                  </div>
+                </DropdownMenuItem>
+              )
+            })}
             <DropdownMenuSeparator />
           </>
         )}

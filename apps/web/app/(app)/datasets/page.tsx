@@ -98,8 +98,29 @@ export default function DatasetsPage() {
                 <CardContent className="flex items-center justify-between py-3 px-4">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{ds.name}</p>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                      <span>{ds.source || 'local'}</span>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {ds.source && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+                          {ds.source}
+                        </span>
+                      )}
+                      {ds.type && ds.type !== 'text' && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                          {ds.type}
+                        </span>
+                      )}
+                      {ds.vlm_metadata && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent font-medium">
+                          VLM · {ds.vlm_metadata.image_count} images
+                        </span>
+                      )}
+                      {ds.tags && ds.tags.length > 0 && ds.tags.slice(0, 3).map(tag => (
+                        <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1.5">
                       <span>{formatBytes(ds.size)}</span>
                       {ds.samples != null && <span>{ds.samples.toLocaleString()} samples</span>}
                       {ds.created_at && <span>{formatDate(ds.created_at)}</span>}

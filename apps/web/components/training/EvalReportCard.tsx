@@ -9,11 +9,11 @@ import { logger } from '@/lib/dev-log'
 import type { EvalHistoryEntry } from '@/lib/training-controller'
 
 function VerdictBadge({ verdict }: { verdict: string }) {
-  const color = verdict === 'improved' ? 'bg-green-500/10 text-green-600'
-    : verdict === 'degraded' ? 'bg-red-500/10 text-red-600'
+  const color = verdict === 'improved' ? 'bg-success/15 text-success'
+    : verdict === 'degraded' ? 'bg-destructive/15 text-destructive'
     : 'bg-muted text-muted-foreground'
   return (
-    <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${color}`}>
+    <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${color}`}>
       {verdict === 'improved' ? '↑ Improved' : verdict === 'degraded' ? '↓ Degraded' : verdict || '—'}
     </span>
   )
@@ -23,7 +23,7 @@ function MetricDelta({ label, value, invert }: { label: string; value?: number; 
   if (value == null) return null
   const sign = value > 0 ? '+' : ''
   const isGood = invert ? value < 0 : value > 0
-  const color = Math.abs(value) < 0.01 ? 'text-muted-foreground' : isGood ? 'text-green-600' : 'text-red-600'
+  const color = Math.abs(value) < 0.01 ? 'text-muted-foreground' : isGood ? 'text-success' : 'text-destructive'
   return (
     <div className="text-center">
       <p className="text-[10px] text-muted-foreground">{label}</p>
@@ -38,7 +38,7 @@ function EvalRow({ entry }: { entry: EvalHistoryEntry }) {
     <div className="flex items-center justify-between rounded-lg border border-border/50 p-3 text-sm">
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center gap-2">
-          <p className="text-xs font-medium truncate">{new Date(entry.timestamp).toLocaleString()}</p>
+          <p className="text-[10px] text-muted-foreground">{new Date(entry.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
           {d?.verdict && <VerdictBadge verdict={d.verdict} />}
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-muted-foreground">

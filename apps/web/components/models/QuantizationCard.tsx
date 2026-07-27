@@ -10,9 +10,9 @@ import { useToastStore } from '@/lib/toast-store'
 type TensorEntry = { scale: number; zero_point: number; cosine_sim: number }
 
 function cosineColor(cos: number): string {
-  if (cos >= 0.99) return 'text-green-600'
-  if (cos >= 0.95) return 'text-yellow-600'
-  return 'text-red-600'
+  if (cos >= 0.99) return 'text-success'
+  if (cos >= 0.95) return 'text-warning'
+  return 'text-destructive'
 }
 
 function formatLayerName(name: string): string {
@@ -20,10 +20,10 @@ function formatLayerName(name: string): string {
 }
 
 function qualityGrade(cos: number): { label: string; color: string } {
-  if (cos >= 0.999) return { label: 'Excellent', color: 'text-green-600' }
-  if (cos >= 0.99) return { label: 'Good', color: 'text-green-600' }
-  if (cos >= 0.95) return { label: 'Fair', color: 'text-yellow-600' }
-  return { label: 'Poor', color: 'text-red-600' }
+  if (cos >= 0.999) return { label: 'Excellent', color: 'text-success' }
+  if (cos >= 0.99) return { label: 'Good', color: 'text-success' }
+  if (cos >= 0.95) return { label: 'Fair', color: 'text-warning' }
+  return { label: 'Poor', color: 'text-destructive' }
 }
 
 export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {

@@ -65,8 +65,8 @@ function AppInner() {
 
     registerForPushNotifications().catch(() => {});
 
-    const unsub = onNotification((title, body) => {
-      console.log('[Push]', title, body);
+    const unsub = onNotification((_title, _body, _data) => {
+      if (__DEV__) console.log('[Push]', _title, _body);
     });
     return unsub;
   }, []);

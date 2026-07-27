@@ -720,6 +720,62 @@ Every interactive element must implement these states. Missing states = broken U
 | **Error** | `bg-destructive/15 text-destructive` | Failed, error |
 | **Primary** | `bg-primary/15 text-primary` | Selected, highlighted |
 
+#### Rich Card Pattern (List Items)
+
+Every list of items (conversations, models, agents, checkpoints, sessions, training jobs, etc.) uses a consistent compound card pattern. Each item has three layers: **identity**, **metadata**, and **action**.
+
+**Structure:**
+```
+┌──────────────────────────────────────────────────────┐
+│ Name (text-sm font-medium)          [action buttons] │
+│ Description (text-[10px] text-muted-foreground)       │
+│ [badge] [badge] [badge]          [status indicator]  │
+└──────────────────────────────────────────────────────┘
+```
+
+**Layer 1 — Identity:**
+- **Name**: `text-sm font-medium truncate` — primary label
+- **Description**: `text-[10px] text-muted-foreground truncate mt-0.5` — secondary context, truncated with `line-clamp-1` or `line-clamp-2`
+
+**Layer 2 — Metadata badges:**
+- Badge base: `text-[9px] px-1.5 py-0.5 rounded font-medium`
+- Neutral info: `bg-muted text-muted-foreground`
+- Source/type: `bg-muted text-muted-foreground`
+- Loaded/active status: `bg-primary/10 text-primary`
+- Cached/success: `bg-success/10 text-success`
+- Tags: `bg-secondary text-secondary-foreground`
+- Active item highlight: entire row gets `bg-primary/[0.08]` + `border-primary/40`
+
+**Layer 3 — Actions:**
+- Edit/load: `Button size="sm" variant="ghost"` — hidden until hover (`opacity-0 group-hover:opacity-100`)
+- Delete: `Button size="sm" variant="ghost" className="text-destructive"` — hidden until hover
+
+**Row states:**
+| State | CSS |
+|-------|-----|
+| Default | `border-border/60 hover:bg-muted/50 transition-colors` |
+| Active/Selected | `bg-primary/[0.08] border-primary/40` |
+| Executing/Loading | `bg-primary/5 border-primary/40` + loading indicator |
+
+**Badge placement rules:**
+- Source/type badges go on the metadata row, after name and description
+- Status badges (Loaded, Cached, Synced) go at the end of the metadata row
+- Tag badges are capped at 2–3 with `slice(0, 2)` to prevent overflow
+- Never show more than 4 badges per item — collapse extras
+
+**Examples by component:**
+
+| Component | Name | Description | Badges | Active indicator |
+|-----------|------|-------------|--------|-----------------|
+| ConversationSidebar | `c.name` | last message preview | message count chip + date | `bg-primary/[0.08]` |
+| ModelCatalogCard | `model.name` | `model.description` | params + size + source + loaded/cached | `border-primary/40 bg-primary/5` |
+| SoulSelectorDropdown | soul name | description + traits | trait chips | `bg-primary/[0.08]` + `IconCheck` |
+| ChatMoreMenu agents | agent name | description | capabilities count | `bg-primary/[0.08]` + `IconCheck` |
+| AgentsPage agent list | agent name | description | tool count + tool chips | executing highlight |
+| Datasets page | dataset name | source | type + VLM + tags | — |
+| CheckpointsCard | checkpoint name | tagline | loss + dataset | `bg-primary/[0.08]` + `IconCheck` |
+| TrainFromSessionsCard | session name | — | message count chip | `bg-primary/[0.08]` |
+
 #### Toggle/Switch States
 
 | State | Visual | Behavior |

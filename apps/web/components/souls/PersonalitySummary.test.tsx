@@ -60,7 +60,7 @@ describe('PersonalitySummary', () => {
 
   it('renders overall score when soul name is provided', () => {
     const { container } = render(<PersonalitySummary traitWeights={baseWeights} currentSoulName="alice" />)
-    const overall = container.querySelector('.text-2xl.font-bold.text-red-400')
+    const overall = container.querySelector('.text-2xl.font-bold.text-destructive')
     expect(overall?.textContent).toBe('50')
   })
 

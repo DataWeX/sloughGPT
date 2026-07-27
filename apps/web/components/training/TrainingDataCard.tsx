@@ -280,7 +280,7 @@ export function TrainingDataCard() {
                     </label>
                   )}
                   {pairs.map(pair => (
-                    <div key={pair.id} className="rounded-lg border border-border/40 p-2 text-[11px] space-y-1">
+                    <div key={pair.id} className="rounded-lg border border-border/40 p-2 text-[11px] space-y-1 hover:bg-muted/30 transition-colors">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-start gap-2 min-w-0 flex-1">
                           <input
@@ -295,7 +295,11 @@ export function TrainingDataCard() {
                           </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          <span className="text-[10px] text-muted-foreground/50">Q:{pair.quality.toFixed(1)}</span>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
+                            pair.quality >= 0.8 ? 'bg-success/15 text-success' :
+                            pair.quality >= 0.5 ? 'bg-warning/15 text-warning' :
+                            'bg-destructive/15 text-destructive'
+                          }`}>Q:{pair.quality.toFixed(1)}</span>
                           <button
                             className="text-muted-foreground/40 hover:text-destructive transition-colors"
                             onClick={() => void handleDelete(pair.id)}

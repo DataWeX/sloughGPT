@@ -43,17 +43,17 @@ const makeProps = (overrides: Partial<UseTrainingDatasetsReturn> = {}): { datase
 describe('datasetLabel', () => {
   it('formats basic dataset with size', () => {
     const ds = makeDataset({ size: 2048 })
-    expect(datasetLabel(ds)).toBe('shakespeare (100 samples, 2.0 KB)')
+    expect(datasetLabel(ds)).toBe('shakespeare · 100 samples · local · 2.0 KB')
   })
 
   it('formats dataset without size', () => {
     const ds = makeDataset({ size: undefined })
-    expect(datasetLabel(ds)).toBe('shakespeare (100 samples, )')
+    expect(datasetLabel(ds)).toBe('shakespeare · 100 samples · local')
   })
 
   it('formats dataset with 0 samples', () => {
     const ds = makeDataset({ samples: 0 })
-    expect(datasetLabel(ds)).toBe('shakespeare (2.0 KB)')
+    expect(datasetLabel(ds)).toBe('shakespeare · local · 2.0 KB')
   })
 
   it('formats VLM dataset', () => {
@@ -61,12 +61,12 @@ describe('datasetLabel', () => {
       type: 'vlm',
       vlm_metadata: { image_count: 50, total_tokens: 1000 },
     } as any)
-    expect(datasetLabel(ds)).toBe('shakespeare (VLM: 50 images, 2.0 KB)')
+    expect(datasetLabel(ds)).toBe('shakespeare · VLM · 50 images · local · 2.0 KB')
   })
 
   it('formats dataset without samples field', () => {
     const ds = makeDataset({ samples: undefined })
-    expect(datasetLabel(ds)).toBe('shakespeare (2.0 KB)')
+    expect(datasetLabel(ds)).toBe('shakespeare · local · 2.0 KB')
   })
 })
 

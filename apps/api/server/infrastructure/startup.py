@@ -212,7 +212,13 @@ class StartupOrchestrator:
         await self._init_lifecycle()
 
         # Reuse profile enum resolved in _init_lifecycle
-        profile_enum = getattr(self, '_profile_enum', StartupProfile.FULL)
+        profile_enum = getattr(self, '_profile_enum', None)
+        if profile_enum is None:
+            try:
+                from domains.infrastructure.lifecycle import StartupProfile
+                profile_enum = StartupProfile.FULL
+            except Exception:
+                profile_enum = None
 
         # Run sequential phases via lifecycle manager
         if self._lifecycle is not None:
@@ -329,6 +335,9 @@ class StartupOrchestrator:
     def _on_model_load_done(self, task: asyncio.Task):
         try:
             task.result()
+        except asyncio.CancelledError:
+            logger.debug("Model load task cancelled (server shutting down)", extra={"tag": "START"})
+            return
         except Exception as e:
             logger.error("Model load task failed: %s", e, exc_info=True, extra={"tag": "START"})
 
@@ -558,11 +567,14 @@ def _autoload_model(cfg: ServerConfig):
     if server_state.model is not None:
         return
 
+    model_id = cfg.autoload_model
+
+    # 1) Try local .slnc / safetensors via ModelLoader
     from domains.infrastructure.model_loader import ModelLoader
 
     loader = ModelLoader()
     result = loader.load(
-        model_id=cfg.autoload_model,
+        model_id=model_id,
         device=cfg.autoload_device,
         quantize=cfg.quantize_slonet,
         quant_bits=cfg.quant_bits,
@@ -570,17 +582,50 @@ def _autoload_model(cfg: ServerConfig):
         verify=True,
     )
 
-    if not result.success:
-        logger.warning("Autoload failed: %s", result.error, extra={"tag": "START"})
+    if result.success:
+        server_state.model = result.model
+        server_state.model_type = result.model_id
+        if result.tokenizer is not None:
+            server_state.tokenizer = result.tokenizer
+        if result.provider is not None:
+            server_state.provider = result.provider
+        logger.info("Autoload ok: %s (%s)", model_id, result.model_type, extra={"tag": "START"})
         return
 
-    # Store model references in server state
-    server_state.model = result.model
-    server_state.model_type = result.model_id
-    if result.tokenizer is not None:
-        server_state.tokenizer = result.tokenizer
-    # Store the provider to avoid re-loading SLNC in setup_providers
-    if result.provider is not None:
-        server_state.provider = result.provider
+    # 2) No local file — download from HuggingFace, then load via ModelLoader
+    logger.info("No local .slnc/safetensors for %s — downloading from HuggingFace", model_id, extra={"tag": "START"})
+    try:
+        from huggingface_hub import snapshot_download
+        from domains.infrastructure.safetensors_loader import _get_model_dir
 
-    logger.info("Autoload ok: %s (%s)", cfg.autoload_model, result.model_type, extra={"tag": "START"})
+        cache_dir = _get_model_dir(model_id)
+        logger.info("Downloading %s to %s ...", model_id, cache_dir, extra={"tag": "START"})
+        snapshot_download(
+            model_id,
+            local_dir=str(cache_dir),
+            allow_patterns=["*.safetensors", "*.json", "*.txt", "*.model"],
+        )
+        logger.info("Download complete: %s", model_id, extra={"tag": "START"})
+    except Exception as e:
+        logger.warning("HuggingFace download failed: %s", e, extra={"tag": "START"})
+        return
+
+    # 3) Retry load now that safetensors are cached
+    result = loader.load(
+        model_id=model_id,
+        device=cfg.autoload_device,
+        quantize=cfg.quantize_slonet,
+        quant_bits=cfg.quant_bits,
+        quant_mode=cfg.quant_mode,
+        verify=True,
+    )
+    if result.success:
+        server_state.model = result.model
+        server_state.model_type = result.model_id
+        if result.tokenizer is not None:
+            server_state.tokenizer = result.tokenizer
+        if result.provider is not None:
+            server_state.provider = result.provider
+        logger.info("Autoload ok (after download): %s (%s)", model_id, result.model_type, extra={"tag": "START"})
+    else:
+        logger.warning("Autoload failed after download: %s", result.error, extra={"tag": "START"})

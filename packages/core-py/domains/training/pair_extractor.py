@@ -20,6 +20,10 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 _SESSIONS_DIR = _REPO_ROOT / "data" / "chat_sessions"
 _RESPONSE_LOGS_DIR = _REPO_ROOT / "data" / "response_logs"
 
+# Ensure directories exist (auto-created on first access)
+_SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+_RESPONSE_LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
 
 def extract_pairs_from_sessions(
     limit: int = 50,

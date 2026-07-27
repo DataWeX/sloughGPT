@@ -39,7 +39,15 @@ export default function ModelsCard({ models, loading, results, running, onBenchm
                     <p className="text-sm font-medium truncate">{m.name}</p>
                     {m.loaded && <Badge label="Loaded" variant="success" size="sm" />}
                   </div>
-                  {m.sizeGb && <p className="text-xs text-muted-foreground mb-2">{m.sizeGb.toFixed(1)} GB</p>}
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    {m.sizeGb && <span className="text-xs text-muted-foreground">{m.sizeGb.toFixed(1)} GB</span>}
+                    {m.source && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{m.source}</span>
+                    )}
+                    {m.type && m.type !== 'text-generation' && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">{m.type}</span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1.5">
                     <Button size="sm" variant={result ? "outline" : "default"} className="h-7 text-xs flex-1" onClick={() => onBenchmark(m.id)} disabled={isRunning}>
                       {isRunning ? 'Benchmarking…' : result ? <><IconCheck className="h-3 w-3 mr-1" /> Rerun</> : 'Benchmark'}

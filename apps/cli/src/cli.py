@@ -400,12 +400,13 @@ def generate(ctx, prompt, model, max_tokens, temperature):
 @click.option("--model", default=None, help="Model path")
 @click.option("--web-port", default=3000, type=int, help="Web dev server port")
 @click.option("--watch-web", is_flag=True, help="Watch web files for changes")
+@click.option("--auto-download", is_flag=True, help="Skip download confirmation on startup")
 @click.pass_context
-def dev(ctx, model, web_port, watch_web):
+def dev(ctx, model, web_port, watch_web, auto_download):
     from commands.dev import cmd_dev
     args = _ns(
         model=model, web_port=web_port, watch_web=watch_web,
-        port=ctx.obj["port"], host=ctx.obj["host"],
+        port=ctx.obj["port"], host=ctx.obj["host"], auto_download=auto_download,
     )
     cmd_dev(args)
 
@@ -414,11 +415,12 @@ def dev(ctx, model, web_port, watch_web):
 @click.option("--host", default="localhost", help="Bind address", show_default=True)
 @click.option("--port", default=8000, type=int, help="API port", show_default=True)
 @click.option("--model", metavar="PATH", help="Model to preload")
-@click.option("--web", is_flag=True, help="Start full FastAPI server + Next.js web UI and open browser")
+@click.option("--web", is_flag=True, help="Start full FastAPI server + Next.js web UI and opens browser")
 @click.option("--web-port", default=3000, type=int, help="Web UI port", show_default=True)
-def serve(host, port, model, web, web_port):
+@click.option("--auto-download", is_flag=True, help="Skip download confirmation on startup")
+def serve(host, port, model, web, web_port, auto_download):
     from commands.dev import cmd_serve
-    args = _ns(host=host, port=port, model=model, web=web, web_port=web_port)
+    args = _ns(host=host, port=port, model=model, web=web, web_port=web_port, auto_download=auto_download)
     cmd_serve(args)
 
 
@@ -454,6 +456,12 @@ def model_list(ctx):
     cmd_models(_ns())
 
 
+@model.command("status", help="Show cached/downloaded models with sizes")
+def model_status():
+    from commands.models import _cmd_models_status
+    _cmd_models_status(_ns())
+
+
 @model.command("info", help="Show checkpoint info")
 @click.argument("checkpoint", default="models/sloughgpt.pt")
 def model_info(checkpoint):
@@ -462,10 +470,11 @@ def model_info(checkpoint):
 
 
 @model.command("download", help="Download model from HuggingFace")
-@click.argument("model_id")
-def model_download(model_id):
+@click.argument("model_id", required=False, default=None)
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
+def model_download(model_id, yes):
     from commands.models import _cmd_models_download
-    _cmd_models_download(_ns(model_id=model_id))
+    _cmd_models_download(_ns(model_id=model_id, yes=yes))
 
 
 @model.command("export", help="Export model to different formats")

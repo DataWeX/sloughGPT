@@ -463,11 +463,15 @@ function ConvRow({
           </p>
         )}
         {!editing && (
-          <div className="flex items-center gap-1 mt-0.5">
-            <IconChat className="h-2.5 w-2.5 text-muted-foreground/50 shrink-0" />
-            <span className="text-[10px] text-muted-foreground/50">
-              {msgCount} msgs · {formatDate(c.updated_at || c.updatedAt)}
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+              {msgCount}
             </span>
+            <span className="text-[10px] text-muted-foreground/50">
+              {formatDate(c.updated_at || c.updatedAt)}
+            </span>
+            {c.pinned && <span className="text-[10px] text-primary">📌</span>}
+            {c.starred && <span className="text-[10px]">★</span>}
           </div>
         )}
       </div>

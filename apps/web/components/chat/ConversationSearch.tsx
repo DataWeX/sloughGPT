@@ -159,13 +159,13 @@ export function ConversationSearch({ open, onClose, onNavigate }: ConversationSe
                   onClick={() => { onNavigate(r.session.id); onClose() }}
                   className="w-full text-left p-2.5 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border/40"
                 >
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1.5">
                     <IconMessage className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     <span className="text-sm font-medium truncate">{r.session.name}</span>
                     {r.remote && (
-                      <span className="text-[10px] text-muted-foreground/40 border border-border/30 rounded px-1 ml-1 shrink-0">remote</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium shrink-0">remote</span>
                     )}
-                    <span className="text-[10px] text-muted-foreground/50 ml-auto shrink-0">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium shrink-0">
                       {r.matches.length} match{r.matches.length !== 1 ? 'es' : ''}
                     </span>
                   </div>

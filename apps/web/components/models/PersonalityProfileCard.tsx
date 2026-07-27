@@ -122,7 +122,7 @@ export default function PersonalityProfileCard({
           ) : (
             <div className="space-y-1">
               {snapshots.map(s => (
-                <div key={s.name} className="flex items-center justify-between px-2 py-1.5 rounded bg-muted/30 hover:bg-muted/50 transition-colors">
+                <div key={s.name} className="flex items-center justify-between px-2 py-1.5 rounded bg-muted/30 hover:bg-primary/[0.05] transition-colors group">
                   <div className="min-w-0 flex-1">
                     <span className="text-[11px] font-medium">{s.label || s.name}</span>
                     {s.saved_at && (
@@ -131,9 +131,9 @@ export default function PersonalityProfileCard({
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button type="button" className="text-[10px] text-primary hover:text-primary/80 px-1.5 py-0.5 rounded hover:bg-primary/10" onClick={() => handleLoadSnapshot(s.name)}>Load</button>
-                    <button type="button" className="text-[10px] text-red-400 hover:text-red-300 px-1.5 py-0.5 rounded hover:bg-red-500/10" onClick={() => handleDeleteSnapshot(s.name)}>Delete</button>
+                    <button type="button" className="text-[10px] text-destructive hover:text-destructive/80 px-1.5 py-0.5 rounded hover:bg-destructive/10" onClick={() => handleDeleteSnapshot(s.name)}>Delete</button>
                   </div>
                 </div>
               ))}

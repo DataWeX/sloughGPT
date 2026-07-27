@@ -360,20 +360,19 @@ export default function SystemHealthPage() {
                 <CardContent className="p-0">
                   <div className="space-y-1">
                     {trainingJobs.slice(0, 6).map((job) => (
-                      <div key={job.id} className="flex items-center justify-between text-xs py-0.5">
+                      <div key={job.id} className="flex items-center justify-between text-xs py-1 px-1.5 rounded hover:bg-muted/30 transition-colors">
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${
-                            job.status === 'completed' ? 'bg-success' :
-                            job.status === 'running' ? 'bg-primary animate-pulse' :
-                            job.status === 'failed' ? 'bg-destructive' :
-                            'bg-muted-foreground/50'
-                          }`} />
-                          <span className="truncate font-mono">{job.name || job.id}</span>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
+                            job.status === 'completed' ? 'bg-success/15 text-success' :
+                            job.status === 'running' ? 'bg-warning/15 text-warning' :
+                            job.status === 'failed' ? 'bg-destructive/15 text-destructive' :
+                            'bg-muted text-muted-foreground'
+                          }`}>{job.status}</span>
+                          <span className="truncate font-mono text-muted-foreground">{job.name || job.id}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground shrink-0 ml-2 font-mono">
+                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground shrink-0 ml-2 font-mono">
                           {job.loss != null && <span>{job.loss.toFixed(3)}</span>}
                           {job.epochs_completed != null && <span>ep{job.epochs_completed}</span>}
-                          <span>{job.status}</span>
                         </div>
                       </div>
                     ))}
@@ -411,14 +410,13 @@ export default function SystemHealthPage() {
                       {executorStatus.jobs.slice(0, 4).map(j => {
                         const ds = j.cancel_requested && j.status === 'running' ? 'cancelling' : j.status
                         return (
-                        <div key={j.job_id} className="flex items-center gap-1.5">
-                          <span className={`inline-block w-1.5 h-1.5 rounded-full ${
-                            ds === 'running' ? 'bg-warning' : ds === 'cancelling' ? 'bg-warning animate-pulse' :
-                            ds === 'completed' ? 'bg-success' : ds === 'failed' ? 'bg-destructive' : 'bg-muted-foreground/30'
-                          }`} />
-                          <span>{j.job_id}</span>
-                          <span className="text-muted-foreground/60">{ds}</span>
-                          {j.elapsed_s != null && <span>{j.elapsed_s.toFixed(1)}s</span>}
+                        <div key={j.job_id} className="flex items-center gap-1.5 px-1 py-0.5 rounded hover:bg-muted/30 transition-colors">
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
+                            ds === 'running' ? 'bg-warning/15 text-warning' : ds === 'cancelling' ? 'bg-warning/15 text-warning' :
+                            ds === 'completed' ? 'bg-success/15 text-success' : ds === 'failed' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground'
+                          }`}>{ds}</span>
+                          <span className="truncate">{j.job_id}</span>
+                          {j.elapsed_s != null && <span className="text-muted-foreground/60">{j.elapsed_s.toFixed(1)}s</span>}
                           {(j.status === 'running' || j.status === 'queued') && !j.cancel_requested && (
                             <Button variant="ghost" size="sm" className="text-[10px] h-4 text-destructive hover:text-destructive ml-auto"
                               onClick={async () => { await systemController.cancelExecutorJob(j.job_id); fetchAll() }}>

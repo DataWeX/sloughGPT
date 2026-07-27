@@ -144,4 +144,46 @@ describe('useChatModelSettings', () => {
     expect(mockStartDownload).toHaveBeenCalledWith('gpt2', expect.any(Number))
     vi.useRealTimers()
   })
+
+  it('fetchInitialData sets model from health even when not loaded', async () => {
+    mockList.mockResolvedValue([
+      { id: 'Qwen/Qwen2.5-0.5B-Instruct', cached: false, size_gb: 1.0 },
+    ])
+    mockGet.mockResolvedValue({ temperature: 0.8, max_new_tokens: 200 })
+    mockSoulsList.mockResolvedValue({ souls: [], current_soul: null })
+    mockSoulsListCheckpoints.mockResolvedValue({ checkpoints: [] })
+
+    const { result } = renderHook(() => useChatModelSettings(showToast, refreshHealth))
+    await act(async () => { await result.current.fetchInitialData('Qwen/Qwen2.5-0.5B-Instruct') })
+
+    expect(result.current.model).toBe('Qwen/Qwen2.5-0.5B-Instruct')
+  })
+
+  it('fetchInitialData sets model when model_type exists but not loaded', async () => {
+    mockList.mockResolvedValue([
+      { id: 'gpt2', cached: true, size_gb: 0.5 },
+    ])
+    mockGet.mockResolvedValue({ temperature: 0.8, max_new_tokens: 200 })
+    mockSoulsList.mockResolvedValue({ souls: [], current_soul: null })
+    mockSoulsListCheckpoints.mockResolvedValue({ checkpoints: [] })
+
+    const { result } = renderHook(() => useChatModelSettings(showToast, refreshHealth))
+    await act(async () => { await result.current.fetchInitialData('gpt2') })
+
+    expect(result.current.model).toBe('gpt2')
+  })
+
+  it('fetchInitialData does not set model when healthModel is undefined', async () => {
+    mockList.mockResolvedValue([
+      { id: 'gpt2', cached: true, size_gb: 0.5 },
+    ])
+    mockGet.mockResolvedValue({ temperature: 0.8, max_new_tokens: 200 })
+    mockSoulsList.mockResolvedValue({ souls: [], current_soul: null })
+    mockSoulsListCheckpoints.mockResolvedValue({ checkpoints: [] })
+
+    const { result } = renderHook(() => useChatModelSettings(showToast, refreshHealth))
+    await act(async () => { await result.current.fetchInitialData() })
+
+    expect(result.current.model).toBe('')
+  })
 })

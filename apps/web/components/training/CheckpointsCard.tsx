@@ -55,31 +55,35 @@ export function CheckpointsCard({
           )
         ) : (
           <div className="grid gap-2 sm:grid-cols-2">
-            {checkpoints.checkpoints.slice().reverse().map((cp) => (
-              <div key={cp.name} className={cn("flex items-center justify-between rounded-lg border p-3 text-sm", checkpoints.activeCheckpoint === cp.name ? "border-primary/30 bg-primary/5" : "border-border/50")}>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium text-xs">{cp.name}</p>
-                  {cp.description ? (
-                    <p className="text-[11px] text-muted-foreground mt-0.5">{cp.description}</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground mt-0.5">
-                      {cp.loss != null && <span>Loss: {cp.loss.toFixed(4)}</span>}
-                      {cp.epochs_trained != null && <span>{cp.epochs_trained} epochs</span>}
-                      {cp.training_dataset && cp.training_dataset !== 'gpt2-generated' && <span>Dataset: {cp.training_dataset}</span>}
+            {checkpoints.checkpoints.slice().reverse().map((cp) => {
+              const isActive = checkpoints.activeCheckpoint === cp.name
+              return (
+                <div key={cp.name} className={cn("flex items-center justify-between rounded-lg border p-3 text-sm", isActive ? "border-primary/30 bg-primary/[0.08]" : "border-border/50")}>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate font-medium text-xs">{cp.name}</p>
+                      {isActive && <span className="text-primary text-[10px]">✓</span>}
                     </div>
-                  )}
+                    {cp.description ? (
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{cp.description}</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground mt-0.5">
+                        {cp.loss != null && <span>loss {cp.loss.toFixed(4)}</span>}
+                        {cp.epochs_trained != null && <span>{cp.epochs_trained} epochs</span>}
+                        {cp.training_dataset && cp.training_dataset !== 'gpt2-generated' && <span>{cp.training_dataset}</span>}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                    {!isActive && (
+                      <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => checkpoints.handleLoadCheckpoint(cp.name, addToast)}>Load</Button>
+                    )}
+                    <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => onContinue(cp.name)}>Continue</Button>
+                    <Button size="sm" variant="ghost" className="h-6 text-xs text-destructive hover:text-destructive" onClick={() => checkpoints.handleDeleteCheckpoint(cp.name, addToast)}>Del</Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 shrink-0 ml-2">
-                  {checkpoints.activeCheckpoint === cp.name ? (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">Active</span>
-                  ) : (
-                    <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => checkpoints.handleLoadCheckpoint(cp.name, addToast)}>Load</Button>
-                  )}
-                  <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => onContinue(cp.name)}>Continue</Button>
-                  <Button size="sm" variant="ghost" className="h-6 text-xs text-destructive hover:text-destructive" onClick={() => checkpoints.handleDeleteCheckpoint(cp.name, addToast)}>Del</Button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </CardContent>

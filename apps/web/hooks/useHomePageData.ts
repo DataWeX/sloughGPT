@@ -16,7 +16,7 @@ export interface HomePageData {
   checkpointCount: number
   modelStatus: { loaded: boolean; model: string | null }
   currentSoul: { name: string; description: string; traits: string[] } | null
-  recentSessions: Array<{ id: string; name: string; updated_at: string }>
+  recentSessions: Array<{ id: string; name: string; updated_at: string; message_count?: number; pinned?: boolean; starred?: boolean }>
   runningTraining: { name: string; status_message: string } | null
   knowledgeCount: number
   recentJobs: Array<{ id: string; name: string; status: string; created_at?: string }>
@@ -44,7 +44,7 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
   const [checkpointCount, setCheckpointCount] = useState<number>(0)
   const [modelStatus, setModelStatus] = useState<{ loaded: boolean; model: string | null }>({ loaded: false, model: null })
   const [currentSoul, setCurrentSoul] = useState<{ name: string; description: string; traits: string[] } | null>(null)
-  const [recentSessions, setRecentSessions] = useState<Array<{ id: string; name: string; updated_at: string }>>([])
+  const [recentSessions, setRecentSessions] = useState<Array<{ id: string; name: string; updated_at: string; message_count?: number; pinned?: boolean; starred?: boolean }>>([])
   const [runningTraining, setRunningTraining] = useState<{ name: string; status_message: string } | null>(null)
   const [knowledgeCount, setKnowledgeCount] = useState<number>(0)
   const [recentJobs, setRecentJobs] = useState<Array<{ id: string; name: string; status: string; created_at?: string }>>([])
@@ -89,6 +89,14 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
           .filter(s => s.name || s.id)
           .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
           .slice(0, 5)
+          .map(s => ({
+            id: s.id,
+            name: s.name,
+            updated_at: s.updated_at,
+            message_count: s.messages?.length,
+            pinned: s.pinned,
+            starred: s.starred,
+          }))
         setRecentSessions(sorted)
       }
     }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, sessions: true })) })

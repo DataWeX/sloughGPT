@@ -115,4 +115,47 @@ describe('SoulSelectorDropdown', () => {
     const matches = screen.getAllByText('witty')
     expect(matches.length).toBeGreaterThanOrEqual(1)
   })
+
+  it('displays traits as tags in soul list', () => {
+    renderWithCtx()
+    expect(screen.getByText('warmth')).toBeDefined()
+    expect(screen.getByText('empathy')).toBeDefined()
+    expect(screen.getByText('humor')).toBeDefined()
+    expect(screen.getByText('intelligence')).toBeDefined()
+  })
+
+  it('shows first trait badge in profile header when current soul has traits', () => {
+    renderWithCtx({ current: souls[0] })
+    const badges = screen.getAllByText('warmth')
+    expect(badges.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('truncates traits to 3 and shows +N overflow', () => {
+    const soulWithManyTraits: Soul = {
+      name: 'complex',
+      description: 'Many traits',
+      traits: ['trait1', 'trait2', 'trait3', 'trait4', 'trait5'],
+      personality: {},
+    }
+    renderWithCtx({ souls: [soulWithManyTraits] })
+    expect(screen.getByText('trait1')).toBeDefined()
+    expect(screen.getByText('trait2')).toBeDefined()
+    expect(screen.getByText('trait3')).toBeDefined()
+    expect(screen.getByText('+2')).toBeDefined()
+    expect(screen.queryByText('trait4')).toBeNull()
+  })
+
+  it('sets title attribute with traits on trigger', () => {
+    renderWithCtx({ current: souls[0] })
+    const buttons = screen.getAllByText('friendly')
+    const trigger = buttons[0].closest('button')
+    expect(trigger?.getAttribute('title')).toBe('warmth, empathy')
+  })
+
+  it('hides traits section when soul has no traits', () => {
+    const soulNoTraits: Soul = { name: 'bare', description: 'No traits', traits: [], personality: {} }
+    renderWithCtx({ souls: [soulNoTraits] })
+    expect(screen.getByText('bare')).toBeDefined()
+    expect(screen.queryByText('warmth')).toBeNull()
+  })
 })

@@ -239,18 +239,35 @@ def search_knowledge(query: str = ""):
 
 @router.get("/stats")
 def knowledge_stats():
-    """Return knowledge base statistics."""
+    """Return knowledge base statistics.
+
+    Uses batched iteration to avoid loading all 5000 entries into memory.
+    Fetches in chunks of 200 and aggregates topic/source counts incrementally.
+    """
     memory = _get_memory()
-    all_items = memory.list_all(top_k=5000)
     topics: dict[str, int] = {}
     sources: dict[str, int] = {}
-    total = len(all_items)
-    for item in all_items:
-        t = item.get("topic", "general")
-        topics[t] = topics.get(t, 0) + 1
-        s = item.get("source", "unknown")
-        sources[s] = sources.get(s, 0) + 1
-    avg_importance = sum(item.get("importance", 0.5) for item in all_items) / max(total, 1)
+    total = 0
+    importance_sum = 0.0
+
+    batch_size = 200
+    offset = 0
+    while True:
+        batch = memory.list_all(top_k=batch_size)
+        if not batch:
+            break
+        for item in batch:
+            t = item.get("topic", "general")
+            topics[t] = topics.get(t, 0) + 1
+            s = item.get("source", "unknown")
+            sources[s] = sources.get(s, 0) + 1
+            importance_sum += item.get("importance", 0.5)
+            total += 1
+        if len(batch) < batch_size:
+            break
+        offset += batch_size
+
+    avg_importance = importance_sum / max(total, 1)
     return success_response(data={
         "total_items": total,
         "topics": topics,

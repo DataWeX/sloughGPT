@@ -107,22 +107,25 @@ export function SearchConversationsDialog({ open, onOpenChange, initialQuery }: 
                   onClick={() => handleSelect(r.session.id)}
                   className="w-full text-left rounded-lg border border-border/40 p-2.5 hover:bg-muted/30 hover:border-border/60 transition-colors"
                 >
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <IconMessage className="h-3 w-3 text-muted-foreground/60 shrink-0" />
-                    <span className="text-xs font-medium truncate">{r.session.name}</span>
-                    <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">{r.matches.length} match{r.matches.length !== 1 ? 'es' : ''}</span>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <IconMessage className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+                    <span className="text-sm font-medium truncate">{r.session.name}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium shrink-0">
+                      {r.matches.length} match{r.matches.length !== 1 ? 'es' : ''}
+                    </span>
                   </div>
                   {r.matches.slice(0, 2).map((m, i) => (
-                    <p
-                      key={i}
-                      className={cn(
-                        "text-xs leading-relaxed line-clamp-1 pl-5",
-                        m.role === 'user' ? "text-foreground/80" : "text-muted-foreground/70"
-                      )}
-                    >
-                      <span className="text-[10px] uppercase tracking-wider mr-1 opacity-60">{m.role}</span>
-                      {highlight(m.content.slice(0, 120))}
-                    </p>
+                    <div key={i} className="pl-5 mb-1">
+                      <span className={cn(
+                        "text-[10px] px-1 py-0.5 rounded font-medium mr-1.5",
+                        m.role === 'user' ? "bg-secondary text-secondary-foreground" : "bg-primary/10 text-primary"
+                      )}>
+                        {m.role === 'user' ? 'You' : 'AI'}
+                      </span>
+                      <span className="text-xs leading-relaxed text-muted-foreground/70">
+                        {highlight(m.content.slice(0, 120))}
+                      </span>
+                    </div>
                   ))}
                   {r.matches.length > 2 && (
                     <p className="text-[10px] text-muted-foreground/50 pl-5 mt-0.5">+{r.matches.length - 2} more</p>
