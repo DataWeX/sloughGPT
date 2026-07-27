@@ -230,6 +230,145 @@ class Device:
         return {"type": "base", "methods": []}
 
 
+class ClockDevice(Device):
+    """Self-contained wall clock — no Python time library dependency.
+
+    Counts PIT ticks from a fixed epoch (Jan 1, 1900 00:00:00 UTC).
+    The PIT calls ``tick()`` on each IRQ0; CMOS reads ``seconds_now()``
+    to derive year/month/day/hour/minute/second via pure arithmetic.
+
+    Epoch: Jan 1, 1900 00:00:00 UTC = Unix timestamp -2208988800.
+    """
+
+    # Jan 1, 1900 as a Unix timestamp (negative — before Unix epoch)
+    EPOCH_1900: int = -2208988800
+
+    # Days in each month (index 1..12, 0 unused)
+    _DAYS_IN_MONTH = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+
+    def __init__(self, freq: int = 100, epoch_unix: int | None = None):
+        """
+        Args:
+            freq: Ticks per second (matches PIT target_hz, default 100).
+            epoch_unix: Unix timestamp for the starting wall-clock time.
+                        Defaults to Jan 1, 1900.
+        """
+        self._freq = freq
+        self._ticks = 0
+        self._epoch = epoch_unix if epoch_unix is not None else self.EPOCH_1900
+
+    # ── PIT interface ─────────────────────────────────────────────────
+
+    def tick(self):
+        """Called by PITDevice on each IRQ0.  Increments the tick counter."""
+        self._ticks += 1
+
+    # ── Time queries ──────────────────────────────────────────────────
+
+    @property
+    def ticks(self) -> int:
+        return self._ticks
+
+    @property
+    def freq(self) -> int:
+        return self._freq
+
+    def seconds_now(self) -> float:
+        """Total seconds since epoch (wall-clock time)."""
+        return self._epoch + self._ticks / self._freq
+
+    def set_time(self, year: int, month: int, day: int,
+                 hour: int = 0, minute: int = 0, second: int = 0):
+        """Set the wall clock to a specific date/time (useful for tests)."""
+        self._epoch = self._date_to_unix(year, month, day, hour, minute, second)
+        self._ticks = 0
+
+    # ── Date decoding (pure arithmetic) ──────────────────────────────
+
+    def decode(self, seconds: float | None = None) -> dict:
+        """Decode total seconds since epoch into year/month/day/hour/minute/second/weekday.
+
+        Args:
+            seconds: Seconds since epoch.  Defaults to ``seconds_now()``.
+
+        Returns:
+            dict with keys: year, month, day, hour, minute, second, weekday.
+            weekday: 0=Monday … 6=Sunday (ISO convention).
+        """
+        if seconds is None:
+            seconds = self.seconds_now()
+        return self._decode_unix(int(seconds))
+
+    @classmethod
+    def _decode_unix(cls, ts: int) -> dict:
+        """Convert a Unix timestamp to calendar components.  Pure math."""
+        ts = max(ts, 0)  # clamp to >= 1970 for arithmetic safety
+
+        # ── Days since Unix epoch ──
+        days = ts // 86400
+        remaining = ts % 86400
+        hour = remaining // 3600
+        minute = (remaining % 3600) // 60
+        second = remaining % 60
+
+        # ── Day-of-week (Jan 1 1970 = Thursday = 3) ──
+        weekday = (days + 3) % 7  # 0=Mon
+
+        # ── Year ──
+        year = 1970
+        while True:
+            days_in_year = 366 if cls._is_leap(year) else 365
+            if days < days_in_year:
+                break
+            days -= days_in_year
+            year += 1
+
+        # ── Month ──
+        month = 1
+        for m in range(1, 13):
+            dim = cls._days_in_month(year, m)
+            if days < dim:
+                month = m
+                break
+            days -= dim
+
+        day = days + 1  # days is 0-indexed within the month
+
+        return {
+            "year": year,
+            "month": month,
+            "day": day,
+            "hour": hour,
+            "minute": minute,
+            "second": second,
+            "weekday": weekday,
+        }
+
+    @classmethod
+    def _date_to_unix(cls, year: int, month: int, day: int,
+                      hour: int = 0, minute: int = 0, second: int = 0) -> int:
+        """Encode a calendar date to a Unix timestamp.  Pure math."""
+        # Days from 1970-01-01 to year-01-01
+        days = 0
+        for y in range(1970, year):
+            days += 366 if cls._is_leap(y) else 365
+        # Days from month start
+        for m in range(1, month):
+            days += cls._days_in_month(year, m)
+        days += day - 1
+        return days * 86400 + hour * 3600 + minute * 60 + second
+
+    @staticmethod
+    def _is_leap(year: int) -> bool:
+        return (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0)
+
+    @classmethod
+    def _days_in_month(cls, year: int, month: int) -> int:
+        if month == 2 and cls._is_leap(year):
+            return 29
+        return cls._DAYS_IN_MONTH[month]
+
+
 class ConsoleDevice(Device):
     """Console I/O device — port 0 for stdin, port 1 for stdout.
 
@@ -848,11 +987,12 @@ class CMOSDevice(Device):
     REG_EXT_MEM_HI = 0x18    # extended memory (KB) high byte
     REG_BOOT_ORDER = 0x3D    # boot device order (4 bits each)
 
-    def __init__(self, cpu: X86CPU | None = None):
+    def __init__(self, cpu: X86CPU | None = None,
+                 clock: ClockDevice | None = None):
         self._cmos = bytearray(self.CMOS_SIZE)
         self._selected = 0       # current register offset (written to port 0x70)
         self._nmi_disabled = False
-        self._offset: float = 0  # time adjustment for testing
+        self._clock = clock      # self-contained wall clock (no time.time)
 
         # Initialize Status Register D (VRT = battery OK)
         self._cmos[self.REG_STATUS_D] = 0x80
@@ -6542,10 +6682,12 @@ class PITDevice:
 
     def __init__(self, cpu: X86CPU, scheduler: Scheduler,
                  syscall_handler: X86SyscallHandler | None = None,
-                 target_hz: int = 100):
+                 target_hz: int = 100,
+                 clock: ClockDevice | None = None):
         self._cpu = cpu
         self._scheduler = scheduler
         self._syscall = syscall_handler
+        self._clock = clock
         self._target_hz = target_hz
         self._tick_count = 0
         self._divider = self.FREQ // target_hz
@@ -6584,6 +6726,8 @@ class PITDevice:
                 if ch == 0:
                     # Channel 0 → IRQ 0 (timer)
                     self._tick_count += 1
+                    if self._clock:
+                        self._clock.tick()
                     if self._syscall:
                         self._syscall.tick()
                     self._scheduler.tick(self._cpu)

@@ -432,7 +432,7 @@ def compress_checkpoint(
         point = compressor.compress_cluster(
             weights, name, n_clusters=n_clusters,
         )
-        total_compressed += len(point.to_bytes()) if hasattr(point, "to_bytes") else weights.nbytes
+        total_compressed += point.nbytes()
         library.add(point)
 
     library.save(lib_path)
@@ -440,10 +440,17 @@ def compress_checkpoint(
     meta = {
         "source": str(soul_file),
         "n_clusters": n_clusters,
-        "point_count": len(library.points) if hasattr(library, "points") else 0,
+        "point_count": len(library.list_all()),
         "total_raw_bytes": total_raw,
         "total_compressed_bytes": total_compressed,
         "compression_ratio": total_raw / max(total_compressed, 1),
+        "lineage": [str(soul_file)],
+        "metadata": {
+            "vocab_size": getattr(model, "vocab_size", 0),
+            "n_embed": getattr(model, "n_embed", 0),
+            "n_layer": getattr(model, "n_layer", 0),
+            "weight_shapes": {name: list(w.shape) for name, w in state_dict.items()},
+        },
     }
     meta_path = out_dir / f"{lib_name}.meta.json"
     meta_path.write_text(json.dumps(meta, indent=2, default=str))

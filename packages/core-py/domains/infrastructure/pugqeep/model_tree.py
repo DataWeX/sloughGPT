@@ -208,3 +208,90 @@ def save_library(library: PointLibrary, path: Path) -> Path:
 def load_library(path: Path) -> PointLibrary:
     """Load a PointLibrary from disk."""
     return PointLibrary.load(path)
+
+
+def load_from_points(path: str) -> Tuple[ModelTree, dict]:
+    """Load a ModelTree from a `.points.json` library file.
+
+    Args:
+        path: Base path without extension (e.g. ``/tmp/test_model``).
+            The library is expected at ``<path>.points.json``.
+
+    Returns:
+        Tuple of (ModelTree, meta_dict).
+
+    Raises:
+        FileNotFoundError: If the library file does not exist.
+    """
+    p = Path(path)
+    lib_path = p.with_suffix(".points.json")
+    if not lib_path.exists():
+        lib_path = p / "library.json"
+        if not lib_path.exists():
+            raise FileNotFoundError(f"Library not found: {p.with_suffix('.points.json')} or {p / 'library.json'}")
+
+    library = PointLibrary.load(lib_path)
+    model_name = p.stem
+
+    meta_path = p.with_suffix(".meta.json") if p.suffix else p / "meta.json"
+    if not meta_path.exists():
+        meta_path = p.parent / f"{p.name}.meta.json"
+    meta = {}
+    if meta_path.exists():
+        import json
+        meta = json.loads(meta_path.read_text())
+
+    weight_shapes = meta.get("metadata", {}).get("weight_shapes", {})
+
+    tree = ModelTree(model_name, library=library)
+    tree._loaded = True
+
+    for point in library.list_all():
+        prefix = f"{model_name}."
+        if point.identity.startswith(prefix):
+            weight_name = point.identity[len(prefix):]
+        elif "." in point.identity:
+            weight_name = point.identity.split(".", 1)[1]
+        else:
+            weight_name = point.identity
+        shape = tuple(weight_shapes.get(weight_name, weight_shapes.get(point.identity, [])))
+        tree._weight_shapes[weight_name] = shape
+        tree._weight_dtypes[weight_name] = np.dtype(point.dtype) if hasattr(point, "dtype") else np.float32
+
+    return tree, meta
+
+
+def decompress_tree(tree: ModelTree) -> Dict[str, np.ndarray]:
+    """Decompress all weights from a ModelTree back to numpy arrays.
+
+    Args:
+        tree: A loaded ModelTree.
+
+    Returns:
+        Dict mapping weight names to their decompressed numpy arrays.
+    """
+    weights = {}
+    prefix = f"{tree.name}."
+    for point in tree.library.list_all():
+        if point.identity.startswith(prefix):
+            weight_name = point.identity[len(prefix):]
+        elif "." in point.identity:
+            weight_name = point.identity.split(".", 1)[1]
+        else:
+            weight_name = point.identity
+
+        shape = tree._weight_shapes.get(weight_name, ())
+        dtype = tree._weight_dtypes.get(weight_name, np.float32)
+
+        if point.function_type == "raw":
+            raw_bytes = base64.b64decode(point.params["data_b64"])
+            arr = np.frombuffer(raw_bytes, dtype=point.params["dtype"])
+            if point.params.get("shape"):
+                arr = arr.reshape(point.params["shape"])
+        else:
+            n = point.params.get("n", 0) if "n" in point.params else (int(np.prod(shape)) if shape else 1000)
+            arr = point.generate(n)
+            if shape:
+                arr = arr.reshape(shape)
+        weights[weight_name] = arr.astype(dtype)
+    return weights
