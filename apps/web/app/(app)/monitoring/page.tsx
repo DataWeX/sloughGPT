@@ -389,7 +389,7 @@ export default function SystemHealthPage() {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Pool</span>
                   {executorStatus.total_tracked > 0 && (
-                    <Button variant="outline" size="sm" className="text-[10px] h-5" onClick={async () => { await systemController.purgeExecutorJobs(3600); fetchAll() }}>
+                    <Button variant="outline" size="sm" className="text-[10px] h-7" onClick={async () => { await systemController.purgeExecutorJobs(3600); fetchAll() }}>
                       Purge
                     </Button>
                   )}
@@ -418,7 +418,7 @@ export default function SystemHealthPage() {
                           <span className="truncate">{j.job_id}</span>
                           {j.elapsed_s != null && <span className="text-muted-foreground/60">{j.elapsed_s.toFixed(1)}s</span>}
                           {(j.status === 'running' || j.status === 'queued') && !j.cancel_requested && (
-                            <Button variant="ghost" size="sm" className="text-[10px] h-4 text-destructive hover:text-destructive ml-auto"
+                            <Button variant="ghost" size="sm" className="text-[10px] h-7 text-destructive hover:text-destructive ml-auto"
                               onClick={async () => { await systemController.cancelExecutorJob(j.job_id); fetchAll() }}>
                               Cancel
                             </Button>

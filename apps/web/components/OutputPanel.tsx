@@ -70,16 +70,16 @@ export function OutputPanel({ open, onClose }: OutputPanelProps) {
           <span className="text-xs text-muted-foreground">({filtered.length}/{lines.length})</span>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={togglePause} className="h-6 px-2 text-xs" title={paused ? 'Resume' : 'Pause'}>
+          <Button variant="ghost" size="sm" onClick={togglePause} className="h-7 px-2 text-xs" aria-label={paused ? 'Resume output' : 'Pause output'}>
             {paused ? '▶' : '⏸'}
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => exportLines('text')} className="h-6 px-2 text-xs" title="Export as .log">
+          <Button variant="ghost" size="sm" onClick={() => exportLines('text')} className="h-7 px-2 text-xs" aria-label="Export as log file">
             ↓
           </Button>
-          <Button variant="ghost" size="sm" onClick={clear} className="h-6 px-2 text-xs">
+          <Button variant="ghost" size="sm" onClick={clear} className="h-7 px-2 text-xs">
             Clear
           </Button>
-          <Button variant="ghost" size="sm" onClick={onClose} className="h-6 px-2 text-xs" aria-label="Close">
+          <Button variant="ghost" size="sm" onClick={onClose} className="h-7 px-2 text-xs" aria-label="Close">
             &times;
           </Button>
         </div>

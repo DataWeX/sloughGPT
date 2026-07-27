@@ -155,7 +155,7 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
                       </thead>
                       <tbody>
                         {sortedLayers.map(([name, entry]) => (
-                          <tr key={name} className="border-t border-border/20 hover:bg-muted/20">
+                          <tr key={name} className="border-t border-border/20 hover:bg-muted/20 transition-colors">
                             <td className="px-2 py-1 font-mono">{formatLayerName(name)}</td>
                             <td className={`px-2 py-1 text-right font-mono ${cosineColor(entry.cosine_sim)}`}>
                               {entry.cosine_sim.toFixed(6)}

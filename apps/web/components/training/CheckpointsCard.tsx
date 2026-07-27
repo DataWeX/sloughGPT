@@ -21,7 +21,14 @@ export function CheckpointsCard({
 }) {
   const addToast = useToastStore(s => s.addToast)
   const hasCheckpoints = checkpoints.checkpoints.length > 0 || checkpoints.loadingCheckpoints
-  if (!hasCheckpoints) return null
+  if (checkpoints.checkpoints.length === 0 && !checkpoints.loadingCheckpoints) return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">Trained models</CardTitle></CardHeader>
+      <CardContent>
+        <p className="text-xs text-muted-foreground text-center py-4">No trained models yet. Start training to create your first checkpoint.</p>
+      </CardContent>
+    </Card>
+  )
 
   return (
     <Card>

@@ -35,11 +35,11 @@ describe('EvalReportCard', () => {
     expect(screen.getByText('Evaluation History')).toBeDefined()
   })
 
-  it('renders nothing when no eval history', async () => {
+  it('shows empty state when no eval history', async () => {
     mockGetEvalHistory.mockResolvedValue({ results: [] })
-    const { container } = render(<EvalReportCard />)
+    render(<EvalReportCard />)
     await waitFor(() => {
-      expect(container.innerHTML).toBe('')
+      expect(screen.getByText(/No evaluation reports yet/)).toBeDefined()
     })
   })
 

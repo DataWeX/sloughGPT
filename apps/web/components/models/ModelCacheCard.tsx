@@ -19,7 +19,7 @@ export default function ModelCacheCard({ cacheUsage, health, onRefresh }: ModelC
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base">Model Cache</CardTitle>
-        <Button size="sm" variant="ghost" onClick={onRefresh}>
+        <Button size="sm" variant="ghost" onClick={onRefresh} aria-label="Refresh cache">
           <IconRefresh className="h-3.5 w-3.5" />
         </Button>
       </CardHeader>

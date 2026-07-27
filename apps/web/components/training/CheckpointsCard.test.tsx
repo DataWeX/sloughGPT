@@ -28,11 +28,12 @@ const cp = (name: string, overrides: Record<string, any> = {}) => ({
 describe('CheckpointsCard', () => {
   afterEach(cleanup)
 
-  it('returns null when no checkpoints and not loading', () => {
-    const { container } = render(
+  it('shows empty state when no checkpoints and not loading', () => {
+    render(
       <CheckpointsCard checkpoints={makeCheckpoints()} loadingTimedOut={false} onRetry={vi.fn()} onContinue={vi.fn()} onTest={vi.fn()} />
     )
-    expect(container.innerHTML).toBe('')
+    expect(screen.getByText('Trained models')).toBeDefined()
+    expect(screen.getByText(/No trained models yet/)).toBeDefined()
   })
 
   it('renders card title', () => {

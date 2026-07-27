@@ -36,11 +36,12 @@ function makeJob(overrides: Record<string, any> = {}) {
 describe('JobHistoryCard', () => {
   afterEach(cleanup)
 
-  it('returns null when no jobs and not loading', () => {
-    const { container } = render(
+  it('shows empty state when no jobs and not loading', () => {
+    render(
       <JobHistoryCard allJobs={[]} checkpoints={makeCheckpoints()} loadingTimedOut={false} onRetry={vi.fn()} />
     )
-    expect(container.innerHTML).toBe('')
+    expect(screen.getByText('Training Jobs')).toBeDefined()
+    expect(screen.getByText(/No training jobs yet/)).toBeDefined()
   })
 
   it('renders card title', () => {

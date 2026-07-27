@@ -21,7 +21,14 @@ export default function PersonalitiesCard({
   souls, soulsLoading, checkpoints, checkpointsLoading,
   currentSoul, activeCheckpoint, switchingSoul, onSwitch,
 }: PersonalitiesCardProps) {
-  if (souls.length === 0 && !soulsLoading) return null
+  if (souls.length === 0 && !soulsLoading) return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">Personalities</CardTitle></CardHeader>
+      <CardContent>
+        <p className="text-xs text-muted-foreground text-center py-4">No personalities available yet.</p>
+      </CardContent>
+    </Card>
+  )
 
   return (
     <Card>

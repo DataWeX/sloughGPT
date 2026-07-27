@@ -82,7 +82,7 @@ export function OutputCard({ title = 'Server Output', height, tail, maxLines, co
     <div className="flex items-center gap-2">
       <span className={`inline-block w-2 h-2 rounded-full ${paused ? 'bg-warning' : streaming ? 'bg-success animate-pulse' : 'bg-muted-foreground/50'}`} />
       <span className="text-[11px] text-muted-foreground font-mono">{paused ? 'Paused' : streaming ? 'Live' : 'Off'}</span>
-      <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={togglePause} aria-label={paused ? 'Resume output' : 'Pause output'}>
+      <Button variant="ghost" size="sm" className="h-7 text-[10px]" onClick={togglePause} aria-label={paused ? 'Resume output' : 'Pause output'}>
         {paused ? '▶' : '⏸'}
       </Button>
       {lines.length > 0 && (

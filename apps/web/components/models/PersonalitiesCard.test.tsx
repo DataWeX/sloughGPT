@@ -58,9 +58,10 @@ describe('PersonalitiesCard', () => {
     expect(container.querySelector('.animate-pulse')).toBeDefined()
   })
 
-  it('returns null when empty and not loading', () => {
-    const { container } = render(<PersonalitiesCard {...base} souls={[]} />)
-    expect(container.innerHTML).toBe('')
+  it('shows empty state when empty and not loading', () => {
+    render(<PersonalitiesCard {...base} souls={[]} />)
+    expect(screen.getByText('Personalities')).toBeDefined()
+    expect(screen.getByText(/No personalities available yet/)).toBeDefined()
   })
 
   it('shows active badge for current soul', () => {

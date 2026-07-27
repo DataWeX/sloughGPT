@@ -22,7 +22,14 @@ export function JobHistoryCard({
   const router = useRouter()
   const addToast = useToastStore(s => s.addToast)
   const hasJobs = allJobs.length > 0 || checkpoints.loadingJobs
-  if (!hasJobs) return null
+  if (allJobs.length === 0 && !checkpoints.loadingJobs) return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">Training Jobs</CardTitle></CardHeader>
+      <CardContent>
+        <p className="text-xs text-muted-foreground text-center py-4">No training jobs yet. Start training to see history here.</p>
+      </CardContent>
+    </Card>
+  )
 
   return (
     <Card>
@@ -119,19 +126,19 @@ export function JobHistoryCard({
                           Use
                         </Button>
                       )}
-                      <span className="text-xs text-success shrink-0">Done</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-success/15 text-success font-medium shrink-0">Done</span>
                     </>
                   )}
                   {job.status === 'failed' && (
                     <>
-                      <span className="text-xs text-destructive shrink-0">Failed</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-destructive/15 text-destructive font-medium shrink-0">Failed</span>
                       <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => router.push('/training')}>
                         Retry
                       </Button>
                     </>
                   )}
                   {['stopping', 'stopped'].includes(job.status) && (
-                    <span className="text-xs text-muted-foreground shrink-0">Stopped</span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium shrink-0">Stopped</span>
                   )}
                   <Button size="sm" variant="ghost" className="h-6 text-xs text-muted-foreground hover:text-destructive" onClick={async () => {
                     if (!confirm(`Delete job "${job.name || job.id}"?`)) return

@@ -96,7 +96,14 @@ export function EvalReportCard() {
     )
   }
 
-  if (entries.length === 0) return null
+  if (entries.length === 0) return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">Evaluation History</CardTitle></CardHeader>
+      <CardContent>
+        <p className="text-xs text-muted-foreground text-center py-4">No evaluation reports yet. Train a model to see eval results.</p>
+      </CardContent>
+    </Card>
+  )
 
   const display = expanded ? entries : entries.slice(0, 3)
 

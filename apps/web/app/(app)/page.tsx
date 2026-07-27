@@ -326,7 +326,7 @@ export default function HomePage() {
                 <div key={j.id} className="flex items-center gap-2 px-1.5 py-1">
                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${j.status === 'running' ? 'bg-success animate-pulse' : j.status === 'completed' ? 'bg-success' : j.status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground/40'}`} />
                   <span className="text-xs truncate flex-1">{j.name || j.id}</span>
-                  <span className="text-[10px] text-muted-foreground shrink-0">{j.status}</span>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${j.status === 'running' ? 'bg-warning/15 text-warning' : j.status === 'completed' ? 'bg-success/15 text-success' : j.status === 'failed' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground'}`}>{j.status}</span>
                 </div>
               ))}
             </div>
@@ -345,7 +345,7 @@ export default function HomePage() {
                 Start chatting, then train the model on your conversations. The more you chat, the better it gets.
               </p>
               <button
-                className="text-[10px] text-muted-foreground hover:text-foreground shrink-0"
+                className="text-[10px] text-muted-foreground hover:text-foreground shrink-0 transition-colors"
                 onClick={(e) => { localStorage.setItem('onboarding_dismissed', '1'); e.currentTarget.closest('.space-y-4 > div')?.remove() }}
               >
                 Got it
