@@ -122,6 +122,7 @@ export function SystemPromptDialog({ open, onOpenChange, value, onSave }: System
                         onClick={() => handleDeletePreset(p.name)}
                         className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
                         title="Delete preset"
+                        aria-label="Delete preset"
                       >
                         <IconTrash className="h-2.5 w-2.5" />
                       </button>
