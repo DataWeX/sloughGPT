@@ -9,7 +9,7 @@ from domains.shell.kernel_scheduler import Scheduler
 from domains.shell.kernel_interrupts import InterruptManager, InterruptVector, InterruptType, Interrupt
 from domains.shell.kernel_devices import DeviceDriver, DeviceManager, DeviceType, DeviceState
 from domains.shell.kernel_syscall import SyscallTable, SyscallNumber, SyscallResult, SYSCALLS
-from domains.shell.kernel_core import Kernel, get_kernel, reset_kernel
+from domains.shell.kernel import Kernel, get_kernel, reset_kernel
 
 
 # ── Process tests ────────────────────────────────────────────────────────────

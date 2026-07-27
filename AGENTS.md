@@ -251,6 +251,7 @@ sloughGPT/
 ### Testing Requirements
 
 ### Before Submitting (Mandatory)
+0. **Clear pycache** — `find . -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null` — stale `.pyc` files cause silent runtime crashes
 1. **Syntax check** — Python: `python3 -m py_compile <file>`; TypeScript: `npx tsc --noEmit`
 2. **Runtime test** — Actually call the endpoint/function, don't just read code
 3. **Log verification** — Check logs for errors, not just HTTP 200
@@ -298,6 +299,9 @@ npm run test:changed  # only changed files
 
 # Full web test suite
 npm run test          # ~3 min — pre-push only
+
+# Clear Python bytecode cache (always run after modifying Python files)
+find . -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null; find . -name "*.pyc" -delete 2>/dev/null; echo "pycache cleared"
 ```
 
 ### Pre-commit Hooks (auto-run on `git commit`)

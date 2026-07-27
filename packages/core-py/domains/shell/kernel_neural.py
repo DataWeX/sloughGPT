@@ -1,16 +1,19 @@
 """
-AI-Native Neural Kernel — DEPRECATED.
+Neural Kernel — re-export shim.
 
-This module is now a re-export shim. The unified Kernel class lives in kernel.py.
+Canonical source is addons.neural. This module exists for backward compatibility.
 
 Migration:
-    from domains.shell.kernel import Kernel
+    from domains.shell.addons.neural import NeuralProcess, NeuralKVCache, ...
 """
-from .kernel import (  # noqa: F401
-    Kernel as NeuralKernel,  # backward compat alias
-    NeuralProcess, NeuralProcessType, NeuralState, NeuralOp,
-    NeuralMemoryType, CacheStrategy, NeuralKVCache, NeuralEmbeddingStore,
+
+from .addons.neural import (  # noqa: F401
+    NeuralOp, NeuralState, NeuralProcessType, NeuralMemoryType, CacheStrategy,
+    NeuralProcess, KVCacheEntry, NeuralKVCache,
+    EmbeddingEntry, NeuralEmbeddingStore,
     NeuralEngineDevice, TokenizerDevice, EmbeddingStoreDevice,
-    NeuralInterrupt, NeuralSyscall, GradientAccumulator, BatchProcessor,
-    BatchRequest, BatchResult, MultiHeadAttentionDevice,
+    MultiHeadAttentionDevice,
+    NeuralInterrupt, NeuralSyscall,
+    GradientAccumulator, BatchRequest, BatchResult, BatchProcessor,
+    NeuralKernel,
 )

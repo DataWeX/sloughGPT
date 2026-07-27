@@ -46,8 +46,8 @@ class DaitRuntime:
     """Top-level runtime — orchestrates kernel, init, devices, VFS, and neural."""
 
     def __init__(self):
-        from .kernel import Kernel
-        self.kernel = Kernel()
+        from .kernel_neural import NeuralKernel
+        self.kernel = NeuralKernel()
         self._model_loaded: bool = False
         self._model_name: str = ""
         self._current_soul: str = ""
@@ -78,6 +78,10 @@ class DaitRuntime:
 
         self._boot_time = time.time()
         self.kernel.boot()
+
+        # Install neural addon before registering devices
+        from .addons import neural
+        self.kernel.install_addon(neural)
 
         # Register neural devices with the kernel
         self.kernel.register_devices()

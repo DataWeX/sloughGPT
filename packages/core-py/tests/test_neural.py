@@ -2,7 +2,7 @@
 
 import pytest
 import numpy as np
-from domains.shell.kernel_core import Kernel, reset_kernel
+from domains.shell.kernel import Kernel, reset_kernel
 from domains.shell.kernel_process import Process, ProcessState, Priority
 from domains.shell.kernel_neural import (
     NeuralKernel, NeuralProcess, NeuralProcessType,

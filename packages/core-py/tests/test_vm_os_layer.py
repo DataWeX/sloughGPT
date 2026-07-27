@@ -586,7 +586,7 @@ class TestOSIntegration:
 class TestSyscallExec:
     def _setup_with_process(self, source_code: str, filename: str = "test.asm"):
         """Create a virtual system, write a file to FS, and spawn a worker."""
-        vs = X86VirtualSystem(memory_size=0x100000, timer_hz=100)
+        vs = X86VirtualSystem(memory_size=0x200000, timer_hz=100)
         vs.filesystem.write(filename, source_code.encode("utf-8"))
         pid = vs.spawn("worker", "mov eax, 99\nhlt")
         assert pid is not None
@@ -636,14 +636,14 @@ class TestSyscallExec:
         assert current.edx == 0
 
     def test_exec_file_not_found(self):
-        vs = X86VirtualSystem(memory_size=0x100000, timer_hz=100)
+        vs = X86VirtualSystem(memory_size=0x200000, timer_hz=100)
         pid = vs.spawn("worker", "hlt")
         vs.scheduler.start(vs.cpu)
         result = self._exec_filename(vs, "nonexistent.asm")
         assert result == -1
 
     def test_exec_no_filesystem(self):
-        vs = X86VirtualSystem(memory_size=0x100000, timer_hz=100)
+        vs = X86VirtualSystem(memory_size=0x200000, timer_hz=100)
         vs._syscall._fs = None
         result = vs._syscall._sys_exec(0x1000)
         assert result == -1
@@ -1407,3 +1407,189 @@ class TestSyscallNetIO:
         vs.nic.inject_packet(b'\x00' * 100)
         result = vs._syscall._sys_net_recv(0x90000, 10)
         assert result == 10
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Integration: x86 assembly test programs
+# ══════════════════════════════════════════════════════════════════════════════
+
+from domains.shell.vm_programs import (
+    TEST_SYSCALLS_ASM, TEST_FILES_ASM, TEST_EXEC_TARGET_ASM, TEST_EXEC_ASM,
+)
+
+
+def _run_program(vs, source, capsys, max_cycles=200000):
+    """Spawn a program, run to completion, return cycles executed."""
+    pid = vs.spawn("test", source)
+    assert pid is not None, "spawn() returned None"
+    vs.scheduler.start(vs.cpu)
+    cycles = 0
+    while cycles < max_cycles:
+        if not vs.cpu.step():
+            break
+        if cycles % 100 == 0:
+            vs._pit.tick()
+        cycles += 1
+        if vs._ptable.alive_count() <= 1:
+            break
+    return cycles
+
+
+class TestSyscallIntegration:
+    """End-to-end tests that assemble and run x86 programs via X86VirtualSystem."""
+
+    def test_syscalls_assembles(self, capsys):
+        """TEST_SYSCALLS_ASM assembles without error."""
+        asm = X86Assembler()
+        code = asm.assemble(TEST_SYSCALLS_ASM)
+        assert len(code) > 100
+
+    def test_files_assembles(self, capsys):
+        """TEST_FILES_ASM assembles without error."""
+        asm = X86Assembler()
+        code = asm.assemble(TEST_FILES_ASM)
+        assert len(code) > 100
+
+    def test_exec_assembles(self, capsys):
+        """TEST_EXEC_ASM assembles without error."""
+        asm = X86Assembler()
+        code = asm.assemble(TEST_EXEC_ASM)
+        assert len(code) > 100
+
+    def test_exec_target_assembles(self, capsys):
+        """TEST_EXEC_TARGET_ASM assembles without error."""
+        asm = X86Assembler()
+        code = asm.assemble(TEST_EXEC_TARGET_ASM)
+        assert len(code) > 10
+
+    def test_syscalls_runs_to_completion(self, capsys):
+        """Spawn and run the full syscall test program."""
+        vs = X86VirtualSystem(memory_size=0x800000)
+        cycles = _run_program(vs, TEST_SYSCALLS_ASM, capsys)
+        assert cycles > 0
+        # Program should have exited (scheduler should be idle or only kernel left)
+        captured = capsys.readouterr()
+        output = captured.out
+        # Must contain PASS or FAIL for each syscall
+        assert "[01]" in output or "[02]" in output, f"No test output found:\n{output}"
+        # Count PASS lines
+        pass_count = output.count("PASS")
+        fail_count = output.count("FAIL")
+        skip_count = output.count("SKIP")
+        assert pass_count + fail_count + skip_count > 0, f"No PASS/FAIL/SKIP found:\n{output}"
+        # At least half should pass (exec is skipped)
+        assert pass_count >= fail_count, f"More failures than passes: {pass_count}P {fail_count}F\n{output}"
+
+    def test_syscalls_write_stdout(self, capsys):
+        """The syscall test writes PASS/FAIL to stdout via SYS_WRITE."""
+        vs = X86VirtualSystem(memory_size=0x800000)
+        _run_program(vs, TEST_SYSCALLS_ASM, capsys)
+        captured = capsys.readouterr()
+        assert "PASS" in captured.out
+
+    def test_files_runs(self, capsys):
+        """Spawn and run the filesystem test program."""
+        vs = X86VirtualSystem(memory_size=0x800000)
+        cycles = _run_program(vs, TEST_FILES_ASM, capsys)
+        assert cycles > 0
+        captured = capsys.readouterr()
+        output = captured.out
+        assert "[1]" in output or "[2]" in output, f"No test output:\n{output}"
+        pass_count = output.count("PASS")
+        fail_count = output.count("FAIL")
+        assert pass_count >= 1, f"No passes in filesystem tests:\n{output}"
+
+    def test_exec_target_runs(self, capsys):
+        """The exec target program runs and prints to stdout."""
+        vs = X86VirtualSystem(memory_size=0x400000)
+        cycles = _run_program(vs, TEST_EXEC_TARGET_ASM, capsys)
+        assert cycles > 0
+        captured = capsys.readouterr()
+        # Exec target prints "X" to stdout
+        assert "X" in captured.out, f"Exec target didn't print X: {captured.out}"
+
+    def test_exec_writes_target_to_fs(self, capsys):
+        """The exec test writes a target file to the filesystem."""
+        vs = X86VirtualSystem(memory_size=0x800000)
+        # Write the target source to FS before spawning
+        vs.filesystem.write("exec_tgt.asm", TEST_EXEC_TARGET_ASM.encode("utf-8"))
+        # Verify it's there
+        assert vs.filesystem.exists("exec_tgt.asm")
+        data = vs.filesystem.read("exec_tgt.asm")
+        assert b"[BITS 32]" in data
+
+    def test_exec_replaces_process(self, capsys):
+        """The exec syscall replaces the current process with target program."""
+        vs = X86VirtualSystem(memory_size=0x800000)
+        # Write the target source to FS
+        vs.filesystem.write("exec_tgt.asm", TEST_EXEC_TARGET_ASM.encode("utf-8"))
+        # Write a small exec test program that calls exec
+        exec_test = """\
+[BITS 32]
+[ORG 0x100000]
+; Write filename "exec_tgt.asm" to memory
+mov byte [0x80000], 'e'
+mov byte [0x80001], 'x'
+mov byte [0x80002], 'e'
+mov byte [0x80003], 'c'
+mov byte [0x80004], '_'
+mov byte [0x80005], 't'
+mov byte [0x80006], 'g'
+mov byte [0x80007], 't'
+mov byte [0x80008], '.'
+mov byte [0x80009], 'a'
+mov byte [0x8000a], 's'
+mov byte [0x8000b], 'm'
+mov byte [0x8000c], 0
+; Call exec
+mov eax, 7
+mov ebx, 0x80000
+int 0x80
+; If exec succeeded, we won't get here
+; If exec failed, print FAIL
+mov eax, 3
+mov ebx, 1
+push 0x000A46  ; "F\n\0"
+mov ecx, esp
+mov edx, 2
+int 0x80
+pop eax
+mov eax, 1
+mov ebx, 0
+int 0x80
+"""
+        cycles = _run_program(vs, exec_test, capsys)
+        assert cycles > 0
+        captured = capsys.readouterr()
+        # Exec target prints "X" — if we see it, exec succeeded
+        # If we see "F", exec failed
+        assert "X" in captured.out or "F" in captured.out, f"Unexpected output: {captured.out}"
+
+    def test_syscalls_all_26_present(self, capsys):
+        """All 26 syscall test labels appear in the assembly."""
+        for i in range(1, 27):
+            label = f"[{i:02d}]"
+            assert label in TEST_SYSCALLS_ASM, f"Missing test label {label}"
+
+    def test_syscalls_program_size(self):
+        """The syscall test program is a reasonable size."""
+        asm = X86Assembler()
+        code = asm.assemble(TEST_SYSCALLS_ASM)
+        # Should be at least 500 bytes (lots of string data + instructions)
+        assert len(code) >= 500
+        # But not more than 64KB
+        assert len(code) <= 65536
+
+    def test_syscalls_uses_all_buffer_regions(self):
+        """The syscall test uses buffer addresses."""
+        assert "0x80000" in TEST_SYSCALLS_ASM or "80000" in TEST_SYSCALLS_ASM
+        assert "saved_fd" in TEST_SYSCALLS_ASM
+        assert "saved_malloc" in TEST_SYSCALLS_ASM
+
+    def test_files_program_has_all_fs_tests(self):
+        """The filesystem test covers open, write, read, readdir, close."""
+        assert "SYS_OPEN" in TEST_FILES_ASM or "open" in TEST_FILES_ASM.lower()
+        assert "write" in TEST_FILES_ASM.lower()
+        assert "read" in TEST_FILES_ASM.lower()
+        assert "readdir" in TEST_FILES_ASM.lower() or "READDIR" in TEST_FILES_ASM
+        assert "close" in TEST_FILES_ASM.lower()

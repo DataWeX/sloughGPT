@@ -24,6 +24,15 @@ Or via CLI:
 from typing import Optional
 
 from .kernel import Kernel, Process, ProcessState  # noqa: F401
+from .addons.neural import (  # noqa: F401
+    NeuralOp, NeuralState, NeuralProcessType, NeuralMemoryType, CacheStrategy,
+    NeuralProcess, KVCacheEntry, NeuralKVCache,
+    EmbeddingEntry, NeuralEmbeddingStore,
+    NeuralEngineDevice, TokenizerDevice, EmbeddingStoreDevice,
+    NeuralInterrupt, NeuralSyscall,
+    GradientAccumulator, BatchRequest, BatchResult, BatchProcessor,
+    MultiHeadAttentionDevice,
+)
 from .runtime import DaitRuntime, Resource  # noqa: F401
 from .repl import ShellREPL
 from .commands import ShellCommands

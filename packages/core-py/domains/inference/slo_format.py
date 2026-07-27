@@ -539,6 +539,11 @@ def save_soul(
     if soul_profile is None:
         soul_profile = SloProfile(name=Path(output_path).stem)
 
+    if not soul_profile.metadata and hasattr(model, "metadata") and isinstance(model.metadata, dict):
+        soul_profile.metadata = dict(model.metadata)
+    if not soul_profile.lineage and hasattr(model, "lineage"):
+        soul_profile.lineage = model.lineage
+
     soul_profile.integrity_hash = soul_profile.compute_hash()
     config_json = json.dumps(
         _soul_json_sanitize(soul_profile.to_dict()),

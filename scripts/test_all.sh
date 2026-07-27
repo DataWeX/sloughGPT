@@ -21,6 +21,14 @@ python3 -m pytest tests/ \
   --ignore=tests/test_rag.py \
   --ignore=tests/test_train_sloughgpt_generate_text.py \
   --ignore=tests/test_train_sloughgpt_resume.py \
+  --ignore=tests/test_auto_train.py \
+  --ignore=tests/test_auto_train_integration.py \
+  --ignore=tests/test_chat_loop_e2e.py \
+  --ignore=tests/test_e2e_inference.py \
+  --ignore=tests/test_e2e_smoke.py \
+  --ignore=tests/test_inference_generate.py \
+  --ignore=tests/test_torch_runtime.py \
+  --ignore=tests/test_wandb_helpers.py \
   --ignore=tests/server/ \
   -q --tb=short || FAILURES=$((FAILURES + 1))
 

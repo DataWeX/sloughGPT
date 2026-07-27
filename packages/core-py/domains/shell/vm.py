@@ -1391,7 +1391,7 @@ class FlatFS:
 
     def write(self, name: str, data: bytes) -> None:
         """Write data to a file, allocating sectors as needed."""
-        sectors_needed = (len(data) + self._block.SECTOR_SIZE - 1) // self._block.SECTOR_SIZE
+        sectors_needed = max(1, (len(data) + self._block.SECTOR_SIZE - 1) // self._block.SECTOR_SIZE)
 
         # Find free sectors (simple: use sectors after all existing files)
         used = set()
@@ -3903,7 +3903,11 @@ class X86CPU:
         handler = self._idt_handlers.get(int_num)
         if handler:
             handler(self)
-        # Simulate IRET: restore IF to pre-interrupt state
+        # Simulate IRET: pop the 12-byte interrupt frame (EIP, CS, EFLAGS)
+        self._eip = self._pop32()
+        self._pop32()  # CS (ignored, flat model)
+        self._eflags = self._pop32() & 0xFFFFFFFF
+        # Restore IF to pre-interrupt state
         if int_num < 16:
             self._set_flag(FLAG_IF, saved_if)
 
@@ -6752,11 +6756,11 @@ class X86VirtualSystem:
                  timer_hz: int = 100,
                  quantum: int = 10):
         # Memory allocator
-        # Reserve: 0-0x40000 (low 256 KB), 0xB8000-0xC0000 (VGA)
+        # Reserve: 0-0x100000 (low 1 MB: IVT, GDT, kernel, VGA)
         self._allocator = PageFrameAllocator(
             total_memory=memory_size,
             reserved_ranges=[
-                (0, 0x40000),
+                (0, 0x100000),
                 (0xB8000, 0xC0000),
             ]
         )
@@ -6809,8 +6813,8 @@ class X86VirtualSystem:
             clock=self._clock,
         )
 
-        # Register INT 0x80 handler
-        self._cpu.register_handler(0x80, self._syscall.handle)
+        # Register INT 0x80 handler (wrapper needed: _raise_interrupt passes cpu arg)
+        self._cpu.register_handler(0x80, lambda _cpu: self._syscall.handle())
 
         # Keyboard interrupt handler
         def _keyboard_handler():
@@ -6951,7 +6955,7 @@ class X86VirtualSystem:
         """Reset the entire system."""
         self._allocator = PageFrameAllocator(
             total_memory=self._cpu._mem_size,
-            reserved_ranges=[(0, 0x40000), (0xB8000, 0xC0000)],
+            reserved_ranges=[(0, 0x100000), (0xB8000, 0xC0000)],
         )
         self._ptable = ProcessTable()
         self._scheduler = Scheduler(self._ptable,

@@ -151,6 +151,8 @@ class TestImportFromSouFallback:
             loaded = import_from_sou(soul_path)
             assert loaded is not None
             assert hasattr(loaded, "state_dict")
+            assert loaded.n_layer == 1, f"Expected n_layer=1, got {loaded.n_layer}"
+            assert loaded.n_head == 2, f"Expected n_head=2, got {loaded.n_head}"
 
             # Verify weights are approximately correct (VQ is lossy)
             orig_weights = net.state_dict()

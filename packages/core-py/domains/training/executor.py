@@ -390,8 +390,6 @@ def compress_checkpoint(
     import json
     from pathlib import Path
 
-    from domains.training.export import export_to_sou
-
     soul_file = Path(soul_path)
     if not soul_file.exists():
         logger.warning("Checkpoint not found: %s", soul_path, extra={"tag": "TRAIN"})
@@ -400,7 +398,7 @@ def compress_checkpoint(
     try:
         from domains.infrastructure.pugqeep import PointCompressor
         from domains.infrastructure.pugqeep.library import PointLibrary
-        from domains.training.slonet import SloTransformer, import_from_sou
+        from domains.training.slonet import import_from_sou
     except ImportError as exc:
         logger.warning("Pugqeep/SloNet not available: %s", exc, extra={"tag": "TRAIN"})
         return None
@@ -422,10 +420,10 @@ def compress_checkpoint(
     compressor = PointCompressor()
     library = PointLibrary(name=lib_name, storage_dir=out_dir)
 
+    import numpy as np
     total_raw = 0
     total_compressed = 0
     for name, weights in state_dict.items():
-        import numpy as np
         if not isinstance(weights, np.ndarray):
             weights = np.asarray(weights, dtype=np.float32)
         total_raw += weights.nbytes

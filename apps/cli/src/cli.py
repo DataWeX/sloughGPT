@@ -324,7 +324,7 @@ def shell(ctx, command):
     from utils.helpers import ensure_server
     ensure_server(host=ctx.obj["host"], port=ctx.obj["port"])
     from domains.shell.repl import ShellREPL
-    from domains.shell.kernel import DaitRuntime
+    from domains.shell import DaitRuntime
 
     os = DaitRuntime()
     repl = ShellREPL(os)
