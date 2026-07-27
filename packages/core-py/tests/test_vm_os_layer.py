@@ -929,11 +929,14 @@ class TestCMOSDevice:
         dev = CMOSDevice(cpu=cpu)
         # Manually set a flag in status C
         dev._cmos[0x0C] = 0x30
-        # Select and read
+        # Select status C via port 0x70, then read via 0x71
         cpu._io_out[0x70](0x0C)
-        val = cpu._io_in[0x0C]() if hasattr(cpu._io_in, '__getitem__') else dev.read_cmos(0x0C)
-        # Status C is read-to-clear
-        assert dev.read_cmos(0x0C) == 0x00
+        val = cpu._io_in[0x71]()
+        assert val == 0x30
+        # Second read should return 0 (read-to-clear)
+        cpu._io_out[0x70](0x0C)
+        val2 = cpu._io_in[0x71]()
+        assert val2 == 0x00
 
     def test_status_d_vrt_bit(self):
         dev = CMOSDevice()
