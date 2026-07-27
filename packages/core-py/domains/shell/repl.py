@@ -72,6 +72,29 @@ except ImportError:
     pass
 
 
+# ── Completion cache fetchers (API-backed) ──────────────────────────
+
+def _make_completion_fetchers() -> dict[str, callable]:
+    """Build command→fetcher mapping for CompletionCache."""
+    try:
+        from core.completion import complete_models, complete_souls, complete_datasets, complete_checkpoints
+    except ImportError:
+        return {}
+    return {
+        "load": complete_models,
+        "unload": complete_models,
+        "gen": complete_models,
+        "protect": complete_models,
+        "unprotect": complete_models,
+        "switch": complete_souls,
+        "datasets": complete_datasets,
+        "dataset": complete_datasets,
+        "checkpoints": complete_checkpoints,
+    }
+
+_COMMAND_CACHE_FETCHERS: dict[str, callable] = _make_completion_fetchers()
+
+
 # ── Output capture context manager ───────────────────────────────────
 
 
@@ -173,6 +196,13 @@ class ShellREPL:
         self._dir_stack: list[str] = []
         self._chat_session_id: str | None = None
         self._chat_history: list[dict[str, str]] = []
+
+        # Dynamic completion cache — TTL-based, shared with completion.py
+        try:
+            from core.completion import get_cache
+            self._completion_cache_obj = get_cache()
+        except ImportError:
+            self._completion_cache_obj = None
         self._completion_cache: dict[str, tuple[float, list[str]]] = {}
 
         if _HAS_READLINE:
@@ -460,17 +490,25 @@ class ShellREPL:
     def _complete_args_for(self, cmd: str) -> list[str]:
         """Return dynamic completion candidates for a given command.
 
-        Uses a 30-second TTL cache to avoid HTTP calls on every Tab press.
+        Uses CompletionCache (30s TTL) when available, falls back to local dict cache.
         """
+        # Use CompletionCache if available (better error handling, stale data)
+        if self._completion_cache_obj is not None:
+            fetcher = _COMMAND_CACHE_FETCHERS.get(cmd)
+            if fetcher:
+                return self._completion_cache_obj.get(cmd, fetcher)
+            # No API fetcher — fall through to path completion
+            return self._complete_path("")
+
+        # Fallback: local dict cache with 30s TTL
         now = time.monotonic()
-        cache_key = cmd
-        entry = self._completion_cache.get(cache_key)
+        entry = self._completion_cache.get(cmd)
         if entry is not None:
             ts, values = entry
             if now - ts < 30.0:
                 return values
         values = self._complete_args_for_uncached(cmd)
-        self._completion_cache[cache_key] = (now, values)
+        self._completion_cache[cmd] = (now, values)
         return values
 
     def _complete_args_for_uncached(self, cmd: str) -> list[str]:
