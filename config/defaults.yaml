@@ -27,6 +27,7 @@ features:
   health_interval: 300
   watchdog: true
   web: false
+  auto_download: false
 
 auth:
   jwt_secret: "dev-secret-change-in-production"

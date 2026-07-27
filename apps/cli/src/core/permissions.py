@@ -60,11 +60,24 @@ class PermissionsManager:
 
     Enforces bandwidth policy by querying HuggingFace Hub for model metadata,
     displaying size estimates, and requiring user confirmation before downloads.
-    Supports ``--yes`` / ``-y`` flag and ``SLO_AUTO_DOWNLOAD=1`` env var bypasses.
+
+    Resolution order for auto_download:
+    1. Constructor ``auto_yes=True`` (from CLI ``--yes`` flag)
+    2. ``SLO_AUTO_DOWNLOAD=1`` env var
+    3. ``features.auto_download`` in AppConfig (persistent, settable via shell)
     """
 
     def __init__(self, auto_yes: bool = False):
-        self.auto_yes = auto_yes or os.environ.get("SLO_AUTO_DOWNLOAD", "") == "1"
+        if auto_yes:
+            self.auto_yes = True
+        elif os.environ.get("SLO_AUTO_DOWNLOAD", "") == "1":
+            self.auto_yes = True
+        else:
+            try:
+                from domains.infrastructure.config import get_config
+                self.auto_yes = get_config().features.auto_download
+            except Exception:
+                self.auto_yes = False
 
     def estimate_model_size(self, model_id: str) -> Optional[ModelSizeEstimate]:
         """Query HuggingFace Hub API for model file list and total size.

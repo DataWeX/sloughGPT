@@ -59,6 +59,7 @@ class FeaturesConfig(BaseModel):
     health_interval: int = 300
     watchdog: bool = True
     web: bool = False
+    auto_download: bool = False
 
 
 class AuthConfig(BaseModel):

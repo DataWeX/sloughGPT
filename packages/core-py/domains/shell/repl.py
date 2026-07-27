@@ -1863,6 +1863,75 @@ Examples:
             self._print(f"  Granted commands: {', '.join(granted)}")
         self._print(f"  Config: {self._perms._config_path}")
 
+    def _cmd_confirm(self, args: str = "") -> None:
+        """confirm [on|off] — toggle auto-download (skip download confirmations).
+
+        Usage:
+          confirm        Show current setting
+          confirm on     Enable auto-download (persistent)
+          confirm off    Disable auto-download (persistent)
+        """
+        import yaml
+        arg = args.strip().lower()
+
+        if not arg:
+            # Show current setting
+            try:
+                from domains.infrastructure.config import get_config
+                cfg = get_config()
+                current = cfg.features.auto_download
+            except Exception:
+                current = os.environ.get("SLO_AUTO_DOWNLOAD", "") == "1"
+
+            if current:
+                self._print(f"  Auto-download: {_C_GREEN}ON{_C_RESET}")
+                self._print(f"  Downloads will be confirmed automatically (no prompts)")
+            else:
+                self._print(f"  Auto-download: {_C_RED}OFF{_C_RESET}")
+                self._print(f"  Downloads will require confirmation")
+            self._print(f"  Toggle: confirm on / confirm off")
+            return
+
+        if arg not in ("on", "off", "yes", "no", "true", "false", "1", "0"):
+            self._print(f"  Usage: confirm [on|off]")
+            self._print(f"    on/yes/true/1  — enable auto-download")
+            self._print(f"    off/no/false/0 — disable auto-download")
+            return
+
+        new_value = arg in ("on", "yes", "true", "1")
+
+        # Update config file
+        try:
+            from domains.infrastructure.config import _REPO_ROOT, get_config
+            config_path = _REPO_ROOT / "config" / "defaults.yaml"
+            if config_path.exists():
+                with open(config_path) as f:
+                    config_data = yaml.safe_load(f) or {}
+            else:
+                config_data = {}
+
+            if "features" not in config_data:
+                config_data["features"] = {}
+            config_data["features"]["auto_download"] = new_value
+
+            with open(config_path, "w") as f:
+                yaml.dump(config_data, f, default_flow_style=False, sort_keys=False)
+
+            # Reload config
+            get_config().reload()
+
+            if new_value:
+                self._print(f"  Auto-download: {_C_GREEN}ON{_C_RESET}")
+                self._print(f"  Downloads will be confirmed automatically")
+            else:
+                self._print(f"  Auto-download: {_C_RED}OFF{_C_RESET}")
+                self._print(f"  Downloads will require confirmation")
+            self._print(f"  Setting saved to {config_path}")
+
+        except Exception as e:
+            self._print(f"  Error updating config: {e}")
+            self._print(f"  Fallback: export SLO_AUTO_DOWNLOAD=1")
+
     def _cmd_procs(self, args: str = "") -> None:
         jobs = self.cmds.ps()
         if not jobs:
@@ -3682,6 +3751,7 @@ Examples:
         "permit": _cmd_permit,
         "deny": _cmd_deny,
         "permissions": _cmd_permissions,
+        "confirm": _cmd_confirm,
     }
 
     # ── Main loop ───────────────────────────────────────────────────

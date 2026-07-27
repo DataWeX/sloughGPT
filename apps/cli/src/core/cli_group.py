@@ -210,9 +210,9 @@ class SmartGroup(click.Group):
         # Print tips
         console.print("  [bold]Tips:[/]")
         console.print("    [dim]• Use fuzzy matching — 'sloughgpt md' finds 'model'[/]")
-        console.print("    [dim]• Set SLO_AUTO_DOWNLOAD=1 to skip download confirmations[/]")
+        console.print("    [dim]• Run 'sloughgpt shell' then 'confirm on' to skip all download prompts[/]")
         console.print("    [dim]• Run 'sloughgpt shell' for 40+ built-in commands[/]")
-        console.print("    [dim]• Add --yes/-y to skip all confirmations[/]")
+        console.print("    [dim]• Add --yes/-y to skip confirmations for a single command[/]")
         console.print()
 
         console.print()

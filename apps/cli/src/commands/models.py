@@ -968,7 +968,7 @@ def register(subparsers):
     # Download
     download_parser = models_sub.add_parser("download", help="Download model from HuggingFace (interactive if no model given)")
     download_parser.add_argument("model_id", nargs="?", default=None, help="HuggingFace model ID (e.g., gpt2) — omit for interactive selection")
-    download_parser.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompt")
+    download_parser.add_argument("--yes", "-y", action="store_true", help="Override: skip confirmation for this download (default from config: confirm on/off)")
     download_parser.set_defaults(func=_cmd_models_download)
 
     # Status
@@ -1036,7 +1036,7 @@ def register(subparsers):
     # Standalone aliases for backward compat (forward to models subcommands)
     hf_download_parser = subparsers.add_parser("hf-download", help="Download model from HuggingFace")
     hf_download_parser.add_argument("model_id", help="HuggingFace model ID")
-    hf_download_parser.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompt")
+    hf_download_parser.add_argument("--yes", "-y", action="store_true", help="Override: skip confirmation for this download (default from config: confirm on/off)")
     hf_download_parser.set_defaults(func=_cmd_models_download)
 
     info_parser = subparsers.add_parser("info", help="Show model checkpoint info")
