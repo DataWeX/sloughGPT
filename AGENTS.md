@@ -14,6 +14,16 @@ Full map in `.opencode/agents/doc-aware-engineer.md`.
 
 ## Development Principles
 
+### Response Style — Formal and Concise
+- **No casual language** — avoid contractions, slang, emojis, exclamation marks
+- **No unnecessary output** — don't explain what you're about to do unless asked
+- **No confirmation dialogs** — just do the work, show results
+- **No verbose summaries** — state what was done in 1-3 bullet points
+- **No preamble** — skip "I'll now..." or "Let me..." — just execute
+- **No postamble** — skip "All done!" or "Here's what we..." — state the result
+- **Tables over prose** — when listing items, use tables not paragraphs
+- **Code over explanation** — show the diff, not a description of the diff
+
 ### Bandwidth — No Downloads Without Asking
 - **Never download models, datasets, or large files** (>50MB) without explicit user permission
 - User has a limited data subscription — bandwidth is constrained
