@@ -73,7 +73,7 @@ class TestLoadFromPoints:
             centroids = np.array([0.1, 0.5, 0.9], dtype=np.float32)
             assignments = np.array([0, 1, 2, 0, 1, 2], dtype=np.uint8)
             p = Point(
-                identity="model.weight",
+                identity="test_model.weight",
                 function_type="cluster",
                 params={"centroids": centroids, "assignments": assignments},
                 accuracy=0.95,
@@ -85,7 +85,7 @@ class TestLoadFromPoints:
             # Load
             tree, meta = load_from_points(str(Path(tmpdir) / "test_model"))
             assert tree.is_loaded
-            assert tree.library.has("model.weight")
+            assert tree.library.has("test_model.weight")
 
             # Decompress
             weights = decompress_tree(tree)
