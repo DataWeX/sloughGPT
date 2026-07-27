@@ -11,6 +11,7 @@ from domains.shell.vm import (
     ProcessTable, Scheduler, X86SyscallHandler, PITDevice,
     X86VirtualSystem, X86CPU, X86Assembler, FlatFS, BlockDevice,
     SerialDevice, MouseDevice, CMOSDevice, DiskDevice, NICDevice,
+    ClockDevice,
 )
 
 
@@ -831,15 +832,30 @@ class TestMouseDevice:
 # ══════════════════════════════════════════════════════════════════════════════
 
 class TestCMOSDevice:
+    # Reference time: 2024-06-15 14:30:45 UTC (Saturday)
+    _REF_YEAR = 2024
+    _REF_MONTH = 6
+    _REF_DAY = 15
+    _REF_HOUR = 14
+    _REF_MINUTE = 30
+    _REF_SECOND = 45
+
+    def _make_cmos(self, cpu=None):
+        """Create a CMOSDevice with clock set to a known reference time."""
+        clock = ClockDevice(freq=100)
+        clock.set_time(self._REF_YEAR, self._REF_MONTH, self._REF_DAY,
+                       self._REF_HOUR, self._REF_MINUTE, self._REF_SECOND)
+        return CMOSDevice(cpu=cpu, clock=clock)
+
     def test_init(self):
-        dev = CMOSDevice()
+        dev = self._make_cmos()
         info = dev.info()
         assert info["type"] == "cmos"
         assert "unix_time" in info
         assert info["nmi_disabled"] is False
 
     def test_default_registers(self):
-        dev = CMOSDevice()
+        dev = self._make_cmos()
         # Status Reg A: divider + rate
         assert dev.read_cmos(0x0A) == 0x26
         # Status Reg B: 24h mode
@@ -848,30 +864,37 @@ class TestCMOSDevice:
         assert dev.read_cmos(0x0D) & 0x80
 
     def test_get_time(self):
-        dev = CMOSDevice()
+        dev = self._make_cmos()
         t = dev.get_time()
-        assert "year" in t
-        assert "month" in t
-        assert "day" in t
-        assert "hour" in t
-        assert 1 <= t["month"] <= 12
-        assert 1 <= t["day"] <= 31
+        assert t["year"] == self._REF_YEAR
+        assert t["month"] == self._REF_MONTH
+        assert t["day"] == self._REF_DAY
+        assert t["hour"] == self._REF_HOUR
+        assert t["minute"] == self._REF_MINUTE
+        assert t["second"] == self._REF_SECOND
 
     def test_get_unix_time(self):
-        dev = CMOSDevice()
+        dev = self._make_cmos()
         ts = dev.get_unix_time()
-        now = int(_time.time())
-        assert abs(ts - now) <= 1
+        # Should match the clock's known Unix timestamp
+        expected = ClockDevice._date_to_unix(
+            self._REF_YEAR, self._REF_MONTH, self._REF_DAY,
+            self._REF_HOUR, self._REF_MINUTE, self._REF_SECOND,
+        )
+        assert ts == expected
 
-    def test_set_offset(self):
-        dev = CMOSDevice()
-        dev.set_offset(3600)
-        ts = dev.get_unix_time()
-        now = int(_time.time())
-        assert abs(ts - now - 3600) <= 1
+    def test_set_time_via_clock(self):
+        """Setting the clock's time changes what CMOS reports."""
+        clock = ClockDevice(freq=100)
+        clock.set_time(2000, 1, 1, 0, 0, 0)
+        dev = CMOSDevice(clock=clock)
+        t = dev.get_time()
+        assert t["year"] == 2000
+        assert t["month"] == 1
+        assert t["day"] == 1
 
     def test_bcd_encoding(self):
-        dev = CMOSDevice()
+        dev = self._make_cmos()
         dev.set_binary_mode(False)  # BCD mode
         assert not (dev.read_cmos(0x0B) & 0x04)  # DM=0 means BCD
         # Seconds should be valid BCD
@@ -880,7 +903,7 @@ class TestCMOSDevice:
         assert 0 <= (sec & 0xF) <= 9  # ones digit
 
     def test_binary_mode(self):
-        dev = CMOSDevice()
+        dev = self._make_cmos()
         dev.set_binary_mode(True)
         assert dev.read_cmos(0x0B) & 0x04  # DM=1 means binary
         sec = dev.read_cmos(0x00)
@@ -888,7 +911,7 @@ class TestCMOSDevice:
 
     def test_io_ports_with_cpu(self):
         cpu = X86CPU()
-        dev = CMOSDevice(cpu=cpu)
+        dev = self._make_cmos(cpu=cpu)
         dev.set_binary_mode(True)  # use binary so readback is plain int
         # Write address to port 0x70 (seconds register)
         cpu._io_out[0x70](0x00)
@@ -898,7 +921,7 @@ class TestCMOSDevice:
 
     def test_io_port_nmi_disable(self):
         cpu = X86CPU()
-        dev = CMOSDevice(cpu=cpu)
+        dev = self._make_cmos(cpu=cpu)
         # Writing bit 7 disables NMI
         cpu._io_out[0x70](0x80 | 0x0A)  # NMI disable + status A
         assert dev._nmi_disabled is True
@@ -908,7 +931,7 @@ class TestCMOSDevice:
 
     def test_io_port_write_read_data(self):
         cpu = X86CPU()
-        dev = CMOSDevice(cpu=cpu)
+        dev = self._make_cmos(cpu=cpu)
         # Select general-purpose CMOS offset 0x40
         cpu._io_out[0x70](0x40)
         # Write a value
@@ -919,14 +942,14 @@ class TestCMOSDevice:
         assert val == 0xAB
 
     def test_status_a_readonly(self):
-        dev = CMOSDevice()
+        dev = self._make_cmos()
         original = dev.read_cmos(0x0A)
         dev.write_cmos(0x0A, 0xFF)
         assert dev.read_cmos(0x0A) == original
 
     def test_status_c_read_to_clear(self):
         cpu = X86CPU()
-        dev = CMOSDevice(cpu=cpu)
+        dev = self._make_cmos(cpu=cpu)
         # Manually set a flag in status C
         dev._cmos[0x0C] = 0x30
         # Select status C via port 0x70, then read via 0x71
@@ -939,7 +962,7 @@ class TestCMOSDevice:
         assert val2 == 0x00
 
     def test_status_d_vrt_bit(self):
-        dev = CMOSDevice()
+        dev = self._make_cmos()
         # VRT is bit 7 of Status D
         assert dev.read_cmos(0x0D) & 0x80
         # Writing 0 clears VRT
@@ -947,26 +970,25 @@ class TestCMOSDevice:
         assert not (dev.read_cmos(0x0D) & 0x80)
 
     def test_raw_read_write(self):
-        dev = CMOSDevice()
+        dev = self._make_cmos()
         dev.write_cmos(0x60, 0x42)
         assert dev.read_cmos(0x60) == 0x42
 
     def test_out_of_bounds(self):
-        dev = CMOSDevice()
+        dev = self._make_cmos()
         dev.write_cmos(200, 0xFF)  # no crash
         assert dev.read_cmos(200) == 0
 
     def test_call_method(self):
-        dev = CMOSDevice()
+        dev = self._make_cmos()
         assert isinstance(dev.call("get_time"), dict)
         assert isinstance(dev.call("get_unix_time"), int)
         assert isinstance(dev.call("read_cmos", 0x00), int)
         assert dev.call("write_cmos", 0x40, 0x55) is True
-        assert dev.call("set_offset", 0) is True
         assert dev.call("set_binary_mode", True) is True
 
     def test_12h_mode(self):
-        dev = CMOSDevice()
+        dev = self._make_cmos()
         # Set 12-hour mode (clear bit 1 of Reg B)
         dev.write_cmos(0x0B, 0x00)
         t = dev.get_time()
