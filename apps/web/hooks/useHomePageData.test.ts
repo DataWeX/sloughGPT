@@ -1,8 +1,9 @@
 /**
  */
-import { describe, expect, it, vi, afterEach } from 'vitest'
+import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 import { renderHook, act, cleanup } from '@testing-library/react'
 import { useHomePageData } from './useHomePageData'
+import { liveStatusStore } from '@/hooks/useLiveStatus'
 
 const mockModelStatus = vi.fn().mockResolvedValue({ loaded: false, model_type: null })
 const mockModelList = vi.fn().mockResolvedValue([])
@@ -42,9 +43,14 @@ vi.mock('@/lib/knowledge-controller', () => ({
   },
 }))
 
+beforeEach(() => {
+  liveStatusStore.setState({ ready: true })
+})
+
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  liveStatusStore.setState({ ready: false })
 })
 
 const ONLINE_HEALTH = { status: 'ok', model_loaded: true, model_type: 'gpt2', summary: 'ready', inference_count: 42 }

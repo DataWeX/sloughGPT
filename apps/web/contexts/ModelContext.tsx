@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
 import { modelController } from '@/lib/model-controller'
 import type { HealthStatus } from '@/lib/model-controller'
-import { useLiveStatus } from '@/hooks/useLiveStatus'
+import { useLiveStatus, useApiReady } from '@/hooks/useLiveStatus'
 import { logger } from '@/lib/dev-log'
 
 const _log = logger.child('model-context')
@@ -88,9 +88,11 @@ export function ModelProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const ready = useApiReady()
+
   useEffect(() => {
-    void refreshModels()
-  }, [refreshModels])
+    if (ready) void refreshModels()
+  }, [ready, refreshModels])
 
   useEffect(() => {
     if (health && health.model_loaded && health.model_type) {

@@ -9,6 +9,7 @@ import { trainingController } from '@/lib/training-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { feedbackController, type FeedbackStats } from '@/lib/feedback-controller'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
+import { useApiReady } from '@/hooks/useLiveStatus'
 
 export interface HomePageData {
   modelCount: number | null
@@ -59,11 +60,14 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
     feedback: false,
   })
 
+  const ready = useApiReady()
+
   const inferenceCount = health && health !== 'offline' ? (health as HealthStatus).inference_count ?? 0 : null
   const healthSummary = health && health !== 'offline' ? (health as HealthStatus).model_type ?? null : null
   const apiStatus = health === null ? 'loading' : health === 'offline' ? 'offline' : 'online'
 
   useEffect(() => {
+    if (!ready) return
     const cancelled = { current: false }
     modelController.status().then(status => {
       if (!cancelled.current) setModelStatus({ loaded: status.loaded, model: status.model_type })
@@ -105,7 +109,7 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
       if (!cancelled.current) setFeedbackStats(s)
     }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, feedback: true })) })
     return () => { cancelled.current = true }
-  }, [])
+  }, [ready])
 
   return {
     modelCount, checkpointCount,

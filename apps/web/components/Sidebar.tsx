@@ -75,9 +75,7 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
   const afterNav = onNavigate ? () => onNavigate() : undefined
 
   return (
-    <div
-      className="relative flex h-dvh w-full transition-[width] duration-200 ease-in-out"
-    >
+    <div className="relative flex h-dvh min-w-0 flex-1">
       <aside
         className={cn(
           'sl-sidebar-surface flex flex-col w-full min-w-0 overflow-hidden',
@@ -169,51 +167,6 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
           </div>
         )}
       </aside>
-
-      {/* 3D bookmark tab — protrudes from sidebar edge */}
-      {!isDrawer && onToggleCollapse && (
-        <button
-          onClick={onToggleCollapse}
-          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className={cn(
-            'group/tab absolute top-1/2 z-20 flex h-[4.5rem] w-[1.15rem] -translate-y-1/2 items-center justify-center',
-            'rounded-r-md cursor-pointer',
-            'transition-all duration-300 ease-[cubic-bezier(222,133,0,1)]',
-            'hover:w-[1.4rem]',
-            /* Sit on the right edge, protruding outside the sidebar border */
-            'right-0 translate-x-[calc(100%-1px)]',
-            /* 3D gradient background */
-            'bg-gradient-to-b from-primary/80 via-primary to-primary/90',
-            /* 3D depth — layered shadows */
-            'shadow-[1px_0_2px_-1px_rgba(0,0,0,0.2),2px_0_4px_-2px_rgba(0,0,0,0.15),3px_0_8px_-3px_rgba(0,0,0,0.1)]',
-            /* Inner highlight for top edge 3D feel */
-            'before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:rounded-r-md before:bg-gradient-to-b before:from-white/40 before:to-transparent',
-            /* Subtle inner shadow for bottom edge */
-            'after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:rounded-r-md after:bg-gradient-to-t after:from-black/20 after:to-transparent',
-            /* Hover glow */
-            'hover:shadow-[1px_0_2px_-1px_rgba(0,0,0,0.2),2px_0_4px_-2px_rgba(0,0,0,0.15),3px_0_8px_-3px_rgba(0,0,0,0.1),0_0_12px_-2px_rgba(var(--primary)/0.3)]',
-          )}
-        >
-          {/* Arrow icon */}
-          <svg
-            className={cn(
-              'h-3 w-3 text-primary-foreground transition-transform duration-300',
-              'drop-shadow-[0_1px_1px_rgba(0,0,0,0.3)]',
-              isCollapsed ? 'rotate-0' : 'rotate-180',
-              'group-hover/tab:scale-110',
-            )}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M9 18l6-6-6-6" />
-          </svg>
-        </button>
-      )}
     </div>
   )
 }

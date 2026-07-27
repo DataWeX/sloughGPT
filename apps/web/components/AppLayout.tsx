@@ -142,8 +142,43 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Desktop sidebar */}
-        <div className="sl-app-sidebar-desktop" data-collapsed={navCollapsed ? 'true' : undefined}>
+        <div className="sl-app-sidebar-desktop relative" data-collapsed={navCollapsed ? 'true' : undefined}>
           <Sidebar variant="desktop" collapsed={navCollapsed} onToggleCollapse={toggleNav} />
+          {/* 3D bookmark tab — protrudes from sidebar edge */}
+          <button
+            onClick={toggleNav}
+            aria-label={navCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={navCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className={cn(
+              'group/tab absolute top-1/2 z-20 flex h-[4.5rem] w-[1.15rem] -translate-y-1/2 items-center justify-center',
+              'rounded-r-md cursor-pointer',
+              'transition-all duration-300 ease-[cubic-bezier(222,133,0,1)]',
+              'hover:w-[1.4rem]',
+              'right-0 translate-x-[calc(100%-1px)]',
+              'bg-gradient-to-b from-primary/80 via-primary to-primary/90',
+              'shadow-[1px_0_2px_-1px_rgba(0,0,0,0.2),2px_0_4px_-2px_rgba(0,0,0,0.15),3px_0_8px_-3px_rgba(0,0,0,0.1)]',
+              'before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:rounded-r-md before:bg-gradient-to-b before:from-white/40 before:to-transparent',
+              'after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:rounded-r-md after:bg-gradient-to-t after:from-black/20 after:to-transparent',
+              'hover:shadow-[1px_0_2px_-1px_rgba(0,0,0,0.2),2px_0_4px_-2px_rgba(0,0,0,0.15),3px_0_8px_-3px_rgba(0,0,0,0.1),0_0_12px_-2px_rgba(var(--primary)/0.3)]',
+            )}
+          >
+            <svg
+              className={cn(
+                'h-3 w-3 text-primary-foreground transition-transform duration-300',
+                'drop-shadow-[0_1px_1px_rgba(0,0,0,0.3)]',
+                navCollapsed ? 'rotate-0' : 'rotate-180',
+                'group-hover/tab:scale-110',
+              )}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+          </button>
         </div>
 
         {/* Main content area */}

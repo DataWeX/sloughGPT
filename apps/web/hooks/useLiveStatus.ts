@@ -60,6 +60,8 @@ export interface LiveStatusState {
   failureCount: number
   /** Last connection error message */
   lastError: string | null
+  /** True once health endpoint first responds — gates feature polling hooks */
+  ready: boolean
 
   // Actions
   setConnectionStatus: (s: ConnectionStatus) => void
@@ -67,6 +69,7 @@ export interface LiveStatusState {
   setHealthLegacy: (h: HealthStatus | 'offline' | null) => void
   setFailureCount: (n: number) => void
   incrementFailures: () => void
+  setReady: (r: boolean) => void
   reset: () => void
 }
 
@@ -81,13 +84,15 @@ export const liveStatusStore = createStore<LiveStatusState>((set) => ({
   lastUpdate: null,
   failureCount: 0,
   lastError: null,
+  ready: false,
 
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
-  setHealth: (health) => set({ health, lastUpdate: Date.now(), failureCount: 0, lastError: null }),
+  setHealth: (health) => set((s) => ({ health, lastUpdate: Date.now(), failureCount: 0, lastError: null, ready: s.ready || true })),
   setHealthLegacy: (healthLegacy) => set({ healthLegacy }),
   setFailureCount: (failureCount) => set({ failureCount }),
   incrementFailures: () => set((s) => ({ failureCount: s.failureCount + 1 })),
-  reset: () => set({ connectionStatus: 'connecting', health: null, healthLegacy: null, lastUpdate: null, failureCount: 0, lastError: null }),
+  setReady: (ready) => set({ ready }),
+  reset: () => set({ connectionStatus: 'connecting', health: null, healthLegacy: null, lastUpdate: null, failureCount: 0, lastError: null, ready: false }),
 }))
 
 /**
@@ -243,6 +248,7 @@ export function useLiveStatus() {
   const healthLegacy = useLiveStatusStore((s) => s.healthLegacy)
   const lastUpdate = useLiveStatusStore((s) => s.lastUpdate)
   const failureCount = useLiveStatusStore((s) => s.failureCount)
+  const ready = useLiveStatusStore((s) => s.ready)
 
   return {
     /** SSE connection status */
@@ -259,7 +265,17 @@ export function useLiveStatus() {
     connected: connectionStatus === 'connected',
     /** Whether SSE is actively streaming */
     live: connectionStatus === 'connected' && health !== null,
+    /** True once health endpoint first responds — gates feature polling hooks */
+    ready,
   }
+}
+
+/**
+ * Convenience hook — returns true once the server's health endpoint first responds.
+ * Use this to gate feature polling hooks that would otherwise 404 during startup.
+ */
+export function useApiReady(): boolean {
+  return useLiveStatusStore((s) => s.ready)
 }
 
 // Re-export the store selector for non-hook usage

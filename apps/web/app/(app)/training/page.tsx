@@ -13,6 +13,7 @@ import { datasetController } from '@/lib/controllers'
 import { useTrainingForm } from '@/hooks/useTrainingForm'
 import { OutputCard } from '@/components/OutputCard'
 import { TestModelDialog } from '@/components/training/TestModelDialog'
+import { useApiReady } from '@/hooks/useLiveStatus'
 
 import { useTrainingSession } from '@/hooks/useTrainingSession'
 import { useTrainingDatasets } from '@/hooks/useTrainingDatasets'
@@ -73,6 +74,7 @@ export default function TrainingPage() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pause checkpoint polling when page is hidden
+  const ready = useApiReady()
   const tickRef = useRef<() => void>(() => {})
   tickRef.current = () => {
     if (visibilityRef.current) {
@@ -82,6 +84,7 @@ export default function TrainingPage() {
     }
   }
   useEffect(() => {
+    if (!ready) return
     const onVisibility = () => { visibilityRef.current = !document.hidden }
     document.addEventListener('visibilitychange', onVisibility)
     const id = setInterval(() => tickRef.current(), 10000)
@@ -89,7 +92,7 @@ export default function TrainingPage() {
       clearInterval(id)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [])
+  }, [ready])
 
   useEffect(() => {
     if (datasets.selectedDataset && form.inputMode === 'dataset') {
