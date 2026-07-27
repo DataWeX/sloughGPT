@@ -2453,7 +2453,35 @@ Examples:
             self._print("    agents list       — List available agents")
             self._print("    agents add <name> <role> <prompt> — Add agent (NYI)")
         elif verb in ("add",):
-            self._print("  agent add: not yet implemented")
+            rest = args.strip().split(maxsplit=1)[1] if len(args.strip().split()) > 1 else ""
+            add_parts = rest.split(maxsplit=2)
+            if len(add_parts) < 3:
+                self._print("  Usage: agents add <name> <role> <system_prompt>")
+                self._print("  Example: agents add summarizer summarize text into concise bullet points")
+                return
+            a_name, a_role, a_prompt = add_parts
+            agent_key = a_name.lower().replace(" ", "_")
+            agent = SpecializedAgent(
+                name=a_name,
+                role=a_role,
+                system_prompt=a_prompt,
+                tools=["memory"],
+            )
+            orch.agents[agent_key] = agent
+            self._print(f"  \u2713 Agent '{a_name}' added (role: {a_role})")
+            # Persist custom agents
+            try:
+                import json
+                from pathlib import Path
+                agents_file = Path.home() / ".config" / "sloughgpt" / "custom_agents.json"
+                agents_file.parent.mkdir(parents=True, exist_ok=True)
+                custom = {}
+                if agents_file.exists():
+                    custom = json.loads(agents_file.read_text())
+                custom[agent_key] = {"name": a_name, "role": a_role, "system_prompt": a_prompt}
+                agents_file.write_text(json.dumps(custom, indent=2))
+            except Exception as e:
+                self._print(f"  {_C_DIM}(not persisted: {e}){_C_RESET}")
         elif not args:
             self._cmd_help("agents")
         else:

@@ -267,12 +267,14 @@ Be concise, accurate, and helpful."""
 
     def _auto_ingest(self) -> None:
         """Trigger repo auto-ingestion if vector store is empty."""
+        import os
         import threading
+        provider = os.environ.get("MAN_VECTOR_STORE", "chromadb")
         def _do():
             try:
                 from domains.infrastructure.auto_ingest import AutoIngester
                 import asyncio
-                ingester = AutoIngester(provider="chromadb")
+                ingester = AutoIngester(provider=provider)
                 asyncio.run(ingester.ingest())
             except Exception:
                 pass
@@ -479,6 +481,32 @@ def get_context_core() -> ContextCore:
             style_manager=StyleManager(),
             task_manager=TaskManager(),
         )
+        # Auto-select vector store from env vars
+        import os
+        vs_provider = os.environ.get("MAN_VECTOR_STORE", "")
+        if vs_provider:
+            try:
+                from domains.inference.vector_store import create_vector_store
+                kwargs = {}
+                if vs_provider == "pinecone":
+                    api_key = os.environ.get("MAN_PINECONE_API_KEY", "")
+                    index_name = os.environ.get("MAN_PINECONE_INDEX", "sloughgpt")
+                    if not api_key:
+                        vs_provider = ""
+                    else:
+                        kwargs = {"api_key": api_key, "index_name": index_name}
+                elif vs_provider == "chromadb":
+                    persist_dir = os.environ.get("MAN_CHROMADB_DIR", "data/vector_store")
+                    kwargs = {"persist_directory": persist_dir}
+                if vs_provider:
+                    import asyncio
+                    store = asyncio.get_event_loop().run_until_complete(
+                        create_vector_store(provider=vs_provider, **kwargs)
+                    )
+                    _context_core.set_vector_store(store)
+                    logger.info("Vector store auto-configured: %s", vs_provider, extra={"tag": "INFRA"})
+            except Exception as e:
+                logger.warning("Failed to auto-configure vector store %s: %s", vs_provider, e, extra={"tag": "INFRA"})
     return _context_core
 
 

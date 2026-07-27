@@ -200,7 +200,7 @@ def _register_defaults():
     FeatureFlags.register(
         "session_kv_cache",
         description="Cross-turn KV cache for multi-turn conversations",
-        status=FlagStatus.EXPERIMENTAL,
+        status=FlagStatus.ENABLED,
     )
     FeatureFlags.register(
         "model_server",
@@ -215,7 +215,7 @@ def _register_defaults():
     FeatureFlags.register(
         "process_isolation",
         description="Subprocess-based model isolation (ProcessGuard)",
-        status=FlagStatus.EXPERIMENTAL,
+        status=FlagStatus.ENABLED,
     )
     FeatureFlags.register(
         "on_device_training",
@@ -255,7 +255,7 @@ def _register_defaults():
     FeatureFlags.register(
         "semantic_cache",
         description="Response caching via embedding similarity",
-        status=FlagStatus.EXPERIMENTAL,
+        status=FlagStatus.ENABLED,
     )
     FeatureFlags.register(
         "llm_nlp",

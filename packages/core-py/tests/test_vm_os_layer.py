@@ -1,13 +1,16 @@
 """
 Tests for the x86 VM OS layer: PageFrameAllocator, ProcessControlBlock,
-ProcessTable, Scheduler, X86SyscallHandler, PITDevice, X86VirtualSystem.
+ProcessTable, Scheduler, X86SyscallHandler, PITDevice, X86VirtualSystem,
+SerialDevice, MouseDevice, RTCDevice, DiskDevice, NICDevice.
 """
 
 import pytest
+import time as _time
 from domains.shell.vm import (
     PageFrameAllocator, ProcessControlBlock, ProcessState,
     ProcessTable, Scheduler, X86SyscallHandler, PITDevice,
     X86VirtualSystem, X86CPU, X86Assembler, FlatFS, BlockDevice,
+    SerialDevice, MouseDevice, RTCDevice, DiskDevice, NICDevice,
 )
 
 
@@ -676,3 +679,481 @@ class TestSyscallExec:
         current.restore_to_cpu(vs.cpu)
         vs.cpu.run(max_steps=10)
         assert vs.cpu._regs[0] == 999
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SerialDevice
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestSerialDevice:
+    def test_init(self):
+        dev = SerialDevice()
+        info = dev.info()
+        assert info["type"] == "serial"
+        assert info["tx_count"] == 0
+        assert info["rx_count"] == 0
+
+    def test_write_byte(self):
+        dev = SerialDevice()
+        dev.write_byte(0x41)
+        assert dev.info()["tx_count"] == 1
+
+    def test_read_byte_empty(self):
+        dev = SerialDevice()
+        assert dev.read_byte() == -1
+
+    def test_read_byte_from_rx(self):
+        dev = SerialDevice()
+        dev.push_byte(0x42)
+        assert dev.read_byte() == 0x42
+        assert dev.info()["rx_count"] == 1
+
+    def test_has_data(self):
+        dev = SerialDevice()
+        assert dev.has_data() is False
+        dev.push_byte(1)
+        assert dev.has_data() is True
+
+    def test_flush(self):
+        dev = SerialDevice()
+        dev.write_byte(1)
+        dev.push_byte(2)
+        dev.flush()
+        assert dev.has_data() is False
+        assert dev.read_byte() == -1
+
+    def test_io_ports_with_cpu(self):
+        cpu = X86CPU()
+        dev = SerialDevice(cpu=cpu)
+        # LSR should indicate TX empty (bit 5 set) and no RX data
+        lsr = cpu._io_in[0x3FD]()
+        assert lsr & 0x20  # TX empty
+        assert not (lsr & 0x01)  # no RX data
+
+    def test_io_port_write_read(self):
+        cpu = X86CPU()
+        dev = SerialDevice(cpu=cpu)
+        # IO port write goes to TX buffer
+        cpu._io_out[0x3F8](0x55)
+        assert dev.info()["tx_count"] == 1
+        # IO port read pulls from RX buffer
+        dev.push_byte(0xAA)
+        val = cpu._io_in[0x3F8]()
+        assert val == 0xAA
+
+    def test_call_method(self):
+        dev = SerialDevice()
+        assert dev.call("write_byte", 0x10) is True
+        assert dev.call("read_byte") == -1
+        dev.call("push_byte", 0x20)
+        assert dev.call("has_data") is True
+        dev.call("flush")
+        assert dev.call("has_data") is False
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MouseDevice
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestMouseDevice:
+    def test_init(self):
+        dev = MouseDevice()
+        info = dev.info()
+        assert info["type"] == "ps2_mouse"
+        assert info["x"] == 0
+        assert info["y"] == 0
+        assert info["buttons"] == 0
+
+    def test_move(self):
+        dev = MouseDevice()
+        dev.move(10, -5)
+        state = dev.get_state()
+        assert state["x"] == 10
+        assert state["y"] == -5
+
+    def test_move_generates_packet(self):
+        dev = MouseDevice()
+        dev.move(1, 0)
+        pkt = dev.read_packet()
+        assert len(pkt) == 3
+        assert pkt[0] & 0x08  # sync bit
+        assert pkt[1] == 1   # dx
+
+    def test_buttons(self):
+        dev = MouseDevice()
+        dev.press(1)  # left
+        assert dev.get_state()["left"] is True
+        dev.press(2)  # right
+        assert dev.get_state()["right"] is True
+        dev.release(1)
+        assert dev.get_state()["left"] is False
+        assert dev.get_state()["right"] is True
+
+    def test_read_packet_empty(self):
+        dev = MouseDevice()
+        assert dev.read_packet() == b''
+
+    def test_negative_movement(self):
+        dev = MouseDevice()
+        dev.move(-3, -7)
+        state = dev.get_state()
+        assert state["x"] == -3
+        assert state["y"] == -7
+        pkt = dev.read_packet()
+        assert pkt[0] & 0x10  # sign_x
+        assert pkt[0] & 0x20  # sign_y
+
+    def test_reset(self):
+        dev = MouseDevice()
+        dev.move(10, 10)
+        dev.press(1)
+        dev.reset()
+        state = dev.get_state()
+        assert state["x"] == 0
+        assert state["y"] == 0
+        assert state["buttons"] == 0
+
+    def test_call_method(self):
+        dev = MouseDevice()
+        assert dev.call("move", 5, 5) is True
+        assert dev.call("press", 1) is True
+        assert dev.call("release", 1) is True
+        # move generated a packet, read it
+        pkt = dev.call("read_packet")
+        assert isinstance(pkt, bytes)
+        assert len(pkt) == 3
+        assert isinstance(dev.call("get_state"), dict)
+        assert dev.call("reset") is True
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RTCDevice
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestRTCDevice:
+    def test_init(self):
+        dev = RTCDevice()
+        info = dev.info()
+        assert info["type"] == "rtc"
+        assert "unix_time" in info
+
+    def test_get_time(self):
+        dev = RTCDevice()
+        t = dev.get_time()
+        assert "year" in t
+        assert "month" in t
+        assert "day" in t
+        assert "hour" in t
+        assert 1 <= t["month"] <= 12
+
+    def test_get_unix_time(self):
+        dev = RTCDevice()
+        ts = dev.get_unix_time()
+        now = int(_time.time())
+        assert abs(ts - now) <= 1
+
+    def test_set_offset(self):
+        dev = RTCDevice()
+        dev.set_offset(3600)
+        ts = dev.get_unix_time()
+        now = int(_time.time())
+        assert abs(ts - now - 3600) <= 1
+
+    def test_call_method(self):
+        dev = RTCDevice()
+        assert isinstance(dev.call("get_time"), dict)
+        assert isinstance(dev.call("get_unix_time"), int)
+        assert dev.call("set_offset", 0) is True
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DiskDevice
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestDiskDevice:
+    def test_init(self):
+        dev = DiskDevice()
+        info = dev.info()
+        assert info["type"] == "disk"
+        assert info["total_sectors"] == 2048
+        assert info["reads"] == 0
+
+    def test_read_sectors(self):
+        dev = DiskDevice()
+        data = dev.read_sectors(0, 1)
+        assert len(data) == 512
+
+    def test_write_read_sectors(self):
+        dev = DiskDevice()
+        payload = b"Hello, Disk!" + b'\x00' * (512 - 12)
+        dev.write_sectors(10, payload)
+        data = dev.read_sectors(10, 1)
+        assert data[:12] == b"Hello, Disk!"
+
+    def test_geometry(self):
+        dev = DiskDevice()
+        geo = dev.get_geometry()
+        assert geo["heads"] == 16
+        assert geo["sectors_per_track"] == 63
+        assert geo["total_sectors"] == 2048
+        assert geo["sector_size"] == 512
+
+    def test_status(self):
+        dev = DiskDevice()
+        assert dev.status() == 0x40
+
+    def test_custom_block_device(self):
+        bd = BlockDevice(num_sectors=64)
+        dev = DiskDevice(block_device=bd)
+        assert dev.info()["total_sectors"] == 64
+
+    def test_call_method(self):
+        dev = DiskDevice()
+        assert isinstance(dev.call("read_sectors", 0, 1), bytes)
+        assert isinstance(dev.call("get_geometry"), dict)
+        assert dev.call("status") == 0x40
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# NICDevice
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestNICDevice:
+    def test_init(self):
+        dev = NICDevice()
+        info = dev.info()
+        assert info["type"] == "nic"
+        assert info["mtu"] == 1500
+        assert info["tx_packets"] == 0
+
+    def test_send_packet(self):
+        dev = NICDevice()
+        ok = dev.send_packet(b'\x00' * 100)
+        assert ok is True
+        stats = dev.get_stats()
+        assert stats["tx_packets"] == 1
+        assert stats["tx_bytes"] == 100
+
+    def test_send_oversized_packet(self):
+        dev = NICDevice()
+        ok = dev.send_packet(b'\x00' * 2000)
+        assert ok is False
+
+    def test_recv_packet_empty(self):
+        dev = NICDevice()
+        assert dev.recv_packet() == b''
+
+    def test_inject_recv(self):
+        dev = NICDevice()
+        dev.inject_packet(b'\xAA\xBB')
+        pkt = dev.recv_packet()
+        assert pkt == b'\xAA\xBB'
+        assert dev.get_stats()["rx_packets"] == 1
+
+    def test_has_packet(self):
+        dev = NICDevice()
+        assert dev.has_packet() is False
+        dev.inject_packet(b'\x01')
+        assert dev.has_packet() is True
+
+    def test_flush(self):
+        dev = NICDevice()
+        dev.send_packet(b'\x01')
+        dev.inject_packet(b'\x02')
+        dev.flush()
+        assert dev.has_packet() is False
+        assert dev.recv_packet() == b''
+
+    def test_call_method(self):
+        dev = NICDevice()
+        assert dev.call("send_packet", b'\x00') is True
+        assert dev.call("recv_packet") == b''
+        assert dev.call("inject_packet", b'\x01') is True
+        assert dev.call("has_packet") is True
+        assert isinstance(dev.call("get_stats"), dict)
+        dev.call("flush")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# X86VirtualSystem — new I/O devices wiring
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestVirtualSystemNewDevices:
+    def test_devices_created(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        assert isinstance(vs.serial, SerialDevice)
+        assert isinstance(vs.mouse, MouseDevice)
+        assert isinstance(vs.rtc, RTCDevice)
+        assert isinstance(vs.disk, DiskDevice)
+        assert isinstance(vs.nic, NICDevice)
+
+    def test_devices_wired_to_syscall(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        assert vs._syscall._serial is vs.serial
+        assert vs._syscall._mouse is vs.mouse
+        assert vs._syscall._rtc is vs.rtc
+        assert vs._syscall._disk is vs.disk
+        assert vs._syscall._nic is vs.nic
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# X86SyscallHandler — new I/O syscalls
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestSyscallSerialIO:
+    def test_serial_write(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        result = vs._syscall._sys_serial_write(0x41)
+        assert result == 0
+        assert vs.serial.info()["tx_count"] == 1
+
+    def test_serial_read(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        vs.serial.push_byte(0x55)
+        result = vs._syscall._sys_serial_read()
+        assert result == 0x55
+
+    def test_serial_read_empty(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        result = vs._syscall._sys_serial_read()
+        assert result == -1
+
+    def test_serial_write_no_device(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        vs._syscall._serial = None
+        assert vs._syscall._sys_serial_write(1) == -1
+
+    def test_serial_read_no_device(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        vs._syscall._serial = None
+        assert vs._syscall._sys_serial_read() == -1
+
+
+class TestSyscallMouseIO:
+    def test_mouse_read(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        vs.mouse.move(5, 3)
+        buf_addr = 0x90000
+        result = vs._syscall._sys_mouse_read(buf_addr)
+        assert result == 0
+        # Verify 3 bytes written to memory
+        b0 = vs.cpu._read8(buf_addr)
+        b1 = vs.cpu._read8(buf_addr + 1)
+        b2 = vs.cpu._read8(buf_addr + 2)
+        assert b0 & 0x08  # sync bit
+        assert b1 == 5    # dx
+        assert b2 == 3    # dy
+
+    def test_mouse_read_empty(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        result = vs._syscall._sys_mouse_read(0x90000)
+        assert result == -1
+
+    def test_mouse_read_no_device(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        vs._syscall._mouse = None
+        assert vs._syscall._sys_mouse_read(0x90000) == -1
+
+
+class TestSyscallRTC:
+    def test_rtc_gettime(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        buf_addr = 0x90000
+        result = vs._syscall._sys_rtc_gettime(buf_addr)
+        now = int(_time.time())
+        assert abs(result - now) <= 2
+        # Verify written to memory
+        val = vs.cpu._read32(buf_addr)
+        assert val == result
+
+    def test_rtc_gettime_no_device(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        vs._syscall._rtc = None
+        assert vs._syscall._sys_rtc_gettime(0x90000) == -1
+
+
+class TestSyscallDiskIO:
+    def test_disk_read(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        # Write something to sector 5 via the disk device
+        payload = b"TESTDATA" + b'\x00' * 504
+        vs.disk.write_sectors(5, payload)
+        # Read via syscall
+        buf_addr = 0x90000
+        result = vs._syscall._sys_disk_read(5, buf_addr, 1)
+        assert result == 512
+        assert vs.cpu._read8(buf_addr) == ord('T')
+        assert vs.cpu._read8(buf_addr + 7) == ord('A')
+
+    def test_disk_write(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        buf_addr = 0x90000
+        # Write bytes to memory
+        data = b"HELLODISK"
+        for i, b in enumerate(data):
+            vs.cpu._write8(buf_addr + i, b)
+        result = vs._syscall._sys_disk_write(3, buf_addr, 1)
+        assert result == 512
+        # Verify via direct disk read
+        read_back = vs.disk.read_sectors(3, 1)
+        assert read_back[:9] == b"HELLODISK"
+
+    def test_disk_read_no_device(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        vs._syscall._disk = None
+        assert vs._syscall._sys_disk_read(0, 0x90000, 1) == -1
+
+    def test_disk_write_no_device(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        vs._syscall._disk = None
+        assert vs._syscall._sys_disk_write(0, 0x90000, 1) == -1
+
+    def test_disk_read_invalid_count(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        assert vs._syscall._sys_disk_read(0, 0x90000, 0) == -1
+        assert vs._syscall._sys_disk_read(0, 0x90000, -1) == -1
+
+
+class TestSyscallNetIO:
+    def test_net_send(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        buf_addr = 0x90000
+        data = b'\xDE\xAD\xBE\xEF'
+        for i, b in enumerate(data):
+            vs.cpu._write8(buf_addr + i, b)
+        result = vs._syscall._sys_net_send(buf_addr, 4)
+        assert result == 0
+        stats = vs.nic.get_stats()
+        assert stats["tx_packets"] == 1
+        assert stats["tx_bytes"] == 4
+
+    def test_net_recv(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        vs.nic.inject_packet(b'\x01\x02\x03')
+        buf_addr = 0x90000
+        result = vs._syscall._sys_net_recv(buf_addr, 1500)
+        assert result == 3
+        assert vs.cpu._read8(buf_addr) == 0x01
+        assert vs.cpu._read8(buf_addr + 2) == 0x03
+
+    def test_net_recv_empty(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        result = vs._syscall._sys_net_recv(0x90000, 1500)
+        assert result == -1
+
+    def test_net_send_no_device(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        vs._syscall._nic = None
+        assert vs._syscall._sys_net_send(0x90000, 4) == -1
+
+    def test_net_recv_no_device(self):
+        vs = X86VirtualSystem(memory_size=0x100000)
+        vs._syscall._nic = None
+        assert vs._syscall._sys_net_recv(0x90000, 1500) == -1
+
+    def test_net_recv_truncates(self):
+        """Net recv truncates packet to max_len."""
+        vs = X86VirtualSystem(memory_size=0x100000)
+        vs.nic.inject_packet(b'\x00' * 100)
+        result = vs._syscall._sys_net_recv(0x90000, 10)
+        assert result == 10

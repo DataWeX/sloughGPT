@@ -851,6 +851,7 @@ def setup_providers(
     """Register providers and build the default processor pipeline.
 
     Registers:
+    - ``"native-c"``: NativeTransformerProvider (C-accelerated, if feature flag enabled)
     - ``"slonet-native"``: SloNetChatProvider (if slonet_hf_id or slonet_provider given)
     - ``"default"``: ProviderRouter with processor chain → text provider
 
@@ -873,6 +874,19 @@ def setup_providers(
         personality_traits: Optional personality traits dict
     """
     text_provider_name = None
+
+    # Try native C inference engine first (highest priority if enabled)
+    try:
+        from domains.shared.feature_flags import is_enabled
+        if is_enabled("native_c_inference"):
+            from domains.inference.native.engine import get_engine, NativeTransformerProvider
+            engine = get_engine()
+            if engine.loaded:
+                register_provider("native-c", NativeTransformerProvider(engine, model_id="native-c"))
+                text_provider_name = "native-c"
+                logger.info("Registered native-c provider (Apple Accelerate BLAS)", extra={"tag": "MODEL"})
+    except Exception as e:
+        logger.debug("Native C inference not available: %s", e, extra={"tag": "MODEL"})
 
     if slonet_provider is not None:
         register_provider("slonet-native", slonet_provider)

@@ -8,6 +8,7 @@ Wraps the C forward pass with:
   - Token-by-token generation with KV cache
 """
 
+import ctypes
 import logging
 import time
 from typing import Optional, List, Dict, Tuple, Generator
@@ -273,3 +274,67 @@ def get_engine() -> TransformerEngine:
     if _engine is None:
         _engine = TransformerEngine()
     return _engine
+
+
+class NativeTransformerProvider:
+    """Async provider wrapping the C-accelerated TransformerEngine.
+
+    Implements the ModelProvider protocol for integration into the provider chain.
+    Uses Apple Accelerate BLAS via the native C forward pass.
+    """
+
+    def __init__(self, engine: TransformerEngine, model_id: str = "native-c"):
+        self._engine = engine
+        self._model_id = model_id
+
+    @property
+    def model_id(self) -> str:
+        return self._model_id
+
+    @property
+    def capabilities(self):
+        from domains.models.provider import ModelCapabilities
+        return ModelCapabilities(chat=True, streaming=True, embedding=False, vision=False)
+
+    async def chat_stream(self, messages, max_tokens=512, temperature=0.8,
+                          top_p=0.9, top_k=50, cancel_event=None,
+                          session_id=None, **kwargs):
+        import asyncio
+        loop = asyncio.get_event_loop()
+
+        def _gen():
+            return self._engine.generate_stream(
+                messages, max_tokens=max_tokens,
+                temperature=temperature, top_p=top_p, top_k=top_k,
+            )
+
+        try:
+            gen = await loop.run_in_executor(None, _gen)
+            for piece in gen:
+                if cancel_event is not None and cancel_event.is_set():
+                    break
+                yield piece
+        except Exception as e:
+            logger.warning("Native C generation error: %s", e, extra={"tag": "MODEL"})
+
+    async def chat(self, messages, max_tokens=512, temperature=0.8, **kwargs):
+        import asyncio
+        loop = asyncio.get_event_loop()
+        def _gen():
+            return self._engine.generate(messages, max_tokens=max_tokens,
+                                         temperature=temperature)
+        return await loop.run_in_executor(None, _gen)
+
+    def embed(self, text: str) -> list:
+        return []
+
+    @property
+    def metadata(self) -> dict:
+        return {
+            "model_id": self._model_id,
+            "type": "native-c",
+            "model_type": self._engine._model_type,
+            "loaded": self._engine.loaded,
+            "vocab_size": self._engine._config.get("vocab_size", 0),
+            "layers": self._engine._config.get("num_hidden_layers", 0),
+        }

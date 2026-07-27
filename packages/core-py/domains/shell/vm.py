@@ -570,6 +570,632 @@ class BlockDevice(Device):
         return super().call(method, *args)
 
 
+class SerialDevice(Device):
+    """UART COM1 serial communication device — ports 0x3F8–0x3FF.
+
+    Provides byte-level serial I/O with TX/RX ring buffers and LSR
+    (Line Status Register) for polling.
+
+    I/O Ports:
+        0x3F8 - RX/TX data register (read/write)
+        0x3FD - LSR (Line Status Register)
+            bit 0: RX data ready (byte available)
+            bit 5: TX holding register empty (ready to send)
+
+    Commands (via DEV_CALL):
+      write_byte(byte)   — send a byte to the serial port
+      read_byte() -> int — receive a byte (or -1 if empty)
+      has_data() -> bool — check if RX buffer has data
+      flush()            — clear both buffers
+    """
+
+    BASE_PORT = 0x3F8
+    LSR_PORT = 0x3FD
+
+    def __init__(self, cpu: X86CPU | None = None):
+        self._tx_buffer: bytearray = bytearray()
+        self._rx_buffer: bytearray = bytearray()
+        self._tx_count = 0
+        self._rx_count = 0
+        self._cpu = cpu
+        if cpu:
+            cpu.register_io_in(self.BASE_PORT, self._read_data)
+            cpu.register_io_out(self.BASE_PORT, self._write_data)
+            cpu.register_io_in(self.LSR_PORT, self._read_lsr)
+
+    def _read_data(self) -> int:
+        if self._rx_buffer:
+            self._rx_count += 1
+            return self._rx_buffer.pop(0)
+        return 0
+
+    def _write_data(self, val: int):
+        self._tx_buffer.append(val & 0xFF)
+        self._tx_count += 1
+
+    def _read_lsr(self) -> int:
+        lsr = 0
+        if self._rx_buffer:
+            lsr |= 0x01  # bit 0: RX ready
+        lsr |= 0x20      # bit 5: TX empty (always ready in simulation)
+        return lsr
+
+    def info(self):
+        return {
+            "type": "serial",
+            "base_port": self.BASE_PORT,
+            "tx_count": self._tx_count,
+            "rx_count": self._rx_count,
+            "rx_pending": len(self._rx_buffer),
+        }
+
+    def write_byte(self, b: int):
+        self._tx_buffer.append(b & 0xFF)
+        self._tx_count += 1
+
+    def read_byte(self) -> int:
+        if self._rx_buffer:
+            self._rx_count += 1
+            return self._rx_buffer.pop(0)
+        return -1
+
+    def push_byte(self, b: int):
+        self._rx_buffer.append(b & 0xFF)
+
+    def has_data(self) -> bool:
+        return len(self._rx_buffer) > 0
+
+    def flush(self):
+        self._tx_buffer.clear()
+        self._rx_buffer.clear()
+
+    def call(self, method, *args):
+        if method == "write_byte":
+            self.write_byte(args[0])
+            return True
+        if method == "read_byte":
+            return self.read_byte()
+        if method == "push_byte":
+            self.push_byte(args[0])
+            return True
+        if method == "has_data":
+            return self.has_data()
+        if method == "flush":
+            self.flush()
+            return True
+        return super().call(method, *args)
+
+
+class MouseDevice(Device):
+    """PS/2 mouse device — relative X/Y movement and button state.
+
+    Generates standard 3-byte PS/2 mouse packets:
+        byte 0: [overflow_y, overflow_x, sign_y, sign_x, 1, middle, right, left]
+        byte 1: X movement (signed)
+        byte 2: Y movement (signed)
+
+    Commands (via DEV_CALL):
+      move(dx, dy)           — inject relative movement
+      press(button)          — press button (1=left, 2=right, 4=middle)
+      release(button)        — release button
+      read_packet() -> bytes — read 3-byte packet (or empty bytes)
+      get_state() -> dict    — current position and buttons
+      reset()                — clear all state
+    """
+
+    def __init__(self):
+        self._x: int = 0
+        self._y: int = 0
+        self._buttons: int = 0  # bit 0=left, bit 1=right, bit 2=middle
+        self._packets: list[bytes] = []
+        self._total_packets = 0
+
+    def info(self):
+        return {
+            "type": "ps2_mouse",
+            "x": self._x,
+            "y": self._y,
+            "buttons": self._buttons,
+            "packets_pending": len(self._packets),
+        }
+
+    def move(self, dx: int, dy: int):
+        self._x += dx
+        self._y += dy
+        packet = self._make_packet(dx, dy)
+        self._packets.append(packet)
+        self._total_packets += 1
+
+    def press(self, button: int):
+        self._buttons |= button
+
+    def release(self, button: int):
+        self._buttons &= ~button
+
+    def read_packet(self) -> bytes:
+        if self._packets:
+            return self._packets.pop(0)
+        return b''
+
+    def get_state(self) -> dict:
+        return {
+            "x": self._x,
+            "y": self._y,
+            "buttons": self._buttons,
+            "left": bool(self._buttons & 1),
+            "right": bool(self._buttons & 2),
+            "middle": bool(self._buttons & 4),
+        }
+
+    def reset(self):
+        self._x = 0
+        self._y = 0
+        self._buttons = 0
+        self._packets.clear()
+
+    def _make_packet(self, dx: int, dy: int) -> bytes:
+        byte0 = 0x08  # bit 3 always set (sync bit)
+        byte0 |= self._buttons & 0x07
+        if dx < 0:
+            byte0 |= 0x10  # sign_x
+            dx = dx & 0xFF
+        if dy < 0:
+            byte0 |= 0x20  # sign_y
+            dy = dy & 0xFF
+        return bytes([byte0, dx & 0xFF, dy & 0xFF])
+
+    def call(self, method, *args):
+        if method == "move":
+            self.move(args[0], args[1])
+            return True
+        if method == "press":
+            self.press(args[0])
+            return True
+        if method == "release":
+            self.release(args[0])
+            return True
+        if method == "read_packet":
+            return self.read_packet()
+        if method == "get_state":
+            return self.get_state()
+        if method == "reset":
+            self.reset()
+            return True
+        return super().call(method, *args)
+
+
+class CMOSDevice(Device):
+    """Intel MC146818 Real-Time Clock + CMOS RAM — ports 0x70/0x71.
+
+    128 bytes of battery-backed CMOS RAM.  RTC registers occupy offsets
+    0x00–0x0D.  The remaining bytes are general-purpose CMOS storage
+    (BIOS setup, equipment list, boot order, etc.).
+
+    I/O Ports:
+        0x70 — Address register (write: select CMOS offset, bit 7 = NMI disable)
+        0x71 — Data register    (read/write: access selected CMOS byte)
+
+    RTC Register Layout (offsets in CMOS RAM):
+        0x00 — Seconds        (00–59)
+        0x01 — Alarm Seconds
+        0x02 — Minutes        (00–59)
+        0x03 — Alarm Minutes
+        0x04 — Hours          (00–23 in 24h mode)
+        0x05 — Alarm Hours
+        0x06 — Day of Week    (1=Sunday … 7=Saturday)
+        0x07 — Day of Month   (01–31)
+        0x08 — Month          (01–12)
+        0x09 — Year           (last 2 digits, 00–99)
+        0x0A — Status Register A
+            bit 7: UIP  (Update In Progress — set while RTC updates)
+            bit 6-4: DV2-DV0 (divider select — default 010 = 1.024 kHz)
+            bit 3-0: RS3-RS0 (rate select — default 0110 = 1024 Hz)
+        0x0B — Status Register B
+            bit 7: SET  (0 = update normally, 1 = inhibit updates)
+            bit 6: PIE  (Periodic Interrupt Enable)
+            bit 5: AIE  (Alarm Interrupt Enable)
+            bit 4: UIE  (Update-Ended Interrupt Enable)
+            bit 3: SQWE (Square Wave Enable)
+            bit 2: DM   (Data Mode: 0 = BCD, 1 = Binary)
+            bit 1: 24/12 (0 = 12h, 1 = 24h)
+            bit 0: DSE  (Daylight Saving Enable — ignored)
+        0x0C — Status Register C (read-only, cleared on read)
+            bit 7: IRQF (Interrupt Request Flag)
+            bit 6: PF   (Periodic Interrupt Flag)
+            bit 5: AF   (Alarm Interrupt Flag)
+            bit 4: UF   (Update-Ended Interrupt Flag)
+        0x0D — Status Register D
+            bit 7: VRT  (Valid RAM and Time — 1 = battery OK)
+
+    CMOS Checksum (BIOS standard):
+        Offset 0x2E-0x2F: 16-bit checksum of bytes 0x10-0x2D
+        Offset 0x30-0x31: 16-bit extended checksum of bytes 0x30-0x3F
+
+    Commands (via DEV_CALL):
+      get_time() -> dict      — decoded RTC time
+      get_unix_time() -> int  — Unix timestamp
+      read_cmos(offset) -> int — read raw CMOS byte
+      write_cmos(offset, val)  — write raw CMOS byte
+      set_offset(seconds)     — adjust time offset (for testing)
+      set_binary_mode(flag)   — True=binary, False=BCD (default)
+    """
+
+    PORT_ADDR = 0x70
+    PORT_DATA = 0x71
+    CMOS_SIZE = 128
+
+    # RTC register offsets
+    REG_SECONDS = 0x00
+    REG_ALARM_SEC = 0x01
+    REG_MINUTES = 0x02
+    REG_ALARM_MIN = 0x03
+    REG_HOURS = 0x04
+    REG_ALARM_HRS = 0x05
+    REG_WEEKDAY = 0x06
+    REG_DAY = 0x07
+    REG_MONTH = 0x08
+    REG_YEAR = 0x09
+    REG_STATUS_A = 0x0A
+    REG_STATUS_B = 0x0B
+    REG_STATUS_C = 0x0C
+    REG_STATUS_D = 0x0D
+
+    # BIOS standard: equipment list, base memory, extended memory etc.
+    REG_EQUIPMENT = 0x14     # CMOS equipment word
+    REG_BASE_MEM_LO = 0x15   # base memory (KB) low byte
+    REG_BASE_MEM_HI = 0x16   # base memory (KB) high byte
+    REG_EXT_MEM_LO = 0x17    # extended memory (KB) low byte
+    REG_EXT_MEM_HI = 0x18    # extended memory (KB) high byte
+    REG_BOOT_ORDER = 0x3D    # boot device order (4 bits each)
+
+    def __init__(self, cpu: X86CPU | None = None):
+        self._cmos = bytearray(self.CMOS_SIZE)
+        self._selected = 0       # current register offset (written to port 0x70)
+        self._nmi_disabled = False
+        self._offset: float = 0  # time adjustment for testing
+
+        # Initialize Status Register D (VRT = battery OK)
+        self._cmos[self.REG_STATUS_D] = 0x80
+
+        # Initialize Status Register A (divider = 1.024 kHz, rate = 1024 Hz)
+        # Default: DV=010 (bits 6-4), RS=0110 (bits 3-0)
+        self._cmos[self.REG_STATUS_A] = 0x26
+
+        # Initialize Status Register B: 24h mode, BCD
+        # bit 1 = 1 (24h), bit 2 = 0 (BCD)
+        self._cmos[self.REG_STATUS_B] = 0x02
+
+        if cpu:
+            cpu.register_io_in(self.PORT_DATA, self._read_data)
+            cpu.register_io_out(self.PORT_ADDR, self._write_addr)
+            cpu.register_io_out(self.PORT_DATA, self._write_data)
+
+        # Register I/O ports for CMOS address port too
+        # (reads from 0x70 return last written value per some implementations)
+        if cpu:
+            cpu.register_io_in(self.PORT_ADDR, lambda: self._selected | (0x80 if self._nmi_disabled else 0))
+
+    def _write_addr(self, val: int):
+        """Port 0x70 write: select CMOS register.  Bit 7 = NMI disable."""
+        self._nmi_disabled = bool(val & 0x80)
+        self._selected = val & 0x7F
+
+    def _read_data(self) -> int:
+        """Port 0x71 read: return selected CMOS byte.  Refreshes time registers."""
+        reg = self._selected
+        # Auto-refresh RTC registers from host clock on every read
+        self._refresh_rtc()
+        # Status register C is read-to-clear
+        if reg == self.REG_STATUS_C:
+            val = self._cmos[reg]
+            self._cmos[reg] = 0x00
+            return val
+        return self._cmos[reg]
+
+    def _write_data(self, val: int):
+        """Port 0x71 write: store byte into selected CMOS register."""
+        reg = self._selected
+        if reg == self.REG_STATUS_A or reg == self.REG_STATUS_C:
+            return  # Status A and C are read-only or write-ignored
+        if reg == self.REG_STATUS_D:
+            # Only bit 7 is writeable (VRT)
+            self._cmos[reg] = (val & 0x80) | (self._cmos[reg] & 0x7F)
+            return
+        self._cmos[reg] = val & 0xFF
+
+    def _refresh_rtc(self):
+        """Update RTC register bytes from host system clock."""
+        import time as _time
+        t = _time.time() + self._offset
+        parts = _time.gmtime(t)
+        reg_b = self._cmos[self.REG_STATUS_B]
+        binary = bool(reg_b & 0x04)    # DM bit: 0=BCD, 1=binary
+        h24 = bool(reg_b & 0x02)       # 24/12 bit: 0=12h, 1=24h
+
+        if binary:
+            self._cmos[self.REG_SECONDS] = parts.tm_sec & 0xFF
+            self._cmos[self.REG_MINUTES] = parts.tm_min & 0xFF
+            self._cmos[self.REG_DAY] = parts.tm_mday & 0xFF
+            self._cmos[self.REG_MONTH] = parts.tm_mon & 0xFF
+            self._cmos[self.REG_YEAR] = parts.tm_year % 100
+            self._cmos[self.REG_WEEKDAY] = (parts.tm_wday + 1) & 0xFF  # 1=Sun
+            if h24:
+                self._cmos[self.REG_HOURS] = parts.tm_hour & 0xFF
+            else:
+                h12 = parts.tm_hour % 12
+                if h12 == 0:
+                    h12 = 12
+                self._cmos[self.REG_HOURS] = h12 | (0x80 if parts.tm_hour >= 12 else 0)
+        else:
+            self._cmos[self.REG_SECONDS] = self._to_bcd(parts.tm_sec)
+            self._cmos[self.REG_MINUTES] = self._to_bcd(parts.tm_min)
+            self._cmos[self.REG_DAY] = self._to_bcd(parts.tm_mday)
+            self._cmos[self.REG_MONTH] = self._to_bcd(parts.tm_mon)
+            self._cmos[self.REG_YEAR] = self._to_bcd(parts.tm_year % 100)
+            self._cmos[self.REG_WEEKDAY] = (parts.tm_wday + 1) & 0xFF
+            if h24:
+                self._cmos[self.REG_HOURS] = self._to_bcd(parts.tm_hour)
+            else:
+                h12 = parts.tm_hour % 12
+                if h12 == 0:
+                    h12 = 12
+                self._cmos[self.REG_HOURS] = self._to_bcd(h12) | (0x80 if parts.tm_hour >= 12 else 0)
+
+    def _to_bcd(self, val: int) -> int:
+        """Convert an integer (0–99) to BCD."""
+        return ((val // 10) << 4) | (val % 10)
+
+    def _from_bcd(self, val: int) -> int:
+        """Convert a BCD byte to integer."""
+        return ((val >> 4) * 10) + (val & 0x0F)
+
+    # ── High-level API ───────────────────────────────────────────────────
+
+    def get_time(self) -> dict:
+        """Return decoded RTC time as a dict."""
+        self._refresh_rtc()
+        reg_b = self._cmos[self.REG_STATUS_B]
+        binary = bool(reg_b & 0x04)
+        h24 = bool(reg_b & 0x02)
+
+        if binary:
+            sec = self._cmos[self.REG_SECONDS]
+            minute = self._cmos[self.REG_MINUTES]
+            hour = self._cmos[self.REG_HOURS]
+        else:
+            sec = self._from_bcd(self._cmos[self.REG_SECONDS])
+            minute = self._from_bcd(self._cmos[self.REG_MINUTES])
+            hour = self._from_bcd(self._cmos[self.REG_HOURS] & 0x7F)
+
+        if not h24:
+            is_pm = bool(self._cmos[self.REG_HOURS] & 0x80)
+            if is_pm and hour != 12:
+                hour += 12
+            elif not is_pm and hour == 12:
+                hour = 0
+
+        return {
+            "year": 2000 + self._cmos[self.REG_YEAR] if self._cmos[self.REG_YEAR] < 100 else self._cmos[self.REG_YEAR],
+            "month": self._cmos[self.REG_MONTH] if binary else self._from_bcd(self._cmos[self.REG_MONTH]),
+            "day": self._cmos[self.REG_DAY] if binary else self._from_bcd(self._cmos[self.REG_DAY]),
+            "hour": hour,
+            "minute": minute,
+            "second": sec,
+            "weekday": self._cmos[self.REG_WEEKDAY],
+        }
+
+    def get_unix_time(self) -> int:
+        """Return Unix timestamp from host clock."""
+        import time as _time
+        return int(_time.time() + self._offset)
+
+    def read_cmos(self, offset: int) -> int:
+        """Read a raw CMOS byte (bypasses I/O port interface)."""
+        if 0 <= offset < self.CMOS_SIZE:
+            self._refresh_rtc()
+            return self._cmos[offset]
+        return 0
+
+    def write_cmos(self, offset: int, val: int):
+        """Write a raw CMOS byte (bypasses I/O port interface)."""
+        if 0 <= offset < self.CMOS_SIZE:
+            self._cmos[offset] = val & 0xFF
+
+    def set_offset(self, seconds: float):
+        self._offset = seconds
+
+    def set_binary_mode(self, binary: bool):
+        """Switch between BCD (False, default) and binary (True) mode."""
+        if binary:
+            self._cmos[self.REG_STATUS_B] |= 0x04
+        else:
+            self._cmos[self.REG_STATUS_B] &= ~0x04
+
+    def info(self):
+        return {
+            "type": "cmos",
+            "nmi_disabled": self._nmi_disabled,
+            "selected": self._selected,
+            "unix_time": self.get_unix_time(),
+        }
+
+    def call(self, method, *args):
+        if method == "get_time":
+            return self.get_time()
+        if method == "get_unix_time":
+            return self.get_unix_time()
+        if method == "read_cmos":
+            return self.read_cmos(args[0])
+        if method == "write_cmos":
+            self.write_cmos(args[0], args[1])
+            return True
+        if method == "set_offset":
+            self.set_offset(args[0])
+            return True
+        if method == "set_binary_mode":
+            self.set_binary_mode(args[0])
+            return True
+        return super().call(method, *args)
+
+
+class DiskDevice(Device):
+    """ATA/IDE disk controller — provides structured disk I/O on a BlockDevice.
+
+    Supports CHS (Cylinder/Head/Sector) addressing and basic ATA commands.
+
+    Commands (via DEV_CALL):
+      read_sectors(lba, count) -> bytes
+      write_sectors(lba, data)
+      get_geometry() -> dict   — {cylinders, heads, sectors_per_track, total_sectors}
+      status() -> int          — status register (0x40=ready, 0x00=busy)
+    """
+
+    SECTOR_SIZE = 512
+
+    def __init__(self, block_device: BlockDevice | None = None):
+        self._block = block_device or BlockDevice(num_sectors=2048)
+        self._total_sectors = self._block._num_sectors
+        # CHS geometry (standard LBA-to-CHS mapping)
+        self._heads = 16
+        self._sectors_per_track = 63
+        self._cylinders = self._total_sectors // (self._heads * self._sectors_per_track)
+        self._reads = 0
+        self._writes = 0
+        self._status = 0x40  # ready
+
+    def info(self):
+        return {
+            "type": "disk",
+            "total_sectors": self._total_sectors,
+            "reads": self._reads,
+            "writes": self._writes,
+            "status": self._status,
+        }
+
+    def read_sectors(self, lba: int, count: int) -> bytes:
+        data = bytearray()
+        for i in range(count):
+            sector_data = self._block.read_sector(lba + i)
+            data.extend(sector_data)
+            self._reads += 1
+        return bytes(data)
+
+    def write_sectors(self, lba: int, data: bytes):
+        for i in range(count := (len(data) + self.SECTOR_SIZE - 1) // self.SECTOR_SIZE):
+            chunk = data[i * self.SECTOR_SIZE:(i + 1) * self.SECTOR_SIZE]
+            self._block.write_sector(lba + i, chunk)
+            self._writes += 1
+
+    def get_geometry(self) -> dict:
+        return {
+            "cylinders": self._cylinders,
+            "heads": self._heads,
+            "sectors_per_track": self._sectors_per_track,
+            "total_sectors": self._total_sectors,
+            "sector_size": self.SECTOR_SIZE,
+        }
+
+    def status(self) -> int:
+        return self._status
+
+    def call(self, method, *args):
+        if method == "read_sectors":
+            return self.read_sectors(*args)
+        if method == "write_sectors":
+            return self.write_sectors(*args)
+        if method == "get_geometry":
+            return self.get_geometry()
+        if method == "status":
+            return self.status()
+        return super().call(method, *args)
+
+
+class NICDevice(Device):
+    """Virtual network interface card — TX/RX packet buffers.
+
+    Provides a simple send/receive packet interface. Packets are
+    byte arrays (simulated Ethernet frames).
+
+    Commands (via DEV_CALL):
+      send_packet(data)      — transmit a packet
+      recv_packet() -> bytes — receive a packet (or empty bytes)
+      has_packet() -> bool   — check if RX buffer has packets
+      get_stats() -> dict    — {tx_packets, rx_packets, tx_bytes, rx_bytes}
+      flush()                — clear all buffers
+    """
+
+    MTU = 1500  # Maximum Transmission Unit
+
+    def __init__(self):
+        self._tx_buffer: list[bytes] = []
+        self._rx_buffer: list[bytes] = []
+        self._tx_packets = 0
+        self._rx_packets = 0
+        self._tx_bytes = 0
+        self._rx_bytes = 0
+
+    def info(self):
+        return {
+            "type": "nic",
+            "mtu": self.MTU,
+            "tx_packets": self._tx_packets,
+            "rx_packets": self._rx_packets,
+            "tx_pending": len(self._tx_buffer),
+            "rx_pending": len(self._rx_buffer),
+        }
+
+    def send_packet(self, data: bytes) -> bool:
+        if len(data) > self.MTU:
+            return False
+        self._tx_buffer.append(data)
+        self._tx_packets += 1
+        self._tx_bytes += len(data)
+        return True
+
+    def recv_packet(self) -> bytes:
+        if self._rx_buffer:
+            pkt = self._rx_buffer.pop(0)
+            return pkt
+        return b''
+
+    def inject_packet(self, data: bytes):
+        self._rx_buffer.append(data)
+        self._rx_packets += 1
+        self._rx_bytes += len(data)
+
+    def has_packet(self) -> bool:
+        return len(self._rx_buffer) > 0
+
+    def get_stats(self) -> dict:
+        return {
+            "tx_packets": self._tx_packets,
+            "rx_packets": self._rx_packets,
+            "tx_bytes": self._tx_bytes,
+            "rx_bytes": self._rx_bytes,
+        }
+
+    def flush(self):
+        self._tx_buffer.clear()
+        self._rx_buffer.clear()
+
+    def call(self, method, *args):
+        if method == "send_packet":
+            return self.send_packet(args[0])
+        if method == "recv_packet":
+            return self.recv_packet()
+        if method == "inject_packet":
+            self.inject_packet(args[0])
+            return True
+        if method == "has_packet":
+            return self.has_packet()
+        if method == "get_stats":
+            return self.get_stats()
+        if method == "flush":
+            self.flush()
+            return True
+        return super().call(method, *args)
+
+
 class FlatFS:
     """Simple flat filesystem on top of a BlockDevice.
 
@@ -5439,6 +6065,14 @@ class X86SyscallHandler:
     SYS_FREE = 16
     SYS_READDIR = 17
     SYS_UNAME = 18
+    SYS_SERIAL_WRITE = 19
+    SYS_SERIAL_READ = 20
+    SYS_MOUSE_READ = 21
+    SYS_RTC_GETTIME = 22
+    SYS_DISK_READ = 23
+    SYS_DISK_WRITE = 24
+    SYS_NET_SEND = 25
+    SYS_NET_RECV = 26
 
     def __init__(self, cpu: X86CPU, process_table: ProcessTable,
                  scheduler: Scheduler, memory: 'PageFrameAllocator',
@@ -5459,6 +6093,13 @@ class X86SyscallHandler:
 
         # Clock ticks
         self._ticks = 0
+
+        # I/O devices (set by X86VirtualSystem after construction)
+        self._serial: SerialDevice | None = None
+        self._mouse: MouseDevice | None = None
+        self._rtc: CMOSDevice | None = None
+        self._disk: DiskDevice | None = None
+        self._nic: NICDevice | None = None
 
     def handle(self):
         """Dispatch syscall based on EAX. Called from INT 0x80 handler."""
@@ -5488,6 +6129,14 @@ class X86SyscallHandler:
             self.SYS_FREE: lambda: self._sys_free(arg1),
             self.SYS_READDIR: lambda: self._sys_readdir(arg1, arg2),
             self.SYS_UNAME: lambda: self._sys_uname(arg1),
+            self.SYS_SERIAL_WRITE: lambda: self._sys_serial_write(arg1),
+            self.SYS_SERIAL_READ: lambda: self._sys_serial_read(),
+            self.SYS_MOUSE_READ: lambda: self._sys_mouse_read(arg1),
+            self.SYS_RTC_GETTIME: lambda: self._sys_rtc_gettime(arg1),
+            self.SYS_DISK_READ: lambda: self._sys_disk_read(arg1, arg2, arg3),
+            self.SYS_DISK_WRITE: lambda: self._sys_disk_write(arg1, arg2, arg3),
+            self.SYS_NET_SEND: lambda: self._sys_net_send(arg1, arg2),
+            self.SYS_NET_RECV: lambda: self._sys_net_recv(arg1, arg2),
         }
 
         handler = handlers.get(num)
@@ -5786,6 +6435,86 @@ class X86SyscallHandler:
             offset += 65  # Linux struct utsname field size
         return 0
 
+    # ── Serial I/O syscalls ──────────────────────────────────────────────
+
+    def _sys_serial_write(self, byte_val: int) -> int:
+        """Write a byte to the serial port. Returns 0 on success."""
+        if self._serial is None:
+            return -1
+        self._serial.write_byte(byte_val)
+        return 0
+
+    def _sys_serial_read(self) -> int:
+        """Read a byte from the serial port. Returns byte or -1 if empty."""
+        if self._serial is None:
+            return -1
+        return self._serial.read_byte()
+
+    # ── Mouse syscalls ───────────────────────────────────────────────────
+
+    def _sys_mouse_read(self, buf_addr: int) -> int:
+        """Read a 3-byte mouse packet into buf_addr. Returns 0 on success, -1 if no packet."""
+        if self._mouse is None:
+            return -1
+        pkt = self._mouse.read_packet()
+        if not pkt:
+            return -1
+        for i, b in enumerate(pkt):
+            self._cpu._write8(buf_addr + i, b)
+        return 0
+
+    # ── RTC syscalls ─────────────────────────────────────────────────────
+
+    def _sys_rtc_gettime(self, buf_addr: int) -> int:
+        """Write Unix timestamp to buf_addr. Returns the timestamp."""
+        if self._rtc is None:
+            return -1
+        ts = self._rtc.get_unix_time()
+        if buf_addr:
+            self._cpu._write32(buf_addr, ts)
+        return ts
+
+    # ── Disk I/O syscalls ────────────────────────────────────────────────
+
+    def _sys_disk_read(self, lba: int, buf_addr: int, count: int) -> int:
+        """Read `count` sectors from LBA into memory at buf_addr. Returns bytes read."""
+        if self._disk is None or count <= 0:
+            return -1
+        data = self._disk.read_sectors(lba, count)
+        for i, b in enumerate(data):
+            self._cpu._write8(buf_addr + i, b)
+        return len(data)
+
+    def _sys_disk_write(self, lba: int, buf_addr: int, count: int) -> int:
+        """Write `count` sectors from memory at buf_addr to LBA. Returns bytes written."""
+        if self._disk is None or count <= 0:
+            return -1
+        data = bytes(self._cpu._read8(buf_addr + i) for i in range(count * 512))
+        self._disk.write_sectors(lba, data)
+        return len(data)
+
+    # ── Network syscalls ─────────────────────────────────────────────────
+
+    def _sys_net_send(self, buf_addr: int, length: int) -> int:
+        """Send a network packet from memory. Returns 0 on success."""
+        if self._nic is None or length <= 0:
+            return -1
+        data = bytes(self._cpu._read8(buf_addr + i) for i in range(length))
+        ok = self._nic.send_packet(data)
+        return 0 if ok else -1
+
+    def _sys_net_recv(self, buf_addr: int, max_len: int) -> int:
+        """Receive a network packet into memory. Returns packet length or -1 if empty."""
+        if self._nic is None:
+            return -1
+        pkt = self._nic.recv_packet()
+        if not pkt:
+            return -1
+        to_read = min(len(pkt), max_len)
+        for i in range(to_read):
+            self._cpu._write8(buf_addr + i, pkt[i])
+        return to_read
+
 
 # ── PIT (Programmable Interval Timer) ───────────────────────────────────────
 
@@ -5892,6 +6621,7 @@ class X86VirtualSystem:
         # Filesystem
         if filesystem is not None:
             self._fs = filesystem
+            self._block = filesystem._block if hasattr(filesystem, '_block') else BlockDevice()
         else:
             self._block = BlockDevice()
             self._fs = FlatFS(self._block)
@@ -5911,6 +6641,20 @@ class X86VirtualSystem:
             memory=self._allocator,
             filesystem=self._fs,
         )
+
+        # I/O devices
+        self._serial = SerialDevice(cpu=self._cpu)
+        self._mouse = MouseDevice()
+        self._rtc = CMOSDevice(cpu=self._cpu)
+        self._disk = DiskDevice(block_device=self._block)
+        self._nic = NICDevice()
+
+        # Wire devices into syscall handler
+        self._syscall._serial = self._serial
+        self._syscall._mouse = self._mouse
+        self._syscall._rtc = self._rtc
+        self._syscall._disk = self._disk
+        self._syscall._nic = self._nic
 
         # PIT timer
         self._pit = PITDevice(
@@ -5953,6 +6697,26 @@ class X86VirtualSystem:
     @property
     def filesystem(self) -> FlatFS:
         return self._fs
+
+    @property
+    def serial(self) -> SerialDevice:
+        return self._serial
+
+    @property
+    def mouse(self) -> MouseDevice:
+        return self._mouse
+
+    @property
+    def rtc(self) -> CMOSDevice:
+        return self._rtc
+
+    @property
+    def disk(self) -> DiskDevice:
+        return self._disk
+
+    @property
+    def nic(self) -> NICDevice:
+        return self._nic
 
     def load_kernel(self, source: str, org: int = 0x1000):
         """Assemble and load kernel code."""

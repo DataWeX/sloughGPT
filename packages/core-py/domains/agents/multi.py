@@ -143,6 +143,26 @@ class MultiAgentOrchestrator:
     def __init__(self, agents: Optional[Dict[str, SpecializedAgent]] = None):
         self.agents = agents or dict(DEFAULT_AGENTS)
         self._cmds = ShellCommands
+        self._load_custom_agents()
+
+    def _load_custom_agents(self):
+        """Load custom agents from ~/.config/sloughgpt/custom_agents.json."""
+        try:
+            import json
+            from pathlib import Path
+            agents_file = Path.home() / ".config" / "sloughgpt" / "custom_agents.json"
+            if agents_file.exists():
+                custom = json.loads(agents_file.read_text())
+                for key, data in custom.items():
+                    if key not in self.agents:
+                        self.agents[key] = SpecializedAgent(
+                            name=data["name"],
+                            role=data["role"],
+                            system_prompt=data["system_prompt"],
+                            tools=data.get("tools", ["memory"]),
+                        )
+        except Exception:
+            pass
 
     def list_agents(self) -> List[Dict[str, Any]]:
         return [a.to_dict() for a in self.agents.values()]
