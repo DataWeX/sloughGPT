@@ -429,8 +429,9 @@ def compress_checkpoint(
         if not isinstance(weights, np.ndarray):
             weights = np.asarray(weights, dtype=np.float32)
         total_raw += weights.nbytes
+        point_id = f"{lib_name}.{name}"
         point = compressor.compress_cluster(
-            weights, name, n_clusters=n_clusters,
+            weights, point_id, n_clusters=n_clusters,
         )
         total_compressed += point.nbytes()
         library.add(point)
