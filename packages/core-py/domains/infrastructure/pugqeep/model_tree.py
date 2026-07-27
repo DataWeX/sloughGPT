@@ -250,8 +250,6 @@ def load_from_points(path: str) -> Tuple[ModelTree, dict]:
         prefix = f"{model_name}."
         if point.identity.startswith(prefix):
             weight_name = point.identity[len(prefix):]
-        elif "." in point.identity:
-            weight_name = point.identity.split(".", 1)[1]
         else:
             weight_name = point.identity
         shape = tuple(weight_shapes.get(weight_name, weight_shapes.get(point.identity, [])))
@@ -275,8 +273,6 @@ def decompress_tree(tree: ModelTree) -> Dict[str, np.ndarray]:
     for point in tree.library.list_all():
         if point.identity.startswith(prefix):
             weight_name = point.identity[len(prefix):]
-        elif "." in point.identity:
-            weight_name = point.identity.split(".", 1)[1]
         else:
             weight_name = point.identity
 
