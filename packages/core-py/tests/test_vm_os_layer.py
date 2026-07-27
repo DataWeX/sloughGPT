@@ -1,7 +1,7 @@
 """
 Tests for the x86 VM OS layer: PageFrameAllocator, ProcessControlBlock,
 ProcessTable, Scheduler, X86SyscallHandler, PITDevice, X86VirtualSystem,
-SerialDevice, MouseDevice, RTCDevice, DiskDevice, NICDevice.
+SerialDevice, MouseDevice, CMOSDevice, DiskDevice, NICDevice.
 """
 
 import pytest
@@ -10,7 +10,7 @@ from domains.shell.vm import (
     PageFrameAllocator, ProcessControlBlock, ProcessState,
     ProcessTable, Scheduler, X86SyscallHandler, PITDevice,
     X86VirtualSystem, X86CPU, X86Assembler, FlatFS, BlockDevice,
-    SerialDevice, MouseDevice, RTCDevice, DiskDevice, NICDevice,
+    SerialDevice, MouseDevice, CMOSDevice, DiskDevice, NICDevice,
 )
 
 
@@ -827,43 +827,147 @@ class TestMouseDevice:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# RTCDevice
+# CMOSDevice
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestRTCDevice:
+class TestCMOSDevice:
     def test_init(self):
-        dev = RTCDevice()
+        dev = CMOSDevice()
         info = dev.info()
-        assert info["type"] == "rtc"
+        assert info["type"] == "cmos"
         assert "unix_time" in info
+        assert info["nmi_disabled"] is False
+
+    def test_default_registers(self):
+        dev = CMOSDevice()
+        # Status Reg A: divider + rate
+        assert dev.read_cmos(0x0A) == 0x26
+        # Status Reg B: 24h mode
+        assert dev.read_cmos(0x0B) & 0x02  # 24h
+        # Status Reg D: VRT (battery OK)
+        assert dev.read_cmos(0x0D) & 0x80
 
     def test_get_time(self):
-        dev = RTCDevice()
+        dev = CMOSDevice()
         t = dev.get_time()
         assert "year" in t
         assert "month" in t
         assert "day" in t
         assert "hour" in t
         assert 1 <= t["month"] <= 12
+        assert 1 <= t["day"] <= 31
 
     def test_get_unix_time(self):
-        dev = RTCDevice()
+        dev = CMOSDevice()
         ts = dev.get_unix_time()
         now = int(_time.time())
         assert abs(ts - now) <= 1
 
     def test_set_offset(self):
-        dev = RTCDevice()
+        dev = CMOSDevice()
         dev.set_offset(3600)
         ts = dev.get_unix_time()
         now = int(_time.time())
         assert abs(ts - now - 3600) <= 1
 
+    def test_bcd_encoding(self):
+        dev = CMOSDevice()
+        dev.set_binary_mode(False)  # BCD mode
+        assert not (dev.read_cmos(0x0B) & 0x04)  # DM=0 means BCD
+        # Seconds should be valid BCD
+        sec = dev.read_cmos(0x00)
+        assert 0 <= (sec >> 4) <= 9   # tens digit
+        assert 0 <= (sec & 0xF) <= 9  # ones digit
+
+    def test_binary_mode(self):
+        dev = CMOSDevice()
+        dev.set_binary_mode(True)
+        assert dev.read_cmos(0x0B) & 0x04  # DM=1 means binary
+        sec = dev.read_cmos(0x00)
+        assert 0 <= sec <= 59
+
+    def test_io_ports_with_cpu(self):
+        cpu = X86CPU()
+        dev = CMOSDevice(cpu=cpu)
+        dev.set_binary_mode(True)  # use binary so readback is plain int
+        # Write address to port 0x70 (seconds register)
+        cpu._io_out[0x70](0x00)
+        # Read data from port 0x71
+        val = cpu._io_in[0x71]()
+        assert 0 <= val <= 59  # seconds value
+
+    def test_io_port_nmi_disable(self):
+        cpu = X86CPU()
+        dev = CMOSDevice(cpu=cpu)
+        # Writing bit 7 disables NMI
+        cpu._io_out[0x70](0x80 | 0x0A)  # NMI disable + status A
+        assert dev._nmi_disabled is True
+        # Clear NMI
+        cpu._io_out[0x70](0x0A)
+        assert dev._nmi_disabled is False
+
+    def test_io_port_write_read_data(self):
+        cpu = X86CPU()
+        dev = CMOSDevice(cpu=cpu)
+        # Select general-purpose CMOS offset 0x40
+        cpu._io_out[0x70](0x40)
+        # Write a value
+        cpu._io_out[0x71](0xAB)
+        # Read it back
+        cpu._io_out[0x70](0x40)
+        val = cpu._io_in[0x71]()
+        assert val == 0xAB
+
+    def test_status_a_readonly(self):
+        dev = CMOSDevice()
+        original = dev.read_cmos(0x0A)
+        dev.write_cmos(0x0A, 0xFF)
+        assert dev.read_cmos(0x0A) == original
+
+    def test_status_c_read_to_clear(self):
+        cpu = X86CPU()
+        dev = CMOSDevice(cpu=cpu)
+        # Manually set a flag in status C
+        dev._cmos[0x0C] = 0x30
+        # Select and read
+        cpu._io_out[0x70](0x0C)
+        val = cpu._io_in[0x0C]() if hasattr(cpu._io_in, '__getitem__') else dev.read_cmos(0x0C)
+        # Status C is read-to-clear
+        assert dev.read_cmos(0x0C) == 0x00
+
+    def test_status_d_vrt_bit(self):
+        dev = CMOSDevice()
+        # VRT is bit 7 of Status D
+        assert dev.read_cmos(0x0D) & 0x80
+        # Writing 0 clears VRT
+        dev.write_cmos(0x0D, 0x00)
+        assert not (dev.read_cmos(0x0D) & 0x80)
+
+    def test_raw_read_write(self):
+        dev = CMOSDevice()
+        dev.write_cmos(0x60, 0x42)
+        assert dev.read_cmos(0x60) == 0x42
+
+    def test_out_of_bounds(self):
+        dev = CMOSDevice()
+        dev.write_cmos(200, 0xFF)  # no crash
+        assert dev.read_cmos(200) == 0
+
     def test_call_method(self):
-        dev = RTCDevice()
+        dev = CMOSDevice()
         assert isinstance(dev.call("get_time"), dict)
         assert isinstance(dev.call("get_unix_time"), int)
+        assert isinstance(dev.call("read_cmos", 0x00), int)
+        assert dev.call("write_cmos", 0x40, 0x55) is True
         assert dev.call("set_offset", 0) is True
+        assert dev.call("set_binary_mode", True) is True
+
+    def test_12h_mode(self):
+        dev = CMOSDevice()
+        # Set 12-hour mode (clear bit 1 of Reg B)
+        dev.write_cmos(0x0B, 0x00)
+        t = dev.get_time()
+        assert 0 <= t["hour"] <= 12
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -983,7 +1087,7 @@ class TestVirtualSystemNewDevices:
         vs = X86VirtualSystem(memory_size=0x100000)
         assert isinstance(vs.serial, SerialDevice)
         assert isinstance(vs.mouse, MouseDevice)
-        assert isinstance(vs.rtc, RTCDevice)
+        assert isinstance(vs.rtc, CMOSDevice)
         assert isinstance(vs.disk, DiskDevice)
         assert isinstance(vs.nic, NICDevice)
 

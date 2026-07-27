@@ -15,6 +15,7 @@ Full ``step_*.pt`` checkpoints embed ``stoi`` / ``itos`` / ``chars`` for fair
 *Checkpoint vocabulary*).
 """
 
+import math
 import os
 import logging
 import threading
@@ -527,13 +528,16 @@ class CheckpointManager:
                 path.unlink()
 
     def load_latest(self) -> Optional[Dict[str, Any]]:
-        """Load the latest checkpoint."""
-        checkpoints = sorted(
-            self.checkpoint_dir.glob("step_*.pt"), key=lambda p: int(p.stem.split("_")[1])
+        """Load the latest checkpoint (.soul, .pt, or .npz)."""
+        candidates = (
+            list(self.checkpoint_dir.glob("*.soul"))
+            + list(self.checkpoint_dir.glob("step_*.pt"))
+            + list(self.checkpoint_dir.glob("*.npz"))
         )
-        if not checkpoints:
+        if not candidates:
             return None
-        return torch_load_checkpoint(str(checkpoints[-1]), map_location="cpu")
+        latest = max(candidates, key=lambda p: p.stat().st_mtime)
+        return torch_load_checkpoint(str(latest), map_location="cpu")
 
     def load_best(self) -> Optional[Dict[str, Any]]:
         """Load the checkpoint with the best metric."""
@@ -1498,7 +1502,7 @@ class SloughGPTTrainer:
     def generate(self, prompt: str, max_tokens: int = 200, temperature: float = 0.8) -> str:
         """Generate text."""
         self.model.eval()
-        idx = torch.tensor([[self.stoi.get(c, 0) for c in prompt[:1]]])
+        idx = torch.tensor([[self.stoi.get(c, 0) for c in prompt]])
 
         with torch.no_grad():
             output = self.model.generate(idx, max_new_tokens=max_tokens, temperature=temperature)
@@ -1595,7 +1599,7 @@ def main():
         max_checkpoints=args.max_checkpoints,
         use_lora=args.lora,
         lora_rank=args.lora_rank,
-        lora_alpha=int(args.lora_alpha),
+        lora_alpha=float(args.lora_alpha),
         use_compile=args.compile,
         compile_mode=args.compile_mode,
         use_channels_last=not args.no_channels_last,

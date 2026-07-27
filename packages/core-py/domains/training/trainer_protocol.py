@@ -91,6 +91,8 @@ class TrainResult:
 
     def __getitem__(self, key: str) -> Any:
         """Dict-like ``result["key"]`` access."""
+        if not hasattr(self, key):
+            raise KeyError(key)
         return getattr(self, key)
 
     def __contains__(self, key: str) -> bool:
@@ -98,7 +100,7 @@ class TrainResult:
         return hasattr(self, key)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to plain dict (includes all fields)."""
+        """Convert to plain dict (includes all fields + backward-compat aliases)."""
         d = {
             "success": self.success,
             "status": self.status,
@@ -111,6 +113,10 @@ class TrainResult:
             "checkpoint_name": self.checkpoint_name,
             "method": self.method,
             "error": self.error,
+            "message": self.message,
+            "elapsed": self.elapsed,
+            "phases": self.phases,
+            "checkpoint": self.checkpoint_name,
         }
         d.update(self.metrics)
         return d

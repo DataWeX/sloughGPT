@@ -7,12 +7,15 @@ import asyncio
 import json
 import sys
 import pytest
+from pathlib import Path
 from unittest.mock import MagicMock
 
 
 def _ensure_paths():
+    import os
+    repo_root = str(Path(__file__).resolve().parents[1])
     for _p in ('packages/core-py', 'apps/api/server'):
-        _full = '/Users/mac/sloughGPT/' + _p
+        _full = os.path.join(repo_root, _p)
         if _full not in sys.path:
             sys.path.insert(0, _full)
 

@@ -43,7 +43,7 @@ def torch_load_checkpoint(
         raw = load_pt_file(path, map_location=map_location)
     except Exception:
         from domains.training.slonet_compat import torch
-        raw = torch.load(path, map_location=map_location, weights_only=False)
+        raw = torch.load(path, map_location=map_location, weights_only=True)
     if not isinstance(raw, dict):
         raise TypeError(f"Expected checkpoint at {path!r} to load to dict, got {type(raw).__name__}")
     return _to_numpy_dict(raw)
@@ -82,9 +82,10 @@ def _to_numpy_dict(d: Dict[str, Any]) -> Dict[str, np.ndarray]:
     result = {}
     for k, v in d.items():
         if hasattr(v, 'cpu'):
-            result[k] = v.cpu().numpy().astype(np.float32)
+            arr = v.cpu().numpy()
+            result[k] = arr.astype(arr.dtype)
         elif isinstance(v, np.ndarray):
-            result[k] = v.astype(np.float32) if v.dtype != np.float32 else v.copy()
+            result[k] = v.copy() if v.dtype != np.float32 else v
         elif isinstance(v, dict):
             result[k] = _to_numpy_dict(v)
         else:
@@ -146,7 +147,15 @@ def load_sloughgpt_from_checkpoint(
 
     Returns:
         ``(model, hyperparams_dict)`` — hyperparams are the resolved constructor kwargs.
+
+    Raises:
+        RuntimeError: If ``SloughGPTModel`` cannot be imported.
     """
+    if SloughGPTModel is None:
+        raise RuntimeError(
+            "SloughGPTModel is not available — "
+            "ensure domains.models is importable (torch required)."
+        )
     bundle = normalize_raw_checkpoint(bundle)
     hp = resolve_sloughgpt_hyperparams(
         bundle,

@@ -119,8 +119,16 @@ class DatasetManager:
             for i, line in enumerate(f):
                 if config.max_samples and i >= config.max_samples:
                     break
-                if line.strip():
+                line = line.strip()
+                if not line:
+                    continue
+                if config.data_format == DataFormat.JSONL or config.data_format == DataFormat.JSON:
                     records.append(json.loads(line))
+                elif config.data_format == DataFormat.CSV:
+                    import csv, io
+                    reader = csv.DictReader(io.StringIO(line))
+                    for row in reader:
+                        records.append(row)
         return records
 
     def stream_dataset(self, name: str) -> Iterator[Dict[str, Any]]:
@@ -168,7 +176,7 @@ class DatasetManager:
 
             path = str(files[0])
             dtype = detect_dataset_type(path)
-            fmt = DataFormat.JSONL if path.endswith(".jsonl") else DataFormat.JSON if path.endswith(".json") else DataFormat.JSON
+            fmt = DataFormat.JSONL if path.endswith(".jsonl") else DataFormat.JSON if path.endswith(".json") else DataFormat.CSV
 
             config = DatasetConfig(
                 name=entry.name,

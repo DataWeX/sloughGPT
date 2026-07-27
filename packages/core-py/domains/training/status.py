@@ -546,17 +546,7 @@ class CheckpointManager:
 
 def _tensors_to_numpy(state_dict: Dict[str, Any]) -> Dict[str, np.ndarray]:
     """Convert tensors in a state dict to numpy arrays."""
-    result = {}
-    for k, v in state_dict.items():
-        if hasattr(v, "cpu"):
-            result[k] = v.cpu().numpy()
-        elif isinstance(v, np.ndarray):
-            result[k] = v
-        elif isinstance(v, dict):
-            result[k] = _tensors_to_numpy(v)
-        else:
-            result[k] = np.array(v)
-    return result
+    return CheckpointManager._tensors_to_numpy(state_dict)
 
 
 def save_checkpoint_npz(path: str, state_dict: Dict[str, Any], meta: Optional[Dict[str, Any]] = None) -> str:

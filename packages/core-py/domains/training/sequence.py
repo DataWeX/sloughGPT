@@ -148,7 +148,7 @@ class TrainingSequenceState:
             "meta": {
                 "error": self.error,
             },
-            "message": self.phase_results[-1].message if self.phase_results else "",
+            "message": self.phase_results[-1].message if self.phase_results else self.error or "",
         }
 
 

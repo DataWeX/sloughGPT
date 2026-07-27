@@ -10,7 +10,7 @@ from importlib.util import spec_from_file_location, module_from_spec
 
 
 def load_module():
-    path = Path("/Users/mac/sloughGPT/packages/core-py/domains/infrastructure/training_pipeline.py")
+    path = Path(__file__).resolve().parents[1] / "packages" / "core-py" / "domains" / "infrastructure" / "training_pipeline.py"
     spec = spec_from_file_location("training_pipeline", path)
     module = module_from_spec(spec)
     spec.loader.exec_module(module)
