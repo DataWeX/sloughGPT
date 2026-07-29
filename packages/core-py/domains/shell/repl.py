@@ -220,6 +220,10 @@ class ShellREPL:
         from .io import ConsoleIO
         self.io = io or ConsoleIO()
 
+        # Structured console output — tables, boxes, status, progress
+        from .console import Console
+        self.console = Console(self.io, has_readline=_HAS_READLINE)
+
         # Structured logger — inherit from domains.logging
         from domains.logging import ShellLogger, LogLevel
         self.log = ShellLogger("slo.shell.repl", level=LogLevel.DEBUG)
@@ -680,7 +684,17 @@ class ShellREPL:
     def _print(self, *args, **kwargs) -> None:
         end = kwargs.get("end", "\n")
         text = " ".join(str(a) for a in args)
-        self.io.write(text, end=end)
+        self.console.write(text, end=end)
+
+    def _table(self, rows: list[list[str]], header: list[str] | None = None,
+               separator_after_header: bool = True) -> None:
+        self.console.table(rows, header, separator_after_header)
+
+    def _box(self, text: str, width: int | None = None) -> None:
+        self.console.box(text, width)
+
+    def _status(self, kind: str, message: str, detail: str = "") -> None:
+        self.console.status(kind, message, detail)
 
     def _log_ok(self, msg: str, **ctx) -> None:
         """Log a success message (green checkmark)."""
@@ -2114,7 +2128,7 @@ Examples:
                 f"{j.get('progress', 0)}%",
                 str(j.get("loss", "\u2014"))[:8],
             ])
-        self._print(self._format_table(rows, ["ID", "Status", "Name", "Progress", "Loss"]))
+        self._table(rows, ["ID", "Status", "Name", "Progress", "Loss"])
 
     def _cmd_ps(self, args: str = "") -> None:
         procs = self.os.kernel.list_processes()
@@ -2130,7 +2144,7 @@ Examples:
             state = state_names.get(p.state, str(p.state))
             age = time.time() - p.created_at
             rows.append([str(p.pid), p.name, state, f"{age:.1f}s"])
-        self._print(self._format_table(rows, ["PID", "Name", "State", "Age"]))
+        self._table(rows, ["PID", "Name", "State", "Age"])
 
     def _cmd_kill(self, args: str = "") -> None:
         if not args:
@@ -2153,7 +2167,7 @@ Examples:
             sz_str = f"{sz:.2f}G" if sz else ""
             loaded = m.get("status") == "loaded" or m.get("loaded")
             rows.append([name, m.get("type", ""), sz_str, "\u2713 loaded" if loaded else ""])
-        self._print(self._format_table(rows, ["Model", "Type", "Size", "Status"]))
+        self._table(rows, ["Model", "Type", "Size", "Status"])
 
     def _cmd_load(self, args: str = "") -> None:
         if not args:
@@ -2244,7 +2258,7 @@ Examples:
             traits = s.get("traits", [])
             trait_str = ", ".join(str(t)[:15] for t in traits[:3])
             rows.append([name, desc, trait_str])
-        self._print(self._format_table(rows, ["Soul", "Description", "Traits"]))
+        self._table(rows, ["Soul", "Description", "Traits"])
 
     def _cmd_switch(self, args: str = "") -> None:
         if not args:
@@ -2403,7 +2417,7 @@ Examples:
             sz = d.get("size", 0)
             sz_str = f"{sz / 1048576:.1f}M" if sz else ""
             rows.append([name, str(samples), sz_str])
-        self._print(self._format_table(rows, ["Dataset", "Samples", "Size"]))
+        self._table(rows, ["Dataset", "Samples", "Size"])
 
     def _cmd_knowledge(self, args: str = "") -> None:
         """List/search knowledge base entries."""
@@ -2485,7 +2499,7 @@ Examples:
         rows = []
         for cp in cps:
             rows.append([cp.get("name", ""), f"{cp.get('loss', _EM)}", cp.get("model_type", "")])
-        self._print(self._format_table(rows, ["Checkpoint", "Loss", "Type"]))
+        self._table(rows, ["Checkpoint", "Loss", "Type"])
 
     def _cmd_finetuned(self, args: str = "") -> None:
         if not self._require_api("finetuned"):
@@ -2502,7 +2516,7 @@ Examples:
             sz_bytes = m.get("size_bytes", 0)
             sz_str = f"{sz_bytes / 1048576:.0f}M"
             rows.append([name, f"{loss}", f"{ep}ep", sz_str])
-        self._print(self._format_table(rows, ["Model", "Loss", "Epochs", "Size"]))
+        self._table(rows, ["Model", "Loss", "Epochs", "Size"])
 
     def _cmd_protect(self, args: str = "") -> None:
         """Protect a model from accidental deletion: protect <model_id>"""
@@ -2568,7 +2582,7 @@ Examples:
                 model = j.get("model", j.get("data_source", ""))
                 prog = j.get("progress", 0)
                 rows.append([jid, status, model, f"{prog}%"])
-            self._print(self._format_table(rows, ["ID", "Status", "Model", "Progress"]))
+            self._table(rows, ["ID", "Status", "Model", "Progress"])
             return
 
         if sub == "follow":
@@ -3983,12 +3997,6 @@ Examples:
 
     # ── Init / Boot commands ────────────────────────────────────────
 
-    def _format_api_status(self, status: dict) -> str:
-        """Format API status dict into a display string."""
-        if status.get("available"):
-            model = status.get("model_id", "unknown") or "unknown"
-            return f"  API: \u2713 {model} ({status.get('engine_type', '').strip() or 'cpu'})"
-        return f"  API: \u2717 not connected — use \u2018api start\u2019 to launch"
 
     def _cmd_api(self, args: str = "") -> None:
         """Manage the API server. Usage: api [start|stop|status|restart]"""
@@ -3998,23 +4006,23 @@ Examples:
 
         if cmd == "start":
             if api.is_running:
-                self._print("  API server is already running.")
+                self._status("info", "API server is already running.")
                 return
             self._print("  Starting API server...")
             result = api.start()
             if result.get("ok"):
-                self._print(f"  \u2713 {result.get('message', 'started')}")
+                self._status("ok", result.get('message', 'started'))
             else:
-                self._print(f"  \u2717 {result.get('error', 'failed to start')}")
+                self._status("error", result.get('error', 'failed to start'))
                 self._last_exit_code = 1
 
         elif cmd == "stop":
             if not api.is_running:
-                self._print("  API server is not running.")
+                self._status("info", "API server is not running.")
                 return
             self._print("  Stopping API server...")
             result = api.stop()
-            self._print(f"  \u2713 {result.get('message', 'stopped')}")
+            self._status("ok", result.get('message', 'stopped'))
 
         elif cmd == "restart":
             if api.is_running:
@@ -4023,19 +4031,22 @@ Examples:
             self._print("  Starting API server...")
             result = api.start()
             if result.get("ok"):
-                self._print(f"  \u2713 {result.get('message', 'restarted')}")
+                self._status("ok", result.get('message', 'restarted'))
             else:
-                self._print(f"  \u2717 {result.get('error', 'failed to restart')}")
+                self._status("error", result.get('error', 'failed to restart'))
                 self._last_exit_code = 1
 
         else:  # status (default)
             status = api.status()
-            self._print(self._format_api_status(status))
+            if status.get("available"):
+                model = status.get("model_id", "unknown") or "unknown"
+                self._status("ok", f"API connected — {model} ({status.get('engine_type', '').strip() or 'cpu'})")
+            else:
+                self._status("error", "API not connected")
+                self._print("  Use \u2018api start\u2019 to launch the API server.")
             if status.get("running"):
                 uptime = status.get("uptime", 0)
                 self._print(f"  Uptime: {uptime:.0f}s")
-            if not status.get("available") and not status.get("running"):
-                self._print("  Use \u2018api start\u2019 to launch the API server.")
 
     def _require_api(self, cmd_name: str = "") -> bool:
         """Check API availability. Print warning and return False if down."""
@@ -4057,7 +4068,11 @@ Examples:
             log, api_status = result
         else:
             log, api_status = result, self.os.api_status
-        self._print(self._format_api_status(api_status))
+        if api_status.get("available"):
+            model = api_status.get("model_id", "unknown") or "unknown"
+            self._status("ok", f"API — {model}")
+        else:
+            self._status("error", "API not connected — use 'api start' to launch")
 
     def _cmd_shutdown(self, args: str = "") -> None:
         """Shut down the shell — halt all services + kernel."""
@@ -4923,7 +4938,11 @@ nl: db 10
 
         self._running = True
         self._print_header()
-        self._print(self._format_api_status(api_status))
+        if api_status.get("available"):
+            model = api_status.get("model_id", "unknown") or "unknown"
+            self._status("ok", f"API — {model}")
+        else:
+            self._status("error", "API not connected — use 'api start' to launch")
         self._audit.startup()
 
         def _graceful_shutdown(signum, frame):
