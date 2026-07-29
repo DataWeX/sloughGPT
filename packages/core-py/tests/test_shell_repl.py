@@ -778,8 +778,8 @@ class TestNoColor:
         with CO() as cap:
             repl._cmd_health("")
         output = cap.getvalue()
-        # Should contain ANSI escape codes
-        assert "\033[" in output or "Status:" in output
+        # Should contain ANSI escape codes or status message
+        assert "\033[" in output or "Status:" in output or "not responding" in output
 
     def test_exit_uses_colors(self, repl):
         from domains.shell.repl import _CaptureOutput as CO

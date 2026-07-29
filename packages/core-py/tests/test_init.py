@@ -140,7 +140,7 @@ class TestInitSystem:
 
     def test_services_property(self):
         init = InitSystem()
-        assert len(init.services) >= 4
+        assert len(init.services) >= 3
 
     def test_services_all_have_runlevels(self):
         init = InitSystem()
@@ -158,7 +158,8 @@ class TestInitSystem:
     def test_boot_runlevel_2(self):
         init = InitSystem()
         output = init.boot(target_runlevel=2)
-        assert "model-server" in output
+        assert "kernel" in output
+        assert "Boot complete" in output
 
     def test_boot_complete_flag(self):
         init = InitSystem()

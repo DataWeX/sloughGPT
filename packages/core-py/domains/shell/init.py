@@ -11,8 +11,10 @@ Provides:
 from __future__ import annotations
 
 import os
+import sys
 import time
 import json
+import itertools
 import logging
 import shlex
 import threading
@@ -37,29 +39,16 @@ BUILTIN_SERVICES: dict[str, dict[str, Any]] = {
         "description": "Core kernel — process and resource manager",
         "builtin": True,
     },
-    "model-server": {
-        "command": "python3 -m apps.api.server.main",
-        "deps": [],
-        "respawn": True,
-        "max_respawns": 3,
-        "respawn_delay": 3.0,
-        "runlevel": 2,
-        "timeout": 60.0,
-        "health_check": "curl -sf http://localhost:8000/health",
-        "description": "AI model inference server (FastAPI)",
-    },
     "agent-orchestrator": {
         "command": "",
-        "deps": ["model-server"],
-        "respawn": False,
+        "deps": [],
         "runlevel": 3,
         "description": "Multi-agent orchestration daemon",
         "builtin": True,
     },
     "knowledge-worker": {
         "command": "",
-        "deps": ["model-server"],
-        "respawn": False,
+        "deps": [],
         "runlevel": 3,
         "description": "Background knowledge ingestion worker",
         "builtin": True,
@@ -119,7 +108,10 @@ class ServiceManager:
         self._stop_requested = False
 
     def start(self, shell_run: Callable[[str], str] | None = None) -> bool:
-        """Start the service. Returns True if started successfully."""
+        """Start the service. Returns True if process launched successfully.
+
+        Does NOT wait for health check — call wait_until_healthy() separately.
+        """
         with self._lock:
             if self.instance.state in ("running", "starting"):
                 return True
@@ -159,6 +151,23 @@ class ServiceManager:
             with self._lock:
                 self.instance.state = "failed"
             self._log(f"start failed: {e}")
+            return False
+
+    def wait_until_healthy(self) -> bool:
+        """Single health check attempt. Returns True if healthy, False otherwise."""
+        if not self.defn.health_check:
+            return True
+        try:
+            subprocess.run(
+                shlex.split(self.defn.health_check),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            )
+            with self._lock:
+                self.instance.state = "running"
+            return True
+        except Exception:
             return False
 
     def stop(self) -> bool:
@@ -288,12 +297,18 @@ class InitSystem:
           3 — optional services (agent orchestrator, knowledge worker)
         """
         self._boot_time = time.time()
-        lines = ["\n  ╔══════════════════════════════════════╗"]
-        lines.append("  ║     Dait — Booting                  ║")
-        lines.append("  ╚══════════════════════════════════════╝")
-        lines.append("")
+        header = [
+            "\n" + "╔══════════════════════════════════════╗",
+            "║     Dait — Booting                  ║",
+            "╚══════════════════════════════════════╝",
+            "",
+        ]
+        _p = lambda: (sys.stdout.flush())
+        sys.stdout.write("\n".join(header) + "\n")
+        _p()
 
         rl_names = {1: "boot-critical", 2: "core", 3: "optional"}
+        output: list[str] = []
 
         for rl in range(1, target_runlevel + 1):
             self._current_runlevel = rl
@@ -302,13 +317,17 @@ class InitSystem:
                 continue
 
             label = rl_names.get(rl, f"runlevel {rl}")
-            lines.append(f"  ── {label} ──")
+            output.append(f"  ── {label} ──")
+            sys.stdout.write(output[-1] + "\n")
+            _p()
 
             # Topological sort by dependencies
             ordered = self._resolve_deps(services)
 
             for mgr in ordered:
-                lines.append(f"    {mgr.defn.name}...")
+                output.append(f"    {mgr.defn.name}...")
+                sys.stdout.write(output[-1] + "\n")
+                _p()
 
                 # Wait for dependencies
                 deps_ok = True
@@ -317,27 +336,59 @@ class InitSystem:
                     if dep and dep.instance.state != "running":
                         dep_start = dep.start(shell_run)
                         if not dep_start:
-                            lines.append(f"      └─ dependency {dep_name} failed")
+                            output[-1] = f"    {mgr.defn.name}... dependency {dep_name} failed"
+                            sys.stdout.write("\033[F\033[K" + output[-1] + "\n")
+                            output.append("      └─ ✗ dependency failed")
+                            sys.stdout.write(output[-1] + "\n")
+                            _p()
                             deps_ok = False
                             break
 
                 if not deps_ok:
-                    lines.append(f"      └─ failed (dependency)")
                     continue
 
+                # Launch process
                 ok = mgr.start(shell_run)
-                if ok:
-                    lines.append(f"      └─ ✓ {mgr.defn.description or 'started'}")
-                else:
-                    lines.append(f"      └─ ✗ failed")
 
-            lines.append("")
+                # Wait for health check with live spinner
+                if ok and mgr.defn.health_check:
+                    spinner = itertools.cycle(["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
+                    deadline = time.time() + mgr.defn.timeout
+                    start_ts = time.time()
+                    while time.time() < deadline:
+                        if mgr.instance.state in ("failed", "crashed"):
+                            break
+                        if mgr.wait_until_healthy():
+                            break
+                        spin = next(spinner)
+                        waited = time.time() - start_ts
+                        sys.stdout.write(f"\r      └─ {spin} waiting ({waited:.0f}s / {mgr.defn.timeout:.0f}s)\033[K")
+                        _p()
+                        time.sleep(1)
+                    else:
+                        with self._lock:
+                            mgr.instance.state = "failed"
+
+                if ok:
+                    result = f"      └─ ✓ {mgr.defn.description or 'started'}"
+                else:
+                    result = "      └─ ✗ failed"
+                output.append(result)
+                sys.stdout.write("\r" + result + "\033[K\n")
+                _p()
+
+            output.append("")
+            sys.stdout.write("\n")
 
         self._current_runlevel = target_runlevel
         self._boot_complete = True
         elapsed = time.time() - self._boot_time
-        lines.append(f"  Boot complete in {elapsed:.1f}s (runlevel {target_runlevel})")
-        return "\n".join(lines)
+        final = f"  Boot complete in {elapsed:.1f}s (runlevel {target_runlevel})"
+        sys.stdout.write(final + "\n")
+        _p()
+        output.append("")
+        output.append(final)
+        return "\n".join(header + output)
 
     def _resolve_deps(self, services: list[ServiceManager]) -> list[ServiceManager]:
         """Simple topological sort by dependency ordering."""

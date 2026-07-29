@@ -499,9 +499,14 @@ def reset_note_store() -> None:
 
 def cli_main(argv: list[str] | None = None) -> int:
     """CLI entry point.  Return exit code."""
+    if argv is None:
+        argv = sys.argv[1:]
+    if argv and argv[0] == "kanban":
+        from .kanban import cli_main as kcli
+        return kcli(argv[1:])
     import argparse
 
-    parser = argparse.ArgumentParser(prog="notes")
+    parser = argparse.ArgumentParser(prog="planner")
     parser.add_argument("--backend", default="file", choices=["file", "mogdb"],
                         help="Storage backend")
     sub = parser.add_subparsers(dest="cmd")

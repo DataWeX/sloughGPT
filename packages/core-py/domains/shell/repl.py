@@ -1518,6 +1518,7 @@ class ShellREPL:
   gen / tokenizer       Inference
   health / status / uname  System info
   boot / shutdown       Shell lifecycle
+  api                   API server lifecycle (start/stop/status)
   svc                   Service management
   devices / lsdev       AI device nodes (/dev/llm, /dev/embedding, /dev/knowledge)
   asm / wm              Virtual machine / window manager
@@ -1627,6 +1628,22 @@ class ShellREPL:
                 "permit": "  permit <cmd> [--persist]  — Grant permission for a blocked command",
                 "deny": "  deny <cmd> [--persist]  — Revoke a previously granted permission",
                 "permissions": "  permissions  — Show current permission policy and granted commands",
+                "api": "  api [start|stop|status|restart]  — Manage the API server lifecycle",
+                "chat": "  chat [msg] | chat /reset  — Multi-turn chat session",
+                "cls": "  cls | clear  — Clear the screen",
+                "confirm": "  confirm [on|off]  — Toggle auto-download confirmation",
+                "events": "  events [filter] [n]  — Show recent EventBus events",
+                "note": '  note [new|list|show|edit|delete|search|today|export]  — Development journal',
+                "read": "  read [-p prompt] VARNAME  — Read stdin into a variable",
+                "printf": '  printf <format> [args]  — Format and print (like bash printf)',
+                "basename": "  basename <path>  — Strip directory from path",
+                "dirname": "  dirname <path>  — Strip last path component",
+                "yes": "  yes [string]  — Repeatedly output (Ctrl+C to stop)",
+                "cut": '  cut -d<delim> -f<field>  — Cut fields from piped input',
+                "tr": "  tr <set1> <set2> | tr -d <set>  — Translate or delete characters",
+                "xargs": "  xargs <cmd>  — Build command lines from piped input",
+                "render": "  render [sphere|cube|plane|light|mat|cam|go|neural|clear|preset]  — Path tracer + neural scene",
+                "win": "  win [split-h|split-v|close|layout]  — Window manager (alias for wm)",
             }
             if args in cmd_help:
                 self._print(cmd_help[args])
@@ -2075,6 +2092,8 @@ Examples:
         self._print(self._dump_json(result))
 
     def _cmd_models(self, args: str = "") -> None:
+        if not self._require_api("models"):
+            return
         models = self.cmds.models()
         if not models:
             self._print("  No models available")
@@ -2091,6 +2110,8 @@ Examples:
     def _cmd_load(self, args: str = "") -> None:
         if not args:
             self._print("  Usage: load <model_name>")
+            return
+        if not self._require_api("load"):
             return
         import sys
         import time
@@ -2156,10 +2177,14 @@ Examples:
                 self._print(f"  ✗ {result.get('error', 'Unknown error')}")
 
     def _cmd_unload(self, args: str = "") -> None:
+        if not self._require_api("unload"):
+            return
         result = self.cmds.unload_model()
         self._print(self._dump_json(result))
 
     def _cmd_souls(self, args: str = "") -> None:
+        if not self._require_api("souls"):
+            return
         souls = self.cmds.souls()
         if not souls:
             self._print("  No souls available")
@@ -2177,10 +2202,14 @@ Examples:
         if not args:
             self._print("  Usage: switch <soul_name>")
             return
+        if not self._require_api("switch"):
+            return
         result = self.cmds.switch_soul(args.strip())
         self._print(self._dump_json(result))
 
     def _cmd_whoami(self, args: str = "") -> None:
+        if not self._require_api("whoami"):
+            return
         soul = self.cmds.current_soul()
         self._print(f"  Current soul: {soul.get('name', 'unknown')}")
         if soul.get("description"):
@@ -2227,6 +2256,10 @@ Examples:
     def _cmd_health(self, args: str = "") -> None:
         h = self.cmds.health()
         status = h.get("status", "unknown")
+        if status == "unknown":
+            self._print(f"  \u2717 API server is not responding. Use \u2018api start\u2019 to launch it.")
+            self._last_exit_code = 1
+            return
         colored = f"{_C_GREEN}{status}{_C_RESET}" if status == "healthy" else f"{_C_YELLOW}{status}{_C_RESET}"
         self._print(f"  Status: {colored}")
         self._print(f"  Model:  {h.get('model_type', _EM)}")
@@ -2309,6 +2342,8 @@ Examples:
                 self._print(f"  {k}: {v}")
 
     def _cmd_datasets(self, args: str = "") -> None:
+        if not self._require_api("datasets"):
+            return
         datasets = self.cmds.datasets()
         if not datasets:
             self._print("  No datasets available")
@@ -2324,6 +2359,8 @@ Examples:
 
     def _cmd_knowledge(self, args: str = "") -> None:
         """List/search knowledge base entries."""
+        if not self._require_api("knowledge"):
+            return
         if args:
             results = self.cmds.list_knowledge(args)
             if not results:
@@ -2351,6 +2388,8 @@ Examples:
             self._print("    cat notes.txt | remember")
             self._last_exit_code = 1
             return
+        if not self._require_api("remember"):
+            return
         content = self._piped_input.strip() if self._piped_input else args
         result = self.cmds.add_knowledge(content)
         if isinstance(result, dict) and result.get("status") == "stored":
@@ -2362,6 +2401,8 @@ Examples:
 
     def _cmd_recall(self, args: str = "") -> None:
         """Search the knowledge base. Shows recent facts if no query."""
+        if not self._require_api("recall"):
+            return
         if not args:
             stats = self.cmds.knowledge_stats()
             count = stats.get("total_items", 0)
@@ -2387,6 +2428,8 @@ Examples:
             self._print(f"  ... and {len(results) - 10} more")
 
     def _cmd_checkpoints(self, args: str = "") -> None:
+        if not self._require_api("checkpoints"):
+            return
         cps = self.cmds.checkpoints()
         if not cps:
             self._print("  No checkpoints")
@@ -2397,6 +2440,8 @@ Examples:
         self._print(self._format_table(rows, ["Checkpoint", "Loss", "Type"]))
 
     def _cmd_finetuned(self, args: str = "") -> None:
+        if not self._require_api("finetuned"):
+            return
         models = self.cmds.finetuned_models()
         if not models:
             self._print("  No fine-tuned models")
@@ -2458,6 +2503,10 @@ Examples:
         """Train: train [dataset] | train status | train follow <id> | train stop <id> | train distill <dataset>"""
         parts = args.strip().split()
         sub = parts[0] if parts else ""
+
+        if not sub or sub in ("status", "follow", "stop", "distill", "hf", "auto"):
+            if not self._require_api("train"):
+                return
 
         if sub == "status":
             jobs = self.cmds.train_status()
@@ -2653,6 +2702,8 @@ Examples:
         if not args:
             self._print("  Usage: gen <prompt>")
             return
+        if not self._require_api("gen"):
+            return
         result = self.cmds.generate(args, max_tokens=150)
         if isinstance(result, dict) and "text" in result:
             self._print(f"\n  {result['text']}\n")
@@ -2665,6 +2716,8 @@ Examples:
         """Multi-turn chat. Starts a session on first message. 'chat /reset' clears history."""
         if not args:
             self._print("  Usage: chat <message>")
+            return
+        if not self._require_api("chat"):
             return
         if args == "/reset":
             self._chat_session_id = None
@@ -2689,6 +2742,8 @@ Examples:
             self._print(self._dump_json(result))
 
     def _cmd_tokenizer(self, args: str = "") -> None:
+        if not self._require_api("tokenizer"):
+            return
         stats = self.cmds.tokenizer_stats()
         if isinstance(stats, dict) and "error" not in stats:
             for k, v in stats.items():
@@ -2978,6 +3033,8 @@ Examples:
         elif not args:
             self._cmd_help("agents")
         else:
+            if not self._require_api("agents"):
+                return
             goal = args.strip()
             self._print(f"  \U0001f916 Orchestrating agents for: {goal}")
             self._print(f"  {_C_DIM}Planning...{_C_RESET}")
@@ -2997,6 +3054,13 @@ Examples:
         if not args:
             self._print("  Usage: ai <natural language query>")
             self._print("  Example: ai show me running training jobs")
+            return
+
+        status = self.os.api_status
+        if not status.get("available"):
+            self._print("  \u2717 API server is not connected. Use \u2018api start\u2019 to launch it.")
+            self._print("  Falling back to keyword matching...")
+            self._interpret_natural(args)
             return
 
         available_commands = "\n".join(
@@ -3871,14 +3935,81 @@ Examples:
 
     # ── Init / Boot commands ────────────────────────────────────────
 
+    def _format_api_status(self, status: dict) -> str:
+        """Format API status dict into a display string."""
+        if status.get("available"):
+            model = status.get("model_id", "unknown") or "unknown"
+            return f"  API: \u2713 {model} ({status.get('engine_type', '').strip() or 'cpu'})"
+        return f"  API: \u2717 not connected — use \u2018api start\u2019 to launch"
+
+    def _cmd_api(self, args: str = "") -> None:
+        """Manage the API server. Usage: api [start|stop|status|restart]"""
+        parts = args.strip().split()
+        cmd = parts[0] if parts else "status"
+        api = self.os.api
+
+        if cmd == "start":
+            if api.is_running:
+                self._print("  API server is already running.")
+                return
+            self._print("  Starting API server...")
+            result = api.start()
+            if result.get("ok"):
+                self._print(f"  \u2713 {result.get('message', 'started')}")
+            else:
+                self._print(f"  \u2717 {result.get('error', 'failed to start')}")
+                self._last_exit_code = 1
+
+        elif cmd == "stop":
+            if not api.is_running:
+                self._print("  API server is not running.")
+                return
+            self._print("  Stopping API server...")
+            result = api.stop()
+            self._print(f"  \u2713 {result.get('message', 'stopped')}")
+
+        elif cmd == "restart":
+            if api.is_running:
+                self._print("  Stopping API server...")
+                api.stop()
+            self._print("  Starting API server...")
+            result = api.start()
+            if result.get("ok"):
+                self._print(f"  \u2713 {result.get('message', 'restarted')}")
+            else:
+                self._print(f"  \u2717 {result.get('error', 'failed to restart')}")
+                self._last_exit_code = 1
+
+        else:  # status (default)
+            status = api.status()
+            self._print(self._format_api_status(status))
+            if status.get("running"):
+                uptime = status.get("uptime", 0)
+                self._print(f"  Uptime: {uptime:.0f}s")
+            if not status.get("available") and not status.get("running"):
+                self._print("  Use \u2018api start\u2019 to launch the API server.")
+
+    def _require_api(self, cmd_name: str = "") -> bool:
+        """Check API availability. Print warning and return False if down."""
+        status = self.os.api_status
+        if status.get("available"):
+            return True
+        self._print(f"  \u2717 API server is not connected. Use \u2018api start\u2019 to launch it.")
+        self._last_exit_code = 1
+        return False
+
     def _cmd_boot(self, args: str = "") -> None:
         """Boot the shell — start kernel + init system + services."""
         if self._running and self._piped_input is None:
             self._print("  Already booted. Use 'shutdown' to halt, then 'sloughgpt shell' to restart.")
             return
         self._running = True
-        log = self.os.boot(shell_run=self._shell_cmd if hasattr(self, "_shell_cmd") else None)
-        self._print(log)
+        result = self.os.boot(shell_run=self._shell_cmd if hasattr(self, "_shell_cmd") else None)
+        if isinstance(result, tuple):
+            log, api_status = result
+        else:
+            log, api_status = result, self.os.api_status
+        self._print(self._format_api_status(api_status))
 
     def _cmd_shutdown(self, args: str = "") -> None:
         """Shut down the shell — halt all services + kernel."""
@@ -4725,6 +4856,7 @@ nl: db 10
         "permissions": _cmd_permissions,
         "confirm": _cmd_confirm,
         "note": _cmd_note,
+        "api": _cmd_api,
     }
 
     # ── Main loop ───────────────────────────────────────────────────
@@ -4738,12 +4870,12 @@ nl: db 10
         _kernel_logger = _logging.getLogger("slo.kernel")
         _prev_propagate = _kernel_logger.propagate
         _kernel_logger.propagate = False
-        boot_log = self.os.boot()
+        boot_log, api_status = self.os.boot()
         _kernel_logger.propagate = _prev_propagate
 
         self._running = True
         self._print_header()
-        self._print(boot_log)
+        self._print(self._format_api_status(api_status))
         self._audit.startup()
 
         def _graceful_shutdown(signum, frame):

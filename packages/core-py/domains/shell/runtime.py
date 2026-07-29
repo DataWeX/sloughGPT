@@ -2,7 +2,9 @@
 Shell Runtime — DaitRuntime + Resource.
 
 DaitRuntime is the top-level runtime orchestrator that boots the kernel,
-init system, devices, VFS, and neural capabilities.
+init system, devices, VFS, and neural capabilities. It also manages the
+API server lifecycle independently — the shell connects to the API, it
+does NOT own it.
 
 Resource is a file metadata dataclass used for disk scanning.
 
@@ -12,12 +14,21 @@ removed — they were superseded by the unified Kernel in kernel.py.
 
 from __future__ import annotations
 
+import os
+import sys
 import time
+import json
+import shlex
+import signal
+import itertools
 import logging
+import threading
+import subprocess
+from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
-logger = logging.getLogger("slo.shell.kernel")
+logger = logging.getLogger("slo.shell.runtime")
 
 _REPO_ROOT = None  # lazy
 
@@ -42,8 +53,163 @@ class Resource:
         return f"{self.size_bytes}B"
 
 
+def _default_api_url() -> str:
+    return os.environ.get("API_BASE", "http://localhost:8000")
+
+
+def _probe_api(api_url: str, timeout: float = 2.0) -> dict:
+    """Check if the API server is reachable. Returns status dict."""
+    import urllib.request
+    try:
+        req = urllib.request.Request(f"{api_url}/health", method="GET")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode())
+            return {
+                "available": True,
+                "status": data.get("status", "unknown"),
+                "model_loaded": data.get("model_loaded", False),
+                "model_id": data.get("model_id"),
+                "engine_type": data.get("engine_type"),
+            }
+    except Exception as e:
+        return {
+            "available": False,
+            "error": str(e),
+        }
+
+
+class APIServerProcess:
+    """Manages the API server as a subprocess (start/stop/status)."""
+
+    def __init__(self, api_url: str = ""):
+        self._api_url = api_url or _default_api_url()
+        self._proc: subprocess.Popen | None = None
+        self._lock = threading.Lock()
+        self._started_at: float = 0.0
+
+    # ── Public API ──────────────────────────────────────────────────────
+
+    def status(self) -> dict:
+        """Check API availability and return status dict."""
+        result = _probe_api(self._api_url)
+        with self._lock:
+            result["running"] = self._proc is not None
+            result["uptime"] = time.time() - self._started_at if self._started_at else 0
+        return result
+
+    def start(self, timeout: float = 120.0) -> dict:
+        """Launch the API server in a subprocess. Blocks until healthy or timeout."""
+        with self._lock:
+            if self._proc is not None:
+                return {"ok": True, "message": "already running"}
+
+        repo_root = self._find_repo_root()
+        cmd = [sys.executable or "python3", "-m", "apps.api.server.main"]
+        logger.info("Starting API server: %s (cwd=%s)", " ".join(cmd), repo_root)
+
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(repo_root),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                preexec_fn=os.setsid if hasattr(os, "setsid") else None,
+            )
+        except Exception as e:
+            return {"ok": False, "error": f"Failed to launch: {e}"}
+
+        with self._lock:
+            self._proc = proc
+            self._started_at = time.time()
+
+        # Stream stderr to logger so user sees boot progress
+        def _log_stderr():
+            if self._proc and self._proc.stderr:
+                for line in self._proc.stderr:
+                    logger.info("[api] %s", line.rstrip())
+        threading.Thread(target=_log_stderr, daemon=True).start()
+
+        # Wait for health check with polling
+        deadline = time.time() + timeout
+        spinner = itertools.cycle(["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
+        last_line = ""
+        while time.time() < deadline:
+            result = _probe_api(self._api_url, timeout=1)
+            if result["available"]:
+                return {"ok": True, "message": f"ready ({result.get('model_id', 'unknown')})", "status": result}
+            # Spinner feedback
+            spin = next(spinner)
+            elapsed = time.time() - self._started_at
+            msg = f"\r  {spin} waiting for API server ({elapsed:.0f}s / {timeout:.0f}s)"
+            if msg != last_line:
+                sys.stdout.write(msg + "\033[K")
+                sys.stdout.flush()
+                last_line = msg
+            time.sleep(1)
+        # Clear spinner line
+        sys.stdout.write("\r" + " " * 80 + "\r")
+        sys.stdout.flush()
+
+        return {"ok": False, "error": f"Timed out after {timeout:.0f}s"}
+
+    def stop(self) -> dict:
+        """Stop the API server process."""
+        with self._lock:
+            proc = self._proc
+            self._proc = None
+            self._started_at = 0.0
+
+        if proc is None:
+            return {"ok": True, "message": "not running"}
+
+        try:
+            if hasattr(os, "killpg"):
+                os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+            else:
+                proc.terminate()
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            try:
+                if hasattr(os, "killpg"):
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                else:
+                    proc.kill()
+                proc.wait(timeout=5)
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+        return {"ok": True, "message": "stopped"}
+
+    @property
+    def is_running(self) -> bool:
+        with self._lock:
+            if self._proc is None:
+                return False
+            return self._proc.poll() is None
+
+    # ── Internal ────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _find_repo_root() -> Path:
+        """Walk up from this file to find the repo root (contains pyproject.toml or setup.py)."""
+        here = Path(__file__).resolve()
+        for parent in here.parents:
+            if (parent / "pyproject.toml").exists() or (parent / "setup.py").exists():
+                return parent
+            # Also check for slonet.py or apps directory as repo markers
+            if (parent / "apps").is_dir() and (parent / "packages").is_dir():
+                return parent
+        return here.parents[3]  # fallback: domains/shell -> domains -> core-py -> packages -> repo
+
+    def __repr__(self) -> str:
+        return f"APIServerProcess(url={self._api_url}, running={self.is_running})"
+
+
 class DaitRuntime:
-    """Top-level runtime — orchestrates kernel, init, devices, VFS, and neural."""
+    """Top-level runtime — orchestrates kernel, init, devices, VFS, neural, and API connection."""
 
     def __init__(self):
         from .kernel import Kernel
@@ -57,15 +223,18 @@ class DaitRuntime:
         self._devices: Any = None
         self._vfs: Any = None
         self._device_system: Any = None
+        self._api = APIServerProcess()
 
-    def boot(self, shell_run: Callable[[str], str] | None = None) -> str:
+    # ── Boot / Shutdown ─────────────────────────────────────────────────
+
+    def boot(self, shell_run: Callable[[str], str] | None = None) -> tuple[str, dict]:
         """Boot the full runtime: addons, kernel, VFS, devices, init system.
 
         Args:
             shell_run: Optional shell command executor for init services.
 
         Returns:
-            Boot log from the init system.
+            (boot_log, api_status) tuple.
         """
         from .init import get_init_system
         from .devices import create_default_devices
@@ -74,36 +243,31 @@ class DaitRuntime:
         self._init = get_init_system()
         self._devices = create_default_devices(get_kernel=lambda: self.kernel)
 
-        # Install addons before kernel boot — addons may depend on kernel state
+        # Install addons before kernel boot
         from .addons import neural, filesystem, shell_ui
         self.kernel.install_addon(neural)
         self.kernel.install_addon(filesystem)
         self.kernel.install_addon(shell_ui)
 
-        # Boot kernel (sets _running, _boot_time)
         self._boot_time = time.time()
         self.kernel.boot()
 
-        # Wire VFS — set_devices is not done by setup() (only set_kernel is)
         self._vfs = self.kernel.vfs
         self._vfs.set_devices(self._devices)
 
-        # Wire DeviceSystem — register all shell devices
         self._device_system = get_device_system()
         for name in self._devices.names:
             dev = self._devices.get(name)
             self._device_system.register(name, dev, registered_by="shell")
 
-        # Bridge NPU to DeviceSystem so assembly programs can access it
         from .vm_devices import NPUVMDevice
         from .kernel_npu import NPUDevice
         npu_device = NPUDevice(name="npu")
         self._device_system.register("npu", NPUVMDevice(npu_device), registered_by="kernel")
 
         boot_log = self._init.boot(target_runlevel=3, shell_run=shell_run)
-        self._detect_health()
         self._boot_complete = True
-        return boot_log
+        return boot_log, self.api_status
 
     def shutdown(self) -> str:
         """Shut down the runtime: init system, then kernel.
@@ -117,17 +281,21 @@ class DaitRuntime:
         self.kernel.shutdown()
         return shutdown_log
 
-    def _detect_health(self) -> None:
-        try:
-            import requests
-            from .config import get_api_base
-            r = requests.get(f"{get_api_base()}/health", timeout=2)
-            if r.status_code == 200:
-                data = r.json()
-                self._model_loaded = data.get("model_loaded", False)
-                self._model_name = data.get("model_type", "")
-        except Exception:
-            self._model_loaded = False
+    # ── API Server ──────────────────────────────────────────────────────
+
+    @property
+    def api(self) -> APIServerProcess:
+        return self._api
+
+    @property
+    def api_status(self) -> dict:
+        """Check API availability. Returns status dict with 'available' key."""
+        result = self._api.status()
+        self._model_loaded = result.get("model_loaded", False)
+        self._model_name = result.get("model_id", "") or result.get("model_id", "")
+        return result
+
+    # ── Status ──────────────────────────────────────────────────────────
 
     @property
     def status_summary(self) -> str:
@@ -138,10 +306,12 @@ class DaitRuntime:
             mem_str = f"rss={mem.rss / 1048576:.0f}M vms={mem.vms / 1048576:.0f}M"
         except Exception:
             mem_str = "psutil not available"
+        api = self.api_status
+        api_str = f"API: {'✓' if api.get('available') else '✗'} ({api.get('model_id') or 'not connected'})"
         lines = (
             f"Kernel uptime: {self.kernel.uptime:.0f}s\n"
             f"Processes: {len(self.kernel.list_processes())}\n"
-            f"Model: {'loaded' if self._model_loaded else 'not loaded'} ({self._model_name})\n"
+            f"{api_str}\n"
             f"Soul: {self._current_soul or 'default'}\n"
             f"Memory: {mem_str}"
         )
