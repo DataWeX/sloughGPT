@@ -13,6 +13,7 @@ Tests the full pipeline without an HTTP server:
 
 import asyncio
 import time
+import threading
 from unittest.mock import patch
 import pytest
 pytestmark = pytest.mark.slow
@@ -21,6 +22,7 @@ from domains.infrastructure.model_registry import get_model_registry, ModelRegis
 from domains.infrastructure.model_server import (
     ModelServer, ModelStatus, CircuitBreakerState, PriorityRequestQueue, Priority,
 )
+from domains.infrastructure.event_bus import get_event_bus, set_event_bus
 
 
 # ── Mock model (torch-free) ──────────────────────────────────────────
@@ -658,3 +660,282 @@ class TestRegistryWiring:
         ids = [m["model_id"] for m in models]
         assert "model-a" in ids
         assert "model-b" in ids
+
+
+# ── EventBus + CircuitBreaker integration tests ──────────────────────────────
+
+
+class TestCircuitBreakerEvents:
+
+    @pytest.fixture(autouse=True)
+    def setup_event_bus(self):
+        bus = get_event_bus()
+        bus.clear()
+        bus._max_history = 100
+        yield bus
+        bus.clear()
+
+    @pytest.mark.asyncio
+    async def test_cb_emits_open_on_failure(self, model, tokenizer, setup_event_bus):
+        bus = setup_event_bus
+        events = []
+
+        def handler(event, data):
+            events.append((event, data))
+
+        bus.on("circuit_breaker.open", handler)
+
+        server = ModelServer(
+            model, tokenizer, model_id="test-cb-open",
+            enable_circuit_breaker=True, failure_threshold=1,
+            enable_warmup=False,
+        )
+
+        def _fail(*args, **kwargs):
+            raise RuntimeError("fail")
+        server._generate_sync = _fail
+
+        with pytest.raises(RuntimeError):
+            await server.generate("hello")
+
+        assert len(events) == 1
+        assert events[0][0] == "circuit_breaker.open"
+        assert events[0][1]["model_id"] == "test-cb-open"
+        assert events[0][1]["old_state"] == "closed"
+        assert events[0][1]["new_state"] == "open"
+
+    @pytest.mark.asyncio
+    async def test_cb_emits_closed_on_reset(self, model, tokenizer, setup_event_bus):
+        bus = setup_event_bus
+        events = []
+
+        def handler(event, data):
+            events.append((event, data))
+
+        bus.on("circuit_breaker.closed", handler)
+
+        server = ModelServer(
+            model, tokenizer, model_id="test-cb-closed",
+            enable_circuit_breaker=True, failure_threshold=1,
+            recovery_timeout=0.5,
+            enable_warmup=False,
+        )
+
+        def _fail(*args, **kwargs):
+            raise RuntimeError("fail")
+        server._generate_sync = _fail
+
+        # First failure opens the breaker
+        with pytest.raises(RuntimeError):
+            await server.generate("hello")
+
+        # Wait for recovery timeout to pass (breaker auto HALF_OPEN on state read)
+        await asyncio.sleep(0.6)
+
+        # Now fix the model and succeed
+        server._generate_sync = _mock_generate_sync
+        await server.generate("hello")
+
+        assert len(events) >= 1
+        closed_events = [e for e in events if e[0] == "circuit_breaker.closed"]
+        assert len(closed_events) == 1
+        assert closed_events[0][1]["model_id"] == "test-cb-closed"
+        assert closed_events[0][1]["new_state"] == "closed"
+
+    @pytest.mark.asyncio
+    async def test_cb_emits_via_model_server(self, model, tokenizer, setup_event_bus):
+        bus = setup_event_bus
+        events = []
+
+        def handler(event, data):
+            events.append((event, data))
+
+        bus.on("circuit_breaker.open", handler)
+        bus.on("circuit_breaker.closed", handler)
+
+        server = ModelServer(
+            model, tokenizer, model_id="test-cb-all",
+            enable_circuit_breaker=True, failure_threshold=1,
+            enable_warmup=False,
+        )
+
+        def _fail(*args, **kwargs):
+            raise RuntimeError("fail")
+        server._generate_sync = _fail
+
+        with pytest.raises(RuntimeError):
+            await server.generate("hello")
+
+        opened = [e for e in events if e[0] == "circuit_breaker.open"]
+        assert len(opened) >= 1
+        assert opened[0][1]["model_id"] == "test-cb-all"
+
+    # ── Generation lifecycle event tests ──────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_generation_emits_started_completed(self, model, tokenizer, setup_event_bus):
+        bus = setup_event_bus
+        events = []
+
+        def handler(event, data):
+            events.append((event, data))
+
+        bus.on("generation.started", handler)
+        bus.on("generation.completed", handler)
+        bus.on("generation.failed", handler)
+
+        server = ModelServer(
+            model, tokenizer, model_id="test-gen-lifecycle",
+            enable_circuit_breaker=False, enable_warmup=False,
+        )
+        result = await server.generate("hello")
+        assert result["tokens_generated"] == 5
+
+        started = [e for e in events if e[0] == "generation.started"]
+        completed = [e for e in events if e[0] == "generation.completed"]
+        failed = [e for e in events if e[0] == "generation.failed"]
+
+        assert len(started) == 1, f"expected 1 started, got {len(started)}"
+        assert started[0][1]["model_id"] == "test-gen-lifecycle"
+        assert started[0][1]["prompt_length"] == 5
+
+        assert len(completed) == 1, f"expected 1 completed, got {len(completed)}"
+        assert completed[0][1]["model_id"] == "test-gen-lifecycle"
+        assert completed[0][1]["tokens"] == 5
+        assert completed[0][1]["elapsed_ms"] > 0
+
+        assert len(failed) == 0, f"expected 0 failed, got {len(failed)}"
+
+    @pytest.mark.asyncio
+    async def test_generation_emits_failed(self, model, tokenizer, setup_event_bus):
+        bus = setup_event_bus
+        events = []
+
+        def handler(event, data):
+            events.append((event, data))
+
+        bus.on("generation.started", handler)
+        bus.on("generation.failed", handler)
+
+        server = ModelServer(
+            model, tokenizer, model_id="test-gen-fail",
+            enable_circuit_breaker=True, failure_threshold=5,
+            enable_warmup=False,
+        )
+
+        def _fail(*args, **kwargs):
+            raise RuntimeError("mock generation failure")
+        server._generate_sync = _fail
+
+        with pytest.raises(RuntimeError):
+            await server.generate("hello")
+
+        started = [e for e in events if e[0] == "generation.started"]
+        failed = [e for e in events if e[0] == "generation.failed"]
+
+        assert len(started) == 1, f"expected 1 started, got {len(started)}"
+        assert len(failed) == 1, f"expected 1 failed, got {len(failed)}"
+        assert "mock generation failure" in failed[0][1]["error"]
+
+    @pytest.mark.asyncio
+    async def test_generation_stream_emits_started_completed(self, model, tokenizer, setup_event_bus):
+        bus = setup_event_bus
+        events = []
+
+        def handler(event, data):
+            events.append((event, data))
+
+        bus.on("generation.started", handler)
+        bus.on("generation.completed", handler)
+
+        server = ModelServer(
+            model, tokenizer, model_id="test-stream-lifecycle",
+            enable_circuit_breaker=False, enable_warmup=False,
+        )
+
+        def _mock_backend():
+            class FakeBackend:
+                def generate_stream(self, *a, **kw):
+                    yield "hello"
+                    yield " world"
+                    return {"text": "hello world", "tokens_generated": 2}
+            return FakeBackend()
+
+        with patch.object(server, "_select_backend", return_value=_mock_backend()):
+            tokens = []
+            async for token in server.generate_stream("hello", max_new_tokens=3):
+                tokens.append(token)
+
+        started = [e for e in events if e[0] == "generation.started"]
+        completed = [e for e in events if e[0] == "generation.completed"]
+
+        assert len(started) == 1, f"expected 1 started, got {len(started)}"
+        assert started[0][1]["model_id"] == "test-stream-lifecycle"
+        assert started[0][1].get("streaming") is True
+
+        assert len(completed) == 1, f"expected 1 completed, got {len(completed)}"
+        assert completed[0][1]["tokens"] == 2
+
+    @pytest.mark.asyncio
+    async def test_generation_stream_emits_failed(self, model, tokenizer, setup_event_bus):
+        bus = setup_event_bus
+        events = []
+
+        def handler(event, data):
+            events.append((event, data))
+
+        bus.on("generation.failed", handler)
+        bus.on("generation.started", handler)
+
+        server = ModelServer(
+            model, tokenizer, model_id="test-stream-fail",
+            enable_circuit_breaker=False, enable_warmup=False,
+        )
+
+        class FailBackend:
+            def generate_stream(self, *a, **kw):
+                raise RuntimeError("stream generation failure")
+
+        with patch.object(server, "_select_backend", return_value=FailBackend()):
+            with pytest.raises(RuntimeError, match="stream generation failure"):
+                async for token in server.generate_stream("hello"):
+                    pass
+
+        failed = [e for e in events if e[0] == "generation.failed"]
+        assert len(failed) == 1, f"expected 1 failed, got {len(failed)}"
+        assert "stream generation failure" in failed[0][1]["error"]
+
+    @pytest.mark.asyncio
+    async def test_generation_stream_emits_cancelled(self, model, tokenizer, setup_event_bus):
+        bus = setup_event_bus
+        events = []
+
+        def handler(event, data):
+            events.append((event, data))
+
+        bus.on("generation.cancelled", handler)
+        bus.on("generation.started", handler)
+
+        server = ModelServer(
+            model, tokenizer, model_id="test-stream-cancel",
+            enable_circuit_breaker=False, enable_warmup=False,
+        )
+
+        class SlowBackend:
+            def generate_stream(self, *a, **kw):
+                import time
+                for i in range(50):
+                    time.sleep(0.005)
+                    yield f"token{i}"
+
+        cancel_event = threading.Event()
+
+        with patch.object(server, "_select_backend", return_value=SlowBackend()):
+            gen = server.generate_stream("hello", max_new_tokens=50, cancel_event=cancel_event)
+            first = await gen.__anext__()
+            assert first == "token0"
+            await gen.aclose()
+
+        cancelled = [e for e in events if e[0] == "generation.cancelled"]
+        assert len(cancelled) == 1, f"expected 1 cancelled, got {len(cancelled)}"
+        assert cancelled[0][1]["model_id"] == "test-stream-cancel"

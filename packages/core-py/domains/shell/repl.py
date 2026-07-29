@@ -2253,6 +2253,52 @@ Examples:
         if granted:
             self._print(f"  Granted: {', '.join(granted)}")
 
+    def _cmd_events(self, args: str = "") -> None:
+        """Show recent EventBus events. Optionally filter by event name and set limit.
+
+        Usage:
+          events              — show last 20 events
+          events model         — filter by event names containing "model"
+          events circuit 10    — filter by "circuit", show last 10
+        """
+        try:
+            from domains.infrastructure.event_bus import get_event_bus
+            bus = get_event_bus()
+        except Exception:
+            self._print("  EventBus not available")
+            return
+
+        parts = args.split()
+        filter_event = parts[0] if parts else None
+        limit = 20
+        if len(parts) > 1:
+            try:
+                limit = int(parts[1])
+            except ValueError:
+                limit = 20
+
+        all_events = bus.history()
+        if not all_events:
+            self._print("  No events recorded")
+            return
+
+        if filter_event:
+            filtered = [e for e in all_events if filter_event.lower() in e.name.lower()]
+        else:
+            filtered = list(all_events)
+
+        if not filtered:
+            self._print(f"  No events matching '{filter_event}'")
+            return
+
+        events = filtered[-limit:]
+        self._print(f"  Event history (last {len(events)} of {len(filtered)}, total {len(all_events)}):")
+        for e in events:
+            t = time.strftime("%H:%M:%S", time.localtime(e.timestamp))
+            src = f"[{e.source}]" if e.source else ""
+            data_str = str(e.data)[:80] if e.data else ""
+            self._print(f"  {t}  {e.name:35s} {src:15s} {data_str}")
+
     def _cmd_metrics(self, args: str = "") -> None:
         metrics = self.cmds.system_metrics()
         if metrics.get("error"):
@@ -4626,6 +4672,7 @@ nl: db 10
         "uptime": _cmd_uptime,
         "health": _cmd_health,
         "status": _cmd_status,
+        "events": _cmd_events,
         "metrics": _cmd_metrics,
         "datasets": _cmd_datasets,
         "knowledge": _cmd_knowledge,

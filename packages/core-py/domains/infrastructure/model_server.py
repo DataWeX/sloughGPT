@@ -45,6 +45,25 @@ from domains.infrastructure.structured_log import StructuredLogger, LogContext
 
 logger = StructuredLogger("slo.infrastructure.model_server")
 
+# Keep a module-level cache of the EventBus singleton to avoid repeated
+# import overhead when emitting generation lifecycle events.
+_gen_bus = None
+
+def _get_gen_bus():
+    global _gen_bus
+    if _gen_bus is None:
+        from .event_bus import get_event_bus
+        _gen_bus = get_event_bus()
+    return _gen_bus
+
+def _emit_gen_event(event: str, data: dict) -> None:
+    """Emit a generation lifecycle event synchronously (safe from any thread)."""
+    try:
+        bus = _get_gen_bus()
+        bus.emit_sync(event, data, source="model_server")
+    except Exception:
+        pass  # EventBus unavailable or disabled — generation still works
+
 
 # ---------------------------------------------------------------------------
 # Priority levels for request scheduling
@@ -492,26 +511,37 @@ class CircuitBreaker:
     _failure_count: int = 0
     _last_failure_at: float = 0.0
     _lock: Lock = field(default_factory=Lock)
+    _on_state_change: Optional[Callable[[CircuitBreakerState, CircuitBreakerState], None]] = None
+
+    def _transition_to(self, new_state: CircuitBreakerState) -> None:
+        old_state = self._state
+        self._state = new_state
+        if self._on_state_change and old_state != new_state:
+            self._on_state_change(old_state, new_state)
 
     @property
     def state(self) -> CircuitBreakerState:
         with self._lock:
             if self._state == CircuitBreakerState.OPEN:
                 if time.time() - self._last_failure_at >= self.recovery_timeout:
-                    self._state = CircuitBreakerState.HALF_OPEN
+                    self._transition_to(CircuitBreakerState.HALF_OPEN)
             return self._state
 
     def record_success(self) -> None:
         with self._lock:
             self._failure_count = 0
-            self._state = CircuitBreakerState.CLOSED
+            self._transition_to(CircuitBreakerState.CLOSED)
 
     def record_failure(self) -> None:
         with self._lock:
-            self._failure_count += 1
             self._last_failure_at = time.time()
-            if self._failure_count >= self.failure_threshold:
-                self._state = CircuitBreakerState.OPEN
+            if self._state == CircuitBreakerState.HALF_OPEN:
+                self._transition_to(CircuitBreakerState.OPEN)
+                self._failure_count = self.failure_threshold
+            else:
+                self._failure_count += 1
+                if self._failure_count >= self.failure_threshold:
+                    self._transition_to(CircuitBreakerState.OPEN)
 
     def allow_request(self) -> bool:
         return self.state != CircuitBreakerState.OPEN
@@ -1005,6 +1035,9 @@ class ModelServer:
             recovery_timeout=recovery_timeout,
         ) if enable_circuit_breaker else None
 
+        if self._circuit_breaker:
+            self._circuit_breaker._on_state_change = self._on_cb_state_change
+
         # Wire guard crash callbacks to circuit breaker
         if self._guard_backend is not None and self._circuit_breaker is not None:
             self._process_guard.on_crash(
@@ -1157,6 +1190,19 @@ class ModelServer:
             _schedule_gc()
         except Exception as e:
             logger.debug("KV cache cleanup failed: %s", e)
+
+    def _on_cb_state_change(self, old: CircuitBreakerState, new: CircuitBreakerState) -> None:
+        try:
+            from .event_bus import get_event_bus
+            bus = get_event_bus()
+            bus.emit_sync(f"circuit_breaker.{new.value}", {
+                "model_id": self.model_id,
+                "old_state": old.value,
+                "new_state": new.value,
+                "failure_count": self._circuit_breaker._failure_count,
+            }, source="model_server")
+        except Exception:
+            pass
 
     # --- Lifecycle hooks ---
 
@@ -1327,6 +1373,13 @@ class ModelServer:
 
         # Submit to priority queue
         async def _run() -> dict:
+            _gen_id = f"{self.model_id}-{id(prompt[:32])}"
+            _emit_gen_event("generation.started", {
+                "model_id": self.model_id,
+                "prompt_length": len(prompt),
+                "session_id": session_id,
+                "gen_id": _gen_id,
+            })
             start = time.time()
             try:
                 result = await asyncio.wait_for(
@@ -1347,6 +1400,13 @@ class ModelServer:
                     self._circuit_breaker.record_success()
                 logger.info("Generated", model_id=self.model_id, tokens=tokens,
                             elapsed_ms=round(elapsed_ms, 1), session_id=session_id)
+                _emit_gen_event("generation.completed", {
+                    "model_id": self.model_id,
+                    "tokens": tokens,
+                    "elapsed_ms": elapsed_ms,
+                    "session_id": session_id,
+                    "gen_id": _gen_id,
+                })
                 return result
             except asyncio.TimeoutError:
                 with self._metrics_lock:
@@ -1354,6 +1414,12 @@ class ModelServer:
                 self._on_generation_error(RuntimeError("Generation timed out"))
                 logger.warning("Generation timed out", model_id=self.model_id,
                                timeout=self._generate_timeout)
+                _emit_gen_event("generation.failed", {
+                    "model_id": self.model_id,
+                    "error": f"Timed out after {self._generate_timeout}s",
+                    "session_id": session_id,
+                    "gen_id": _gen_id,
+                })
                 raise TimeoutError(
                     f"Generation timed out after {self._generate_timeout}s "
                     f"for {self.model_id}"
@@ -1365,6 +1431,12 @@ class ModelServer:
                 if self._circuit_breaker:
                     self._circuit_breaker.record_failure()
                 self._on_generation_error(e)
+                _emit_gen_event("generation.failed", {
+                    "model_id": self.model_id,
+                    "error": error_msg,
+                    "session_id": session_id,
+                    "gen_id": _gen_id,
+                })
                 _mps_oom_recovery()
                 raise
 
@@ -1483,6 +1555,16 @@ class ModelServer:
             except Exception as e:
                 logger.warning("Pre-gen hook failed: %s", e, extra={"tag": "MODEL"})
 
+        # EventBus generation lifecycle — started
+        _gen_id = f"{self.model_id}-stream-{id(prompt[:32])}"
+        _emit_gen_event("generation.started", {
+            "model_id": self.model_id,
+            "prompt_length": len(prompt),
+            "session_id": session_id,
+            "gen_id": _gen_id,
+            "streaming": True,
+        })
+
         # Acquire slot in the priority queue for admission control
         queue = await self._ensure_queue()
         try:
@@ -1573,12 +1655,27 @@ class ModelServer:
                 self._circuit_breaker.record_success()
             logger.info("Streamed", model_id=self.model_id, tokens=token_count,
                         elapsed_ms=round(elapsed_ms, 1), session_id=session_id)
+            _emit_gen_event("generation.completed", {
+                "model_id": self.model_id,
+                "tokens": token_count,
+                "elapsed_ms": elapsed_ms,
+                "session_id": session_id,
+                "gen_id": _gen_id,
+                "streaming": True,
+            })
 
         except GeneratorExit:
             aborted = True
             logger.info("generate_stream[%s]: client disconnected mid-stream", self.model_id, extra={"tag": "MODEL"})
             if cancel_event is not None:
                 cancel_event.set()
+            _emit_gen_event("generation.cancelled", {
+                "model_id": self.model_id,
+                "tokens": token_count,
+                "session_id": session_id,
+                "gen_id": _gen_id,
+                "streaming": True,
+            })
             # Join the pump thread so post-generation hooks don't race with it
             if pump_thread is not None and pump_thread.is_alive():
                 pump_thread.join(timeout=10)
@@ -1589,6 +1686,13 @@ class ModelServer:
             with self._metrics_lock:
                 self.metrics.record_timeout()
             self._on_generation_error(RuntimeError("Generation timed out"))
+            _emit_gen_event("generation.failed", {
+                "model_id": self.model_id,
+                "error": f"Timed out after {self._generate_timeout}s",
+                "session_id": session_id,
+                "gen_id": _gen_id,
+                "streaming": True,
+            })
             raise
         except Exception as e:
             error_msg = f"{type(e).__name__}: {e}"
@@ -1597,6 +1701,13 @@ class ModelServer:
             if self._circuit_breaker:
                 self._circuit_breaker.record_failure()
             self._on_generation_error(e)
+            _emit_gen_event("generation.failed", {
+                "model_id": self.model_id,
+                "error": error_msg,
+                "session_id": session_id,
+                "gen_id": _gen_id,
+                "streaming": True,
+            })
             _mps_oom_recovery()
             raise
         finally:

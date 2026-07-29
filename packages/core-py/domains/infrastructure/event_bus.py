@@ -12,6 +12,7 @@ import asyncio
 import logging
 import time
 import uuid
+import warnings
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
@@ -65,11 +66,14 @@ class EventBus:
         priority: EventPriority = EventPriority.NORMAL,
     ):
         """Subscribe `handler` to `event`. Handler receives `(event_name, data)`."""
+        if not callable(handler):
+            raise TypeError(f"handler must be callable, got {type(handler).__name__}")
         sub = Subscription(handler=handler, priority=priority, once=False)
         if event == "*":
             self._wildcards.append(sub)
         else:
             self._subscriptions[event].append(sub)
+            self._subscriptions[event].sort(key=lambda s: s.priority, reverse=True)
         self._subscriptions[event].sort(key=lambda s: s.priority, reverse=True)
 
     def once(
@@ -79,12 +83,14 @@ class EventBus:
         priority: EventPriority = EventPriority.NORMAL,
     ):
         """Subscribe for a single emission, then auto-remove."""
+        if not callable(handler):
+            raise TypeError(f"handler must be callable, got {type(handler).__name__}")
         sub = Subscription(handler=handler, priority=priority, once=True)
         if event == "*":
             self._wildcards.append(sub)
         else:
             self._subscriptions[event].append(sub)
-        self._subscriptions[event].sort(key=lambda s: s.priority, reverse=True)
+            self._subscriptions[event].sort(key=lambda s: s.priority, reverse=True)
 
     def off(self, event: str, handler: EventHandler) -> bool:
         """Unsubscribe a specific handler from an event. Returns True if removed."""
@@ -102,6 +108,9 @@ class EventBus:
         if event is None:
             self._subscriptions.clear()
             self._wildcards.clear()
+        elif event == "*":
+            self._subscriptions.pop(event, None)
+            self._wildcards.clear()
         else:
             self._subscriptions.pop(event, None)
 
@@ -113,7 +122,7 @@ class EventBus:
         data: dict[str, Any] | None = None,
         source: str = "",
     ) -> int:
-        """Fire an event. Returns number of handlers called (not counting errors)."""
+        """Fire an event. Returns number of handlers invoked (including those that raise)."""
         evt = Event(
             name=event,
             data=data or {},
@@ -165,12 +174,7 @@ class EventBus:
             try:
                 result = sub.handler(event, data or {})
                 if asyncio.iscoroutine(result):
-                    logger.warning(
-                        "Ignored async handler %s on %s in sync emit",
-                        getattr(sub.handler, "__name__", "?"),
-                        event,
-                        extra={"tag": "INFRA"},
-                    )
+                    continue
             except Exception:
                 logger.exception(
                     "Sync handler failed for %s on %s",
@@ -206,7 +210,6 @@ class EventBus:
                 try:
                     result = handler(evt.name, evt.data)
                     if asyncio.iscoroutine(result):
-                        import warnings
                         warnings.warn("async handler passed to sync replay()")
                 except Exception:
                     logger.exception("Replay handler failed for %s", evt.name, extra={"tag": "INFRA"})
@@ -241,3 +244,48 @@ def get_event_bus() -> EventBus:
 def set_event_bus(bus: EventBus):
     global _default_bus
     _default_bus = bus
+
+
+# ── Log subscriber ───────────────────────────────────────────────────
+
+
+_LOG_SENSOR_LOGGER = logging.getLogger("slo.event_sensor")
+
+_SKIP_PATTERNS = (
+    "heartbeat", "ping", "metric.", "cache.",
+)
+
+
+def _is_noisy(event: str) -> bool:
+    """Return True for high-frequency events that should not be logged."""
+    return any(p in event for p in _SKIP_PATTERNS)
+
+
+_LOG_SUBSCRIBER_INSTALLED = False
+
+
+def install_log_subscriber(bus: EventBus | None = None) -> None:
+    """Subscribe to all events and log them via the structured logger.
+
+    Noisy events (heartbeat, metrics, cache) are filtered out.
+    Safe to call multiple times — idempotent via module-level flag.
+    """
+    global _LOG_SUBSCRIBER_INSTALLED
+    if _LOG_SUBSCRIBER_INSTALLED:
+        return
+    _LOG_SUBSCRIBER_INSTALLED = True
+
+    if bus is None:
+        bus = get_event_bus()
+
+    def _log_handler(event: str, data: dict) -> None:
+        if _is_noisy(event):
+            return
+        _LOG_SENSOR_LOGGER.info(
+            "EVENT %s%s%s",
+            event,
+            f"  {data}" if data else "",
+            extra={"tag": "EVENT", "event_name": event},
+        )
+
+    bus.on("*", _log_handler, priority=EventPriority.MONITOR)
