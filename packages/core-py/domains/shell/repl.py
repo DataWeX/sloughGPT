@@ -696,6 +696,9 @@ class ShellREPL:
     def _status(self, kind: str, message: str, detail: str = "") -> None:
         self.console.status(kind, message, detail)
 
+    def _kvlist(self, items: list[tuple[str, str]]) -> None:
+        self.console.kvlist(items)
+
     def _log_ok(self, msg: str, **ctx) -> None:
         """Log a success message (green checkmark)."""
         from domains.logging import LogLevel
@@ -2319,16 +2322,18 @@ Examples:
         h = self.cmds.health()
         status = h.get("status", "unknown")
         if status == "unknown":
-            self._print(f"  \u2717 API server is not responding. Use \u2018api start\u2019 to launch it.")
+            self._status("error", "API server is not responding")
+            self._print("  Use 'api start' to launch it.")
             self._last_exit_code = 1
             return
-        colored = f"{_C_GREEN}{status}{_C_RESET}" if status == "healthy" else f"{_C_YELLOW}{status}{_C_RESET}"
-        self._print(f"  Status: {colored}")
-        self._print(f"  Model:  {h.get('model_type', _EM)}")
-        self._print(f"  Soul:   {h.get('soul_name', _EM)}")
+        self._status("ok" if status == "healthy" else "warn", f"Status: {status}")
+        self._kvlist([
+            ("Model", h.get("model_type", _EM)),
+            ("Soul", h.get("soul_name", _EM)),
+        ])
 
     def _cmd_status(self, args: str = "") -> None:
-        self._print(self.os.status_summary)
+        self._box(self.os.status_summary)
         try:
             detailed = self.cmds.health_detailed()
             if isinstance(detailed, dict) and "registry" in detailed:
