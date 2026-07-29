@@ -74,25 +74,73 @@ except ImportError:
 
 # ── Completion cache fetchers (API-backed) ──────────────────────────
 
-def _make_completion_fetchers() -> dict[str, callable]:
-    """Build command→fetcher mapping for CompletionCache."""
+def _fetch_model_names() -> list[str]:
+    """Fetch available model names from the API for tab completion."""
+    import requests
     try:
-        from core.completion import complete_models, complete_souls, complete_datasets, complete_checkpoints
-    except ImportError:
-        return {}
-    return {
-        "load": complete_models,
-        "unload": complete_models,
-        "gen": complete_models,
-        "protect": complete_models,
-        "unprotect": complete_models,
-        "switch": complete_souls,
-        "datasets": complete_datasets,
-        "dataset": complete_datasets,
-        "checkpoints": complete_checkpoints,
-    }
+        from .commands import get_api_base
+        r = requests.get(f"{get_api_base()}/models", timeout=3)
+        if r.status_code == 200:
+            data = r.json()
+            models = data if isinstance(data, list) else data.get("models", [])
+            return sorted(set(m.get("name", m.get("id", "")) for m in models if isinstance(m, dict)))
+    except Exception:
+        pass
+    return []
 
-_COMMAND_CACHE_FETCHERS: dict[str, callable] = _make_completion_fetchers()
+def _fetch_soul_names() -> list[str]:
+    """Fetch soul names from the API for tab completion."""
+    import requests
+    try:
+        from .commands import get_api_base
+        r = requests.get(f"{get_api_base()}/souls", timeout=3)
+        if r.status_code == 200:
+            data = r.json()
+            souls = data if isinstance(data, list) else data.get("souls", [])
+            return sorted(set(s.get("name", "") for s in souls if isinstance(s, dict)))
+    except Exception:
+        pass
+    return []
+
+def _fetch_dataset_names() -> list[str]:
+    """Fetch dataset names from the API for tab completion."""
+    import requests
+    try:
+        from .commands import get_api_base
+        r = requests.get(f"{get_api_base()}/datasets", timeout=3)
+        if r.status_code == 200:
+            data = r.json()
+            datasets = data if isinstance(data, list) else data.get("datasets", [])
+            return sorted(set(d.get("name", "") for d in datasets if isinstance(d, dict)))
+    except Exception:
+        pass
+    return []
+
+def _fetch_checkpoint_names() -> list[str]:
+    """Fetch checkpoint names from the API for tab completion."""
+    import requests
+    try:
+        from .commands import get_api_base
+        r = requests.get(f"{get_api_base()}/auto-train/checkpoints", timeout=3)
+        if r.status_code == 200:
+            data = r.json()
+            cps = data if isinstance(data, list) else data.get("checkpoints", [])
+            return sorted(set(c.get("name", "") for c in cps if isinstance(c, dict)))
+    except Exception:
+        pass
+    return []
+
+_COMMAND_CACHE_FETCHERS: dict[str, callable] = {
+    "load": _fetch_model_names,
+    "unload": _fetch_model_names,
+    "gen": _fetch_model_names,
+    "protect": _fetch_model_names,
+    "unprotect": _fetch_model_names,
+    "switch": _fetch_soul_names,
+    "datasets": _fetch_dataset_names,
+    "dataset": _fetch_dataset_names,
+    "checkpoints": _fetch_checkpoint_names,
+}
 
 
 # ── Output capture context manager ───────────────────────────────────
