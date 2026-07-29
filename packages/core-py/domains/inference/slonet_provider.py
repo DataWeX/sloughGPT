@@ -25,10 +25,12 @@ import logging
 import threading
 import time
 from pathlib import Path
-from typing import Optional, Dict, List, Tuple, Union
+from typing import Optional, Dict, List, Tuple, Union, Any
 import numpy as np
 
-logger = logging.getLogger("slo.inference.slonet_provider")
+from domains.infrastructure.structured_log import StructuredLogger
+
+logger = StructuredLogger("slo.inference.slonet_provider")
 
 # Lazy import to avoid circular dependency
 _SloLayerNorm = None
@@ -282,9 +284,26 @@ class SloNetChatProvider:
 
     Satisfies the ModelProvider protocol used by ProviderRouter.
 
+    Can optionally wrap a ``SloNetServer`` for concurrency control, circuit
+    breaker, warmup, and metrics. When a server is attached, ``chat()`` and
+    ``chat_stream()`` delegate to the server's async methods.
+
     Args:
         hf_model_id: HuggingFace model ID or local path (e.g. 'gpt2', 'Qwen/Qwen2.5-0.5B-Instruct')
     """
+
+    def set_server(self, server: Any) -> None:
+        """Attach a ``SloNetServer`` for concurrency control and observability.
+
+        When set, ``chat()`` and ``chat_stream()`` delegate to the server's
+        async ``generate()`` / ``generate_stream()`` methods instead of calling
+        the model directly.
+        """
+        self._server = server
+
+    def get_server(self) -> Optional[Any]:
+        """Return the attached ``SloNetServer``, or None."""
+        return getattr(self, '_server', None)
 
     @staticmethod
     def _load_safetensors_bf16(path) -> dict:
@@ -492,6 +511,15 @@ class SloNetChatProvider:
                 extra={"tag": "INF"},
             )
 
+        # Apply ResourceManager compute limits (BLAS threads, OMP_NUM_THREADS, etc.)
+        try:
+            from domains.infrastructure.resource_manager import get_resource_manager
+            rm = get_resource_manager()
+            rm.apply_blas_env()
+            rm.apply_compute_limits()
+        except Exception:
+            pass
+
         # Load tokenizer
         instance._tokenizer = instance._load_tokenizer(
             Path(slnc_path).parent, config
@@ -590,8 +618,23 @@ class SloNetChatProvider:
         return self._tokenizer.decode(result[0].tolist())
 
     async def chat(self, messages, max_tokens=512, temperature=0.8, **kwargs):
-        """Blocking chat — returns complete response. Runs in thread to avoid blocking event loop."""
+        """Blocking chat — returns complete response.
+
+        Delegates to ``SloNetServer.generate()`` if a server is attached,
+        otherwise runs sync generation in a thread.
+        """
         import asyncio
+        server = getattr(self, '_server', None)
+        if server is not None:
+            prompt = self._build_prompt(messages)
+            return await server.generate(
+                prompt,
+                max_new_tokens=max_tokens,
+                temperature=temperature or 0.7,
+                top_p=kwargs.get('top_p', 0.9),
+                top_k=kwargs.get('top_k', 50),
+                repetition_penalty=kwargs.get('repetition_penalty', 1.0),
+            )
         return await asyncio.to_thread(
             self._generate_sync, messages, max_tokens, temperature,
             kwargs.get('top_k'), kwargs.get('top_p'),
@@ -621,12 +664,19 @@ class SloNetChatProvider:
         Pre-fills prompt in one forward pass, then generates one token at a time
         using KV cache (each step only processes the new token).
 
+        Accepts optional ``priority`` kwarg (0=HIGH, 1=MEDIUM, 2=LOW).
+        HIGH priority requests (chat) skip the admission lock.
+        MEDIUM/LOW requests wait for any in-flight generation to finish.
+
         Robustness features:
         - cancel_event: abort generation mid-stream (e.g. on client disconnect)
         - NaN/Inf guard: stops if forward step produces non-finite logits
         - Per-token timeout: 30s per token prevents hung threads
         - Total generation timeout: 120s total prevents unbounded generation
         - Error propagation: producer thread exceptions surface to consumer
+
+        Delegates to ``SloNetServer.generate_stream()`` if a server is attached,
+        otherwise uses the built-in queue-based streaming pipeline.
 
         Args:
             messages: List of {"role": "...", "content": "..."} dicts
@@ -645,6 +695,21 @@ class SloNetChatProvider:
         import math
         import time
 
+        server = getattr(self, '_server', None)
+        if server is not None:
+            prompt = self._build_prompt(messages)
+            async for token in server.generate_stream(
+                prompt,
+                max_new_tokens=max_tokens,
+                temperature=temperature or 0.7,
+                top_p=kwargs.get('top_p', 0.9),
+                top_k=kwargs.get('top_k', 50),
+                repetition_penalty=kwargs.get('repetition_penalty', 1.0),
+                cancel_event=kwargs.get('cancel_event'),
+            ):
+                yield token
+            return
+
         prompt = self._build_prompt(messages)
         token_ids = self._tokenizer.encode(prompt)
         eos_id = self._tokenizer.eos_token_id or 0
@@ -652,6 +717,7 @@ class SloNetChatProvider:
         top_p = kwargs.get('top_p')
         repetition_penalty = kwargs.get('repetition_penalty', 1.0)
         cancel_event = kwargs.get('cancel_event')
+        priority = kwargs.get('priority', 1)  # default MEDIUM
 
         def _stream_generate():
             """Token-by-token streaming using generate_numpy_stream().

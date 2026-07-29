@@ -187,7 +187,7 @@ class ShellREPL:
         self._aliases: dict[str, str] = dict(self.state.aliases)
         self._aliases.update({
             "q": "exit", "quit": "exit", "h": "help",
-            "?": "help", "cls": "clear", "ps": "procs",
+            "?": "help", "cls": "clear",
             "jobs": "bg",
         })
 
@@ -262,7 +262,7 @@ class ShellREPL:
         Still audit-logs every execution.
         """
         import time as _time
-        from .io import MemoryIO, capture_output
+        from .io import MemoryIO
 
         if not line.strip():
             return "", 0
@@ -396,7 +396,8 @@ class ShellREPL:
                 return val
         try:
             import requests
-            r = requests.get(f"http://localhost:8000/health", timeout=2)
+            from .config import get_api_base
+            r = requests.get(f"{get_api_base()}/health", timeout=2)
             if r.status_code == 200:
                 data = r.json()
                 model = data.get("model", data.get("model_name", ""))
@@ -418,7 +419,8 @@ class ShellREPL:
                 return val
         try:
             import requests
-            r = requests.get(f"http://localhost:8000/souls/current", timeout=2)
+            from .config import get_api_base
+            r = requests.get(f"{get_api_base()}/souls/current", timeout=2)
             if r.status_code == 200:
                 data = r.json()
                 soul = data.get("name", "")
@@ -453,10 +455,51 @@ class ShellREPL:
             import readline
             histfile = Path.home() / ".config" / "sloughgpt" / ".shell_history"
             histfile.parent.mkdir(parents=True, exist_ok=True)
+
+            # Truncate oversized history files (>10MB) to prevent slow startup.
+            # Uses seek to find the last 5000 newlines without loading the
+            # entire file into memory.
+            _MAX_HIST_LINES = 5000
+            _MAX_HIST_BYTES = 10 * 1024 * 1024
+            if histfile.exists():
+                try:
+                    size = histfile.stat().st_size
+                    if size > _MAX_HIST_BYTES:
+                        with open(histfile, "rb") as f:
+                            # Seek to find the position of the N-th line from end
+                            f.seek(0, 2)
+                            end = f.tell()
+                            # Read last 2MB to find line boundaries
+                            chunk_size = min(2 * 1024 * 1024, size)
+                            f.seek(max(0, end - chunk_size))
+                            tail = f.read()
+                            # Count newlines and find the split point
+                            nl_count = tail.count(b"\n")
+                            if nl_count >= _MAX_HIST_LINES:
+                                # Find the position of the (_MAX_HIST_LINES)th newline from end
+                                pos = len(tail)
+                                for _ in range(_MAX_HIST_LINES):
+                                    pos = tail.rfind(b"\n", 0, pos)
+                                    if pos < 0:
+                                        break
+                                # Rewrite file with only the tail
+                                kept = tail[pos + 1:] if pos >= 0 else tail
+                                with open(histfile, "wb") as wf:
+                                    wf.write(kept)
+                            # If fewer newlines than needed but file is huge,
+                            # the file has very long lines — just keep last 2MB
+                            elif nl_count < _MAX_HIST_LINES and chunk_size < size:
+                                with open(histfile, "wb") as wf:
+                                    wf.write(tail)
+                            readline.set_history_length(_MAX_HIST_LINES)
+                except Exception:
+                    pass
+
             try:
                 readline.read_history_file(str(histfile))
             except FileNotFoundError:
                 pass
+            readline.set_history_length(5000)
             import atexit
             atexit.register(lambda: readline.write_history_file(str(histfile)))
             readline.set_completer(self._complete)
@@ -479,7 +522,20 @@ class ShellREPL:
             candidates = list(self.COMMANDS.keys()) + list(self._aliases.keys())
         else:
             cmd = parts[0].lower()
-            candidates = self._complete_args_for(cmd)
+            if cmd == "note" and len(parts) >= 2:
+                sub = parts[1].lower() if len(parts) > 1 else ""
+                if sub in ("show", "edit", "delete", "rm") and line.endswith(" "):
+                    from notes import get_note_store
+                    store = get_note_store(backend="mogdb")
+                    candidates = [n.short_id for n in store.list_notes(limit=9999)]
+                elif sub == "sprint" and line.endswith(" "):
+                    from notes import get_note_store
+                    store = get_note_store(backend="mogdb")
+                    candidates = store.sprints()
+                else:
+                    candidates = self._complete_args_for(cmd)
+            else:
+                candidates = self._complete_args_for(cmd)
 
         matches = [c for c in sorted(set(candidates)) if c.startswith(text)]
         try:
@@ -537,6 +593,8 @@ class ShellREPL:
                 if cmd == "permit":
                     candidates.append("--all-dangerous")
                 return candidates
+            if cmd == "note":
+                return ["new", "list", "show", "edit", "delete", "search", "today", "export", "tags", "status", "sprint", "timeline"]
         except Exception:
             pass
         return self._complete_path("")
@@ -1513,8 +1571,8 @@ class ShellREPL:
                 "sort": "  sort [-r] [-u] [-n]  — Sort piped lines; -r=reverse, -u=unique, -n=numeric",
                 "uniq": "  uniq  — Deduplicate consecutive piped lines",
                 "less": "  less  — Pager: scroll through piped output page by page",
-                "procs": "  procs | ps  — List running training jobs",
-                "ps": "  procs | ps  — List running training jobs",
+                "procs": "  procs  — List running training jobs",
+                "ps": "  ps  — List kernel processes (AI workloads)",
                 "kill": "  kill <id>  — Stop a training job by ID",
                 "train": "  train [dataset]  — Start training or list datasets",
                 "bg": "  bg | jobs  — List background shell processes",
@@ -1564,6 +1622,8 @@ class ShellREPL:
                 "devices": "  devices | lsdev  — List AI device nodes (/dev/*)",
                 "lsdev": "  devices | lsdev  — List AI device nodes (/dev/*)",
                 "asm": '  asm [file.asm] | asm --test | asm --list  — Assemble and run VM programs',
+                "vmrun": '  vmrun [--admin|--kernel] [--steps=N] [--debug] <file|name>  — Run x86 assembly in virtual PC with RBAC. Built-in: hello, count, counter',
+                "vmperms": "  vmperms  — Show x86 VM RBAC permission matrix (role×perm)",
                 "permit": "  permit <cmd> [--persist]  — Grant permission for a blocked command",
                 "deny": "  deny <cmd> [--persist]  — Revoke a previously granted permission",
                 "permissions": "  permissions  — Show current permission policy and granted commands",
@@ -1746,6 +1806,11 @@ Most common commands (help [cmd] for details, help for full list):
 Virtual machine:
   asm [file.asm]          Assemble and run a VM program (.text + .data sections)
   asm --test              Run VM self-tests
+  vmrun [--admin|--kernel] [--steps=N] [--debug] <file|name>
+                          Run x86 assembly in X86VirtualSystem with RBAC
+                          Built-in names: hello, count, counter
+  vmrun --list            List available built-in x86 programs
+  vmperms                 Show x86 VM RBAC permission matrix
   time <cmd>              Show command execution time
   $?                      Exit code of last command
   ai <query>              LLM-powered natural language interpretation
@@ -1986,6 +2051,22 @@ Examples:
             ])
         self._print(self._format_table(rows, ["ID", "Status", "Name", "Progress", "Loss"]))
 
+    def _cmd_ps(self, args: str = "") -> None:
+        procs = self.os.kernel.list_processes()
+        if not procs:
+            self._print("  No kernel processes")
+            return
+        state_names = {
+            0: "CREATED", 1: "READY", 2: "RUNNING",
+            3: "WAITING", 4: "STOPPED", 5: "ZOMBIE",
+        }
+        rows = []
+        for p in procs:
+            state = state_names.get(p.state, str(p.state))
+            age = time.time() - p.created_at
+            rows.append([str(p.pid), p.name, state, f"{age:.1f}s"])
+        self._print(self._format_table(rows, ["PID", "Name", "State", "Age"]))
+
     def _cmd_kill(self, args: str = "") -> None:
         if not args:
             self._print("  Usage: kill <job_id>")
@@ -2016,7 +2097,7 @@ Examples:
         model_name = args.strip()
 
         try:
-            from domains.infrastructure.conversion_tracker import get_tracker, ConversionStage
+            from domains.infrastructure.conversion_tracker import get_tracker
             from apps.cli.src.utils.progress import ProgressBar
             tracker = get_tracker()
 
@@ -2605,6 +2686,203 @@ Examples:
                 self._print(f"  Window manager error: {e}")
             finally:
                 self._print("  Exited window manager.")
+
+    def _cmd_render(self, args: str = "") -> None:
+        """Path tracer + neural scene analysis. Subcommands:
+  render                       — show scene info
+  render sphere r x y z [mat]  — add sphere
+  render cube  s x y z [mat]   — add cube
+  render plane s y [mat]       — add plane
+  render light x y z [r g b s] — add light
+  render mat idx r g b m rough — set material
+  render cam ox oy oz lx ly lz — set camera
+  render go [w h spp]          — render image (prints stats)
+  render neural                — render + neural analysis
+  render clear                 — clear scene
+  render preset <name>         — load preset scene (demo, Cornell, spheres)"""
+        import numpy as _np
+        from .cycles_device import CyclesDevice
+        from .render_neural import RenderNeuralDevice
+
+        if not hasattr(self, '_render_device'):
+            self._render_device = CyclesDevice(width=80, height=60, samples=4)
+            self._render_neural = RenderNeuralDevice(cycles_device=self._render_device)
+
+        dev = self._render_device
+        parts = args.strip().split()
+        verb = parts[0].lower() if parts else ""
+
+        def _f(s, default=0.0):
+            try: return float(s)
+            except (ValueError, TypeError): return default
+
+        def _i(s, default=0):
+            try: return int(s)
+            except (ValueError, TypeError): return default
+
+        if not verb or verb == "info":
+            info = dev.call("info")
+            self._print(f"  Scene: {info['meshes']} meshes, {info['materials']} materials, {info['lights']} lights")
+            self._print(f"  Resolution: {info['resolution'][0]}x{info['resolution'][1]}, Samples: {info['samples']}")
+
+        elif verb == "sphere":
+            if len(parts) < 5:
+                self._print("  Usage: render sphere radius cx cy cz [mat_idx]")
+                return
+            r, cx, cy, cz = _f(parts[1]), _f(parts[2]), _f(parts[3]), _f(parts[4])
+            mat = _i(parts[5], 0) if len(parts) > 5 else 0
+            idx = dev.call("add_sphere", r, cx, cy, cz, mat, 12)
+            self._print(f"  Added sphere #{idx[0]}: r={r} center=({cx},{cy},{cz}) mat={mat}")
+
+        elif verb == "cube":
+            if len(parts) < 5:
+                self._print("  Usage: render cube size cx cy cz [mat_idx]")
+                return
+            s, cx, cy, cz = _f(parts[1]), _f(parts[2]), _f(parts[3]), _f(parts[4])
+            mat = _i(parts[5], 0) if len(parts) > 5 else 0
+            idx = dev.call("add_cube", s, cx, cy, cz, mat)
+            self._print(f"  Added cube #{idx[0]}: size={s} center=({cx},{cy},{cz}) mat={mat}")
+
+        elif verb == "plane":
+            if len(parts) < 3:
+                self._print("  Usage: render plane size y [mat_idx]")
+                return
+            s, y = _f(parts[1]), _f(parts[2])
+            mat = _i(parts[3], 0) if len(parts) > 3 else 0
+            idx = dev.call("add_plane", s, y, mat)
+            self._print(f"  Added plane #{idx[0]}: size={s} y={y} mat={mat}")
+
+        elif verb == "light":
+            if len(parts) < 4:
+                self._print("  Usage: render light x y z [r g b strength]")
+                return
+            x, y, z = _f(parts[1]), _f(parts[2]), _f(parts[3])
+            r, g, b = _f(parts[4], 1.0), _f(parts[5], 1.0), _f(parts[6], 1.0)
+            s = _f(parts[7], 5.0) if len(parts) > 7 else 5.0
+            idx = dev.call("add_light", x, y, z, r, g, b, s)
+            self._print(f"  Added light #{idx[0]}: ({x},{y},{z}) color=({r:.1f},{g:.1f},{b:.1f}) strength={s}")
+
+        elif verb == "mat":
+            if len(parts) < 7:
+                self._print("  Usage: render mat idx r g b metallic roughness")
+                return
+            idx = _i(parts[1], 0)
+            r, g, b = _f(parts[2]), _f(parts[3]), _f(parts[4])
+            m, rough = _f(parts[5]), _f(parts[6])
+            dev.call("set_material", idx, r, g, b, m, rough)
+            self._print(f"  Material {idx}: color=({r:.2f},{g:.2f},{b:.2f}) metallic={m:.2f} roughness={rough:.2f}")
+
+        elif verb == "cam":
+            if len(parts) < 7:
+                self._print("  Usage: render cam origin_x origin_y origin_z look_x look_y look_z [fov]")
+                return
+            ox, oy, oz = _f(parts[1]), _f(parts[2]), _f(parts[3])
+            lx, ly, lz = _f(parts[4]), _f(parts[5]), _f(parts[6])
+            fov = _f(parts[7], 50.0) if len(parts) > 7 else 50.0
+            dev.call("set_camera", ox, oy, oz, lx, ly, lz, fov)
+            self._print(f"  Camera: origin=({ox},{oy},{oz}) look_at=({lx},{ly},{lz}) fov={fov}")
+
+        elif verb == "go":
+            import time as _time
+            w = _i(parts[1], 80) if len(parts) > 1 else 80
+            h = _i(parts[2], 60) if len(parts) > 2 else 60
+            spp = _i(parts[3], 4) if len(parts) > 3 else 4
+            dev.call("set_resolution", w, h)
+            dev.call("set_samples", spp)
+            self._print(f"  Rendering {w}x{h} @ {spp} spp...")
+            t0 = _time.time()
+            img = dev.call("render")
+            dt = _time.time() - t0
+            nz = int((img.sum(axis=-1) > 0.01).sum())
+            self._print(f"  Done in {dt:.1f}s — {nz}/{w*h} lit pixels ({100*nz/(w*h):.0f}%)")
+            self._print(f"  Pixel range: [{img.min():.4f}, {img.max():.4f}]")
+
+        elif verb == "neural":
+            import time as _time
+            w, h, spp = 80, 60, 4
+            dev.call("set_resolution", w, h)
+            dev.call("set_samples", spp)
+            self._print(f"  Rendering {w}x{h} @ {spp} spp...")
+            t0 = _time.time()
+            out = self._render_neural.call("process")
+            dt = _time.time() - t0
+            desc = self._render_neural.call("descriptor")
+            emb = out["embedding"]
+            probs = out["probabilities"]
+            cls_names = ["mat_unknown", "mat_diffuse", "mat_metallic", "mat_glass",
+                         "mat_emissive", "mat_dielectric", "mat_rough", "mat_smooth"]
+            dom = desc["dominant_class"]
+            self._print(f"  Done in {dt:.1f}s")
+            self._print(f"  Embedding: {emb.shape} (norm={_np.linalg.norm(emb):.4f})")
+            self._print(f"  Dominant class: {cls_names[dom] if dom < len(cls_names) else dom}")
+            self._print(f"  Class probs: {', '.join(f'{cls_names[i] if i < len(cls_names) else i}={p:.3f}' for i, p in enumerate(probs))}")
+            self._print(f"  Entropy: {desc['neural_entropy']:.4f}")
+            for k in ("image", "depth", "normal"):
+                if k in desc:
+                    self._print(f"  {k}: mean={desc[k]['mean']:.4f} std={desc[k]['std']:.4f}")
+
+        elif verb == "clear":
+            dev.call("clear")
+            self._render_neural.call("set_source", dev)
+            self._print("  Scene cleared.")
+
+        elif verb == "preset":
+            name = parts[1].lower() if len(parts) > 1 else ""
+            self._apply_render_preset(name)
+        else:
+            self._print(f"  Unknown render subcommand: {verb}")
+            self._print("  Try: render info | sphere | cube | plane | light | mat | cam | go | neural | clear | preset")
+
+    def _apply_render_preset(self, name: str) -> None:
+        """Load a preset scene configuration."""
+        import numpy as _np
+        dev = self._render_device
+
+        if name == "demo":
+            dev.call("clear")
+            dev.call("set_material", 0, 0.3, 0.3, 0.35, 0.0, 0.8)
+            dev.call("set_material", 1, 0.8, 0.1, 0.1, 0.1, 0.3)
+            dev.call("set_material", 2, 0.9, 0.9, 0.9, 0.0, 0.0)
+            dev.call("set_material", 3, 1.0, 1.0, 1.0, 0.0, 0.0)
+            dev.call("add_plane", 6.0, -1.0, 0)
+            dev.call("add_sphere", 0.6, -1.2, -0.4, 0.0, 1, 12)
+            dev.call("add_sphere", 0.6, 0.0, -0.4, 0.0, 2, 12)
+            dev.call("add_sphere", 0.6, 1.2, -0.4, 0.0, 1, 12)
+            dev.call("add_cube", 0.4, 0.0, 1.5, 0.0, 3)
+            dev.call("add_light", 2.0, 3.0, 2.0, 1.0, 0.95, 0.9, 8.0)
+            dev.call("add_light", -2.0, 2.0, -1.0, 0.7, 0.8, 1.0, 4.0)
+            dev.call("set_camera", 0, 1.5, 4, 0, 0, 0, 50)
+            self._print("  Loaded preset: demo (3 spheres + cube + floor + 2 lights)")
+
+        elif name == "cornell":
+            dev.call("clear")
+            dev.call("set_material", 0, 0.7, 0.1, 0.1, 0.0, 0.5)
+            dev.call("set_material", 1, 0.1, 0.7, 0.1, 0.0, 0.5)
+            dev.call("set_material", 2, 0.7, 0.7, 0.7, 0.0, 0.5)
+            dev.call("set_material", 3, 1.0, 1.0, 1.0, 0.0, 0.0)
+            dev.call("add_plane", 4.0, -1.0, 0)
+            dev.call("add_cube", 1.0, -0.7, -0.5, 0.0, 0)
+            dev.call("add_cube", 0.7, 0.7, -0.65, 0.0, 1)
+            dev.call("add_cube", 0.3, 0.0, 1.5, 0.0, 3)
+            dev.call("add_light", 0.0, 2.8, 0.0, 1.0, 0.95, 0.9, 10.0)
+            dev.call("set_camera", 0, 1.0, 4.5, 0, 0.5, 0, 60)
+            self._print("  Loaded preset: cornell (classic Cornell box)")
+
+        elif name == "spheres":
+            dev.call("clear")
+            dev.call("set_material", 0, 0.3, 0.3, 0.35, 0.0, 0.8)
+            for i in range(5):
+                dev.call("set_material", i + 1, 0.5 + i * 0.1, 0.1, 0.1, float(i) / 5.0, 1.0 - float(i) / 5.0)
+            dev.call("add_plane", 8.0, -1.0, 0)
+            for i in range(5):
+                dev.call("add_sphere", 0.5, -2.0 + i, -0.5, 0.0, i + 1, 12)
+            dev.call("add_light", 0.0, 4.0, 2.0, 1.0, 0.95, 0.9, 8.0)
+            dev.call("set_camera", 0, 1.5, 5, 0, 0, 0, 50)
+            self._print("  Loaded preset: spheres (5 spheres, metallic→dielectric gradient)")
+
+        else:
+            self._print(f"  Unknown preset: {name}")
+            self._print("  Available presets: demo, cornell, spheres")
 
     def _cmd_agents(self, args: str = "") -> None:
         """Multi-agent orchestration: agents <goal> or agents list."""
@@ -3688,6 +3966,611 @@ Examples:
             self._print(f"  VM error: {e}")
             self._last_exit_code = 1
 
+    # ── x86 VM (X86VirtualSystem with RBAC) ────────────────────────
+
+    def _cmd_vmperms(self, args: str = "") -> None:
+        """Show x86 VM RBAC permission matrix."""
+        from domains.shell.vm_permissions import Permission, Role, _ROLE_PERMISSIONS
+        perms = list(Permission)
+        roles = [Role.USER, Role.ADMIN, Role.KERNEL]
+        col_w = max(len(p.name) for p in perms) + 2
+        header = f"{'Permission':>{col_w}}  {'USER':>6} {'ADMIN':>6} {'KERNEL':>7}"
+        self._print(header)
+        self._print("─" * len(header))
+        for p in perms:
+            cells = " ".join("  ✓  " if p in _ROLE_PERMISSIONS[r] else "     " for r in roles)
+            self._print(f"{p.name:>{col_w}}  {cells}")
+        self._print("")
+
+    # ── Built-in x86 assembly programs for vmrun ─────────────────────────
+
+    HELLO_X86 = """\
+[BITS 32]
+mov eax, 3
+mov ebx, 1
+mov ecx, hello
+mov edx, 18
+int 0x80
+mov eax, 1
+xor ebx, ebx
+int 0x80
+jmp $
+hello: db 'Hello from x86 VM!', 10
+"""
+
+    ECHO_X86 = """\
+[BITS 32]
+mov eax, 3
+mov ebx, 1
+mov ecx, msg
+mov edx, 42
+int 0x80
+mov eax, 1
+xor ebx, ebx
+int 0x80
+jmp $
+msg: db 'echo: built-in x86 program (piped input not yet supported)', 10
+"""
+
+    FIB_X86 = """\
+[BITS 32]
+mov esi, 10
+mov byte [num], '0'
+.loop:
+push esi
+mov eax, 3
+mov ebx, 1
+mov ecx, num
+mov edx, 1
+int 0x80
+mov eax, 3
+mov ebx, 1
+mov ecx, space
+mov edx, 1
+int 0x80
+pop esi
+inc byte [num]
+dec esi
+jnz .loop
+mov eax, 3
+mov ebx, 1
+mov ecx, nl
+mov edx, 1
+int 0x80
+mov eax, 1
+xor ebx, ebx
+int 0x80
+num: db '0'
+space: db ' '
+nl: db 10
+"""
+
+    COLLATZ_X86 = """\
+[BITS 32]
+mov ecx, 5
+mov byte [num], '0'
+.loop:
+push ecx
+mov eax, 3
+mov ebx, 1
+mov ecx, num
+mov edx, 1
+int 0x80
+mov eax, 3
+mov ebx, 1
+mov ecx, nl
+mov edx, 1
+int 0x80
+pop ecx
+inc byte [num]
+dec ecx
+jnz .loop
+mov eax, 1
+xor ebx, ebx
+int 0x80
+num: db '0'
+nl: db 10
+"""
+
+    def _cmd_vmrun(self, args: str = "") -> None:
+        """Run x86 assembly in X86VirtualSystem with RBAC.
+        Usage: vmrun [--admin|--kernel] [--steps=N] [--debug] <file.asm>
+               vmrun [--admin|--kernel] [--steps=N] [--debug] <name>   (built-in)
+               echo '<code>' | vmrun [--admin|--kernel] [--steps=N] [--debug]
+        Built-in names: hello, echo, fib, collatz
+        """
+        source = self._piped_input if self._piped_input else ""
+        role = "user"
+        max_steps = 5000
+        debug = False
+        rest = args.strip()
+
+        # Parse flags
+        while rest:
+            if rest.startswith("--admin"):
+                role = "admin"
+                rest = rest[len("--admin"):].lstrip()
+            elif rest.startswith("--kernel"):
+                role = "kernel"
+                rest = rest[len("--kernel"):].lstrip()
+            elif rest.startswith("--steps="):
+                try:
+                    max_steps = int(rest[len("--steps="):].split()[0])
+                    rest = rest[len("--steps=") + len(str(max_steps)):].lstrip()
+                except ValueError:
+                    self._print("  vmrun: --steps=N requires an integer")
+                    self._last_exit_code = 1
+                    return
+            elif rest.startswith("--debug"):
+                debug = True
+                rest = rest[len("--debug"):].lstrip()
+            elif rest.startswith("--list"):
+                self._print("  Built-in x86 programs:")
+                self._print(f"    {'hello':15s} Print 'Hello from x86 VM!'")
+                self._print(f"    {'count':15s} Count 0 to 9")
+                self._print(f"    {'counter':15s} Count 0 to 4")
+                self._last_exit_code = 0
+                return
+            else:
+                break
+
+        max_role = os.environ.get("MAN_VM_ROLE", "kernel")
+        max_idx = {"user": 0, "admin": 1, "kernel": 2}
+        role_idx = {"user": 0, "admin": 1, "kernel": 2}
+        if role_idx.get(role, 0) > max_idx.get(max_role, 2):
+            self._print(f"  vmrun: --{role} requires MAN_VM_ROLE={role} or higher (current: {max_role})")
+            self._last_exit_code = 1
+            return
+
+        file_or_name = rest if rest else ""
+
+        # Check built-in programs by name
+        builtins = {
+            "hello": HELLO_X86,
+            "count": FIB_X86,
+            "counter": COLLATZ_X86,
+        }
+        if file_or_name and file_or_name in builtins:
+            source = builtins[file_or_name]
+        elif file_or_name:
+            try:
+                source = Path(os.path.expanduser(file_or_name)).read_text()
+            except Exception as e:
+                self._print(f"  vmrun: {e}")
+                self._last_exit_code = 1
+                return
+
+        if not source:
+            self._print("  Usage: vmrun [--admin|--kernel] [--steps=N] [--debug] <file.asm>")
+            self._print("         vmrun --list")
+            self._print("         echo '<code>' | vmrun [--admin|--kernel]")
+            self._last_exit_code = 1
+            return
+
+        try:
+            from domains.shell.vm import X86VirtualSystem
+            from domains.shell.vm_permissions import Role
+            vs = X86VirtualSystem()
+
+            pid = vs.spawn("user_prog", source)
+            if pid is None:
+                self._print("  vmrun: failed to spawn process")
+                self._last_exit_code = 1
+                return
+
+            role_map = {"user": Role.USER, "admin": Role.ADMIN, "kernel": Role.KERNEL}
+            vs._syscall._rbac.assign(pid, role_map[role])
+
+            vs.scheduler.start(vs.cpu)
+            current = vs.scheduler.current
+            if current is None:
+                self._print("  vmrun: no process to run")
+                self._last_exit_code = 1
+                return
+
+            current.restore_to_cpu(vs.cpu)
+
+            # Capture SYS_WRITE output instead of printing directly
+            output_buffer: list[str] = []
+            original_write = vs._syscall._sys_write
+
+            def _captured_write(fd, buf_addr, count):
+                if fd in (1, 2):
+                    data = bytes(vs.cpu._read8(buf_addr + i) for i in range(count))
+                    output_buffer.append(data.decode('ascii', errors='replace'))
+                    return count
+                return original_write(fd, buf_addr, count)
+
+            vs._syscall._sys_write = _captured_write
+            try:
+                vs.cpu.run(max_steps=max_steps)
+            finally:
+                vs._syscall._sys_write = original_write
+
+            exit_code = vs.cpu._regs[0] & 0xFFFFFFFF
+            for line in output_buffer:
+                self._print(line.rstrip())
+            self._print(f"  [exit: {exit_code}, role: {role}, pid: {pid}, steps: {max_steps}]")
+
+            if debug:
+                reg_names = ["EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"]
+                self._print(f"  Registers: {', '.join(f'{n}=0x{vs.cpu._regs[i]:08x}' for i, n in enumerate(reg_names))}")
+                self._print(f"  EIP: 0x{vs.cpu._eip:08x}")
+
+        except Exception as e:
+            self._print(f"  vmrun error: {e}")
+            self._last_exit_code = 1
+
+    # ── Notes (development journal) ────────────────────────────────
+
+    def _cmd_note(self, args: str = "") -> None:
+        """Development journal: note new/list/show/edit/delete/search/today/export."""
+        from notes import get_note_store
+        store = get_note_store(backend="mogdb")
+        parts = args.split(None, 1)
+        sub = parts[0].lower() if parts else "list"
+        rest = parts[1] if len(parts) > 1 else ""
+
+        if sub == "new":
+            self._note_new(store, rest)
+        elif sub == "list":
+            self._note_list(store, rest)
+        elif sub == "show":
+            self._note_show(store, rest)
+        elif sub == "edit":
+            self._note_edit(store, rest)
+        elif sub == "delete" or sub == "rm":
+            self._note_delete(store, rest)
+        elif sub == "search":
+            self._note_search(store, rest)
+        elif sub == "today":
+            self._note_today(store)
+        elif sub == "export":
+            self._note_export(store, rest)
+        elif sub == "tags":
+            self._note_tags(store)
+        elif sub == "status":
+            self._note_status_summary(store)
+        elif sub == "sprint":
+            self._note_sprint(store, rest)
+        elif sub == "timeline":
+            self._note_timeline(store, rest)
+        else:
+            self._print(f"  note: unknown subcommand '{sub}'")
+            self._print("  Usage: note <new|list|show|edit|delete|search|today|export|tags|status|sprint|timeline> [args]")
+            self._last_exit_code = 1
+
+    def _note_new(self, store, rest: str) -> None:
+        if not rest:
+            self._print("  Usage: note new <title> [--tags tag1,tag2] [--status s] [--sprint S1] [--gh owner/repo#123]")
+            self._last_exit_code = 1
+            return
+
+        title = rest
+        tags: list[str] = []
+        status = "open"
+        sprint = ""
+        gh = ""
+
+        for flag, handler in [
+            ("--tags", lambda v: [t.strip() for t in v.split(",") if t.strip()]),
+            ("--status", lambda v: v),
+            ("--sprint", lambda v: v),
+            ("--gh", lambda v: v),
+        ]:
+            if flag in title:
+                idx = title.index(flag)
+                before = title[:idx].strip()
+                after = title[idx + len(flag) + 1:].strip()
+                rest_val = after.split()[0] if after else ""
+                if rest_val:
+                    remainder = after[len(rest_val):].strip()
+                    title = before + " " + remainder
+                    if flag == "--tags":
+                        tags = handler(rest_val)
+                    elif flag == "--status":
+                        status = handler(rest_val)
+                    elif flag == "--sprint":
+                        sprint = handler(rest_val)
+                    elif flag == "--gh":
+                        gh = handler(rest_val)
+                title = title.strip()
+
+        title = title.strip()
+        if not title:
+            self._print("  Title cannot be empty")
+            self._last_exit_code = 1
+            return
+
+        note = store.create(title, tags=tags, status=status, sprint=sprint, gh=gh)
+        sprint_tag = f" [{sprint}]" if sprint else ""
+        self._print(f"  Created: {note.short_id}  {note.title}{sprint_tag}")
+        self._last_exit_code = 0
+
+    def _note_list(self, store, rest: str) -> None:
+        tag = None
+        status = None
+        sprint = None
+        limit = 20
+
+        if "--tag" in rest:
+            idx = rest.index("--tag") + 5
+            tag = rest[idx:].split()[0] if rest[idx:].strip() else None
+        if "--status" in rest:
+            idx = rest.index("--status") + 8
+            status = rest[idx:].split()[0] if rest[idx:].strip() else None
+        if "--sprint" in rest:
+            idx = rest.index("--sprint") + 8
+            sprint = rest[idx:].split()[0] if rest[idx:].strip() else None
+        if "--limit" in rest:
+            idx = rest.index("--limit") + 7
+            try:
+                limit = int(rest[idx:].split()[0])
+            except (ValueError, IndexError):
+                pass
+
+        notes = store.list_notes(tag=tag, status=status, sprint=sprint, limit=limit)
+        if not notes:
+            self._print("  No notes found.")
+            return
+
+        # Group by date
+        by_date: dict[str, list] = {}
+        for n in notes:
+            by_date.setdefault(n.date_str, []).append(n)
+
+        for date_str, day_notes in by_date.items():
+            self._print(f"\n  {date_str}")
+            for n in day_notes:
+                tags_str = f"  [{', '.join(n.tags)}]" if n.tags else ""
+                status_icon = {"open": "○", "wip": "◐", "done": "●", "blocked": "✕"}.get(n.status, "?")
+                self._print(f"    {status_icon} {n.short_id}  {n.title}{tags_str}")
+        self._print(f"\n  {len(notes)} note(s)")
+        self._last_exit_code = 0
+
+    def _note_show(self, store, rest: str) -> None:
+        if not rest.strip():
+            self._print("  Usage: note show <note-id>")
+            self._last_exit_code = 1
+            return
+
+        note = store.get(rest.strip())
+        if note is None:
+            self._print(f"  Note not found: {rest.strip()}")
+            self._last_exit_code = 1
+            return
+
+        tags_str = ", ".join(note.tags) if note.tags else "none"
+        self._print(f"  {note.title}")
+        self._print(f"  id: {note.id}")
+        self._print(f"  created: {note.created_at}")
+        self._print(f"  updated: {note.updated_at}")
+        self._print(f"  status: {note.status}")
+        self._print(f"  tags: {tags_str}")
+        if note.sprint:
+            self._print(f"  sprint: {note.sprint}")
+        if note.gh:
+            self._print(f"  gh: {note.gh}")
+            if note.gh_url:
+                self._print(f"  gh_url: {note.gh_url}")
+        self._print("")
+        for line in note.body.split("\n"):
+            self._print(f"  {line}")
+        self._last_exit_code = 0
+
+    def _note_edit(self, store, rest: str) -> None:
+        parts = rest.split(None, 1)
+        if not parts:
+            self._print("  Usage: note edit <note-id> [--title T] [--tags t1,t2] [--status s] [--sprint S1] [--gh owner/repo#123] [--body B]")
+            self._last_exit_code = 1
+            return
+
+        note_id = parts[0]
+        flags = parts[1] if len(parts) > 1 else ""
+
+        kwargs: dict[str, Any] = {}
+        if "--title" in flags:
+            idx = flags.index("--title") + 7
+            kwargs["title"] = flags[idx:].strip()
+        if "--tags" in flags:
+            idx = flags.index("--tags") + 6
+            tag_str = flags[idx:].split("--")[0].strip() if "--" in flags[idx:] else flags[idx:].strip()
+            kwargs["tags"] = [t.strip() for t in tag_str.split(",") if t.strip()]
+        if "--status" in flags:
+            idx = flags.index("--status") + 8
+            kwargs["status"] = flags[idx:].split("--")[0].strip() if "--" in flags[idx:] else flags[idx:].strip()
+        if "--sprint" in flags:
+            idx = flags.index("--sprint") + 8
+            kwargs["sprint"] = flags[idx:].split("--")[0].strip() if "--" in flags[idx:] else flags[idx:].strip()
+        if "--gh" in flags:
+            idx = flags.index("--gh") + 4
+            kwargs["gh"] = flags[idx:].split("--")[0].strip() if "--" in flags[idx:] else flags[idx:].strip()
+        if "--body" in flags:
+            idx = flags.index("--body") + 6
+            kwargs["body"] = flags[idx:].strip()
+
+        if not kwargs:
+            self._print("  No changes specified. Use --title, --tags, --status, or --body.")
+            self._last_exit_code = 1
+            return
+
+        updated = store.update(note_id, **kwargs)
+        if updated is None:
+            self._print(f"  Note not found: {note_id}")
+            self._last_exit_code = 1
+            return
+
+        self._print(f"  Updated: {updated.short_id}  {updated.title}")
+        self._last_exit_code = 0
+
+    def _note_delete(self, store, rest: str) -> None:
+        """Delete a note. Usage: note delete <id>"""
+        if not rest.strip():
+            self._print("  Usage: note delete <note-id>")
+            self._last_exit_code = 1
+            return
+
+        if store.delete(rest.strip()):
+            self._print(f"  Deleted: {rest.strip()}")
+            self._last_exit_code = 0
+        else:
+            self._print(f"  Note not found: {rest.strip()}")
+            self._last_exit_code = 1
+
+    def _note_search(self, store, rest: str) -> None:
+        """Search notes. Usage: note search <query>"""
+        if not rest.strip():
+            self._print("  Usage: note search <query>")
+            self._last_exit_code = 1
+            return
+
+        results = store.search(rest.strip())
+        if not results:
+            self._print(f"  No notes matching '{rest.strip()}'")
+            return
+
+        for n in results:
+            tags_str = f"  [{', '.join(n.tags)}]" if n.tags else ""
+            self._print(f"    {n.short_id}  {n.title}{tags_str}")
+        self._print(f"\n  {len(results)} result(s)")
+        self._last_exit_code = 0
+
+    def _note_today(self, store) -> None:
+        """Show today's notes."""
+        notes = store.today()
+        if not notes:
+            self._print("  No notes today.")
+            return
+
+        for n in notes:
+            tags_str = f"  [{', '.join(n.tags)}]" if n.tags else ""
+            status_icon = {"open": "○", "wip": "◐", "done": "●", "blocked": "✕"}.get(n.status, "?")
+            self._print(f"    {status_icon} {n.short_id}  {n.title}{tags_str}")
+        self._print(f"\n  {len(notes)} note(s) today")
+        self._last_exit_code = 0
+
+    def _note_export(self, store, rest: str) -> None:
+        """Export all notes. Usage: note export [file.md]"""
+        output_path = rest.strip() if rest.strip() else None
+        content = store.export_all(output_path=output_path)
+        if output_path:
+            self._print(f"  Exported {store.count()} notes to {output_path}")
+        else:
+            self._print(content)
+        self._last_exit_code = 0
+
+    def _note_tags(self, store) -> None:
+        """List all tags with counts."""
+        tag_counts: dict[str, int] = {}
+        for note in store.list_notes(limit=9999):
+            for tag in note.tags:
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+        if not tag_counts:
+            self._print("  No tags found.")
+            return
+
+        for tag, count in sorted(tag_counts.items()):
+            self._print(f"    {tag:20s}  {count} note(s)")
+        self._last_exit_code = 0
+
+    def _note_status_summary(self, store) -> None:
+        """Show notes grouped by status."""
+        status_counts: dict[str, int] = {}
+        for note in store.list_notes(limit=9999):
+            status_counts[note.status] = status_counts.get(note.status, 0) + 1
+
+        if not status_counts:
+            self._print("  No notes.")
+            return
+
+        icons = {"open": "○", "wip": "◐", "done": "●", "blocked": "✕"}
+        for status in ["open", "wip", "done", "blocked"]:
+            count = status_counts.get(status, 0)
+            if count:
+                icon = icons.get(status, "?")
+                self._print(f"    {icon} {status:10s}  {count}")
+        self._last_exit_code = 0
+
+    def _note_sprint(self, store, rest: str) -> None:
+        """Sprint operations. Usage: note sprint <name> [list|report]"""
+        parts = rest.split(None, 1)
+        sprint_name = parts[0].strip() if parts else ""
+        action = parts[1].strip().lower() if len(parts) > 1 else "list"
+
+        if not sprint_name:
+            sprints = store.sprints()
+            if not sprints:
+                self._print("  No sprints found.")
+                return
+            self._print(f"  Sprints: {', '.join(sprints)}")
+            return
+
+        notes = store.list_notes(sprint=sprint_name, limit=9999)
+        if not notes:
+            self._print(f"  No notes for sprint '{sprint_name}'.")
+            return
+
+        if action == "report":
+            report = store.sprint_report(sprint_name)
+            for line in report.split("\n"):
+                self._print(f"  {line}")
+        else:
+            by_status: dict[str, list] = {}
+            for n in notes:
+                by_status.setdefault(n.status, []).append(n)
+            for status in ["open", "wip", "done", "blocked"]:
+                items = by_status.get(status, [])
+                if not items:
+                    continue
+                icons = {"open": "○", "wip": "◐", "done": "●", "blocked": "✕"}
+                icon = icons.get(status, "?")
+                self._print(f"\n  {icon} {status.upper()} ({len(items)})")
+                for n in items:
+                    gh_tag = f"  #{n.gh}" if n.gh else ""
+                    self._print(f"    {n.short_id}  {n.title}{gh_tag}")
+            self._print(f"\n  {len(notes)} note(s) in sprint '{sprint_name}'")
+        self._last_exit_code = 0
+
+    def _note_timeline(self, store, rest: str) -> None:
+        """Timeline view. Usage: note timeline [--days N] [--tag T] [--status S]"""
+        days = 7
+        tag: str | None = None
+        status: str | None = None
+        args = rest.split()
+        i = 0
+        while i < len(args):
+            if args[i] == "--days" and i + 1 < len(args):
+                try:
+                    days = int(args[i + 1])
+                except ValueError:
+                    pass
+                i += 2
+            elif args[i] == "--tag" and i + 1 < len(args):
+                tag = args[i + 1]
+                i += 2
+            elif args[i] == "--status" and i + 1 < len(args):
+                status = args[i + 1]
+                i += 2
+            else:
+                i += 1
+        groups = store.timeline(days=days, tag=tag, status=status)
+        if not groups:
+            self._print("  No notes in the specified range.")
+            return
+        total = 0
+        icons = {"open": "○", "wip": "◐", "done": "●", "blocked": "✕"}
+        for date_str, day_notes in groups:
+            self._print(f"\n  ▬ {date_str} ▬")
+            for n in day_notes:
+                icon = icons.get(n.status, "?")
+                tags_s = f"  [{', '.join(n.tags)}]" if n.tags else ""
+                sprint_s = f"  [{n.sprint}]" if n.sprint else ""
+                self._print(f"    {icon} {n.short_id}  {n.title}{tags_s}{sprint_s}")
+            total += len(day_notes)
+        self._print(f"\n  {total} note(s) across {len(groups)} day(s)")
+        self._last_exit_code = 0
+
     # ── Command registry ────────────────────────────────────────────
 
     COMMANDS: dict[str, Callable] = {
@@ -3726,6 +4609,7 @@ Examples:
         "popd": _cmd_popd,
         "dirs": _cmd_dirs,
         "procs": _cmd_procs,
+        "ps": _cmd_ps,
         "kill": _cmd_kill,
         "bg": _cmd_bg,
         "jobs": _cmd_bg,
@@ -3774,6 +4658,7 @@ Examples:
         "tr": _cmd_tr,
         "wm": _cmd_wm,
         "win": _cmd_wm,
+        "render": _cmd_render,
         "pbcopy": _cmd_pbcopy,
         "pbpaste": _cmd_pbpaste,
         "remember": _cmd_remember,
@@ -3786,10 +4671,13 @@ Examples:
         "devices": _cmd_lsdev,
         "lsdev": _cmd_lsdev,
         "asm": _cmd_asm,
+        "vmrun": _cmd_vmrun,
+        "vmperms": _cmd_vmperms,
         "permit": _cmd_permit,
         "deny": _cmd_deny,
         "permissions": _cmd_permissions,
         "confirm": _cmd_confirm,
+        "note": _cmd_note,
     }
 
     # ── Main loop ───────────────────────────────────────────────────
@@ -3797,10 +4685,18 @@ Examples:
     def run(self) -> None:
         import time as _time
         import signal as _signal
+        import logging as _logging
+
+        # Suppress all kernel logs during boot so the banner appears first
+        _kernel_logger = _logging.getLogger("slo.kernel")
+        _prev_propagate = _kernel_logger.propagate
+        _kernel_logger.propagate = False
         boot_log = self.os.boot()
-        self._print(boot_log)
+        _kernel_logger.propagate = _prev_propagate
+
         self._running = True
         self._print_header()
+        self._print(boot_log)
         self._audit.startup()
 
         def _graceful_shutdown(signum, frame):

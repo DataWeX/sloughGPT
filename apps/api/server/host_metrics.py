@@ -7,6 +7,16 @@ import platform
 from typing import Any, Dict, Optional
 
 
+def _rm_cpu_counts() -> tuple[Optional[int], Optional[int]]:
+    """Return (logical, physical) core counts from ResourceManager if available."""
+    try:
+        from domains.infrastructure.resource_manager import get_resource_manager
+        rm = get_resource_manager()
+        return rm.topology.logical_cores, rm.topology.physical_cores
+    except Exception:
+        return None, None
+
+
 def sample_host_metrics_sync() -> Dict[str, Any]:
     import os
 
@@ -14,7 +24,11 @@ def sample_host_metrics_sync() -> Dict[str, Any]:
 
     cpu_percent = psutil.cpu_percent(interval=0.1)
     vm = psutil.virtual_memory()
-    phys = psutil.cpu_count(logical=False)
+    logical, phys = _rm_cpu_counts()
+    if logical is None:
+        logical = int(psutil.cpu_count(logical=True) or 1)
+    if phys is None:
+        phys = psutil.cpu_count(logical=False)
     try:
         process_rss_bytes = int(psutil.Process(os.getpid()).memory_info().rss)
     except Exception:
@@ -23,7 +37,7 @@ def sample_host_metrics_sync() -> Dict[str, Any]:
         "platform": platform.system(),
         "platform_release": platform.release(),
         "python_version": platform.python_version(),
-        "cpu_count_logical": int(psutil.cpu_count(logical=True) or 1),
+        "cpu_count_logical": logical,
         "cpu_count_physical": int(phys) if phys is not None else None,
         "cpu_percent": round(float(cpu_percent), 2),
         "memory_total_bytes": int(vm.total),

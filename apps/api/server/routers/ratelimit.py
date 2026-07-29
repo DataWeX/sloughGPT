@@ -7,8 +7,6 @@ from collections import defaultdict
 
 from schemas.common import success_response
 
-router = APIRouter(prefix="/rate-limit", tags=["rate-limit"])
-
 
 class _RateLimiter:
     """Simple in-memory rate limiter."""
@@ -36,25 +34,34 @@ class _RateLimiter:
         return max(0.0, window - (now - self._history[key][0]))
 
 
-_rate_limiter = _RateLimiter()
+class RatelimitRouter:
+    """Rate Limit Router - Rate limiting status and configuration."""
+
+    def __init__(self):
+        self.router = APIRouter(prefix="/rate-limit", tags=["rate-limit"])
+        self._rate_limiter = _RateLimiter()
+        self._register_routes()
+
+    def _register_routes(self):
+        self.router.add_api_route(path="/status", endpoint=self.get_rate_limit_status, methods=["GET"])
+        self.router.add_api_route(path="/check", endpoint=self.check_rate_limit, methods=["GET"])
+
+    async def get_rate_limit_status(self):
+        """Get current rate limit configuration"""
+        return success_response(data={
+            "requests_per_minute": self._rate_limiter.requests_per_minute,
+            "burst_size": self._rate_limiter.burst_size,
+            "enabled": True,
+        })
+
+    async def check_rate_limit(self, request: Request):
+        """Check if request would be rate limited"""
+        client_ip = request.client.host if request.client else "unknown"
+        allowed = self._rate_limiter.is_allowed(client_ip)
+        return success_response(data={
+            "allowed": allowed,
+            "wait_time": 0 if allowed else self._rate_limiter.get_wait_time(client_ip),
+        })
 
 
-@router.get("/status")
-async def get_rate_limit_status():
-    """Get current rate limit configuration"""
-    return success_response(data={
-        "requests_per_minute": _rate_limiter.requests_per_minute,
-        "burst_size": _rate_limiter.burst_size,
-        "enabled": True,
-    })
-
-
-@router.get("/check")
-async def check_rate_limit(request: Request):
-    """Check if request would be rate limited"""
-    client_ip = request.client.host if request.client else "unknown"
-    allowed = _rate_limiter.is_allowed(client_ip)
-    return success_response(data={
-        "allowed": allowed,
-        "wait_time": 0 if allowed else _rate_limiter.get_wait_time(client_ip),
-    })
+router = RatelimitRouter().router

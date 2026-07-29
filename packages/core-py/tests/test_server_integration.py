@@ -18,7 +18,9 @@ import pytest
 pytestmark = pytest.mark.slow
 from domains.infrastructure.server_state import get_server_state
 from domains.infrastructure.model_registry import get_model_registry, ModelRegistry
-from domains.infrastructure.model_server import ModelServer, ModelStatus, CircuitBreakerState
+from domains.infrastructure.model_server import (
+    ModelServer, ModelStatus, CircuitBreakerState, PriorityRequestQueue, Priority,
+)
 
 
 # ── Mock model (torch-free) ──────────────────────────────────────────
@@ -315,6 +317,118 @@ class TestModelServer:
         # Should half-open and fail again (model still fails)
         with pytest.raises(RuntimeError):
             await server.generate("hello")
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_opens_on_queue_full_generate(self, model, tokenizer):
+        """Queue-full error in generate() trips circuit breaker after threshold."""
+        server = ModelServer(
+            model, tokenizer, model_id="test",
+            enable_circuit_breaker=True,
+            failure_threshold=2,
+            enable_warmup=False,
+        )
+
+        # Inject a tiny queue (1 concurrent, 1 queued) and start its worker
+        q = PriorityRequestQueue(max_concurrent=1, max_queue=1)
+        wk = asyncio.get_event_loop().create_task(q.worker())
+        server._request_queue = q
+        await asyncio.sleep(0.02)
+
+        # Make generate() slow so the second request sits in the heap
+        def _slow(*args, **kwargs):
+            time.sleep(0.5)
+            return {"text": "done", "tokens_generated": 5, "elapsed_ms": 500.0}
+        server._generate_sync = _slow
+
+        # First request: occupies the in-flight slot
+        t1 = asyncio.create_task(server.generate("hello"))
+        await asyncio.sleep(0.05)
+
+        # Second request: sits in the heap (in_flight == max_concurrent)
+        t2 = asyncio.create_task(server.generate("world"))
+        await asyncio.sleep(0.05)
+
+        # Third request: heap is full → raises → CB records 1st failure
+        with pytest.raises(RuntimeError, match="Queue full"):
+            await server.generate("third")
+        assert server._circuit_breaker._failure_count == 1
+
+        # Fourth request: heap still full → raises → CB records 2nd → OPEN
+        with pytest.raises(RuntimeError, match="Queue full"):
+            await server.generate("fourth")
+        assert server._circuit_breaker.state == CircuitBreakerState.OPEN
+
+        # Cleanup
+        await t1
+        t2.cancel()
+        try:
+            await t2
+        except (asyncio.CancelledError, RuntimeError):
+            pass
+        wk.cancel()
+        try:
+            await wk
+        except (asyncio.CancelledError, RuntimeError):
+            pass
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_opens_on_queue_full_stream(self, model, tokenizer):
+        """Queue-full error in generate_stream() trips circuit breaker.
+
+        Fill the heap via queue.acquire() directly, then verify
+        generate_stream() raises Queue full → CB opens.
+        """
+        server = ModelServer(
+            model, tokenizer, model_id="test",
+            enable_circuit_breaker=True,
+            failure_threshold=2,
+            enable_warmup=False,
+        )
+
+        q = PriorityRequestQueue(max_concurrent=1, max_queue=1)
+        wk = asyncio.get_event_loop().create_task(q.worker())
+        server._request_queue = q
+        await asyncio.sleep(0.02)
+
+        def _slow(*args, **kwargs):
+            time.sleep(0.5)
+            return {"text": "done", "tokens_generated": 5, "elapsed_ms": 500.0}
+        server._generate_sync = _slow
+
+        # Slow generate occupies the in-flight slot
+        t1 = asyncio.create_task(server.generate("hello"))
+        await asyncio.sleep(0.05)
+
+        # Fill heap via direct acquire (worker busy, in_flight=1)
+        a1 = asyncio.create_task(
+            q.acquire(priority=Priority.HIGH, request_id="fill")
+        )
+        await asyncio.sleep(0.05)
+
+        # generate_stream tries acquire → heap full → raises → CB records 1
+        s3 = server.generate_stream("third")
+        with pytest.raises(RuntimeError, match="Queue full"):
+            await s3.__anext__()
+        assert server._circuit_breaker._failure_count == 1
+
+        # Fourth → CB records 2nd → OPEN
+        s4 = server.generate_stream("fourth")
+        with pytest.raises(RuntimeError, match="Queue full"):
+            await s4.__anext__()
+        assert server._circuit_breaker.state == CircuitBreakerState.OPEN
+
+        # Cleanup
+        await t1
+        a1.cancel()
+        try:
+            await a1
+        except Exception:
+            pass
+        wk.cancel()
+        try:
+            await wk
+        except (asyncio.CancelledError, RuntimeError):
+            pass
 
     @pytest.mark.asyncio
     async def test_timeout_semaphore(self, model, tokenizer):

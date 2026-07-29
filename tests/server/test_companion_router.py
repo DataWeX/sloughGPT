@@ -13,7 +13,7 @@ app = FastAPI()
 app.include_router(router)
 client = TestClient(app, raise_server_exceptions=False)
 
-COMPANION_TARGET = "apps.api.server.routers.companion._get_companion"
+COMPANION_TARGET = "apps.api.server.routers.companion._companion_router._get_companion"
 
 
 def _mock_companion():

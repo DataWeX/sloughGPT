@@ -12,6 +12,30 @@ Before any edit, read the relevant docs for the area. Use `opencode doc-aware` t
 - Config → `docs/ENVIRONMENT.md`
 Full map in `.opencode/agents/doc-aware-engineer.md`.
 
+## Dev Journal — Document Every Session
+Every session must log its work using the `notes` CLI tool:
+
+```bash
+notes new "Short title" --tags tag1,tag2 --status wip|done
+```
+
+The `notes` command is installed globally (from `tools/notes/`). Notes live in `~/.config/dev-notes/`; each note is a `.md` file with YAML frontmatter.
+
+### When to create a note
+- **Session start**: Create a note with the session goal, status `wip`
+- **Major milestone**: Note key decisions, architecture changes, root causes
+- **Session end**: Update the session note to `done` with a summary of changes
+
+### Useful commands
+```bash
+notes new "Session title" --tags area,subarea --status wip       # start a session note
+notes list --status wip                                          # what's in progress
+notes list --today                                               # today's work
+notes show <short-id>                                            # view detail
+notes edit <short-id> --status done --body "Completed: ..."       # close out
+notes search "keyword"                                           # find by topic
+```
+
 ## Development Principles
 
 ### Response Style — Formal and Concise
@@ -2433,6 +2457,59 @@ domains/shell/
 | `tests/test_shell_repl.py` | 1073 | 148 unit tests |
 | `tests/test_shell_integration.py` | 350 | 35 integration tests |
 | `docs/SHELL.md` | ~500 | GitBook-style documentation covering all features |
+| `vm_training_bridge.py` | 210 | Thin HTTP proxy — x86 VM syscalls → ``POST /training/start`` API |
+| `vm_permissions.py` | 80 | RBAC roles, Permission enum (TRAINING gated behind ADMIN) |
+
+### x86 VM Training Syscall Bridge
+
+**Do not rebuild training logic inside assembly.** Scattered training code in assembly creates maintenance debt, and the bridge itself must not contain training logic either — it is a thin HTTP proxy to the existing ``/training/start`` and ``/training/jobs/{id}`` API endpoints.
+
+#### Architecture
+```
+x86 VM (assembly)              VMTrainingBridge (thin proxy)          REST API
+┌────────────────────┐       ┌────────────────────────────┐       ┌────────────────┐
+│ SYS_TRAIN_START    │──────>│  POST /training/start      │──────>│ start_training │
+│   (eax=28)         │       │  (requests + job tracking) │       │ -> job_id      │
+│                    │       │                            │       │                │
+│ SYS_TRAIN_STATUS   │<──────│  GET /training/jobs/{id}   │<──────│ job status     │
+│   (eax=29)         │       │  (poll every call)         │       │                │
+│                    │       │                            │       │                │
+│ SYS_TRAIN_GET_     │<──────│  cached result JSON        │       │                │
+│   RESULT (eax=30)  │       │  (from completed job data) │       │                │
+└────────────────────┘       └────────────────────────────┘       └────────────────┘
+```
+
+#### Key Design Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| **Zero training logic** | Bridge is a thin HTTP proxy — just calls existing ``/training/start`` etc. |
+| **requests.Session** | Reuses HTTP connection pool to ``localhost:8000`` |
+| **Permission gating** | `Permission.TRAINING` requires `ADMIN` role — VM must be admin to train |
+| **Singleton bridge** | `get_bridge()` returns shared `VMTrainingBridge` (lightweight, no executor) |
+
+#### JSON Config (same shape as ``TrainingRequest`` / ``TrainRequest``)
+
+```json
+{
+  "dataset": "shakespeare",
+  "epochs": 3,
+  "lr": 1e-3,
+  "batch_size": 32,
+  "embed_dim": 128,
+  "n_layer": 4,
+  "n_head": 4
+}
+```
+
+Key: ``dataset`` resolves via ``resolve_training_inputs()`` in the API layer.
+
+#### Relevant Files
+- ``domains/shell/vm_training_bridge.py`` — ``VMTrainingBridge``, ``get_bridge()``
+- ``domains/shell/vm.py`` — ``X86SyscallHandler._sys_train_start/status/get_result``
+- ``domains/shell/vm_permissions.py`` — ``Permission.TRAINING``
+- ``apps/api/server/training/router.py`` — ``POST /training/start``, ``GET /training/jobs/{id}``
+- ``apps/api/server/training/schemas.py`` — ``TrainingRequest``, ``TrainRequest``
 
 ---
 

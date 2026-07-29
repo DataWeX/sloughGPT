@@ -7,6 +7,35 @@ import { act } from 'react'
 const mockCva = vi.hoisted(() => { const fn = () => ''; return fn })
 vi.mock('class-variance-authority', () => ({ cva: () => mockCva }))
 
+vi.mock('@sloughgpt/strui', () => {
+  const iconMock = (name: string) => { const C = () => <span data-testid={`icon-${name}`}>{name}</span>; C.displayName = `Icon${name}`; return C }
+  const passthrough = ({ children }: any) => <div>{children}</div>
+  return {
+    cn: vi.fn((...args: any[]) => args.join(' ')),
+    Card: passthrough, CardContent: passthrough, CardHeader: passthrough, CardTitle: ({ children, className }: any) => <div className={className}>{children}</div>,
+    Button: ({ children, onClick, variant, size, className, disabled, 'aria-label': ariaLabel }: any) => (
+      <button onClick={onClick} className={className} disabled={disabled} aria-label={ariaLabel} data-variant={variant}>{children}</button>
+    ),
+    Input: ({ value, onChange, className, placeholder, 'aria-label': ariaLabel }: any) => (
+      <input value={value} onChange={onChange} className={className} placeholder={placeholder} aria-label={ariaLabel} />
+    ),
+    Badge: ({ children, variant, className }: any) => <span data-variant={variant} className={className}>{children}</span>,
+    StatCard: ({ label, value, className }: any) => <div className={className}><span>{label}</span><span>{String(value)}</span></div>,
+    KpiGrid: ({ children }: any) => <div>{children}</div>,
+    Skeleton: ({ className }: any) => <div className={className} />,
+    IconTrash: iconMock('trash'), IconDownload: iconMock('download'), IconEdit: iconMock('edit'),
+    IconCheck: iconMock('check'), IconX: iconMock('x'), IconRefresh: iconMock('refresh'),
+    AlertDialog: ({ open, onOpenChange, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
+    AlertDialogContent: ({ children }: any) => <div>{children}</div>,
+    AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
+    AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
+    AlertDialogDescription: ({ children }: any) => <div>{children}</div>,
+    AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
+    AlertDialogCancel: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    AlertDialogAction: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
+  }
+})
+
 // ── controller & router mocks ──
 const { mockGet, mockUpdate, mockDelete, mockExport, mockGetStats, mockPush, mockAddToast } = vi.hoisted(() => ({
   mockGet: vi.fn(), mockUpdate: vi.fn(), mockDelete: vi.fn(),
@@ -18,7 +47,6 @@ vi.mock('next/navigation', () => ({ useRouter: () => stableRouter, useParams: ()
 vi.mock('@/lib/dataset-controller', () => ({ datasetController: { get: mockGet, update: mockUpdate, delete: mockDelete, export: mockExport, getStats: mockGetStats } }))
 vi.mock('@/lib/toast-store', () => ({ useToastStore: (sel: any) => sel({ addToast: mockAddToast }) }))
 vi.mock('@/components/DatasetPreview', () => ({ DatasetPreview: () => null }))
-vi.stubGlobal('confirm', vi.fn(() => true))
 vi.stubGlobal('URL', { createObjectURL: vi.fn(), revokeObjectURL: vi.fn() })
 
 import DatasetDetailPage from './page'
@@ -113,9 +141,14 @@ describe('DatasetDetailPage', () => {
   it('deletes dataset on delete with confirmation', async () => {
     mockDelete.mockResolvedValue({})
     mockGet.mockResolvedValue(mockDataset)
-    render(<DatasetDetailPage />)
+    const { container } = render(<DatasetDetailPage />)
     await waitForName()
-    await act(async () => { screen.getByText('Delete').click() })
+    const deleteBtn = container.querySelector('button.text-destructive') as HTMLElement
+    await act(async () => { deleteBtn.click() })
+    await waitFor(() => { expect(screen.getByTestId('alert-dialog')).toBeTruthy() })
+    const dialog = screen.getByTestId('alert-dialog')
+    const confirmBtn = dialog.querySelector('button:last-child') as HTMLElement
+    await act(async () => { confirmBtn.click() })
     await waitFor(() => { expect(mockDelete).toHaveBeenCalledWith('shakespeare') })
     expect(mockPush).toHaveBeenCalledWith('/datasets')
   })

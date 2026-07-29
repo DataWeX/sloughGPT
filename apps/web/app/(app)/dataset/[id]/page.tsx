@@ -5,6 +5,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
@@ -13,6 +17,7 @@ import { IconTrash, IconDownload, IconEdit, IconCheck, IconX, IconRefresh } from
 import { datasetController, type Dataset, type DatasetStats } from '@/lib/dataset-controller'
 import { DatasetPreview } from '@/components/DatasetPreview'
 import { formatBytes } from '@/lib/format-bytes'
+import { downloadBlob } from '@/lib/download-utils'
 import { useToastStore } from '@/lib/toast-store'
 
 export default function DatasetDetailPage() {
@@ -26,6 +31,7 @@ export default function DatasetDetailPage() {
   const [renaming, setRenaming] = useState(false)
   const [renameText, setRenameText] = useState('')
   const [stats, setStats] = useState<DatasetStats | null>(null)
+  const [showDelete, setShowDelete] = useState(false)
 
   const fetchDataset = useCallback(async () => {
     setLoading(true)
@@ -79,13 +85,14 @@ export default function DatasetDetailPage() {
 
   const handleDelete = async () => {
     if (!dataset) return
-    if (!confirm(`Delete dataset "${dataset.name}"?`)) return
     try {
       await datasetController.delete(dataset.id)
       addToast(`Deleted "${dataset.name}"`, 'info')
       router.push('/datasets')
     } catch {
       addToast('Delete failed', 'error')
+    } finally {
+      setShowDelete(false)
     }
   }
 
@@ -93,10 +100,7 @@ export default function DatasetDetailPage() {
     if (!dataset) return
     try {
       const blob = await datasetController.export(dataset.id)
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url; a.download = `${dataset.name || dataset.id}.jsonl`; a.click()
-      URL.revokeObjectURL(url)
+      downloadBlob(blob, `${dataset.name || dataset.id}.jsonl`)
       addToast('Exported', 'success')
     } catch {
       addToast('Export failed', 'error')
@@ -150,7 +154,7 @@ export default function DatasetDetailPage() {
                     <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleExport}>
                       <IconDownload className="h-3 w-3 mr-1" /> Export
                     </Button>
-                    <Button size="sm" variant="outline" className="h-7 text-xs text-destructive hover:text-destructive" onClick={handleDelete}>
+                    <Button size="sm" variant="outline" className="h-7 text-xs text-destructive hover:text-destructive" onClick={() => setShowDelete(true)}>
                       <IconTrash className="h-3 w-3 mr-1" /> Delete
                     </Button>
                   </div>
@@ -250,6 +254,23 @@ export default function DatasetDetailPage() {
           </>
         )}
       </div>
+
+      <AlertDialog open={showDelete} onOpenChange={setShowDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete dataset</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &ldquo;{dataset?.name}&rdquo;? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

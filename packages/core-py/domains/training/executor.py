@@ -135,6 +135,12 @@ class TrainingExecutor:
             self._jobs[job_id] = info
 
         def _wrapper() -> Any:
+            # Switch RM to training mode for optimal pool sizing
+            from domains.infrastructure.resource_manager import get_resource_manager
+            rm = get_resource_manager()
+            prev_mode = rm.mode
+            if prev_mode != "training":
+                rm.recompute("training")
             info.status = JobStatus.RUNNING
             info.started_at = time.time()
             try:
@@ -148,6 +154,8 @@ class TrainingExecutor:
                 raise
             finally:
                 info.completed_at = time.time()
+                if prev_mode != "training":
+                    rm.recompute(prev_mode)
 
         future = self._executor.submit(_wrapper)
         info.future = future
@@ -348,8 +356,8 @@ _instance_lock = threading.Lock()
 def get_training_executor() -> TrainingExecutor:
     """Return (and lazily create) the global TrainingExecutor singleton.
 
-    Pool size defaults to ``min(2, cpu_count)`` to avoid memory exhaustion
-    on small machines while allowing some parallel training.
+    Pool size is determined by ``ResourceManager.train_pool_size``,
+    overridable via ``SLO_TRAIN_POOL_SIZE`` env var.
     """
     global _instance
     if _instance is not None:
@@ -357,10 +365,10 @@ def get_training_executor() -> TrainingExecutor:
     with _instance_lock:
         if _instance is not None:
             return _instance
+        from domains.infrastructure.resource_manager import get_resource_manager
+        rm = get_resource_manager()
         import os
-        import multiprocessing
-        default_workers = min(2, multiprocessing.cpu_count())
-        max_workers = int(os.environ.get("SLO_TRAIN_POOL_SIZE", default_workers))
+        max_workers = int(os.environ.get("SLO_TRAIN_POOL_SIZE", rm.train_pool_size))
         _instance = TrainingExecutor(max_workers=max_workers)
         logger.info("TrainingExecutor created (workers=%d)", max_workers, extra={"tag": "TRAIN"})
         return _instance

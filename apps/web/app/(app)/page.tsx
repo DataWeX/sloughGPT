@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
@@ -38,6 +39,7 @@ function Greeting() {
 }
 
 export default function HomePage() {
+  const router = useRouter()
   const { t } = useLocale()
   const { healthLegacy: health } = useLiveStatus()
   const addToast = useToastStore(s => s.addToast)
@@ -302,7 +304,7 @@ export default function HomePage() {
               {recentSessions.slice(0, 3).map(s => (
                 <button
                   key={s.id}
-                  onClick={() => window.location.href = `/chat?session=${s.id}`}
+                  onClick={() => router.push(`/chat?session=${s.id}`)}
                   className="w-full flex items-center gap-2 text-left hover:bg-muted/30 rounded px-1.5 py-1 transition-colors"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0" />
@@ -357,7 +359,7 @@ export default function HomePage() {
 
       {recentSessions.length > 0 && (
         <button
-          onClick={() => window.location.href = `/chat?session=${recentSessions[0].id}`}
+          onClick={() => router.push(`/chat?session=${recentSessions[0].id}`)}
           className="w-full text-left rounded-lg border border-border/30 bg-card p-3 flex items-center gap-3 hover:border-border/60 hover:bg-muted/30 transition-colors group"
         >
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground group-hover:text-foreground transition-colors">

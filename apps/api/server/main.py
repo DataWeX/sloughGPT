@@ -233,11 +233,6 @@ JWT_EXPIRATION_HOURS = _sec.jwt_expiration_hours
 VALID_API_KEYS = _sec.valid_api_keys
 
 
-def find_available_port(start_port: int = 8000, max_attempts: int = 10) -> int:
-    """Find an available port starting from start_port (DEPRECATED - use domains.shared.find_available_port)."""
-    from domains.shared import find_available_port as _find_available_port
-    return _find_available_port(host="", start_port=start_port, max_attempts=max_attempts)
-
 
 # ── Background daemons (callable from __main__) ─────────────────────
 def _start_feedback_workflow() -> None:
@@ -426,7 +421,8 @@ if __name__ == "__main__":
     if args.web:
         web_root = _REPO_ROOT / "apps" / "web"
         standalone_dir = web_root / ".next" / "standalone"
-        web_port = find_available_port(3000)
+        from domains.shared import find_available_port as _find_available_port
+        web_port = _find_available_port(host="", start_port=3000)
         web_env = {**os.environ, "PORT": str(web_port)}
 
         if standalone_dir.is_dir() and (standalone_dir / "server.js").is_file():

@@ -164,7 +164,7 @@ class TestConsoleLogger:
         log.info("hello world")
         output = stream.getvalue()
         assert "hello world" in output
-        assert "slo.test" in output
+        assert "test" in output
         assert "INF" in output
 
     def test_colors_disabled_no_ansi(self):

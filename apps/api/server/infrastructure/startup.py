@@ -469,7 +469,7 @@ class StartupOrchestrator:
             logger.warning("Task queue init failed: %s", e, extra={"tag": "START"})
 
     async def _phase_config(self):
-        """Validate and warm the config system."""
+        """Validate and warm the config system + init ResourceManager."""
         STARTUP_PHASE.update(phase="config", step=3, total=9, message="Validating config...")
         try:
             from domains.infrastructure.config import get_config
@@ -478,6 +478,17 @@ class StartupOrchestrator:
             logger.info("Config system validated", extra={"tag": "START"})
         except Exception as e:
             logger.warning("Config system init: %s", e, extra={"tag": "START"})
+        # Init ResourceManager — applies BLAS env vars before numpy loads
+        try:
+            from domains.infrastructure.resource_manager import get_resource_manager
+            rm = get_resource_manager()
+            rm.apply_blas_env()
+            rm.apply_compute_limits()
+            rm.apply_environment()
+            logger.info("ResourceManager initialised: mode=%s %s", rm.mode, rm.summary(),
+                extra={"tag": "START"})
+        except Exception as e:
+            logger.warning("ResourceManager init: %s", e, extra={"tag": "START"})
 
     async def _phase_ready(self):
         """Mark server as ready — happens after all synchronous phases complete."""

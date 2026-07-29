@@ -46,8 +46,8 @@ class DaitRuntime:
     """Top-level runtime — orchestrates kernel, init, devices, VFS, and neural."""
 
     def __init__(self):
-        from .kernel_neural import NeuralKernel
-        self.kernel = NeuralKernel()
+        from .kernel import Kernel
+        self.kernel = Kernel()
         self._model_loaded: bool = False
         self._model_name: str = ""
         self._current_soul: str = ""
@@ -59,32 +59,40 @@ class DaitRuntime:
         self._device_system: Any = None
 
     def boot(self, shell_run: Callable[[str], str] | None = None) -> str:
+        """Boot the full runtime: addons, kernel, VFS, devices, init system.
+
+        Args:
+            shell_run: Optional shell command executor for init services.
+
+        Returns:
+            Boot log from the init system.
+        """
         from .init import get_init_system
         from .devices import create_default_devices
-        from .vfs import get_vfs
         from .device_system import get_device_system
 
         self._init = get_init_system()
         self._devices = create_default_devices(get_kernel=lambda: self.kernel)
-        self._vfs = get_vfs()
+
+        # Install addons before kernel boot — addons may depend on kernel state
+        from .addons import neural, filesystem, shell_ui
+        self.kernel.install_addon(neural)
+        self.kernel.install_addon(filesystem)
+        self.kernel.install_addon(shell_ui)
+
+        # Boot kernel (sets _running, _boot_time)
+        self._boot_time = time.time()
+        self.kernel.boot()
+
+        # Wire VFS — set_devices is not done by setup() (only set_kernel is)
+        self._vfs = self.kernel.vfs
         self._vfs.set_devices(self._devices)
-        self._vfs.set_kernel(self.kernel)
 
         # Wire DeviceSystem — register all shell devices
         self._device_system = get_device_system()
         for name in self._devices.names:
             dev = self._devices.get(name)
             self._device_system.register(name, dev, registered_by="shell")
-
-        self._boot_time = time.time()
-        self.kernel.boot()
-
-        # Install neural addon before registering devices
-        from .addons import neural
-        self.kernel.install_addon(neural)
-
-        # Register neural devices with the kernel
-        self.kernel.register_devices()
 
         # Bridge NPU to DeviceSystem so assembly programs can access it
         from .vm_devices import NPUVMDevice
@@ -98,6 +106,11 @@ class DaitRuntime:
         return boot_log
 
     def shutdown(self) -> str:
+        """Shut down the runtime: init system, then kernel.
+
+        Returns:
+            Shutdown log from the init system.
+        """
         from .init import get_init_system
         self._boot_complete = False
         shutdown_log = get_init_system().shutdown()
@@ -107,7 +120,8 @@ class DaitRuntime:
     def _detect_health(self) -> None:
         try:
             import requests
-            r = requests.get("http://localhost:8000/health", timeout=2)
+            from .config import get_api_base
+            r = requests.get(f"{get_api_base()}/health", timeout=2)
             if r.status_code == 200:
                 data = r.json()
                 self._model_loaded = data.get("model_loaded", False)

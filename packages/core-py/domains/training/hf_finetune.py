@@ -325,7 +325,10 @@ class HFFineTuner:
             extra={"tag": "TRAIN"},)
         self._is_training = True
         try:
-            train_result = trainer.train()
+            from domains.infrastructure.resource_manager import get_resource_manager
+            rm = get_resource_manager()
+            with rm.mode_override("training"):
+                train_result = trainer.train()
         finally:
             self._is_training = False
 

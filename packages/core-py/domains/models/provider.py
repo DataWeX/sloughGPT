@@ -17,7 +17,7 @@ Built-in processors:
 
 import asyncio
 import re
-from typing import AsyncIterator, Optional, List, Dict, Any, Protocol, runtime_checkable, Tuple
+from typing import AsyncIterator, Optional, List, Dict, Any, Protocol, runtime_checkable, Tuple, TYPE_CHECKING
 from dataclasses import dataclass
 import logging
 
@@ -55,6 +55,10 @@ class ModelProvider(Protocol):
     Callers always do:
         provider = get_provider("default")
         async for token in provider.chat_stream(messages, **kwargs): ...
+
+    All ``chat*`` methods accept an optional ``priority`` kwarg
+    (0=HIGH, 1=MEDIUM, 2=LOW) that may be used by backends with
+    priority-aware request scheduling.
     """
 
     @property
@@ -842,6 +846,7 @@ class SloTransformerProvider:
 def setup_providers(
     slonet_hf_id: Optional[str] = None,
     slonet_provider=None,
+    slonet_server=None,
     model_registry=None,
     quantize: bool = False,
     quant_bits: int = 8,
@@ -855,6 +860,9 @@ def setup_providers(
     - ``"slonet-native"``: SloNetChatProvider (if slonet_hf_id or slonet_provider given)
     - ``"default"``: ProviderRouter with processor chain → text provider
 
+    When a ``SloNetServer`` is given via ``slonet_server``, it is attached to
+    the provider for concurrency control, circuit breaker, and warmup.
+
     Processor chain (in order):
     1. VisionProcessor — caption images
     2. ToolUseProcessor — tool-call instructions
@@ -867,6 +875,7 @@ def setup_providers(
     Args:
         slonet_hf_id: HuggingFace model ID for SloNet model
         slonet_provider: Pre-loaded provider (skips re-loading)
+        slonet_server: ``SloNetServer`` instance for concurrency/circuit-breaker
         model_registry: Optional ModelRegistry for lifecycle management
         quantize: Whether to quantize the model
         quant_bits: Quantization bit width
@@ -889,10 +898,17 @@ def setup_providers(
         logger.debug("Native C inference not available: %s", e, extra={"tag": "MODEL"})
 
     if slonet_provider is not None:
+        # Attach SloNetServer if provided
+        if slonet_server is not None and hasattr(slonet_provider, 'set_server'):
+            slonet_provider.set_server(slonet_server)
+            logger.info("Attached SloNetServer to provider: %s",
+                        getattr(slonet_provider, '_model_id', '?'), extra={"tag": "MODEL"})
         register_provider("slonet-native", slonet_provider)
         text_provider_name = "slonet-native"
-        logger.info("Registered slonet-native provider: %s (pre-loaded)",
-                    getattr(slonet_provider, '_model_id', '?'), extra={"tag": "MODEL"})
+        logger.info("Registered slonet-native provider: %s (pre-loaded%s)",
+                    getattr(slonet_provider, '_model_id', '?'),
+                    ', server-backed' if slonet_server else '',
+                    extra={"tag": "MODEL"})
     elif slonet_hf_id:
         try:
             from domains.inference.slonet_provider import SloNetChatProvider
@@ -908,10 +924,16 @@ def setup_providers(
                 quant_bits=quant_bits,
                 quant_mode=quant_mode,
             )
+            # Attach SloNetServer if provided
+            if slonet_server is not None and hasattr(slonet_provider, 'set_server'):
+                slonet_provider.set_server(slonet_server)
             register_provider("slonet-native", slonet_provider)
             text_provider_name = "slonet-native"
-            logger.info("Registered slonet-native provider: %s (quant=%s)",
-                        slonet_hf_id, f"int{quant_bits}" if quantize else "none", extra={"tag": "MODEL"})
+            logger.info("Registered slonet-native provider: %s (quant=%s%s)",
+                        slonet_hf_id,
+                        f"int{quant_bits}" if quantize else "none",
+                        ', server-backed' if slonet_server else '',
+                        extra={"tag": "MODEL"})
         except Exception as e:
             logger.warning("Failed to load slonet-native provider %s: %s", slonet_hf_id, e, extra={"tag": "MODEL"})
 

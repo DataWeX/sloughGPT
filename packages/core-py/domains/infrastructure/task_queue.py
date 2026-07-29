@@ -73,7 +73,10 @@ class Task:
 class WorkerPool:
     """Pool of async workers that pull tasks from a queue."""
 
-    def __init__(self, num_workers: int = 2):
+    def __init__(self, num_workers: Optional[int] = None):
+        if num_workers is None:
+            from domains.infrastructure.resource_manager import get_resource_manager
+            num_workers = get_resource_manager().task_queue_workers
         self.num_workers = num_workers
         self._queue: asyncio.Queue | None = None
         self._workers: list[asyncio.Task] = []
@@ -138,7 +141,7 @@ class WorkerPool:
 class TaskQueue:
     """Async task queue with priority scheduling, pause/resume, cancel, dependencies."""
 
-    def __init__(self, num_workers: int = 2):
+    def __init__(self, num_workers: Optional[int] = None):
         self._pool = WorkerPool(num_workers=num_workers)
         self._pool.set_handler(self._process_task)
         self._tasks: dict[str, Task] = {}
@@ -382,7 +385,7 @@ class TaskQueue:
 class InProcessTaskQueue(TaskQueue):
     """TaskQueue that runs handlers via registered callbacks (no subprocess)."""
 
-    def __init__(self, num_workers: int = 2):
+    def __init__(self, num_workers: Optional[int] = None):
         super().__init__(num_workers=num_workers)
         self._handlers: dict[str, Callable[[Task], Awaitable[Any]]] = {}
 
@@ -468,7 +471,9 @@ _default_queue: InProcessTaskQueue | None = None
 def get_task_queue() -> InProcessTaskQueue:
     global _default_queue
     if _default_queue is None:
-        _default_queue = InProcessTaskQueue(num_workers=4)
+        from domains.infrastructure.resource_manager import get_resource_manager
+        n = get_resource_manager().task_queue_workers
+        _default_queue = InProcessTaskQueue(num_workers=n)
     return _default_queue
 
 

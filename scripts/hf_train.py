@@ -14,9 +14,19 @@ Non-stream mode (default):
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
+
+
+def _default_dl_workers() -> int:
+    """Default DataLoader workers — prefer ResourceManager, fall back to cpu_count // 2."""
+    try:
+        from domains.infrastructure.resource_manager import get_resource_manager
+        return get_resource_manager().dataloader_workers
+    except Exception:
+        return max(0, (os.cpu_count() or 1) // 2)
 
 
 def _emit(obj, stream_mode):
@@ -40,6 +50,8 @@ def main():
     parser.add_argument("--lora-alpha", type=int, default=16)
     parser.add_argument("--stream", action="store_true", default=False,
                         help="Emit JSON progress lines per training step")
+    parser.add_argument("--dataloader-workers", type=int, default=None,
+                        help="DataLoader num_workers (default: os.cpu_count() // 2)")
     args = parser.parse_args()
 
     t0 = time.time()
@@ -179,7 +191,7 @@ def main():
         save_strategy="epoch",
         report_to="none",
         fp16=False,
-        dataloader_num_workers=0,
+        dataloader_num_workers=args.dataloader_workers if args.dataloader_workers is not None else max(0, _default_dl_workers()),
     )
 
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)

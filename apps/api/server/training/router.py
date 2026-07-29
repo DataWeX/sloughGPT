@@ -1982,29 +1982,6 @@ async def list_builds():
                     "dataset": d.name.split("_")[1] if "_" in d.name else "",
                 })
 
-    # 5. Visual (VLM) checkpoints
-    try:
-        from routers.visual import list_visual_checkpoints
-        vis_ckpts = await list_visual_checkpoints()
-        for ckpt in vis_ckpts:
-            if ckpt.get("name") in seen:
-                continue
-            seen.add(ckpt.get("name"))
-            builds.append({
-                "name": ckpt.get("name"),
-                "build_type": "vlm",
-                "model": ckpt.get("model", "vision"),
-                "dataset": ckpt.get("dataset", ""),
-                "loss": ckpt.get("loss"),
-                "epochs": ckpt.get("epochs"),
-                "model_path": ckpt.get("path", ""),
-                "size_mb": ckpt.get("size_mb"),
-                "created_at": ckpt.get("created_at", ""),
-                "finished_at": ckpt.get("finished_at", ""),
-            })
-    except Exception:
-        logger.debug("Visual checkpoints not available", exc_info=True, extra={"tag": "TRAIN"})
-
     return {"builds": builds}
 
 

@@ -5,6 +5,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
@@ -17,6 +21,7 @@ import { IconTrash, IconRefresh, IconDownload } from '@sloughgpt/strui'
 import { trainingJobsController, type TrainingJob } from '@/lib/training-controller'
 import { modelController } from '@/lib/model-controller'
 import { useToastStore } from '@/lib/toast-store'
+import { downloadBlob } from '@/lib/download-utils'
 
 function formatDuration(start: number | string, end?: number | string): string {
   const s = new Date(start).getTime()
@@ -45,6 +50,7 @@ export default function TrainingJobDetailPage() {
   const [loading, setLoading] = useState(true)
   const [summaryText, setSummaryText] = useState<string | null>(null)
   const [summaryLoading, setSummaryLoading] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
 
   const fetchJob = useCallback(async () => {
     if (!jobId) return
@@ -109,12 +115,12 @@ export default function TrainingJobDetailPage() {
 
   const handleDelete = async () => {
     if (!job) return
-    if (!confirm(`Delete job "${job.name || job.id}"?`)) return
     try {
       await trainingJobsController.delete(job.id)
       addToast('Job deleted', 'info')
       router.push('/training')
-    } catch {       addToast('Something went wrong deleting the job', 'error') }
+    } catch {       addToast('Something went wrong deleting the job', 'error')
+    } finally { setShowDelete(false) }
   }
 
   return (
@@ -133,7 +139,7 @@ export default function TrainingJobDetailPage() {
             <Button variant="ghost" size="sm" onClick={fetchJob} disabled={loading} aria-label="Refresh job status">
               <IconRefresh className={loading ? 'animate-spin h-3.5 w-3.5' : 'h-3.5 w-3.5'} />
             </Button>
-            <Button variant="ghost" size="sm" className="text-destructive" onClick={handleDelete} disabled={!job} aria-label="Delete job">
+            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setShowDelete(true)} disabled={!job} aria-label="Delete job">
               <IconTrash className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -201,10 +207,7 @@ export default function TrainingJobDetailPage() {
                         <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={async () => {
                           try {
                             const blob = await trainingJobsController.downloadTrainingJob(job.id)
-                            const url = URL.createObjectURL(blob)
-                            const a = document.createElement('a')
-                            a.href = url; a.download = `${job.id}.checkpoint`
-                            a.click(); URL.revokeObjectURL(url)
+                            downloadBlob(blob, `${job.id}.checkpoint`)
                             addToast('Checkpoint downloaded', 'success')
                           } catch { addToast('Download failed', 'error') }
                         }}>
@@ -310,6 +313,23 @@ export default function TrainingJobDetailPage() {
           </>
         )}
       </div>
+
+      <AlertDialog open={showDelete} onOpenChange={setShowDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete job</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &ldquo;{job?.name || job?.id}&rdquo;? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

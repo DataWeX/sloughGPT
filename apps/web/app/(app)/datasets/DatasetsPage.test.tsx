@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import React from 'react'
 
 const {
@@ -10,6 +10,33 @@ const {
   mockList: vi.fn(),
   mockDelete: vi.fn(),
 }))
+
+vi.mock('@sloughgpt/strui', () => {
+  const iconMock = (name: string) => { const C = () => <span data-testid={`icon-${name}`}>{name}</span>; C.displayName = `Icon${name}`; return C }
+  const passthrough = ({ children }: any) => <div>{children}</div>
+  return {
+    cn: vi.fn((...args: any[]) => args.join(' ')),
+    Card: ({ children, className, onClick }: any) => <div className={className} onClick={onClick}>{children}</div>, CardContent: ({ children, className }: any) => <div className={className}>{children}</div>,
+    CardHeader: passthrough, CardTitle: ({ children, className }: any) => <div className={className}>{children}</div>,
+    EmptyCard: ({ message, action }: any) => <div><span>{message}</span>{action}</div>,
+    Button: ({ children, onClick, variant, size, className, disabled, 'aria-label': ariaLabel }: any) => (
+      <button onClick={onClick} className={className} disabled={disabled} aria-label={ariaLabel} data-variant={variant}>{children}</button>
+    ),
+    Input: ({ value, onChange, className, placeholder }: any) => (
+      <input value={value} onChange={onChange} className={className} placeholder={placeholder} />
+    ),
+    Skeleton: ({ className }: any) => <div className={className} />,
+    IconRefresh: iconMock('refresh'), IconPlus: iconMock('plus'), IconTrash: iconMock('trash'),
+    AlertDialog: ({ open, onOpenChange, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
+    AlertDialogContent: ({ children }: any) => <div>{children}</div>,
+    AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
+    AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
+    AlertDialogDescription: ({ children }: any) => <div>{children}</div>,
+    AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
+    AlertDialogCancel: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    AlertDialogAction: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
+  }
+})
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
@@ -102,11 +129,14 @@ describe('DatasetsPage', () => {
   })
 
   it('calls delete and removes dataset from list', async () => {
-    window.confirm = vi.fn().mockReturnValue(true)
     render(<DatasetsPage />)
     await waitFor(() => expect(screen.getByText('Shakespeare')).toBeDefined())
     const deleteButtons = screen.getAllByLabelText(/Delete/)
-    fireEvent.click(deleteButtons[0])
+    await act(async () => { fireEvent.click(deleteButtons[0]) })
+    await waitFor(() => { expect(screen.getByTestId('alert-dialog')).toBeTruthy() })
+    const dialog = screen.getByTestId('alert-dialog')
+    const confirmBtn = dialog.querySelector('button:last-child') as HTMLElement
+    await act(async () => { confirmBtn.click() })
     await waitFor(() => {
       expect(mockDelete).toHaveBeenCalledWith('ds1')
       expect(mockAddToast).toHaveBeenCalledWith(expect.stringContaining('Shakespeare'), 'info')

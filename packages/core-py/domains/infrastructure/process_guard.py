@@ -55,7 +55,7 @@ class ProcessGuard:
         restart_delay: float = 1.0,
         health_check_interval: float = 1.0,
         extra_sys_paths: Optional[list] = None,
-        max_concurrent: int = 1,
+        max_concurrent: Optional[int] = None,
         memory_limit_mb: Optional[float] = 4096.0,
         # SloNet mode (preferred)
         slnc_path: Optional[str] = None,
@@ -95,6 +95,9 @@ class ProcessGuard:
         self._restart_callbacks: list[Callable[[str], None]] = []
         self._monitor_thread: Optional[threading.Thread] = None
         self._stop_monitor = threading.Event()
+        if max_concurrent is None:
+            from domains.infrastructure.resource_manager import get_resource_manager
+            max_concurrent = get_resource_manager().process_guard_concurrent
         self._semaphore = threading.Semaphore(max_concurrent)
 
     @property
@@ -164,9 +167,12 @@ class ProcessGuard:
             return None
         try:
             import psutil
+        except ImportError:
+            return None
+        try:
             proc = psutil.Process(self._worker._process.pid)
             return proc.memory_info().rss / (1024 * 1024)
-        except (ImportError, psutil.NoSuchProcess, psutil.AccessDenied):
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
             return None
 
     def health(self) -> dict:
@@ -264,7 +270,7 @@ def create_model_guard(
     restart_delay: float = 2.0,
     memory_limit_mb: Optional[float] = None,
     generate_timeout: float = 120.0,
-    max_concurrent: int = 1,
+    max_concurrent: Optional[int] = None,
 ) -> ProcessGuard:
     """Create a ProcessGuard for an HF model (legacy path).
 
@@ -306,7 +312,7 @@ def create_slo_guard(
     restart_delay: float = 2.0,
     memory_limit_mb: Optional[float] = None,
     generate_timeout: float = 120.0,
-    max_concurrent: int = 1,
+    max_concurrent: Optional[int] = None,
     quantize: bool = False,
     quant_bits: int = 8,
     quant_mode: str = "symmetric",

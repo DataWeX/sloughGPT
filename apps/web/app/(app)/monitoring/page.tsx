@@ -147,7 +147,7 @@ export default function SystemHealthPage() {
           </div>
         }
       />
-      <div className="space-y-3">
+      <div className="space-y-4">
         {!loaded && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Card className="p-3"><CardContent className="p-0"><KpiGrid columns={4}>

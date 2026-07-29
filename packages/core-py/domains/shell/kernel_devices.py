@@ -256,3 +256,16 @@ class DeviceManager:
 
     def stats(self) -> dict:
         return self.table.stats()
+
+
+class NullDevice(DeviceDriver):
+    """A null /dev/null device that discards writes and returns empty on read."""
+
+    def __init__(self):
+        super().__init__("null", DeviceType.CUSTOM)
+
+    def read(self, **kwargs) -> bytes:
+        return b""
+
+    def write(self, data: Any) -> bool:
+        return True

@@ -48,11 +48,13 @@ class InferencePool:
         if cls._instance is None:
             async with cls._lock:
                 if cls._instance is None:
+                    from domains.infrastructure.resource_manager import get_resource_manager
+                    rm = get_resource_manager()
                     import os
-                    import multiprocessing
-                    # Auto-size to CPU count, capped at 8 to avoid oversubscription
-                    default_workers = min(multiprocessing.cpu_count() // 2, 4)
-                    max_workers = int(os.environ.get("SLO_INFERENCE_POOL_SIZE", default_workers))
+                    max_workers = int(os.environ.get(
+                        "SLO_INFERENCE_POOL_SIZE",
+                        rm.inference_pool_size,
+                    ))
                     cls._instance = cls(max_workers=max_workers)
         return cls._instance
 

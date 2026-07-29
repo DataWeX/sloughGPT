@@ -21,6 +21,7 @@ Backends:
 """
 
 import asyncio
+import heapq
 import logging
 import time
 import gc
@@ -38,9 +39,242 @@ def _ensure_torch() -> bool:
         return False
 from typing import Any, Optional, Callable
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, IntEnum
 
-logger = logging.getLogger("slo.infrastructure.model_server")
+from domains.infrastructure.structured_log import StructuredLogger, LogContext
+
+logger = StructuredLogger("slo.infrastructure.model_server")
+
+
+# ---------------------------------------------------------------------------
+# Priority levels for request scheduling
+# ---------------------------------------------------------------------------
+
+class Priority(IntEnum):
+    """Request priority — lower number = higher priority (dequeued first)."""
+    HIGH = 0    # interactive chat
+    MEDIUM = 1  # generate / inference
+    LOW = 2     # batch / background
+
+
+@dataclass
+class QueueMetrics:
+    """Snapshot of priority queue state (thread-safe)."""
+    depth_high: int = 0
+    depth_medium: int = 0
+    depth_low: int = 0
+    total_depth: int = 0
+    served: int = 0
+    timed_out: int = 0
+    avg_wait_ms: float = 0.0
+    max_wait_ms: float = 0.0
+
+
+# ---------------------------------------------------------------------------
+# Priority request queue — async, priority-aware, with metrics
+# ---------------------------------------------------------------------------
+
+@dataclass(order=True)
+class _QueueItem:
+    """Item in the priority queue.  ``order=True`` makes ``heapq`` sort by
+    ``(priority, enqueue_order)`` — lower priority first, FIFO within same
+    priority."""
+    priority: int          # Priority value (0=HIGH, 1=MEDIUM, 2=LOW)
+    enqueue_order: int     # insertion order for FIFO within priority level
+    coro: Any = field(compare=False)                # awaitable to execute
+    future: asyncio.Future = field(compare=False)   # resolves when coro is done
+    enqueued_at: float = field(compare=False, default_factory=time.time)
+    request_id: str = field(compare=False, default="")
+
+
+class PriorityRequestQueue:
+    """Async request queue with 3 priority levels and bounded concurrency.
+
+    Workers pull the highest-priority item (FIFO within priority level)
+    and execute it, up to ``max_concurrent`` in-flight.
+    """
+
+    def __init__(self, max_concurrent: int = 2, max_queue: int = 128):
+        self._max_concurrent = max_concurrent
+        self._max_queue = max_queue
+        self._heap: list[_QueueItem] = []
+        self._order_counter = 0
+        self._in_flight = 0
+        self._lock = asyncio.Lock()
+        self._wake_event = asyncio.Event()
+
+        # Metrics
+        self._served = 0
+        self._total_wait = 0.0
+        self._max_wait_s = 0.0
+        self._metrics_lock = Lock()
+
+    # --- Public API ---
+
+    async def acquire(
+        self,
+        priority: Priority = Priority.MEDIUM,
+        request_id: str = "",
+    ) -> Callable[[], None]:
+        """Reserve a slot for long-lived work (e.g. streaming).
+
+        Returns a ``release()`` callable that the caller *must* invoke when
+        the work completes (or is aborted).  Until release, the slot counts
+        against ``max_concurrent``, blocking other submissions.
+
+        Unlike :meth:`submit`, ``acquire`` does **not** execute a coroutine
+        inside the queue worker — it only grants permission to proceed.
+        The caller runs their work externally and calls ``release()``.
+        """
+        loop = asyncio.get_running_loop()
+        grant: asyncio.Future = loop.create_future()
+
+        async with self._lock:
+            if len(self._heap) >= self._max_queue:
+                logger.warning("Queue full on acquire", max_queue=self._max_queue,
+                               request_id=request_id)
+                raise RuntimeError(f"Queue full ({self._max_queue} items)")
+            item = _QueueItem(
+                priority=priority.value,
+                enqueue_order=self._order_counter,
+                coro=None,  # marker — no coroutine to execute
+                future=grant,
+                request_id=request_id or f"acq-{self._order_counter}",
+            )
+            self._order_counter += 1
+            heapq.heappush(self._heap, item)
+
+        logger.debug("Acquire enqueued", request_id=item.request_id,
+                     priority=priority.name, queue_depth=len(self._heap))
+        self._wake_event.set()
+
+        released = False
+
+        def _release() -> None:
+            nonlocal released
+            if not released:
+                released = True
+                self._in_flight -= 1
+                self._wake_event.set()
+
+        try:
+            await grant  # blocks until worker pops this marker
+        except (asyncio.CancelledError, Exception, GeneratorExit):
+            if grant.done() and not grant.cancelled():
+                # Worker already popped it — release the slot
+                _release()
+            else:
+                # Marker still in heap — remove it
+                async with self._lock:
+                    self._heap = [x for x in self._heap if x.future is not grant]
+                    heapq.heapify(self._heap)
+            raise
+
+        return _release
+
+    async def submit(
+        self,
+        coro: Any,
+        priority: Priority = Priority.MEDIUM,
+        request_id: str = "",
+    ) -> Any:
+        """Submit an awaitable for execution, returning its result."""
+        async with self._lock:
+            if len(self._heap) >= self._max_queue:
+                logger.warning("Queue full", max_queue=self._max_queue, request_id=request_id)
+                raise RuntimeError(f"Queue full ({self._max_queue} items)")
+            future: asyncio.Future = asyncio.get_running_loop().create_future()
+            item = _QueueItem(
+                priority=priority.value,
+                enqueue_order=self._order_counter,
+                coro=coro,
+                future=future,
+                request_id=request_id or f"req-{self._order_counter}",
+            )
+            self._order_counter += 1
+            heapq.heappush(self._heap, item)
+
+        logger.debug("Enqueued", request_id=item.request_id, priority=priority.name,
+                      queue_depth=len(self._heap))
+        self._wake_event.set()
+        return await future
+
+    def _pop(self) -> Optional[_QueueItem]:
+        """Pop highest-priority item (caller must hold ``_lock``)."""
+        return heapq.heappop(self._heap) if self._heap else None
+
+    async def depth(self) -> list[int]:
+        async with self._lock:
+            d = [0, 0, 0]
+            for item in self._heap:
+                if item.priority < 3:
+                    d[item.priority] += 1
+            return d
+
+    @property
+    def in_flight(self) -> int:
+        return self._in_flight
+
+    def metrics_snapshot(self) -> QueueMetrics:
+        with self._metrics_lock:
+            depths = [0, 0, 0]
+            for item in self._heap:
+                if item.priority < 3:
+                    depths[item.priority] += 1
+            avg = (self._total_wait / max(self._served, 1)) * 1000
+            return QueueMetrics(
+                depth_high=depths[0], depth_medium=depths[1], depth_low=depths[2],
+                total_depth=sum(depths), served=self._served,
+                avg_wait_ms=avg, max_wait_ms=self._max_wait_s * 1000,
+            )
+
+    # --- Worker loop ---
+
+    async def worker(self) -> None:
+        """Pop and execute items (runs forever)."""
+        while True:
+            await self._wake_event.wait()
+
+            item: Optional[_QueueItem] = None
+            async with self._lock:
+                if self._in_flight < self._max_concurrent and self._heap:
+                    item = self._pop()
+
+            if item is None:
+                async with self._lock:
+                    if not self._heap:
+                        self._wake_event.clear()
+                await asyncio.sleep(0.01)
+                continue
+
+            wait_s = time.time() - item.enqueued_at
+            with self._metrics_lock:
+                self._served += 1
+                self._total_wait += wait_s
+                if wait_s > self._max_wait_s:
+                    self._max_wait_s = wait_s
+
+            logger.debug("Dequeued", request_id=item.request_id,
+                          wait_ms=round(wait_s * 1000, 1),
+                          priority=Priority(item.priority).name)
+
+            # Reservation marker — grant the slot, let caller manage in_flight
+            if item.coro is None:
+                self._in_flight += 1
+                item.future.set_result(None)
+                continue
+
+            # Normal work item
+            self._in_flight += 1
+            try:
+                result = await item.coro
+                item.future.set_result(result)
+            except Exception as e:
+                if not item.future.done():
+                    item.future.set_exception(e)
+            finally:
+                self._in_flight -= 1
+                self._wake_event.set()
 
 
 class SessionKVCache:
@@ -118,30 +352,15 @@ class SessionKVCache:
 
 
 def _optimize_cpu_threads() -> None:
-    """Set optimal CPU thread count for PyTorch inference on Intel Mac."""
-    import os
-    if not _ensure_torch():
-        return
-    import torch
-    # Detect physical cores — on this Intel Mac (i7-9750H) that's 6
-    try:
-        import multiprocessing
-        n_cores = multiprocessing.cpu_count()
-    except Exception:
-        n_cores = 4
-    # Reserve 1 thread for async overhead when >4 cores
-    intra_ops = max(1, n_cores - 1) if n_cores > 4 else n_cores
-    inter_ops = 2  # parallel graph partitions
-    torch.set_num_threads(intra_ops)
-    if hasattr(torch, "set_num_interop_threads"):
-        try:
-            torch.set_num_interop_threads(min(inter_ops, intra_ops))
-        except RuntimeError:
-            pass  # already set — ignore
-    os.environ.setdefault("OMP_NUM_THREADS", str(intra_ops))
-    os.environ.setdefault("MKL_NUM_THREADS", str(intra_ops))
-    os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
-    logger.debug("CPU threads: intra=%d inter=%d cores=%d", intra_ops, inter_ops, n_cores)
+    """Set optimal compute / BLAS thread counts from ResourceManager."""
+    from domains.infrastructure.resource_manager import get_resource_manager
+    rm = get_resource_manager()
+    rm.apply_blas_env()
+    rm.apply_compute_limits()
+    logger.debug(
+        "Compute threads: %d  I/O threads: %d  (topology: %s)",
+        rm.compute_threads, rm.io_threads, rm.topology.summary(),
+    )
 
 
 def _torch_compile_model(model, model_id: str) -> Any:
@@ -438,166 +657,6 @@ class GuardBackend(GenerateBackend):
         return gen
 
 
-class NumpyBackend(GenerateBackend):
-    """Pure-NumPy backend — no PyTorch, no tokenizer, no MPS.
-
-    Wraps a NumpyEngine instance for direct safetensors→numpy inference.
-    Used when NumpyEngine is loaded as the primary model (zero PyTorch dep).
-
-    Features:
-      - Compression: weights compressed via VQ (4x memory savings)
-      - KV cache: incremental decoding (faster generation)
-      - Streaming: token-by-token async output
-    """
-
-    def __init__(self, engine: Any):
-        self._engine = engine
-
-    @property
-    def alive(self) -> bool:
-        return self._engine is not None
-
-    def generate(
-        self,
-        prompt: str,
-        max_new_tokens: int,
-        temperature: float,
-        top_p: float,
-        top_k: int,
-        repetition_penalty: float,
-        **kwargs: Any,
-    ) -> dict:
-        """Generate text using NumpyEngine with KV cache."""
-        text = self._engine.generate(
-            prompt,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            top_k=top_k,
-            use_kv_cache=True,
-        )
-        input_len = len(self._engine.tokenizer.encode(prompt))
-        output_len = len(self._engine.tokenizer.encode(text))
-        tokens_generated = max(0, output_len - input_len)
-        return {"text": text, "tokens_generated": tokens_generated}
-
-    def generate_stream(
-        self,
-        prompt: str,
-        max_new_tokens: int,
-        temperature: float,
-        top_p: float,
-        top_k: int,
-        repetition_penalty: float,
-        cancel_event=None,
-        **kwargs: Any,
-    ) -> GeneratorType[str, None, dict]:
-        """Stream tokens from NumpyEngine — yields one token at a time.
-
-        Uses the engine's generate_stream() async generator for true
-        token-by-token streaming with KV cache support.
-        """
-        if cancel_event is not None and cancel_event.is_set():
-            return {"text": "", "tokens_generated": 0}
-
-        import asyncio
-
-        # Collect tokens from async generator via a coroutine
-        collected_tokens = []
-
-        async def _collect():
-            async for token in self._engine.generate_stream(
-                prompt,
-                max_new_tokens=max_new_tokens,
-                temperature=temperature,
-                top_k=top_k,
-            ):
-                if cancel_event is not None and cancel_event.is_set():
-                    break
-                collected_tokens.append(token)
-
-        loop = asyncio.new_event_loop()
-        try:
-            loop.run_until_complete(_collect())
-        finally:
-            loop.close()
-
-        # Yield collected tokens synchronously
-        token_count = 0
-        for token in collected_tokens:
-            token_count += 1
-            yield token
-
-        return {"text": "", "tokens_generated": token_count}
-
-class ONNXBackend(GenerateBackend):
-    """Wraps ONNXInferenceEngine for fast CPU/MPS inference.
-
-    Provides 5-10x speedup over PyTorch on CPU by using ONNX Runtime's
-    optimized execution providers (CoreML, XNNPACK, etc.).
-    """
-
-    def __init__(self, engine: Any, tokenizer: Any):
-        self._engine = engine
-        self._tokenizer = tokenizer
-
-    @property
-    def alive(self) -> bool:
-        try:
-            return self._engine is not None and self._engine.session is not None
-        except Exception:
-            return False
-
-    def generate(
-        self,
-        prompt: str,
-        max_new_tokens: int,
-        temperature: float,
-        top_p: float,
-        top_k: int,
-        repetition_penalty: float,
-        **kwargs: Any,
-    ) -> dict:
-        """Generate text using ONNX Runtime."""
-        do_sample = temperature > 0 and top_k > 0
-        text = self._engine.generate(
-            prompt,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            top_k=top_k,
-            top_p=top_p,
-            do_sample=do_sample,
-        )
-        input_len = len(self._tokenizer.encode(prompt).ids if hasattr(self._tokenizer, 'encode') and hasattr(self._tokenizer.encode(prompt), 'ids') else self._tokenizer.encode(prompt))
-        output_ids = self._tokenizer.encode(text).ids if hasattr(self._tokenizer.encode(text), 'ids') else self._tokenizer.encode(text)
-        output_len = len(output_ids)
-        tokens_generated = max(0, output_len - input_len)
-        return {"text": text, "tokens_generated": tokens_generated}
-
-    def generate_stream(
-        self,
-        prompt: str,
-        max_new_tokens: int,
-        temperature: float,
-        top_p: float,
-        top_k: int,
-        repetition_penalty: float,
-        cancel_event=None,
-        **kwargs: Any,
-    ) -> GeneratorType[str, None, dict]:
-        """Stream tokens from ONNX Runtime — yields one token at a time."""
-        if cancel_event is not None and cancel_event.is_set():
-            return {"text": "", "tokens_generated": 0}
-
-        token_count = 0
-        for token_text in self._engine.generate_stream(prompt, max_new_tokens=max_new_tokens):
-            if cancel_event is not None and cancel_event.is_set():
-                break
-            yield token_text
-            token_count += 1
-
-        return {"text": "", "tokens_generated": token_count}
-
-
 class LocalBackend(GenerateBackend):
     """Direct in-process model.generate()."""
 
@@ -606,12 +665,14 @@ class LocalBackend(GenerateBackend):
         model: Any,
         tokenizer: Any,
         lock: Lock,
+        gen_lock: Lock,
         device: str,
         tokenize_cache: dict,
     ):
         self._model_ref = model
         self._tokenizer = tokenizer
         self._lock = lock
+        self._gen_lock = gen_lock
         self._device = device
         self._tokenize_cache = tokenize_cache
 
@@ -683,7 +744,8 @@ class LocalBackend(GenerateBackend):
             except Exception as e:
                 logger.debug("OOM-to-CPU fallback failed: %s", e)
 
-        output = _inference_mode_generate(self._model_ref, gen_kwargs)
+        with self._gen_lock:
+            output = _inference_mode_generate(self._model_ref, gen_kwargs)
 
         if _cpu_fallback:
             try:
@@ -785,7 +847,8 @@ class LocalBackend(GenerateBackend):
 
         def _generate_inner():
             try:
-                _inference_mode_generate(self._model_ref, gen_kwargs)
+                with self._gen_lock:
+                    _inference_mode_generate(self._model_ref, gen_kwargs)
             except Exception as e:
                 _error.append(e)
 
@@ -878,7 +941,7 @@ class ModelServer:
         model: Any = None,
         tokenizer: Any = None,
         model_id: str = "unknown",
-        max_concurrent: int = 1,
+        max_concurrent: Optional[int] = None,
         generate_timeout: float = 120.0,
         enable_circuit_breaker: bool = True,
         failure_threshold: int = 3,
@@ -886,32 +949,26 @@ class ModelServer:
         process_guard: Optional[Any] = None,
         enable_warmup: bool = True,
         warmup_prompt: str = "Hello",
-        numpy_engine: Optional[Any] = None,
-        onnx_engine: Optional[Any] = None,
     ):
-        # CPU threading optimization (torch.set_num_threads etc.)
+        # CPU threading optimization — uses ResourceManager for topology-aware tuning
         _optimize_cpu_threads()
 
         self.model_id = model_id
         self._tokenizer = tokenizer
         self._model_ref = model
         self._lock = Lock()  # protects model reference swap
+        self._gen_lock = Lock()  # serializes model.generate() calls (HF not thread-safe)
         self._process_guard = process_guard  # optional ProcessGuard for bulk gen
 
         # Generate backends — strategy pattern
         self._guard_backend: Optional[GuardBackend] = (
             GuardBackend(process_guard) if process_guard is not None else None
         )
-        self._numpy_backend: Optional[NumpyBackend] = (
-            NumpyBackend(numpy_engine) if numpy_engine is not None else None
-        )
-        self._onnx_backend: Optional[ONNXBackend] = (
-            ONNXBackend(onnx_engine, tokenizer) if onnx_engine is not None else None
-        )
         self._local_backend = LocalBackend(
             model=model,
             tokenizer=tokenizer,
             lock=self._lock,
+            gen_lock=self._gen_lock,
             device="cpu",  # updated by _check_device below
             tokenize_cache={},  # shared with ModelServer
         ) if model is not None else None
@@ -926,9 +983,13 @@ class ModelServer:
         self._warmup_error: Optional[str] = None
         self._warmup_lock = Lock()
 
-        # Concurrency control (per-event-loop semaphore — handles warmup/test loops)
+        # Priority request queue (replaces per-loop semaphore)
+        if max_concurrent is None:
+            from domains.infrastructure.resource_manager import get_resource_manager
+            max_concurrent = get_resource_manager().concurrent_writes
         self._max_concurrent = max_concurrent
-        self._semaphores: dict[int, asyncio.Semaphore] = {}
+        self._request_queue: Optional[PriorityRequestQueue] = None
+        self._queue_task: Optional[asyncio.Task] = None
 
         # Read/write separation — readers (tokenize, health) can run concurrently;
         # writers (generate) get exclusive access.
@@ -981,6 +1042,9 @@ class ModelServer:
         # Background warmup
         if self._enable_warmup:
             Thread(target=self._run_warmup, daemon=True).start()
+
+        # Queue workers are lazily started on first generate() call
+        # (avoids asyncio loop issues with warmup threads)
 
     @property
     def _resolved_device(self) -> str:
@@ -1051,14 +1115,10 @@ class ModelServer:
     def _select_backend(self) -> GenerateBackend:
         """Pick the best available backend for the current request.
 
-        Priority: GuardBackend (crash-isolated) > NumpyBackend (no torch) > ONNXBackend (fast CPU) > LocalBackend.
+        Priority: GuardBackend (crash-isolated) > LocalBackend.
         """
         if self._guard_backend is not None and self._guard_backend.alive:
             return self._guard_backend
-        if self._numpy_backend is not None and self._numpy_backend.alive:
-            return self._numpy_backend
-        if self._onnx_backend is not None and self._onnx_backend.alive:
-            return self._onnx_backend
         return self._local_backend
 
     def drop_model_ref(self) -> None:
@@ -1111,22 +1171,31 @@ class ModelServer:
 
     # --- Status ---
 
-    async def _get_semaphore(self) -> Optional[asyncio.Semaphore]:
-        """Get an asyncio semaphore for the current event loop.
+    async def _ensure_queue(self) -> PriorityRequestQueue:
+        """Lazily create the priority queue and worker tasks on first call.
 
-        Each event loop gets its own semaphore so warmup (daemon thread with
-        its own loop) and main-request ``asyncio.run()`` loops don't collide.
+        Workers run as asyncio tasks on the current event loop.
         """
-        if self._max_concurrent is None:
-            return None
+        if self._request_queue is not None:
+            return self._request_queue
+        q = PriorityRequestQueue(
+            max_concurrent=self._max_concurrent or 2,
+            max_queue=256,
+        )
+        self._request_queue = q
+        # Start workers (one per slot)
+        loop = asyncio.get_running_loop()
+        self._queue_task = loop.create_task(self._run_queue_workers(q))
+        return q
+
+    async def _run_queue_workers(self, q: PriorityRequestQueue) -> None:
+        """Launch and manage queue worker tasks."""
+        n_workers = min(self._max_concurrent or 2, 8)
+        workers = [asyncio.create_task(q.worker()) for _ in range(n_workers)]
         try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            return None
-        loop_id = id(loop)
-        if loop_id not in self._semaphores:
-            self._semaphores[loop_id] = asyncio.Semaphore(self._max_concurrent)
-        return self._semaphores[loop_id]
+            await asyncio.gather(*workers)
+        except Exception:
+            pass  # workers run forever
 
     async def _get_read_semaphore(self) -> Optional[asyncio.Semaphore]:
         """Get a read semaphore for the current event loop.
@@ -1199,11 +1268,18 @@ class ModelServer:
         base["status"] = self.status.value
         base["device"] = self._device or "unknown"
         base["circuit_breaker"] = self._circuit_breaker.state.value if self._circuit_breaker else "disabled"
-        base["semaphore_locked"] = any(
-            s.locked() for s in self._semaphores.values()
-        ) if self._semaphores else False
         base["warmup_completed"] = warmup_ok
         base["warmup_error"] = warmup_err
+        # Priority queue metrics
+        if self._request_queue is not None:
+            qm = self._request_queue.metrics_snapshot()
+            base["queue_depth_total"] = qm.total_depth
+            base["queue_depth_high"] = qm.depth_high
+            base["queue_depth_medium"] = qm.depth_medium
+            base["queue_depth_low"] = qm.depth_low
+            base["queue_served"] = qm.served
+            base["queue_avg_wait_ms"] = round(qm.avg_wait_ms, 1)
+            base["queue_max_wait_ms"] = round(qm.max_wait_ms, 1)
         return base
 
     # --- Core generation (async) ---
@@ -1217,9 +1293,10 @@ class ModelServer:
         top_k: int = 50,
         repetition_penalty: float = 1.0,
         session_id: Optional[str] = None,
+        priority: Priority = Priority.MEDIUM,
         **kwargs: Any,
     ) -> dict:
-        """Generate text with full lifecycle management.
+        """Generate text with priority-aware request scheduling.
 
         If ``session_id`` is provided, the KV cache from previous
         generations is reused via :class:`SessionKVCache`, avoiding
@@ -1248,81 +1325,59 @@ class ModelServer:
             except Exception as e:
                 logger.warning("Pre-gen hook failed: %s", e, extra={"tag": "MODEL"})
 
-        # Acquire semaphore (serialize concurrent access)
-        acquired = False
-        semaphore = await self._get_semaphore()
-        if semaphore is not None:
+        # Submit to priority queue
+        async def _run() -> dict:
+            start = time.time()
             try:
-                await asyncio.wait_for(
-                    semaphore.acquire(),
-                    timeout=min(self._generate_timeout, 30.0),
+                result = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self._generate_sync,
+                        prompt, max_new_tokens, temperature,
+                        top_p, top_k, repetition_penalty,
+                        session_id=session_id,
+                        **kwargs,
+                    ),
+                    timeout=self._generate_timeout,
                 )
-                acquired = True
+                elapsed_ms = (time.time() - start) * 1000
+                tokens = result.get("tokens_generated", 0)
+                with self._metrics_lock:
+                    self.metrics.record_success(elapsed_ms, tokens)
+                if self._circuit_breaker:
+                    self._circuit_breaker.record_success()
+                logger.info("Generated", model_id=self.model_id, tokens=tokens,
+                            elapsed_ms=round(elapsed_ms, 1), session_id=session_id)
+                return result
             except asyncio.TimeoutError:
                 with self._metrics_lock:
                     self.metrics.record_timeout()
+                self._on_generation_error(RuntimeError("Generation timed out"))
+                logger.warning("Generation timed out", model_id=self.model_id,
+                               timeout=self._generate_timeout)
                 raise TimeoutError(
-                    f"Request queued too long for {self.model_id} "
-                    f"(semaphore timeout)"
+                    f"Generation timed out after {self._generate_timeout}s "
+                    f"for {self.model_id}"
                 )
-        else:
-            acquired = True  # no semaphore — proceed
+            except Exception as e:
+                error_msg = f"{type(e).__name__}: {e}"
+                with self._metrics_lock:
+                    self.metrics.record_failure(error_msg)
+                if self._circuit_breaker:
+                    self._circuit_breaker.record_failure()
+                self._on_generation_error(e)
+                _mps_oom_recovery()
+                raise
 
+        queue = await self._ensure_queue()
         try:
-            # Run generation in thread pool
-            start = time.time()
-            result = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self._generate_sync,
-                    prompt,
-                    max_new_tokens,
-                    temperature,
-                    top_p,
-                    top_k,
-                    repetition_penalty,
-                    session_id=session_id,
-                    **kwargs,
-                ),
-                timeout=self._generate_timeout,
-            )
-            elapsed_ms = (time.time() - start) * 1000
-            tokens = result.get("tokens_generated", 0)
-
-            with self._metrics_lock:
-                self.metrics.record_success(elapsed_ms, tokens)
-
-            # Circuit breaker: record success
-            if self._circuit_breaker:
-                self._circuit_breaker.record_success()
-
-            return result
-
-        except asyncio.TimeoutError:
-            with self._metrics_lock:
-                self.metrics.record_timeout()
-            self._on_generation_error(RuntimeError("Generation timed out"))
-            raise TimeoutError(
-                f"Generation timed out after {self._generate_timeout}s "
-                f"for {self.model_id}"
-            )
-        except Exception as e:
+            return await queue.submit(_run(), priority=priority, request_id=f"gen-{id(prompt[:32])}")
+        except RuntimeError as e:
             error_msg = f"{type(e).__name__}: {e}"
             with self._metrics_lock:
                 self.metrics.record_failure(error_msg)
             if self._circuit_breaker:
                 self._circuit_breaker.record_failure()
-            self._on_generation_error(e)
-            _mps_oom_recovery()
             raise
-        finally:
-            if acquired and semaphore is not None:
-                semaphore.release()
-            # Post-generation hooks (KV cache reset, memory cleanup)
-            for hook in self._post_generate_hooks:
-                try:
-                    hook()
-                except Exception as e:
-                    logger.warning("Post-gen hook failed: %s", e, extra={"tag": "MODEL"})
 
     def _generate_sync(
         self,
@@ -1390,6 +1445,7 @@ class ModelServer:
         repetition_penalty: float = 1.0,
         cancel_event=None,
         session_id: Optional[str] = None,
+        priority: Priority = Priority.MEDIUM,
         **kwargs: Any,
     ) -> Any:
         """Async streaming generation with full lifecycle management.
@@ -1427,30 +1483,25 @@ class ModelServer:
             except Exception as e:
                 logger.warning("Pre-gen hook failed: %s", e, extra={"tag": "MODEL"})
 
+        # Acquire slot in the priority queue for admission control
+        queue = await self._ensure_queue()
+        try:
+            _release = await queue.acquire(
+                priority=priority,
+                request_id=f"stream-{id(prompt[:32])}",
+            )
+        except RuntimeError as e:
+            error_msg = f"{type(e).__name__}: {e}"
+            with self._metrics_lock:
+                self.metrics.record_failure(error_msg)
+            if self._circuit_breaker:
+                self._circuit_breaker.record_failure()
+            raise
+
         # Select backend (guard if alive, else local)
         backend = self._select_backend()
         logger.debug("generate_stream[%s]: backend=%s session_id=%s",
                      self.model_id, type(backend).__name__, session_id)
-
-        # Acquire semaphore (serialize concurrent access, per-event-loop)
-        acquired = False
-        semaphore = await self._get_semaphore()
-        if semaphore is not None:
-            try:
-                await asyncio.wait_for(
-                    semaphore.acquire(),
-                    timeout=min(self._generate_timeout, 30.0),
-                )
-                acquired = True
-            except asyncio.TimeoutError:
-                with self._metrics_lock:
-                    self.metrics.record_timeout()
-                raise TimeoutError(
-                    f"Request queued too long for {self.model_id} "
-                    f"(semaphore timeout)"
-                )
-        else:
-            acquired = True
 
         start = time.time()
         token_count = 0
@@ -1520,6 +1571,8 @@ class ModelServer:
                 self.metrics.record_success(elapsed_ms, token_count)
             if self._circuit_breaker:
                 self._circuit_breaker.record_success()
+            logger.info("Streamed", model_id=self.model_id, tokens=token_count,
+                        elapsed_ms=round(elapsed_ms, 1), session_id=session_id)
 
         except GeneratorExit:
             aborted = True
@@ -1547,14 +1600,14 @@ class ModelServer:
             _mps_oom_recovery()
             raise
         finally:
-            if acquired and semaphore is not None:
-                semaphore.release()
             # Post-generation hooks (KV cache reset, memory cleanup)
             for hook in self._post_generate_hooks:
                 try:
                     hook()
                 except Exception as e:
                     logger.warning("Post-gen hook failed: %s", e, extra={"tag": "MODEL"})
+            # Release priority-queue slot
+            _release()
             if aborted:
                 logger.info("generate_stream[%s]: cleaned up after abort", self.model_id, extra={"tag": "MODEL"})
 

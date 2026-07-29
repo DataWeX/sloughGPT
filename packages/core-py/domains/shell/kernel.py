@@ -18,34 +18,16 @@ from __future__ import annotations
 import time
 import logging
 import threading
-from typing import Any
+from typing import Any, Callable
 
-import numpy as np
-
-from .kernel_process import Process, ProcessState, Priority, TensorRef
-from .kernel_memory import TensorMemory, MemoryBlock
+from .kernel_process import Process, ProcessState, Priority
+from .kernel_memory import TensorMemory
 from .kernel_scheduler import Scheduler
 from .kernel_syscall import SyscallTable, SyscallResult, SyscallNumber, build_default_syscall_table
-from .kernel_devices import DeviceManager, DeviceDriver, DeviceType, DeviceState, DeviceHandle
+from .kernel_devices import DeviceManager, DeviceDriver, DeviceHandle, NullDevice
 from .kernel_interrupts import InterruptManager, InterruptType, Interrupt
 
 logger = logging.getLogger("slo.kernel")
-
-
-# ---------------------------------------------------------------------------
-# Null Device
-# ---------------------------------------------------------------------------
-
-class NullDevice(DeviceDriver):
-    """A null /dev/null device that discards writes and returns empty on read."""
-    def __init__(self):
-        super().__init__("null", DeviceType.CUSTOM)
-
-    def read(self, **kwargs) -> bytes:
-        return b""
-
-    def write(self, data: Any) -> bool:
-        return True
 
 
 # ---------------------------------------------------------------------------
@@ -87,13 +69,6 @@ class Kernel:
         # Addon registry
         self._addons: dict[str, Any] = {}
 
-        # Auto-install neural addon if available
-        try:
-            from .addons import neural
-            self.install_addon(neural)
-        except Exception:
-            pass
-
         # Wire up default interrupt handlers
         self._interrupts.vector.register(
             InterruptType.PROCESS_DONE, self._handle_process_done
@@ -108,9 +83,15 @@ class Kernel:
     # --- Addon API ---
 
     def install_addon(self, addon: Any) -> None:
-        """Install an addon module. Calls addon.setup(self)."""
-        name = getattr(addon, "__name__", None) or addon.__spec__.name.rsplit(".", 1)[-1]
-        short = name.rsplit(".", 1)[-1]
+        """Install an addon module. Calls addon.setup(self).
+
+        Idempotent — second call for the same addon is a no-op.
+        """
+        name = getattr(addon, "__name__", None)
+        if name is None:
+            spec = getattr(addon, "__spec__", None)
+            name = getattr(spec, "name", None) if spec else None
+        short = name.rsplit(".", 1)[-1] if name else str(addon)
         if short in self._addons:
             return
         addon.setup(self)
@@ -125,10 +106,31 @@ class Kernel:
     # --- Lifecycle ---
 
     def boot(self) -> str:
+        """Boot the kernel: install addons, register devices, start init process.
+
+        Returns:
+            Boot message with pid and memory info.
+        """
         if self._running:
             return "Already booted"
         self._boot_time = time.time()
         self._running = True
+
+        # Auto-install neural addon if not yet installed
+        if "neural" not in self._addons:
+            try:
+                from .addons import neural
+                self.install_addon(neural)
+            except Exception:
+                pass
+
+        # Auto-install shell_ui addon if not yet installed
+        if "shell_ui" not in self._addons:
+            try:
+                from .addons import shell_ui
+                self.install_addon(shell_ui)
+            except Exception:
+                pass
 
         # Register built-in devices
         self._devices.register(NullDevice())
@@ -144,216 +146,12 @@ class Kernel:
         logger.info(msg)
         return msg
 
-    def spawn_shell(self, shell_class: Any = None, **kwargs: Any) -> Process:
-        """Spawn the interactive shell as a kernel process.
-
-        If shell_class is None, lazily imports ShellREPL. The shell runs
-        as a NORMAL priority process — it gets scheduled by the kernel's
-        tick loop.
-        """
-        if shell_class is None:
-            from .repl import ShellREPL
-            shell_class = ShellREPL
-
-        def _shell_entry():
-            shell = shell_class(**kwargs)
-            shell.run()
-
-        proc = self.spawn_process(
-            "shell",
-            priority=Priority.NORMAL,
-            entry=_shell_entry,
-        )
-        return proc
-
-    def spawn_kernel_shell(self, stdin_fn=None, stdout_fn=None) -> Process:
-        """Spawn a simple kernel shell process.
-
-        A minimal command loop that processes commands via the kernel's
-        built-in dispatch. Commands: help, meminfo, procs, halt.
-        """
-        kernel = self
-
-        def _kernel_shell_entry():
-            prompt = "ai-compteur> "
-            if stdout_fn:
-                stdout_fn(prompt)
-
-            while True:
-                if stdin_fn:
-                    line = stdin_fn()
-                else:
-                    break
-
-                line = line.strip()
-                if not line:
-                    if stdout_fn:
-                        stdout_fn(prompt)
-                    continue
-
-                parts = line.split()
-                cmd = parts[0].lower()
-                args = parts[1:]
-
-                if cmd == "help":
-                    cmds = "help, meminfo, procs, run, ls, cat, write, halt"
-                    if stdout_fn:
-                        stdout_fn(f"commands: {cmds}\n")
-                elif cmd == "meminfo":
-                    info = kernel._memory.stats()
-                    if stdout_fn:
-                        stdout_fn(f"blocks: {info.get('block_count', 0)}\n")
-                elif cmd == "procs":
-                    for p in kernel.list_processes():
-                        if stdout_fn:
-                            stdout_fn(f"  pid={p.pid} {p.name} {p.state.name}\n")
-                elif cmd == "run":
-                    if not args:
-                        if stdout_fn:
-                            stdout_fn("usage: run <program.asm>\n")
-                    else:
-                        prog_name = args[0]
-                        if stdout_fn:
-                            stdout_fn(f"loading {prog_name}...\n")
-                        try:
-                            from .vm import DiskProgramLoader, FlatFS, BlockDevice
-                            if not hasattr(kernel, '_block_device'):
-                                kernel._block_device = BlockDevice()
-                                kernel._fs = FlatFS(kernel._block_device)
-                            loader = DiskProgramLoader(kernel._fs)
-                            result = loader.run(prog_name, stdout_fn=stdout_fn)
-                            if stdout_fn:
-                                stdout_fn(f"done ({result['steps']} steps)\n")
-                        except Exception as e:
-                            if stdout_fn:
-                                stdout_fn(f"error: {e}\n")
-                elif cmd == "ls":
-                    if not hasattr(kernel, '_fs'):
-                        if stdout_fn:
-                            stdout_fn("no filesystem mounted\n")
-                    else:
-                        files = kernel._fs.list_files()
-                        if not files:
-                            if stdout_fn:
-                                stdout_fn("(empty)\n")
-                        else:
-                            for f in files:
-                                if stdout_fn:
-                                    stdout_fn(f"  {f}\n")
-                elif cmd == "cat":
-                    if not args:
-                        if stdout_fn:
-                            stdout_fn("usage: cat <file>\n")
-                    elif not hasattr(kernel, '_fs'):
-                        if stdout_fn:
-                            stdout_fn("no filesystem mounted\n")
-                    else:
-                        try:
-                            data = kernel._fs.read(args[0])
-                            if stdout_fn:
-                                stdout_fn(data.decode('utf-8', errors='replace').rstrip('\x00') + "\n")
-                        except Exception as e:
-                            if stdout_fn:
-                                stdout_fn(f"error: {e}\n")
-                elif cmd == "write":
-                    if len(args) < 2:
-                        if stdout_fn:
-                            stdout_fn("usage: write <file> <content>\n")
-                    elif not hasattr(kernel, '_fs'):
-                        if stdout_fn:
-                            stdout_fn("no filesystem mounted\n")
-                    else:
-                        fname = args[0]
-                        content = " ".join(args[1:])
-                        try:
-                            kernel._fs.write(fname, content.encode('utf-8'))
-                            if stdout_fn:
-                                stdout_fn(f"wrote {len(content)} bytes to {fname}\n")
-                        except Exception as e:
-                            if stdout_fn:
-                                stdout_fn(f"error: {e}\n")
-                elif cmd in ("halt", "exit", "quit"):
-                    if stdout_fn:
-                        stdout_fn("shutting down...\n")
-                    break
-                else:
-                    if stdout_fn:
-                        stdout_fn(f"unknown: {cmd}\n")
-
-                if stdout_fn:
-                    stdout_fn(prompt)
-
-        proc = self.spawn_process(
-            "kernel-shell",
-            priority=Priority.NORMAL,
-            entry=_kernel_shell_entry,
-        )
-        return proc
-
-    def spawn_vm_process(self, name: str, source: str,
-                         stdin_fn=None, stdout_fn=None,
-                         priority: Priority = Priority.NORMAL,
-                         use_syscalls: bool = False) -> Process:
-        """Spawn a process that runs VM assembly code.
-
-        Creates a VirtualSystem, loads the assembled program, and executes
-        it in a background thread. I/O goes through the console device.
-        If use_syscalls=True, wires SYSCALL instruction to kernel's syscall table.
-        """
-        from .vm import VirtualSystem, set_syscall_handler
-
-        output_log: list[str] = []
-        kernel = self
-
-        def _handle_syscall(num, args):
-            from .kernel_syscall import SyscallNumber
-            if num == SyscallNumber.CONSOLE_WRITE:
-                val = args[0]
-                if stdout_fn:
-                    stdout_fn(str(val) + "\n")
-                else:
-                    output_log.append(str(val))
-                return 0
-            elif num == SyscallNumber.CONSOLE_READ:
-                if stdin_fn:
-                    return stdin_fn()
-                return ""
-            elif num == SyscallNumber.EXIT:
-                return -1
-            elif num == SyscallNumber.MALLOC:
-                block = kernel._memory.allocate(
-                    shape=(args[0],) if args[0] else (1,),
-                    dtype="float32",
-                )
-                return block.block_id
-            elif num == SyscallNumber.FREE:
-                kernel._memory.free_block(args[0])
-                return 0
-            elif num == SyscallNumber.UPTIME:
-                return int(kernel.uptime * 1000)
-            elif num == SyscallNumber.STATS:
-                return kernel.info()
-            return 0
-
-        def _vm_entry():
-            handler = _handle_syscall if use_syscalls else None
-            vs = VirtualSystem(
-                stdin_fn=stdin_fn,
-                stdout_fn=stdout_fn or (lambda v: output_log.append(str(v))),
-                syscall_handler=handler,
-            )
-            vs.load_program(source)
-            vs.run()
-
-        proc = self.spawn_process(
-            name,
-            priority=priority,
-            entry=_vm_entry,
-            metadata={"source": source, "output_log": output_log},
-        )
-        return proc
-
     def shutdown(self) -> str:
+        """Shut down the kernel: stop processes, free memory.
+
+        Returns:
+            Shutdown message with uptime and tick count.
+        """
         if not self._running:
             return "Already shut down"
         self._running = False
@@ -390,6 +188,19 @@ class Kernel:
     def spawn_process(self, name: str, priority: Priority = Priority.NORMAL,
                       entry: Any = None, args: tuple = (), metadata: dict | None = None,
                       depends_on: list[int] | None = None) -> Process:
+        """Create and register a new process.
+
+        Args:
+            name: Human-readable process name.
+            priority: Scheduling priority (CRITICAL, HIGH, NORMAL, LOW, IDLE).
+            entry: Callable to execute when process runs.
+            args: Positional arguments for entry.
+            metadata: Arbitrary metadata dict.
+            depends_on: List of pids this process depends on.
+
+        Returns:
+            The created Process object.
+        """
         with self._lock:
             pid = self._next_pid
             self._next_pid += 1
@@ -557,7 +368,7 @@ class Kernel:
                         try:
                             cb(p)
                         except Exception:
-                            pass
+                            logger.debug("on_process_done callback failed", exc_info=True)
 
             t = threading.Thread(target=_run_proc, args=(proc,), daemon=True, name=f"proc-{proc.pid}")
             proc._thread = t
@@ -572,6 +383,13 @@ class Kernel:
         # Process pending interrupts
         self._interrupts.vector.process_pending()
 
+        # Fire tick callbacks
+        for cb in self._on_tick:
+            try:
+                cb(self._tick_count)
+            except Exception:
+                logger.debug("on_tick callback failed", exc_info=True)
+
         return {
             "current_pid": proc.pid if proc else None,
             "tick_count": self._tick_count,
@@ -579,10 +397,20 @@ class Kernel:
 
     # --- Hooks ---
 
-    def on_tick(self, callback) -> None:
+    def on_tick(self, callback: Callable[[int], None]) -> None:
+        """Register a callback to fire on each scheduler tick.
+
+        Args:
+            callback: Function called with tick_count on each tick.
+        """
         self._on_tick.append(callback)
 
-    def on_process_done(self, callback) -> None:
+    def on_process_done(self, callback: Callable[[Process], None]) -> None:
+        """Register a callback to fire when a process completes.
+
+        Args:
+            callback: Function called with the completed Process.
+        """
         self._on_process_done.append(callback)
 
     # --- Interrupt handlers ---
@@ -619,50 +447,13 @@ class Kernel:
                 break
         return results
 
-    def run_program(self, source: str, trace: bool = False) -> dict:
-        """Run a VM assembly program through the kernel's device bus.
-
-        Creates a VM CPU, wires it to the kernel's devices, and executes
-        the assembled program. Returns output, trace, and step count.
-        """
-        from .vm import CPU, Assembler, DeviceBus as VMBus
-
-        vm_bus = VMBus()
-        if hasattr(self._devices, '_table'):
-            for name, dev in self._devices._table._devices.items():
-                vm_bus.register(name, dev)
-        elif hasattr(self._devices, '_devices'):
-            for name, dev in self._devices._devices.items():
-                vm_bus.register(name, dev)
-
-        cpu = CPU(devices=vm_bus)
-        cpu._tracing = trace
-        assembler = Assembler()
-        instructions = assembler.assemble(source)
-        cpu.load_program(instructions)
-        output = cpu.run()
-
-        return {
-            "output": output,
-            "steps": cpu._step_count,
-            "trace": cpu.get_trace() if trace else [],
-            "regs": {f"R{i}": v for i, v in enumerate(cpu.regs) if v != 0},
-        }
-
     # --- Info ---
 
     def info(self) -> dict:
-        """Return a snapshot of kernel state."""
-        return {
-            "uptime_s": self.uptime,
-            "running": self._running,
-            "tick_count": self._tick_count,
-            "process_count": len(self._processes),
-            "memory": self._memory.stats(),
-            "devices": self._devices.stats(),
-            "interrupts": self._interrupts.stats(),
-            "syscalls": self._syscall_table.stats(),
-        }
+        """Return a snapshot of kernel state (backward-compatible keys)."""
+        s = self.stats()
+        s["uptime_s"] = s.pop("uptime")
+        return s
 
     def stats(self) -> dict:
         return {
@@ -678,173 +469,24 @@ class Kernel:
         }
 
     # ===================================================================
-    # Neural capabilities (via addon)
+    # Filesystem (via addon)
     # ===================================================================
 
-    @property
-    def engine(self):
-        self._require_addon("neural")
-        return self._engine
-
-    @property
-    def tokenizer_device(self):
-        self._require_addon("neural")
-        return self._tokenizer_device
-
-    @property
-    def embedding_device(self):
-        self._require_addon("neural")
-        return self._embedding_device
-
-    @property
-    def embedding_store(self):
-        from .addons.neural import NeuralEmbeddingStore
-        self._require_addon("neural")
-        stores = list(self._embedding_stores.values())
-        return stores[0] if stores else NeuralEmbeddingStore()
-
-    @property
-    def kv_caches(self) -> dict:
-        self._require_addon("neural")
-        return self._kv_caches
-
-    @property
-    def gradient_accumulator(self):
-        self._require_addon("neural")
-        return self._gradient_accumulator
-
-    @property
-    def batch_processor(self):
-        self._require_addon("neural")
-        return self._batch_processor
-
-    def create_neural_process(self, name: str, neural_type: Any = None,
-                              model_name: str = "", priority: Priority = Priority.NORMAL,
-                              **kwargs) -> Any:
-        from .addons.neural import NeuralProcess, NeuralProcessType
-        self._require_addon("neural")
-        proc = self.spawn_process(name, priority)
-        neural = NeuralProcess(process=proc, model_name=model_name)
-        neural.neural_type = neural_type or NeuralProcessType.INFERENCE
-        with self._lock:
-            self._neural_processes[proc.pid] = neural
-        return neural
-
-    def get_neural_process(self, pid: int):
-        self._require_addon("neural")
-        return self._neural_processes.get(pid)
-
-    def list_neural_processes(self) -> list:
-        self._require_addon("neural")
-        return list(self._neural_processes.values())
-
-    def tokenize(self, text: str) -> list[int]:
-        self._require_addon("neural")
-        result = self._tokenizer_device.ioctl("encode", text)
-        if result and hasattr(result, 'value') and result.value:
-            return result.value.get("tokens", [])
-        return list(text.encode("utf-8"))
-
-    def detokenize(self, tokens: list[int]) -> str:
-        self._require_addon("neural")
-        result = self._tokenizer_device.ioctl("decode", tokens)
-        if result and hasattr(result, 'value') and result.value:
-            return result.value.get("text", "")
-        return bytes(tokens).decode("utf-8", errors="replace")
-
-    def embed(self, ids: np.ndarray, store_name: str = "default") -> np.ndarray | None:
-        self._require_addon("neural")
-        store = self._embedding_stores.get(store_name)
-        if store is None:
-            return None
-        return store.lookup(ids)
-
-    def embed_text(self, text: str) -> np.ndarray:
-        from .addons.neural import NeuralEmbeddingStore, NeuralSyscall
-        self._require_addon("neural")
-        store = list(self._embedding_stores.values())[0] if self._embedding_stores else NeuralEmbeddingStore()
-        return NeuralSyscall.embed(store, text)
-
-    def create_embedding_store(self, name: str, vocab_size: int = 1000,
-                               embed_dim: int = 64):
-        from .addons.neural import NeuralEmbeddingStore
-        self._require_addon("neural")
-        store = NeuralEmbeddingStore(vocab_size=vocab_size, embed_dim=embed_dim)
-        self._embedding_stores[name] = store
-        return store
-
-    def create_kv_cache(self, name: str, num_layers: int = 6,
-                        head_dim: int = 32, **kwargs):
-        from .addons.neural import NeuralKVCache
-        self._require_addon("neural")
-        cache = NeuralKVCache(num_layers=num_layers, head_dim=head_dim,
-                              max_positions=kwargs.get('max_positions', 512))
-        self._kv_caches[name] = cache
-        return cache
-
-    def get_kv_cache(self, name: str):
-        self._require_addon("neural")
-        return self._kv_caches.get(name)
-
-    def remove_kv_cache(self, name: str) -> None:
-        self._require_addon("neural")
-        with self._lock:
-            self._kv_caches.pop(name, None)
-
-    def generate(self, model_name: str, prompt: str, max_tokens: int = 10, **kwargs: Any) -> dict[str, Any] | None:
-        self._require_addon("neural")
-        result = self._engine.ioctl("generate", model_name, prompt, max_tokens=max_tokens, **kwargs)
-        if result and hasattr(result, 'value') and result.value:
-            return result.value
-        return None
-
-    def forward(self, neural_proc: Any, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-        from .addons.neural import NeuralSyscall
-        return NeuralSyscall.forward(neural_proc, inputs)
-
-    def backward(self, neural_proc: Any, grad_output: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-        from .addons.neural import NeuralSyscall
-        return NeuralSyscall.backward(neural_proc, grad_output)
-
-    def attention(self, q: np.ndarray, k: np.ndarray, v: np.ndarray,
-                  mask: np.ndarray | None = None) -> np.ndarray:
-        from .addons.neural import NeuralSyscall
-        return NeuralSyscall.attention(self._attention_device, q, k, v, mask)
-
-    def neural_syscall(self, proc: Any, op: str, *args: Any, **kwargs: Any) -> Any:
-        from .addons.neural import NeuralSyscall, NeuralEmbeddingStore
-        if op == "forward":
-            return NeuralSyscall.forward(proc, *args, **kwargs)
-        elif op == "backward":
-            return NeuralSyscall.backward(proc, *args, **kwargs)
-        elif op == "embed":
-            return NeuralSyscall.embed(self._embedding_stores.get("default", NeuralEmbeddingStore()), *args, **kwargs)
-        return None
-
     def register_devices(self) -> None:
-        if "neural" in self._addons:
-            self.register_device(self._engine)
-            self.register_device(self._tokenizer_device)
-            self.register_device(self._embedding_device)
-            self.register_device(self._attention_device)
+        """Register built-in and addon-provided devices.
 
-    def cleanup_pid(self, pid: int) -> None:
-        if "neural" in self._addons:
-            with self._lock:
-                self._neural_processes.pop(pid, None)
-        self.memory.free_pid(pid)
+        Built-in devices (NullDevice) are registered in boot().
+        Addon devices are registered during install_addon() in each
+        addon's setup(). This method is maintained as a convenience
+        for explicit one-shot device registration, but addon setup()
+        is the canonical path.
+        """
+        pass
 
-    def neural_stats(self) -> dict:
-        self._require_addon("neural")
-        return {
-            "neural_processes": len(self._neural_processes),
-            "kv_caches": len(self._kv_caches),
-            "embedding_stores": len(self._embedding_stores),
-            "gradient_accumulator": self._gradient_accumulator.stats(),
-            "batch_processor": self._batch_processor.stats(),
-            "attention_device": self._attention_device.info(),
-            "engine": self._engine.info(),
-        }
+    @property
+    def vfs(self):
+        self._require_addon("filesystem")
+        return self._vfs
 
 
 # ---------------------------------------------------------------------------
@@ -858,9 +500,10 @@ def get_kernel() -> Kernel:
     global _kernel
     if _kernel is None:
         _kernel = Kernel()
-        from .addons import neural
+        from .addons import neural, filesystem, shell_ui
         _kernel.install_addon(neural)
-        _kernel.register_devices()
+        _kernel.install_addon(filesystem)
+        _kernel.install_addon(shell_ui)
     return _kernel
 
 
@@ -869,7 +512,21 @@ def reset_kernel() -> Kernel:
     if _kernel is not None and _kernel.running:
         _kernel.shutdown()
     _kernel = Kernel()
-    from .addons import neural
+    from .addons import neural, filesystem, shell_ui
     _kernel.install_addon(neural)
-    _kernel.register_devices()
+    _kernel.install_addon(filesystem)
+    _kernel.install_addon(shell_ui)
     return _kernel
+
+
+class NeuralKernel(Kernel):
+    """Deprecated: use Kernel() instead. Kernel auto-installs the neural addon."""
+
+    def __init__(self):
+        import warnings
+        warnings.warn(
+            "NeuralKernel is deprecated, use Kernel() instead. "
+            "Kernel auto-installs the neural addon via boot().",
+            DeprecationWarning, stacklevel=2,
+        )
+        super().__init__()

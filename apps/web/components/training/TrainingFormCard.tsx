@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { DatasetSelector } from '@/components/training/DatasetSelector'
@@ -370,7 +371,7 @@ export function TrainingFormCard({
                   {form.method === 'vlm' && datasets.datasets.filter(ds => ds.type === 'vlm').length === 0 && (
                     <p className="text-xs text-muted-foreground/70">
                       No VLM datasets found. Create one from the{' '}
-                      <a href="/multimodal" className="text-primary underline underline-offset-2">Multimodal</a> page.
+                      <Link href="/multimodal" className="text-primary underline underline-offset-2">Multimodal</Link> page.
                     </p>
                   )}
                 </div>

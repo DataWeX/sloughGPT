@@ -15,7 +15,7 @@ app = FastAPI()
 app.include_router(router)
 client = TestClient(app, raise_server_exceptions=False)
 
-WF_TARGET = "apps.api.server.routers.workflow._get_workflow"
+WF_TARGET = "apps.api.server.routers.workflow._workflow_router._get_workflow"
 
 
 def _make_workflow():

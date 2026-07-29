@@ -26,6 +26,7 @@ import { useSettings, useUpdateSettings } from '@/lib/store'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { systemController, type DetailedHealth, type SystemMetrics, type DiskUsage, type SystemInfo } from '@/lib/system-controller'
 import { formatUptime } from '@/lib/chat-utils'
+import { downloadJson, importFile } from '@/lib/download-utils'
 
 function SettingsSlider({
   label, value, onChange, min, max, step, formatValue,
@@ -293,41 +294,31 @@ export default function SettingsPage() {
           <CardContent>
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" onClick={() => {
-                const data = JSON.stringify(settings, null, 2)
-                const blob = new Blob([data], { type: 'application/json' })
-                const url = URL.createObjectURL(blob)
-                const a = document.createElement('a')
-                a.href = url; a.download = 'sloughgpt-settings.json'; a.click()
-                URL.revokeObjectURL(url)
+                downloadJson(settings, 'sloughgpt-settings.json')
                 addToast('Settings exported', 'success')
               }}>Export settings</Button>
-              <Button size="sm" variant="outline" onClick={() => {
-                const input = document.createElement('input')
-                input.type = 'file'; input.accept = '.json'
-                input.onchange = async (e) => {
-                  const file = (e.target as HTMLInputElement).files?.[0]
-                  if (!file) return
-                  try {
-                    const text = await file.text()
-                    const raw = JSON.parse(text)
-                    const valid: Record<string, unknown> = {}
-                    if (typeof raw.apiUrl === 'string') valid.apiUrl = raw.apiUrl
-                    if (typeof raw.hfToken === 'string') valid.hfToken = raw.hfToken
-                    if (typeof raw.defaultModel === 'string') valid.defaultModel = raw.defaultModel
-                    if (typeof raw.defaultTemp === 'number') valid.defaultTemp = raw.defaultTemp
-                    if (typeof raw.defaultMaxTokens === 'number') valid.defaultMaxTokens = raw.defaultMaxTokens
-                    if (['dark', 'light', 'system'].includes(raw.theme)) valid.theme = raw.theme
-                    if (typeof raw.streaming === 'boolean') valid.streaming = raw.streaming
-                    if (typeof raw.customContext === 'string') valid.customContext = raw.customContext
-                    if (typeof raw.collapsibleMessageLength === 'number') valid.collapsibleMessageLength = raw.collapsibleMessageLength
-                    if (Object.keys(valid).length === 0) throw new Error('No valid settings found')
-                    updateSettings(valid)
-                    addToast('Settings imported', 'success')
-                  } catch {
-                    addToast('Invalid settings file', 'error')
-                  }
+              <Button size="sm" variant="outline" onClick={async () => {
+                const file = await importFile('.json')
+                if (!file) return
+                try {
+                  const text = await file.text()
+                  const raw = JSON.parse(text)
+                  const valid: Record<string, unknown> = {}
+                  if (typeof raw.apiUrl === 'string') valid.apiUrl = raw.apiUrl
+                  if (typeof raw.hfToken === 'string') valid.hfToken = raw.hfToken
+                  if (typeof raw.defaultModel === 'string') valid.defaultModel = raw.defaultModel
+                  if (typeof raw.defaultTemp === 'number') valid.defaultTemp = raw.defaultTemp
+                  if (typeof raw.defaultMaxTokens === 'number') valid.defaultMaxTokens = raw.defaultMaxTokens
+                  if (['dark', 'light', 'system'].includes(raw.theme)) valid.theme = raw.theme
+                  if (typeof raw.streaming === 'boolean') valid.streaming = raw.streaming
+                  if (typeof raw.customContext === 'string') valid.customContext = raw.customContext
+                  if (typeof raw.collapsibleMessageLength === 'number') valid.collapsibleMessageLength = raw.collapsibleMessageLength
+                  if (Object.keys(valid).length === 0) throw new Error('No valid settings found')
+                  updateSettings(valid)
+                  addToast('Settings imported', 'success')
+                } catch {
+                  addToast('Invalid settings file', 'error')
                 }
-                input.click()
               }}>Import settings</Button>
             </div>
           </CardContent>

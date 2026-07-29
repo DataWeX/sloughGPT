@@ -1400,3 +1400,30 @@ class TestPermissions:
         output, code = repl.execute("echo hello")
         assert code == 0
         assert "hello" in output
+
+
+# ── ps ─────────────────────────────────────────────────────────────────
+
+
+class TestPs:
+    def test_ps_shows_no_processes_when_empty(self, repl):
+        output, code = repl.execute("ps")
+        assert code == 0
+        assert "No kernel processes" in output
+
+    def test_ps_shows_processes_when_running(self, repl):
+        repl.os.kernel.boot()
+        output, code = repl.execute("ps")
+        assert code == 0
+        assert "PID" in output
+        assert "kernel-init" in output
+
+    def test_cmd_ps_no_processes(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_ps("")
+        output = cap.getvalue()
+        assert "No kernel processes" in output
+
+    def test_procs_still_works(self, repl):
+        output, code = repl.execute("procs")
+        assert code == 0

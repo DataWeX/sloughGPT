@@ -208,12 +208,15 @@ class OptimizedDataLoader:
         self,
         dataset: Dataset,
         batch_size: int,
-        num_workers: int = 4,
+        num_workers: Optional[int] = None,
         prefetch_factor: int = 2,
         persistent_workers: bool = True,
         pin_memory: bool = True,
         collate_fn: Optional[Callable] = None,
     ):
+        if num_workers is None:
+            from domains.infrastructure.resource_manager import get_resource_manager
+            num_workers = get_resource_manager().dataloader_workers
         effective_workers = effective_dataloader_workers(num_workers)
         effective_prefetch = effective_prefetch_factor(effective_workers, prefetch_factor)
 

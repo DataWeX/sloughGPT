@@ -597,9 +597,12 @@ class _CPUBackend(_Accelerator):
             if n > 0:
                 self._openblas_threads_cache = n
                 return n
-            # Try to detect automatically (cpu count - 1)
-            import multiprocessing
-            n = max(1, multiprocessing.cpu_count() - 1)
+            # Try ResourceManager first, then cpu count - 1
+            try:
+                from domains.infrastructure.resource_manager import get_resource_manager
+                n = get_resource_manager().omp_num_threads
+            except Exception:
+                n = max(1, (os.cpu_count() or 1) - 1)
             self._openblas_threads_cache = n
             return n
         except Exception:

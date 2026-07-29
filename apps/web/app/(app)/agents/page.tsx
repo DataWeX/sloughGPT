@@ -204,6 +204,7 @@ export default function AgentsPage() {
                 <button
                   key={t}
                   onClick={() => toggleTool(t, newTools, setNewTools)}
+                  aria-pressed={newTools.includes(t)}
                   className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
                     newTools.includes(t)
                       ? 'bg-primary text-primary-foreground border-primary'
@@ -256,6 +257,7 @@ export default function AgentsPage() {
                           <button
                             key={t}
                             onClick={() => toggleTool(t, editTools, setEditTools)}
+                            aria-pressed={editTools.includes(t)}
                             className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
                               editTools.includes(t)
                                 ? 'bg-primary text-primary-foreground border-primary'

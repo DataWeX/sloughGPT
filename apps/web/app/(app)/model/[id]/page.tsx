@@ -191,7 +191,7 @@ export default function ModelDetailPage() {
                   <div className="flex items-center gap-2">
                     {isLoaded ? (
                       <>
-                        <Button size="sm" className="h-7 text-xs" onClick={() => window.location.href = '/chat'}>
+                        <Button size="sm" className="h-7 text-xs" onClick={() => router.push('/chat')}>
                           Chat with this model
                         </Button>
                         <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleUnload}>
@@ -350,7 +350,7 @@ export default function ModelDetailPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-base">Recent Activity</CardTitle>
-                <Button size="sm" variant="ghost" onClick={() => apiGet<{ logs: string[] }>('/models/logs?limit=10').then(r => setModelLogs(r.logs)).catch(() => {})}>
+                <Button size="sm" variant="ghost" aria-label="Refresh activity logs" onClick={() => apiGet<{ logs: string[] }>('/models/logs?limit=10').then(r => setModelLogs(r.logs)).catch(() => {})}>
                   <IconRefresh className="h-3 w-3" />
                 </Button>
               </CardHeader>

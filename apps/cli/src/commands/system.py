@@ -31,7 +31,13 @@ def cmd_system(args):
 
     if psutil:
         printer.section("CPU")
-        printer.key_value("Cores", str(psutil.cpu_count()))
+        try:
+            from domains.infrastructure.resource_manager import get_resource_manager
+            rm = get_resource_manager()
+            cores = f"{rm.topology.logical_cores} logical / {rm.topology.physical_cores} physical"
+        except Exception:
+            cores = str(psutil.cpu_count())
+        printer.key_value("Cores", cores)
         printer.key_value("Usage", f"{psutil.cpu_percent()}%")
 
         printer.section("Memory")
@@ -152,8 +158,16 @@ def cmd_optimize(args):
     if args.optimize:
         printer.blank()
         printer.step("Applying optimizations...")
-        torch.set_num_threads(min(8, torch.get_num_threads()))
-        printer.success("Thread count optimized")
+        try:
+            from domains.infrastructure.resource_manager import get_resource_manager
+            rm = get_resource_manager()
+            rm.apply_blas_env()
+            rm.apply_compute_limits()
+            printer.success(f"Thread count optimized: compute={rm.compute_threads} io={rm.io_threads}")
+            printer.info(f"OMP={rm.omp_num_threads} MKL={rm.mkl_num_threads} NUMEXPR={rm.numexpr_num_threads}")
+        except Exception:
+            torch.set_num_threads(min(8, torch.get_num_threads()))
+            printer.success("Thread count optimized (torch fallback)")
         printer.info("Memory format set to channels_last (where applicable)")
 
 

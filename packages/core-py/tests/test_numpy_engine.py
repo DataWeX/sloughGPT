@@ -3,7 +3,6 @@
 import numpy as np
 import pytest
 from domains.infrastructure.numpy_engine import NumpyEngine, KVCache, _CompressedWeight, _LRUCache
-from domains.infrastructure.model_server import NumpyBackend, ModelServer, GuardBackend
 
 
 @pytest.fixture(scope="session")
@@ -22,12 +21,6 @@ def gpt2_uncompressed():
 def qwen2():
     """Load Qwen2 once for entire test session."""
     return NumpyEngine.from_pretrained("Qwen/Qwen2-0.5B-Instruct")
-
-
-@pytest.fixture(scope="session")
-def gpt2_backend(gpt2):
-    """NumpyBackend wrapping GPT-2, once per session."""
-    return NumpyBackend(gpt2)
 
 
 class TestNumpyEngineGPT2:
@@ -217,70 +210,6 @@ class TestNumpyEngineErrors:
     def test_missing_model_raises(self):
         with pytest.raises(FileNotFoundError):
             NumpyEngine.from_pretrained("nonexistent/model-xyz")
-
-
-class TestNumpyBackend:
-    """NumpyBackend wrapping NumpyEngine into ModelServer backend interface."""
-
-    def test_alive(self, gpt2_backend):
-        assert gpt2_backend.alive is True
-
-    def test_generate(self, gpt2_backend):
-        result = gpt2_backend.generate(
-            "Hello", max_new_tokens=10, temperature=0.0,
-            top_p=1.0, top_k=0, repetition_penalty=1.0,
-        )
-        assert isinstance(result, dict)
-        assert "text" in result
-        assert "tokens_generated" in result
-        assert len(result["text"]) > 0
-        assert result["tokens_generated"] >= 0
-
-    def test_generate_stream(self, gpt2_backend):
-        tokens = list(gpt2_backend.generate_stream(
-            "The capital of France is", max_new_tokens=5, temperature=0.0,
-            top_p=1.0, top_k=0, repetition_penalty=1.0,
-        ))
-        assert len(tokens) > 0
-        assert all(isinstance(t, str) for t in tokens)
-
-    def test_generate_stream_cancel(self, gpt2_backend):
-        from threading import Event
-        cancel = Event()
-        cancel.set()  # cancel immediately
-        tokens = list(gpt2_backend.generate_stream(
-            "Hello", max_new_tokens=50, temperature=0.0,
-            top_p=1.0, top_k=0, repetition_penalty=1.0,
-            cancel_event=cancel,
-        ))
-        assert len(tokens) == 0
-
-    def test_dead_engine(self):
-        backend = NumpyBackend(None)
-        assert backend.alive is False
-
-
-class TestModelServerNumpy:
-    """ModelServer with numpy_engine (no PyTorch model)."""
-
-    def test_select_backend_numpy(self, gpt2):
-        server = ModelServer(
-            model=None, tokenizer=None, model_id="test-numpy",
-            numpy_engine=gpt2, enable_warmup=False,
-        )
-        backend = server._select_backend()
-        assert isinstance(backend, NumpyBackend)
-
-    def test_select_backend_guard_preferred(self, gpt2):
-        mock_guard = type("MockGuard", (), {"alive": True, "generate": lambda *a, **k: {}})()
-        server = ModelServer(
-            model=None, tokenizer=None, model_id="test-priority",
-            numpy_engine=gpt2, enable_warmup=False,
-        )
-        server._guard_backend = GuardBackend(mock_guard)
-        backend = server._select_backend()
-        assert isinstance(backend, GuardBackend)
-
 
 class TestHierarchicalCompression:
     """Tests for hierarchical centroid compression (linear function for centroids)."""

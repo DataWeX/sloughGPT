@@ -27,68 +27,15 @@ from schemas.common import success_response
 
 logger = logging.getLogger("slo.errors")
 
-router = APIRouter(prefix="/errors", tags=["errors"])
+# ── Constants ─────────────────────────────────────────────────────────────
 
-# In-memory ring buffer for recent errors
 MAX_ERRORS = 500
-_error_buffer: list[dict] = []
-_error_count_since_clear = 0
-
-# Disk persistence
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _ERROR_LOG_DIR = _REPO_ROOT / "data" / "error_log"
 _ERROR_LOG_FILE = _ERROR_LOG_DIR / "errors.jsonl"
 
 
-def _ensure_dir():
-    _ERROR_LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def _persist_to_disk(record: dict):
-    """Append a single error record to the JSONL file on disk."""
-    try:
-        _ensure_dir()
-        with open(_ERROR_LOG_FILE, "a") as f:
-            f.write(json.dumps(record, default=str) + "\n")
-    except Exception:
-        pass  # best-effort — never block the request
-
-
-def _load_from_disk() -> list[dict]:
-    """Load all errors from disk (for startup / restart recovery)."""
-    try:
-        if _ERROR_LOG_FILE.exists():
-            records = []
-            for line in _ERROR_LOG_FILE.read_text().splitlines():
-                line = line.strip()
-                if line:
-                    records.append(json.loads(line))
-            return records[-MAX_ERRORS:]
-    except Exception:
-        pass
-    return []
-
-
-def _clear_disk():
-    """Clear the error log file on disk."""
-    try:
-        if _ERROR_LOG_FILE.exists():
-            _ERROR_LOG_FILE.unlink()
-    except Exception:
-        pass
-
-
-def _fingerprint(message: str) -> str:
-    """Create a stable fingerprint for deduplication (ignore numbers/IDs)."""
-    normalized = re.sub(r'\d+', 'N', message.lower())
-    normalized = re.sub(r'[a-f0-9]{8,}', 'ID', normalized)
-    return hashlib.md5(normalized.encode()).hexdigest()[:12]
-
-
-# Load persisted errors on module init
-_error_buffer = _load_from_disk()
-_error_count_since_clear = 0  # reset on restart — only tracks current session
-
+# ── Pydantic models ──────────────────────────────────────────────────────
 
 class ErrorEntry(BaseModel):
     message: str
@@ -105,60 +52,7 @@ class ErrorBatch(BaseModel):
     errors: List[ErrorEntry]
 
 
-@router.post("/log")
-async def log_errors(batch: ErrorBatch, request: Request):
-    """
-    Accept frontend JS errors and store them in the ring buffer + disk.
-
-    Returns a 201 with the count of logged errors.
-    """
-    global _error_count_since_clear
-    now = datetime.now(timezone.utc).isoformat()
-    client_host = request.client.host if request.client else "unknown"
-
-    for entry in batch.errors:
-        error_record = {
-            "id": uuid.uuid4().hex[:12],
-            "message": entry.message,
-            "source": entry.source or "web",
-            "stack": entry.stack,
-            "url": entry.url,
-            "line": entry.line,
-            "col": entry.col,
-            "client_host": client_host,
-            "timestamp": entry.timestamp or now,
-            "metadata": entry.metadata or {},
-            "fingerprint": _fingerprint(entry.message),
-        }
-        _error_buffer.append(error_record)
-        _error_count_since_clear += 1
-        _persist_to_disk(error_record)
-
-        # Downgrade extension errors to DEBUG (crypto wallet noise)
-        is_extension = any(x in (entry.url or "") for x in ("chrome-extension://", "moz-extension://", "extension://"))
-        is_vague = entry.message in ("error", "Script error.", "Non-Error promise rejection")
-        log_fn = logger.debug if (is_extension or is_vague) else logger.error
-        log_fn(
-            "CLIENT ERROR [%s] %s | %s:%s %s",
-            error_record["id"],
-            entry.message[:120],
-            entry.url or "?",
-            entry.line or 0,
-            entry.col or 0,
-        )
-
-    # Trim buffer
-    while len(_error_buffer) > MAX_ERRORS:
-        _error_buffer.pop(0)
-
-    return success_response(data={"status": "ok", "logged": len(batch.errors)})
-
-
-# ── Frontend structured log ingest ───────────────────────────────────────
-
-
 class FrontendLogEntry(BaseModel):
-    """A single structured log record from the frontend WebLogger."""
     level: str = "info"
     logger: str = "web"
     message: str = ""
@@ -168,212 +62,289 @@ class FrontendLogEntry(BaseModel):
 
 
 class FrontendLogBatch(BaseModel):
-    """Batch of frontend log records."""
     logs: List[FrontendLogEntry]
 
 
-@router.post("/logs/ingest")
-async def ingest_frontend_logs(batch: FrontendLogBatch):
-    """
-    Accept structured logs from the frontend WebLogger and route them
-    into the OutputBuffer so they appear in the SSE /system/stream
-    and the monitoring page OutputCard.
+# ── Router class ─────────────────────────────────────────────────────────
 
-    This is the bridge between frontend logging and backend logging —
-    frontend logs flow through the same pipeline as backend logs.
-    """
-    from domains.infrastructure.output_buffer import get_server_buffer
-    from domains.logging import LogLevel as _LL
+class ErrorsRouter:
+    """OOP router for error-logging endpoints."""
 
-    buf = get_server_buffer()
-    level_map = {
-        "debug": "debug", "info": "info", "warning": "warning",
-        "error": "error", "critical": "critical",
-    }
+    def __init__(self):
+        self.router = APIRouter(prefix="/errors", tags=["errors"])
+        self._error_buffer: list[dict] = []
+        self._error_count_since_clear = 0
 
-    for entry in batch.logs:
-        lvl = level_map.get(entry.level, "info")
-        context: dict = {}
-        if entry.context:
-            context.update(entry.context)
-        if entry.exception:
-            context["exception"] = entry.exception
+        self._error_buffer = self._load_from_disk()
+        self._error_count_since_clear = 0
 
-        buf.append_log(
-            text=f"{entry.logger} {entry.message}",
-            level=lvl,
-            source=f"web.{entry.logger}",
-            tag="WEB",
-            context=context,
-        )
+        self._register_routes()
 
-    return success_response(data={"status": "ok", "ingested": len(batch.logs)})
+    # ── Route registration ──────────────────────────────────────────────
 
+    def _register_routes(self):
+        self.router.add_api_route("/log", self.log_errors, methods=["POST"])
+        self.router.add_api_route("/logs/ingest", self.ingest_frontend_logs, methods=["POST"])
+        self.router.add_api_route("/recent", self.get_recent_errors, methods=["GET"])
+        self.router.add_api_route("/grouped", self.get_grouped_errors, methods=["GET"])
+        self.router.add_api_route("/trends", self.get_error_trends, methods=["GET"])
+        self.router.add_api_route("/export", self.export_errors, methods=["GET"])
+        self.router.add_api_route("/clear", self.clear_errors, methods=["DELETE"])
+        self.router.add_api_route("/unread", self.unread_count, methods=["GET"])
+        self.router.add_api_route("/log", self.get_opencode_log, methods=["GET"])
 
-@router.get("/recent")
-async def get_recent_errors(limit: int = 50, offset: int = 0):
-    """Return paginated client errors (newest first)."""
-    total = len(_error_buffer)
-    start = max(0, total - offset - limit)
-    end = max(0, total - offset)
-    return success_response(data={
-        "errors": list(reversed(_error_buffer[start:end])),
-        "unread_count": _error_count_since_clear,
-        "total": total,
-        "offset": offset,
-        "limit": limit,
-    })
+    # ── Helpers ─────────────────────────────────────────────────────────
 
+    def _ensure_dir(self):
+        _ERROR_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-@router.get("/grouped")
-async def get_grouped_errors():
-    """Return errors grouped by message fingerprint with counts."""
-    groups: dict[str, dict] = {}
-    for entry in reversed(_error_buffer):
-        fp = entry.get("fingerprint") or _fingerprint(entry.get("message", ""))
-        if fp in groups:
-            groups[fp]["count"] += 1
-            groups[fp]["latest"] = entry.get("timestamp", "")
-        else:
-            groups[fp] = {
-                "fingerprint": fp,
-                "message": entry.get("message", "")[:200],
-                "source": entry.get("source", ""),
-                "count": 1,
-                "latest": entry.get("timestamp", ""),
-                "sample_id": entry.get("id", ""),
-                "sample_url": entry.get("url", ""),
-                "sample_line": entry.get("line"),
-            }
-    result = sorted(groups.values(), key=lambda g: g["count"], reverse=True)
-    return success_response(data={"groups": result, "total_groups": len(result)})
-
-
-@router.get("/trends")
-async def get_error_trends(hours: int = 24):
-    """Return error counts per hour for the last N hours."""
-    now = datetime.now(timezone.utc)
-    buckets: dict[str, int] = {}
-
-    # Initialize all buckets
-    for h in range(hours):
-        t = now.replace(minute=0, second=0, microsecond=0)
-        from datetime import timedelta
-        t = t - timedelta(hours=h)
-        key = t.strftime("%Y-%m-%dT%H:00")
-        buckets[key] = 0
-
-    # Fill from buffer
-    for entry in _error_buffer:
-        ts = entry.get("timestamp", "")
-        if not ts:
-            continue
+    def _persist_to_disk(self, record: dict):
         try:
-            t = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-            key = t.strftime("%Y-%m-%dT%H:00")
-            if key in buckets:
-                buckets[key] += 1
-        except (ValueError, TypeError):
+            self._ensure_dir()
+            with open(_ERROR_LOG_FILE, "a") as f:
+                f.write(json.dumps(record, default=str) + "\n")
+        except Exception:
             pass
 
-    # Also count from disk file
-    try:
-        if _ERROR_LOG_FILE.exists():
-            for line in _ERROR_LOG_FILE.read_text().splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    rec = json.loads(line)
-                    ts = rec.get("timestamp", "")
-                    t = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                    key = t.strftime("%Y-%m-%dT%H:00")
-                    if key in buckets:
-                        buckets[key] += 1
-                except (ValueError, TypeError, json.JSONDecodeError):
-                    pass
-    except Exception:
-        pass
+    def _load_from_disk(self) -> list[dict]:
+        try:
+            if _ERROR_LOG_FILE.exists():
+                records = []
+                for line in _ERROR_LOG_FILE.read_text().splitlines():
+                    line = line.strip()
+                    if line:
+                        records.append(json.loads(line))
+                return records[-MAX_ERRORS:]
+        except Exception:
+            pass
+        return []
 
-    result = [{"hour": k, "count": v} for k, v in sorted(buckets.items())]
-    return success_response(data={"trends": result, "hours": hours})
+    def _clear_disk(self):
+        try:
+            if _ERROR_LOG_FILE.exists():
+                _ERROR_LOG_FILE.unlink()
+        except Exception:
+            pass
+
+    def _fingerprint(self, message: str) -> str:
+        normalized = re.sub(r'\d+', 'N', message.lower())
+        normalized = re.sub(r'[a-f0-9]{8,}', 'ID', normalized)
+        return hashlib.md5(normalized.encode()).hexdigest()[:12]
+
+    # ── Route handlers ──────────────────────────────────────────────────
+
+    async def log_errors(self, batch: ErrorBatch, request: Request):
+        now = datetime.now(timezone.utc).isoformat()
+        client_host = request.client.host if request.client else "unknown"
+
+        for entry in batch.errors:
+            error_record = {
+                "id": uuid.uuid4().hex[:12],
+                "message": entry.message,
+                "source": entry.source or "web",
+                "stack": entry.stack,
+                "url": entry.url,
+                "line": entry.line,
+                "col": entry.col,
+                "client_host": client_host,
+                "timestamp": entry.timestamp or now,
+                "metadata": entry.metadata or {},
+                "fingerprint": self._fingerprint(entry.message),
+            }
+            self._error_buffer.append(error_record)
+            self._error_count_since_clear += 1
+            self._persist_to_disk(error_record)
+
+            is_extension = any(x in (entry.url or "") for x in ("chrome-extension://", "moz-extension://", "extension://"))
+            is_vague = entry.message in ("error", "Script error.", "Non-Error promise rejection")
+            log_fn = logger.debug if (is_extension or is_vague) else logger.error
+            log_fn(
+                "CLIENT ERROR [%s] %s | %s:%s %s",
+                error_record["id"],
+                entry.message[:120],
+                entry.url or "?",
+                entry.line or 0,
+                entry.col or 0,
+            )
+
+        while len(self._error_buffer) > MAX_ERRORS:
+            self._error_buffer.pop(0)
+
+        return success_response(data={"status": "ok", "logged": len(batch.errors)})
+
+    async def ingest_frontend_logs(self, batch: FrontendLogBatch):
+        from domains.infrastructure.output_buffer import get_server_buffer
+        from domains.logging import LogLevel as _LL
+
+        buf = get_server_buffer()
+        level_map = {
+            "debug": "debug", "info": "info", "warning": "warning",
+            "error": "error", "critical": "critical",
+        }
+
+        for entry in batch.logs:
+            lvl = level_map.get(entry.level, "info")
+            context: dict = {}
+            if entry.context:
+                context.update(entry.context)
+            if entry.exception:
+                context["exception"] = entry.exception
+
+            buf.append_log(
+                text=f"{entry.logger} {entry.message}",
+                level=lvl,
+                source=f"web.{entry.logger}",
+                tag="WEB",
+                context=context,
+            )
+
+        return success_response(data={"status": "ok", "ingested": len(batch.logs)})
+
+    async def get_recent_errors(self, limit: int = 50, offset: int = 0):
+        total = len(self._error_buffer)
+        start = max(0, total - offset - limit)
+        end = max(0, total - offset)
+        return success_response(data={
+            "errors": list(reversed(self._error_buffer[start:end])),
+            "unread_count": self._error_count_since_clear,
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+        })
+
+    async def get_grouped_errors(self):
+        groups: dict[str, dict] = {}
+        for entry in reversed(self._error_buffer):
+            fp = entry.get("fingerprint") or self._fingerprint(entry.get("message", ""))
+            if fp in groups:
+                groups[fp]["count"] += 1
+                groups[fp]["latest"] = entry.get("timestamp", "")
+            else:
+                groups[fp] = {
+                    "fingerprint": fp,
+                    "message": entry.get("message", "")[:200],
+                    "source": entry.get("source", ""),
+                    "count": 1,
+                    "latest": entry.get("timestamp", ""),
+                    "sample_id": entry.get("id", ""),
+                    "sample_url": entry.get("url", ""),
+                    "sample_line": entry.get("line"),
+                }
+        result = sorted(groups.values(), key=lambda g: g["count"], reverse=True)
+        return success_response(data={"groups": result, "total_groups": len(result)})
+
+    async def get_error_trends(self, hours: int = 24):
+        now = datetime.now(timezone.utc)
+        buckets: dict[str, int] = {}
+
+        for h in range(hours):
+            t = now.replace(minute=0, second=0, microsecond=0)
+            from datetime import timedelta
+            t = t - timedelta(hours=h)
+            key = t.strftime("%Y-%m-%dT%H:00")
+            buckets[key] = 0
+
+        for entry in self._error_buffer:
+            ts = entry.get("timestamp", "")
+            if not ts:
+                continue
+            try:
+                t = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                key = t.strftime("%Y-%m-%dT%H:00")
+                if key in buckets:
+                    buckets[key] += 1
+            except (ValueError, TypeError):
+                pass
+
+        try:
+            if _ERROR_LOG_FILE.exists():
+                for line in _ERROR_LOG_FILE.read_text().splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                        ts = rec.get("timestamp", "")
+                        t = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                        key = t.strftime("%Y-%m-%dT%H:00")
+                        if key in buckets:
+                            buckets[key] += 1
+                    except (ValueError, TypeError, json.JSONDecodeError):
+                        pass
+        except Exception:
+            pass
+
+        result = [{"hour": k, "count": v} for k, v in sorted(buckets.items())]
+        return success_response(data={"trends": result, "hours": hours})
+
+    async def export_errors(self, limit: int = 500):
+        errors = list(reversed(self._error_buffer[-limit:]))
+        return JSONResponse(
+            content={"errors": errors, "total": len(self._error_buffer), "exported": len(errors)},
+            headers={
+                "Content-Disposition": f'attachment; filename="errors-{datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")}.json"'
+            },
+        )
+
+    async def clear_errors(self):
+        self._error_buffer.clear()
+        self._clear_disk()
+        self._error_count_since_clear = 0
+        return success_response(data={"status": "ok", "cleared": True})
+
+    async def unread_count(self):
+        return success_response(data={"unread_count": self._error_count_since_clear})
+
+    async def get_opencode_log(self):
+        import os
+        home = os.path.expanduser("~")
+        entries: list[dict] = []
+
+        cli_log_path = os.path.join(home, ".opencode-error-log.json")
+        try:
+            if os.path.exists(cli_log_path):
+                with open(cli_log_path) as f:
+                    data = json.load(f)
+                for rec in data:
+                    entries.append({
+                        "timestamp": rec.get("timestamp", ""),
+                        "command": rec.get("command", ""),
+                        "category": "cli",
+                        "pattern": rec.get("pattern", ""),
+                        "snippet": rec.get("snippet", ""),
+                        "cwd": rec.get("cwd", ""),
+                    })
+        except Exception:
+            pass
+
+        ui_log_path = os.path.join(home, ".opencode-ui-error-log.json")
+        try:
+            if os.path.exists(ui_log_path):
+                with open(ui_log_path) as f:
+                    data = json.load(f)
+                for rec in data:
+                    entries.append({
+                        "timestamp": rec.get("timestamp", ""),
+                        "command": rec.get("command", ""),
+                        "category": rec.get("category", "unknown"),
+                        "pattern": rec.get("pattern", ""),
+                        "snippet": rec.get("snippet", ""),
+                        "cwd": rec.get("cwd", ""),
+                    })
+        except Exception:
+            pass
+
+        entries.sort(key=lambda e: e.get("timestamp", ""), reverse=True)
+        return success_response(data={"entries": entries[:200], "total": len(entries)})
 
 
-@router.get("/export")
-async def export_errors(limit: int = 500):
-    """Dump the full error log as a downloadable JSON response."""
-    errors = list(reversed(_error_buffer[-limit:]))
-    return JSONResponse(
-        content={"errors": errors, "total": len(_error_buffer), "exported": len(errors)},
-        headers={
-            "Content-Disposition": f'attachment; filename="errors-{datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")}.json"'
-        },
-    )
+# ── Singleton + backward-compat re-exports ──────────────────────────────────
+
+_errors_instance = ErrorsRouter()
+router = _errors_instance.router
+_error_buffer = _errors_instance._error_buffer
+_error_count_since_clear = _errors_instance._error_count_since_clear
 
 
-@router.delete("/clear")
-async def clear_errors():
-    """Clear all stored errors and reset unread counter."""
-    _error_buffer.clear()
-    _clear_disk()
-    global _error_count_since_clear
-    _error_count_since_clear = 0
-    return success_response(data={"status": "ok", "cleared": True})
-
-
-@router.get("/unread")
-async def unread_count():
-    """Return the number of errors logged since last clear."""
-    return success_response(data={"unread_count": _error_count_since_clear})
-
-
-@router.get("/log")
-async def get_opencode_log():
-    """
-    Read error logs from the opencode log-monitor and ui-error-watcher plugins.
-    Returns a unified list of log entries from both ~/.opencode-error-log.json
-    and ~/.opencode-ui-error-log.json, sorted newest-first.
-    """
-    import os
-    home = os.path.expanduser("~")
-    entries: list[dict] = []
-
-    # Read CLI error log (log-monitor plugin)
-    cli_log_path = os.path.join(home, ".opencode-error-log.json")
-    try:
-        if os.path.exists(cli_log_path):
-            with open(cli_log_path) as f:
-                data = json.load(f)
-            for rec in data:
-                entries.append({
-                    "timestamp": rec.get("timestamp", ""),
-                    "command": rec.get("command", ""),
-                    "category": "cli",
-                    "pattern": rec.get("pattern", ""),
-                    "snippet": rec.get("snippet", ""),
-                    "cwd": rec.get("cwd", ""),
-                })
-    except Exception:
-        pass
-
-    # Read UI error log (ui-error-watcher plugin)
-    ui_log_path = os.path.join(home, ".opencode-ui-error-log.json")
-    try:
-        if os.path.exists(ui_log_path):
-            with open(ui_log_path) as f:
-                data = json.load(f)
-            for rec in data:
-                entries.append({
-                    "timestamp": rec.get("timestamp", ""),
-                    "command": rec.get("command", ""),
-                    "category": rec.get("category", "unknown"),
-                    "pattern": rec.get("pattern", ""),
-                    "snippet": rec.get("snippet", ""),
-                    "cwd": rec.get("cwd", ""),
-                })
-    except Exception:
-        pass
-
-    # Sort newest first
-    entries.sort(key=lambda e: e.get("timestamp", ""), reverse=True)
-    return success_response(data={"entries": entries[:200], "total": len(entries)})
+def clear_errors():
+    return _errors_instance.clear_errors()

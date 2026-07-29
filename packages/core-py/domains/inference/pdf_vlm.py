@@ -19,14 +19,8 @@ class PDFVLMProcessor:
         self.max_pages = max_pages
 
     def _get_vlm(self):
-        """Try to get loaded VLM inference engine."""
-        try:
-            from apps.api.server.routers.visual import _vlm_inference
-            return _vlm_inference
-        except ImportError:
-            return None
-        except Exception:
-            return None
+        """VLM inference is not available."""
+        return None
 
     def _page_images(self, pdf_path: str) -> list[bytes]:
         """Convert PDF pages to PNG images."""

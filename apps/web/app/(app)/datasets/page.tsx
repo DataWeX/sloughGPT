@@ -4,6 +4,10 @@ export const dynamic = 'force-dynamic'
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@sloughgpt/strui'
 import { Card, CardContent, CardHeader, CardTitle, EmptyCard } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
@@ -20,6 +24,7 @@ export default function DatasetsPage() {
   const [datasets, setDatasets] = useState<Dataset[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [pendingDelete, setPendingDelete] = useState<Dataset | null>(null)
 
   const fetchDatasets = useCallback(async () => {
     setLoading(true)
@@ -37,14 +42,16 @@ export default function DatasetsPage() {
     fetchDatasets()
   }, [fetchDatasets])
 
-  const handleDelete = async (ds: Dataset) => {
-    if (!confirm(`Delete dataset "${ds.name}"?`)) return
+  const handleDelete = async () => {
+    if (!pendingDelete) return
     try {
-      await datasetController.delete(ds.id)
-      setDatasets(prev => prev.filter(d => d.id !== ds.id))
-      addToast(`Deleted "${ds.name}"`, 'info')
+      await datasetController.delete(pendingDelete.id)
+      setDatasets(prev => prev.filter(d => d.id !== pendingDelete.id))
+      addToast(`Deleted "${pendingDelete.name}"`, 'info')
     } catch {
       addToast('Delete failed', 'error')
+    } finally {
+      setPendingDelete(null)
     }
   }
 
@@ -130,7 +137,7 @@ export default function DatasetsPage() {
                     variant="ghost"
                     size="sm"
                     className="h-7 w-7 ml-2 shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); handleDelete(ds) }}
+                    onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); setPendingDelete(ds) }}
                     aria-label={`Delete ${ds.name}`}
                   >
                     <IconTrash className="h-3.5 w-3.5" />
@@ -141,6 +148,23 @@ export default function DatasetsPage() {
           </div>
         )}
       </div>
+
+      <AlertDialog open={!!pendingDelete} onOpenChange={(open) => { if (!open) setPendingDelete(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete dataset</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &ldquo;{pendingDelete?.name}&rdquo;? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

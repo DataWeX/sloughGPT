@@ -23,7 +23,7 @@ Or via CLI:
 
 from typing import Optional
 
-from .kernel import Kernel, Process, ProcessState  # noqa: F401
+from .kernel import Kernel, NeuralKernel, Process, ProcessState  # noqa: F401
 from .addons.neural import (  # noqa: F401
     NeuralOp, NeuralState, NeuralProcessType, NeuralMemoryType, CacheStrategy,
     NeuralProcess, KVCacheEntry, NeuralKVCache,
@@ -46,6 +46,9 @@ from .devices import DeviceManager, AIDevice, create_default_devices
 from .vm import VirtualCPU, VMRunner, ProgramLoader, Instruction, VMFault, Halt, MemFault, InsFault, SysFault
 from .vm_programs import HELLO_ASM, COUNTER_ASM, FIB_ASM, COLLATZ_ASM, self_test
 from .vfs import VFS, VFSEntry, VFSGeneratedFile, VFSDirectory, get_vfs, reset_vfs
+from .cycles import CyclesRenderer, Scene, Camera, Material, Light, BVH, create_sphere, create_plane, create_cube
+from .cycles_device import CyclesDevice
+from .render_neural import RenderNeuralDevice
 
 
 _dait_instance: Optional[DaitRuntime] = None
@@ -61,6 +64,7 @@ def get_dait_runtime() -> DaitRuntime:
 __all__ = [
     "DaitRuntime",
     "Kernel",
+    "NeuralKernel",
     "Process",
     "ProcessState",
     "Resource",
@@ -96,4 +100,15 @@ __all__ = [
     "self_test",
     "ShellPermissions",
     "Risk",
+    "CyclesRenderer",
+    "Scene",
+    "Camera",
+    "Material",
+    "Light",
+    "BVH",
+    "create_sphere",
+    "create_plane",
+    "create_cube",
+    "CyclesDevice",
+    "RenderNeuralDevice",
 ]

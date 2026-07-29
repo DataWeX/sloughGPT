@@ -6,32 +6,37 @@ from datetime import datetime
 
 from schemas.common import success_response
 
-router = APIRouter(tags=["status"])
 
-_start_time = datetime.now()
+class StatusRouter:
+    def __init__(self):
+        self._start_time = datetime.now()
+        self.router = APIRouter(tags=["status"])
+        self._register_routes()
+
+    def _register_routes(self):
+        self.router.add_api_route("/status", self.get_status, methods=["GET"])
+        self.router.add_api_route("/ready", self.ready, methods=["GET"])
+        self.router.add_api_route("/live", self.live, methods=["GET"])
+
+    async def get_status(self):
+        """Get overall service status"""
+        import psutil
+
+        uptime = (datetime.now() - self._start_time).total_seconds()
+
+        return success_response(data={
+            "status": "healthy",
+            "uptime_seconds": uptime,
+            "timestamp": datetime.now().isoformat(),
+        })
+
+    async def ready(self):
+        """Readiness check"""
+        return success_response(data={"ready": True})
+
+    async def live(self):
+        """Liveness check"""
+        return success_response(data={"alive": True})
 
 
-@router.get("/status")
-async def get_status():
-    """Get overall service status"""
-    import psutil
-
-    uptime = (datetime.now() - _start_time).total_seconds()
-
-    return success_response(data={
-        "status": "healthy",
-        "uptime_seconds": uptime,
-        "timestamp": datetime.now().isoformat(),
-    })
-
-
-@router.get("/ready")
-async def ready():
-    """Readiness check"""
-    return success_response(data={"ready": True})
-
-
-@router.get("/live")
-async def live():
-    """Liveness check"""
-    return success_response(data={"alive": True})
+router = StatusRouter().router

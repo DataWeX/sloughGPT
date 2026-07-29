@@ -15,13 +15,15 @@ logger = logging.getLogger("slo.shell.commands")
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
-API_BASE = "http://localhost:8000"
+from .config import get_api_base
+
+API_BASE = get_api_base()  # backward compat
 
 
 def _api_get(path: str) -> dict[str, Any] | list:
     import requests
     try:
-        r = requests.get(f"{API_BASE}{path}", timeout=15)
+        r = requests.get(f"{get_api_base()}{path}", timeout=15)
         if r.status_code == 200:
             return r.json()
         return {"error": f"HTTP {r.status_code}", "detail": r.text[:200]}
@@ -32,7 +34,7 @@ def _api_get(path: str) -> dict[str, Any] | list:
 def _api_post(path: str, data: dict | None = None) -> dict[str, Any] | list:
     import requests
     try:
-        r = requests.post(f"{API_BASE}{path}", json=data or {}, timeout=120)
+        r = requests.post(f"{get_api_base()}{path}", json=data or {}, timeout=120)
         if r.status_code in (200, 201):
             return r.json()
         return {"error": f"HTTP {r.status_code}", "detail": r.text[:200]}
@@ -43,7 +45,7 @@ def _api_post(path: str, data: dict | None = None) -> dict[str, Any] | list:
 def _api_delete(path: str) -> dict[str, Any]:
     import requests
     try:
-        r = requests.delete(f"{API_BASE}{path}", timeout=15)
+        r = requests.delete(f"{get_api_base()}{path}", timeout=15)
         return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}"}
     except Exception as e:
         return {"error": str(e)}
@@ -81,7 +83,7 @@ class ShellCommands:
         import requests
         try:
             r = requests.post(
-                f"{API_BASE}/models/load",
+                f"{get_api_base()}/models/load",
                 json={"model_id": model_name, "device": "cpu"},
                 timeout=600,
             )

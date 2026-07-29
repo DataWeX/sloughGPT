@@ -177,6 +177,31 @@ def _build_status_message(
     return msg
 
 
+def _get_resource_allocation() -> Dict[str, Any]:
+    """Get CPU topology resource allocation."""
+    try:
+        from domains.infrastructure.resource_manager import get_resource_manager
+        rm = get_resource_manager()
+        return {
+            "mode": rm.mode,
+            "compute_threads": rm.compute_threads,
+            "io_threads": rm.io_threads,
+            "omp_num_threads": rm.omp_num_threads,
+            "mkl_num_threads": rm.mkl_num_threads,
+            "openblas_num_threads": rm.openblas_num_threads,
+            "numexpr_num_threads": rm.numexpr_num_threads,
+            "inference_pool_size": rm.inference_pool_size,
+            "train_pool_size": rm.train_pool_size,
+            "task_queue_workers": rm.task_queue_workers,
+            "dataloader_workers": rm.dataloader_workers,
+            "concurrent_reads": rm.concurrent_reads,
+            "concurrent_writes": rm.concurrent_writes,
+            "process_guard_concurrent": rm.process_guard_concurrent,
+        }
+    except Exception:
+        return {}
+
+
 class HealthController:
     """Controller for system health"""
 
@@ -227,6 +252,9 @@ class HealthController:
         executor_stats = _get_executor_stats()
         if executor_stats:
             result["training_pool"] = executor_stats
+
+        # Resource allocation from CPU topology
+        result["resource_allocation"] = _get_resource_allocation()
 
         return result
 
@@ -335,6 +363,7 @@ class HealthController:
             "quantization": _get_quantization_info(),
             "lifecycle": lifecycle,
             "training_pool": _get_executor_stats(),
+            "resource_allocation": _get_resource_allocation(),
             "status_message": _build_status_message(
                 model_loaded, model_type, model_loading, current_soul,
                 request_count, error_count, lifecycle,

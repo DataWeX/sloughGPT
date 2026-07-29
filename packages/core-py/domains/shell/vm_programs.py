@@ -882,6 +882,500 @@ db 0
 exec_src_len equ $ - exec_src
 """
 
+TEST_MEMORY_ASM = """\
+; ════════════════════════════════════════════════════════════════════════════
+; test_memory.asm — Byte, word, and dword memory read/write tests
+; ════════════════════════════════════════════════════════════════════════════
+;
+; Tests: writed/read byte, word, dword at absolute addresses
+; ════════════════════════════════════════════════════════════════════════════
+
+[BITS 32]
+[ORG 0x100000]
+
+    jmp start
+
+print:
+    pusha
+    push esi
+    xor edx, edx
+.count:
+    lodsb
+    test al, al
+    jz .have_len
+    inc edx
+    jmp .count
+.have_len:
+    pop ecx
+    mov eax, 3
+    mov ebx, 1
+    int 0x80
+    popa
+    ret
+
+print_result:
+    pusha
+    jnz .fail
+    mov esi, msg_pass
+    jmp .do_print
+.fail:
+    mov esi, msg_fail
+.do_print:
+    call print
+    popa
+    ret
+
+start:
+    ; ── Test 1: Write and read byte at fixed address ──
+    mov esi, t1
+    call print
+    mov byte [0x80000], 0xAB
+    mov al, [0x80000]
+    cmp al, 0xAB
+    call print_result
+
+    ; ── Test 2: Write and read dword at fixed address ──
+    mov esi, t2
+    call print
+    mov dword [0x80004], 0xDEADBEEF
+    mov eax, [0x80004]
+    cmp eax, 0xDEADBEEF
+    call print_result
+
+    ; ── Test 3: Write and read word at fixed address ──
+    mov esi, t3
+    call print
+    mov word [0x80008], 0x1234
+    mov ax, [0x80008]
+    cmp ax, 0x1234
+    call print_result
+
+    ; ── Test 4: Write via register indirect ──
+    mov esi, t4
+    call print
+    mov ebx, 0x8000C
+    mov dword [ebx], 0xCAFEBABE
+    mov eax, [ebx]
+    cmp eax, 0xCAFEBABE
+    call print_result
+
+    ; ── Test 5: Read via register indirect ──
+    mov esi, t5
+    call print
+    mov dword [0x80010], 0x20202020
+    mov ebx, 0x80010
+    mov eax, [ebx]
+    cmp eax, 0x20202020
+    call print_result
+
+    mov esi, msg_done
+    call print
+    mov eax, 1
+    xor ebx, ebx
+    int 0x80
+
+t1:  db "[1]  byte  r/w         ", 0
+t2:  db "[2]  dword r/w         ", 0
+t3:  db "[3]  word  r/w         ", 0
+t4:  db "[4]  reg-indirect write", 0
+t5:  db "[5]  reg-indirect read ", 0
+msg_pass: db "  PASS", 10, 0
+msg_fail: db "  FAIL", 10, 0
+msg_done: db 10, "=== Memory tests done ===", 10, 0
+"""
+
+TEST_ARITH_ASM = """\
+; ════════════════════════════════════════════════════════════════════════════
+; test_arith.asm — Arithmetic and bitwise operation tests
+; ════════════════════════════════════════════════════════════════════════════
+;
+; Tests: add, sub, and, or, xor, inc, dec, bit shifts
+; ════════════════════════════════════════════════════════════════════════════
+
+[BITS 32]
+[ORG 0x100000]
+
+    jmp start
+
+print:
+    pusha
+    push esi
+    xor edx, edx
+.count:
+    lodsb
+    test al, al
+    jz .have_len
+    inc edx
+    jmp .count
+.have_len:
+    pop ecx
+    mov eax, 3
+    mov ebx, 1
+    int 0x80
+    popa
+    ret
+
+print_result:
+    pusha
+    jnz .fail
+    mov esi, msg_pass
+    jmp .do_print
+.fail:
+    mov esi, msg_fail
+.do_print:
+    call print
+    popa
+    ret
+
+start:
+    ; ── Test 1: add ──
+    mov esi, t1
+    call print
+    mov eax, 10
+    add eax, 20
+    cmp eax, 30
+    call print_result
+
+    ; ── Test 2: sub ──
+    mov esi, t2
+    call print
+    mov eax, 50
+    sub eax, 13
+    cmp eax, 37
+    call print_result
+
+    ; ── Test 3: and ──
+    mov esi, t3
+    call print
+    mov eax, 0xFF
+    and eax, 0x0F
+    cmp eax, 0x0F
+    call print_result
+
+    ; ── Test 4: or ──
+    mov esi, t4
+    call print
+    mov eax, 0xF0
+    or eax, 0x0F
+    cmp eax, 0xFF
+    call print_result
+
+    ; ── Test 5: xor ──
+    mov esi, t5
+    call print
+    mov eax, 0xFF
+    xor eax, 0x0F
+    cmp eax, 0xF0
+    call print_result
+
+    ; ── Test 6: shl ──
+    mov esi, t6
+    call print
+    mov eax, 1
+    shl eax, 4
+    cmp eax, 16
+    call print_result
+
+    ; ── Test 7: shr ──
+    mov esi, t7
+    call print
+    mov eax, 256
+    shr eax, 4
+    cmp eax, 16
+    call print_result
+
+    ; ── Test 8: inc ──
+    mov esi, t8
+    call print
+    mov eax, 99
+    inc eax
+    cmp eax, 100
+    call print_result
+
+    ; ── Test 9: dec ──
+    mov esi, t9
+    call print
+    mov eax, 1
+    dec eax
+    cmp eax, 0
+    call print_result
+
+    mov esi, msg_done
+    call print
+    mov eax, 1
+    xor ebx, ebx
+    int 0x80
+
+t1:  db "[1]  add              ", 0
+t2:  db "[2]  sub              ", 0
+t3:  db "[3]  and              ", 0
+t4:  db "[4]  or               ", 0
+t5:  db "[5]  xor              ", 0
+t6:  db "[6]  shl              ", 0
+t7:  db "[7]  shr              ", 0
+t8:  db "[8]  inc              ", 0
+t9:  db "[9]  dec              ", 0
+msg_pass: db "  PASS", 10, 0
+msg_fail: db "  FAIL", 10, 0
+msg_done: db 10, "=== Arithmetic tests done ===", 10, 0
+"""
+
+TEST_STACK_ASM = """\
+; ════════════════════════════════════════════════════════════════════════════
+; test_stack.asm — Stack and call/ret tests
+; ════════════════════════════════════════════════════════════════════════════
+;
+; Tests: push, pop, pusha/popa, call/ret, nested calls
+; ════════════════════════════════════════════════════════════════════════════
+
+[BITS 32]
+[ORG 0x100000]
+
+    jmp start
+
+print:
+    pusha
+    push esi
+    xor edx, edx
+.count:
+    lodsb
+    test al, al
+    jz .have_len
+    inc edx
+    jmp .count
+.have_len:
+    pop ecx
+    mov eax, 3
+    mov ebx, 1
+    int 0x80
+    popa
+    ret
+
+print_result:
+    pusha
+    jnz .fail
+    mov esi, msg_pass
+    jmp .do_print
+.fail:
+    mov esi, msg_fail
+.do_print:
+    call print
+    popa
+    ret
+
+; Helper: returns eax*2
+double_it:
+    add eax, eax
+    ret
+
+; Helper: nested — doubles twice
+double_twice:
+    call double_it
+    call double_it
+    ret
+
+start:
+    ; ── Test 1: push/pop preserves value ──
+    mov esi, t1
+    call print
+    mov eax, 0x42
+    push eax
+    mov eax, 0
+    pop eax
+    cmp eax, 0x42
+    call print_result
+
+    ; ── Test 2: push immediate ──
+    mov esi, t2
+    call print
+    push 0x99
+    pop eax
+    cmp eax, 0x99
+    call print_result
+
+    ; ── Test 3: pusha/popa ──
+    mov esi, t3
+    call print
+    mov eax, 1
+    mov ebx, 2
+    mov ecx, 3
+    pusha
+    mov eax, 0
+    mov ebx, 0
+    mov ecx, 0
+    popa
+    cmp eax, 1
+    jne .t3_fail
+    cmp ebx, 2
+    jne .t3_fail
+    cmp ecx, 3
+    jne .t3_fail
+    cmp eax, 0  ; ZF=1
+    jmp .t3_done
+.t3_fail:
+    cmp eax, -1 ; ZF=0
+.t3_done:
+    call print_result
+
+    ; ── Test 4: call/ret ──
+    mov esi, t4
+    call print
+    mov eax, 21
+    call double_it
+    cmp eax, 42
+    call print_result
+
+    ; ── Test 5: nested calls ──
+    mov esi, t5
+    call print
+    mov eax, 5
+    call double_twice
+    cmp eax, 20
+    call print_result
+
+    mov esi, msg_done
+    call print
+    mov eax, 1
+    xor ebx, ebx
+    int 0x80
+
+t1:  db "[1]  push/pop reg     ", 0
+t2:  db "[2]  push immediate    ", 0
+t3:  db "[3]  pusha/popa        ", 0
+t4:  db "[4]  call/ret          ", 0
+t5:  db "[5]  nested call       ", 0
+msg_pass: db "  PASS", 10, 0
+msg_fail: db "  FAIL", 10, 0
+msg_done: db 10, "=== Stack/call tests done ===", 10, 0
+"""
+
+TEST_SYS_EDGE_ASM = """\
+; ════════════════════════════════════════════════════════════════════════════
+; test_sys_edges.asm — Syscall edge case tests
+; ════════════════════════════════════════════════════════════════════════════
+;
+; Tests: invalid fd, zero-length write, etc.
+; ════════════════════════════════════════════════════════════════════════════
+
+[BITS 32]
+[ORG 0x100000]
+
+    jmp start
+
+print:
+    pusha
+    push esi
+    xor edx, edx
+.count:
+    lodsb
+    test al, al
+    jz .have_len
+    inc edx
+    jmp .count
+.have_len:
+    pop ecx
+    mov eax, 3
+    mov ebx, 1
+    int 0x80
+    popa
+    ret
+
+print_result:
+    pusha
+    jnz .fail
+    mov esi, msg_pass
+    jmp .do_print
+.fail:
+    mov esi, msg_fail
+.do_print:
+    call print
+    popa
+    ret
+
+start:
+    ; ── Test 1: SYS_GETPID returns positive PID ──
+    mov esi, t1
+    call print
+    mov eax, 10
+    int 0x80
+    cmp eax, 0
+    ja .t1_ok
+    cmp eax, 0
+    jmp .t1_done
+.t1_ok:
+    cmp eax, 0
+.t1_done:
+    call print_result
+
+    ; ── Test 2: SYS_READ on fd=1 (stdout) returns -1 ──
+    mov esi, t2
+    call print
+    mov eax, 2
+    mov ebx, 1
+    mov ecx, 0x80000
+    mov edx, 8
+    int 0x80
+    cmp eax, -1
+    je .t2_ok
+    cmp eax, 0
+    jmp .t2_done
+.t2_ok:
+    cmp eax, 0
+.t2_done:
+    call print_result
+
+    ; ── Test 3: SYS_WRITE with count=0 returns 0 ──
+    mov esi, t3
+    call print
+    mov eax, 3
+    mov ebx, 1
+    mov ecx, msg_hello
+    mov edx, 0
+    int 0x80
+    cmp eax, 0
+    call print_result
+
+    ; ── Test 4: SYS_CLOSE returns -1 for invalid fd ──
+    mov esi, t4
+    call print
+    mov eax, 5
+    mov ebx, 999
+    int 0x80
+    cmp eax, -1
+    je .t4_ok
+    cmp eax, 0
+    jmp .t4_done
+.t4_ok:
+    cmp eax, 0
+.t4_done:
+    call print_result
+
+    ; ── Test 5: SYS_UNAME returns 0 ──
+    mov esi, t5
+    call print
+    mov eax, 18
+    mov ebx, 0x80000
+    int 0x80
+    cmp eax, 0
+    call print_result
+
+    mov esi, msg_done
+    call print
+    mov eax, 1
+    xor ebx, ebx
+    int 0x80
+
+t1:  db "[1]  getpid >0         ", 0
+t2:  db "[2]  read on fd=1      ", 0
+t3:  db "[3]  write count=0     ", 0
+t4:  db "[4]  close invalid fd  ", 0
+t5:  db "[5]  uname returns 0   ", 0
+msg_pass: db "  PASS", 10, 0
+msg_fail: db "  FAIL", 10, 0
+msg_hello: db "Hello", 0
+msg_done: db 10, "=== Edge case tests done ===", 10, 0
+"""
+
 # ── Example Programs ─────────────────────────────────────────────────────────
 
 HELLO_ASM = """\

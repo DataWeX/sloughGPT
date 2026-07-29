@@ -92,8 +92,9 @@ class LLMDevice(AIDevice):
             return self._generate_fn(prompt)
         try:
             import requests
+            from .config import get_api_base
             r = requests.post(
-                "http://localhost:8000/inference/generate",
+                f"{get_api_base()}/inference/generate",
                 json={"prompt": prompt, "max_new_tokens": 128},
                 timeout=30,
             )
@@ -141,8 +142,9 @@ class KnowledgeDevice(AIDevice):
     name = "knowledge"
     description = "Knowledge base — read returns random fact, write stores a fact"
 
-    def __init__(self, api_base: str = "http://localhost:8000"):
-        self._api_base = api_base
+    def __init__(self, api_base: str | None = None):
+        from .config import get_api_base
+        self._api_base = api_base or get_api_base()
 
     def read(self, args: str = "") -> str:
         try:

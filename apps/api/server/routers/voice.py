@@ -12,7 +12,6 @@ from pydantic import BaseModel
 from schemas.common import success_response
 
 logger = logging.getLogger("slo.routers.voice")
-router = APIRouter(prefix="/voice", tags=["voice"])
 
 
 # ── TTS backend state (lazy-loaded) ─────────────────────────────────────
@@ -31,12 +30,11 @@ class _TTSBackend:
             return True
         try:
             from transformers import pipeline
-            # Try Bark-small (fast, works without GPU for short text)
             model_id = "suno/bark-small"
             self._pipeline = pipeline(
                 "text-to-speech",
                 model=model_id,
-                device=-1,  # CPU
+                device=-1,
             )
             self._model_id = model_id
             self._loaded = True
@@ -56,12 +54,10 @@ class _TTSBackend:
             if not self.load():
                 raise RuntimeError(f"TTS unavailable: {self._error}")
         result = self._pipeline(text)
-        # Result is dict with 'audio' (numpy array) and 'sampling_rate' (int)
         audio_array = result["audio"]
         sample_rate = result["sampling_rate"]
         import numpy as np
         audio_int16 = (audio_array * 32767).astype(np.int16)
-        # Write as WAV
         import wave
         buf = io.BytesIO()
         with wave.open(buf, "wb") as wf:
@@ -73,73 +69,78 @@ class _TTSBackend:
         return buf.read()
 
 
-_tts_backend = _TTSBackend()
-
-
 # ── Schema ──────────────────────────────────────────────────────────────
 
 class TTSRequest(BaseModel):
     text: str
-    voice: Optional[str] = None  # future: voice selection
+    voice: Optional[str] = None
 
 
 class TTSResponse(BaseModel):
-    audio: str       # base64-encoded WAV
+    audio: str
     sample_rate: int
     duration_ms: int
-    backend: str     # "hf-model" | "browser-fallback"
+    backend: str
 
 
-# ── Endpoint ────────────────────────────────────────────────────────────
+# ── Router ──────────────────────────────────────────────────────────────
 
-@router.post("/tts", response_model=TTSResponse)
-async def text_to_speech(request: TTSRequest):
-    """Convert text to speech audio.
+class VoiceRouter:
+    def __init__(self):
+        self._tts_backend = _TTSBackend()
+        self.router = APIRouter(prefix="/voice", tags=["voice"])
+        self._register_routes()
 
-    Uses HuggingFace TTS model (bark-small) if available.
-    Returns base64-encoded WAV audio with sample rate metadata.
+    def _register_routes(self):
+        self.router.add_api_route("/tts", self.text_to_speech, methods=["POST"], response_model=TTSResponse)
+        self.router.add_api_route("/status", self.voice_status, methods=["GET"])
 
-    Falls back with a browser-fallback signal so the frontend
-    can use native speechSynthesis instead.
-    """
-    if not request.text.strip():
-        raise HTTPException(status_code=400, detail="No text provided")
+    async def text_to_speech(self, request: TTSRequest) -> TTSResponse:
+        """Convert text to speech audio.
 
-    try:
-        if _tts_backend.load():
-            audio_bytes = await asyncio.to_thread(_tts_backend.generate, request.text)
-            sample_rate = 24000  # bark-small default
-            # Estimate duration from sample rate and data size
-            import wave
-            with wave.open(io.BytesIO(audio_bytes)) as wf:
-                frames = wf.getnframes()
-                sr = wf.getframerate()
-                duration_ms = int(frames / sr * 1000) if sr > 0 else 0
+        Uses HuggingFace TTS model (bark-small) if available.
+        Returns base64-encoded WAV audio with sample rate metadata.
 
-            return TTSResponse(
-                audio=base64.b64encode(audio_bytes).decode("utf-8"),
-                sample_rate=sr,
-                duration_ms=duration_ms,
-                backend="hf-model",
-            )
-    except Exception as e:
-        logger.warning(f"TTS generation failed, falling back to browser: {e}", extra={"tag": "MODEL"})
+        Falls back with a browser-fallback signal so the frontend
+        can use native speechSynthesis instead.
+        """
+        if not request.text.strip():
+            raise HTTPException(status_code=400, detail="No text provided")
 
-    # Fallback: tell frontend to use browser speechSynthesis
-    return TTSResponse(
-        audio="",
-        sample_rate=0,
-        duration_ms=0,
-        backend="browser-fallback",
-    )
+        try:
+            if self._tts_backend.load():
+                audio_bytes = await asyncio.to_thread(self._tts_backend.generate, request.text)
+                sample_rate = 24000
+                import wave
+                with wave.open(io.BytesIO(audio_bytes)) as wf:
+                    frames = wf.getnframes()
+                    sr = wf.getframerate()
+                    duration_ms = int(frames / sr * 1000) if sr > 0 else 0
+
+                return TTSResponse(
+                    audio=base64.b64encode(audio_bytes).decode("utf-8"),
+                    sample_rate=sr,
+                    duration_ms=duration_ms,
+                    backend="hf-model",
+                )
+        except Exception as e:
+            logger.warning(f"TTS generation failed, falling back to browser: {e}", extra={"tag": "MODEL"})
+
+        return TTSResponse(
+            audio="",
+            sample_rate=0,
+            duration_ms=0,
+            backend="browser-fallback",
+        )
+
+    async def voice_status(self):
+        """Check if server-side TTS model is available."""
+        available = self._tts_backend.load()
+        return success_response(data={
+            "server_tts": available,
+            "model": self._tts_backend._model_id if available else None,
+            "error": self._tts_backend._error,
+        })
 
 
-@router.get("/status")
-async def voice_status():
-    """Check if server-side TTS model is available."""
-    available = _tts_backend.load()
-    return success_response(data={
-        "server_tts": available,
-        "model": _tts_backend._model_id if available else None,
-        "error": _tts_backend._error,
-    })
+router = VoiceRouter().router

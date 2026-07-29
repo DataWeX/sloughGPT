@@ -2439,15 +2439,20 @@ class X86Assembler:
         return False
         self._reloc = []  # (offset, label, type)
 
-    def assemble(self, source: str) -> bytearray:
+    def assemble(self, source: str, org: int = 0) -> bytearray:
         """Assemble x86 source to machine code bytes.
 
         Multi-pass converging assembler:
           Each pass generates code using current labels, then re-records labels.
           Repeats until label addresses stabilize (or max 10 passes).
+
+        Args:
+            source: Assembly source code.
+            org: Base address for label resolution. If source contains an
+                 [ORG] directive it takes precedence.
         """
         self._bits = 16
-        self._org = 0
+        self._org = org
         self._labels = {}
         self._output = bytearray()
         self._reloc = []
@@ -2458,7 +2463,7 @@ class X86Assembler:
         for iteration in range(10):
             self._output = bytearray()
             self._bits = 16
-            self._org = 0
+            self._org = org
             self._pass = max(iteration, 1)
 
             for line in lines:
@@ -3187,16 +3192,43 @@ class X86Assembler:
                     self._output.append(modrm)
                     self._output.extend((disp & 0xFFFFFFFF).to_bytes(4, "little"))
             else:
-                # [label + label] — treat as direct address sum
-                addr = self._parse_imm(inner)
-                modrm = (0x00 | (reg_enc << 3) | 0x05)
-                self._output.append(modrm)
-                self._output.extend((addr & 0xFFFFFFFF).to_bytes(4, "little"))
+                # Check for scaled index: "label + esi*4" or "esi*4 + label"
+                scaled_reg = None
+                scaled_mul = None
+                disp_part = None
+                for p in parts:
+                    p = p.strip()
+                    if "*" in p:
+                        r, _, s = p.partition("*")
+                        r = r.strip()
+                        s = s.strip()
+                        if r in self._REG32 and s in ("1", "2", "4", "8"):
+                            scaled_reg = r
+                            scaled_mul = int(s)
+                        else:
+                            disp_part = p
+                    else:
+                        disp_part = p
+                if scaled_reg is not None:
+                    addr = self._parse_label(disp_part) if disp_part else 0
+                    scale_enc = {1: 0, 2: 1, 4: 2, 8: 3}[scaled_mul]
+                    index_enc = self._REG32[scaled_reg]
+                    modrm = (0x00 | (reg_enc << 3) | 0x04)
+                    sib = (scale_enc << 6) | (index_enc << 3) | 0x05
+                    self._output.append(modrm)
+                    self._output.append(sib)
+                    self._output.extend((addr & 0xFFFFFFFF).to_bytes(4, "little"))
+                else:
+                    # [label + label] — treat as direct address sum
+                    addr = self._parse_label(inner)
+                    modrm = (0x00 | (reg_enc << 3) | 0x05)
+                    self._output.append(modrm)
+                    self._output.extend((addr & 0xFFFFFFFF).to_bytes(4, "little"))
         else:
-            # Direct address [imm32]
+            # Direct address [imm32] or [label]
             modrm = (0x00 | (reg_enc << 3) | 0x05)
             self._output.append(modrm)
-            addr = self._parse_imm(inner)
+            addr = self._parse_label(inner)
             self._output.extend((addr & 0xFFFFFFFF).to_bytes(4, "little"))
 
     def _emit_alu(self, op, ops):
@@ -3306,16 +3338,17 @@ class X86Assembler:
                 modrm = (0xC0 | (0 << 3) | self._REG8[dst])
                 self._output.append(modrm)
                 self._output.append(val & 0xFF)
-            elif -128 <= val <= 127:
+            elif -128 <= val <= 255:
                 self._output.append(0x80)
                 modrm = (0xC0 | (alu_op[op] << 3) | self._REG8[dst])
                 self._output.append(modrm)
                 self._output.append(val & 0xFF)
             else:
+                self._output.append(0x66)
                 self._output.append(0x81)
                 modrm = (0xC0 | (alu_op[op] << 3) | self._REG8[dst])
                 self._output.append(modrm)
-                self._output.append(val & 0xFF)
+                self._output.append((val & 0xFFFF).to_bytes(2, "little"))
         # [mem], reg or [mem], imm — ALU r/m32, r/imm
         elif "[" in dst:
             mem = dst
@@ -3353,11 +3386,11 @@ class X86Assembler:
                         disp_bytes = b""
                 else:
                     modrm_rm = 5
-                    addr = self._parse_imm(inner)
+                    addr = self._parse_label(inner)
                     disp_bytes = (addr & 0xFFFFFFFF).to_bytes(4, "little")
             else:
                 modrm_rm = 5
-                addr = self._parse_imm(inner)
+                addr = self._parse_label(inner)
                 disp_bytes = (addr & 0xFFFFFFFF).to_bytes(4, "little")
             # [mem], reg — ALU r/m32, r32
             if src in self._REG32:
@@ -3418,7 +3451,7 @@ class X86Assembler:
             self._output.append(0xFF)
             modrm = (0x00 | (func << 3) | 0x05)  # /0 or /1, [disp32]
             self._output.append(modrm)
-            addr = self._parse_imm(mem.strip("[]"))
+            addr = self._parse_label(mem.strip("[]"))
             self._output.extend((addr & 0xFFFFFFFF).to_bytes(4, "little"))
 
     def _emit_unary(self, op, ops):
@@ -3608,6 +3641,7 @@ class X86Assembler:
 
     def _parse_label(self, text):
         text = text.strip()
+        import re
         if text == "$":
             return self._org + len(self._output)
         if text in self._labels:
@@ -3618,7 +3652,6 @@ class X86Assembler:
         if text.startswith("0b") or text.startswith("0B"):
             return int(text, 2)
         # Only treat as hex literal if the prefix is purely hex digits (e.g. "10h", "FFh")
-        import re
         if re.match(r'^[0-9a-fA-F]+[hH]$', text):
             return int(text[:-1], 16)
         if re.match(r'^[01]+[bB]$', text):
@@ -3644,12 +3677,13 @@ class X86Assembler:
         if re.match(r'^[\d\s\+\-\*\/\(\)]+$', text):
             try:
                 return int(eval(text))
-            except:
+            except (ValueError, SyntaxError, TypeError):
                 return 0
         return 0
 
     def _parse_imm(self, text):
         text = text.strip()
+        import re
         # Character literals: 'A', '0', '\n', etc.
         if (text.startswith("'") and text.endswith("'")) or (text.startswith('"') and text.endswith('"')):
             inner = text[1:-1]
@@ -3674,7 +3708,7 @@ class X86Assembler:
             return int(text, 2)
         if text.endswith("h") or text.endswith("H"):
             return int(text[:-1], 16)
-        if text.endswith("b") or text.endswith("B"):
+        if re.match(r'^[01]+[bB]$', text):
             return int(text[:-1], 2)
         try:
             return int(text, 0)
@@ -3686,10 +3720,9 @@ class X86Assembler:
         if text in self._labels:
             return self._labels[text]
         # Try arithmetic expression with label references
-        import re
         expr = text
         for name, addr in self._labels.items():
-            expr = re.sub(r'\b' + re.escape(name) + r'\b', str(addr), expr)
+            expr = re.sub(r'(?<!\w)' + re.escape(name) + r'(?!\w)', str(addr), expr)
         if re.match(r'^[\d\s\+\-\*\/\(\)]+$', expr):
             try:
                 return int(eval(expr))
@@ -6187,7 +6220,16 @@ class X86SyscallHandler:
         15 - malloc        (EBX = size) → EAX = addr
         16 - free          (EBX = addr)
         17 - readdir       (EBX = buf_addr, ECX = max_entries) → EAX = count
-        18 - uname         (EBX = buf_addr)
+         18 - uname         (EBX = buf_addr)
+         19 - serial_write  (EBX = char)
+         20 - serial_read   () → EAX = char
+         21 - mouse_read    (EBX = buf_addr) → EAX = status
+         22 - rtc_gettime   (EBX = buf_addr) → EAX = ticks
+         23 - disk_read     (EBX = sector, ECX = buf_addr, EDX = count) → EAX = bytes
+         24 - disk_write    (EBX = sector, ECX = buf_addr, EDX = count) → EAX = bytes
+         25 - net_send      (EBX = buf_addr, ECX = len)
+         26 - net_recv      (EBX = buf_addr, ECX = max_len)
+         27 - getrole       () → EAX = 0=USER, 1=ADMIN, 2=KERNEL
     """
 
     SYS_EXIT = 1
@@ -6216,6 +6258,10 @@ class X86SyscallHandler:
     SYS_DISK_WRITE = 24
     SYS_NET_SEND = 25
     SYS_NET_RECV = 26
+    SYS_GETROLE = 27
+    SYS_TRAIN_START = 28
+    SYS_TRAIN_STATUS = 29
+    SYS_TRAIN_GET_RESULT = 30
 
     def __init__(self, cpu: X86CPU, process_table: ProcessTable,
                  scheduler: Scheduler, memory: 'PageFrameAllocator',
@@ -6243,6 +6289,66 @@ class X86SyscallHandler:
         self._rtc: CMOSDevice | None = None
         self._disk: DiskDevice | None = None
         self._nic: NICDevice | None = None
+
+        # RBAC layer
+        from .vm_permissions import X86RBAC, Permission
+        self._rbac = X86RBAC()
+        self._Permission = Permission
+
+        # Syscall → required permission map
+        self._perm_map: dict[int, Permission | None] = {}
+
+    def _build_perm_map(self) -> None:
+        P = self._Permission
+        self._perm_map = {
+            self.SYS_EXIT: P.PROCESS_SELF,
+            self.SYS_READ: P.FILE_READ,
+            self.SYS_WRITE: P.FILE_WRITE,
+            self.SYS_OPEN: P.FILE_READ,
+            self.SYS_CLOSE: P.FILE_READ,
+            self.SYS_FORK: P.PROCESS_SPAWN,
+            self.SYS_EXEC: P.PROCESS_SPAWN,
+            self.SYS_WAIT: P.PROCESS_SELF,
+            self.SYS_BRK: P.PROCESS_SELF,
+            self.SYS_GETPID: P.PROCESS_SELF,
+            self.SYS_SBRK: P.PROCESS_SELF,
+            self.SYS_YIELD: P.PROCESS_SELF,
+            self.SYS_KILL: P.PROCESS_KILL,
+            self.SYS_GETTIMEOFDAY: P.PROCESS_SELF,
+            self.SYS_MALLOC: P.PROCESS_SELF,
+            self.SYS_FREE: P.PROCESS_SELF,
+            self.SYS_READDIR: P.FILE_META,
+            self.SYS_UNAME: P.PROCESS_SELF,
+            self.SYS_SERIAL_WRITE: P.DEVICE_SERIAL,
+            self.SYS_SERIAL_READ: P.DEVICE_SERIAL,
+            self.SYS_MOUSE_READ: P.DEVICE_MOUSE,
+            self.SYS_RTC_GETTIME: P.DEVICE_RTC,
+            self.SYS_DISK_READ: P.DEVICE_DISK,
+            self.SYS_DISK_WRITE: P.DEVICE_DISK,
+            self.SYS_NET_SEND: P.DEVICE_NET,
+            self.SYS_NET_RECV: P.DEVICE_NET,
+            self.SYS_GETROLE: P.PROCESS_SELF,
+            self.SYS_TRAIN_START: P.TRAINING,
+            self.SYS_TRAIN_STATUS: P.TRAINING,
+            self.SYS_TRAIN_GET_RESULT: P.TRAINING,
+        }
+
+    def _check_perm(self, syscall_num: int) -> bool:
+        if not self._perm_map:
+            self._build_perm_map()
+        required = self._perm_map.get(syscall_num)
+        if required is None:
+            return True
+        current = self._scheduler.current
+        pid = current.pid if current else 0
+        allowed = self._rbac.check(pid, required)
+        if not allowed:
+            role = self._rbac.role_of(pid)
+            import logging
+            logging.getLogger("x86.rbac").debug(
+                "DENY pid=%d syscall=%d role=%s need=%s",
+                pid, syscall_num, role.name, required.name)
+        return allowed
 
     def handle(self):
         """Dispatch syscall based on EAX. Called from INT 0x80 handler."""
@@ -6280,7 +6386,15 @@ class X86SyscallHandler:
             self.SYS_DISK_WRITE: lambda: self._sys_disk_write(arg1, arg2, arg3),
             self.SYS_NET_SEND: lambda: self._sys_net_send(arg1, arg2),
             self.SYS_NET_RECV: lambda: self._sys_net_recv(arg1, arg2),
+            self.SYS_GETROLE: lambda: self._sys_getrole(),
+            self.SYS_TRAIN_START: lambda: self._sys_train_start(arg1),
+            self.SYS_TRAIN_STATUS: lambda: self._sys_train_status(arg1),
+            self.SYS_TRAIN_GET_RESULT: lambda: self._sys_train_get_result(arg1, arg2, arg3),
         }
+
+        if not self._check_perm(num):
+            self._cpu._regs[0] = 0xFFFFFFFE  # -2 = permission denied
+            return
 
         handler = handlers.get(num)
         if handler:
@@ -6393,6 +6507,7 @@ class X86SyscallHandler:
                                      priority=current.priority)
         child.parent_pid = current.pid
         current.children.append(child.pid)
+        self._rbac.inherit(child.pid, current.pid)
 
         # Copy registers (fork returns 0 in child, child_pid in parent)
         child.eax = 0  # child return value
@@ -6460,8 +6575,14 @@ class X86SyscallHandler:
         if base is None:
             return -1
 
+        # Re-assemble with correct org so data labels resolve to the right addresses
+        try:
+            code = X86Assembler().assemble(source, org=base)
+        except Exception:
+            return -1
+
         # Load code at base address
-        self._cpu._mem[base:base + code_size] = code
+        self._cpu._mem[base:base + len(code)] = code
 
         # Reset process state for new program
         current.eip = base
@@ -6505,6 +6626,63 @@ class X86SyscallHandler:
         current = self._scheduler.current
         return current.pid if current else 0
 
+    def _sys_getrole(self) -> int:
+        current = self._scheduler.current
+        pid = current.pid if current else 0
+        return self._rbac.role_of(pid).value
+
+    # ── Training syscalls (bridge to Python training pipeline) ─────────────
+
+    def _sys_train_start(self, config_addr: int) -> int:
+        """Start training via ``POST /training/start`` API.
+
+        EBX = pointer to null-terminated JSON config in guest memory.
+
+        JSON keys:
+            dataset     — dataset name under datasets/ (e.g. "shakespeare")
+            epochs      — int (default: 3)
+            lr          — learning rate float (default: 1e-3)
+            batch_size  — int (default: 32)
+            embed_dim   — embedding dimension (default: 128)
+            n_layer     — transformer layers (default: 4)
+            n_head      — attention heads (default: 4)
+
+        Returns: job_id (>=1) on success, -1 on error.
+        """
+        config_str = self._read_string(config_addr)
+        from .vm_training_bridge import get_bridge
+        return get_bridge().start(config_str)
+
+    def _sys_train_status(self, job_id: int) -> int:
+        """Poll training job status.
+
+        EBX = job_id from SYS_TRAIN_START.
+
+        Returns: 0 = running, 1 = completed, 2 = failed, -1 = not found.
+        """
+        from .vm_training_bridge import get_bridge
+        s = get_bridge().status(job_id)
+        return {"running": 0, "completed": 1, "failed": 2, "not_found": -1}.get(s["status"], -1)
+
+    def _sys_train_get_result(self, job_id: int, buf_addr: int, buf_size: int) -> int:
+        """Read training result into VM memory buffer.
+
+        EBX = job_id, ECX = buffer addr, EDX = buffer size.
+
+        Writes JSON result string into buffer, null-terminated.
+        Returns: bytes written (0 if job not completed or not found).
+        """
+        from .vm_training_bridge import get_bridge
+        result_json = get_bridge().get_result_json(job_id)
+        if result_json is None:
+            return 0
+        data = (result_json + "\0").encode("utf-8")
+        if len(data) > buf_size:
+            data = data[:buf_size - 1] + b"\0"
+        for i, b in enumerate(data):
+            self._cpu._write8(buf_addr + i, b)
+        return len(data) - 1  # exclude null terminator
+
     def _sys_sbrk(self, increment: int) -> int:
         current = self._scheduler.current
         if current is None:
@@ -6521,8 +6699,26 @@ class X86SyscallHandler:
         pcb = self._ptable.get(pid)
         if pcb is None:
             return -1
+        current = self._scheduler.current
+        # Role escalation guard: prevent killing higher-privileged processes
+        if current is not None:
+            caller_role = self._rbac.role_of(current.pid)
+        else:
+            caller_role = None
+        if caller_role is not None:
+            target_role = self._rbac.role_of(pcb.pid)
+            if target_role is not None and target_role > caller_role:
+                return -1
         if signal == 9:  # SIGKILL
-            self._scheduler.exit_current(self._cpu, exit_code=-1)
+            if pcb.pid == (current.pid if current else None):
+                self._scheduler.exit_current(self._cpu, exit_code=-1)
+            else:
+                pcb.state = ProcessState.TERMINATED
+                pcb.exit_code = signal
+                self._ptable.remove(pcb.pid)
+                self._scheduler._ready_queue = [
+                    p for p in self._scheduler._ready_queue if p != pcb.pid
+                ]
             return 0
         return 0
 
@@ -6822,7 +7018,7 @@ class X86VirtualSystem:
 
         self._cpu.register_handler(1, _keyboard_handler)
 
-        # Kernel process (PID 1)
+        # Kernel process (PID 1) — gets KERNEL role (unrestricted)
         self._kernel = self._ptable.create(name="kernel", priority=10)
         self._kernel.state = ProcessState.RUNNING
         self._kernel.stack_base = memory_size - 0x10000
@@ -6830,6 +7026,8 @@ class X86VirtualSystem:
         self._kernel.eip = 0x1000  # kernel loads at 0x1000
         self._kernel.esp = memory_size - 4
         self._scheduler._current_pid = self._kernel.pid
+        from .vm_permissions import Role
+        self._syscall._rbac.assign(self._kernel.pid, Role.KERNEL)
 
     @property
     def cpu(self) -> X86CPU:
@@ -6870,7 +7068,7 @@ class X86VirtualSystem:
     def load_kernel(self, source: str, org: int = 0x1000):
         """Assemble and load kernel code."""
         asm = X86Assembler()
-        code = asm.assemble(source)
+        code = asm.assemble(source, org=org)
         self._cpu.load(code, org)
         self._kernel.eip = org
         self._kernel.esp = self._cpu._mem_size - 4
@@ -6878,25 +7076,25 @@ class X86VirtualSystem:
     def spawn(self, name: str, source: str, org: int = 0x100000) -> int | None:
         """Assemble a user program and spawn it as a new process.
 
+        Code is loaded at the address specified by `org` (or the [ORG] directive
+        in the source if present). Labels in the source resolve relative to this
+        address, making data references (e.g. string labels) work correctly.
+
         Returns the new PID, or None on failure.
         """
-        # Allocate memory for the process
-        code = X86Assembler().assemble(source)
+        code = X86Assembler().assemble(source, org=org)
         code_size = len(code)
-        # Round up to page boundary
-        pages_needed = (code_size + 0x1000) // 0x1000 + 1  # code + stack
-        base = self._allocator.alloc(pages_needed)
-        if base is None:
-            return None
+        base = org
 
-        # Load code at the base address
+        # Load code at the org address
         self._cpu._mem[base:base + code_size] = code
 
         # Create process
         pcb = self._ptable.create(name=name)
         pcb.eip = base
-        pcb.stack_base = base + code_size
-        pcb.stack_size = pages_needed * 0x1000 - code_size
+        stack_pages = 1
+        pcb.stack_base = base + ((code_size + 0xFFF) & ~0xFFF)
+        pcb.stack_size = stack_pages * 0x1000
         pcb.esp = pcb.stack_base + pcb.stack_size - 4
 
         self._scheduler.enqueue(pcb.pid)

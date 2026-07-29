@@ -112,11 +112,8 @@ export interface TurboTrainStartRequest {
   n_layer?: number
   block_size?: number
   dropout?: number
-  // Legacy fields (ignored)
-  n_encoder_layers?: number
+  // Legacy fields (kept for backward compat)
   n_decoder_layers?: number
-  dim_feedforward?: number
-  max_src_len?: number
   max_tgt_len?: number
 }
 

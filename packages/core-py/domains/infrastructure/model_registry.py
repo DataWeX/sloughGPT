@@ -46,7 +46,7 @@ class ModelRegistry:
         model: Any,
         tokenizer: Any,
         make_default: bool = False,
-        max_concurrent: int = 1,
+        max_concurrent: Optional[int] = None,
         generate_timeout: float = 120.0,
         enable_circuit_breaker: bool = True,
         process_guard: Optional[Any] = None,
@@ -90,8 +90,8 @@ class ModelRegistry:
             logger.info("ModelRegistry: replaced model '%s'", model_id, extra={"tag": "MODEL"})
 
         logger.info(
-            "ModelRegistry: registered '%s' (device=%s, timeout=%ss, concurrent=%d)",
-            model_id, server._device, generate_timeout, max_concurrent,
+            "ModelRegistry: registered '%s' (device=%s, timeout=%ss, concurrent=%s)",
+            model_id, server._device, generate_timeout, max_concurrent if max_concurrent is not None else "default",
             extra={"tag": "MODEL"},
         )
         return server

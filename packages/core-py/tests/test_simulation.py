@@ -1,424 +1,462 @@
 """
-Simulation harness — boot kernel, open NPU, load model, run inference/training.
+Tests for the baby-in-the-world simulation model.
 
-Tests the full stack: Kernel → NPU device → SloNet provider → metrics.
+Covers WorldGrid, cell update functions, Entity, Perceptron,
+SimBaby, SimScene, and the Simulation tick loop.
 """
 
-import time
 import numpy as np
 import pytest
-from domains.shell.kernel import Kernel
-
-
-# ---------------------------------------------------------------------------
-# Mock model for testing (no real weights needed)
-# ---------------------------------------------------------------------------
-
-class MockTransformer:
-    """Minimal transformer-like model for simulation testing."""
-
-    def __init__(self, vocab_size: int = 256, d_model: int = 64, num_layers: int = 2):
-        self.vocab_size = vocab_size
-        self.d_model = d_model
-        self.num_layers = num_layers
-        self._call_count = 0
-        self._total_tokens = 0
-
-    def __call__(self, input_ids: np.ndarray) -> np.ndarray:
-        self._call_count += 1
-        self._total_tokens += input_ids.size
-        # Simple embedding lookup + linear projection
-        logits = np.random.randn(input_ids.shape[0], input_ids.shape[1], self.vocab_size).astype(np.float32)
-        return logits
-
-    def generate_numpy(self, prompt: str, max_tokens: int = 10, temperature: float = 1.0, **kwargs) -> list[int]:
-        self._call_count += 1
-        tokens = list(range(10, 10 + max_tokens))
-        self._total_tokens += max_tokens
-        return tokens
-
-    def forward(self, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-        self._call_count += 1
-        input_ids = inputs.get("input_ids", np.zeros((1, 10), dtype=np.int64))
-        logits = np.random.randn(input_ids.shape[0], input_ids.shape[1], self.vocab_size).astype(np.float32)
-        self._total_tokens += input_ids.size
-        return {"logits": logits}
-
-
-# ---------------------------------------------------------------------------
-# Simulation tests
-# ---------------------------------------------------------------------------
-
-class TestKernelBoot:
-    """Test kernel lifecycle."""
-
-    def test_boot_and_shutdown(self):
-        k = Kernel()
-        msg = k.boot()
-        assert "Kernel booted" in msg
-        assert k.running
-        assert k.uptime >= 0
-        msg = k.shutdown()
-        assert "shut down" in msg
-        assert not k.running
-
-    def test_double_boot_is_idempotent(self):
-        k = Kernel()
-        k.boot()
-        msg = k.boot()
-        assert "Already booted" in msg
-        k.shutdown()
-
-    def test_tick_advances(self):
-        k = Kernel()
-        k.boot()
-        before = k.tick_count
-        result = k.tick()
-        assert result["tick_count"] == before + 1
-        k.shutdown()
-
-    def test_run_executes_ticks(self):
-        k = Kernel()
-        k.boot()
-        results = k.run(max_ticks=10)
-        assert len(results) > 0
-        assert k.tick_count > 0
-        k.shutdown()
-
-
-class TestProcessManagement:
-    """Test process spawning and lifecycle."""
-
-    def test_spawn_process(self):
-        from domains.shell.kernel_process import Priority
-        k = Kernel()
-        k.boot()
-        proc = k.spawn_process("test-job", Priority.NORMAL)
-        assert proc.pid > 0
-        assert proc.name == "test-job"
-        assert proc in k.list_processes()
-        k.shutdown()
-
-    def test_kill_process(self):
-        from domains.shell.kernel_process import Priority, ProcessState
-        k = Kernel()
-        k.boot()
-        proc = k.spawn_process("doomed", Priority.LOW)
-        pid = proc.pid
-        assert k.kill_process(pid)
-        assert k.get_process(pid).state == ProcessState.STOPPED
-        k.shutdown()
-
-    def test_process_count_in_stats(self):
-        from domains.shell.kernel_process import Priority
-        k = Kernel()
-        k.boot()
-        k.spawn_process("a", Priority.NORMAL)
-        k.spawn_process("b", Priority.HIGH)
-        stats = k.stats()
-        assert stats["process_count"] == 3  # init + a + b
-        k.shutdown()
-
-
-class TestNeuralCapabilities:
-    """Test neural-specific kernel features."""
-
-    def test_tokenize(self):
-        k = Kernel()
-        k.boot()
-        tokens = k.tokenize("hello world")
-        assert tokens == list(b"hello world")
-        k.shutdown()
-
-    def test_detokenize(self):
-        k = Kernel()
-        k.boot()
-        text = k.detokenize([104, 101, 108, 108, 111])
-        assert text == "hello"
-        k.shutdown()
-
-    def test_create_neural_process(self):
-        from domains.shell.kernel_neural import NeuralProcessType
-        k = Kernel()
-        k.boot()
-        proc = k.create_neural_process("infer", NeuralProcessType.INFERENCE, model_name="mock")
-        assert proc.neural_type == NeuralProcessType.INFERENCE
-        assert proc.model_name == "mock"
-        k.shutdown()
-
-    def test_create_embedding_store(self):
-        k = Kernel()
-        k.boot()
-        store = k.create_embedding_store("test", 1000, 64)
-        assert store.vocab_size == 1000
-        vecs = k.embed(np.array([1, 2, 3]), "test")
-        assert vecs is not None
-        assert vecs.shape == (3, 64)
-        k.shutdown()
-
-    def test_create_kv_cache(self):
-        k = Kernel()
-        k.boot()
-        cache = k.create_kv_cache("turn1", num_layers=4, head_dim=32)
-        cache.initialize(num_heads=8)
-        k0 = np.random.randn(8, 32)
-        v0 = np.random.randn(8, 32)
-        cache.update(0, k0, v0)
-        cache.advance(1)
-        kr, vr = cache.get(0, 0, 1)
-        np.testing.assert_array_almost_equal(kr[:, 0, :], k0)
-        k.shutdown()
-
-
-class TestNPUDevice:
-    """Test NPU device through kernel's engine."""
-
-    def test_load_and_generate(self):
-        k = Kernel()
-        k.boot()
-        model = MockTransformer()
-        k.engine.load_model("mock", model)
-        result = k.generate("mock", "test", max_tokens=5)
-        assert result is not None
-        assert result["token_count"] == 5
-        k.shutdown()
-
-    def test_load_and_forward(self):
-        from domains.shell.kernel_neural import NeuralProcessType
-        k = Kernel()
-        k.boot()
-        model = MockTransformer()
-        k.engine.load_model("mock", model)
-        proc = k.create_neural_process("fwd", NeuralProcessType.INFERENCE, model_name="mock")
-        proc.model_ref = model
-        inputs = {"input_ids": np.array([[1, 2, 3, 4, 5]])}
-        outputs = k.forward(proc, inputs)
-        assert "logits" in outputs
-        assert outputs["logits"].shape == (1, 5, 256)
-        k.shutdown()
-
-    def test_unload_model(self):
-        k = Kernel()
-        k.boot()
-        k.engine.load_model("tmp", MockTransformer())
-        assert "tmp" in k.engine.info()["model_names"]
-        k.engine.unload_model("tmp")
-        assert "tmp" not in k.engine.info()["model_names"]
-        k.shutdown()
-
-
-class TestSyscalls:
-    """Test kernel syscall dispatch."""
-
-    def test_tensor_alloc_syscall(self):
-        from domains.shell.kernel_syscall import SyscallNumber
-        k = Kernel()
-        k.boot()
-        result = k.syscall(SyscallNumber.TENSOR_ALLOC, (32, 64), "float32")
-        assert result.success
-        assert result.value["shape"] == (32, 64)
-        k.shutdown()
-
-    def test_neural_tokenize_syscall(self):
-        from domains.shell.kernel_neural import NeuralSyscall
-        k = Kernel()
-        k.boot()
-        result = k.syscall(NeuralSyscall.TOKENIZE, "hello")
-        assert result.success
-        assert result.value["tokens"] == list(b"hello")
-        k.shutdown()
-
-
-class TestKernelStats:
-    """Test kernel info and stats."""
-
-    def test_info_snapshot(self):
-        k = Kernel()
-        k.boot()
-        info = k.info()
-        assert "uptime_s" in info
-        assert "process_count" in info
-        assert "memory" in info
-        assert "devices" in info
-        k.shutdown()
-
-    def test_neural_stats(self):
-        k = Kernel()
-        k.boot()
-        k.create_kv_cache("c1", 4, 32)
-        k.create_embedding_store("e1", 500, 128)
-        ns = k.neural_stats()
-        assert ns["kv_caches"] == 1
-        assert ns["embedding_stores"] == 1
-        assert ns["engine"]["models_loaded"] == 0
-        k.shutdown()
-
-
-class TestDeviceRegistration:
-    """Test that neural devices are registered with the kernel."""
-
-    def test_register_devices(self):
-        k = Kernel()
-        k.boot()
-        k.register_devices()
-        stats = k.devices.stats()
-        assert stats["total_devices"] >= 4  # null + engine + tokenizer + embedding + mha
-        k.shutdown()
-
-
-class TestEndToEndSimulation:
-    """Full simulation: boot → load → infer → metrics → shutdown."""
-
-    def test_full_simulation(self):
-        from domains.shell.kernel_neural import NeuralProcessType
-        k = Kernel()
-        k.boot()
-        k.register_devices()
-
-        # Load model
-        model = MockTransformer(vocab_size=128, d_model=32, num_layers=2)
-        k.engine.load_model("sim-model", model)
-
-        # Create inference process
-        proc = k.create_neural_process("sim-infer", NeuralProcessType.INFERENCE, model_name="sim-model")
-        proc.model_ref = model
-
-        # Tokenize
-        tokens = k.tokenize("the quick brown fox")
-        assert len(tokens) > 0
-
-        # Forward pass
-        input_ids = np.array([tokens])
-        outputs = k.forward(proc, {"input_ids": input_ids})
-        assert "logits" in outputs
-
-        # Generate
-        gen_result = k.generate("sim-model", "once upon a time", max_tokens=20)
-        assert gen_result["token_count"] == 20
-
-        # KV cache
-        cache = k.create_kv_cache("sim-cache", num_layers=2, head_dim=32)
-        cache.initialize(num_heads=4)
-        k0 = np.random.randn(4, 32)
-        v0 = np.random.randn(4, 32)
-        cache.update(0, k0, v0)
-        cache.advance(1)
-
-        # Stats
-        info = k.info()
-        ns = k.neural_stats()
-        assert info["process_count"] >= 2
-        assert ns["engine"]["models_loaded"] == 1
-
-        k.shutdown()
-
-
-class TestBootAndShell:
-    def test_boot_program(self):
-        from domains.shell.vm import VirtualSystem
-        from domains.shell.vm_programs import BOOT_ASM
-
-        out = []
-        vs = VirtualSystem(enable_block=True, stdout_fn=lambda v: out.append(str(v)))
-        vs.load_program(BOOT_ASM)
-        vs.run()
-        assert any("AI Compteur" in line for line in out)
-        assert any("Ready" in line for line in out)
-
-    def test_shell_echoes_command(self):
-        from domains.shell.vm import VirtualSystem
-        from domains.shell.vm_programs import SHELL_ASM
-
-        out = []
-        inputs = ['test-cmd']
-        input_iter = iter(inputs)
-
-        vs = VirtualSystem(
-            stdin_fn=lambda: next(input_iter, 'exit'),
-            stdout_fn=lambda v: out.append(str(v)),
-        )
-        vs.load_program(SHELL_ASM)
-        vs.run(max_steps=30)
-        assert any("test-cmd" in line for line in out)
-        assert any("ai-compteur>" in line for line in out)
-
-    def test_kernel_boots_and_spawns_shell(self):
-        import time as _time
-        k = Kernel()
-        k.boot()
-        k.register_devices()
-        proc = k.spawn_shell()
-        assert proc.name == "shell"
-        k.tick()
-        _time.sleep(0.05)
-        assert proc.state.name in ("RUNNING", "READY")
-        k.shutdown()
-
-    def test_full_boot_shell_pipeline(self):
-        import time as _time
-        output = []
-        inputs = ['help', 'halt']
-        input_iter = iter(inputs)
-
-        k = Kernel()
-        k.boot()
-        k.register_devices()
-
-        # Boot process
-        k.spawn_vm_process(
-            'boot',
-            'LOAD_CONST R0, "AI Compteur v0.1"\nOUT 1, R0\nHALT',
-            stdout_fn=lambda v: output.append(v),
-        )
-
-        # Shell process
-        k.spawn_kernel_shell(
-            stdin_fn=lambda: next(input_iter, 'halt'),
-            stdout_fn=lambda v: output.append(v),
-        )
-
-        for _ in range(50):
-            k.tick()
-            _time.sleep(0.02)
-            if all(p.state.name == 'ZOMBIE' for p in k.list_processes() if p.name != 'kernel-init'):
-                break
-
-        assert any("AI Compteur" in line for line in output)
-        assert any("commands" in line for line in output)
-        assert any("shutting down" in line for line in output)
-
-        procs = k.list_processes()
-        assert len(procs) == 3  # init + boot + shell
-        k.shutdown()
-
-    def test_shell_runs_program_from_disk(self):
-        import time as _time
-        from domains.shell.vm import BlockDevice, FlatFS
-
-        blk = BlockDevice(num_sectors=32)
-        fs = FlatFS(blk)
-        fs.write('echo.asm', 'LOAD_CONST R0, "disk program"\nOUT 1, R0\nHALT')
-
-        output = []
-        inputs = ['run echo.asm', 'halt']
-        input_iter = iter(inputs)
-
-        k = Kernel()
-        k.boot()
-        k.register_devices()
-        k._block_device = blk
-        k._fs = fs
-
-        proc = k.spawn_kernel_shell(
-            stdin_fn=lambda: next(input_iter, 'halt'),
-            stdout_fn=lambda v: output.append(str(v)),
-        )
-
-        for _ in range(50):
-            k.tick()
-            _time.sleep(0.02)
-            if proc.state.name == 'ZOMBIE':
-                break
-
-        assert any("disk program" in line for line in output)
-        k.shutdown()
+
+from domains.shell.simulation import (
+    WorldGrid, WorldCell, WorldParams,
+    cell_update_diffusion, cell_update_waves,
+    cell_update_energy_conservation, cell_update_default,
+    Entity, EntityType, Perceptron, CellWrite, BabyAction,
+    SimBaby, SimScene, Simulation,
+    MATERIAL_AIR, MATERIAL_STONE, MATERIAL_ORGANIC, MATERIAL_SIGNAL,
+    NUM_MATERIALS,
+)
+
+
+# ── WorldGrid ─────────────────────────────────────────────────────────────────
+
+class TestWorldGrid:
+    def test_creation(self):
+        g = WorldGrid((16, 8, 16))
+        assert g.size == (16, 8, 16)
+        assert g.nx == 16
+        assert g.ny == 8
+        assert g.nz == 16
+        assert g.total == 2048
+
+    def test_reset_sets_defaults(self):
+        g = WorldGrid((4, 4, 4))
+        assert np.all(g.material == MATERIAL_AIR)
+        assert np.all(g.energy == 0.0)
+        assert np.all(g.temperature == 20.0)
+        assert np.all(g.signal == 0.0)
+
+    def test_idx(self):
+        g = WorldGrid((4, 4, 4))
+        assert g.idx(0, 0, 0) == 0
+        assert g.idx(3, 3, 3) == 63
+
+    def test_idx_wraps(self):
+        g = WorldGrid((4, 4, 4))
+        assert g.idx(4, 0, 0) == 0  # wraps
+        assert g.idx(0, 4, 0) == 0  # wraps
+
+    def test_coords_roundtrip(self):
+        g = WorldGrid((8, 4, 8))
+        for x, y, z in [(0, 0, 0), (7, 3, 7), (3, 1, 5)]:
+            i = g.idx(x, y, z)
+            cx, cy, cz = g.coords(i)
+            assert (cx, cy, cz) == (x, y, z)
+
+    def test_set_and_get_cell(self):
+        g = WorldGrid((4, 4, 4))
+        cell = WorldCell(material=MATERIAL_STONE, energy=50.0, temperature=100.0)
+        g.set_cell(1, 2, 3, cell)
+        result = g.get_cell(1, 2, 3)
+        assert result.material == MATERIAL_STONE
+        assert result.energy == 50.0
+        assert result.temperature == 100.0
+
+    def test_place_material(self):
+        g = WorldGrid((4, 4, 4))
+        g.place_material(2, 1, 0, MATERIAL_ORGANIC, energy=30.0)
+        cell = g.get_cell(2, 1, 0)
+        assert cell.material == MATERIAL_ORGANIC
+        assert cell.energy == 30.0
+
+    def test_write_cell_succeeds(self):
+        g = WorldGrid((4, 4, 4))
+        assert g.write_cell(0, 0, 0, MATERIAL_STONE, 10.0)
+        assert g.get_cell(0, 0, 0).material == MATERIAL_STONE
+
+    def test_write_cell_out_of_bounds(self):
+        g = WorldGrid((4, 4, 4))
+        assert not g.write_cell(-1, 0, 0, MATERIAL_STONE, 0.0)
+        assert not g.write_cell(4, 0, 0, MATERIAL_STONE, 0.0)
+
+    def test_get_nearby_cells(self):
+        g = WorldGrid((16, 8, 16))
+        g.place_material(8, 4, 8, MATERIAL_ORGANIC, energy=100.0)
+        cells = g.get_nearby_cells(8, 4, 8, radius=3.0)
+        assert cells["count"] > 0
+        organic_idx = np.where(cells["material"] == MATERIAL_ORGANIC)[0]
+        assert len(organic_idx) == 1
+
+    def test_nearby_cells_small_radius(self):
+        g = WorldGrid((4, 4, 4))
+        cells = g.get_nearby_cells(0, 0, 0, radius=0.1)
+        assert cells["count"] == 1  # always includes origin cell
+
+    def test_total_energy(self):
+        g = WorldGrid((4, 4, 4))
+        assert g.total_energy == 0.0
+        g.place_material(0, 0, 0, MATERIAL_STONE, energy=50.0)
+        assert g.total_energy == 50.0
+
+
+# ── Cell Update Functions ─────────────────────────────────────────────────────
+
+class TestCellUpdate:
+    def test_diffusion_spreads_energy(self):
+        g = WorldGrid((4, 4, 4))
+        g.place_material(1, 1, 1, MATERIAL_STONE, energy=100.0)
+        params = WorldParams(diffusion_rate=0.5, energy_loss=0.0)
+        before = g.energy[g.idx(1, 1, 1)]
+        cell_update_diffusion(g, params)
+        after = g.energy[g.idx(1, 1, 1)]
+        assert after < before  # energy spread out
+        assert abs(g.total_energy - 100.0) < 1e-5  # conserved
+
+    def test_waves_propagate_signal(self):
+        g = WorldGrid((4, 4, 4))
+        i = g.idx(1, 1, 1)
+        g.signal[i] = 100.0
+        params = WorldParams(wave_speed=0.5, signal_decay=0.1)
+        before = g.signal[i]
+        cell_update_waves(g, params)
+        after = g.signal[i]
+        assert after < before  # signal spread out
+
+    def test_energy_conservation_reduces_energy(self):
+        g = WorldGrid((4, 4, 4))
+        np.copyto(g.energy, np.full(g.total, 100.0, dtype=np.float32))
+        params = WorldParams(energy_loss=0.1)
+        cell_update_energy_conservation(g, params)
+        assert np.all(g.energy == 90.0)
+
+    def test_energy_conservation_clamps_negative(self):
+        g = WorldGrid((4, 4, 4))
+        np.copyto(g.energy, np.full(g.total, -10.0, dtype=np.float32))
+        params = WorldParams(energy_loss=0.0)
+        cell_update_energy_conservation(g, params)
+        assert np.all(g.energy >= 0.0)
+
+    def test_default_update_runs_all(self):
+        g = WorldGrid((4, 4, 4))
+        g.place_material(1, 1, 1, MATERIAL_ORGANIC, energy=100.0)
+        params = WorldParams()
+        cell_update_default(g, params)
+        assert g.total_energy < 100.0  # diffusion + loss
+        assert g.total_energy > 0.0
+
+
+# ── Entity ────────────────────────────────────────────────────────────────────
+
+class TestEntity:
+    def test_creation(self):
+        e = Entity(id=1, position=np.array([1.0, 2.0, 3.0]), energy=50.0,
+                   entity_type=EntityType.AGENT)
+        assert e.id == 1
+        assert np.allclose(e.position, [1.0, 2.0, 3.0])
+        assert e.energy == 50.0
+        assert e.entity_type == EntityType.AGENT
+        assert e.alive
+
+    def test_distance_to(self):
+        a = Entity(position=np.array([0.0, 0.0, 0.0]))
+        b = Entity(position=np.array([3.0, 4.0, 0.0]))
+        assert a.distance_to(b) == 5.0
+
+    def test_distance_to_point(self):
+        e = Entity(position=np.array([0.0, 0.0, 0.0]))
+        assert e.distance_to_point(np.array([1.0, 0.0, 0.0])) == 1.0
+
+
+# ── Perceptron ────────────────────────────────────────────────────────────────
+
+class TestPerceptron:
+    def test_forward(self):
+        p = Perceptron(4, 3)
+        x = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
+        out = p.forward(x)
+        assert out.shape == (3,)
+        assert np.all((out >= 0.0) & (out <= 1.0))
+
+    def test_forward_zeros(self):
+        p = Perceptron(4, 3)
+        x = np.zeros(4, dtype=np.float32)
+        out = p.forward(x)
+        assert out.shape == (3,)
+        assert np.all(out >= 0.5 - 1e-5) and np.all(out <= 0.5 + 1e-5)
+
+    def test_update_changes_weights(self):
+        p = Perceptron(2, 1)
+        x = np.array([1.0, 0.0], dtype=np.float32)
+        before = p.W.copy()
+        p.update(x, np.array([1.0]), lr=0.1)
+        assert not np.allclose(p.W, before)
+
+    def test_sigmoid_bounds(self):
+        assert abs(Perceptron._sigmoid(100.0) - 1.0) < 1e-4
+        assert abs(Perceptron._sigmoid(-100.0) - 0.0) < 1e-4
+        assert abs(Perceptron._sigmoid(0.0) - 0.5) < 1e-5
+
+
+# ── CellWrite / BabyAction ───────────────────────────────────────────────────
+
+class TestBabyAction:
+    def test_cell_write(self):
+        w = CellWrite(x=1, y=2, z=3, material=MATERIAL_STONE, energy=10.0)
+        assert w.x == 1
+        assert w.y == 2
+        assert w.z == 3
+        assert w.material == MATERIAL_STONE
+        assert w.energy == 10.0
+
+    def test_baby_action_defaults_to_empty(self):
+        a = BabyAction()
+        assert a.writes == []
+
+
+# ── SimBaby ───────────────────────────────────────────────────────────────────
+
+class TestSimBaby:
+    def test_creation(self):
+        baby = SimBaby(initial_energy=100.0)
+        assert baby.energy == 100.0
+        assert baby.entity.entity_type == EntityType.AGENT
+        assert baby.alive
+        assert baby.tick_count == 0
+
+    def test_position_through_entity(self):
+        baby = SimBaby(initial_energy=100.0)
+        baby.entity.position = np.array([5.0, 3.0, 7.0])
+        assert np.allclose(baby.position, [5.0, 3.0, 7.0])
+
+    def test_perceive_returns_perception(self):
+        baby = SimBaby(initial_energy=100.0)
+        world = WorldGrid((16, 8, 16))
+        p = baby.perceive(world)
+        assert p.nearby_cells["count"] > 0
+        assert p.agent_body["energy"] == 100.0
+        assert p.time_ms >= 0.0
+
+    def test_feel_positive_delta(self):
+        baby = SimBaby(initial_energy=100.0)
+        baby.entity.energy = 110.0
+        delta = baby.feel(100.0)
+        assert delta == 10.0
+
+    def test_feel_negative_delta(self):
+        baby = SimBaby(initial_energy=100.0)
+        baby.entity.energy = 80.0
+        delta = baby.feel(100.0)
+        assert delta == -20.0
+
+    def test_react_returns_action(self):
+        baby = SimBaby(initial_energy=100.0)
+        world = WorldGrid((16, 8, 16))
+        p = baby.perceive(world)
+        action = baby.react(p, 0.0)
+        assert isinstance(action, BabyAction)
+        assert len(action.writes) > 0
+
+    def test_react_does_nothing_when_low_energy(self):
+        baby = SimBaby(initial_energy=5.0)
+        world = WorldGrid((16, 8, 16))
+        p = baby.perceive(world)
+        action = baby.react(p, -5.0)
+        assert len(action.writes) == 0
+
+    def test_apply_action_writes_cells(self):
+        baby = SimBaby(initial_energy=100.0,
+                       position=np.array([8.0, 4.0, 8.0]))
+        world = WorldGrid((16, 8, 16))
+        action = BabyAction(writes=[CellWrite(8, 4, 8, MATERIAL_STONE, 10.0)])
+        n = baby.apply_action(action, world)
+        assert n == 1
+        assert world.get_cell(8, 4, 8).material == MATERIAL_STONE
+
+    def test_absorb_energy_from_organic(self):
+        baby = SimBaby(initial_energy=100.0,
+                       position=np.array([5.0, 3.0, 5.0]))
+        world = WorldGrid((16, 8, 16))
+        world.place_material(5, 3, 5, MATERIAL_ORGANIC, energy=50.0)
+        absorbed = baby.absorb_energy(world, radius=1)
+        assert absorbed > 0
+        assert world.get_cell(5, 3, 5).energy < 50.0
+
+    def test_learn_updates_weights(self):
+        baby = SimBaby(initial_energy=100.0)
+        before = baby.perceptron_body.W.copy()
+        baby.learn(5.0)
+        assert not np.allclose(baby.perceptron_body.W, before)
+
+    def test_learn_weakens_on_negative(self):
+        baby = SimBaby(initial_energy=100.0)
+        before = baby.perceptron_body.W.copy()
+        baby.learn(-5.0)
+        assert not np.allclose(baby.perceptron_body.W, before)
+
+    def test_alive_false_when_zero_energy(self):
+        baby = SimBaby(initial_energy=0.0)
+        assert not baby.alive
+
+    def test_alive_false_when_entity_dead(self):
+        baby = SimBaby(initial_energy=100.0)
+        baby.entity.alive = False
+        assert not baby.alive
+
+    def test_info(self):
+        baby = SimBaby(initial_energy=100.0,
+                       position=np.array([3.0, 5.0, 7.0]))
+        info = baby.info()
+        assert info["id"] == baby.entity.id
+        assert info["energy"] == 100.0
+        assert info["alive"]
+
+
+# ── SimScene ──────────────────────────────────────────────────────────────────
+
+class TestSimScene:
+    def test_creation(self):
+        scene = SimScene()
+        assert scene.world.size == (64, 32, 64)
+        assert scene.tick == 0
+
+    def test_add_baby(self):
+        scene = SimScene()
+        baby = SimBaby(initial_energy=100.0)
+        scene.add_baby(baby)
+        assert len(scene._devices) == 1
+        assert baby.entity in scene.entities
+
+    def test_spawn_babies(self):
+        scene = SimScene()
+        scene.spawn_babies(count=4)
+        assert len(scene._devices) == 4
+        assert len(scene.entities) == 4
+
+    def test_spawn_babies_default_count(self):
+        scene = SimScene(params=WorldParams(start_agents=3))
+        scene.spawn_babies()
+        assert len(scene._devices) == 3
+
+    def test_place_material(self):
+        scene = SimScene()
+        scene.place_material(10, 5, 10, MATERIAL_ORGANIC, energy=100.0)
+        cell = scene.world.get_cell(10, 5, 10)
+        assert cell.material == MATERIAL_ORGANIC
+        assert cell.energy == 100.0
+
+    def test_update_cells(self):
+        scene = SimScene()
+        scene.place_material(10, 5, 10, MATERIAL_ORGANIC, energy=100.0)
+        scene.update_cells()
+        assert scene.world.total_energy < 100.0  # diffusion + loss
+
+    def test_get_baby(self):
+        scene = SimScene()
+        baby = SimBaby(initial_energy=100.0)
+        scene.add_baby(baby)
+        assert scene.get_baby(baby.entity.id) is baby
+        assert scene.get_baby(-1) is None
+
+    def test_alive_babies(self):
+        scene = SimScene()
+        b1 = SimBaby(initial_energy=100.0)
+        b2 = SimBaby(initial_energy=0.0)  # dead
+        scene.add_baby(b1)
+        scene.add_baby(b2)
+        alive = scene.alive_babies
+        assert len(alive) == 1
+        assert alive[0] is b1
+
+    def test_info(self):
+        scene = SimScene()
+        scene.spawn_babies(count=2)
+        info = scene.info()
+        assert info["grid_size"] == (64, 32, 64)
+        assert info["alive_babies"] == 2
+
+
+# ── Simulation ────────────────────────────────────────────────────────────────
+
+_SIM_PARAMS = WorldParams(grid_size=(8, 4, 8), start_agents=1)
+
+
+class TestSimulation:
+    def test_creation(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        sim = Simulation(scene, max_ticks=10)
+        assert sim.max_ticks == 10
+        assert not sim._running
+
+    def test_step_returns_results(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        scene.spawn_babies(count=1)
+        sim = Simulation(scene, max_ticks=10)
+        results = sim.step()
+        assert len(results) == 1
+        assert results[0]["baby_id"] > 0
+        assert results[0]["tick"] == 1
+        assert results[0]["energy"] < 100.0  # drain + costs
+
+    def test_run_executes_max_ticks(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        scene.spawn_babies(count=1)
+        sim = Simulation(scene, max_ticks=10)
+        results = sim.run()
+        assert scene.tick == 10
+        assert len(results) == 10
+
+    def test_stop_stops_simulation(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        scene.spawn_babies(count=1)
+        sim = Simulation(scene, max_ticks=100)
+        sim._running = True
+        sim.stop()
+        assert not sim._running
+
+    def test_summary(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        scene.spawn_babies(count=1)
+        sim = Simulation(scene, max_ticks=5)
+        sim.run()
+        summary = sim.summary()
+        assert summary["total_ticks"] == 5
+        assert summary["total_baby_ticks"] == 5
+        assert summary["total_cells_written"] >= 0
+
+    def test_step_reduces_energy_over_time(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        scene.spawn_babies(count=1)
+        sim = Simulation(scene, max_ticks=20)
+        first = sim.step()[0]["energy"]
+        for _ in range(10):
+            sim.step()
+        last = sim.step()[0]["energy"]
+        assert last < first  # energy decreases over time
+
+    def test_baby_dies_at_zero_energy(self):
+        p = WorldParams(grid_size=(8, 4, 8), start_agents=1, passive_drain=5.0, see_cost=0.0)
+        scene = SimScene(params=p)
+        baby = SimBaby(initial_energy=1.0, params=p)  # almost dead
+        scene.add_baby(baby)
+        sim = Simulation(scene, max_ticks=20)
+        results = sim.run()
+        energies = [r["energy"] for r in results]
+        assert any(e <= 0 for e in energies)  # died at some point
+
+    def test_multiple_babies(self):
+        p = WorldParams(grid_size=(8, 4, 8), start_agents=4)
+        scene = SimScene(params=p)
+        scene.spawn_babies(count=4)
+        sim = Simulation(scene, max_ticks=10)
+        results = sim.run()
+        assert len(results) >= 4
+        assert scene.tick == 10
+
+    def test_tick_log(self):
+        scene = SimScene(params=_SIM_PARAMS)
+        scene.spawn_babies(count=1)
+        sim = Simulation(scene, max_ticks=5)
+        assert len(sim.tick_log) == 0
+        sim.run()
+        assert len(sim.tick_log) == 5

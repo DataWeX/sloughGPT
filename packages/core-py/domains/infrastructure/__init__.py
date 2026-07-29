@@ -24,6 +24,8 @@ from .lifecycle import (
     ShutdownHook,
     get_lifecycle_manager,
 )
+from .cpu_topology import CpuTopology, detect_topology
+from .resource_manager import ResourceManager, ResourceAllocation, get_resource_manager, compute_allocation
 
 __all__ = [
     "MeaningTags", "get_default_meaning_tags",
@@ -31,4 +33,6 @@ __all__ = [
     "TruthLabeler", "get_truth_labeler",
     "TruthMaintainer", "get_truth_maintainer",
     "SpacedRepetitionScheduler",
+    "CpuTopology", "detect_topology",
+    "ResourceManager", "ResourceAllocation", "get_resource_manager", "compute_allocation",
 ]
