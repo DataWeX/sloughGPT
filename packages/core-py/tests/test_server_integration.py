@@ -939,3 +939,83 @@ class TestCircuitBreakerEvents:
         cancelled = [e for e in events if e[0] == "generation.cancelled"]
         assert len(cancelled) == 1, f"expected 1 cancelled, got {len(cancelled)}"
         assert cancelled[0][1]["model_id"] == "test-stream-cancel"
+
+
+class TestModelLifecycleEvents:
+    """EventBus events for model lifecycle (register/unregister/swap)."""
+
+    @pytest.fixture(autouse=True)
+    def setup_event_bus(self):
+        bus = get_event_bus()
+        bus.clear()
+        bus._max_history = 100
+        yield bus
+        bus.clear()
+
+    def test_register_emits_model_registered(self, model, tokenizer, setup_event_bus):
+        bus = setup_event_bus
+        events = []
+
+        def handler(event, data):
+            events.append((event, data))
+
+        bus.on("model.registered", handler)
+
+        registry = ModelRegistry()
+        registry.register("test-model", model, tokenizer, make_default=True)
+
+        registered = [e for e in events if e[0] == "model.registered"]
+        assert len(registered) == 1, f"expected 1 registered, got {len(registered)}"
+        assert registered[0][1]["model_id"] == "test-model"
+        assert registered[0][1].get("device") is not None
+        assert registered[0][1].get("replaced") is False
+
+    def test_register_replace_emits_replaced_flag(self, model, tokenizer, setup_event_bus):
+        bus = setup_event_bus
+        events = []
+
+        def handler(event, data):
+            events.append((event, data))
+
+        bus.on("model.registered", handler)
+
+        registry = ModelRegistry()
+        registry.register("test-model", model, tokenizer)
+        registry.register("test-model", model, tokenizer)
+
+        registered = [e for e in events if e[0] == "model.registered"]
+        assert len(registered) == 2
+        assert registered[1][1]["replaced"] is True
+
+    def test_unregister_emits_model_unregistered(self, model, tokenizer, setup_event_bus):
+        bus = setup_event_bus
+        events = []
+
+        def handler(event, data):
+            events.append((event, data))
+
+        bus.on("model.unregistered", handler)
+
+        registry = ModelRegistry()
+        registry.register("temp", model, tokenizer)
+        registry.unregister("temp")
+
+        unregistered = [e for e in events if e[0] == "model.unregistered"]
+        assert len(unregistered) == 1
+        assert unregistered[0][1]["model_id"] == "temp"
+
+    def test_swap_emits_model_swapped(self, model, tokenizer, setup_event_bus):
+        bus = setup_event_bus
+        events = []
+
+        def handler(event, data):
+            events.append((event, data))
+
+        bus.on("model.swapped", handler)
+
+        server = ModelServer(model, tokenizer, model_id="swap-test", enable_warmup=False)
+        server.swap_model(model)
+
+        swapped = [e for e in events if e[0] == "model.swapped"]
+        assert len(swapped) == 1
+        assert swapped[0][1]["model_id"] == "swap-test"

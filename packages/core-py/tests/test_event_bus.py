@@ -234,3 +234,73 @@ class TestEventBus:
         bus.on("a", h)
         bus.on("b", h)
         assert bus.subscriber_count == 2
+
+    async def test_on_raises_on_non_callable(self, bus):
+        with pytest.raises(TypeError, match="handler must be callable"):
+            bus.on("test", "not_callable")
+
+    async def test_once_raises_on_non_callable(self, bus):
+        with pytest.raises(TypeError, match="handler must be callable"):
+            bus.once("test", 42)
+
+    async def test_clear_star_clears_wildcards(self, bus):
+        async def h(event, data):
+            pass
+        bus.on("*", h)
+        bus.clear("*")
+        assert bus.subscriber_count == 0
+
+    async def test_emit_sync_skips_async_handlers(self, bus):
+        results = []
+        async def async_handler(event, data):
+            results.append("async")
+
+        bus.on("test", async_handler)
+        n = bus.emit_sync("test")
+        assert n == 1
+        assert results == []
+
+    async def test_mixed_handler_types(self, bus):
+        results = []
+        def sync_h(event, data):
+            results.append("sync")
+        async def async_h(event, data):
+            results.append("async")
+
+        bus.on("test", sync_h)
+        bus.on("test", async_h)
+        n = await bus.emit("test")
+        assert n == 2
+        assert results == ["sync", "async"]
+
+    async def test_wildcard_and_specific_both_receive(self, bus):
+        results = []
+        async def wild(event, data):
+            results.append(f"wild:{event}")
+        async def specific(event, data):
+            results.append(f"specific:{event}")
+
+        bus.on("*", wild)
+        bus.on("foo", specific)
+        await bus.emit("foo")
+        assert "wild:foo" in results
+        assert "specific:foo" in results
+
+    async def test_replay_empty_history_returns_empty_list(self, bus):
+        events = bus.replay("nonexistent")
+        assert events == []
+
+    async def test_off_twice_returns_false(self, bus):
+        async def h(event, data):
+            pass
+        bus.on("test", h)
+        bus.off("test", h)
+        assert bus.off("test", h) is False
+
+    async def test_emit_count_includes_errored_handlers(self, bus):
+        async def bad(event, data):
+            raise ValueError("fail")
+
+        bus.on("test", bad)
+        n = await bus.emit("test")
+        assert n == 1

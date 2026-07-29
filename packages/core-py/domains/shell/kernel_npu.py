@@ -24,6 +24,12 @@ from .kernel_devices import DeviceDriver, DeviceType, DeviceState
 from .kernel_syscall import SyscallResult
 from domains.inference.forward_pass import ForwardPassResult
 
+try:
+    import psutil as _psutil
+    _HAS_PSUTIL = True
+except ImportError:
+    _HAS_PSUTIL = False
+
 logger = logging.getLogger("slo.kernel.npu")
 
 
@@ -686,8 +692,10 @@ class NPUDevice(DeviceDriver):
             text = m.provider.detokenize(gen[0].tolist())
             gen_ms = (time.time() - t1) * 1000
 
-            import psutil
-            mem = psutil.Process().memory_info().rss / (1024 * 1024)
+            if _HAS_PSUTIL:
+                mem = _psutil.Process().memory_info().rss / (1024 * 1024)
+            else:
+                mem = 0.0
 
             results[label] = {
                 "forward_ms": round(fwd_ms, 2),

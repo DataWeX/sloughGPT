@@ -630,13 +630,14 @@ class SloNetChatProvider:
             return await server.generate(
                 prompt,
                 max_new_tokens=max_tokens,
-                temperature=temperature or 0.7,
+                temperature=(temperature if temperature is not None else 0.7),
                 top_p=kwargs.get('top_p', 0.9),
                 top_k=kwargs.get('top_k', 50),
                 repetition_penalty=kwargs.get('repetition_penalty', 1.0),
+                cancel_event=kwargs.get('cancel_event'),
             )
         return await asyncio.to_thread(
-            self._generate_sync, messages, max_tokens, temperature,
+            self._generate_sync, messages, max_tokens, temperature if temperature is not None else 0.8,
             kwargs.get('top_k'), kwargs.get('top_p'),
             kwargs.get('repetition_penalty', 1.0),
         )
@@ -701,7 +702,7 @@ class SloNetChatProvider:
             async for token in server.generate_stream(
                 prompt,
                 max_new_tokens=max_tokens,
-                temperature=temperature or 0.7,
+                temperature=(temperature if temperature is not None else 0.7),
                 top_p=kwargs.get('top_p', 0.9),
                 top_k=kwargs.get('top_k', 50),
                 repetition_penalty=kwargs.get('repetition_penalty', 1.0),

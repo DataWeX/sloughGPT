@@ -936,6 +936,33 @@ def setup_providers(
                         extra={"tag": "MODEL"})
         except Exception as e:
             logger.warning("Failed to load slonet-native provider %s: %s", slonet_hf_id, e, extra={"tag": "MODEL"})
+    else:
+        # Standalone SloNet mode: auto-detect a cached .slnc model
+        try:
+            from domains.infrastructure.safetensors_loader import _get_model_dir
+            from domains.infrastructure.config import get_config
+            cfg = get_config()
+            default_model = cfg.autoload_model
+            if default_model:
+                _cache_dir = _get_model_dir(default_model)
+                _slnc = _cache_dir / "model.slnc"
+                if _slnc.exists():
+                    from domains.inference.slonet_provider import SloNetChatProvider
+                    auto_provider = SloNetChatProvider.from_slnc(
+                        str(_slnc),
+                        model_id=default_model,
+                        quantize=quantize,
+                        quant_bits=quant_bits,
+                        quant_mode=quant_mode,
+                    )
+                    if slonet_server is not None and hasattr(auto_provider, 'set_server'):
+                        auto_provider.set_server(slonet_server)
+                    register_provider("slonet-native", auto_provider)
+                    text_provider_name = "slonet-native"
+                    logger.info("Auto-detected slonet-native provider: %s", default_model,
+                                extra={"tag": "MODEL"})
+        except Exception:
+            pass
 
     # Build default ProviderRouter with full processor pipeline
     existing = _providers.get("default")

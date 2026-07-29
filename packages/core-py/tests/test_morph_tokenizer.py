@@ -7,7 +7,7 @@ from domains.infrastructure.morph_tokenizer import MorphTokenizer
 class TestMorphTokenizerGPT2:
     """GPT-2 tokenizer tests (byte_level=True)."""
 
-    @pytest.fixture(scope="class")
+    @pytest.fixture
     def tok(self):
         return MorphTokenizer.from_pretrained("gpt2")
 
@@ -62,7 +62,7 @@ class TestMorphTokenizerGPT2:
 class TestMorphTokenizerQwen2:
     """Qwen2 tokenizer tests (byte_level=True, bfloat16 weights)."""
 
-    @pytest.fixture(scope="class")
+    @pytest.fixture
     def tok(self):
         return MorphTokenizer.from_pretrained("Qwen/Qwen2-0.5B-Instruct")
 
@@ -99,7 +99,7 @@ class TestMorphTokenizerQwen2:
 class TestMorphologicalAnalysis:
     """Linguistic rule-based morphological tests."""
 
-    @pytest.fixture(scope="class")
+    @pytest.fixture
     def tok(self):
         return MorphTokenizer.from_pretrained("gpt2")
 

@@ -482,11 +482,9 @@ class KnowledgeMemory:
         """Run a coroutine, creating an event loop if needed (thread-safe)."""
         import asyncio
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                fut = asyncio.run_coroutine_threadsafe(coro, loop)
-                return fut.result()
-            return loop.run_until_complete(coro)
+            loop = asyncio.get_running_loop()
+            fut = asyncio.run_coroutine_threadsafe(coro, loop)
+            return fut.result()
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)

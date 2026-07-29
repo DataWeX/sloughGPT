@@ -29,7 +29,7 @@ import os
 import math
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Set
+from typing import Any, Counter, Dict, List, Optional, Tuple, Set
 import logging
 
 logger = logging.getLogger("slo.tokenizer")

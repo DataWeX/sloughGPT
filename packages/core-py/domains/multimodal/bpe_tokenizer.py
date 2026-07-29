@@ -8,7 +8,7 @@ to handle OOV words and produce more natural captions.
 from __future__ import annotations
 import re
 from collections import Counter
-from typing import List, Dict, Tuple, Optional
+from typing import Counter, List, Dict, Tuple, Optional
 import json
 from pathlib import Path
 

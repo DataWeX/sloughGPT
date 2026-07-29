@@ -1782,6 +1782,9 @@ class ModelServer:
             _schedule_gc()
         self._check_device()
         self.set_status(ModelStatus.READY)
+        _emit_gen_event("model.swapped", {
+            "model_id": self.model_id,
+        })
         logger.info("ModelServer[%s]: model swapped", self.model_id, extra={"tag": "MODEL"})
         # Re-warmup with new model
         with self._warmup_lock:

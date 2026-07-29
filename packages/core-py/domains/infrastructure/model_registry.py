@@ -17,7 +17,7 @@ import asyncio
 import logging
 import time
 from threading import Lock
-from typing import Any, Optional, Union, get_type_hints
+from typing import Any, Optional, Union
 
 from .model_server import ModelServer, ModelStatus
 
@@ -37,6 +37,14 @@ class ModelRegistry:
         self._servers: dict[str, Union[ModelServer, Any]] = {}
         self._lock = Lock()
         self._default_id: Optional[str] = None
+
+    def _emit_event(self, event: str, model_id: str, **extra: Any) -> None:
+        try:
+            from .event_bus import get_event_bus
+            bus = get_event_bus()
+            bus.emit_sync(event, {"model_id": model_id, **extra}, source="model_registry")
+        except Exception:
+            pass
 
     # --- Registration ---
 
@@ -89,11 +97,14 @@ class ModelRegistry:
             old.set_status(ModelStatus.UNLOADED)
             logger.info("ModelRegistry: replaced model '%s'", model_id, extra={"tag": "MODEL"})
 
+        replaced = old is not None
         logger.info(
             "ModelRegistry: registered '%s' (device=%s, timeout=%ss, concurrent=%s)",
             model_id, server._device, generate_timeout, max_concurrent if max_concurrent is not None else "default",
             extra={"tag": "MODEL"},
         )
+        self._emit_event("model.registered", model_id, device=server._device,
+                          replaced=replaced, make_default=make_default)
         return server
 
     def register_engine(
@@ -121,6 +132,7 @@ class ModelRegistry:
             engine_id, make_default,
             extra={"tag": "MODEL"},
         )
+        self._emit_event("model.registered", engine_id, engine=True, make_default=make_default)
 
     def unregister(self, model_id: str) -> bool:
         """Unregister a model and clean up resources."""
@@ -132,6 +144,7 @@ class ModelRegistry:
             if self._default_id == model_id:
                 self._default_id = next(iter(self._servers)) if self._servers else None
         logger.info("ModelRegistry: unregistered '%s'", model_id, extra={"tag": "MODEL"})
+        self._emit_event("model.unregistered", model_id)
         return True
 
     # --- Access ---

@@ -109,10 +109,11 @@ def build_arch(name: str, config: dict, weight_keys: set) -> ArchConfig:
 
     # Select weight map based on which keys exist in the checkpoint
     if "wte.weight" in weight_keys:
-        # GPT-2 style — safetensors stores weights as (in, out), no transpose needed
+        # GPT-2 uses Conv1D which stores weights as (in, out).
+        # SloNet SloLinear stores as (out, in) and does x @ W.T — transpose needed.
         wm = GPT2_WEIGHT_MAP
         norm, positional, activation, attention = "layer_norm", "absolute", "gelu", "mha"
-        transpose = False  # GPT-2 safetensors is already (in, out), forward does h @ W directly
+        transpose = True  # Conv1D stores (in, out), SloLinear expects (out, in)
     elif "model.embed_tokens.weight" in weight_keys and "model.layers.0.self_attn.q_proj.weight" in weight_keys:
         # LLaMA/Qwen/Mistral style — detect sub-features
         norm = "rms_norm" if "model.layers.0.input_layernorm.weight" in weight_keys else "layer_norm"

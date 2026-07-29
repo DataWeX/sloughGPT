@@ -22,7 +22,7 @@ import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Dict, Optional
 
 logger = logging.getLogger("slo.training.executor")
 
