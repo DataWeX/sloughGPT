@@ -1786,6 +1786,10 @@ class ModelServer:
             "model_id": self.model_id,
         })
         logger.info("ModelServer[%s]: model swapped", self.model_id, extra={"tag": "MODEL"})
+        # Reset queue so the next generate() creates fresh workers on
+        # whichever event loop it runs on (warmup thread or test).
+        self._request_queue = None
+        self._queue_task = None
         # Re-warmup with new model
         with self._warmup_lock:
             self._warmup_completed = False
