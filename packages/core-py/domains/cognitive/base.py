@@ -8,9 +8,9 @@ import asyncio
 import logging
 from typing import Any, Dict, Optional
 
+from .. import DomainException
 from ..__init__ import (
     BaseDomain,
-    DomainException,
     ICognitiveProcessor,
     IMemoryManager,
     IMetacognitiveMonitor,
@@ -37,6 +37,12 @@ class CognitiveDomain(BaseDomain):
         # Background tasks
         self._background_tasks: list[asyncio.Task] = []
 
+        # Component tracking
+        self.components: dict = {}
+
+        # Lifecycle
+        self.is_initialized = False
+
         # Cognitive state
         self.cognitive_state = "idle"
         self.active_thoughts = []
@@ -56,6 +62,7 @@ class CognitiveDomain(BaseDomain):
             # Start cognitive processes
             await self._start_cognitive_processes()
 
+            self.is_initialized = True
             self.logger.info("Cognitive Domain initialized successfully", extra={"tag": "COG"})
 
         except Exception as e:
@@ -80,6 +87,7 @@ class CognitiveDomain(BaseDomain):
             if self.memory_manager:
                 await self._shutdown_component("memory_manager")
 
+            self.is_initialized = False
             self.logger.info("Cognitive Domain shutdown successfully", extra={"tag": "COG"})
 
         except Exception as e:
@@ -94,7 +102,8 @@ class CognitiveDomain(BaseDomain):
         from .reasoning import ReasoningEngine
 
         self.reasoning_engine = ReasoningEngine()
-        await self.reasoning_engine.initialize()
+        if hasattr(self.reasoning_engine, "initialize"):
+            await self.reasoning_engine.initialize()
         self.components["reasoning_engine"] = self.reasoning_engine
 
     async def _initialize_metacognitive_monitor(self) -> None:
@@ -187,10 +196,11 @@ class CognitiveDomain(BaseDomain):
 
         import uuid
 
+        resolved_type = getattr(ThoughtType, thought_type.upper(), thought_type)
         thought = Thought(
             thought_id=str(uuid.uuid4()),
             content=thought_content,
-            thought_type=ThoughtType(thought_type),
+            thought_type=resolved_type,
             confidence=0.5,
             metadata={},
         )
@@ -202,7 +212,7 @@ class CognitiveDomain(BaseDomain):
             "original_thought": thought_content,
             "processed_thought": result.content,
             "confidence": result.confidence,
-            "reasoning_path": await self.reasoning_engine.get_reasoning_path()
+            "reasoning_path": self.reasoning_engine.reasoning_history
             if self.reasoning_engine
             else [],
         }
