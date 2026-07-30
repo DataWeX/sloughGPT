@@ -449,22 +449,28 @@ class FormalLogicEngine:
 
     def _forward_chain(self, query: Predicate) -> bool:
         """Forward chaining inference."""
-        derived = set()
-        queue = list(self.knowledge_base)
+        derived: Set[Predicate] = set()
+        changed = True
 
-        while queue:
-            wff = queue.pop(0)
+        while changed:
+            changed = False
+            for wff in self.knowledge_base:
+                # Add simple predicates
+                if wff.predicate and wff.operator is None:
+                    if wff.predicate not in derived:
+                        derived.add(wff.predicate)
+                        changed = True
 
-            # Apply Modus Ponens
-            if wff.operator == LogicalOperator.IMPLIES:
-                result = self._modus_ponens(wff.left, wff.right, derived)
-                if result:
-                    derived.add(result)
-                    queue.append(WellFormedFormula(predicate=result))
+                # Apply Modus Ponens
+                if wff.operator == LogicalOperator.IMPLIES:
+                    result = self._modus_ponens(wff.left, wff.right, derived)
+                    if result and result not in derived:
+                        derived.add(result)
+                        changed = True
 
-            # Check if query is satisfied
-            if wff.predicate and wff.predicate.name == query.name:
-                if self._unify(wff.predicate, query):
+            # Check query against all derived facts
+            for pred in derived:
+                if pred.name == query.name and self._unify(pred, query):
                     return True
 
         return False
