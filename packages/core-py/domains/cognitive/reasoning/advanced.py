@@ -734,7 +734,8 @@ async def advanced_reasoning(
         return await engine.reason(problem, **kwargs)
 
     elif mode == ReasoningMode.TREE_OF_THOUGHTS:
-        engine = TreeOfThoughts(llm_call, **kwargs)
+        beam_width = kwargs.pop("beam_width", 3)
+        engine = TreeOfThoughts(llm_call, beam_width=beam_width)
         return await engine.reason(problem, **kwargs)
 
     elif mode == ReasoningMode.SELF_CONSISTENCY:
