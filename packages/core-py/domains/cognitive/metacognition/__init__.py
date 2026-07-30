@@ -479,7 +479,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
         accuracy = float(base_accuracy) * 0.7 + float(historical_accuracy) * 0.3
         return max(0.0, min(1.0, accuracy))
 
-    async def _get_thought_type_confidence(self, thought_type: ThoughtType) -> float:
+    async def _get_thought_type_confidence(self, thought_type: str) -> float:
         """Get confidence score for thought type"""
         type_confidence = {
             "analytical": 0.8,
@@ -487,7 +487,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             "metacognitive": 0.9,
             "intuitive": 0.5,
         }
-        return type_confidence.get(thought_type.value, 0.7)
+        return type_confidence.get(thought_type, 0.7)
 
     async def _assess_context_confidence(self, metadata: Dict[str, Any]) -> float:
         """Assess confidence based on context"""
@@ -890,12 +890,12 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
 
         return trends
 
-    def _thought_type_to_process(self, thought_type: ThoughtType) -> CognitiveProcess:
+    def _thought_type_to_process(self, thought_type: str) -> CognitiveProcess:
         """Convert thought type to cognitive process"""
         mapping = {
-            ThoughtType.ANALYTICAL: CognitiveProcess.REASONING,
-            ThoughtType.CREATIVE: CognitiveProcess.CREATIVITY,
-            ThoughtType.METACOGNITIVE: CognitiveProcess.REASONING,
-            ThoughtType.INTUITIVE: CognitiveProcess.DECISION_MAKING,
+            "analytical": CognitiveProcess.REASONING,
+            "creative": CognitiveProcess.CREATIVITY,
+            "metacognitive": CognitiveProcess.REASONING,
+            "intuitive": CognitiveProcess.DECISION_MAKING,
         }
         return mapping.get(thought_type, CognitiveProcess.DECISION_MAKING)

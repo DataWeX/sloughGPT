@@ -1185,8 +1185,8 @@ class ShellREPL:
                     self._last_exit_code = ext_mod.run(argv, c, self.cmds, self._env)
                     self._env.pop("_piped_input", None)
                 else:
-                    handler(self, args)
                     self._last_exit_code = 0
+                    handler(self, args)
             except SystemExit as e:
                 self._last_exit_code = e.code if isinstance(e.code, int) else 1
             except Exception as e:
@@ -1608,6 +1608,15 @@ class ShellREPL:
                 "rev": "  rev [file]  — Reverse characters in each line",
                 "paste": "  paste <file1> [file2 ...]  — Merge lines of files side by side",
                 "comm": "  comm <file1> <file2>  — Compare two sorted files line by line",
+                "test": "  test <expr>  — Evaluate conditional expression (sets $? 0=true 1=false)",
+                "[": "  [ <expr> ]  — Synonym for test",
+                "printf": "  printf <format> [args...]  — Format and print data (%s %d %f \\n \\t)",
+                "expand": "  expand [file]  — Convert tabs to spaces",
+                "unexpand": "  unexpand [file]  — Convert spaces to tabs",
+                "id": "  id  — Print user identity",
+                "logname": "  logname  — Print login name",
+                "mktemp": "  mktemp [-d]  — Create a temporary file or directory",
+                "who": "  who  — Show who is logged on",
                 "history": "  history [n]  — Show command history (last n entries, default 20)",
                 "fc": "  fc [-l] [n]  — List history, or re-run command by number (fc 42)",
                 "alias": "  alias [name=cmd]  — List or set aliases",
@@ -1759,6 +1768,8 @@ Most common commands (help [cmd] for details, help for full list):
   rev [file]             Reverse characters in each line
   paste <f1> [f2 ...]    Merge lines of files side by side
   comm <f1> <f2>         Compare two sorted files line by line
+  test <expr>            Evaluate conditional expression ($? 0=true 1=false)
+  printf <fmt> [args..]  Format and print data (%s %d %f \n \t)
   history [n]             Show command history
   fc [-l] [n]             List history, or re-run command #n (fc 42)
   alias [name=cmd]        List or set aliases
@@ -2972,6 +2983,185 @@ Examples:
         while j < len(lines2):
             self._print(f"\t{lines2[j]}")
             j += 1
+        self._last_exit_code = 0
+
+    def _cmd_test(self, args: str = "") -> None:
+        """Evaluate conditional expression. Sets exit code 0=true, 1=false."""
+        if not args:
+            self._last_exit_code = 1
+            return
+        parts = args.strip().split()
+        if args.startswith("[ ") and args.endswith(" ]"):
+            parts = args[2:-2].strip().split()
+        # -f: file exists
+        if len(parts) == 2 and parts[0] == "-f":
+            self._last_exit_code = 0 if Path(os.path.expanduser(parts[1])).is_file() else 1
+        elif len(parts) == 2 and parts[0] == "-d":
+            self._last_exit_code = 0 if Path(os.path.expanduser(parts[1])).is_dir() else 1
+        elif len(parts) == 2 and parts[0] == "-e":
+            p = Path(os.path.expanduser(parts[1]))
+            self._last_exit_code = 0 if p.exists() else 1
+        elif len(parts) == 2 and parts[0] == "-z":
+            self._last_exit_code = 0 if len(parts[1]) == 0 else 1
+        elif len(parts) == 2 and parts[0] == "-n":
+            self._last_exit_code = 0 if len(parts[1]) > 0 else 1
+        elif len(parts) == 3 and parts[1] == "=":
+            self._last_exit_code = 0 if parts[0] == parts[2] else 1
+        elif len(parts) == 3 and parts[1] == "!=":
+            self._last_exit_code = 0 if parts[0] != parts[2] else 1
+        elif len(parts) == 3 and parts[1] == "-eq":
+            self._last_exit_code = 0 if int(parts[0]) == int(parts[2]) else 1
+        elif len(parts) == 3 and parts[1] == "-ne":
+            self._last_exit_code = 0 if int(parts[0]) != int(parts[2]) else 1
+        elif len(parts) == 3 and parts[1] == "-lt":
+            self._last_exit_code = 0 if int(parts[0]) < int(parts[2]) else 1
+        elif len(parts) == 3 and parts[1] == "-le":
+            self._last_exit_code = 0 if int(parts[0]) <= int(parts[2]) else 1
+        elif len(parts) == 3 and parts[1] == "-gt":
+            self._last_exit_code = 0 if int(parts[0]) > int(parts[2]) else 1
+        elif len(parts) == 3 and parts[1] == "-ge":
+            self._last_exit_code = 0 if int(parts[0]) >= int(parts[2]) else 1
+        else:
+            self._last_exit_code = 1
+
+    def _cmd_printf(self, args: str = "") -> None:
+        """Format and print data (supports %s, %d, %f, \\n, \\t)."""
+        if not args:
+            self._last_exit_code = 1
+            return
+        parts = args.strip().split(maxsplit=1)
+        fmt = parts[0]
+        rest = parts[1] if len(parts) > 1 else ""
+        fmt = fmt.replace("\\n", "\n").replace("\\t", "\t").replace("\\\\", "\\")
+        # Handle %% format spec and count placeholders
+        arg_parts = rest.split() if rest else []
+        arg_idx = 0
+        out = []
+        i = 0
+        while i < len(fmt):
+            if fmt[i] == "%" and i + 1 < len(fmt):
+                spec = fmt[i + 1]
+                if spec == "%":
+                    out.append("%")
+                    i += 2
+                elif spec == "s":
+                    val = arg_parts[arg_idx] if arg_idx < len(arg_parts) else ""
+                    arg_idx += 1
+                    out.append(val)
+                    i += 2
+                elif spec == "d":
+                    val = arg_parts[arg_idx] if arg_idx < len(arg_parts) else "0"
+                    arg_idx += 1
+                    try:
+                        out.append(str(int(val)))
+                    except ValueError:
+                        out.append("0")
+                    i += 2
+                elif spec == "f":
+                    val = arg_parts[arg_idx] if arg_idx < len(arg_parts) else "0.0"
+                    arg_idx += 1
+                    try:
+                        out.append(f"{float(val):f}")
+                    except ValueError:
+                        out.append("0.000000")
+                    i += 2
+                else:
+                    out.append(fmt[i])
+                    i += 1
+            else:
+                out.append(fmt[i])
+                i += 1
+        self._print("".join(out).rstrip("\n"))
+        self._last_exit_code = 0
+
+    def _cmd_expand(self, args: str = "") -> None:
+        """Convert tabs to spaces (piped input or file)."""
+        if not args and not self._piped_input:
+            self._print("  Usage: expand [file]")
+            self._last_exit_code = 1
+            return
+        try:
+            if args:
+                content = Path(os.path.expanduser(args.strip())).read_text()
+            else:
+                content = self._piped_input
+        except FileNotFoundError:
+            self._print(f"  expand: {args.strip()}: No such file or directory")
+            self._last_exit_code = 1
+            return
+        self._print(content.expandtabs(8).rstrip("\n"))
+        self._last_exit_code = 0
+
+    def _cmd_unexpand(self, args: str = "") -> None:
+        """Convert spaces to tabs (piped input or file)."""
+        if not args and not self._piped_input:
+            self._print("  Usage: unexpand [file]")
+            self._last_exit_code = 1
+            return
+        try:
+            if args:
+                content = Path(os.path.expanduser(args.strip())).read_text()
+            else:
+                content = self._piped_input
+        except FileNotFoundError:
+            self._print(f"  unexpand: {args.strip()}: No such file or directory")
+            self._last_exit_code = 1
+            return
+        lines = content.splitlines()
+        out = []
+        for line in lines:
+            spaces = 0
+            for ch in line:
+                if ch == " ":
+                    spaces += 1
+                else:
+                    break
+            tabs, rem = divmod(spaces, 8)
+            out.append("\t" * tabs + " " * rem + line[spaces:])
+        self._print("\n".join(out))
+        self._last_exit_code = 0
+
+    def _cmd_id(self, args: str = "") -> None:
+        """Print user identity."""
+        import getpass as _gp, os as _os
+        user = _gp.getuser()
+        uid = _os.getuid() if hasattr(_os, "getuid") else "?"
+        gid = _os.getgid() if hasattr(_os, "getgid") else "?"
+        self._print(f"  uid={uid}({user}) gid={gid}({user})")
+        self._last_exit_code = 0
+
+    def _cmd_logname(self, args: str = "") -> None:
+        """Print login name."""
+        import getpass as _gp, os as _os
+        self._print(_gp.getuser())
+        self._last_exit_code = 0
+
+    def _cmd_mktemp(self, args: str = "") -> None:
+        """Create a temporary file or directory."""
+        import tempfile as _tf
+        parts = args.strip().split()
+        is_dir = any(p == "-d" for p in parts)
+        try:
+            if is_dir:
+                path = _tf.mkdtemp()
+            else:
+                path = _tf.mkstemp()[1]
+            self._print(path)
+            self._last_exit_code = 0
+        except OSError as e:
+            self._print(f"  mktemp: {e}")
+            self._last_exit_code = 1
+
+    def _cmd_who(self, args: str = "") -> None:
+        """Show who is logged on."""
+        import os as _os, pwd as _pwd, time as _time
+        try:
+            host = _os.uname().nodename
+        except AttributeError:
+            host = "localhost"
+        import getpass as _gp
+        user = _gp.getuser()
+        self._print(f"  {user}    console  {_time.strftime('%Y-%m-%d %H:%M')}")
         self._last_exit_code = 0
 
     def _cmd_exit(self, args: str = "") -> None:
@@ -5101,6 +5291,15 @@ nl: db 10
         "rev": _cmd_rev,
         "paste": _cmd_paste,
         "comm": _cmd_comm,
+        "test": _cmd_test,
+        "[": _cmd_test,
+        "printf": _cmd_printf,
+        "expand": _cmd_expand,
+        "unexpand": _cmd_unexpand,
+        "id": _cmd_id,
+        "logname": _cmd_logname,
+        "mktemp": _cmd_mktemp,
+        "who": _cmd_who,
         "which": _cmd_which,
         "type": _cmd_type,
         "history": _cmd_history,

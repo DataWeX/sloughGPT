@@ -1819,3 +1819,104 @@ class TestPipelineBuiltins:
             repl._cmd_tac("")
             out = cap.getvalue()
         assert "Usage" in out
+
+    def test_test_file_exists(self, repl):
+        import tempfile
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            p = f.name
+        try:
+            repl._cmd_test(f"-f {p}")
+            assert repl._last_exit_code == 0
+            repl._cmd_test("-f /nonexistent_xyz")
+            assert repl._last_exit_code == 1
+        finally:
+            os.unlink(p)
+
+    def test_test_dir_exists(self, repl):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            repl._cmd_test(f"-d {td}")
+        assert repl._last_exit_code == 0
+        repl._cmd_test("-d /nonexistent_dir_xyz")
+        assert repl._last_exit_code == 1
+
+    def test_test_str_eq(self, repl):
+        repl._cmd_test("a = a")
+        assert repl._last_exit_code == 0
+        repl._cmd_test("a = b")
+        assert repl._last_exit_code == 1
+
+    def test_test_int_cmp(self, repl):
+        repl._cmd_test("1 -eq 1")
+        assert repl._last_exit_code == 0
+        repl._cmd_test("1 -ne 1")
+        assert repl._last_exit_code == 1
+        repl._cmd_test("1 -lt 2")
+        assert repl._last_exit_code == 0
+        repl._cmd_test("2 -gt 1")
+        assert repl._last_exit_code == 0
+
+    def test_test_no_args(self, repl):
+        repl._cmd_test("")
+        assert repl._last_exit_code == 1
+
+    def test_printf_basic(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_printf("%s hello")
+            out = cap.getvalue()
+        assert "hello" in out
+
+    def test_printf_format_int(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_printf("%d 42")
+            out = cap.getvalue()
+        assert "42" in out
+
+    def test_printf_format_escape_n(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_printf("a\\nb")
+            out = cap.getvalue()
+        lines = out.strip().split("\n")
+        assert len(lines) >= 2
+
+    def test_printf_no_args(self, repl):
+        repl._cmd_printf("")
+        assert repl._last_exit_code == 1
+
+    def test_which_registered(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_which("echo")
+            out = cap.getvalue()
+        assert "echo" in out
+        assert repl._last_exit_code == 0
+
+    def test_which_not_found(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_which("nonexistent_cmd")
+            out = cap.getvalue()
+        assert "not found" in out or "nonexistent" in out
+        assert repl._last_exit_code == 1
+
+    def test_which_no_args(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_which("")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_type_describes_command(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_type("echo")
+            out = cap.getvalue()
+        assert "built-in" in out or "echo" in out
+
+    def test_type_not_found(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_type("nonexistent_cmd")
+            out = cap.getvalue()
+        assert "not found" in out
+
+    def test_type_no_args(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_type("")
+            out = cap.getvalue()
+        assert "Usage" in out
