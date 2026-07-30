@@ -271,14 +271,11 @@ class HierarchicalContext:
 
         # Start from top level
         current_level = len(self.hierarchy) - 1
-        relevant_chunks = [self.hierarchy[current_level]]
+        relevant_chunks = self.hierarchy[current_level][:]
 
         # Descend hierarchy
         while current_level > 0:
-            # Find most relevant chunk in current level
-            best_chunk = relevant_chunks[0]  # Simplified
             current_level -= 1
-            # In production: do similarity search here
 
         # Combine relevant chunks
         context = ' '.join(relevant_chunks)
@@ -382,7 +379,9 @@ class KnowledgeGrounding:
         parts = statement.replace('.', '').split()
 
         if len(parts) >= 3:
-            subject, predicate, obj = parts[0], parts[1], ' '.join(parts[2:])
+            subject = parts[0]
+            predicate = parts[1]
+            obj = ' '.join(parts[2:])
 
             known_objects = self.query(subject, predicate)
             is_verified = obj in known_objects
