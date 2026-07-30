@@ -39,6 +39,11 @@ class QuantizeRequest(BaseModel):
     mode: str = "symmetric"
 
 
+class PrecisionRequest(BaseModel):
+    """Request body for POST /models/precision."""
+    mode: str = "auto"
+
+
 class ModelsRouter:
     """Models Router - MVC View layer."""
 
@@ -67,6 +72,7 @@ class ModelsRouter:
         self.router.add_api_route(path="/visual-load", endpoint=self.visual_model_load, methods=["POST"])
         self.router.add_api_route(path="/quantize", endpoint=self.quantize_model, methods=["POST"])
         self.router.add_api_route(path="/dequantize", endpoint=self.dequantize_model, methods=["POST"])
+        self.router.add_api_route(path="/precision", endpoint=self.set_precision, methods=["POST"])
         self.router.add_api_route(path="/catalog", endpoint=self.get_catalog, methods=["GET"])
         self.router.add_api_route(path="/catalog/stats", endpoint=self.get_catalog_stats, methods=["GET"])
         self.router.add_api_route(path="/conversion-status", endpoint=self.get_conversion_status, methods=["GET"])
@@ -594,6 +600,7 @@ class ModelsRouter:
 
         engine = QuantEngine(bits=bits, mode=mode)
         quantized_count = 0
+        tensor_infos = {}
         for name, module in layers.items():
             weight = module.weight.data
             # Convert torch tensor to numpy if needed
@@ -613,7 +620,17 @@ class ModelsRouter:
                     module._ql = ql
                     module._orig_forward = module.forward
                     module.forward = ql.make_torch_forward()
+                tensor_infos[name] = info
                 quantized_count += 1
+
+        # Persist quantized weights to disk for fast future loads
+        if quantized_count > 0 and hasattr(provider, "_model_path"):
+            model_path = provider._model_path
+            if model_path:
+                from pathlib import Path
+                p = Path(str(model_path))
+                quant_npz = p.with_suffix(p.suffix + ".quant.npz")
+                engine.save_weights(str(quant_npz), tensor_infos)
 
         # Store the engine on the provider for health endpoint access
         provider._quant_engine = engine
@@ -691,6 +708,78 @@ class ModelsRouter:
             "model_type": model_type,
             "layers_reset": len(layers),
         })
+
+    async def set_precision(self, req: PrecisionRequest):
+        """Switch compute precision on-the-fly without model reload.
+
+        Works on both GPU (fp16 via accelerator) and CPU (fp32/int8/int4).
+        Already-loaded models switch immediately — no restart needed.
+
+        Args:
+            mode: ``"auto"`` (benchmark and pick fastest), ``"fp32"``, or
+                  ``"fp16"``. On GPU without fp16 support, silently falls
+                  back to ``"fp32"``.
+
+        Returns:
+            Active precision mode, benchmark results (if ``mode="auto"``),
+            and per-format timing/quality.
+        """
+        from domains.slolib.gpu import get_accelerator, set_accelerator_precision
+        import numpy as np
+
+        acc = get_accelerator()
+        acc_mode = req.mode
+
+        result = {
+            "accelerator": acc.name,
+            "device_type": acc.device_type,
+        }
+
+        if acc.name == "cpu":
+            # CPU path: use QuantEngine to select best format
+            from domains.infrastructure.quantization import QuantEngine
+            suggestion = QuantEngine.suggest_format()
+            result["precision"] = suggestion["format"]
+            result["bits"] = suggestion["bits"]
+            result["reason"] = suggestion["reason"]
+            result["benchmark"] = suggestion["benchmark"]
+            result["fp16_mode"] = False
+
+            # If int8/int4 selected, apply quantization
+            if suggestion["format"] in ("int8", "int4"):
+                from domains.models.provider import get_provider
+                provider = get_provider("slonet") or get_provider("hf-default")
+                if provider is not None:
+                    model = getattr(provider, "_model", None)
+                    if model is not None:
+                        # Re-use existing quantize logic
+                        from domains.infrastructure.quantization import QuantEngine, walk_slo_linears, walk_hf_linears
+                        engine = QuantEngine(bits=suggestion["bits"], mode="symmetric")
+                        if hasattr(model, "layers"):
+                            layers = walk_slo_linears(model)
+                        else:
+                            layers = walk_hf_linears(model)
+                        quantized = 0
+                        for name, module in layers.items():
+                            weight = module.weight.data
+                            if hasattr(weight, "cpu"):
+                                weight = weight.cpu().numpy().astype(np.float32).copy()
+                            else:
+                                weight = np.asarray(weight, dtype=np.float32).copy()
+                            info = engine.quantize(f"{name}.weight", weight)
+                            if info.is_quantized:
+                                module._quant_info = info
+                                quantized += 1
+                        result["layers_quantized"] = quantized
+                        result["total_layers"] = len(layers)
+        else:
+            # GPU path: use accelerator's set_precision
+            active = set_accelerator_precision(acc_mode)
+            result["precision"] = active
+            result["fp16_mode"] = acc._fp16_mode
+            result["reason"] = f"Accelerator {acc.name} set to {active}"
+
+        return success_response(data=result)
 
     async def get_catalog(self):
         """Get the persistent model catalog."""

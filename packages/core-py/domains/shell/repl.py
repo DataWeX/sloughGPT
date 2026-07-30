@@ -7,13 +7,12 @@ Features:
   - Pipeline chaining (|) — passes captured output as next command's args
   - Background execution (&) — spawns in a thread
   - Command chaining (&&, ||, ;) with exit code tracking ($?)
-  - Unix filesystem commands: ls, cd, pwd, mkdir, rm, cp, mv, cat, touch
-  - Scripting commands: true, false, test/[, which, type, env
+  - AI-domain commands: gen, chat, ai, models, souls, train, datasets, ...
+  - Shell essentials: history, alias, export, py, jobs, watch, ...
   - readline tab completion for command names
   - Persistent history and aliases (~/.config/sloughgpt/shell_state.json)
   - LLM-powered natural language interpretation (ai <query>)
   - Alias management (alias / unalias)
-  - Pipe filters: grep, head, tail, wc
 """
 
 from __future__ import annotations
@@ -27,7 +26,6 @@ import time
 import stat
 import shutil
 import logging
-import fnmatch
 import glob
 import threading
 import subprocess
@@ -37,6 +35,7 @@ from typing import Any, Callable
 
 from .runtime import DaitRuntime
 from .commands import ShellCommands
+from .console import Console
 from .state import ShellState
 from .window_manager import get_window_manager
 
@@ -212,6 +211,7 @@ class ShellREPL:
             "PS1": "\u03bb",
             "SHELL": "sloughgpt",
             "HOME": str(Path.home()),
+            "TERM": "xterm-256color",
         }
         self._env.update(self.state.env)
         self._update_color_state()
@@ -239,7 +239,7 @@ class ShellREPL:
         self._aliases: dict[str, str] = dict(self.state.aliases)
         self._aliases.update({
             "q": "exit", "quit": "exit", "h": "help",
-            "?": "help", "cls": "clear",
+            "?": "help",
             "jobs": "bg",
         })
 
@@ -256,6 +256,10 @@ class ShellREPL:
         except ImportError:
             self._completion_cache_obj = None
         self._completion_cache: dict[str, tuple[float, list[str]]] = {}
+
+        # External commands from commands/ directory
+        from .cmds import discover as _discover
+        self._ext_cmds = _discover()
 
         if _HAS_READLINE:
             self._setup_readline()
@@ -321,13 +325,15 @@ class ShellREPL:
 
         mem = MemoryIO()
         old_io = self.io
+        old_console_io = self.console._io
         self.io = mem
+        self.console._io = mem
         old_print = self._print
 
         def _captured_print(*args, **kwargs):
             end = kwargs.get("end", "\n")
             text = " ".join(str(a) for a in args)
-            mem.write(text, end=end)
+            self.io.write(text, end=end)
 
         self._print = _captured_print  # type: ignore
 
@@ -342,12 +348,23 @@ class ShellREPL:
 
             commands, is_bg, should_time = self._parse_pipeline(line)
 
+            if not commands:
+                self._print(f"  {_C_DIM}(empty pipeline){_C_RESET}")
+                self._last_exit_code = 0
+                self.io = old_io
+                self.console._io = old_console_io
+                self._print = old_print
+                return mem.get_output(), 0
+
             if is_bg:
                 if len(commands) > 1:
                     self._execute_background_tuples(commands)
                 else:
                     self._execute_background(commands[0][0])
                 self._audit.command(line, commands[0][0].split()[0] if commands[0][0] else "", line, 0, is_background=True, is_pipeline=len(commands) > 1)
+                self.io = old_io
+                self.console._io = old_console_io
+                self._print = old_print
                 return mem.get_output(), 0
             elif len(commands) > 1:
                 self._execute_pipeline(commands, should_time=should_time)
@@ -359,14 +376,26 @@ class ShellREPL:
                 cmd = parts[0].lower()
                 args_str = parts[1] if len(parts) > 1 else ""
                 handler = self.COMMANDS.get(cmd)
-                if handler:
+                ext_mod = self._ext_cmds.get(cmd) if handler is None else None
+                if handler or ext_mod:
                     if not self._check_permission(cmd, args_str, interactive=False):
                         self._last_exit_code = 126
                         self._audit.command(line, cmd, args_str, 126, elapsed_ms=0, expanded=expanded)
+                        self.io = old_io
+                        self.console._io = old_console_io
+                        self._print = old_print
                         return mem.get_output(), self._last_exit_code
                     try:
-                        handler(self, args_str)
-                        self._last_exit_code = 0
+                        if ext_mod:
+                            piped = self._piped_input if self._piped_input else ""
+                            self._env["_piped_input"] = piped
+                            self._env["_exec_fn"] = self._execute_single
+                            c = Console(mem, has_readline=False)
+                            self._last_exit_code = ext_mod.run([cmd] + (args_str.split() if args_str else []), c, self.cmds, self._env)
+                            self._env.pop("_piped_input", None)
+                        else:
+                            handler(self, args_str)
+                            self._last_exit_code = 0
                     except SystemExit as e:
                         self._last_exit_code = e.code if isinstance(e.code, int) else 1
                     except Exception as e:
@@ -393,6 +422,7 @@ class ShellREPL:
 
         output = mem.get_output()
         self.io = old_io
+        self.console._io = old_console_io
         self._print = old_print
         return output, self._last_exit_code
 
@@ -571,7 +601,7 @@ class ShellREPL:
         is_first_word = len(parts) <= 1 or line.endswith(" ")
 
         if is_first_word:
-            candidates = list(self.COMMANDS.keys()) + list(self._aliases.keys())
+            candidates = list(self.COMMANDS.keys()) + list(self._ext_cmds.keys()) + list(self._aliases.keys())
         else:
             cmd = parts[0].lower()
             if cmd == "note" and len(parts) >= 2:
@@ -653,6 +683,22 @@ class ShellREPL:
 
     def _complete_path(self, prefix: str) -> list[str]:
         """Return matching file/directory paths for tab completion."""
+        # VFS-aware completion for /dev/ and /proc/
+        if prefix.startswith("/dev") or prefix.startswith("/proc"):
+            try:
+                vfs = self.os.vfs
+                if vfs:
+                    parent = prefix.rsplit("/", 1)[0] or prefix
+                    partial = prefix.rsplit("/", 1)[1] if "/" in prefix else ""
+                    if parent == prefix:
+                        parent = prefix.rstrip("/")
+                        partial = ""
+                    entries = vfs.listdir(parent) if parent else vfs.listdir("/dev")
+                    if entries is not None:
+                        matches = [e + "/" if vfs.isdir(parent + "/" + e if parent else "/dev/" + e) else e for e in entries if not e.startswith(".") and e.startswith(partial)]
+                        return sorted(matches)
+            except Exception:
+                pass
         if not prefix or prefix == "." or prefix == "..":
             search_dir = Path(".")
             partial = prefix
@@ -721,12 +767,11 @@ class ShellREPL:
         sep = f"{_C_DIM}{'━' * terminal}{_C_RESET}"
         lines = self.os.status_summary.split("\n")
         header = lines[0] if lines else ""
-        self.io.write(sep)
-        self.io.write(f"{_C_CYAN}{_C_BOLD}  Dait{_C_RESET}".center(terminal))
-        self.io.write(f"{_C_DIM}  {header}{_C_RESET}".center(terminal))
-        self.io.write(sep)
-        self.io.write(f"  Type {_C_YELLOW}`help`{_C_RESET} for commands, {_C_YELLOW}`exit`{_C_RESET} to quit, {_C_YELLOW}`ai <query>`{_C_RESET} for AI mode")
-        self.io.write("")
+        self._print(sep)
+        self._print(f"{_C_CYAN}{_C_BOLD}  Dait{_C_RESET}".center(terminal))
+        self._print(f"{_C_DIM}  {header}{_C_RESET}".center(terminal))
+        self._print(sep)
+        self._print(f"  Type {_C_YELLOW}`help`{_C_RESET} for commands, {_C_YELLOW}`exit`{_C_RESET} to quit, {_C_YELLOW}`ai <query>`{_C_RESET} for AI mode")
 
     def _format_table(self, rows: list[list[str]], header: list[str] | None = None) -> str:
         if not rows:
@@ -755,6 +800,29 @@ class ShellREPL:
 
     def _dump_json(self, obj: Any) -> str:
         return json.dumps(obj, indent=2, default=str)
+
+    def _spinner_call(self, label: str, fn, ok_msg: str | None = ""):
+        """
+        Standard loading-state wrapper for any operation that makes API calls
+        or has a timeout. Shows a spinner animation while *fn* runs, then
+        replaces it with a success or cleared line.
+
+        Args:
+            label:  Spinner label text (e.g. "Fetching models", "Generating").
+            fn:     Zero-arg callable wrapping the blocking operation.
+            ok_msg: Success message shown after completion.
+                    - ``None``  → spinner line is cleared silently (for list/table commands).
+                    - ``""``    → uses *label* as the success message.
+                    - ``str``   → custom success message.
+
+        Every command that calls the HTTP API MUST use _spinner_call or an
+        equivalent loading indicator — this is a codebase standard.
+        """
+        with self.console.spinner(label) as s:
+            result = fn()
+        if ok_msg is not None:
+            s.ok(ok_msg or label)
+        return result
 
     def _expand_vars(self, text: str) -> str:
         """Replace $VAR, ${VAR}, and $? with values."""
@@ -936,12 +1004,31 @@ class ShellREPL:
         # Group by pipes within each chain segment
         commands = []
         for seg, op in tokens:
-            pipe_parts = [p.strip() for p in seg.split("|")]
+            pipe_parts = self._split_pipe(seg)
             for pp in pipe_parts[:-1]:
                 commands.append((pp, '|'))
             commands.append((pipe_parts[-1], op))
 
         return commands, bg, should_time
+
+    @staticmethod
+    def _split_pipe(seg: str) -> list[str]:
+        parts = []
+        cur: list[str] = []
+        in_quote: str | None = None
+        for ch in seg:
+            if ch in ("'", '"'):
+                if in_quote is None:
+                    in_quote = ch
+                elif in_quote == ch:
+                    in_quote = None
+            if ch == "|" and in_quote is None:
+                parts.append("".join(cur).strip())
+                cur = []
+            else:
+                cur.append(ch)
+        parts.append("".join(cur).strip())
+        return parts
 
     def _strip_redirection(self, raw_args: str):
         """Strip '> file' or '>> file' from the end of args. Returns (cleaned_args, redirect_path, append_mode)."""
@@ -992,7 +1079,72 @@ class ShellREPL:
 
         self._piped_input = piped_input
         handler = self.COMMANDS.get(cmd)
-        if handler is None:
+        ext_mod = self._ext_cmds.get(cmd) if handler is None else None
+
+        if handler is None and ext_mod is None:
+            # Fallback: try as a system binary
+            import shutil, subprocess, shlex
+            binary = shutil.which(cmd)
+            if binary:
+                from .io import MemoryIO as _MemIO
+                cap = _MemIO()
+                old_io = self.io
+                old_console_io = self.console._io
+                self.io = cap
+                self.console._io = cap
+                try:
+                    shell_args = shlex.split(args) if args else []
+                    stdin_data = piped_input if isinstance(piped_input, bytes) else (piped_input.encode() if piped_input else None)
+                    sub_env = {**os.environ, **self._env}
+                    result = subprocess.run(
+                        [binary] + shell_args,
+                        input=stdin_data,
+                        capture_output=True,
+                        timeout=120,
+                        env=sub_env,
+                    )
+                    out_text = result.stdout.decode(errors="replace") if result.stdout else ""
+                    err_text = result.stderr.decode(errors="replace") if result.stderr else ""
+                    if out_text:
+                        self._print(out_text.rstrip("\n"))
+                    if err_text:
+                        self._print(err_text.rstrip("\n"))
+                    self._last_exit_code = result.returncode
+                except subprocess.TimeoutExpired:
+                    self._print(f"  Command timed out: {cmd}")
+                    self._last_exit_code = 124
+                except Exception as e:
+                    self._print(f"  Error: {e}")
+                    self._last_exit_code = 1
+                finally:
+                    self.io = old_io
+                    self.console._io = old_console_io
+
+                # Handle redirect
+                cap_out = cap.get_output()
+                if redirect_path:
+                    vfs = self.os.vfs
+                    if vfs and (redirect_path.startswith("/dev/") or redirect_path.startswith("/proc/")):
+                        result = vfs.write(redirect_path, cap_out)
+                        if result:
+                            self._print(result)
+                    else:
+                        mode = "a" if append_mode else "w"
+                        try:
+                            with open(os.path.expanduser(redirect_path), mode) as f:
+                                f.write(cap_out)
+                        except OSError:
+                            self._last_exit_code = 1
+                    cap_out = ""
+
+                for k in inline_env:
+                    if old_env[k] is None:
+                        self._env.pop(k, None)
+                    else:
+                        self._env[k] = old_env[k]
+                self._piped_input = ""
+                return cap_out
+
             self._piped_input = ""
             for k in inline_env:
                 if old_env[k] is None:
@@ -1019,11 +1171,22 @@ class ShellREPL:
         from .io import MemoryIO as _MemIO
         cap = _MemIO()
         old_io = self.io
+        old_console_io = self.console._io
         self.io = cap
+        self.console._io = cap
         try:
             try:
-                handler(self, args)
-                self._last_exit_code = 0
+                if ext_mod:
+                    argv = [cmd] + (args.split() if args else [])
+                    c = Console(self.io, has_readline=_HAS_READLINE)
+                    if piped_input:
+                        self._env["_piped_input"] = piped_input
+                    self._env["_exec_fn"] = self._execute_single
+                    self._last_exit_code = ext_mod.run(argv, c, self.cmds, self._env)
+                    self._env.pop("_piped_input", None)
+                else:
+                    handler(self, args)
+                    self._last_exit_code = 0
             except SystemExit as e:
                 self._last_exit_code = e.code if isinstance(e.code, int) else 1
             except Exception as e:
@@ -1031,6 +1194,7 @@ class ShellREPL:
                 self._last_exit_code = 1
         finally:
             self.io = old_io
+            self.console._io = old_console_io
 
         for k in inline_env:
             if old_env[k] is None:
@@ -1060,9 +1224,9 @@ class ShellREPL:
         return output
 
     def _suggest_command(self, bad_cmd: str) -> str | None:
-        """Suggest a close command match via difflib."""
+        """Suggest a close command match via difflib (excludes short aliases)."""
         import difflib
-        all_cmds = list(self.COMMANDS.keys()) + list(self._aliases.keys())
+        all_cmds = list(self.COMMANDS.keys()) + list(self._ext_cmds.keys())
         matches = difflib.get_close_matches(bad_cmd, all_cmds, n=1, cutoff=0.6)
         return matches[0] if matches else None
 
@@ -1135,166 +1299,6 @@ class ShellREPL:
         self._print(f"  [bg-{bg_id}] {cmds_str}")
 
     # ── Pipe-filter commands ────────────────────────────────────────
-
-    def _cmd_grep(self, args: str = "") -> None:
-        pattern = args if args else ""
-        data = self._piped_input if self._piped_input else ""
-        if not pattern and not data:
-            self._print("  Usage: grep <pattern>   (filters piped input)")
-            return
-        if not data and pattern:
-            data = pattern
-            pattern = ""
-        if not pattern:
-            self._print("  No pattern specified. Usage: grep <pattern>")
-            return
-        lines = data.split("\n")
-        try:
-            matched = [l for l in lines if l and re.search(pattern, l)]
-            for m in matched:
-                self._print(m)
-        except re.error as e:
-            self._print(f"  Invalid regex: {e}")
-
-    def _cmd_head(self, args: str = "") -> None:
-        n = 10
-        data = self._piped_input if self._piped_input else ""
-        a = args.strip()
-        if a.lstrip("-").isdigit():
-            n = abs(int(a))
-        elif a.startswith("-n") and len(a) > 2:
-            n = int(a[2:].strip())
-        elif a and not data:
-            data = a
-        lines = [l for l in data.split("\n") if l] if data else []
-        for l in lines[:n]:
-            self._print(l)
-
-    def _cmd_tail(self, args: str = "") -> None:
-        n = 10
-        data = self._piped_input if self._piped_input else ""
-        a = args.strip()
-        if a.lstrip("-").isdigit():
-            n = abs(int(a))
-        elif a.startswith("-n") and len(a) > 2:
-            n = int(a[2:].strip())
-        elif a and not data:
-            data = a
-        lines = [l for l in data.split("\n") if l] if data else []
-        for l in lines[-n:]:
-            self._print(l)
-
-    def _cmd_wc(self, args: str = "") -> None:
-        text = self._piped_input if self._piped_input else args
-        if not text:
-            self._print("  0  0  0")
-            return
-        line_count = len(text.split("\n"))
-        word_count = len(text.split())
-        char_count = len(text)
-        self._print(f"  {line_count:>4} {word_count:>4} {char_count:>4}")
-
-    def _cmd_echo(self, args: str = "") -> None:
-        """Print arguments (like Unix echo). Supports -n (no newline) and -e (escape codes)."""
-        if not args:
-            self._print()
-            return
-        parts = args.split()
-        no_newline = False
-        interpret_escapes = False
-        idx = 0
-        while idx < len(parts):
-            if parts[idx] == "-n":
-                no_newline = True
-                idx += 1
-            elif parts[idx] == "-e":
-                interpret_escapes = True
-                idx += 1
-            elif parts[idx] == "-E":
-                interpret_escapes = False
-                idx += 1
-            else:
-                break
-        text = " ".join(parts[idx:]) if idx < len(parts) else ""
-        if interpret_escapes:
-            text = text.encode().decode("unicode_escape")
-        self._print(text, end="" if no_newline else "\n")
-
-    def _cmd_tee(self, args: str = "") -> None:
-        """Write piped input to file AND pass through to stdout."""
-        data = self._piped_input if self._piped_input else ""
-        path = args.strip() if args else ""
-        if not path or not data:
-            self._print("  Usage: <cmd> | tee <file>")
-            return
-        try:
-            with open(os.path.expanduser(path), "w") as f:
-                f.write(data)
-            self._print(data, end="")
-        except OSError as e:
-            self._print(f"  Error: {e}")
-
-    def _cmd_sort(self, args: str = "") -> None:
-        """Sort lines of piped input. Flags: -r (reverse), -u (unique), -n (numeric)."""
-        data = self._piped_input if self._piped_input else args
-        if not data:
-            return
-        flags = set(args.strip().split())
-        reverse = bool(flags & {"-r", "--reverse"})
-        unique = bool(flags & {"-u", "--unique"})
-        numeric = bool(flags & {"-n", "--numeric"})
-        lines = [l for l in data.split("\n") if l]
-        if numeric:
-            def _key(s):
-                m = re.search(r"[-+]?\d+\.?\d*", s)
-                return float(m.group()) if m else 0.0
-            lines = sorted(lines, key=_key, reverse=reverse)
-        else:
-            lines = sorted(lines, reverse=reverse)
-        if unique:
-            seen = set()
-            deduped = []
-            for l in lines:
-                if l not in seen:
-                    seen.add(l)
-                    deduped.append(l)
-            lines = deduped
-        for l in lines:
-            self._print(l)
-
-    def _cmd_uniq(self, args: str = "") -> None:
-        """Deduplicate consecutive lines of piped input."""
-        data = self._piped_input if self._piped_input else args
-        if not data:
-            return
-        lines = data.split("\n")
-        prev = None
-        for l in lines:
-            if l != prev:
-                self._print(l)
-            prev = l
-
-    def _cmd_less(self, args: str = "") -> None:
-        """Pager — scroll through piped output (Enter=next page, q=quit)."""
-        data = self._piped_input if self._piped_input else args
-        if not data:
-            self._print("  Usage: <cmd> | less   (pager: Enter=next page, q=quit)")
-            return
-        lines = data.rstrip("\n").split("\n")
-        rows, _cols = shutil.get_terminal_size()
-        page_size = max(rows - 3, 1)
-        pos = 0
-        while pos < len(lines):
-            for l in lines[pos:pos + page_size]:
-                self._print(l)
-            pos += page_size
-            if pos < len(lines):
-                try:
-                    resp = self.io.read(f"{_C_DIM}-- more ({pos}/{len(lines)} lines) --{_C_RESET} ")
-                    if resp.strip().lower() == "q":
-                        break
-                except (EOFError, KeyboardInterrupt):
-                    break
 
     # ── Alias commands ──────────────────────────────────────────────
 
@@ -1479,20 +1483,6 @@ class ShellREPL:
         if t.is_alive():
             self._print(f"  [bg-{bg_id}] still running (use `bg` to check)")
 
-    def _cmd_sleep(self, args: str = "") -> None:
-        """Pause for N seconds."""
-        if not args:
-            self._print("  Usage: sleep <seconds>")
-            return
-        try:
-            n = float(args.strip())
-            import time as _time
-            self._print(f"  Sleeping for {n}s...")
-            _time.sleep(n)
-            self._print("  Done")
-        except ValueError:
-            self._print(f"  Invalid number: {args}")
-
     def _cmd_watch(self, args: str = "") -> None:
         """Run a command repeatedly every N seconds."""
         parts = args.strip().split(maxsplit=1)
@@ -1519,41 +1509,6 @@ class ShellREPL:
         except KeyboardInterrupt:
             self._print(f"  {_C_DIM}Stopped{_C_RESET}")
 
-    def _cmd_pushd(self, args: str = "") -> None:
-        """Push current directory onto stack and cd to <dir>."""
-        if not args:
-            self._print("  Usage: pushd <dir>")
-            return
-        path = os.path.expanduser(args.strip())
-        if not os.path.isdir(path):
-            self._print(f"  Not a directory: {path}")
-            return
-        self._dir_stack.append(os.getcwd())
-        os.chdir(path)
-        cwd = os.getcwd().replace(str(Path.home()), "~")
-        self._print(f"  {cwd}")
-
-    def _cmd_popd(self, args: str = "") -> None:
-        """Pop directory stack and cd back."""
-        if not self._dir_stack:
-            self._print("  Directory stack is empty")
-            return
-        path = self._dir_stack.pop()
-        os.chdir(path)
-        cwd = os.getcwd().replace(str(Path.home()), "~")
-        self._print(f"  {cwd}")
-
-    def _cmd_dirs(self, args: str = "") -> None:
-        """Show directory stack."""
-        if not self._dir_stack:
-            self._print("  (empty)")
-            return
-        cwd = os.getcwd().replace(str(Path.home()), "~")
-        self._print(f"  {cwd}  (current)")
-        for i, d in enumerate(reversed(self._dir_stack), 1):
-            display = d.replace(str(Path.home()), "~")
-            self._print(f"  {i}: {display}")
-
     def _cmd_export(self, args: str = "") -> None:
         """POSIX-style export: export NAME=VALUE or export NAME."""
         if not args:
@@ -1571,25 +1526,36 @@ class ShellREPL:
 
     # ── Existing command handlers ───────────────────────────────────
 
+    @staticmethod
+    def _group_ext_cmds(ext_cmds: dict[str, CmdModule]) -> dict[str, list[str]]:
+        groups: dict[str, list[str]] = {}
+        for name, m in ext_cmds.items():
+            h = getattr(m, "help", "") or ""
+            groups.setdefault(h, []).append(name)
+        for names in groups.values():
+            names.sort()
+        return dict(sorted(groups.items(), key=lambda x: x[1][0]))
+
     def _cmd_help(self, args: str = "") -> None:
         if args:
             if args == "brief":
                 self._print("""
   Most-used commands (help <cmd> for details, help for full list):
 
-  ls / cd / pwd / cat   File system navigation
   models / load / unload  Model management
   souls / switch        Soul personality management
-  gen / tokenizer       Inference
-  health / status / uname  System info
+  gen / chat / ai       Inference and natural language
+  health / status       System health and info
   boot / shutdown       Shell lifecycle
   api                   API server lifecycle (start/stop/status)
   svc                   Service management
   devices / lsdev       AI device nodes (/dev/llm, /dev/embedding, /dev/knowledge)
   asm / wm              Virtual machine / window manager
   remember / recall     Knowledge base
+  datasets / tokenizer  Data and tokenizer utilities
   procs / kill / bg / fg  Process management
-  py / ai / echo        Shell utilities
+  py                    Shell utilities
+  cd / pwd / echo / ls / cat / mkdir / rm / touch / cp / mv / head / tail / wc   Filesystem operations
   history / fc          Command history
   help <cmd>            Help for a specific command
   exit / q / quit       Exit shell
@@ -1600,43 +1566,60 @@ class ShellREPL:
             cmd_help = {
                 "help": "  help [cmd]  — Show this help or help for a specific command",
                 "exit": "  exit | q | quit  — Exit the shell",
-                "clear": "  clear | cls  — Clear the screen",
+                "cd": '  cd [dir]  — Change directory (default: ~, - for previous)',
+                "pwd": "  pwd  — Print working directory",
+                "echo": "  echo [text...]  — Print text to stdout",
+                "ls": "  ls [dir]  — List directory contents (VFS-aware: shows /dev/*, /proc/*)",
+                "cat": "  cat <file>  — Print file contents (VFS-aware: reads /dev/*, /proc/*)",
+                "mkdir": "  mkdir <dir>  — Create a directory",
+                "rm": "  rm [-rf] <path>  — Remove files/directories (permission-gated)",
+                "touch": "  touch <file> [file...]  — Create empty files or update timestamps",
+                "cp": "  cp <src> <dst>  — Copy files/directories",
+                "mv": "  mv <src> <dst>  — Move or rename files",
+                "head": "  head [-N] <file>  — Output first N lines (default 10, VFS-aware)",
+                "tail": "  tail [-N] <file>  — Output last N lines (default 10, VFS-aware)",
+                "wc": "  wc <file>  — Count lines, words, characters (VFS-aware)",
+                "grep": "  grep [-i] [-v] <pattern> [file]  — Search for patterns (VFS-aware, supports pipes)",
+                "sort": "  sort [-r] [-n] [-u] [file]  — Sort lines (supports pipes)",
+                "uniq": "  uniq [file]  — Remove adjacent duplicate lines (supports pipes)",
+                "find": "  find [dir] -name <pattern>  — Search for files by name",
+                "tee": "  tee [-a] <file>  — Copy stdin to file and stdout",
+                "xargs": "  xargs [-n N] <cmd>  — Build and execute command from stdin",
+                "chmod": "  chmod <mode> <file>  — Change file permissions (octal)",
+                "du": "  du [-h] [path...]  — Estimate disk usage",
+                "diff": "  diff <file1> <file2>  — Compare files line by line",
+                "stat": "  stat <path>  — Display file metadata",
+                "cut": "  cut -f<N> [-d<delim>] [file]  — Cut fields from lines (supports pipes)",
+                "tr": "  tr <set1> <set2>  — Translate characters (piped input)",
+                "seq": "  seq [first [inc]] last  — Generate number sequence",
+                "nl": "  nl [file]  — Number lines of a file or piped input",
+                "fold": "  fold [-w width] [file]  — Wrap long lines at a specified width",
+                "tac": "  tac [file]  — Reverse lines (cat backwards)",
+                "env": "  env  — Print environment variables",
+                "printenv": "  printenv  — Print environment variables",
+                "yes": "  yes [string]  — Repeatedly output a line",
+                "realpath": "  realpath <path>  — Resolve path to absolute",
+                "dirname": "  dirname <path>  — Strip last component from file path",
+                "basename": "  basename <path> [suffix]  — Strip directory from file path",
+                "nproc": "  nproc  — Print number of CPUs",
+                "hostname": "  hostname  — Print system hostname",
+                "uname": "  uname [-a] [-srm]  — Print system information",
+                "shuf": "  shuf [file]  — Shuffle lines randomly",
+                "rev": "  rev [file]  — Reverse characters in each line",
+                "paste": "  paste <file1> [file2 ...]  — Merge lines of files side by side",
+                "comm": "  comm <file1> <file2>  — Compare two sorted files line by line",
                 "history": "  history [n]  — Show command history (last n entries, default 20)",
                 "fc": "  fc [-l] [n]  — List history, or re-run command by number (fc 42)",
                 "alias": "  alias [name=cmd]  — List or set aliases",
                 "unalias": "  unalias <name>  — Remove an alias",
-                "export": "  export  — Show shell state (history count, aliases, env vars)",
+                "export": "  export [NAME=VALUE]  — Set/show env vars (POSIX-style)",
                 "set": '  set [name=value]  — Set/show env vars. $VAR, ${VAR}, and NAME=VALUE cmd supported',
-                "sleep": "  sleep <sec>  — Pause for N seconds",
                 "source": "  source <file> | . <file>  — Execute commands from a file",
-                "sleep": "  sleep <sec>  — Pause for N seconds",
-                "ls": "  ls [-l] [-a] [path]  — List directory contents",
-                "cd": "  cd [dir]  — Change directory (no arg = $HOME, - = previous)",
-                "pwd": "  pwd  — Print working directory",
-                "mkdir": "  mkdir [-p] <dir>  — Create directory",
-                "rm": "  rm [-r] [-f] <path>  — Remove files/directories",
-                "cp": "  cp [-r] <src> <dst>  — Copy files/directories",
-                "mv": "  mv <src> <dst>  — Move/rename files",
-                "cat": "  cat <file>  — Print file contents",
-                "touch": "  touch <file>  — Create/update file timestamps",
-                "chmod": "  chmod <mode> <file>  — Change file permissions",
-                "find": "  find [path] -name <glob>  — Recursively find files matching a pattern",
-                "true": "  true  — Return exit code 0",
-                "false": "  false  — Return exit code 1",
-                "test": "  test <expr> | [ <expr> ]  — Evaluate expression",
                 "which": "  which <command>  — Locate a command",
                 "type": "  type <command>  — Describe a command",
-                "env": "  env  — Print environment variables",
-                "font": "  font [name]  — Show or set terminal font (OSC 50)",
+
                 "watch": "  watch <sec> <cmd>  — Run command repeatedly every N seconds",
-                "pushd": "  pushd <dir>  — Push dir onto stack and cd there",
-                "popd": "  popd  — Pop dir stack and cd back",
-                "dirs": "  dirs  — Show directory stack",
-                "export": "  export [NAME=VALUE]  — Set/show env vars (POSIX-style)",
-                "tee": "  tee <file>  — Write piped input to file + pass through",
-                "sort": "  sort [-r] [-u] [-n]  — Sort piped lines; -r=reverse, -u=unique, -n=numeric",
-                "uniq": "  uniq  — Deduplicate consecutive piped lines",
-                "less": "  less  — Pager: scroll through piped output page by page",
+
                 "procs": "  procs  — List running training jobs",
                 "ps": "  ps  — List kernel processes (AI workloads)",
                 "kill": "  kill <id>  — Stop a training job by ID",
@@ -1650,7 +1633,6 @@ class ShellREPL:
                 "souls": "  souls  — List available souls (tab-completes names)",
                 "switch": "  switch <name>  — Switch to a soul (tab-completes names)",
                 "whoami": "  whoami  — Show current soul",
-                "uname": "  uname [-a]  — Print system information (Dait version, machine)",
                 "uptime": "  uptime  — How long Dait has been running",
                 "health": "  health  — Quick API health check (colored status output)",
                 "status": "  status  — Detailed system status (model, soul, server)",
@@ -1663,23 +1645,16 @@ class ShellREPL:
                 "finetuned": "  finetuned  — List fine-tuned models",
                 "protect": "  protect <model>  — Protect model files from accidental deletion (read-only + manifest)",
                 "unprotect": "  unprotect <model>  — Remove protection from a model's files",
-                "train": "  train [dataset] | train status | train follow <id> | train stop <id>  — Training operations",
-                "finetuned": "  finetuned  — List fine-tuned model paths (tab-completes names)",
                 "gen": "  gen <prompt>  — Generate text via inference",
                 "tokenizer": "  tokenizer  — Show tokenizer vocabulary stats",
                 "py": '  py <expr>  — Evaluate a Python expression. E.g. py 2 + 2, py [i*2 for i in range(5)]',
-                "grep": "  grep <pattern>  — Filter piped lines by regex",
-                "head": "  head [n]  — Show first n lines of piped input (default 10)",
-                "tail": "  tail [n]  — Show last n lines of piped input (default 10)",
-                "wc": "  wc  — Count lines/words/characters of piped input",
-                "echo": "  echo <text>  — Print text",
+
+
                 "ai": '  ai <query>  — LLM-powered NL interpretation. E.g. ai "show me running jobs"',
                 "agents": "  agents <goal>  — Multi-agent orchestration. E.g. agents 'research and write about X'",
-                "agents_list": "  agents list  — List available specialized agents",
                 "tutorial": "  tutorial  — Interactive walkthrough of shell features",
                 "wm": "  wm [split-h|split-v|close|layout]  — Open window manager TUI, or manage panes from the shell",
-                "pbcopy": "  pbcopy  — Copy piped input to macOS clipboard",
-                "pbpaste": "  pbpaste  — Paste from macOS clipboard",
+
                 "remember": "  remember <fact>  — Store a fact in the knowledge base (also piped input)",
                 "recall": "  recall <query>  — Search the knowledge base",
                 "boot": "  boot  — Boot the shell (kernel + init services)",
@@ -1695,18 +1670,10 @@ class ShellREPL:
                 "permissions": "  permissions  — Show current permission policy and granted commands",
                 "api": "  api [start|stop|status|restart]  — Manage the API server lifecycle",
                 "chat": "  chat [msg] | chat /reset  — Multi-turn chat session",
-                "cls": "  cls | clear  — Clear the screen",
                 "confirm": "  confirm [on|off]  — Toggle auto-download confirmation",
                 "events": "  events [filter] [n]  — Show recent EventBus events",
                 "note": '  note [new|list|show|edit|delete|search|today|export]  — Development journal',
                 "read": "  read [-p prompt] VARNAME  — Read stdin into a variable",
-                "printf": '  printf <format> [args]  — Format and print (like bash printf)',
-                "basename": "  basename <path>  — Strip directory from path",
-                "dirname": "  dirname <path>  — Strip last path component",
-                "yes": "  yes [string]  — Repeatedly output (Ctrl+C to stop)",
-                "cut": '  cut -d<delim> -f<field>  — Cut fields from piped input',
-                "tr": "  tr <set1> <set2> | tr -d <set>  — Translate or delete characters",
-                "xargs": "  xargs <cmd>  — Build command lines from piped input",
                 "render": "  render [sphere|cube|plane|light|mat|cam|go|neural|clear|preset]  — Path tracer + neural scene",
                 "win": "  win [split-h|split-v|close|layout]  — Window manager (alias for wm)",
             }
@@ -1714,24 +1681,27 @@ class ShellREPL:
                 self._print(cmd_help[args])
             elif self.COMMANDS.get(args):
                 self._print(f"  {args}  — (built-in command)")
+            elif args in self._ext_cmds:
+                h = getattr(self._ext_cmds[args], "help", "")
+                if h and args not in h:
+                    self._print(f"  {args}  — {h}")
+                else:
+                    self._print(f"  {args}  — (external command)")
+            elif shutil.which(args):
+                self._print(f"  {args}  — (system command)")
             elif args == "brief":
                 self._print("""
 Most common commands (help [cmd] for details, help for full list):
   help [cmd]           Show help
   exit / q / quit      Exit the shell
-  clear / cls          Clear screen
   history [n]          Show command history
-  ls / cd / pwd        Navigate filesystem
-  cat <file>           Print file
-  mkdir / rm / cp / mv  File operations
-  find -name <glob>    Find files
   gen <prompt>         Generate text
   models               List models
   load <name>          Load model
   souls                List souls
   switch <name>        Switch soul
   whoami               Current soul
-  health / status / uname  System info
+  health / status      System info
   datasets             List datasets
   remember <fact>      Store knowledge
   recall <query>       Search knowledge
@@ -1742,8 +1712,6 @@ Most common commands (help [cmd] for details, help for full list):
   ai <query>           NL command interpretation
   procs                Show running jobs
   kill <id>            Stop a job
-  grep / head / tail / wc  Pipe filters
-  pbcopy / pbpaste     Clipboard
   permit / deny        Permission management
   permissions          Show permission policy
 """)
@@ -1754,7 +1722,43 @@ Most common commands (help [cmd] for details, help for full list):
 {_C_CYAN}Built-in commands:{_C_RESET}
   help [cmd]             Show this help or help for a specific command
   exit / q / quit         Exit the shell
-  clear / cls             Clear the screen
+  cd [dir]               Change directory (default: ~, - for previous)
+  pwd                    Print working directory
+  echo [text...]         Print text to stdout
+  ls [dir]               List directory contents (VFS-aware)
+  cat <file>             Print file contents (VFS-aware)
+  mkdir <dir>            Create a directory
+  rm [-rf] <path>        Remove files/directories
+  touch <file>           Create empty file or update timestamp
+  cp <src> <dst>         Copy files/directories
+  mv <src> <dst>         Move or rename files
+  head [-N] <file>       Output first N lines (VFS-aware)
+  tail [-N] <file>       Output last N lines (VFS-aware)
+  wc <file>              Count lines/words/chars (VFS-aware)
+  grep [-i] <pattern>    Search for pattern in file or pipe (VFS-aware)
+  sort [-rnu] [file]     Sort lines (supports pipes)
+  uniq [file]            Remove adjacent duplicate lines (supports pipes)
+  find [dir] -name <p>   Search for files by name pattern
+  tee [-a] <file>        Copy stdin to file and stdout
+  chmod <mode> <file>    Change file permissions (octal)
+  du [-h] [path...]      Estimate disk usage
+  diff <file1> <file2>   Compare files line by line
+  stat <path>            Display file metadata
+  nl [file]              Number lines of a file or piped input
+  fold [-w w] [file]     Wrap long lines at a specified width
+  tac [file]             Reverse lines (cat backwards)
+  env / printenv         Print environment variables
+  yes [string]           Repeatedly output a line
+  realpath <path>        Resolve path to absolute
+  dirname <path>         Strip last component from file path
+  basename <path> [suf]  Strip directory from file path
+  nproc                  Print number of CPUs
+  hostname               Print system hostname
+  uname [-a]             Print system information
+  shuf [file]            Shuffle lines randomly (piped input)
+  rev [file]             Reverse characters in each line
+  paste <f1> [f2 ...]    Merge lines of files side by side
+  comm <f1> <f2>         Compare two sorted files line by line
   history [n]             Show command history
   fc [-l] [n]             List history, or re-run command #n (fc 42)
   alias [name=cmd]        List or set aliases
@@ -1763,41 +1767,15 @@ Most common commands (help [cmd] for details, help for full list):
   set [name=value]        Set/show environment variables ($VAR expansion)
   source <file> / .       Execute commands from a file
   py <expr>               Evaluate a Python expression
-  sleep <sec>             Pause for N seconds
   watch <sec> <cmd>       Run command repeatedly every N seconds
-  pushd <dir>             Push dir onto stack and cd there
-  popd                    Pop dir stack and cd back
-  dirs                    Show directory stack
-
-{_C_CYAN}Unix filesystem:{_C_RESET}
-  ls [-l] [-a] [path]    List directory contents
-  cd [dir]                Change directory
-  pwd                     Print working directory
-  mkdir [-p] <dir>        Create directory
-  rm [-r] [-f] <path>     Remove files/directories
-  cp [-r] <src> <dst>     Copy files/directories
-  mv <src> <dst>          Move/rename files
-  cat <file>              Print file contents
-  touch <file>            Create/update file timestamps
-  chmod <mode> <file>     Change file permissions
-  find [path] -name <glob>  Recursively find files matching a pattern
-
-{_C_CYAN}Clipboard (macOS):{_C_RESET}
-  pbcopy                  Copy piped input to clipboard. E.g. gen hello | pbcopy
-  pbpaste                 Paste from clipboard
 
 {_C_CYAN}Knowledge:{_C_RESET}
   remember <fact>         Store a fact in the knowledge base
   recall <query>          Search the knowledge base
 
-{_C_CYAN}Unix scripting:{_C_RESET}
-  true                    Return exit code 0
-  false                   Return exit code 1
-  test <expr> / [ <expr> ]  Evaluate expression (-f, -d, -e, =, !=)
+{_C_CYAN}Scripting:{_C_RESET}
   which <cmd>             Locate a command
   type <cmd>              Describe a command
-  env                     Print environment variables
-  font [name]             Show or set terminal font (OSC 50 / iTerm2)
 
 {_C_CYAN}Process management:{_C_RESET}
   procs / ps              List running training jobs
@@ -1821,7 +1799,6 @@ Most common commands (help [cmd] for details, help for full list):
 
 {_C_CYAN}Devices:{_C_RESET}
   devices / lsdev         List AI device nodes (/dev/*)
-  cat /dev/<name>         Read from an AI device (e.g. cat /dev/llm, cat /dev/random)
 
 {_C_CYAN}Model management:{_C_RESET}
   models                  List available models (tab-completes names)
@@ -1837,7 +1814,6 @@ Most common commands (help [cmd] for details, help for full list):
   health                  Quick health check (colored status)
   status                  Detailed system status
   metrics                 CPU/memory/disk metrics
-  uname [-a]              Print system info (Dait version, machine)
   uptime                  How long Dait has been running
 
 {_C_CYAN}Data:{_C_RESET}
@@ -1852,17 +1828,6 @@ Most common commands (help [cmd] for details, help for full list):
   gen <prompt>            Generate text
   tokenizer               Show tokenizer stats
 
-{_C_CYAN}Pipe filters:{_C_RESET}
-  grep <pattern>          Filter lines by regex
-  head [n]                Show first n lines (default 10)
-  tail [n]                Show last n lines (default 10)
-  wc                      Count lines/words/chars
-  tee <file>              Write piped input to file + pass through
-  sort [-r] [-u] [-n]     Sort piped lines; -r=reverse, -u=unique, -n=numeric
-  uniq                    Deduplicate consecutive piped lines
-  less                    Pager: scroll through output page by page
-  echo <text>             Print text
-
 {_C_CYAN}Shell features:{_C_RESET}
   <cmd> | <cmd>           Pipeline: output of first feeds second
   <cmd> &                 Background: run without blocking
@@ -1872,11 +1837,11 @@ Most common commands (help [cmd] for details, help for full list):
   <cmd> > <file>          Redirect output to file (overwrite)
   <cmd> > /dev/llm        Redirect output to AI device (write)
   <cmd> >> <file>         Redirect output to file (append)
-  /dev/llm                AI device node: cat /dev/llm, echo hi > /dev/llm
+  /dev/llm                AI device node: write prompt, read response
   /dev/null               Discard output: <cmd> > /dev/null
   /dev/random             Random tokens: cat /dev/random
   /dev/embedding          Compute embeddings: echo text > /dev/embedding
-  /dev/knowledge          Knowledge base: cat /dev/knowledge, echo fact > /dev/knowledge
+  /dev/knowledge          Knowledge base: read/write facts
 
 {_C_CYAN}Permissions:{_C_RESET}
   permit <cmd>            Grant permission for a blocked command (this session)
@@ -1897,7 +1862,6 @@ Virtual machine:
   $?                      Exit code of last command
   ai <query>              LLM-powered natural language interpretation
   agents <goal>           Multi-agent orchestration (researcher + writer + critic)
-  agents list             List available agents
   wm [subcmd]             Open window manager TUI (:split-h, :split-v, :close, :q)
   $(cmd)                  Command substitution: inline output of cmd
   py <expr>               Evaluate Python expression
@@ -1905,26 +1869,1110 @@ Virtual machine:
   NAME=VALUE cmd          Inline env var (set for single command)
   \\\\h \\\\w \\\\t \\\\u \\\\#    PS1 escapes: host, cwd, time, user, cmd#
 
+{_C_CYAN}Development:{_C_RESET}
+  note [new|list|show|edit|delete|search|today|export]  — Dev journal
+  confirm [on|off]       Toggle auto-download confirmation
+  render [sphere|cube|plane|light|mat|cam|go|neural|clear|preset]  — Path tracer
 Examples:
-  ls -la
-  cd /tmp && ls
-  test -f file.txt && cat file.txt
-  mkdir -p build && cd build
-  false || echo "failed"
-  models | grep gpt
-  health &
+  health
+  models | head
   gen hello > output.txt
   time load gpt2
   ai show me running training jobs
   set PS1=$  ;  echo $HOME
-  echo $?
   alias ll=procs
   source setup.sh
   py 2 + 2
 """[:-1])
 
-    def _cmd_clear(self, args: str = "") -> None:
-        os.system("clear" if os.name == "posix" else "cls")
+    def _cmd_cd(self, args: str = "") -> None:
+        """Change the working directory."""
+        target = args.strip()
+        if not target or target == "~":
+            target = self._env.get("HOME", str(Path.home()))
+        elif target == "-":
+            target = self._env.get("OLDPWD", os.getcwd())
+        try:
+            os.chdir(os.path.expanduser(target))
+            self._env["OLDPWD"] = os.getcwd()
+            self._last_exit_code = 0
+        except FileNotFoundError:
+            self._print(f"  cd: no such file or directory: {target}")
+            self._last_exit_code = 1
+        except PermissionError:
+            self._print(f"  cd: permission denied: {target}")
+            self._last_exit_code = 1
+        except NotADirectoryError:
+            self._print(f"  cd: not a directory: {target}")
+            self._last_exit_code = 1
+
+    def _cmd_pwd(self, args: str = "") -> None:
+        """Print the working directory."""
+        self._print(os.getcwd())
+        self._last_exit_code = 0
+
+    def _cmd_echo(self, args: str = "") -> None:
+        """Echo arguments to stdout."""
+        self._print(args)
+        self._last_exit_code = 0
+
+    def _cmd_ls(self, args: str = "") -> None:
+        """List directory contents."""
+        target = args.strip() or "."
+        try:
+            vfs = self.os.vfs
+            if vfs and (target.startswith("/dev") or target.startswith("/proc")):
+                entries = vfs.listdir(target)
+            else:
+                entries = os.listdir(os.path.expanduser(target))
+            if entries is None:
+                self._print(f"  ls: cannot access '{target}': No such file or directory")
+                self._last_exit_code = 1
+                return
+            entries.sort()
+            parts = []
+            for e in entries:
+                path = os.path.join(target, e) if target != "." else e
+                if vfs:
+                    is_dir = vfs.isdir(path)
+                else:
+                    is_dir = os.path.isdir(os.path.expanduser(path))
+                suffix = "/" if is_dir else ""
+                parts.append(e + suffix)
+            if parts:
+                self._print("  " + "  ".join(parts))
+            self._last_exit_code = 0
+        except FileNotFoundError:
+            self._print(f"  ls: cannot access '{target}': No such file or directory")
+            self._last_exit_code = 1
+        except PermissionError:
+            self._print(f"  ls: permission denied: {target}")
+            self._last_exit_code = 1
+        except NotADirectoryError:
+            self._print(f"  ls: not a directory: {target}")
+            self._last_exit_code = 1
+
+    def _cmd_cat(self, args: str = "") -> None:
+        """Concatenate and print files."""
+        if not args:
+            if self._piped_input:
+                self._print(self._piped_input.rstrip("\n"))
+                self._last_exit_code = 0
+                return
+            self._print("  Usage: cat <file>")
+            self._last_exit_code = 1
+            return
+        target = args.strip()
+        try:
+            vfs = self.os.vfs
+            if vfs and (target.startswith("/dev") or target.startswith("/proc")):
+                content = vfs.read(target)
+            else:
+                content = Path(os.path.expanduser(target)).read_text()
+            if content is None:
+                self._print(f"  cat: {target}: No such file or directory")
+                self._last_exit_code = 1
+                return
+            self._print(content.rstrip("\n"))
+            self._last_exit_code = 0
+        except FileNotFoundError:
+            self._print(f"  cat: {target}: No such file or directory")
+            self._last_exit_code = 1
+        except IsADirectoryError:
+            self._print(f"  cat: {target}: Is a directory")
+            self._last_exit_code = 1
+        except PermissionError:
+            self._print(f"  cat: permission denied: {target}")
+            self._last_exit_code = 1
+
+    def _cmd_mkdir(self, args: str = "") -> None:
+        """Create directories."""
+        if not args:
+            self._print("  Usage: mkdir <dir>")
+            self._last_exit_code = 1
+            return
+        target = os.path.expanduser(args.strip())
+        try:
+            os.makedirs(target, exist_ok=False)
+            self._last_exit_code = 0
+        except FileExistsError:
+            self._print(f"  mkdir: cannot create directory '{target}': File exists")
+            self._last_exit_code = 1
+        except PermissionError:
+            self._print(f"  mkdir: permission denied: {target}")
+            self._last_exit_code = 1
+        except FileNotFoundError:
+            self._print(f"  mkdir: cannot create directory '{target}': No such file or directory")
+            self._last_exit_code = 1
+
+    def _cmd_rm(self, args: str = "") -> None:
+        """Remove files or directories."""
+        if not args:
+            self._print("  Usage: rm [-rf] <path>")
+            self._last_exit_code = 1
+            return
+        parts = args.strip().split()
+        flags = [p for p in parts if p.startswith("-")]
+        paths = [p for p in parts if not p.startswith("-")]
+        recursive = any(f in ("-r", "-rf", "-fr", "-R") for f in flags)
+        force = any(f in ("-f", "-rf", "-fr") for f in flags)
+        if not paths:
+            self._print("  Usage: rm [-rf] <path>")
+            self._last_exit_code = 1
+            return
+        for p in paths:
+            target = os.path.expanduser(p)
+            try:
+                if os.path.isdir(target) and recursive:
+                    import shutil as _shutil
+                    _shutil.rmtree(target)
+                elif os.path.isdir(target):
+                    self._print(f"  rm: cannot remove '{p}': Is a directory")
+                    self._last_exit_code = 1
+                    continue
+                else:
+                    os.remove(target)
+                self._last_exit_code = 0
+            except FileNotFoundError:
+                if not force:
+                    self._print(f"  rm: cannot remove '{p}': No such file or directory")
+                    self._last_exit_code = 1
+            except PermissionError:
+                self._print(f"  rm: permission denied: {p}")
+                self._last_exit_code = 1
+
+    def _cmd_touch(self, args: str = "") -> None:
+        """Create empty files or update timestamps."""
+        if not args:
+            self._print("  Usage: touch <file> [file...]")
+            self._last_exit_code = 1
+            return
+        for p in args.strip().split():
+            target = os.path.expanduser(p)
+            try:
+                if os.path.exists(target):
+                    os.utime(target, None)
+                else:
+                    Path(target).write_text("")
+                self._last_exit_code = 0
+            except PermissionError:
+                self._print(f"  touch: permission denied: {p}")
+                self._last_exit_code = 1
+
+    def _cmd_cp(self, args: str = "") -> None:
+        """Copy files."""
+        if not args:
+            self._print("  Usage: cp <src> <dst>")
+            self._last_exit_code = 1
+            return
+        parts = args.strip().split()
+        if len(parts) < 2:
+            self._print("  cp: missing destination")
+            self._last_exit_code = 1
+            return
+        src, dst = os.path.expanduser(parts[0]), os.path.expanduser(parts[1])
+        try:
+            import shutil as _shutil
+            if os.path.isdir(src):
+                _shutil.copytree(src, dst, dirs_exist_ok=True)
+            else:
+                _shutil.copy2(src, dst)
+            self._last_exit_code = 0
+        except FileNotFoundError:
+            self._print(f"  cp: cannot stat '{parts[0]}': No such file or directory")
+            self._last_exit_code = 1
+        except PermissionError:
+            self._print(f"  cp: permission denied")
+            self._last_exit_code = 1
+
+    def _cmd_mv(self, args: str = "") -> None:
+        """Move or rename files."""
+        if not args:
+            self._print("  Usage: mv <src> <dst>")
+            self._last_exit_code = 1
+            return
+        parts = args.strip().split()
+        if len(parts) < 2:
+            self._print("  mv: missing destination")
+            self._last_exit_code = 1
+            return
+        src, dst = os.path.expanduser(parts[0]), os.path.expanduser(parts[1])
+        try:
+            os.rename(src, dst)
+            self._last_exit_code = 0
+        except FileNotFoundError:
+            self._print(f"  mv: cannot stat '{parts[0]}': No such file or directory")
+            self._last_exit_code = 1
+        except PermissionError:
+            self._print(f"  mv: permission denied")
+            self._last_exit_code = 1
+
+    def _cmd_head(self, args: str = "") -> None:
+        """Output the first part of files (VFS-aware)."""
+        parts = args.strip().split() if args else []
+        n = 10
+        targets = []
+        for p in parts:
+            if p.startswith("-") and p[1:].isdigit():
+                n = int(p[1:])
+            else:
+                targets.append(p)
+        # If no file args, use piped input
+        if not targets:
+            if self._piped_input:
+                lines = self._piped_input.splitlines()
+                self._print("\n".join(lines[:n]))
+                self._last_exit_code = 0
+                return
+            self._print("  Usage: head [-N] <file>")
+            self._last_exit_code = 1
+            return
+        for path in targets:
+            target = os.path.expanduser(path)
+            try:
+                vfs = self.os.vfs
+                if vfs and (target.startswith("/dev") or target.startswith("/proc")):
+                    content = vfs.read(target)
+                else:
+                    content = Path(target).read_text()
+                if content is None:
+                    self._print(f"  head: {path}: No such file or directory")
+                    self._last_exit_code = 1
+                    continue
+                lines = content.splitlines()
+                out = "\n".join(lines[:n])
+                if len(targets) > 1:
+                    self._print(f"==> {path} <==")
+                self._print(out)
+                self._last_exit_code = 0
+            except FileNotFoundError:
+                self._print(f"  head: {path}: No such file or directory")
+                self._last_exit_code = 1
+
+    def _cmd_tail(self, args: str = "") -> None:
+        """Output the last part of files (VFS-aware)."""
+        parts = args.strip().split() if args else []
+        n = 10
+        targets = []
+        for p in parts:
+            if p.startswith("-") and p[1:].isdigit():
+                n = int(p[1:])
+            else:
+                targets.append(p)
+        # If no file args, use piped input
+        if not targets:
+            if self._piped_input:
+                lines = self._piped_input.splitlines()
+                self._print("\n".join(lines[-n:]))
+                self._last_exit_code = 0
+                return
+            self._print("  Usage: tail [-N] <file>")
+            self._last_exit_code = 1
+            return
+        for path in targets:
+            target = os.path.expanduser(path)
+            try:
+                vfs = self.os.vfs
+                if vfs and (target.startswith("/dev") or target.startswith("/proc")):
+                    content = vfs.read(target)
+                else:
+                    content = Path(target).read_text()
+                if content is None:
+                    self._print(f"  tail: {path}: No such file or directory")
+                    self._last_exit_code = 1
+                    continue
+                lines = content.splitlines()
+                out = "\n".join(lines[-n:])
+                if len(targets) > 1:
+                    self._print(f"==> {path} <==")
+                self._print(out)
+                self._last_exit_code = 0
+            except FileNotFoundError:
+                self._print(f"  tail: {path}: No such file or directory")
+                self._last_exit_code = 1
+
+    def _cmd_wc(self, args: str = "") -> None:
+        """Count lines, words, and characters (VFS-aware)."""
+        if not args:
+            if self._piped_input:
+                lines = len(self._piped_input.splitlines())
+                words = len(self._piped_input.split())
+                chars = len(self._piped_input)
+                self._print(f"  {lines:4} {words:4} {chars:4}")
+                self._last_exit_code = 0
+                return
+            self._print("  Usage: wc <file>")
+            self._last_exit_code = 1
+            return
+        target = os.path.expanduser(args.strip())
+        try:
+            vfs = self.os.vfs
+            if vfs and (target.startswith("/dev") or target.startswith("/proc")):
+                content = vfs.read(target)
+            else:
+                content = Path(target).read_text()
+            if content is None:
+                self._print(f"  wc: {args.strip()}: No such file or directory")
+                self._last_exit_code = 1
+                return
+            lines = len(content.splitlines())
+            words = len(content.split())
+            chars = len(content)
+            self._print(f"  {lines:4} {words:4} {chars:4} {args.strip()}")
+            self._last_exit_code = 0
+        except FileNotFoundError:
+            self._print(f"  wc: {args.strip()}: No such file or directory")
+            self._last_exit_code = 1
+
+    def _cmd_grep(self, args: str = "") -> None:
+        """Search for patterns in files or piped input (VFS-aware)."""
+        if not args and not self._piped_input:
+            self._print("  Usage: grep <pattern> [file]")
+            self._last_exit_code = 1
+            return
+        import re as _re
+        parts = args.strip().split()
+        flags = [p for p in parts if p.startswith("-")]
+        non_flags = [p for p in parts if not p.startswith("-")]
+        ignore_case = any(f in ("-i", "-vi") for f in flags)
+        invert = any(f in ("-v", "-vi") for f in flags)
+        pattern = non_flags[0] if non_flags else ""
+        target = non_flags[1] if len(non_flags) > 1 else None
+        if not pattern:
+            self._print("  Usage: grep <pattern> [file]")
+            self._last_exit_code = 1
+            return
+        try:
+            if target:
+                target_path = os.path.expanduser(target)
+                vfs = self.os.vfs
+                if vfs and (target_path.startswith("/dev") or target_path.startswith("/proc")):
+                    content = vfs.read(target_path)
+                else:
+                    content = Path(target_path).read_text()
+                if content is None:
+                    self._print(f"  grep: {target}: No such file or directory")
+                    self._last_exit_code = 1
+                    return
+                lines = content.splitlines()
+            else:
+                lines = self._piped_input.splitlines()
+            kwargs = {"flags": _re.IGNORECASE} if ignore_case else {}
+            matched = 0
+            for line in lines:
+                found = _re.search(pattern, line, **kwargs) if kwargs else _re.search(pattern, line)
+                if invert:
+                    found = not found
+                if found:
+                    self._print(line)
+                    matched += 1
+            self._last_exit_code = 0 if matched else 1
+        except _re.error as e:
+            self._print(f"  grep: invalid pattern: {e}")
+            self._last_exit_code = 2
+        except FileNotFoundError:
+            self._print(f"  grep: {target}: No such file or directory")
+            self._last_exit_code = 1
+
+    def _cmd_sort(self, args: str = "") -> None:
+        """Sort lines of text (from file or piped input)."""
+        parts = args.strip().split() if args else []
+        flags = [p for p in parts if p.startswith("-")]
+        targets = [p for p in parts if not p.startswith("-")]
+        reverse = any(f in ("-r", "-R") for f in flags)
+        numeric = any(f in ("-n", "-g") for f in flags)
+        unique = any(f in ("-u",) for f in flags)
+        if targets:
+            target = os.path.expanduser(targets[0])
+            try:
+                lines = Path(target).read_text().splitlines()
+            except FileNotFoundError:
+                self._print(f"  sort: {targets[0]}: No such file or directory")
+                self._last_exit_code = 1
+                return
+        elif self._piped_input:
+            lines = self._piped_input.splitlines()
+        else:
+            self._print("  Usage: sort [-r] [-n] [-u] [file]")
+            self._last_exit_code = 1
+            return
+        if numeric:
+            lines.sort(key=lambda x: float(x.split()[0]) if x.split() else 0, reverse=reverse)
+        else:
+            lines.sort(reverse=reverse)
+        if unique:
+            seen = set()
+            deduped = []
+            for l in lines:
+                if l not in seen:
+                    seen.add(l)
+                    deduped.append(l)
+            lines = deduped
+        self._print("\n".join(lines))
+        self._last_exit_code = 0
+
+    def _cmd_uniq(self, args: str = "") -> None:
+        """Remove adjacent duplicate lines (from file or piped input)."""
+        if args:
+            target = os.path.expanduser(args.strip())
+            try:
+                lines = Path(target).read_text().splitlines()
+            except FileNotFoundError:
+                self._print(f"  uniq: {args.strip()}: No such file or directory")
+                self._last_exit_code = 1
+                return
+        elif self._piped_input:
+            lines = self._piped_input.splitlines()
+        else:
+            self._print("  Usage: uniq [file]")
+            self._last_exit_code = 1
+            return
+        out = []
+        prev = None
+        for l in lines:
+            if l != prev:
+                out.append(l)
+                prev = l
+        self._print("\n".join(out))
+        self._last_exit_code = 0
+
+    def _cmd_find(self, args: str = "") -> None:
+        """Search for files by name pattern (VFS-aware)."""
+        if not args:
+            self._print("  Usage: find [dir] -name <pattern>")
+            self._last_exit_code = 1
+            return
+        parts = args.strip().split()
+        search_dir = "."
+        pattern = None
+        i = 0
+        while i < len(parts):
+            if parts[i] in ("-name", "-iname") and i + 1 < len(parts):
+                import fnmatch as _fnmatch
+                pattern = parts[i + 1]
+                if parts[i] == "-iname":
+                    pattern = pattern.lower()
+                    def _match_fn(name, pat=pattern):
+                        return _fnmatch.fnmatch(name.lower(), pat)
+                else:
+                    _match_fn = lambda name, p=pattern: _fnmatch.fnmatch(name, p)
+                i += 2
+            elif not parts[i].startswith("-"):
+                search_dir = parts[i]
+                i += 1
+            else:
+                i += 1
+        if pattern is None:
+            self._print("  Usage: find [dir] -name <pattern>")
+            self._last_exit_code = 1
+            return
+        search_path = os.path.expanduser(search_dir)
+        try:
+            matches = []
+            for root, dirs, files in os.walk(search_path):
+                for name in files + dirs:
+                    if _match_fn(name):
+                        matches.append(os.path.join(root, name))
+            if matches:
+                self._print("\n".join(matches))
+            self._last_exit_code = 0
+        except FileNotFoundError:
+            self._print(f"  find: '{search_dir}': No such file or directory")
+            self._last_exit_code = 1
+        except PermissionError:
+            self._print(f"  find: '{search_dir}': Permission denied")
+            self._last_exit_code = 1
+
+    def _cmd_tee(self, args: str = "") -> None:
+        """Read stdin and write to both stdout and file(s)."""
+        if not self._piped_input:
+            self._print("  Usage: <command> | tee [-a] <file>")
+            self._last_exit_code = 1
+            return
+        parts = args.strip().split() if args else []
+        append = any(p == "-a" for p in parts)
+        files = [p for p in parts if p != "-a"]
+        mode = "a" if append else "w"
+        for fname in files:
+            try:
+                with open(os.path.expanduser(fname), mode) as f:
+                    f.write(self._piped_input)
+                    if not self._piped_input.endswith("\n"):
+                        f.write("\n")
+            except (OSError, PermissionError) as e:
+                self._print(f"  tee: {fname}: {e}")
+                self._last_exit_code = 1
+                return
+        self._print(self._piped_input.rstrip("\n"))
+        self._last_exit_code = 0
+
+    def _cmd_xargs(self, args: str = "") -> None:
+        """Build and execute command from stdin."""
+        if not self._piped_input:
+            self._print("  Usage: <command> | xargs [-n N] <cmd> [args...]")
+            self._last_exit_code = 1
+            return
+        parts = args.strip().split()
+        n = None
+        cmd_parts = []
+        i = 0
+        while i < len(parts):
+            if parts[i] == "-n" and i + 1 < len(parts):
+                n = int(parts[i + 1])
+                i += 2
+            else:
+                cmd_parts.append(parts[i])
+                i += 1
+        items = self._piped_input.split()
+        if not cmd_parts:
+            for item in items:
+                self._print(item)
+            self._last_exit_code = 0
+            return
+        if n:
+            chunks = [items[i:i + n] for i in range(0, len(items), n)]
+        else:
+            chunks = [items]
+        for chunk in chunks:
+            full_cmd = cmd_parts + chunk
+            if self._check_permission(full_cmd[0], " ".join(full_cmd[1:]) if len(full_cmd) > 1 else ""):
+                result = self._execute_single(" ".join(full_cmd))
+                if result:
+                    self._print(result.rstrip("\n"))
+        self._last_exit_code = 0
+
+    def _cmd_time(self, args: str = "") -> None:
+        """Time a command execution."""
+        if not args:
+            self._print("  Usage: time <command>")
+            self._last_exit_code = 1
+            return
+        import time as _time
+        start = _time.perf_counter()
+        self._execute_single(args)
+        elapsed = _time.perf_counter() - start
+        self._print(f"  {_C_DIM}real  {elapsed:.3f}s{_C_RESET}")
+        self._last_exit_code = 0
+
+    def _cmd_chmod(self, args: str = "") -> None:
+        """Change file permissions (chmod)."""
+        if not args:
+            self._print("  Usage: chmod <mode> <file>")
+            self._last_exit_code = 1
+            return
+        parts = args.strip().split()
+        if len(parts) < 2:
+            self._print("  Usage: chmod <mode> <file>")
+            self._last_exit_code = 1
+            return
+        mode, target = parts[0], os.path.expanduser(parts[1])
+        try:
+            if mode.isdigit():
+                os.chmod(target, int(mode, 8))
+            else:
+                self._print(f"  chmod: symbolic modes not supported (use octal, e.g. 644)")
+                self._last_exit_code = 1
+                return
+            self._last_exit_code = 0
+        except FileNotFoundError:
+            self._print(f"  chmod: cannot access '{parts[1]}': No such file or directory")
+            self._last_exit_code = 1
+        except PermissionError:
+            self._print(f"  chmod: changing permissions of '{parts[1]}': Operation not permitted")
+            self._last_exit_code = 1
+
+    def _cmd_du(self, args: str = "") -> None:
+        """Estimate disk usage of files/directories."""
+        parts = args.strip().split() if args else []
+        human = any(p == "-h" for p in parts)
+        targets = [os.path.expanduser(p) for p in parts if p != "-h"]
+        if not targets:
+            targets = ["."]
+        total = 0
+        for target in targets:
+            try:
+                if os.path.isfile(target):
+                    size = os.path.getsize(target)
+                    total += size
+                    label = self._format_size(size, human)
+                    self._print(f"  {label}\t{target}")
+                elif os.path.isdir(target):
+                    sz = 0
+                    for root, dirs, files in os.walk(target):
+                        for f in files:
+                            try:
+                                sz += os.path.getsize(os.path.join(root, f))
+                            except OSError:
+                                pass
+                    total += sz
+                    label = self._format_size(sz, human)
+                    self._print(f"  {label}\t{target}")
+                else:
+                    self._print(f"  du: cannot access '{target}': No such file or directory")
+            except FileNotFoundError:
+                self._print(f"  du: cannot access '{target}': No such file or directory")
+        if len(targets) > 1:
+            self._print(f"  {self._format_size(total, human)}\ttotal")
+        self._last_exit_code = 0
+
+    @staticmethod
+    def _format_size(size: int, human: bool = False) -> str:
+        if not human:
+            return f"{size:>8}"
+        for unit in ("B", "K", "M", "G", "T"):
+            if size < 1024:
+                return f"{size:>4.1f}{unit}"
+            size /= 1024
+        return f"{size:>4.1f}P"
+
+    def _cmd_diff(self, args: str = "") -> None:
+        """Compare two files line by line."""
+        if not args:
+            self._print("  Usage: diff <file1> <file2>")
+            self._last_exit_code = 1
+            return
+        parts = args.strip().split()
+        if len(parts) < 2:
+            self._print("  Usage: diff <file1> <file2>")
+            self._last_exit_code = 1
+            return
+        f1, f2 = os.path.expanduser(parts[0]), os.path.expanduser(parts[1])
+        try:
+            lines1 = Path(f1).read_text().splitlines()
+            lines2 = Path(f2).read_text().splitlines()
+        except FileNotFoundError as e:
+            self._print(f"  diff: {e.filename}: No such file or directory")
+            self._last_exit_code = 1
+            return
+        import difflib as _difflib
+        differ = _difflib.Differ()
+        diffs = list(differ.compare(lines1, lines2))
+        changes = [l for l in diffs if l.startswith(("+ ", "- ", "? "))]
+        if not changes:
+            self._last_exit_code = 0
+            return
+        for l in diffs:
+            if l.startswith("+ "):
+                self._print(f"  {_C_GREEN}{l}{_C_RESET}")
+            elif l.startswith("- "):
+                self._print(f"  {_C_RED}{l}{_C_RESET}")
+            elif l.startswith("? "):
+                self._print(f"  {_C_DIM}{l}{_C_RESET}")
+        self._last_exit_code = 1
+
+    def _cmd_stat(self, args: str = "") -> None:
+        """Display file or directory metadata."""
+        if not args:
+            self._print("  Usage: stat <path>")
+            self._last_exit_code = 1
+            return
+        target = os.path.expanduser(args.strip())
+        try:
+            st = os.stat(target)
+            import stat as _stat, time as _time
+            mode_str = _stat.filemode(st.st_mode)
+            size = st.st_size
+            mtime = _time.strftime("%Y-%m-%d %H:%M:%S", _time.localtime(st.st_mtime))
+            atime = _time.strftime("%Y-%m-%d %H:%M:%S", _time.localtime(st.st_atime))
+            kind = "directory" if os.path.isdir(target) else "file" if os.path.isfile(target) else "other"
+            self._print(f"  File: {target}")
+            self._print(f"  Size: {size:,} bytes  {self._format_size(size, human=True).strip()}")
+            self._print(f"  Type: {kind}")
+            self._print(f"  Mode: {mode_str} ({oct(_stat.S_IMODE(st.st_mode))})")
+            self._print(f"  Modified: {mtime}")
+            self._print(f"  Accessed: {atime}")
+            self._last_exit_code = 0
+        except FileNotFoundError:
+            self._print(f"  stat: cannot stat '{args.strip()}': No such file or directory")
+            self._last_exit_code = 1
+        except PermissionError:
+            self._print(f"  stat: cannot stat '{args.strip()}': Permission denied")
+            self._last_exit_code = 1
+
+    def _cmd_cut(self, args: str = "") -> None:
+        """Cut fields from lines of text (file or piped input)."""
+        if not args and not self._piped_input:
+            self._print("  Usage: cut -f<N> [-d<delim>] [file]")
+            self._last_exit_code = 1
+            return
+        parts = args.strip().split() if args else []
+        delim = "\t"
+        fields = []
+        target = None
+        for p in parts:
+            if p.startswith("-d") and len(p) > 2:
+                delim = p[2:]
+            elif p.startswith("-f") and len(p) > 2:
+                for part in p[2:].split(","):
+                    if "-" in part:
+                        a, b = part.split("-", 1)
+                        fields.extend(range(int(a) if a else 1, (int(b) if b else 9999) + 1))
+                    else:
+                        fields.append(int(part))
+            elif not p.startswith("-"):
+                target = p
+        if not fields:
+            self._print("  cut: you must specify a list of fields (-f)")
+            self._last_exit_code = 1
+            return
+        try:
+            if target:
+                content = Path(os.path.expanduser(target)).read_text()
+            elif self._piped_input:
+                content = self._piped_input
+            else:
+                self._print("  cut: no input")
+                self._last_exit_code = 1
+                return
+        except FileNotFoundError:
+            self._print(f"  cut: {target}: No such file or directory")
+            self._last_exit_code = 1
+            return
+        out_lines = []
+        for line in content.splitlines():
+            cols = line.split(delim)
+            chosen = []
+            for f in fields:
+                if f <= len(cols):
+                    chosen.append(cols[f - 1])
+            out_lines.append(delim.join(chosen))
+        self._print("\n".join(out_lines))
+        self._last_exit_code = 0
+
+    def _cmd_tr(self, args: str = "") -> None:
+        """Translate or delete characters (piped input only)."""
+        if not self._piped_input:
+            self._print("  Usage: <command> | tr <set1> <set2>")
+            self._last_exit_code = 1
+            return
+        parts = args.strip().split() if args else []
+        delete = any(p == "-d" for p in parts)
+        squeeze = any(p == "-s" for p in parts)
+        sets = [p for p in parts if not p.startswith("-")]
+        if len(sets) < 1 or (not delete and not squeeze and len(sets) < 2):
+            self._print("  Usage: <command> | tr <set1> <set2>")
+            self._last_exit_code = 1
+            return
+        set1 = sets[0]
+        set2 = sets[1] if len(sets) > 1 else ""
+
+        def _expand(s: str) -> str:
+            result = []
+            i = 0
+            while i < len(s):
+                if i + 2 < len(s) and s[i + 1] == "-" and ord(s[i]) < ord(s[i + 2]):
+                    result.extend(chr(c) for c in range(ord(s[i]), ord(s[i + 2]) + 1))
+                    i += 3
+                else:
+                    result.append(s[i])
+                    i += 1
+            return "".join(result)
+
+        expanded1 = _expand(set1)
+        expanded2 = _expand(set2)
+        if delete:
+            result = self._piped_input.translate(str.maketrans("", "", expanded1))
+        elif squeeze:
+            import re as _re
+            result = _re.sub(rf"[{_re.escape(expanded1)}]+", lambda m: m.group(0)[0], self._piped_input)
+        else:
+            trans = str.maketrans(expanded1, expanded2[:len(expanded1)].ljust(len(expanded1), expanded2[-1] if expanded2 else ""))
+            result = self._piped_input.translate(trans)
+        self._print(result.rstrip("\n"))
+        self._last_exit_code = 0
+
+    def _cmd_seq(self, args: str = "") -> None:
+        """Generate a sequence of numbers."""
+        if not args:
+            self._print("  Usage: seq [first [increment]] last")
+            self._last_exit_code = 1
+            return
+        parts = args.strip().split()
+        try:
+            if len(parts) == 1:
+                first, inc, last = 1, 1, float(parts[0])
+            elif len(parts) == 2:
+                first, inc, last = float(parts[0]), 1, float(parts[1])
+            elif len(parts) == 3:
+                first, inc, last = float(parts[0]), float(parts[1]), float(parts[2])
+            else:
+                self._print("  seq: too many arguments")
+                self._last_exit_code = 1
+                return
+        except ValueError:
+            self._print(f"  seq: invalid number")
+            self._last_exit_code = 1
+            return
+        if first == int(first) and inc == int(inc) and last == int(last):
+            fmt = "{:d}" if inc == int(inc) else "{:g}"
+            nums = range(int(first), int(last) + 1, int(inc))
+            self._print("\n".join(fmt.format(n) for n in nums))
+        else:
+            nums = []
+            cur = first
+            while cur <= last if inc > 0 else cur >= last:
+                nums.append(str(cur))
+                cur += inc
+            self._print("\n".join(nums))
+        self._last_exit_code = 0
+
+    def _cmd_nl(self, args: str = "") -> None:
+        """Number lines of a file or piped input."""
+        if not args and not self._piped_input:
+            self._print("  Usage: nl [file]")
+            self._last_exit_code = 1
+            return
+        try:
+            if args:
+                content = Path(os.path.expanduser(args.strip())).read_text()
+            else:
+                content = self._piped_input
+        except FileNotFoundError:
+            self._print(f"  nl: {args.strip()}: No such file or directory")
+            self._last_exit_code = 1
+            return
+        lines = content.splitlines()
+        out = "\n".join(f"{i + 1}\t{line}" for i, line in enumerate(lines))
+        self._print(out)
+        self._last_exit_code = 0
+
+    def _cmd_fold(self, args: str = "") -> None:
+        """Wrap long lines at a specified width (default 80)."""
+        if not args and not self._piped_input:
+            self._print("  Usage: fold [-w width] [file]")
+            self._last_exit_code = 1
+            return
+        parts = args.strip().split() if args else []
+        width = 80
+        target = None
+        i = 0
+        while i < len(parts):
+            p = parts[i]
+            if p == "-w" and i + 1 < len(parts):
+                width = int(parts[i + 1])
+                i += 2
+            elif p.startswith("-w") and len(p) > 2:
+                width = int(p[2:])
+                i += 1
+            elif p.startswith("-"):
+                i += 1
+            else:
+                target = p
+                i += 1
+        try:
+            if target:
+                content = Path(os.path.expanduser(target)).read_text()
+            elif self._piped_input:
+                content = self._piped_input
+            else:
+                self._print("  fold: no input")
+                self._last_exit_code = 1
+                return
+        except FileNotFoundError:
+            self._print(f"  fold: {target}: No such file or directory")
+            self._last_exit_code = 1
+            return
+        out_lines = []
+        for line in content.splitlines():
+            for i in range(0, len(line), width):
+                out_lines.append(line[i:i + width])
+        self._print("\n".join(out_lines))
+        self._last_exit_code = 0
+
+    def _cmd_tac(self, args: str = "") -> None:
+        """Reverse lines of a file or piped input (cat backwards)."""
+        if not args and not self._piped_input:
+            self._print("  Usage: tac [file]")
+            self._last_exit_code = 1
+            return
+        try:
+            if args:
+                content = Path(os.path.expanduser(args.strip())).read_text()
+            else:
+                content = self._piped_input
+        except FileNotFoundError:
+            self._print(f"  tac: {args.strip()}: No such file or directory")
+            self._last_exit_code = 1
+            return
+        lines = content.splitlines()
+        self._print("\n".join(reversed(lines)))
+        self._last_exit_code = 0
+
+    def _cmd_env(self, args: str = "") -> None:
+        """Print environment variables."""
+        for k, v in sorted(self._environ.items()):
+            self._print(f"  {k}={v}")
+        self._last_exit_code = 0
+
+    def _cmd_yes(self, args: str = "") -> None:
+        """Repeatedly output a line (default: 'y')."""
+        s = args.strip() or "y"
+        for _ in range(100):
+            self._print(s)
+        self._last_exit_code = 0
+
+    def _cmd_realpath(self, args: str = "") -> None:
+        """Resolve path to absolute."""
+        if not args:
+            self._print("  Usage: realpath <path>")
+            self._last_exit_code = 1
+            return
+        p = os.path.expanduser(args.strip())
+        try:
+            self._print(os.path.realpath(p))
+            self._last_exit_code = 0
+        except OSError as e:
+            self._print(f"  realpath: {e}")
+            self._last_exit_code = 1
+
+    def _cmd_dirname(self, args: str = "") -> None:
+        """Strip last component from file path."""
+        if not args:
+            self._print("  Usage: dirname <path>")
+            self._last_exit_code = 1
+            return
+        self._print(os.path.dirname(os.path.expanduser(args.strip())))
+        self._last_exit_code = 0
+
+    def _cmd_basename(self, args: str = "") -> None:
+        """Strip directory from file path."""
+        if not args:
+            self._print("  Usage: basename <path> [suffix]")
+            self._last_exit_code = 1
+            return
+        parts = args.strip().split(None, 1)
+        name = os.path.basename(os.path.expanduser(parts[0]))
+        if len(parts) > 1 and name.endswith(parts[1]):
+            name = name[:-len(parts[1])]
+        self._print(name)
+        self._last_exit_code = 0
+
+    def _cmd_nproc(self, args: str = "") -> None:
+        """Print number of CPUs."""
+        import os as _os
+        self._print(str(_os.cpu_count() or 1))
+        self._last_exit_code = 0
+
+    def _cmd_hostname(self, args: str = "") -> None:
+        """Print system hostname."""
+        import socket as _socket
+        self._print(_socket.gethostname())
+        self._last_exit_code = 0
+
+    def _cmd_uname(self, args: str = "") -> None:
+        """Print system information."""
+        import platform as _platform
+        flags = args.strip().split() if args else []
+        if not flags or "-a" in flags:
+            self._print(f"  {_platform.system()} {_platform.release()} {_platform.machine()}")
+        else:
+            parts = []
+            for f in flags:
+                if "s" in f:
+                    parts.append(_platform.system())
+                if "r" in f:
+                    parts.append(_platform.release())
+                if "m" in f:
+                    parts.append(_platform.machine())
+            self._print(" ".join(parts))
+        self._last_exit_code = 0
+
+    def _cmd_shuf(self, args: str = "") -> None:
+        """Shuffle lines of a file or piped input."""
+        if not args and not self._piped_input:
+            self._print("  Usage: shuf [file]")
+            self._last_exit_code = 1
+            return
+        try:
+            if args:
+                content = Path(os.path.expanduser(args.strip())).read_text()
+            else:
+                content = self._piped_input
+        except FileNotFoundError:
+            self._print(f"  shuf: {args.strip()}: No such file or directory")
+            self._last_exit_code = 1
+            return
+        import random as _random
+        lines = content.splitlines()
+        _random.shuffle(lines)
+        self._print("\n".join(lines))
+        self._last_exit_code = 0
+
+    def _cmd_rev(self, args: str = "") -> None:
+        """Reverse characters in each line of a file or piped input."""
+        if not args and not self._piped_input:
+            self._print("  Usage: rev [file]")
+            self._last_exit_code = 1
+            return
+        try:
+            if args:
+                content = Path(os.path.expanduser(args.strip())).read_text()
+            else:
+                content = self._piped_input
+        except FileNotFoundError:
+            self._print(f"  rev: {args.strip()}: No such file or directory")
+            self._last_exit_code = 1
+            return
+        for line in content.splitlines():
+            self._print(line[::-1])
+        self._last_exit_code = 0
+
+    def _cmd_paste(self, args: str = "") -> None:
+        """Merge lines of files side by side."""
+        if not args:
+            self._print("  Usage: paste <file1> [file2 ...]")
+            self._last_exit_code = 1
+            return
+        files = args.strip().split()
+        try:
+            readers = [Path(os.path.expanduser(f)).read_text().splitlines() for f in files]
+        except FileNotFoundError as e:
+            self._print(f"  paste: {e.filename}: No such file or directory")
+            self._last_exit_code = 1
+            return
+        import itertools as _itertools
+        for row in _itertools.zip_longest(*readers, fillvalue=""):
+            self._print("\t".join(row))
+        self._last_exit_code = 0
+
+    def _cmd_comm(self, args: str = "") -> None:
+        """Compare two sorted files line by line."""
+        if not args:
+            self._print("  Usage: comm <file1> <file2>")
+            self._last_exit_code = 1
+            return
+        parts = args.strip().split()
+        if len(parts) < 2:
+            self._print("  Usage: comm <file1> <file2>")
+            self._last_exit_code = 1
+            return
+        f1, f2 = os.path.expanduser(parts[0]), os.path.expanduser(parts[1])
+        try:
+            lines1 = Path(f1).read_text().splitlines()
+            lines2 = Path(f2).read_text().splitlines()
+        except FileNotFoundError as e:
+            self._print(f"  comm: {e.filename}: No such file or directory")
+            self._last_exit_code = 1
+            return
+        i = j = 0
+        while i < len(lines1) and j < len(lines2):
+            if lines1[i] < lines2[j]:
+                self._print(f"\t\t{lines1[i]}")
+                i += 1
+            elif lines1[i] > lines2[j]:
+                self._print(f"\t{lines2[j]}")
+                j += 1
+            else:
+                self._print(lines1[i])
+                i += 1
+                j += 1
+        while i < len(lines1):
+            self._print(f"\t\t{lines1[i]}")
+            i += 1
+        while j < len(lines2):
+            self._print(f"\t{lines2[j]}")
+            j += 1
+        self._last_exit_code = 0
 
     def _cmd_exit(self, args: str = "") -> None:
         self._running = False
@@ -2118,7 +3166,7 @@ Examples:
             self._print(f"  Fallback: export SLO_AUTO_DOWNLOAD=1")
 
     def _cmd_procs(self, args: str = "") -> None:
-        jobs = self.cmds.ps()
+        jobs = self._spinner_call("Fetching jobs", lambda: self.cmds.ps(), ok_msg=None)
         if not jobs:
             self._print("  No running jobs")
             return
@@ -2153,24 +3201,8 @@ Examples:
         if not args:
             self._print("  Usage: kill <job_id>")
             return
-        result = self.cmds.kill(args.strip())
+        result = self._spinner_call("Killing job", lambda: self.cmds.kill(args.strip()), ok_msg=None)
         self._print(self._dump_json(result))
-
-    def _cmd_models(self, args: str = "") -> None:
-        if not self._require_api("models"):
-            return
-        models = self.cmds.models()
-        if not models:
-            self._print("  No models available")
-            return
-        rows = []
-        for m in models:
-            name = m.get("model_id", m.get("name", m.get("id", "?")))
-            sz = m.get("size_gb", 0) or m.get("size_mb", 0) / 1024
-            sz_str = f"{sz:.2f}G" if sz else ""
-            loaded = m.get("status") == "loaded" or m.get("loaded")
-            rows.append([name, m.get("type", ""), sz_str, "\u2713 loaded" if loaded else ""])
-        self._table(rows, ["Model", "Type", "Size", "Status"])
 
     def _cmd_load(self, args: str = "") -> None:
         if not args:
@@ -2241,72 +3273,6 @@ Examples:
             elif status == "error":
                 self._print(f"  ✗ {result.get('error', 'Unknown error')}")
 
-    def _cmd_unload(self, args: str = "") -> None:
-        if not self._require_api("unload"):
-            return
-        result = self.cmds.unload_model()
-        self._print(self._dump_json(result))
-
-    def _cmd_souls(self, args: str = "") -> None:
-        if not self._require_api("souls"):
-            return
-        souls = self.cmds.souls()
-        if not souls:
-            self._print("  No souls available")
-            return
-        rows = []
-        for s in souls:
-            name = s.get("name", s.get("id", "?"))
-            desc = s.get("description", "")[:50]
-            traits = s.get("traits", [])
-            trait_str = ", ".join(str(t)[:15] for t in traits[:3])
-            rows.append([name, desc, trait_str])
-        self._table(rows, ["Soul", "Description", "Traits"])
-
-    def _cmd_switch(self, args: str = "") -> None:
-        if not args:
-            self._print("  Usage: switch <soul_name>")
-            return
-        if not self._require_api("switch"):
-            return
-        result = self.cmds.switch_soul(args.strip())
-        self._print(self._dump_json(result))
-
-    def _cmd_whoami(self, args: str = "") -> None:
-        if not self._require_api("whoami"):
-            return
-        soul = self.cmds.current_soul()
-        self._print(f"  Current soul: {soul.get('name', 'unknown')}")
-        if soul.get("description"):
-            self._print(f"  Description: {soul['description']}")
-
-    def _cmd_uname(self, args: str = "") -> None:
-        """Print system information (like Unix uname)."""
-        a = args.strip()
-        if not a:
-            self._print("Dait")
-            return
-        sysname = "Dait"
-        nodename = os.uname().nodename
-        release = "0.1"
-        version = "Dait 0.1"
-        machine = os.uname().machine
-        if a == "-a" or a == "--all":
-            self._print(f"{sysname} {nodename} {release} {version} {machine}")
-        elif a == "-s" or a == "--kernel-name":
-            self._print(sysname)
-        elif a == "-n" or a == "--nodename":
-            self._print(nodename)
-        elif a == "-r" or a == "--kernel-release":
-            self._print(release)
-        elif a == "-v" or a == "--kernel-version":
-            self._print(version)
-        elif a == "-m" or a == "--machine":
-            self._print(machine)
-        else:
-            self._print(f"  uname: invalid option -- {a}")
-            self._last_exit_code = 1
-
     def _cmd_uptime(self, args: str = "") -> None:
         """Print how long Dait has been running (like Unix uptime)."""
         uptime_secs = self.os.kernel.uptime if self.os.kernel else 0.0
@@ -2318,24 +3284,10 @@ Examples:
         else:
             self._print(f"  up {hours}:{minutes:02d}")
 
-    def _cmd_health(self, args: str = "") -> None:
-        h = self.cmds.health()
-        status = h.get("status", "unknown")
-        if status == "unknown":
-            self._status("error", "API server is not responding")
-            self._print("  Use 'api start' to launch it.")
-            self._last_exit_code = 1
-            return
-        self._status("ok" if status == "healthy" else "warn", f"Status: {status}")
-        self._kvlist([
-            ("Model", h.get("model_type", _EM)),
-            ("Soul", h.get("soul_name", _EM)),
-        ])
-
     def _cmd_status(self, args: str = "") -> None:
         self._box(self.os.status_summary)
         try:
-            detailed = self.cmds.health_detailed()
+            detailed = self._spinner_call("Fetching status", lambda: self.cmds.health_detailed(), ok_msg=None)
             if isinstance(detailed, dict) and "registry" in detailed:
                 registry = detailed.get("registry", {})
                 models = registry.get("models", []) or registry.get("names", [])
@@ -2400,128 +3352,13 @@ Examples:
             self._print(f"  {t}  {e.name:35s} {src:15s} {data_str}")
 
     def _cmd_metrics(self, args: str = "") -> None:
-        metrics = self.cmds.system_metrics()
+        metrics = self._spinner_call("Fetching metrics", lambda: self.cmds.system_metrics(), ok_msg=None)
         if metrics.get("error"):
             self._print(f"  Error: {metrics['error']}")
             return
         for k, v in metrics.items():
             if not k.startswith("_"):
                 self._print(f"  {k}: {v}")
-
-    def _cmd_datasets(self, args: str = "") -> None:
-        if not self._require_api("datasets"):
-            return
-        datasets = self.cmds.datasets()
-        if not datasets:
-            self._print("  No datasets available")
-            return
-        rows = []
-        for d in datasets:
-            name = d.get("name", "?")
-            samples = d.get("samples", 0)
-            sz = d.get("size", 0)
-            sz_str = f"{sz / 1048576:.1f}M" if sz else ""
-            rows.append([name, str(samples), sz_str])
-        self._table(rows, ["Dataset", "Samples", "Size"])
-
-    def _cmd_knowledge(self, args: str = "") -> None:
-        """List/search knowledge base entries."""
-        if not self._require_api("knowledge"):
-            return
-        if args:
-            results = self.cmds.list_knowledge(args)
-            if not results:
-                self._print("  No results")
-                return
-            for r in results[:20]:
-                self._print(f"  \u2022 {r.get('content', '')[:120]}")
-            return
-        stats = self.cmds.knowledge_stats()
-        count = stats.get("total_items", 0)
-        if count == 0:
-            self._print("  Knowledge base is empty")
-            self._print("  Use: remember <fact>  to add a fact")
-            return
-        self._print(f"  Knowledge base: {count} fact(s)")
-        topics = stats.get("topics", {})
-        if topics:
-            self._print(f"  Topics: {', '.join(sorted(topics.keys()))}")
-
-    def _cmd_remember(self, args: str = "") -> None:
-        """Store a fact in the knowledge base. Supports piped input."""
-        if not args and not self._piped_input:
-            self._print("  Usage: remember <fact>")
-            self._print("    remember this project uses FastAPI")
-            self._print("    cat notes.txt | remember")
-            self._last_exit_code = 1
-            return
-        if not self._require_api("remember"):
-            return
-        content = self._piped_input.strip() if self._piped_input else args
-        result = self.cmds.add_knowledge(content)
-        if isinstance(result, dict) and result.get("status") == "stored":
-            topic = result.get("topic", "general")
-            preview = content[:80].replace("\n", "\\n")
-            self._print(f"  Stored fact [{topic}]: {preview}...")
-        else:
-            self._print(f"  Error: {result}")
-
-    def _cmd_recall(self, args: str = "") -> None:
-        """Search the knowledge base. Shows recent facts if no query."""
-        if not self._require_api("recall"):
-            return
-        if not args:
-            stats = self.cmds.knowledge_stats()
-            count = stats.get("total_items", 0)
-            if count == 0:
-                self._print("  Knowledge base is empty")
-                return
-            self._print(f"  Knowledge base: {count} fact(s)")
-            topics = stats.get("topics", {})
-            if topics:
-                self._print(f"  Topics: {', '.join(sorted(topics.keys()))}")
-            self._print("  Use: recall <query>  to search")
-            return
-        results = self.cmds.list_knowledge(args)
-        if not results:
-            self._print("  No matching facts")
-            return
-        for r in results[:10]:
-            topic = r.get("topic", "")
-            content = r.get("content", "")
-            score = r.get("score", 0)
-            self._print(f"  [{topic}] {content[:140]}  (score: {score:.2f})")
-        if len(results) > 10:
-            self._print(f"  ... and {len(results) - 10} more")
-
-    def _cmd_checkpoints(self, args: str = "") -> None:
-        if not self._require_api("checkpoints"):
-            return
-        cps = self.cmds.checkpoints()
-        if not cps:
-            self._print("  No checkpoints")
-            return
-        rows = []
-        for cp in cps:
-            rows.append([cp.get("name", ""), f"{cp.get('loss', _EM)}", cp.get("model_type", "")])
-        self._table(rows, ["Checkpoint", "Loss", "Type"])
-
-    def _cmd_finetuned(self, args: str = "") -> None:
-        if not self._require_api("finetuned"):
-            return
-        models = self.cmds.finetuned_models()
-        if not models:
-            self._print("  No fine-tuned models")
-            return
-        rows = []
-        for m in models:
-            name = m.get("model_name", "")
-            loss = m.get("final_loss", "\u2014")
-            ep = m.get("epochs", 0)
-            sz_bytes = m.get("size_bytes", 0)
-            sz_str = f"{sz_bytes / 1048576:.0f}M"
-            rows.append([name, f"{loss}", f"{ep}ep", sz_str])
-        self._table(rows, ["Model", "Loss", "Epochs", "Size"])
 
     def _cmd_protect(self, args: str = "") -> None:
         """Protect a model from accidental deletion: protect <model_id>"""
@@ -2613,7 +3450,7 @@ Examples:
                 return
             teacher = parts[2] if len(parts) > 2 else "gpt2"
             epochs = int(parts[3]) if len(parts) > 3 else 5
-            r = self.cmds.train_distill(dataset, teacher=teacher, epochs=epochs)
+            r = self._spinner_call("Starting distillation", lambda: self.cmds.train_distill(dataset, teacher=teacher, epochs=epochs))
             if "error" in r:
                 self._print(f"  Error: {r['error']}")
             else:
@@ -2630,7 +3467,7 @@ Examples:
                 self._print("  Usage: train hf <model> <dataset> [epochs]")
                 return
             epochs = int(parts[3]) if len(parts) > 3 else 3
-            r = self.cmds.train_hf(model, dataset, epochs=epochs)
+            r = self._spinner_call("Starting fine-tune", lambda: self.cmds.train_hf(model, dataset, epochs=epochs))
             if "error" in r:
                 self._print(f"  Error: {r['error']}")
             else:
@@ -2644,7 +3481,7 @@ Examples:
             soul = parts[1] if len(parts) > 1 else ""
             teacher = parts[2] if len(parts) > 2 else "gpt2"
             epochs = int(parts[3]) if len(parts) > 3 else 10
-            r = self.cmds.train_auto(soul_name=soul, teacher=teacher, epochs=epochs)
+            r = self._spinner_call("Starting auto-train", lambda: self.cmds.train_auto(soul_name=soul, teacher=teacher, epochs=epochs))
             if "error" in r:
                 self._print(f"  Error: {r['error']}")
             else:
@@ -2689,7 +3526,7 @@ Examples:
             return
 
         name = parts[1] if len(parts) > 1 else ""
-        r = self.cmds.train_quick(dataset, name=name)
+        r = self._spinner_call("Starting training", lambda: self.cmds.train_quick(dataset, name=name))
         if "error" in r:
             self._print(f"  Error: {r['error']}")
         else:
@@ -2771,7 +3608,8 @@ Examples:
             return
         if not self._require_api("gen"):
             return
-        result = self.cmds.generate(args, max_tokens=150)
+        with self.console.spinner("Generating") as s:
+            result = self.cmds.generate(args, max_tokens=150)
         if isinstance(result, dict) and "text" in result:
             self._print(f"\n  {result['text']}\n")
         elif isinstance(result, dict) and "error" in result:
@@ -2784,12 +3622,12 @@ Examples:
         if not args:
             self._print("  Usage: chat <message>")
             return
-        if not self._require_api("chat"):
-            return
         if args == "/reset":
             self._chat_session_id = None
             self._chat_history = []
             self._print("  [session cleared]")
+            return
+        if not self._require_api("chat"):
             return
         if not self._chat_session_id:
             import uuid
@@ -2797,7 +3635,7 @@ Examples:
             self._chat_history = []
             self._print("  [new session]")
         self._chat_history.append({"role": "user", "content": args})
-        result = self.cmds.chat(self._chat_history)
+        result = self._spinner_call("Thinking", lambda: self.cmds.chat(self._chat_history), "Done")
         if isinstance(result, dict) and "message" in result:
             text = result["message"]
             text = text.replace("<think>", "").replace("</think>", "")
@@ -2807,16 +3645,6 @@ Examples:
             self._print(f"  Error: {result['error']}")
         else:
             self._print(self._dump_json(result))
-
-    def _cmd_tokenizer(self, args: str = "") -> None:
-        if not self._require_api("tokenizer"):
-            return
-        stats = self.cmds.tokenizer_stats()
-        if isinstance(stats, dict) and "error" not in stats:
-            for k, v in stats.items():
-                self._print(f"  {k}: {v}")
-        else:
-            self._print(f"  {self._dump_json(stats)}")
 
     # ── LLM-powered NL interpreter ──────────────────────────────────
 
@@ -3104,9 +3932,8 @@ Examples:
                 return
             goal = args.strip()
             self._print(f"  \U0001f916 Orchestrating agents for: {goal}")
-            self._print(f"  {_C_DIM}Planning...{_C_RESET}")
             try:
-                result = orch.execute(goal)
+                result = self._spinner_call("Planning & executing", lambda: orch.execute(goal))
                 self._print("")
                 self._print(result.get("response", "No response"))
                 tasks = result.get("tasks", [])
@@ -3134,6 +3961,9 @@ Examples:
             f"  {name} - {cmd.__doc__ or ''}"
             for name, cmd in sorted(self.COMMANDS.items())
         )
+        for name, mod in sorted(self._ext_cmds.items()):
+            h = getattr(mod, "help", "")
+            available_commands += f"\n  {name} - {h}"
 
         prompt = (
             "You are an AI shell assistant. Given the available commands below, "
@@ -3146,7 +3976,7 @@ Examples:
         )
 
         self._print(f"  \u2601\ufe0f Interpreting as LLM query...")
-        result = self.cmds.generate(prompt, max_tokens=60)
+        result = self._spinner_call("Thinking", lambda: self.cmds.generate(prompt, max_tokens=60))
 
         if isinstance(result, dict) and "text" in result:
             generated = result["text"].strip().split("\n")[0].strip()
@@ -3176,25 +4006,25 @@ Examples:
         """Keyword-based NL fallback when LLM is unavailable."""
         q = query.lower()
         if any(w in q for w in ["process", "job", "running", "ps", "procs"]):
-            self._cmd_procs()
+            self._execute_single("procs")
         elif any(w in q for w in ["model", "models"]):
-            self._cmd_models()
+            self._print(self._execute_single("models"), end="")
         elif any(w in q for w in ["soul", "personality"]):
-            self._cmd_whoami()
+            self._print(self._execute_single("whoami"), end="")
         elif any(w in q for w in ["health", "status"]):
-            self._cmd_health()
+            self._print(self._execute_single("health"), end="")
         elif any(w in q for w in ["dataset", "data"]):
-            self._cmd_datasets()
+            self._print(self._execute_single("datasets"), end="")
         elif any(w in q for w in ["knowledge", "fact"]):
-            self._cmd_knowledge()
+            self._print(self._execute_single("knowledge"), end="")
         elif any(w in q for w in ["checkpoint"]):
-            self._cmd_checkpoints()
+            self._print(self._execute_single("checkpoints"), end="")
         elif any(w in q for w in ["finetune", "trained"]):
-            self._cmd_finetuned()
+            self._print(self._execute_single("finetuned"), end="")
         elif any(w in q for w in ["metric", "cpu", "memory", "disk"]):
-            self._cmd_metrics()
+            self._print(self._execute_single("metrics"), end="")
         elif any(w in q for w in ["tokenizer", "vocab"]):
-            self._cmd_tokenizer()
+            self._print(self._execute_single("tokenizer"), end="")
         elif any(w in q for w in ["help", "command"]):
             self._cmd_help()
         else:
@@ -3218,8 +4048,7 @@ Examples:
         w(f"    ai show models   Natural language commands")
         w(f"")
         w(f"  {_C_YELLOW}Pipes & more:{_C_RESET}")
-        w(f"    models | grep gpt    Filter output")
-        w(f"    health &             Run in background")
+        w(f"    health &         Run in background")
         w(f"    gen hello > out.txt  Redirect to file")
         w(f"    time load gpt2       Time a command")
         w(f"")
@@ -3257,10 +4086,9 @@ Examples:
             ]),
             ("\u2463 Pipelines", [
                 "  Chain commands with |  (like bash):",
-                "    models | grep gpt",
-                "    health | head 3",
-                "    echo hello | wc",
-                "  Filters: grep, head, tail, wc, sort, uniq, tee, less",
+                "    models | head",
+                "    gen hello > output.txt",
+                "  Pipe to filters: head, tail, wc, sort, uniq",
                 "  Sort flags: -r (reverse), -u (unique), -n (numeric)",
             ]),
             ("\u2464 Background & timing", [
@@ -3295,7 +4123,7 @@ Examples:
                 "    Example: ai show me running training jobs",
                 "  py <expr>    \u2014 Evaluate Python inline",
                 "    Example: py 2 + 2",
-                "  Advanced: pipelines, watch, sleep, pushd/popd",
+                "  Advanced: pipelines, watch, background jobs",
             ]),
             ("\u2469 All done!", [
                 "  You're ready to use Dait!",
@@ -3317,256 +4145,6 @@ Examples:
                 w(f"  {_C_DIM}Tutorial stopped.{_C_RESET}")
                 return
 
-    # ── Unix filesystem commands ───────────────────────────────────
-
-    def _cmd_ls(self, args: str = "") -> None:
-        """List directory contents (like Unix ls). Supports -l, -a, -h flags."""
-        parts = args.strip().split()
-        flags = {p for p in parts if p.startswith("-")}
-        targets = [p for p in parts if not p.startswith("-") or p == "--"]
-        show_all = "-a" in flags or "--all" in flags or "-A" in flags
-        long_fmt = "-l" in flags
-        human = "-h" in flags
-        show_dirs = targets or ["."]
-
-        for dir_idx, dir_path in enumerate(show_dirs):
-            path = os.path.expanduser(dir_path)
-            vfs = self.os.vfs
-            if vfs and (path.startswith("/dev") or path.startswith("/proc")):
-                entries = vfs.listdir(path)
-                if entries is None:
-                    self._print(f"  ls: cannot access '{dir_path}': No such file or directory")
-                    self._last_exit_code = 2
-                    continue
-                if not show_all:
-                    entries = [e for e in entries if not e.startswith(".")]
-                if long_fmt:
-                    for name in entries:
-                        st = vfs.stat(os.path.join(path, name))
-                        if st:
-                            mode = stat.filemode(st.st_mode)
-                            sz = st.st_size
-                            sz_str = str(sz).rjust(8)
-                            self._print(f"  {mode} {st.st_nlink:2d} {sz_str} {name}")
-                        else:
-                            self._print(f"  ??????????  0 ??? {name}")
-                else:
-                    self._print("  " + "  ".join(entries))
-                continue
-            if not os.path.exists(path):
-                self._print(f"  ls: cannot access '{dir_path}': No such file or directory")
-                self._last_exit_code = 2
-                continue
-            if len(show_dirs) > 1:
-                self._print(f"  {dir_path}:")
-            try:
-                entries = sorted(os.listdir(path))
-            except PermissionError as e:
-                self._print(f"  ls: {e}")
-                self._last_exit_code = 2
-                continue
-
-            if not show_all:
-                entries = [e for e in entries if not e.startswith(".")]
-
-            if long_fmt:
-                for name in entries:
-                    full = os.path.join(path, name)
-                    try:
-                        st = os.stat(full)
-                        mode = stat.filemode(st.st_mode)
-                        sz = st.st_size
-                        if human:
-                            for unit in ['B', 'K', 'M', 'G', 'T']:
-                                if sz < 1024:
-                                    break
-                                sz /= 1024
-                            sz_str = f"{sz:.1f}{unit}" if sz >= 10 else f"{sz:.1f}{unit}"
-                        else:
-                            sz_str = str(st.st_size).rjust(8)
-                        self._print(f"  {mode} {st.st_nlink:2d} {sz_str} {name}")
-                    except OSError:
-                        self._print(f"  ??????????  0 ??? {name}")
-            else:
-                if human:
-                    self._print("  " + "  ".join(entries))
-                else:
-                    cols = shutil.get_terminal_size().columns
-                    col_w = max(len(e) for e in entries) + 2 if entries else 20
-                    ncols = max(1, cols // col_w)
-                    rows = [entries[i:i + ncols] for i in range(0, len(entries), ncols)]
-                    for row in rows:
-                        self._print("  " + "".join(e.ljust(col_w) for e in row))
-
-    def _cmd_cd(self, args: str = "") -> None:
-        """Change directory (like Unix cd). No args goes to $HOME."""
-        target = args.strip() if args else os.environ.get("HOME", "~")
-        target = os.path.expanduser(target)
-        if target == "-":
-            if len(self._dir_stack) > 0:
-                target = self._dir_stack.pop()
-            else:
-                self._print("  cd: no previous directory in stack")
-                self._last_exit_code = 1
-                return
-        try:
-            os.chdir(target)
-        except FileNotFoundError:
-            self._print(f"  cd: no such file or directory: {args}")
-            self._last_exit_code = 1
-        except PermissionError:
-            self._print(f"  cd: permission denied: {args}")
-            self._last_exit_code = 1
-        except NotADirectoryError:
-            self._print(f"  cd: not a directory: {args}")
-            self._last_exit_code = 1
-
-    def _cmd_pwd(self, args: str = "") -> None:
-        """Print working directory (like Unix pwd)."""
-        self._print(os.getcwd())
-
-    def _cmd_mkdir(self, args: str = "") -> None:
-        """Create directories (like Unix mkdir). Supports -p (parent)."""
-        parts = args.strip().split()
-        flags = {p for p in parts if p.startswith("-")}
-        targets = [p for p in parts if not p.startswith("-")]
-        parent = "-p" in flags
-        if not targets:
-            self._print("  Usage: mkdir [-p] <dir> ...")
-            self._last_exit_code = 1
-            return
-        for d in targets:
-            path = os.path.expanduser(d)
-            try:
-                if parent:
-                    os.makedirs(path, exist_ok=True)
-                else:
-                    os.mkdir(path)
-            except FileExistsError:
-                self._print(f"  mkdir: cannot create directory '{d}': File exists")
-                self._last_exit_code = 1
-            except FileNotFoundError:
-                self._print(f"  mkdir: cannot create directory '{d}': No such file or directory")
-                self._last_exit_code = 1
-            except PermissionError:
-                self._print(f"  mkdir: permission denied: {d}")
-                self._last_exit_code = 1
-
-    def _cmd_rm(self, args: str = "") -> None:
-        """Remove files or directories (like Unix rm). Supports -r, -f."""
-        parts = args.strip().split()
-        flags = {p for p in parts if p.startswith("-")}
-        targets = [p for p in parts if not p.startswith("-")]
-        recursive = "-r" in flags or "-rf" in flags or "-fr" in flags
-        force = "-f" in flags or "-rf" in flags or "-fr" in flags
-        if not targets:
-            self._print("  Usage: rm [-r] [-f] <path> ...")
-            self._last_exit_code = 1
-            return
-        for t in targets:
-            path = os.path.expanduser(t)
-            try:
-                if os.path.isdir(path) and not recursive:
-                    self._print(f"  rm: cannot remove '{t}': Is a directory")
-                    self._last_exit_code = 1
-                    continue
-                if recursive and os.path.isdir(path):
-                    shutil.rmtree(path)
-                else:
-                    os.remove(path)
-            except FileNotFoundError:
-                if not force:
-                    self._print(f"  rm: cannot remove '{t}': No such file or directory")
-                    self._last_exit_code = 1
-            except PermissionError:
-                self._print(f"  rm: permission denied: {t}")
-                self._last_exit_code = 1
-
-    def _cmd_cp(self, args: str = "") -> None:
-        """Copy files (like Unix cp). Supports -r for directories."""
-        parts = args.strip().split()
-        flags = {p for p in parts if p.startswith("-")}
-        targets = [p for p in parts if not p.startswith("-")]
-        recursive = "-r" in flags or "-R" in flags
-        if len(targets) < 2:
-            self._print("  Usage: cp [-r] <source> <dest>")
-            self._last_exit_code = 1
-            return
-        src, dst = os.path.expanduser(targets[0]), os.path.expanduser(targets[1])
-        try:
-            if os.path.isdir(src):
-                if recursive:
-                    shutil.copytree(src, dst, dirs_exist_ok=True)
-                else:
-                    self._print(f"  cp: omitting directory '{targets[0]}'")
-                    self._last_exit_code = 1
-            else:
-                shutil.copy2(src, dst)
-        except FileNotFoundError:
-            self._print(f"  cp: cannot stat '{targets[0]}': No such file or directory")
-            self._last_exit_code = 1
-        except PermissionError:
-            self._print(f"  cp: permission denied")
-            self._last_exit_code = 1
-        except IsADirectoryError:
-            self._print(f"  cp: '{dst}' is a directory (use -r)")
-            self._last_exit_code = 1
-
-    def _cmd_mv(self, args: str = "") -> None:
-        """Move/rename files (like Unix mv)."""
-        parts = args.strip().split()
-        targets = [p for p in parts if not p.startswith("-")]
-        if len(targets) < 2:
-            self._print("  Usage: mv <source> <dest>")
-            self._last_exit_code = 1
-            return
-        src, dst = os.path.expanduser(targets[0]), os.path.expanduser(targets[1])
-        try:
-            shutil.move(src, dst)
-        except FileNotFoundError:
-            self._print(f"  mv: cannot stat '{targets[0]}': No such file or directory")
-            self._last_exit_code = 1
-        except PermissionError:
-            self._print(f"  mv: permission denied")
-            self._last_exit_code = 1
-
-    def _cmd_cat(self, args: str = "") -> None:
-        """Concatenate and print files (like Unix cat). Also reads AI devices (/dev/llm, etc)."""
-        if not args:
-            if self._piped_input:
-                self._print(self._piped_input, end="")
-            else:
-                self._print("  Usage: cat <file> ...   or   <cmd> | cat")
-                self._last_exit_code = 1
-            return
-        parts = args.strip().split()
-        first = parts[0]
-        first_path = os.path.expanduser(first)
-        vfs = self.os.vfs
-        if vfs and (first_path.startswith("/dev/") or first_path.startswith("/proc/")):
-            remaining = " ".join(parts[1:]) if len(parts) > 1 else ""
-            content = vfs.read(first_path)
-            if content is not None:
-                self._print(content, end="\n" if not content.endswith("\n") else "")
-            else:
-                self._print(f"  cat: {first}: No such file or directory")
-                self._last_exit_code = 1
-            return
-        for f in parts:
-            path = os.path.expanduser(f)
-            try:
-                with open(path) as fp:
-                    self._print(fp.read(), end="")
-            except FileNotFoundError:
-                self._print(f"  cat: {f}: No such file or directory")
-                self._last_exit_code = 1
-            except PermissionError:
-                self._print(f"  cat: {f}: Permission denied")
-                self._last_exit_code = 1
-            except IsADirectoryError:
-                self._print(f"  cat: {f}: Is a directory")
-                self._last_exit_code = 1
-
     def _cmd_lsdev(self, args: str = "") -> None:
         """List AI device nodes (/dev/*)."""
         if not self.os.devices:
@@ -3575,181 +4153,7 @@ Examples:
         self._print("  AI Device nodes:")
         self._print(self.os.devices.list_devices())
 
-    def _cmd_touch(self, args: str = "") -> None:
-        """Update file timestamps or create empty files (like Unix touch)."""
-        if not args:
-            self._print("  Usage: touch <file> ...")
-            self._last_exit_code = 1
-            return
-        parts = args.strip().split()
-        for f in parts:
-            path = os.path.expanduser(f)
-            try:
-                if os.path.exists(path):
-                    os.utime(path, None)
-                else:
-                    open(path, 'a').close()
-            except PermissionError:
-                self._print(f"  touch: {f}: Permission denied")
-                self._last_exit_code = 1
-
-    def _cmd_chmod(self, args: str = "") -> None:
-        """Change file mode (like Unix chmod). Supports octal (755) and symbolic (u+x)."""
-        parts = args.strip().split()
-        if len(parts) < 2:
-            self._print("  Usage: chmod <mode> <file> ...")
-            self._last_exit_code = 1
-            return
-        mode_str = parts[0]
-        targets = parts[1:]
-        for t in targets:
-            path = os.path.expanduser(t)
-            try:
-                if mode_str.isdigit():
-                    mode = int(mode_str, 8)
-                    os.chmod(path, mode)
-                else:
-                    # Simple symbolic: u+x, g+w, o-r, a+x
-                    current = os.stat(path).st_mode
-                    who = mode_str[0] if mode_str[0] in 'ugoa' else 'a'
-                    op = mode_str[1] if len(mode_str) > 1 and mode_str[1] in '+-=' else '+'
-                    perm = mode_str[2:] if len(mode_str) > 2 else ''
-                    who_map = {'u': stat.S_IRWXU, 'g': stat.S_IRWXG, 'o': stat.S_IRWXO, 'a': stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO}
-                    perm_map = {'x': stat.S_IXUSR, 'w': stat.S_IWUSR, 'r': stat.S_IRUSR}
-                    mask = 0
-                    for p in perm:
-                        mask |= perm_map.get(p, 0)
-                    if who != 'a':
-                        # Restrict mask to only the specified who bits
-                        mask = mask & who_map.get(who, 0o777)
-                        # Also shift to group/other
-                        if who == 'g':
-                            mask = (mask >> 3) & 0o777
-                        elif who == 'o':
-                            mask = (mask >> 6) & 0o777
-                    if op == '+':
-                        new_mode = current | mask
-                    elif op == '-':
-                        new_mode = current & ~mask
-                    else:
-                        new_mode = mask
-                    os.chmod(path, new_mode)
-            except FileNotFoundError:
-                self._print(f"  chmod: cannot access '{t}': No such file or directory")
-                self._last_exit_code = 1
-            except PermissionError:
-                self._print(f"  chmod: changing permissions of '{t}': Operation not permitted")
-                self._last_exit_code = 1
-
-    def _cmd_find(self, args: str = "") -> None:
-        """Recursively find files matching a pattern (like Unix find). Usage: find [path] [-name <glob>]"""
-        if not args.strip():
-            self._print("  Usage: find [path] [-name <glob>]")
-            self._last_exit_code = 1
-            return
-        try:
-            import shlex
-            parts = shlex.split(args)
-        except Exception:
-            parts = args.strip().split()
-        path = "."
-        name_pat = "*"
-        i = 0
-        while i < len(parts):
-            if parts[i] == "-name" and i + 1 < len(parts):
-                name_pat = parts[i + 1].strip("'\"")
-                i += 2
-            elif parts[i] == "-iname" and i + 1 < len(parts):
-                name_pat = parts[i + 1].strip("'\"")
-                i += 2
-            else:
-                path = parts[i]
-                i += 1
-        root = os.path.expanduser(path)
-        if not os.path.isdir(root):
-            self._print(f"  find: '{path}': No such directory")
-            self._last_exit_code = 1
-            return
-        count = 0
-        for dirpath, dirnames, filenames in os.walk(root):
-            for f in filenames:
-                if fnmatch.fnmatch(f, name_pat):
-                    self._print(f"  {os.path.join(dirpath, f)}")
-                    count += 1
-        self._print(f"  [{count} file(s) found]")
-
-    # ── Unix scripting commands ────────────────────────────────────
-
-    def _cmd_true(self, args: str = "") -> None:
-        """Return exit code 0 (like Unix true)."""
-        self._last_exit_code = 0
-
-    def _cmd_false(self, args: str = "") -> None:
-        """Return exit code 1 (like Unix false)."""
-        self._last_exit_code = 1
-
-    def _cmd_test(self, args: str = "") -> None:
-        """Evaluate expression (like Unix test / [). Supports -f, -d, -e, -n, -z, =, !=."""
-        if not args:
-            self._last_exit_code = 1
-            return
-        parts = args.strip().split()
-        if parts[0] == "[":
-            parts = parts[1:]
-        if parts and parts[-1] == "]":
-            parts = parts[:-1]
-        if not parts:
-            self._last_exit_code = 1
-            return
-
-        def _file_test(flag: str, path: str) -> bool:
-            p = os.path.expanduser(path)
-            if flag == "-e": return os.path.exists(p)
-            if flag == "-f": return os.path.isfile(p)
-            if flag == "-d": return os.path.isdir(p)
-            if flag == "-r": return os.access(p, os.R_OK)
-            if flag == "-w": return os.access(p, os.W_OK)
-            if flag == "-x": return os.access(p, os.X_OK)
-            if flag == "-s": return os.path.isfile(p) and os.path.getsize(p) > 0
-            if flag == "-L": return os.path.islink(p)
-            return False
-
-        if len(parts) == 1:
-            self._last_exit_code = 0 if parts[0] else 1
-        elif len(parts) == 2:
-            self._last_exit_code = 0 if _file_test(parts[0], parts[1]) else 1
-        elif len(parts) == 3:
-            a, op, b = parts[0], parts[1], parts[2]
-            if op == "=":
-                self._last_exit_code = 0 if a == b else 1
-            elif op == "!=":
-                self._last_exit_code = 0 if a != b else 1
-            elif op == "-eq":
-                try: self._last_exit_code = 0 if int(a) == int(b) else 1
-                except (ValueError, TypeError): self._last_exit_code = 1
-            elif op == "-ne":
-                try: self._last_exit_code = 0 if int(a) != int(b) else 1
-                except (ValueError, TypeError): self._last_exit_code = 1
-            elif op == "-gt":
-                try: self._last_exit_code = 0 if int(a) > int(b) else 1
-                except (ValueError, TypeError): self._last_exit_code = 1
-            elif op == "-lt":
-                try: self._last_exit_code = 0 if int(a) < int(b) else 1
-                except (ValueError, TypeError): self._last_exit_code = 1
-            elif op == "-ge":
-                try: self._last_exit_code = 0 if int(a) >= int(b) else 1
-                except (ValueError, TypeError): self._last_exit_code = 1
-            elif op == "-le":
-                try: self._last_exit_code = 0 if int(a) <= int(b) else 1
-                except (ValueError, TypeError): self._last_exit_code = 1
-            elif op == "-n":
-                self._last_exit_code = 0 if len(a) > 0 else 1
-            elif op == "-z":
-                self._last_exit_code = 0 if len(a) == 0 else 1
-            else:
-                self._last_exit_code = 1
-        else:
-            self._last_exit_code = 1
+    # ── Scripting commands ────────────────────────────────────────
 
     def _cmd_which(self, args: str = "") -> None:
         """Locate a command (like Unix which)."""
@@ -3758,9 +4162,12 @@ Examples:
             self._last_exit_code = 1
             return
         cmd = args.strip().lower()
-        if cmd in self.COMMANDS or cmd in self._aliases:
+        if cmd in self.COMMANDS or cmd in self._ext_cmds or cmd in self._aliases:
             if cmd in self._aliases:
                 self._print(f"  {cmd}: aliased to {self._aliases[cmd]}")
+            elif cmd in self._ext_cmds:
+                h = getattr(self._ext_cmds[cmd], "help", "")
+                self._print(f"  {cmd}: external command — {h}")
             else:
                 self._print(f"  {cmd}: shell built-in command")
             self._last_exit_code = 0
@@ -3782,6 +4189,9 @@ Examples:
         cmd = args.strip().lower()
         if cmd in self._aliases:
             self._print(f"  {cmd} is aliased to `{self._aliases[cmd]}`")
+        elif cmd in self._ext_cmds:
+            h = getattr(self._ext_cmds[cmd], "help", "")
+            self._print(f"  {cmd} is an external command — {h}")
         elif cmd in self.COMMANDS:
             self._print(f"  {cmd} is a shell built-in")
         elif shutil.which(cmd):
@@ -3789,27 +4199,6 @@ Examples:
         else:
             self._print(f"  {cmd}: not found")
             self._last_exit_code = 1
-
-    def _cmd_env(self, args: str = "") -> None:
-        """Print environment variables (like Unix env)."""
-        max_key = max(len(k) for k in self._env) if self._env else 0
-        for k in sorted(self._env):
-            self._print(f"  {k.upper().ljust(max_key)}  {self._env[k]}")
-
-    def _cmd_font(self, args: str = "") -> None:
-        """Set or show terminal font (iTerm2). Uses OSC 50 escape sequence."""
-        if not args:
-            current = self._env.get("FONT", "terminal default")
-            self._print(f"  Current font: {current}")
-            self._print("  Usage: font <name>   (e.g. 'font Digital TS Medium')")
-            return
-        font_name = args.strip()
-        self._env["FONT"] = font_name
-        self.state.set_env("FONT", font_name)
-        self.state.save()
-        # Emit OSC 50 to change terminal font (iTerm2, some terminals)
-        self.io.write(f"\x1b]50;Set Font={font_name}\x07", end="")
-        self._print(f"  Font set to: {font_name}")
 
     def _cmd_read(self, args: str = "") -> None:
         """Read a line from stdin into a variable (like bash read).
@@ -3832,172 +4221,6 @@ Examples:
             self._env[parts[0]] = value
             self._last_exit_code = 0
         except (EOFError, KeyboardInterrupt):
-            self._last_exit_code = 1
-
-    def _cmd_printf(self, args: str = "") -> None:
-        """Format and print data (like bash printf). Supports %s, %d, %f."""
-        if not args:
-            self._last_exit_code = 1
-            return
-        parts = args.split(maxsplit=1)
-        fmt = parts[0]
-        values = parts[1].split() if len(parts) > 1 else []
-        try:
-            idx = 0
-            result = []
-            i = 0
-            while i < len(fmt):
-                if fmt[i] == '%' and i + 1 < len(fmt):
-                    spec = fmt[i + 1]
-                    if spec in ('s', 'd', 'f', '%'):
-                        if spec == '%':
-                            result.append('%')
-                        elif idx < len(values):
-                            if spec == 's':
-                                result.append(values[idx])
-                            elif spec == 'd':
-                                result.append(str(int(float(values[idx]))))
-                            elif spec == 'f':
-                                result.append(f"{float(values[idx]):f}")
-                            idx += 1
-                        i += 2
-                        continue
-                    result.append(fmt[i])
-                elif fmt[i] == '\\' and i + 1 < len(fmt):
-                    esc = {'n': '\n', 't': '\t', 'r': '\r', '\\': '\\'}.get(fmt[i+1], fmt[i+1])
-                    result.append(esc)
-                    i += 2
-                    continue
-                else:
-                    result.append(fmt[i])
-                i += 1
-            self._print("".join(result), end="")
-        except (ValueError, IndexError):
-            self._last_exit_code = 1
-
-    def _cmd_dirname(self, args: str = "") -> None:
-        """Strip last component from path (like Unix dirname)."""
-        if not args:
-            self._print("  Usage: dirname <path>")
-            self._last_exit_code = 1
-            return
-        self._print(f"  {os.path.dirname(os.path.expanduser(args.strip()))}")
-
-    def _cmd_basename(self, args: str = "") -> None:
-        """Strip directory from path (like Unix basename)."""
-        if not args:
-            self._print("  Usage: basename <path>")
-            self._last_exit_code = 1
-            return
-        self._print(f"  {os.path.basename(os.path.expanduser(args.strip()))}")
-
-    def _cmd_yes(self, args: str = "") -> None:
-        """Repeatedly output a string (like Unix yes). Ctrl+C to stop."""
-        string = args.strip() or "y"
-        try:
-            while True:
-                self._print(string)
-        except KeyboardInterrupt:
-            pass
-
-    def _cmd_xargs(self, args: str = "") -> None:
-        """Build and execute command lines from piped input (like Unix xargs).
-        Reads piped input, splits by whitespace, and runs the given command
-        with each item as an argument."""
-        data = self._piped_input if self._piped_input else ""
-        if not data or not args:
-            self._print("  Usage: <cmd> | xargs <command>")
-            self._last_exit_code = 1
-            return
-        parts = args.strip().split()
-        cmd = parts[0]
-        base_args = parts[1:] if len(parts) > 1 else []
-        items = data.split()
-        for item in items:
-            all_args = base_args + [item]
-            raw = cmd + " " + " ".join(all_args)
-            out = self._execute_single(raw, "")
-            self._print(out, end="")
-
-    def _cmd_cut(self, args: str = "") -> None:
-        """Remove sections from each line of input (like Unix cut).
-        Usage: <cmd> | cut -d<delim> -f<field>"""
-        data = self._piped_input if self._piped_input else ""
-        if not data:
-            data = sys.stdin.read()
-        if not data:
-            self._print("  Usage: <cmd> | cut -d<delim> -f<field>")
-            self._last_exit_code = 1
-            return
-        parts = args.strip().split()
-        delim = "\t"
-        fields = [1]
-        for i, p in enumerate(parts):
-            if p.startswith("-d") and len(p) > 2:
-                delim = p[2]
-            elif p.startswith("-f"):
-                fspec = p[2:]
-                if fspec:
-                    fields = [int(x) for x in fspec.split(",")]
-        result = []
-        for line in data.split("\n"):
-            if not line.strip():
-                result.append("")
-                continue
-            cols = line.split(delim)
-            selected = [cols[f-1] for f in fields if f <= len(cols)]
-            result.append(delim.join(selected))
-        self._print("\n".join(result))
-
-    def _cmd_tr(self, args: str = "") -> None:
-        """Translate or delete characters (like Unix tr).
-        Usage: <cmd> | tr <set1> <set2>   or   <cmd> | tr -d <set>"""
-        data = self._piped_input if self._piped_input else ""
-        if not data:
-            self._print("  Usage: <cmd> | tr <set1> <set2>")
-            self._last_exit_code = 1
-            return
-        parts = args.strip().split()
-        if not parts:
-            self._print("  Usage: <cmd> | tr <set1> <set2>")
-            self._last_exit_code = 1
-            return
-        delete_mode = parts[0] == "-d"
-        if delete_mode:
-            if len(parts) < 2:
-                return
-            chars = parts[1]
-            trans_table = str.maketrans("", "", chars)
-        else:
-            if len(parts) < 2:
-                return
-            set1 = parts[0]
-            set2 = parts[1] if len(parts) > 1 else set1
-            trans_table = str.maketrans(set1, set2)
-        self._print(data.translate(trans_table), end="")
-
-    def _cmd_pbcopy(self, args: str = "") -> None:
-        """Copy piped input to macOS clipboard (like pbcopy). Usage: <cmd> | pbcopy"""
-        data = self._piped_input if self._piped_input else args
-        if not data:
-            self._print("  Usage: <cmd> | pbcopy   or   pbcopy <text>")
-            self._last_exit_code = 1
-            return
-        try:
-            p = subprocess.Popen(["pbcopy"], stdin=subprocess.PIPE)
-            p.communicate(data.encode("utf-8"))
-            self._print(f"  Copied {len(data)} chars to clipboard")
-        except Exception as e:
-            self._print(f"  pbcopy: {e}")
-            self._last_exit_code = 1
-
-    def _cmd_pbpaste(self, args: str = "") -> None:
-        """Paste from macOS clipboard (like pbpaste)."""
-        try:
-            p = subprocess.run(["pbpaste"], capture_output=True)
-            self._print(p.stdout.decode("utf-8").rstrip())
-        except Exception as e:
-            self._print(f"  pbpaste: {e}")
             self._last_exit_code = 1
 
     # ── Init / Boot commands ────────────────────────────────────────
@@ -4063,11 +4286,21 @@ Examples:
         return False
 
     def _cmd_boot(self, args: str = "") -> None:
-        """Boot the shell — start kernel + init system + services."""
+        """Boot the shell — start kernel + init system + services.
+
+        Automatically starts the API server if not already running.
+        """
         if self._running and self._piped_input is None:
             self._print("  Already booted. Use 'shutdown' to halt, then 'sloughgpt shell' to restart.")
             return
         self._running = True
+        # Auto-start API if not available
+        api = self.os.api
+        if not api.is_running:
+            self._print("  \u26a1 Auto-starting API server...")
+            result = api.start()
+            if not result.get("ok"):
+                self._print(f"  \u2717 API auto-start failed: {result.get('error', 'unknown')}")
         result = self.os.boot(shell_run=self._shell_cmd if hasattr(self, "_shell_cmd") else None)
         if isinstance(result, tuple):
             log, api_status = result
@@ -4077,7 +4310,7 @@ Examples:
             model = api_status.get("model_id", "unknown") or "unknown"
             self._status("ok", f"API — {model}")
         else:
-            self._status("error", "API not connected — use 'api start' to launch")
+            self._status("error", "API not connected")
 
     def _cmd_shutdown(self, args: str = "") -> None:
         """Shut down the shell — halt all services + kernel."""
@@ -4817,30 +5050,59 @@ nl: db 10
         self._last_exit_code = 0
 
     # ── Command registry ────────────────────────────────────────────
+    # AI-domain commands + shell essentials only.
+    # cd and pwd are built-in because they must reflect the shell's CWD
+    # (subprocess can't change the parent's directory).
+    # Other Unix standard commands delegate to system binaries.
 
     COMMANDS: dict[str, Callable] = {
         "help": _cmd_help,
-        "clear": _cmd_clear,
-        "cls": _cmd_clear,
         "exit": _cmd_exit,
-        "ls": _cmd_ls,
         "cd": _cmd_cd,
         "pwd": _cmd_pwd,
+        "echo": _cmd_echo,
+        "ls": _cmd_ls,
+        "cat": _cmd_cat,
         "mkdir": _cmd_mkdir,
         "rm": _cmd_rm,
+        "touch": _cmd_touch,
         "cp": _cmd_cp,
         "mv": _cmd_mv,
-        "cat": _cmd_cat,
-        "touch": _cmd_touch,
+        "head": _cmd_head,
+        "tail": _cmd_tail,
+        "wc": _cmd_wc,
+        "grep": _cmd_grep,
+        "sort": _cmd_sort,
+        "uniq": _cmd_uniq,
+        "find": _cmd_find,
+        "tee": _cmd_tee,
+        "xargs": _cmd_xargs,
+        "time": _cmd_time,
         "chmod": _cmd_chmod,
-        "true": _cmd_true,
-        "false": _cmd_false,
-        "test": _cmd_test,
-        "[": _cmd_test,
+        "du": _cmd_du,
+        "diff": _cmd_diff,
+        "stat": _cmd_stat,
+        "cut": _cmd_cut,
+        "tr": _cmd_tr,
+        "seq": _cmd_seq,
+        "nl": _cmd_nl,
+        "fold": _cmd_fold,
+        "tac": _cmd_tac,
+        "env": _cmd_env,
+        "printenv": _cmd_env,
+        "yes": _cmd_yes,
+        "realpath": _cmd_realpath,
+        "dirname": _cmd_dirname,
+        "basename": _cmd_basename,
+        "nproc": _cmd_nproc,
+        "hostname": _cmd_hostname,
+        "uname": _cmd_uname,
+        "shuf": _cmd_shuf,
+        "rev": _cmd_rev,
+        "paste": _cmd_paste,
+        "comm": _cmd_comm,
         "which": _cmd_which,
         "type": _cmd_type,
-        "env": _cmd_env,
-        "font": _cmd_font,
         "history": _cmd_history,
         "fc": _cmd_fc,
         "alias": _cmd_alias,
@@ -4850,65 +5112,28 @@ nl: db 10
         "source": _cmd_source,
         ".": _cmd_source,
         "py": _cmd_py,
-        "pushd": _cmd_pushd,
-        "popd": _cmd_popd,
-        "dirs": _cmd_dirs,
         "procs": _cmd_procs,
         "ps": _cmd_ps,
         "kill": _cmd_kill,
         "bg": _cmd_bg,
         "jobs": _cmd_bg,
         "fg": _cmd_fg,
-        "sleep": _cmd_sleep,
         "watch": _cmd_watch,
-        "models": _cmd_models,
         "load": _cmd_load,
-        "unload": _cmd_unload,
-        "souls": _cmd_souls,
-        "switch": _cmd_switch,
-        "whoami": _cmd_whoami,
-        "uname": _cmd_uname,
         "uptime": _cmd_uptime,
-        "health": _cmd_health,
         "status": _cmd_status,
         "events": _cmd_events,
         "metrics": _cmd_metrics,
-        "datasets": _cmd_datasets,
-        "knowledge": _cmd_knowledge,
-        "checkpoints": _cmd_checkpoints,
-        "finetuned": _cmd_finetuned,
         "train": _cmd_train,
         "gen": _cmd_gen,
         "chat": _cmd_chat,
-        "tokenizer": _cmd_tokenizer,
         "ai": _cmd_ai,
         "agents": _cmd_agents,
         "tutorial": _cmd_tutorial,
-        "grep": _cmd_grep,
-        "head": _cmd_head,
-        "tail": _cmd_tail,
-        "wc": _cmd_wc,
-        "tee": _cmd_tee,
-        "sort": _cmd_sort,
-        "uniq": _cmd_uniq,
-        "less": _cmd_less,
-        "echo": _cmd_echo,
         "read": _cmd_read,
-        "printf": _cmd_printf,
-        "dirname": _cmd_dirname,
-        "basename": _cmd_basename,
-        "yes": _cmd_yes,
-        "find": _cmd_find,
-        "xargs": _cmd_xargs,
-        "cut": _cmd_cut,
-        "tr": _cmd_tr,
         "wm": _cmd_wm,
         "win": _cmd_wm,
         "render": _cmd_render,
-        "pbcopy": _cmd_pbcopy,
-        "pbpaste": _cmd_pbpaste,
-        "remember": _cmd_remember,
-        "recall": _cmd_recall,
         "protect": _cmd_protect,
         "unprotect": _cmd_unprotect,
         "boot": _cmd_boot,
@@ -4938,6 +5163,17 @@ nl: db 10
         _kernel_logger = _logging.getLogger("slo.kernel")
         _prev_propagate = _kernel_logger.propagate
         _kernel_logger.propagate = False
+
+        # Auto-start API before boot
+        api = self.os.api
+        if not api.is_running:
+            with self.console.spinner("Starting API server") as s:
+                result = api.start()
+                if result.get("ok"):
+                    s.ok("API server ready")
+                else:
+                    s.fail(f"API start failed: {result.get('error', 'unknown')}")
+
         boot_log, api_status = self.os.boot()
         _kernel_logger.propagate = _prev_propagate
 
@@ -4947,7 +5183,7 @@ nl: db 10
             model = api_status.get("model_id", "unknown") or "unknown"
             self._status("ok", f"API — {model}")
         else:
-            self._status("error", "API not connected — use 'api start' to launch")
+            self._status("error", "API not connected")
         self._audit.startup()
 
         def _graceful_shutdown(signum, frame):
@@ -5011,15 +5247,24 @@ nl: db 10
                     cmd = parts[0].lower()
                     args_str = parts[1] if len(parts) > 1 else ""
                     handler = self.COMMANDS.get(cmd)
-                    if handler:
+                    ext_mod = self._ext_cmds.get(cmd) if handler is None else None
+                    if handler or ext_mod:
                         if not self._check_permission(cmd, args_str, interactive=True):
                             self._last_exit_code = 126
                             self._audit.command(line, cmd, args_str, 126, elapsed_ms=0, expanded=expanded)
                             continue
                         t0 = _time.time() if should_time else None
                         try:
-                            handler(self, args_str)
-                            self._last_exit_code = 0
+                            if ext_mod:
+                                from .console import Console as _Console
+                                c = _Console(self.io, has_readline=_HAS_READLINE)
+                                self._last_exit_code = ext_mod.run(
+                                    [cmd] + (args_str.split() if args_str else []),
+                                    c, self.cmds, self._env,
+                                )
+                            else:
+                                handler(self, args_str)
+                                self._last_exit_code = 0
                         except SystemExit as e:
                             self._last_exit_code = e.code if isinstance(e.code, int) else 1
                         except Exception as e:

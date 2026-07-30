@@ -434,21 +434,17 @@ class SloNetChatProvider:
 
         # Apply quantization if requested
         if quantize:
-            from domains.infrastructure.quantization import QuantEngine, walk_slo_linears
+            from domains.infrastructure.quantization import QuantEngine, walk_slo_linears, TensorInfo
             from pathlib import Path as PathlibPath
 
             slnc_path_obj = PathlibPath(slnc_path)
+            quant_npz_path = slnc_path_obj.with_suffix(slnc_path_obj.suffix + ".quant.npz")
             quant_meta_path = slnc_path_obj.with_suffix(slnc_path_obj.suffix + ".quant.json")
 
-            # Get SloLinear layers via walk_slo_linears (not named_modules,
-            # which misses layers stored in plain Python list attributes)
             linear_map = walk_slo_linears(model)
             param_names = dict(model.named_parameters())
 
             # Build a reverse lookup: parameter name → linear module name
-            # named_parameters() uses HuggingFace naming (q_proj), while
-            # walk_slo_linears uses SloNet naming (W_q). Match via the
-            # actual module objects.
             param_to_module = {}
             for mod_name, module in linear_map.items():
                 for pname, param in param_names.items():
@@ -456,13 +452,29 @@ class SloNetChatProvider:
                         param_to_module[pname] = mod_name
                         break
 
-            # Try loading existing quant metadata sidecar
-            if quant_meta_path.exists():
-                engine = QuantEngine(
-                    bits=quant_bits,
-                    mode=quant_mode,
-                    clip_percentile=quant_clip,
+            engine = QuantEngine(
+                bits=quant_bits,
+                mode=quant_mode,
+                clip_percentile=quant_clip,
+            )
+
+            # Priority 1: pre-quantized weight arrays (.npz) — fastest load
+            if quant_npz_path.exists():
+                tensor_infos = engine.load_weights(str(quant_npz_path))
+                quantized_count = 0
+                for mod_name, module in linear_map.items():
+                    info = tensor_infos.get(mod_name)
+                    if info is not None and info.is_quantized:
+                        module.set_quantized_weight(info)
+                        quantized_count += 1
+                logger.info(
+                    "SloNetChatProvider.from_slnc: loaded pre-quantized weights (%d tensors) from %s",
+                    quantized_count, quant_npz_path,
+                    extra={"tag": "INF"},
                 )
+
+            # Priority 2: metadata-only (.json) — re-encode from float32
+            elif quant_meta_path.exists():
                 engine.load_metadata(str(quant_meta_path))
                 logger.info(
                     "SloNetChatProvider.from_slnc: loaded quant metadata (%d tensors) from %s",
@@ -471,6 +483,7 @@ class SloNetChatProvider:
                 )
 
                 quantized_count = 0
+                tensor_infos = {}
                 for pname, param in param_names.items():
                     if pname not in param_to_module:
                         continue
@@ -481,26 +494,33 @@ class SloNetChatProvider:
                             pname, arr, meta.scale, meta.zero_point,
                         )
                         if info.is_quantized:
-                            linear_map[param_to_module[pname]].set_quantized_weight(info)
+                            mod_name = param_to_module[pname]
+                            linear_map[mod_name].set_quantized_weight(info)
+                            tensor_infos[mod_name] = info
                             quantized_count += 1
-            else:
-                engine = QuantEngine(
-                    bits=quant_bits,
-                    mode=quant_mode,
-                    clip_percentile=quant_clip,
-                )
 
+                # Save pre-quantized arrays for future fast loads
+                if tensor_infos:
+                    engine.save_weights(str(quant_npz_path), tensor_infos)
+
+            # Priority 3: fresh quantization
+            else:
                 quantized_count = 0
+                tensor_infos = {}
                 for pname, param in param_names.items():
                     if pname not in param_to_module:
                         continue
                     arr = param.data.copy()
                     info = engine.quantize(pname, arr)
                     if info.is_quantized:
-                        linear_map[param_to_module[pname]].set_quantized_weight(info)
+                        mod_name = param_to_module[pname]
+                        linear_map[mod_name].set_quantized_weight(info)
+                        tensor_infos[mod_name] = info
                         quantized_count += 1
 
                 engine.save_metadata(str(quant_meta_path))
+                if tensor_infos:
+                    engine.save_weights(str(quant_npz_path), tensor_infos)
 
             instance._quant_engine = engine
             summary = engine.summary()

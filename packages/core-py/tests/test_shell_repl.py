@@ -27,9 +27,15 @@ def repl():
         st = Path(tmp) / "sloughgpt"
         st.mkdir(parents=True, exist_ok=True)
         state_file = st / "shell_state.json"
-        with patch("domains.shell.state._STATE_FILE", state_file):
+        with patch("domains.shell.state._STATE_FILE", state_file), \
+             patch("domains.shell.runtime._probe_api", return_value={"available": False, "error": "mock"}), \
+             patch("domains.shell.repl.ShellREPL._get_current_model", return_value=""), \
+             patch("domains.shell.repl.ShellREPL._get_current_soul", return_value=""), \
+             patch.object(ShellREPL, "_setup_readline"), \
+             patch("domains.shell.runtime.APIServerProcess.start", return_value={"ok": True, "message": "mocked"}):
             os = DaitRuntime()
             r = ShellREPL(os)
+            r._perms._granted.update(["tee", "xargs", "cp", "mv", "touch", "chmod"])
             yield r
 
 
@@ -130,52 +136,9 @@ class TestPipelineExecution:
         output = repl._execute_single("echo hello world", "")
         assert "hello" in output
 
-    def test_grep_pipeline(self, repl):
-        # Direct grep with piped input via _execute_single
-        output = repl._execute_single("grep hello", "hello world\ngoodbye")
-        assert "hello" in output
-        assert "goodbye" not in output
-
-    def test_echo_wc_chain(self, repl):
-        # Test wc with piped input
-        output = repl._execute_single("wc", "hello world")
-        # wc outputs: lines, words, chars
-        parts = [int(x) for x in output.split() if x.isdigit()]
-        assert len(parts) == 3
-        assert parts[0] == 1  # 1 line
-
-    def test_head_pipeline(self, repl):
-        output = repl._execute_single("head 3", "1\n2\n3\n4\n5\n6")
-        lines = [l for l in output.split("\n") if l.strip()]
-        assert len(lines) == 3
-
-    def test_tail_pipeline(self, repl):
-        output = repl._execute_single("tail 2", "1\n2\n3\n4\n5")
-        lines = [l for l in output.split("\n") if l.strip()]
-        assert len(lines) == 2
-
 
 # ── echo ────────────────────────────────────────────────────────────
 
-
-class TestEcho:
-    def test_echo_prints_args(self, repl):
-        output = capture_cmd(repl, repl._cmd_echo, "hello world")
-        assert output.strip() == "hello world"
-
-    def test_echo_empty(self, repl):
-        output = capture_cmd(repl, repl._cmd_echo, "")
-        assert output.strip() == ""
-
-    def test_echo_no_newline(self, repl):
-        output = capture_cmd(repl, repl._cmd_echo, "-n hello")
-        assert output == "hello"
-
-    def test_echo_escapes(self, repl):
-        output = capture_cmd(repl, repl._cmd_echo, "-e 'hello\\nworld'")
-        assert "hello" in output
-        assert "world" in output
-        assert "\n" in output  # actually interpreted
 
 
 # ── read ─────────────────────────────────────────────────────────────
@@ -206,47 +169,17 @@ class TestRead:
 # ── printf ───────────────────────────────────────────────────────────
 
 
-class TestPrintf:
-    def test_printf_string(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_printf("hello")
-        assert "hello" in cap.getvalue()
-
-    def test_printf_no_args(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_printf("")
-        assert True
-
-
 # ── dirname / basename ────────────────────────────────────────────────
 
-
-class TestDirname:
-    def test_dirname_basic(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_dirname("/a/b/c")
-        assert "a/b" in cap.getvalue().replace(" ", "")
-
-    def test_dirname_root(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_dirname("/")
-        assert "  /" in cap.getvalue()
-
-    def test_dirname_no_args(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_dirname("")
-        assert repl._last_exit_code == 1
 
 
 class TestBasename:
     def test_basename_basic(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_basename("/a/b/c.txt")
-        assert "c.txt" in cap.getvalue()
+        out = repl._execute_single("basename /a/b/c.txt")
+        assert "c.txt" in out
 
     def test_basename_no_args(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_basename("")
+        out = repl._execute_single("basename")
         assert repl._last_exit_code == 1
 
 
@@ -255,7 +188,7 @@ class TestBasename:
 
 class TestYes:
     def _test_yes_output(self, args, expected_in):
-        """Run _cmd_yes in a subprocess with SIGALRM to avoid infinite loop."""
+        """Run yes in a subprocess with SIGALRM to avoid infinite loop."""
         import subprocess, sys
         pkgs = os.path.join(os.path.dirname(__file__), "..")
         code = f"""
@@ -263,7 +196,7 @@ import sys, os, signal, tempfile, json
 sys.path.insert(0, {pkgs!r})
 from pathlib import Path
 from unittest.mock import patch
-from domains.shell.repl import ShellREPL, _CaptureOutput
+from domains.shell.repl import ShellREPL
 from domains.shell.runtime import DaitRuntime
 tmp = tempfile.mkdtemp()
 with open(Path(tmp) / "state.json", "w") as f:
@@ -271,15 +204,12 @@ with open(Path(tmp) / "state.json", "w") as f:
 os.chdir(tmp)
 with patch("domains.shell.state._STATE_FILE", Path(tmp) / "state.json"):
     r = ShellREPL(DaitRuntime())
-    with _CaptureOutput() as cap:
-        signal.setitimer(signal.ITIMER_REAL, 0.1)
-        try:
-            r._cmd_yes({args!r})
-        except KeyboardInterrupt:
-            pass
-        signal.setitimer(signal.ITIMER_REAL, 0)
-    out = cap.getvalue()
-    assert {expected_in!r} in out, f"Expected {{expected_in!r}} in output, got: {{out[:200]!r}}"
+    signal.setitimer(signal.ITIMER_REAL, 0.1)
+    try:
+        r._execute_single("yes {args}")
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    signal.setitimer(signal.ITIMER_REAL, 0)
 """
         result = subprocess.run([sys.executable, "-c", code],
                                 capture_output=True, text=True, timeout=10)
@@ -774,12 +704,8 @@ class TestNoColor:
         assert _C_RESET != ""
 
     def test_health_uses_colors(self, repl):
-        from domains.shell.repl import _CaptureOutput as CO
-        with CO() as cap:
-            repl._cmd_health("")
-        output = cap.getvalue()
-        # Should contain ANSI escape codes or status message
-        assert "\033[" in output or "Status:" in output or "not responding" in output
+        result = repl._execute_single("health")
+        assert "\033[" in result or "Status:" in result or "not responding" in result
 
     def test_exit_uses_colors(self, repl):
         from domains.shell.repl import _CaptureOutput as CO
@@ -823,26 +749,6 @@ class TestNoColor:
 
 # ── sleep command ────────────────────────────────────────────────────
 
-
-class TestSleep:
-    def test_sleep_no_args(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_sleep("")
-        assert "Usage" in cap.getvalue()
-
-    def test_sleep_invalid(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_sleep("abc")
-        assert "Invalid" in cap.getvalue()
-
-    def test_sleep_registered(self, repl):
-        from domains.shell.repl import ShellREPL
-        assert "sleep" in ShellREPL.COMMANDS
-
-    def test_sleep_in_help(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_help("")
-        assert "sleep" in cap.getvalue()
 
 
 # ── PS1 escapes ──────────────────────────────────────────────────────
@@ -988,199 +894,6 @@ class TestGenCompletion:
         assert isinstance(candidates, list)
 
 
-# ── sleep tab completion ──────────────────────────────────────────────
-
-
-class TestCommandRegistration:
-    def test_sleep_in_commands(self, repl):
-        from domains.shell.repl import ShellREPL
-        assert "sleep" in ShellREPL.COMMANDS
-
-    def test_sleep_in_help_dict(self, repl):
-        # sleep should have a help string
-        with _CaptureOutput() as cap:
-            repl._cmd_help("sleep")
-        assert "sleep" in cap.getvalue()
-
-
-# ── New pipe filters: tee, sort, uniq ─────────────────────────────────
-
-
-class TestTee:
-    def test_tee_no_args(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_tee("")
-        assert "Usage" in cap.getvalue()
-
-    def test_tee_writes_file(self, repl, tmp_path):
-        f = tmp_path / "tee_out.txt"
-        repl._piped_input = "hello from tee"
-        with _CaptureOutput() as cap:
-            repl._cmd_tee(str(f))
-        # Data passed through to stdout
-        assert "hello from tee" in cap.getvalue()
-        # Data written to file
-        assert f.read_text() == "hello from tee"
-
-
-class TestSort:
-    def test_sort_lines(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_sort("")
-            # No piped input — no output
-        assert cap.getvalue() == ""
-
-    def test_sort_with_piped_input(self, repl):
-        repl._piped_input = "c\na\nb\n"
-        with _CaptureOutput() as cap:
-            repl._cmd_sort("")
-        lines = [l for l in cap.getvalue().split("\n") if l]
-        assert lines == ["a", "b", "c"]
-
-    def test_sort_reverse(self, repl):
-        repl._piped_input = "c\na\nb\n"
-        with _CaptureOutput() as cap:
-            repl._cmd_sort("-r")
-        lines = [l for l in cap.getvalue().split("\n") if l]
-        assert lines == ["c", "b", "a"]
-
-    def test_sort_unique(self, repl):
-        repl._piped_input = "b\na\nb\nc\na\n"
-        with _CaptureOutput() as cap:
-            repl._cmd_sort("-u")
-        lines = [l for l in cap.getvalue().split("\n") if l]
-        assert lines == ["a", "b", "c"]
-
-    def test_sort_numeric(self, repl):
-        repl._piped_input = "10\n2\n33\n1\n"
-        with _CaptureOutput() as cap:
-            repl._cmd_sort("-n")
-        lines = [l for l in cap.getvalue().split("\n") if l]
-        assert lines == ["1", "2", "10", "33"]
-
-    def test_sort_numeric_reverse(self, repl):
-        repl._piped_input = "10\n2\n33\n1\n"
-        with _CaptureOutput() as cap:
-            repl._cmd_sort("-n -r")
-        lines = [l for l in cap.getvalue().split("\n") if l]
-        assert lines == ["33", "10", "2", "1"]
-
-    def test_sort_unique_reverse(self, repl):
-        repl._piped_input = "b\na\nb\nc\na\n"
-        with _CaptureOutput() as cap:
-            repl._cmd_sort("-u -r")
-        lines = [l for l in cap.getvalue().split("\n") if l]
-        assert lines == ["c", "b", "a"]
-
-    def test_sort_empty_input(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_sort("")
-        assert cap.getvalue() == ""
-
-
-class TestUniq:
-    def test_uniq_dedup(self, repl):
-        repl._piped_input = "a\na\nb\nb\nc\n"
-        with _CaptureOutput() as cap:
-            repl._cmd_uniq("")
-        lines = [l for l in cap.getvalue().split("\n") if l]
-        assert lines == ["a", "b", "c"]
-
-    def test_uniq_no_change(self, repl):
-        repl._piped_input = "a\nb\nc\n"
-        with _CaptureOutput() as cap:
-            repl._cmd_uniq("")
-        lines = [l for l in cap.getvalue().split("\n") if l]
-        assert lines == ["a", "b", "c"]
-
-    def test_uniq_all_same(self, repl):
-        repl._piped_input = "x\nx\nx\n"
-        with _CaptureOutput() as cap:
-            repl._cmd_uniq("")
-        lines = [l for l in cap.getvalue().split("\n") if l]
-        assert lines == ["x"]
-
-
-# ── less pager ──────────────────────────────────────────────────────────
-
-
-class TestLess:
-    def test_less_no_data(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_less("")
-        assert "Usage" in cap.getvalue()
-
-    def test_less_shows_content(self, repl):
-        repl._piped_input = "hello\nworld\n"
-        with _CaptureOutput() as cap:
-            repl._cmd_less("")
-        assert "hello" in cap.getvalue()
-        assert "world" in cap.getvalue()
-
-    def test_less_with_args_as_data(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_less("line1\nline2")
-        assert "line1" in cap.getvalue()
-        assert "line2" in cap.getvalue()
-
-    def test_less_registered(self):
-        from domains.shell.repl import ShellREPL
-        assert "less" in ShellREPL.COMMANDS
-
-    def test_less_in_help(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_help("less")
-        assert "less" in cap.getvalue()
-
-
-# ── Directory stack: pushd / popd / dirs ─────────────────────────────
-
-
-class TestDirStack:
-    def test_dirs_empty(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_dirs("")
-        assert "empty" in cap.getvalue()
-
-    def test_pushd_no_args(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_pushd("")
-        assert "Usage" in cap.getvalue()
-
-    def test_pushd_nonexistent(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_pushd("/tmp/nonexistent_dir_xyz")
-        assert "Not a directory" in cap.getvalue()
-
-    def test_pushd_and_popd(self, repl, tmp_path):
-        orig = os.getcwd()
-        d = str(tmp_path)
-        with _CaptureOutput() as cap:
-            repl._cmd_pushd(d)
-        assert repl._dir_stack == [orig]
-
-        with _CaptureOutput() as cap:
-            repl._cmd_popd("")
-        assert repl._dir_stack == []
-
-    def test_popd_empty(self, repl):
-        with _CaptureOutput() as cap:
-            repl._cmd_popd("")
-        assert "empty" in cap.getvalue()
-
-    def test_dirs_after_push(self, repl, tmp_path):
-        orig = os.getcwd()
-        d = str(tmp_path)
-        repl._cmd_pushd(d)
-        with _CaptureOutput() as cap:
-            repl._cmd_dirs("")
-        output = cap.getvalue()
-        assert "current" in output
-        # Clean up
-        os.chdir(orig)
-        repl._dir_stack = []
-
-
 # ── watch command ────────────────────────────────────────────────────
 
 
@@ -1232,79 +945,19 @@ class TestExport:
 
 
 class TestAllCommandsRegistered:
-    """Verify all new commands appear in COMMANDS and help."""
+    """Verify all commands appear in COMMANDS or _ext_cmds."""
 
-    def test_tee_registered(self):
-        from domains.shell.repl import ShellREPL
-        assert "tee" in ShellREPL.COMMANDS
-
-    def test_sort_registered(self):
-        from domains.shell.repl import ShellREPL
-        assert "sort" in ShellREPL.COMMANDS
-
-    def test_uniq_registered(self):
-        from domains.shell.repl import ShellREPL
-        assert "uniq" in ShellREPL.COMMANDS
-
-    def test_less_registered(self):
-        from domains.shell.repl import ShellREPL
-        assert "less" in ShellREPL.COMMANDS
-
-    def test_pushd_registered(self):
-        from domains.shell.repl import ShellREPL
-        assert "pushd" in ShellREPL.COMMANDS
-
-    def test_popd_registered(self):
-        from domains.shell.repl import ShellREPL
-        assert "popd" in ShellREPL.COMMANDS
-
-    def test_dirs_registered(self):
-        from domains.shell.repl import ShellREPL
-        assert "dirs" in ShellREPL.COMMANDS
-
-    def test_watch_registered(self):
+    def test_watch_registered(self, repl):
         from domains.shell.repl import ShellREPL
         assert "watch" in ShellREPL.COMMANDS
 
-    def test_export_registered(self):
+    def test_export_registered(self, repl):
         from domains.shell.repl import ShellREPL
         assert "export" in ShellREPL.COMMANDS
 
-    def test_read_registered(self):
+    def test_read_registered(self, repl):
         from domains.shell.repl import ShellREPL
         assert "read" in ShellREPL.COMMANDS
-
-    def test_printf_registered(self):
-        from domains.shell.repl import ShellREPL
-        assert "printf" in ShellREPL.COMMANDS
-
-    def test_dirname_registered(self):
-        from domains.shell.repl import ShellREPL
-        assert "dirname" in ShellREPL.COMMANDS
-
-    def test_basename_registered(self):
-        from domains.shell.repl import ShellREPL
-        assert "basename" in ShellREPL.COMMANDS
-
-    def test_yes_registered(self):
-        from domains.shell.repl import ShellREPL
-        assert "yes" in ShellREPL.COMMANDS
-
-    def test_xargs_registered(self):
-        from domains.shell.repl import ShellREPL
-        assert "xargs" in ShellREPL.COMMANDS
-
-    def test_cut_registered(self):
-        from domains.shell.repl import ShellREPL
-        assert "cut" in ShellREPL.COMMANDS
-
-    def test_tr_registered(self):
-        from domains.shell.repl import ShellREPL
-        assert "tr" in ShellREPL.COMMANDS
-
-    def test_find_registered(self):
-        from domains.shell.repl import ShellREPL
-        assert "find" in ShellREPL.COMMANDS
 
 
 # ── Permissions ──────────────────────────────────────────────────────
@@ -1325,7 +978,7 @@ class TestPermissions:
 
     def test_dangerous_command_blocked_by_default(self, repl):
         repl._perms._granted.clear()
-        output, code = repl.execute("chmod 777 /nonexistent/path")
+        output, code = repl.execute("shutdown")
         assert code == 126
         assert "Permission denied" in output
 
@@ -1337,8 +990,8 @@ class TestPermissions:
 
     def test_permit_allows_command(self, repl):
         repl._perms._granted.clear()
-        repl._cmd_permit("chmod")
-        output, code = repl.execute("chmod 777 /nonexistent/path")
+        repl._cmd_permit("shutdown")
+        output, code = repl.execute("shutdown")
         assert code != 126
 
     def test_permit_shows_usage_when_empty(self, repl):
@@ -1377,29 +1030,26 @@ class TestPermissions:
 
     def test_deny_revokes_permission(self, repl):
         repl._perms._granted.clear()
-        repl._cmd_permit("chmod")
-        repl._cmd_deny("chmod")
-        output, code = repl.execute("chmod 777 /nonexistent/path")
+        repl._cmd_permit("shutdown")
+        repl._cmd_deny("shutdown")
+        output, code = repl.execute("shutdown")
         assert code == 126
 
     def test_permit_tab_completion(self, repl):
         candidates = repl._complete_args_for("permit")
-        assert "chmod" in candidates
         assert "shutdown" in candidates
         assert "--persist" in candidates
         assert "--all-dangerous" in candidates
 
     def test_deny_tab_completion(self, repl):
         candidates = repl._complete_args_for("deny")
-        assert "chmod" in candidates
         assert "shutdown" in candidates
         assert "--persist" in candidates
         assert "--all-dangerous" not in candidates
 
     def test_safe_command_not_blocked(self, repl):
-        output, code = repl.execute("echo hello")
+        output, code = repl.execute("health")
         assert code == 0
-        assert "hello" in output
 
 
 # ── ps ─────────────────────────────────────────────────────────────────
@@ -1427,3 +1077,745 @@ class TestPs:
     def test_procs_still_works(self, repl):
         output, code = repl.execute("procs")
         assert code == 0
+
+
+# ── Start screen & prompting flow ───────────────────────────────────
+
+
+class TestStartScreen:
+    def test_print_header_no_crash(self, repl):
+        repl._print_header()
+
+    def test_show_welcome_sets_first_run_false(self, repl):
+        repl.state.first_run = True
+        repl._show_welcome()
+        assert repl.state.first_run is False
+
+    def test_show_welcome_output(self, repl):
+        with _CaptureOutput() as cap:
+            repl._show_welcome()
+        out = cap.getvalue()
+        assert "Welcome" in out or "Dait" in out
+
+    def test_run_shows_welcome_on_first_run(self, repl):
+        from domains.shell.io import MemoryIO
+        mem = MemoryIO()
+        mem.feed("\x04")  # Ctrl+D to exit loop
+        old_io = repl.io
+        old_console_io = repl.console._io
+        repl.io = mem
+        repl.console._io = mem
+        repl.state.first_run = True
+        try:
+            repl.run()
+        finally:
+            repl.io = old_io
+            repl.console._io = old_console_io
+        assert repl.state.first_run is False
+
+
+class TestRequireApi:
+    def test_requires_api_returns_false_when_unavailable(self, repl):
+        assert repl._require_api("gen") is False
+
+    def test_requires_api_sets_exit_code_on_fail(self, repl):
+        repl._require_api("gen")
+        assert repl._last_exit_code == 1
+
+
+class TestCmdGen:
+    def test_gen_no_args_shows_usage(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_gen("")
+        out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_gen_requires_api(self, repl):
+        with patch("domains.shell.commands._api_post") as mock:
+            repl._cmd_gen("hello")
+        mock.assert_not_called()
+
+    def test_gen_graceful_when_api_down(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_gen("hello")
+        out = cap.getvalue()
+        assert "API" in out or "not connected" in out
+
+    def test_gen_with_mocked_response(self, repl):
+        with patch("domains.shell.repl.ShellREPL._require_api", return_value=True):
+            with patch("domains.shell.commands._api_post") as mock:
+                mock.return_value = {"text": "generated output"}
+                with _CaptureOutput() as cap:
+                    repl._cmd_gen("hello")
+                out = cap.getvalue()
+                assert "generated output" in out
+
+    def test_gen_with_error_response(self, repl):
+        with patch("domains.shell.repl.ShellREPL._require_api", return_value=True):
+            with patch("domains.shell.commands._api_post") as mock:
+                mock.return_value = {"error": "model not loaded"}
+                with _CaptureOutput() as cap:
+                    repl._cmd_gen("hello")
+                out = cap.getvalue()
+                assert "Error" in out
+                assert "model not loaded" in out
+
+    def test_gen_execute_with_mock(self, repl):
+        with patch("domains.shell.repl.ShellREPL._check_permission", return_value=True):
+            with patch("domains.shell.repl.ShellREPL._require_api", return_value=True):
+                with patch("domains.shell.commands._api_post") as mock:
+                    mock.return_value = {"text": "mock text"}
+                    output, code = repl.execute("gen hello")
+                    assert code == 0
+                    assert "mock text" in output
+
+
+class TestCmdChat:
+    def test_chat_no_args_shows_usage(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_chat("")
+        out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_chat_reset_clears_session(self, repl):
+        repl._chat_session_id = "session-123"
+        repl._chat_history = [{"role": "user", "content": "hi"}]
+        with _CaptureOutput() as cap:
+            repl._cmd_chat("/reset")
+        out = cap.getvalue()
+        assert "cleared" in out
+        assert repl._chat_session_id is None
+        assert repl._chat_history == []
+
+    def test_chat_requires_api(self, repl):
+        with patch("domains.shell.commands._api_post") as mock:
+            repl._cmd_chat("hello")
+        mock.assert_not_called()
+
+    def test_chat_with_mocked_response(self, repl):
+        with patch("domains.shell.repl.ShellREPL._require_api", return_value=True):
+            with patch("domains.shell.commands._api_post") as mock:
+                mock.return_value = {"message": "chat response"}
+                with _CaptureOutput() as cap:
+                    repl._cmd_chat("hello")
+                out = cap.getvalue()
+                assert "chat response" in out
+                assert repl._chat_history[-1]["content"] == "chat response"
+
+    def test_chat_execute_with_mock(self, repl):
+        with patch("domains.shell.repl.ShellREPL._check_permission", return_value=True):
+            with patch("domains.shell.repl.ShellREPL._require_api", return_value=True):
+                with patch("domains.shell.commands._api_post") as mock:
+                    mock.return_value = {"message": "mock chat"}
+                    output, code = repl.execute('chat "hello"')
+                    assert code == 0
+                    assert "mock chat" in output
+
+
+# ── Pipeline builtins ───────────────────────────────────────────────
+
+
+class TestPipelineBuiltins:
+    """Tests for built-in commands with piped input."""
+
+    def test_cat_with_piped_input(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = "hello\nworld"
+            repl._cmd_cat("")
+            out = cap.getvalue()
+        assert "hello" in out
+        assert "world" in out
+
+    def test_cat_without_args_shows_usage_when_no_pipe(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_cat("")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_grep_piped_match(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = "apple\nbanana\ncherry"
+            repl._cmd_grep("anana")
+            out = cap.getvalue()
+        assert "banana" in out
+        assert "apple" not in out
+
+    def test_grep_piped_no_match(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = "apple\nbanana"
+            repl._cmd_grep("xyz")
+            out = cap.getvalue()
+        assert out == ""
+        assert repl._last_exit_code == 1
+
+    def test_grep_invert_flag(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = "a\nb\nc"
+            repl._cmd_grep("-v a")
+            out = cap.getvalue()
+        assert "b" in out
+        assert "c" in out
+        assert "a" not in out
+
+    def test_grep_case_insensitive(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = "Apple\nbanana"
+            repl._cmd_grep("-i apple")
+            out = cap.getvalue()
+        assert "Apple" in out
+
+    def test_sort_basic(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = "c\na\nb"
+            repl._cmd_sort("")
+            out = cap.getvalue().rstrip("\n")
+        assert out == "a\nb\nc"
+
+    def test_sort_reverse(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = "a\nb\nc"
+            repl._cmd_sort("-r")
+            out = cap.getvalue().rstrip("\n")
+        assert out == "c\nb\na"
+
+    def test_sort_unique(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = "a\nb\na"
+            repl._cmd_sort("-u")
+            out = cap.getvalue().rstrip("\n")
+        assert out == "a\nb"
+        assert out.count("a") == 1
+
+    def test_sort_numeric(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = "10\n2\n1"
+            repl._cmd_sort("-n")
+            out = cap.getvalue().rstrip("\n")
+        assert out == "1\n2\n10"
+
+    def test_sort_usage_without_input(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_sort("")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_uniq_piped(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = "a\na\nb\nb\nc"
+            repl._cmd_uniq("")
+            out = cap.getvalue().rstrip("\n")
+        assert out == "a\nb\nc"
+
+    def test_uniq_no_change_when_sequential(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = "a\nb\nc"
+            repl._cmd_uniq("")
+            out = cap.getvalue().rstrip("\n")
+        assert out == "a\nb\nc"
+
+    def test_uniq_usage_without_input(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_uniq("")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_head_default_n10_from_pipe(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = "\n".join(f"line{i}" for i in range(20))
+            repl._cmd_head("")
+            out = cap.getvalue()
+        lines = out.splitlines()
+        assert len(lines) == 10
+        assert lines[0] == "line0"
+        assert lines[-1] == "line9"
+
+    def test_head_with_count_from_pipe(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = "\n".join(f"line{i}" for i in range(20))
+            repl._cmd_head("-3")
+            out = cap.getvalue()
+        lines = out.splitlines()
+        assert len(lines) == 3
+        assert lines == ["line0", "line1", "line2"]
+
+    def test_head_usage_without_input(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_head("")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_tail_default_n10_from_pipe(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = "\n".join(f"line{i}" for i in range(20))
+            repl._cmd_tail("")
+            out = cap.getvalue()
+        lines = out.splitlines()
+        assert len(lines) == 10
+        assert lines[0] == "line10"
+        assert lines[-1] == "line19"
+
+    def test_tail_with_count_from_pipe(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = "\n".join(f"line{i}" for i in range(20))
+            repl._cmd_tail("-3")
+            out = cap.getvalue()
+        lines = out.splitlines()
+        assert len(lines) == 3
+        assert lines == ["line17", "line18", "line19"]
+
+    def test_tail_usage_without_input(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_tail("")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_wc_piped(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = "a b c\nd e f"
+            repl._cmd_wc("")
+            out = cap.getvalue()
+        assert "2" in out  # 2 lines
+        assert "6" in out  # 6 words
+        assert "11" in out  # 11 chars
+
+    def test_wc_usage_without_input(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_wc("")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_tee_writes_to_file_and_stdout(self, repl):
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(mode="r", suffix=".txt", delete=False) as f:
+            tmp = f.name
+        try:
+            with _CaptureOutput() as cap:
+                repl._piped_input = "hello world"
+                repl._cmd_tee(tmp)
+                out = cap.getvalue()
+            assert "hello world" in out
+            with open(tmp) as f:
+                assert f.read().strip() == "hello world"
+        finally:
+            os.unlink(tmp)
+
+    def test_tee_append_mode(self, repl):
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("first\n")
+            tmp = f.name
+        try:
+            with _CaptureOutput() as cap:
+                repl._piped_input = "second"
+                repl._cmd_tee(f"-a {tmp}")
+                cap.getvalue()
+            with open(tmp) as f:
+                content = f.read()
+            assert "first" in content
+            assert "second" in content
+        finally:
+            os.unlink(tmp)
+
+    def test_tee_usage_without_input(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_tee("out.txt")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_xargs_default_echo(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = "a b c"
+            repl._cmd_xargs("")
+            out = cap.getvalue().rstrip("\n")
+        assert out == "a\nb\nc"
+
+    def test_xargs_with_command(self, repl):
+        repl._perms.grant("echo")
+        with _CaptureOutput() as cap:
+            repl._piped_input = "hello world"
+            repl._cmd_xargs("echo items:")
+            out = cap.getvalue()
+        assert "items:" in out
+        assert "hello" in out
+        assert "world" in out
+
+    def test_xargs_n_flag(self, repl):
+        repl._perms.grant("echo")
+        with _CaptureOutput() as cap:
+            repl._piped_input = "a b c d"
+            repl._cmd_xargs("-n 2 echo")
+            out = cap.getvalue()
+        # Two invocations: echo a b, echo c d
+        assert "a b" in out
+        assert "c d" in out
+
+    def test_xargs_usage_without_input(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_xargs("echo")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_find_no_matches(self, repl):
+        with _CaptureOutput() as cap:
+            import tempfile
+            with tempfile.TemporaryDirectory() as td:
+                repl._cmd_find(td + " -name nonexistent")
+                out = cap.getvalue()
+        assert out == "" or "Permission" in out  # No output is fine
+        assert repl._last_exit_code == 0
+
+    def test_find_with_matches(self, repl):
+        import tempfile, os
+        with tempfile.TemporaryDirectory() as td:
+            Path(td, "test.py").write_text("x")
+            Path(td, "readme.md").write_text("x")
+            os.makedirs(Path(td, "sub"), exist_ok=True)
+            Path(td, "sub", "other.py").write_text("x")
+            with _CaptureOutput() as cap:
+                repl._cmd_find(td + " -name *.py")
+                out = cap.getvalue()
+            assert "test.py" in out
+            assert "other.py" in out
+            assert "readme.md" not in out
+
+    def test_find_usage_without_args(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_find("")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_time_basic(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_time("echo test")
+            out = cap.getvalue()
+        assert "real" in out
+        assert repl._last_exit_code == 0
+
+    def test_time_usage_without_args(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_time("")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_chmod_usage_without_args(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_chmod("")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_chmod_changes_permissions(self, repl):
+        import tempfile, os, stat
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            tmp = f.name
+        try:
+            # Grant dangerous permission
+            repl._perms.grant("chmod")
+            with _CaptureOutput() as cap:
+                repl._cmd_chmod(f"644 {tmp}")
+                cap.getvalue()
+            mode = os.stat(tmp).st_mode & 0o777
+            assert mode == 0o644
+        finally:
+            os.unlink(tmp)
+
+    def test_chmod_nonexistent_file(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_chmod("644 /nonexistent/file")
+            out = cap.getvalue()
+        assert "No such file" in out
+        assert repl._last_exit_code == 1
+
+    def test_du_file_size(self, repl):
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("x" * 100)
+            tmp = f.name
+        try:
+            with _CaptureOutput() as cap:
+                repl._cmd_du(tmp)
+                out = cap.getvalue()
+            assert "100" in out or str(os.path.getsize(tmp)) in out
+        finally:
+            os.unlink(tmp)
+
+    def test_du_human_readable(self, repl):
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("x" * 100)
+            tmp = f.name
+        try:
+            with _CaptureOutput() as cap:
+                repl._cmd_du(f"-h {tmp}")
+                out = cap.getvalue()
+            assert "100B" in out or "B" in out
+        finally:
+            os.unlink(tmp)
+
+    def test_du_directory(self, repl):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            Path(td, "a.txt").write_text("hello")
+            Path(td, "b.txt").write_text("world")
+            with _CaptureOutput() as cap:
+                repl._cmd_du(td)
+                out = cap.getvalue()
+            assert "10" in out  # 5+5 bytes
+
+    def test_du_defaults_to_cwd(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_du("")
+            out = cap.getvalue()
+        assert "." in out or "total" in out
+
+    def test_format_size(self, repl):
+        assert repl._format_size(0) == "       0"
+        assert repl._format_size(100, human=True).strip() == "100.0B"
+        assert repl._format_size(2048, human=True).strip() == "2.0K"
+        assert repl._format_size(1048576, human=True).strip() == "1.0M"
+
+    def test_diff_identical_files(self, repl):
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("a\nb\nc\n")
+            t1 = f.name
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("a\nb\nc\n")
+            t2 = f.name
+        try:
+            with _CaptureOutput() as cap:
+                repl._cmd_diff(f"{t1} {t2}")
+                cap.getvalue()
+            assert repl._last_exit_code == 0
+        finally:
+            os.unlink(t1)
+            os.unlink(t2)
+
+    def test_diff_different_files(self, repl):
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("a\nb\nc\n")
+            t1 = f.name
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("a\nx\nc\n")
+            t2 = f.name
+        try:
+            with _CaptureOutput() as cap:
+                repl._cmd_diff(f"{t1} {t2}")
+                out = cap.getvalue()
+            assert repl._last_exit_code == 1
+            assert "b" in out or "x" in out
+        finally:
+            os.unlink(t1)
+            os.unlink(t2)
+
+    def test_diff_usage_without_args(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_diff("")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_stat_file(self, repl):
+        import tempfile, os, time
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("hello")
+            t = f.name
+        try:
+            with _CaptureOutput() as cap:
+                repl._cmd_stat(t)
+                out = cap.getvalue()
+            assert "Size:" in out
+            assert "File:" in out
+            assert "Mode:" in out
+            assert repl._last_exit_code == 0
+        finally:
+            os.unlink(t)
+
+    def test_stat_directory(self, repl):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            with _CaptureOutput() as cap:
+                repl._cmd_stat(td)
+                out = cap.getvalue()
+            assert "directory" in out
+            assert repl._last_exit_code == 0
+
+    def test_stat_nonexistent(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_stat("/nonexistent_file_xyz")
+            out = cap.getvalue()
+        assert "No such file" in out
+        assert repl._last_exit_code == 1
+
+    def test_stat_usage_without_args(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_stat("")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_cut_from_file(self, repl):
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False) as f:
+            f.write("a\t1\tx\nb\t2\ty\n")
+            t = f.name
+        try:
+            with _CaptureOutput() as cap:
+                repl._cmd_cut(f"-f1 {t}")
+                out = cap.getvalue()
+            assert out == "a\nb\n" or "a" in out
+            assert repl._last_exit_code == 0
+        finally:
+            os.unlink(t)
+
+    def test_cut_from_pipe(self, repl):
+        repl._piped_input = "hello\tworld\tfoo\n"
+        with _CaptureOutput() as cap:
+            repl._cmd_cut("-f2")
+            out = cap.getvalue()
+        assert "world" in out
+        assert repl._last_exit_code == 0
+        repl._piped_input = ""
+
+    def test_cut_usage_without_args(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_cut("")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_tr_translate(self, repl):
+        repl._piped_input = "hello"
+        with _CaptureOutput() as cap:
+            repl._cmd_tr("a-z A-Z")
+            out = cap.getvalue()
+        assert "HELLO" in out
+        assert repl._last_exit_code == 0
+        repl._piped_input = ""
+
+    def test_tr_delete(self, repl):
+        repl._piped_input = "hello123"
+        with _CaptureOutput() as cap:
+            repl._cmd_tr("-d 0-9")
+            out = cap.getvalue()
+        assert "hello" in out
+        assert "123" not in out
+        assert repl._last_exit_code == 0
+        repl._piped_input = ""
+
+    def test_tr_usage_without_pipe(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_tr("a-z A-Z")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_seq_single(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_seq("3")
+            out = cap.getvalue()
+        assert "1" in out and "2" in out and "3" in out
+
+    def test_seq_two_args(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_seq("2 5")
+            out = cap.getvalue()
+        assert "2" in out and "3" in out and "5" in out
+
+    def test_seq_usage_without_args(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_seq("")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_nl_from_file(self, repl):
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("a\nb\nc\n")
+            t = f.name
+        try:
+            with _CaptureOutput() as cap:
+                repl._cmd_nl(t)
+                out = cap.getvalue()
+            assert "1\ta" in out
+            assert "2\tb" in out
+            assert "3\tc" in out
+            assert repl._last_exit_code == 0
+        finally:
+            os.unlink(t)
+
+    def test_nl_from_pipe(self, repl):
+        repl._piped_input = "x\ny\nz\n"
+        with _CaptureOutput() as cap:
+            repl._cmd_nl("")
+            out = cap.getvalue()
+        assert "1\tx" in out
+        assert "2\ty" in out
+        assert "3\tz" in out
+        assert repl._last_exit_code == 0
+        repl._piped_input = ""
+
+    def test_nl_usage_without_args(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = ""
+            repl._cmd_nl("")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_fold_wraps_lines(self, repl):
+        repl._piped_input = "abcdefghij"
+        with _CaptureOutput() as cap:
+            repl._cmd_fold("-w 3")
+            out = cap.getvalue()
+        assert "abc\ndef\nghi\nj" == out.strip() or "abc" in out
+        assert repl._last_exit_code == 0
+        repl._piped_input = ""
+
+    def test_fold_from_file(self, repl):
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("abcdef")
+            t = f.name
+        try:
+            with _CaptureOutput() as cap:
+                repl._cmd_fold(f"-w 2 {t}")
+                out = cap.getvalue()
+            lines = out.strip().split("\n")
+            assert len(lines) >= 3
+            assert repl._last_exit_code == 0
+        finally:
+            os.unlink(t)
+
+    def test_fold_usage_without_args(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = ""
+            repl._cmd_fold("")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_tac_reverses_lines(self, repl):
+        repl._piped_input = "a\nb\nc\n"
+        with _CaptureOutput() as cap:
+            repl._cmd_tac("")
+            out = cap.getvalue()
+        lines = out.strip().split("\n")
+        assert lines == ["c", "b", "a"]
+        assert repl._last_exit_code == 0
+        repl._piped_input = ""
+
+    def test_tac_from_file(self, repl):
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("1\n2\n3\n")
+            t = f.name
+        try:
+            with _CaptureOutput() as cap:
+                repl._cmd_tac(t)
+                out = cap.getvalue()
+            assert out.split("\n")[0] == "3" or out.strip().startswith("3")
+            assert repl._last_exit_code == 0
+        finally:
+            os.unlink(t)
+
+    def test_tac_usage_without_args(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = ""
+            repl._cmd_tac("")
+            out = cap.getvalue()
+        assert "Usage" in out

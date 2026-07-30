@@ -29,12 +29,21 @@ logger = logging.getLogger("slo.quant_core")
 # ── Paths ──────────────────────────────────────────────────────────
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
+
+# Platform-specific shared library extension
+if sys.platform == "darwin":
+    _EXT = ".dylib"
+elif sys.platform == "win32":
+    _EXT = ".dll"
+else:
+    _EXT = ".so"
+
 _SRCS = {
     "matmul_int8": os.path.join(_HERE, "matmul_int8.c"),
     "matmul_int4": os.path.join(_HERE, "matmul_int4.c"),
 }
 _DYLIBS = {
-    name: os.path.join(_HERE, f"{name}.dylib")
+    name: os.path.join(_HERE, f"{name}{_EXT}")
     for name in _SRCS
 }
 
@@ -225,16 +234,14 @@ def _fallback(A: np.ndarray, B: np.ndarray) -> np.ndarray:
 
 
 def _fallback_int4(A: np.ndarray, B_packed: np.ndarray, K: int) -> np.ndarray:
-    """Pure-numpy fallback for int4 matmul: unpack to int8 then matmul."""
+    """Vectorized pure-numpy fallback for int4 matmul."""
+    from ..quantization import _unpack_int4 as _vectorized_unpack_int4
+
     N = B_packed.shape[0]
-    B_unpacked = np.zeros((N, K), dtype=np.int8)
-    for j in range(N):
-        for k in range(K):
-            if k % 2 == 0:
-                nib = int(B_packed[j, k // 2]) & 0x0F
-            else:
-                nib = (int(B_packed[j, k // 2]) >> 4) & 0x0F
-            B_unpacked[j, k] = np.int8((nib ^ 8) - 8)
+    # Vectorized unpack: all rows at once using the shared utility
+    n_total = N * K
+    flat = _vectorized_unpack_int4(B_packed.ravel(), n_total, signed=True)
+    B_unpacked = flat.reshape(N, K).astype(np.int8)
     return _fallback(A, B_unpacked)
 
 

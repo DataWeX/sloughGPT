@@ -78,29 +78,39 @@ def _probe_api(api_url: str, timeout: float = 2.0) -> dict:
         }
 
 
+_shared_proc: subprocess.Popen | None = None
+_shared_lock = threading.Lock()
+_shared_started_at: float = 0.0
+
+
 class APIServerProcess:
-    """Manages the API server as a subprocess (start/stop/status)."""
+    """Manages the API server as a subprocess (start/stop/status).
+
+    The underlying subprocess is shared at the module level so that every
+    DaitRuntime instance sees the same process.  Only the first call to
+    ``start()`` spawns a new process; subsequent calls return immediately.
+    """
 
     def __init__(self, api_url: str = ""):
         self._api_url = api_url or _default_api_url()
-        self._proc: subprocess.Popen | None = None
-        self._lock = threading.Lock()
-        self._started_at: float = 0.0
 
     # ── Public API ──────────────────────────────────────────────────────
 
     def status(self) -> dict:
         """Check API availability and return status dict."""
+        global _shared_started_at
         result = _probe_api(self._api_url)
-        with self._lock:
-            result["running"] = self._proc is not None
-            result["uptime"] = time.time() - self._started_at if self._started_at else 0
+        with _shared_lock:
+            result["running"] = _shared_proc is not None
+            result["uptime"] = time.time() - _shared_started_at if _shared_started_at else 0
         return result
 
     def start(self, timeout: float = 120.0) -> dict:
         """Launch the API server in a subprocess. Blocks until healthy or timeout."""
-        with self._lock:
-            if self._proc is not None:
+        global _shared_proc, _shared_started_at
+
+        with _shared_lock:
+            if _shared_proc is not None:
                 return {"ok": True, "message": "already running"}
 
         repo_root = self._find_repo_root()
@@ -119,14 +129,14 @@ class APIServerProcess:
         except Exception as e:
             return {"ok": False, "error": f"Failed to launch: {e}"}
 
-        with self._lock:
-            self._proc = proc
-            self._started_at = time.time()
+        with _shared_lock:
+            _shared_proc = proc
+            _shared_started_at = time.time()
 
         # Stream stderr to logger so user sees boot progress
         def _log_stderr():
-            if self._proc and self._proc.stderr:
-                for line in self._proc.stderr:
+            if _shared_proc and _shared_proc.stderr:
+                for line in _shared_proc.stderr:
                     logger.info("[api] %s", line.rstrip())
         threading.Thread(target=_log_stderr, daemon=True).start()
 
@@ -140,7 +150,7 @@ class APIServerProcess:
                 return {"ok": True, "message": f"ready ({result.get('model_id', 'unknown')})", "status": result}
             # Spinner feedback
             spin = next(spinner)
-            elapsed = time.time() - self._started_at
+            elapsed = time.time() - _shared_started_at
             msg = f"\r  {spin} waiting for API server ({elapsed:.0f}s / {timeout:.0f}s)"
             if msg != last_line:
                 sys.stdout.write(msg + "\033[K")
@@ -155,10 +165,12 @@ class APIServerProcess:
 
     def stop(self) -> dict:
         """Stop the API server process."""
-        with self._lock:
-            proc = self._proc
-            self._proc = None
-            self._started_at = 0.0
+        global _shared_proc, _shared_started_at
+
+        with _shared_lock:
+            proc = _shared_proc
+            _shared_proc = None
+            _shared_started_at = 0.0
 
         if proc is None:
             return {"ok": True, "message": "not running"}
@@ -185,10 +197,10 @@ class APIServerProcess:
 
     @property
     def is_running(self) -> bool:
-        with self._lock:
-            if self._proc is None:
+        with _shared_lock:
+            if _shared_proc is None:
                 return False
-            return self._proc.poll() is None
+            return _shared_proc.poll() is None
 
     # ── Internal ────────────────────────────────────────────────────────
 

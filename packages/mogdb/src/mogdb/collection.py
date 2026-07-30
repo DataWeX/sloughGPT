@@ -62,6 +62,8 @@ class Collection:
                     continue
                 try:
                     entry = json.loads(line)
+                    if "data" in entry:
+                        entry = entry["data"]
                     doc = Document(entry)
                     self._docs[doc.id] = doc
                     count += 1

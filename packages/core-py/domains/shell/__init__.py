@@ -49,6 +49,8 @@ from .vfs import VFS, VFSEntry, VFSGeneratedFile, VFSDirectory, get_vfs, reset_v
 from .cycles import CyclesRenderer, Scene, Camera, Material, Light, BVH, create_sphere, create_plane, create_cube
 from .cycles_device import CyclesDevice
 from .render_neural import RenderNeuralDevice
+from . import cmds  # noqa: F401 — external command modules (health, models, souls, data_cmds)
+from .cmds import discover as discover_cmds, CmdModule, _MODULE_NAMES  # noqa: F401
 
 
 _dait_instance: Optional[DaitRuntime] = None

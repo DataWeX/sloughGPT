@@ -15,8 +15,6 @@ Everything else (parsing, expansion, command dispatch) stays in ShellREPL.
 
 from __future__ import annotations
 
-import io
-import os
 import sys
 from typing import Callable, Optional, Protocol
 
@@ -170,24 +168,26 @@ class MemoryIO:
 class _Capture:
     """Context manager: redirect all writes to a string buffer."""
 
-    def __init__(self, io: ShellIO):
-        self._io = io
-        self._buf = io.StringIO()
+    def __init__(self, io_shell: ShellIO):
+        self._io = io_shell
+        self._buf: list[str] = []
         self._old_write: Callable | None = None
 
     def __enter__(self) -> "_Capture":
+        self._buf.clear()
         self._old_write = self._io.write
         self._io.write = self._write_to_buf  # type: ignore
         return self
 
     def __exit__(self, *exc):
-        self._io.write = self._old_write  # type: ignore
+        if self._old_write:
+            self._io.write = self._old_write
 
     def _write_to_buf(self, text: str, end: str = "\n") -> None:
-        self._buf.write(text + end if text else end)
+        self._buf.append(text + end if text else end)
 
     def getvalue(self) -> str:
-        return self._buf.getvalue()
+        return "".join(self._buf)
 
 
 # ── Convenience ─────────────────────────────────────────────────────
@@ -202,9 +202,12 @@ def capture_cmd(repl, method, *args) -> str:
     """Call a command method, capture output via MemoryIO, return the string."""
     mem = MemoryIO()
     old_io = repl.io
+    old_console_io = repl.console._io
     repl.io = mem
+    repl.console._io = mem
     try:
         method(*args)
     finally:
         repl.io = old_io
+        repl.console._io = old_console_io
     return mem.get_output()

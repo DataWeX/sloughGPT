@@ -12,6 +12,7 @@ import struct
 import json
 import math
 import time
+import threading
 import numpy as np
 from typing import Optional, List, Dict, Any, Tuple, Callable
 from pathlib import Path
@@ -1234,6 +1235,7 @@ class SloLinear(SloLayer):
         self.soul_traits = {"creativity": 0.5, "confidence": 0.5, "warmth": 0.5}
         self._quant_info = None  # TensorInfo for quantized weight
         self._quant_unpacked = None  # lazy int4→int8 unpack cache
+        self._lock = threading.Lock()  # thread safety for lazy int4 unpack
         self._point_weight = None  # PointWeight: function-based weight representation
 
     def _get_weight_T(self) -> Tensor:
@@ -1255,19 +1257,20 @@ class SloLinear(SloLayer):
         self._quant_unpacked = None  # lazy unpack cache for int4
 
     def _get_quant_array(self) -> np.ndarray:
-        """Return the quantized weight array as 2D int8 matrix.
-
-        For int4, lazily unpacks the packed array and caches it.
-        """
         if self._quant_info is None or not self._quant_info.is_quantized:
             return None
         if self._quant_info.meta.bits == 4:
             if self._quant_unpacked is None:
-                from domains.infrastructure.quantization import _unpack_int4
-                signed = self._quant_info.meta.mode == "symmetric"
-                n_total = int(np.prod(self._quant_info.meta.original_shape))
-                unpacked_1d = _unpack_int4(self._quant_info.array, n_total, signed=signed)
-                self._quant_unpacked = unpacked_1d.reshape(self._quant_info.meta.original_shape).astype(np.int8)
+                self._lock.acquire()
+                try:
+                    if self._quant_unpacked is None:
+                        from domains.infrastructure.quantization import _unpack_int4
+                        signed = self._quant_info.meta.mode == "symmetric"
+                        n_total = int(np.prod(self._quant_info.meta.original_shape))
+                        unpacked_1d = _unpack_int4(self._quant_info.array, n_total, signed=signed)
+                        self._quant_unpacked = unpacked_1d.reshape(self._quant_info.meta.original_shape).astype(np.int8)
+                finally:
+                    self._lock.release()
             return self._quant_unpacked
         return self._quant_info.array
 

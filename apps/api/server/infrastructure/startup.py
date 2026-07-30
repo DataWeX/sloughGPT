@@ -314,6 +314,16 @@ class StartupOrchestrator:
                     quant_bits=cfg.quant_bits,
                     quant_mode=cfg.quant_mode,
                 )
+
+                # Auto-select precision on GPU (fp16 benchmark)
+                try:
+                    from domains.slolib.gpu import set_accelerator_precision
+                    active = set_accelerator_precision("auto")
+                    if active == "fp16":
+                        logger.info("GPU precision set to fp16 (auto-selected via benchmark)",
+                                    extra={"tag": "START"})
+                except Exception:
+                    pass
                 # Sync current soul traits to PersonalityProcessor
                 try:
                     from domains.inference.slo_manager import get_slo_manager

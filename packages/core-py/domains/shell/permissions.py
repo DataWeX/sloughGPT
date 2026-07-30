@@ -1,15 +1,15 @@
 """
-Shell permissions manager — gate destructive operations.
+Shell permissions manager -- gate destructive operations.
 
 Every command that can modify state, destroy data, or affect the system
 is classified by risk level.  The permissions manager decides what runs
 and what requires explicit grant.
 
 Risk levels:
-  SAFE      — read-only, no side effects (ls, cat, echo, help, ...)
-  ELEVATED  — modifies shell state (alias, set, source, py, ...)
-  DANGEROUS — modifies filesystem or external state (rm, cp, mv, chmod, ...)
-  CRITICAL  — affects the whole system (shutdown, boot, svc, agents, ...)
+  SAFE      -- read-only, no side effects (help, health, status, ...)
+  ELEVATED  -- modifies shell state (alias, set, source, py, ...)
+  DANGEROUS -- modifies filesystem or external state (protect, ...)
+  CRITICAL  -- affects the whole system (shutdown, boot, svc, load, ...)
 
 Usage:
     perms = ShellPermissions()
@@ -36,33 +36,37 @@ class Risk:
 
 # Read-only / no side effects
 _SAFE = frozenset({
-    "help", "exit", "clear", "cls", "ls", "pwd", "cat", "echo",
-    "printf", "head", "tail", "wc", "grep", "sort", "uniq", "less",
-    "find", "dirname", "basename", "cut", "tr", "xargs", "which",
-    "type", "env", "history", "fc", "dirs", "uname", "uptime",
-    "date", "true", "false", "test", "[", "whoami", "font",
+    "help", "exit", "which",
+    "type", "history", "fc", "whoami",
     "tutorial", "status", "metrics", "health", "tokenizer",
-    "devices", "lsdev", "asm", "wm", "win",
+    "devices", "lsdev", "asm", "wm", "win", "uptime",
+    "pwd", "echo", "cat", "head", "tail", "wc", "less",
+    "sort", "uniq", "find", "grep", "ls", "tee", "xargs", "diff", "stat", "du",
+    "cut", "tr", "seq", "nl", "fold", "tac", "env", "printenv", "yes", "realpath",
+    "dirname", "basename", "nproc", "hostname", "uname", "shuf", "rev", "paste", "comm",
 })
 
 # Modifies shell state only (aliases, env, history, variables, jobs)
 _ELEVATED = frozenset({
     "alias", "unalias", "set", "export", "read", "source", ".",
-    "cd", "pushd", "popd", "py", "ai",
-    "bg", "fg", "watch", "yes",
+    "py", "ai", "cd",
+    "bg", "fg", "watch",
 })
 
 # Modifies filesystem or external resources
 _DANGEROUS = frozenset({
-    "rm", "cp", "mv", "mkdir", "touch", "chmod", "tee",
-    "pbcopy", "pbpaste", "xargs",
+    "protect", "unprotect",
+    "rm", "chmod", "chown", "mv", "cp", "dd", "touch",
+    "mkfs", "fsck", "fdisk", "mount", "umount",
+    "mkdir", "rmdir",
 })
 
 # Affects system, models, training, processes, services
 _CRITICAL = frozenset({
     "boot", "shutdown", "svc", "load", "unload", "switch",
     "train", "kill", "gen", "chat", "agents", "remember",
-    "recall",
+    "recall", "note", "api", "vmrun", "vmperms",
+    "permit", "deny", "permissions", "confirm",
 })
 
 # Command → risk classification
@@ -77,9 +81,10 @@ for _cmd in _CRITICAL:
     _RISK_MAP[_cmd] = Risk.CRITICAL
 
 # rm -rf is always critical regardless of command name
+# Force patterns — specific args escalate risk regardless of base command
 _FORCE_PATTERNS = {
-    "rm": {"-rf", "-fr", "-r", "-f"},
-    "chmod": {"777", "000", "a+rwx"},
+    "rm": {"-rf", "-fr", "--recursive", "-r", "-R"},
+    "chmod": {"777", "000", "a+rwx", "a-rwx", "a+rw", "a-rw"},
 }
 
 

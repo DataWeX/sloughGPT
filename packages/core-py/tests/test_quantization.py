@@ -619,3 +619,117 @@ class TestQuantizedLinear:
         x = np.random.randn(2, 16).astype(np.float32)
         result = ql.forward_numpy(x)
         assert result.shape == (2, 16)
+
+
+class TestSuggestFormat:
+    """Tests for QuantEngine.suggest_format() CPU precision auto-selection."""
+
+    def test_returns_expected_keys(self):
+        result = QuantEngine.suggest_format()
+        assert "format" in result
+        assert "bits" in result
+        assert "reason" in result
+        assert "benchmark" in result
+        assert result["format"] in ("fp32", "int8", "int4")
+        assert result["bits"] in (32, 8, 4)
+
+    def test_fp32_always_in_benchmark(self):
+        result = QuantEngine.suggest_format()
+        assert "fp32" in result["benchmark"]
+        assert result["benchmark"]["fp32"]["cosine_sim"] == 1.0
+        assert result["benchmark"]["fp32"]["bits"] == 32
+
+    def test_int8_in_benchmark(self):
+        result = QuantEngine.suggest_format()
+        assert "int8" in result["benchmark"]
+        assert result["benchmark"]["int8"]["cosine_sim"] > 0.9
+        assert result["benchmark"]["int8"]["bits"] == 8
+
+    def test_int4_in_benchmark(self):
+        result = QuantEngine.suggest_format()
+        assert "int4" in result["benchmark"]
+        assert result["benchmark"]["int4"]["bits"] == 4
+
+    def test_benchmark_timing_non_negative(self):
+        result = QuantEngine.suggest_format()
+        for fmt in ("fp32", "int8", "int4"):
+            assert result["benchmark"][fmt]["time_s"] > 0
+
+    def test_custom_sample_weight(self):
+        w = np.random.randn(64, 64).astype(np.float32)
+        result = QuantEngine.suggest_format(sample_weight=w)
+        assert result["format"] in ("fp32", "int8", "int4")
+
+    def test_low_quality_threshold_prefers_int8(self):
+        result = QuantEngine.suggest_format(quality_threshold=0.5, min_speed_ratio=0.1)
+        assert "benchmark" in result
+
+
+class TestSaveLoadWeights:
+    """Tests for QuantEngine.save_weights() / load_weights() round-trip."""
+
+    def test_round_trip_preserves_values(self, tmp_path: Path):
+        engine = QuantEngine(bits=8, mode="symmetric")
+        w = np.random.randn(16, 32).astype(np.float32)
+        info = engine.quantize("test_w", w)
+        path = str(tmp_path / "quant.npz")
+        engine.save_weights(path, {"test_w": info})
+        loaded = engine.load_weights(path)
+        assert "test_w" in loaded
+        assert loaded["test_w"].is_quantized
+        assert loaded["test_w"].meta.bits == 8
+        np.testing.assert_array_equal(loaded["test_w"].array, info.array)
+
+    def test_round_trip_multiple_tensors(self, tmp_path: Path):
+        engine = QuantEngine(bits=8, mode="asymmetric")
+        infos = {}
+        for name in ("w1", "w2", "b1"):
+            w = np.random.randn(8, 16).astype(np.float32)
+            infos[name] = engine.quantize(name, w)
+        path = str(tmp_path / "multi.npz")
+        engine.save_weights(path, infos)
+        loaded = engine.load_weights(path)
+        assert set(loaded.keys()) == {"w1", "w2", "b1"}
+        for name in infos:
+            np.testing.assert_array_equal(loaded[name].array, infos[name].array)
+            assert loaded[name].meta.bits == infos[name].meta.bits
+            assert loaded[name].meta.mode == infos[name].meta.mode
+
+    def test_skips_non_quantized_tensors(self, tmp_path: Path):
+        engine = QuantEngine(bits=8, mode="symmetric")
+        info = engine.quantize("good", np.random.randn(8, 8).astype(np.float32))
+        non_quant = TensorInfo(name="skip", array=np.zeros((4, 4), dtype=np.float32))
+        path = str(tmp_path / "skip.npz")
+        engine.save_weights(path, {"good": info, "skip": non_quant})
+        loaded = engine.load_weights(path)
+        assert "good" in loaded
+        assert "skip" not in loaded
+
+    def test_load_empty_archive_returns_empty(self, tmp_path: Path):
+        path = str(tmp_path / "empty.npz")
+        np.savez_compressed(path)
+        engine = QuantEngine()
+        result = engine.load_weights(path)
+        assert result == {}
+
+    def test_missing_metadata_logs_warning(self, tmp_path: Path):
+        path = str(tmp_path / "bad.npz")
+        np.savez_compressed(path, w=np.array([1, 2, 3], dtype=np.int8))
+        engine = QuantEngine()
+        result = engine.load_weights(path)
+        assert result == {}
+
+    def test_int4_round_trip(self, tmp_path: Path):
+        engine = QuantEngine(bits=4, mode="symmetric")
+        w = np.random.randn(8, 16).astype(np.float32)
+        info = engine.quantize("w4", w)
+        path = str(tmp_path / "int4.npz")
+        engine.save_weights(path, {"w4": info})
+        loaded = engine.load_weights(path)
+        assert loaded["w4"].meta.bits == 4
+        np.testing.assert_array_equal(loaded["w4"].array, info.array)
+
+    def test_load_rejects_nonexistent_path(self):
+        engine = QuantEngine()
+        with pytest.raises((FileNotFoundError, OSError)):
+            engine.load_weights("/nonexistent/path.npz")

@@ -532,6 +532,181 @@ class QuantEngine:
         self._error_report = {name: QuantMeta.from_dict(d) for name, d in raw.items()}
         logger.info("QuantEngine: loaded metadata for %d tensors from %s", len(self._error_report), path, extra={"tag": "INFRA"})
 
+    def save_weights(self, path: str, tensor_infos: Dict[str, TensorInfo]):
+        """Save quantized weight arrays + metadata to .npz archive.
+
+        The archive contains:
+          - For each tensor name: ``{name}`` — quantized array (int8)
+          - ``_meta_{name}`` — JSON string with scale/zero_point/bits/mode/shape
+
+        Args:
+            path: Output `.npz` path (e.g. ``model.slnc.quant.npz``)
+            tensor_infos: dict of ``{tensor_name: TensorInfo}`` from quantize()
+        """
+        arrays = {}
+        for name, info in tensor_infos.items():
+            if info.is_quantized and info.meta is not None:
+                arrays[name] = info.array
+                arrays[f"_meta_{name}"] = np.array(json.dumps(info.meta.to_dict()), dtype=object)
+        np.savez_compressed(path, **arrays)
+        logger.info(
+            "QuantEngine: saved %d quantized weight arrays to %s",
+            sum(1 for k in arrays if not k.startswith("_meta_")), path,
+            extra={"tag": "INFRA"},
+        )
+
+    def load_weights(self, path: str) -> Dict[str, TensorInfo]:
+        """Load quantized weight arrays from .npz archive.
+
+        Returns:
+            dict of ``{tensor_name: TensorInfo}`` — ready for set_quantized_weight()
+        """
+        data = np.load(path, allow_pickle=True)
+        result = {}
+        # Collect all unique tensor names (those without _meta_ prefix)
+        names = set()
+        for key in data:
+            if key.startswith("_meta_"):
+                names.add(key[len("_meta_"):])
+            else:
+                names.add(key)
+        for name in sorted(names):
+            meta_key = f"_meta_{name}"
+            if meta_key not in data:
+                logger.warning("QuantEngine: missing metadata for %s, skipping", name, extra={"tag": "INFRA"})
+                continue
+            meta_dict = json.loads(str(data[meta_key].item()))
+            meta = QuantMeta.from_dict(meta_dict)
+            arr = data[name]
+            # Ensure array is contiguous (npz may return read-only views)
+            arr = np.asarray(arr).copy(order='C')
+            result[name] = TensorInfo(name=name, array=arr, meta=meta)
+        data.close()
+        logger.info(
+            "QuantEngine: loaded %d quantized weight arrays from %s",
+            len(result), path, extra={"tag": "INFRA"},
+        )
+        return result
+
+    @staticmethod
+    def suggest_format(
+        sample_weight: Optional[np.ndarray] = None,
+        quality_threshold: float = 0.98,
+        min_speed_ratio: float = 0.8,
+    ) -> Dict[str, Any]:
+        """Auto-select the best precision format for the current hardware.
+
+        Benchmarks fp32, int8, and int4 matmul performance on a representative
+        weight matrix and returns the format that gives the best speed/quality
+        trade-off.
+
+        Without AVX2, int8/int4 numpy matmuls promote to int32/fp32 internally,
+        so fp32 is usually fastest on CPU. On GPU with tensor cores, fp16 is
+        the best choice (handled by the accelerator's ``set_precision()``).
+
+        Args:
+            sample_weight: Float32 weight matrix to benchmark with. If ``None``,
+                a random 1024×1024 matrix is used.
+            quality_threshold: Minimum cosine similarity to accept a quantized
+                format (default 0.98).
+            min_speed_ratio: Minimum throughput ratio vs the fastest format to
+                still be considered (default 0.8 = 80% of peak).
+
+        Returns:
+            dict with keys:
+            - ``format``: ``"fp32"``, ``"int8"``, or ``"int4"``
+            - ``bits``: 32, 8, or 4
+            - ``reason``: human-readable explanation
+            - ``benchmark``: dict of per-format timing/quality
+        """
+        import time
+
+        if sample_weight is None:
+            w = np.random.randn(1024, 1024).astype(np.float32)
+        else:
+            w = np.asarray(sample_weight, dtype=np.float32)
+            if w.ndim == 1:
+                w = w.reshape(-1, 1)
+
+        results: Dict[str, Dict[str, Any]] = {}
+
+        # Benchmark helper: 20 matmuls, return avg time
+        def _bench(weight: np.ndarray) -> float:
+            x = np.random.randn(1, weight.shape[0]).astype(np.float32)
+            t0 = time.perf_counter()
+            for _ in range(20):
+                x @ weight
+            return (time.perf_counter() - t0) / 20
+
+        # Check AVX2 availability
+        try:
+            from domains.infrastructure.quant_core.wrapper import HAS_AVX2
+            has_avx2 = bool(HAS_AVX2)
+        except Exception:
+            has_avx2 = False
+
+        # fp32 baseline
+        t_fp32 = _bench(w)
+        results["fp32"] = {
+            "time_s": t_fp32,
+            "throughput": 1.0 / max(t_fp32, 1e-10),
+            "cosine_sim": 1.0,
+            "bits": 32,
+        }
+
+        # int8: quantize → matmul with recovered weights
+        flat = w.flatten()
+        max_abs = max(np.max(np.abs(flat)), 1e-10)
+        scale_i8 = max_abs / 127.0
+        w_i8 = np.clip(np.round(w / scale_i8), -128, 127).astype(np.int8)
+        w_i8_fp32 = w_i8.astype(np.float32) * scale_i8
+        t_i8 = _bench(w_i8_fp32)
+        cos8 = float(_cosine_similarity(flat, w_i8_fp32.flatten()))
+        results["int8"] = {
+            "time_s": t_i8,
+            "throughput": 1.0 / max(t_i8, 1e-10),
+            "cosine_sim": cos8,
+            "bits": 8,
+        }
+
+        # int4: quantize → dequantize → matmul
+        flat_scaled = flat / (max(np.max(np.abs(flat)), 1e-10) / 7.0)
+        q_i4 = np.clip(np.round(flat_scaled), -8, 7).astype(np.int8)
+        packed = _pack_int4(q_i4)
+        w_i4_fp32 = _dequantize(packed, max_abs / 7.0, 0, 4, w.shape, signed=True)
+        t_i4 = _bench(w_i4_fp32)
+        cos4 = float(_cosine_similarity(flat, w_i4_fp32.flatten()))
+        results["int4"] = {
+            "time_s": t_i4,
+            "throughput": 1.0 / max(t_i4, 1e-10),
+            "cosine_sim": cos4,
+            "bits": 4,
+        }
+
+        # Pick best format
+        best = "fp32"
+        best_tp = results["fp32"]["throughput"]
+
+        for fmt in ("int8", "int4"):
+            r = results[fmt]
+            if r["cosine_sim"] >= quality_threshold and r["throughput"] >= best_tp * min_speed_ratio:
+                if r["throughput"] > best_tp:
+                    best = fmt
+                    best_tp = r["throughput"]
+
+        return {
+            "format": best,
+            "bits": results[best]["bits"],
+            "reason": (
+                f"Selected {best} (bits={results[best]['bits']}) "
+                f"fp32={results['fp32']['time_s']*1000:.2f}ms "
+                f"int8={results['int8']['time_s']*1000:.2f}ms cos={results['int8']['cosine_sim']:.4f} "
+                f"int4={results['int4']['time_s']*1000:.2f}ms cos={results['int4']['cosine_sim']:.4f}"
+                f"{' avx2=1' if has_avx2 else ''}"
+            ),
+            "benchmark": results,
+        }
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # int4 packing / unpacking

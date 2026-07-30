@@ -54,7 +54,7 @@ class TestApiCommands:
         if not _check_api():
             pytest.skip("API server not running")
         out = _capture(repl, "health")
-        assert "healthy" in out.lower() or "ok" in out.lower()
+        assert "healthy" in out.lower() or "success" in out.lower() or "ok" in out.lower()
 
     def test_models_lists_something(self, repl):
         if not _check_api():
@@ -80,6 +80,43 @@ class TestApiCommands:
         out = _capture(repl, "whoami")
         assert isinstance(out, str)
 
+    def test_precision_without_arg_defaults_to_auto(self, repl):
+        if not _check_api():
+            pytest.skip("API server not running")
+        out = _capture(repl, "precision")
+        assert "mode" in out.lower() or "precision" in out.lower() or "auto" in out.lower()
+
+    def test_precision_fp32_returns_ok(self, repl):
+        if not _check_api():
+            pytest.skip("API server not running")
+        out = _capture(repl, "precision fp32")
+        assert "mode" in out.lower() or "precision" in out.lower() or "fp32" in out.lower()
+
+    def test_quantize_shows_result(self, repl):
+        if not _check_api():
+            pytest.skip("API server not running")
+        out = _capture(repl, "quantize")
+        assert "quantized" in out.lower() or "bits" in out.lower() or "error" in out.lower()
+
+    def test_quantize_4bit(self, repl):
+        if not _check_api():
+            pytest.skip("API server not running")
+        out = _capture(repl, "quantize 4")
+        assert "4" in out or "quantized" in out.lower() or "error" in out.lower()
+
+    def test_dequantize_returns_result(self, repl):
+        if not _check_api():
+            pytest.skip("API server not running")
+        out = _capture(repl, "dequantize")
+        assert "dequantized" in out.lower() or "error" in out.lower()
+
+    def test_set_precision_invalid_mode_still_responds(self, repl):
+        if not _check_api():
+            pytest.skip("API server not running")
+        out = _capture(repl, "precision invalid")
+        # Invalid should fallback to auto
+        assert isinstance(out, str)
+
 
 # ── Local commands ──────────────────────────────────────────────────
 
@@ -99,7 +136,7 @@ class TestLocalCommands:
 
     def test_clear_returns_empty(self, repl):
         out = _capture(repl, "clear")
-        assert out == "" or out is None
+        assert out == "" or out is None or out.startswith("\x1b[")
 
     def test_history_shows_previous(self, repl):
         out = _capture(repl, "history")

@@ -1,0 +1,752 @@
+{
+  "name": "board",
+  "columns": [
+    {
+      "name": "todo",
+      "wip_limit": 0,
+      "order": 0
+    },
+    {
+      "name": "in_progress",
+      "wip_limit": 3,
+      "order": 1
+    },
+    {
+      "name": "review",
+      "wip_limit": 0,
+      "order": 2
+    },
+    {
+      "name": "done",
+      "wip_limit": 0,
+      "order": 3
+    }
+  ],
+  "cards": [
+    {
+      "id": "20260712_120000_2026-07-12-cross-turn-kv-cache-server-crash-fix-mps-on-intel-mac-watchdog",
+      "title": "2026-07-12 \u2014 Cross-Turn KV Cache + Server Crash Fix (MPS on Intel Mac, Watchdog)",
+      "description": "### Summary\nAdded cross-turn KV cache for multi-turn conversation speedup. Fixed 3 startup warnings.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-07-12T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:44.072702+00:00",
+      "due_date": "2026-07-12",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260706_120000_2026-07-06-vector-store-extraction-abc-package-strui-test-mock-migration",
+      "title": "2026-07-06 \u2014 Vector Store Extraction (ABC \u2192 Package) + Strui Test Mock Migration",
+      "description": "### Summary\nExtracted `PineconeVectorStore` and `ChromaDBVectorStore` from `vector_store.py` into a new `vector_stores/` sub-package.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-07-06T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:44.068120+00:00",
+      "due_date": "2026-07-06",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260706_120000_2026-07-06-process-isolation-wiring-streaming-cb-memory-strui-source-cleanup",
+      "title": "2026-07-06 \u2014 Process Isolation Wiring (Streaming, CB, Memory) + Strui Source Cleanup",
+      "description": "### Summary\nCompleted the ProcessGuard \u2192 ModelServer integration (streaming delegation through subprocess, circuit breaker callbacks on crash/restart, psutil memory tracking).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-07-06T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:44.063628+00:00",
+      "due_date": "2026-07-06",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260701_120000_2026-07-01-bidirectional-dag-forward-mode-ad-test-fixes-cleanup",
+      "title": "2026-07-01 \u2014 Bidirectional DAG (Forward-Mode AD) + Test Fixes + Cleanup",
+      "description": "### Summary\nImplemented bidirectional DAG for forward-mode automatic differentiation (JVP/tangent propagation) alongside the existing reverse-mode AD.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-07-01T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:44.059208+00:00",
+      "due_date": "2026-07-01",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260701_120000_2026-07-01-chat-page-code-splitting-bundle-size-audit",
+      "title": "2026-07-01 \u2014 Chat Page Code Splitting + Bundle Size Audit",
+      "description": "### Summary\nCode-split 5 always-mounted chat components (`ChatSettings`, `ChatToolPanel`, `ReadFileSection`, `DownloadDialog`, `SystemPromptDialog`) via `next/dynamic` with conditional render guards \u2014.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-07-01T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:44.054882+00:00",
+      "due_date": "2026-07-01",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260630_120000_2026-06-30-multi-agent-async-conversion-activity-router-tests",
+      "title": "2026-06-30 \u2014 Multi-Agent Async Conversion + Activity Router Tests",
+      "description": "### Summary\nAdded async `async_execute()` to `MultiAgentOrchestrator` (replaces `ThreadPoolExecutor` with `asyncio.gather`), rewrote `/orchestrate` SSE route to use async methods, wrote 10 async metho.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-06-30T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:44.050627+00:00",
+      "due_date": "2026-06-30",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260629_120000_2026-06-29-activity-classifier-conv-backward-vectorized-training-stability-data",
+      "title": "2026-06-29 \u2014 Activity Classifier: Conv Backward Vectorized + Training Stability + Data Augmentation",
+      "description": "### Summary\nTriple improvement to the activity recognition pipeline: 4.9\u00d7 faster conv backward via numpy vectorization, gradient clipping + LR scheduler for stable training (87.5% val accuracy, up fro.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-06-29T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:44.046244+00:00",
+      "due_date": "2026-06-29",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260629_120000_2026-06-29-kv-cache-for-greedy-generation",
+      "title": "2026-06-29 \u2014 KV Cache for Greedy Generation",
+      "description": "### Summary\nImplemented incremental KV cache for the `generate()` greedy path.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-06-29T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:44.042108+00:00",
+      "due_date": "2026-06-29",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260629_120000_2026-06-29-multimodal-training-profiling-metal-accelerator-fix",
+      "title": "2026-06-29 \u2014 Multimodal Training Profiling & Metal Accelerator Fix",
+      "description": "### Summary\nProfiled the multimodal training pipeline and discovered the Apple Metal GPU accelerator was making training **6x slower** than CPU numpy for embed_dim\u2264128.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-06-29T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:44.038027+00:00",
+      "due_date": "2026-06-29",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260628_120000_2026-06-28-slash-commands-message-bookmarks-detail-page-enhancements",
+      "title": "2026-06-28 \u2014 Slash Commands, Message Bookmarks, Detail Page Enhancements",
+      "description": "### Summary\nAdded inline slash-command popup in chat input and a message bookmarks feature, plus enhanced dataset/model detail pages.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-06-28T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:44.034072+00:00",
+      "due_date": "2026-06-28",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260628_120000_2026-06-28-generate-non-determinism-root-cause-fix",
+      "title": "2026-06-28 \u2014 generate() Non-Determinism Root Cause & Fix",
+      "description": "### Summary\nFound and fixed the root cause of `generate()` non-determinism: Apple Metal GPU accelerator (`_MetalBackend`) produces different floating-point results across calls for the same `_matmul` .",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-06-28T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:44.030217+00:00",
+      "due_date": "2026-06-28",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260626_120000_2026-06-26-cross-attention-gradient-explosion-fixed",
+      "title": "2026-06-26 \u2014 Cross-Attention Gradient Explosion Fixed",
+      "description": "### Summary\nFound and fixed an **800x gradient explosion** in `SloCrossAttention.forward()` caused by a redundant `SloLayerNorm` wrapping the output.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-06-26T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:44.026424+00:00",
+      "due_date": "2026-06-26",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260624_120000_2026-06-24-final-lib-files-4-files-60-tests",
+      "title": "2026-06-24 \u2014 Final Lib Files (4 files, 60 tests)",
+      "description": "### Summary\nWrote 60 tests across the last 4 untested lib files: dev-log (17), piston-api (7), db (22), multimodal-controller (14). **All lib files now have test coverage.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-06-24T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:44.022718+00:00",
+      "due_date": "2026-06-24",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260623_120000_2026-06-23-lib-test-blitz-3-files-23-tests",
+      "title": "2026-06-23 \u2014 Lib Test Blitz (3 files, 23 tests)",
+      "description": "### Summary\nWrote 23 tests across 3 remaining lib files: error-controller (6), whats-new-data (2), quick-prompts (15). **1915+ tests across ~165 files, all pass**.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-06-23T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:44.018868+00:00",
+      "due_date": "2026-06-23",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260623_120000_2026-06-23-full-summary",
+      "title": "2026-06-23 \u2014 Full Summary",
+      "description": "- **34 new tests** across 5 new files: model-controller (7), store (13), error-reporter (4), init-error-reporter (1), chat-controller (9)\n- **72 new tests** across 7 small lib files: cn (6), agents (1.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-06-23T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:44.014984+00:00",
+      "due_date": "2026-06-23",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260624_120000_2026-06-24-dead-code-removal-embedder-cleanup-trainer-protocol-chat-ui-polish",
+      "title": "2026-06-24 \u2014 Dead Code Removal, Embedder Cleanup, Trainer Protocol, Chat UI Polish",
+      "description": "### Summary\nRemoved SloNetProvider (dead class), consolidated embedders, created `BaseTrainer` protocol with `TrainResult`, deprecated legacy trainers, added TTL cache to ModelRegistry, added warm cha.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-06-24T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:44.010917+00:00",
+      "due_date": "2026-06-24",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260622_120000_2026-06-22-test-fix-blitz-8-files-33-failures-0",
+      "title": "2026-06-22 \u2014 Test Fix Blitz (8 files, 33 failures \u2192 0)",
+      "description": "### Summary\nFixed 33 test failures across 8 files, all caused by JSDOM StrictMode double-mount + DOM duplicate matching + fetch mock timing issues.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-06-22T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:44.007025+00:00",
+      "due_date": "2026-06-22",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260603_120000_2026-06-03-shell-bugfixes-window-manager-rewrite-multi-agent-live-test",
+      "title": "2026-06-03 \u2014 Shell Bugfixes, Window Manager Rewrite, Multi-Agent Live Test",
+      "description": "### Summary\nFixed `models` shell command (API returns flat list, not `{\"models\": [...]}`), raised `_api_post` timeout to 120s for inference, verified multi-agent orchestration works end-to-end via liv.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-06-03T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:44.003268+00:00",
+      "due_date": "2026-06-03",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260530_120000_2026-05-30-hf-fine-tuning-pipeline-transformerstrainer-peft-lora",
+      "title": "2026-05-30 \u2014 HF Fine-Tuning Pipeline (transformers.Trainer + peft LoRA)",
+      "description": "### Summary\nBuilt real HuggingFace model fine-tuning pipeline using `transformers.Trainer` with optional LoRA (`peft`).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-05-30T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:43.999598+00:00",
+      "due_date": "2026-05-30",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260526_120000_2026-05-26-modelserver-modelregistry-state-rewrite-streaming-cancel",
+      "title": "2026-05-26 \u2014 ModelServer + ModelRegistry + State Rewrite + Streaming Cancel",
+      "description": "### Summary\nBuilt a crash-resilient, composable model serving layer.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-05-26T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:43.995978+00:00",
+      "due_date": "2026-05-26",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260526_120000_2026-05-26-context-manager-architecture-trait-weights-steering",
+      "title": "2026-05-26 \u2014 Context Manager Architecture (Trait Weights \u2192 Steering)",
+      "description": "### Summary\nReplaced the direct LoRA weight approach with a proper context manager architecture.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-05-26T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:43.992473+00:00",
+      "due_date": "2026-05-26",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260526_120000_2026-05-26-mobile-polish-bugfixes-performance",
+      "title": "2026-05-26 \u2014 Mobile Polish + Bugfixes + Performance",
+      "description": "- `--include`, `--exclude`, `--progress`, `--dedup` CLI flags added\n- `AGENT` string auto-derives version via `importlib.metadata` instead of hardcoded `\"0.1\"`\n- README updated with all new flags and .",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-05-26T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:43.989046+00:00",
+      "due_date": "2026-05-26",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260521_120000_2026-05-21-chat-pipeline-stabilization-qwen-working",
+      "title": "2026-05-21 \u2014 Chat Pipeline Stabilization (Qwen working)",
+      "description": "### Summary\nFixed the MPS device name bug (`_resolve_device` returned \"metal\" instead of \"mps\") and forced CPU inference to eliminate MPS OOM crashes after ~10 sequential requests.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-05-21T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:43.985785+00:00",
+      "due_date": "2026-05-21",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260521_120000_2026-05-21-chat-pipeline-audit-fix",
+      "title": "2026-05-21 \u2014 Chat Pipeline Audit & Fix",
+      "description": "### Summary\nAudited the full chat pipeline end-to-end.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-05-21T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:43.982563+00:00",
+      "due_date": "2026-05-21",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260520_120000_2026-05-20-knowledgememory-core-tests-n-gram-embed-fix",
+      "title": "2026-05-20 \u2014 KnowledgeMemory Core Tests + N-gram Embed Fix",
+      "description": "### Summary\nWrote 16 tests for `KnowledgeMemory` (fact CRUD, search, context, dedup, bulk, importance sorting), fixed n-gram TF-IDF embedder that had been silently reverted to old hash-based version, .",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-05-20T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:43.979353+00:00",
+      "due_date": "2026-05-20",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260520_120000_2026-05-20-warnings-docs-tests-pages-and-polish-blitz",
+      "title": "2026-05-20 \u2014 Warnings, Docs, Tests, Pages, and Polish Blitz",
+      "description": "### Summary\nMassive cleanup and feature push: fixed 2 runtime warnings, added 14 new tests, created 2 new pages (Knowledge, backend tests), added real-time monitoring chart, batch operations, CLI comp.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-05-20T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:43.976058+00:00",
+      "due_date": "2026-05-20",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260520_120000_2026-05-20-dead-code-cleanup-modelcontext-fix",
+      "title": "2026-05-20 \u2014 Dead Code Cleanup + ModelContext Fix",
+      "description": "### Summary\nRemoved ~1K lines of dead code across `lib/`, `hooks/`, and fixed broken imports in `contexts/ModelContext.tsx` that referenced the deleted `api.ts`.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-05-20T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:43.972933+00:00",
+      "due_date": "2026-05-20",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260520_120000_2026-05-20-e2e-finalization",
+      "title": "2026-05-20 \u2014 E2E Finalization",
+      "description": "### Summary\nAll 6 e2e specs passing (12 assertions), fixed Cypress TypeScript declarations, cleaned stale build cache, verified full frontend test suite.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-05-20T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:43.970041+00:00",
+      "due_date": "2026-05-20",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260520_120000_2026-05-20-dataset-import-routes-training-page-rebuild",
+      "title": "2026-05-20 \u2014 Dataset Import Routes + Training Page Rebuild",
+      "description": "### Summary\nAdded 7 import endpoints to the datasets router (were deleted during dead inline-API cleanup months ago), fixed the DataImporter output-dir mismatch causing imported datasets to be invisib.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-05-20T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:43.967205+00:00",
+      "due_date": "2026-05-20",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260520_120000_2026-05-20-e2e-test-suite-api-path-audit",
+      "title": "2026-05-20 \u2014 E2E Test Suite + API Path Audit",
+      "description": "### Summary\nAudited all 189 backend endpoints against frontend API calls, identified 21 mismatched paths, fixed 10 runtime 404 bugs, added 2 missing backend endpoints, and wrote 6 new e2e spec files (.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-05-20T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:43.964479+00:00",
+      "due_date": "2026-05-20",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260520_120000_2026-05-20-streaming-chat-fix-event-loop-blocking",
+      "title": "2026-05-20 \u2014 Streaming Chat Fix (Event Loop Blocking)",
+      "description": "### Root Cause\n`_enrich_knowledge()` in `routers/inference.py:110` does a synchronous blocking call inside the async `generate()` generator.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-05-20T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:43.961896+00:00",
+      "due_date": "2026-05-20",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260520_120000_2026-05-20-feature-blitz-15-pages-controllers-and-backend-endpoints",
+      "title": "2026-05-20 \u2014 Feature Blitz: 15+ Pages, Controllers, and Backend Endpoints",
+      "description": "### Summary\nMassive feature push across the entire app. Every remaining stub/redirect page was replaced with a real page. New backend endpoints added for dataset CRUD.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-05-20T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:43.959239+00:00",
+      "due_date": "2026-05-20",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260518_120000_2026-05-18-e2e-smoke-test-inferencegenerate-endpoints-scheduler-fix",
+      "title": "2026-05-18 \u2014 E2E Smoke Test, /inference/generate Endpoints, Scheduler Fix",
+      "description": "### Summary\nE2E tested all key endpoints (health, chat, generate, regenerate, feedback, workflow), added missing `/inference/generate` endpoints to match the frontend `generateController`, and fixed a.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-05-18T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:43.721874+00:00",
+      "due_date": "2026-05-18",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260518_120000_2026-05-18-inference-engine-bugfixes-unified-kvcache",
+      "title": "2026-05-18 \u2014 Inference Engine Bugfixes & Unified KVCache",
+      "description": "### Summary\nFixed multiple inference bugs and consolidated 5 duplicate KVCache implementations into a single unified cache.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-05-18T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:43.620418+00:00",
+      "due_date": "2026-05-18",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260518_120000_2026-05-18-legacy-apits-deleted-round-3-controller-migration",
+      "title": "2026-05-18 \u2014 Legacy api.ts Deleted (Round 3 Controller Migration)",
+      "description": "### Summary\nDeleted the 2100-line legacy `api.ts` file. All 9 test files and the `feedback-store.ts` production file migrated to use the new individual controllers.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session"
+      ],
+      "created_at": "2026-05-18T00:00:00+00:00",
+      "updated_at": "2026-07-29T23:48:43.619478+00:00",
+      "due_date": "2026-05-18",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260729_233137_verify-mogdb-migration",
+      "title": "Verify mogdb migration",
+      "description": "Confirmed: notes list/show/new all work with mogdb backend",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "test",
+        "mogdb"
+      ],
+      "created_at": "2026-07-29T23:31:37.413953+00:00",
+      "updated_at": "2026-07-29T23:31:37.413953+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260729_232337_move-noteskanban-to-project-root",
+      "title": "Move notes/kanban to project root",
+      "description": "\nMoved data from ~/.config/dev-notes/ and ~/.config/kanban/ to the project root (.dev-notes/, .kanban/). Rewrote /home/mana/.local/bin/notes and kanban wrapper scripts to use project-relative paths. Updated AGENTS.md with new locations.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "notes",
+        "kanban",
+        "workflow"
+      ],
+      "created_at": "2026-07-29T23:23:37.067668+00:00",
+      "updated_at": "2026-07-29T23:23:37.067668+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260729_231958_kanban-board-auto-sync-from-dev-notes",
+      "title": "Kanban board auto-sync from dev-notes",
+      "description": "\nCreated sync-notes-to-board script that reads all dev-notes and populates the kanban board. Maps note status to columns: done\u2192done, wip\u2192in_progress, etc. Added sync step to AGENTS.md workflow. 9 existing session notes now visible on the board.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "kanban",
+        "notes",
+        "workflow"
+      ],
+      "created_at": "2026-07-29T23:19:58.768237+00:00",
+      "updated_at": "2026-07-29T23:19:58.768237+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260729_231928_add-note-timeline-feature",
+      "title": "Add note timeline feature",
+      "description": "\nAdded NoteStore.timeline(days, tag, status) returning (date, notes) groups. Added CLI subcommand notes timeline --days/--tag/--status. Added REPL note timeline dispatch with tab completion. Fixed indentation bug in status CLI handler. 6 new timeline tests. All 40 tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "notes",
+        "timeline"
+      ],
+      "created_at": "2026-07-29T23:19:28.222481+00:00",
+      "updated_at": "2026-07-29T23:19:28.222481+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260729_231928_priority-queue-rm-and-cpu-topology-test-fixes",
+      "title": "Priority queue, RM, and cpu_topology test fixes",
+      "description": "\nFixed priority queue tests (async fixture with worker, queue_full test, depth tests, concurrency tests) -- 16/16 pass. All resource manager (31/31) and cpu_topology (16/16) tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "testing",
+        "infrastructure"
+      ],
+      "created_at": "2026-07-29T23:19:28.220905+00:00",
+      "updated_at": "2026-07-29T23:19:28.220905+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260729_231928_x86-vm-rbac-integration-tests-fix",
+      "title": "x86 VM RBAC integration tests fix",
+      "description": "\nCompleted x86 VM RBAC system: all 26 syscalls mapped with permissions, fork inherits role, SYS_GETROLE (27) allows querying current role, diagnostic logging on denial. Fixed spawn() org parameter propagation to assembler so data labels resolve correctly. 173 VM tests pass (16 RBAC + 157 OS layer).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "rbac",
+        "virtual-machine"
+      ],
+      "created_at": "2026-07-29T23:19:28.219400+00:00",
+      "updated_at": "2026-07-29T23:19:28.219400+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260729_231928_slot-reservation-for-priority-queue-streaming",
+      "title": "Slot reservation for priority queue streaming",
+      "description": "\nAdded acquire()/release() to PriorityRequestQueue for long-lived work (streaming). Worker handles reservation markers (coro=None). Wired ModelServer.generate_stream() through the queue. 5 new tests \u2014 all 21 priority queue tests pass. 42/43 server integration tests pass (1 pre-existing warmup timing flake).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "infrastructure",
+        "scheduler"
+      ],
+      "created_at": "2026-07-29T23:19:28.218006+00:00",
+      "updated_at": "2026-07-29T23:19:28.218006+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260729_231928_queue-circuit-breaker-integration-acquire-cancellation-safet",
+      "title": "Queue-circuit-breaker integration + acquire cancellation safety",
+      "description": "\nQueue-full errors in ModelServer.generate() and generate_stream() now trip the circuit breaker (failure_threshold consecutive rejections opens the breaker). acquire() now safely handles task cancellation: if the marker is still in the heap, it's removed; if the worker already popped it, the slot is released. 4 new tests \u2014 all 67 tests pass (1 pre-existing warmup flake).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "infrastructure",
+        "scheduler",
+        "circuit-breaker"
+      ],
+      "created_at": "2026-07-29T23:19:28.216659+00:00",
+      "updated_at": "2026-07-29T23:19:28.216659+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260729_231928_backend-cleanup-remove-numpybackend-and-onnxbackend-dead-cla",
+      "title": "Backend cleanup: remove NumpyBackend and ONNXBackend dead classes",
+      "description": "\nRemoved NumpyBackend (~90 lines) and ONNXBackend (~70 lines) backend classes \u2014 both were never instantiated in production (only in test fixtures). Simplified _select_backend to GuardBackend > LocalBackend only. Removed numpy_engine/onnx_engine params from ModelServer.__init__. Deleted test_onnx_backend.py (6 tests), removed TestNumpyBackend and TestModelServerNumpy from test_numpy_engine.py (7 tests). All 44 server integration + 23 queue tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "infrastructure",
+        "model-server",
+        "cleanup"
+      ],
+      "created_at": "2026-07-29T23:19:28.215399+00:00",
+      "updated_at": "2026-07-29T23:19:28.215399+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260729_231928_fix-process-guard-psutil-unboundlocalerror-modelworkerproces",
+      "title": "Fix process_guard psutil UnboundLocalError + ModelWorkerProcess default",
+      "description": "\nprocess_guard.py: split try/except for psutil import vs usage \u2014 when psutil is absent, _memory_mb() returns None instead of UnboundLocalError. model_worker.py: changed silent default model_cls_path to raise ValueError('requires either slnc_path or model_cls_path'). 7 pre-existing test failures fixed, 32 process isolation tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "infrastructure",
+        "process-guard",
+        "bugfix"
+      ],
+      "created_at": "2026-07-29T23:19:28.214258+00:00",
+      "updated_at": "2026-07-29T23:19:28.214258+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260729_231928_eventbus-fixes-slonetprovider-temperaturecancel-fixes",
+      "title": "EventBus fixes + SloNetProvider temperature/cancel fixes",
+      "description": "\nFixed: temperature or 0.7 falsy bug, cancel_event forwarding in SloNetServer/SloNetChatProvider, 7 EventBus bugs (callable validation, clear(*) wildcards, emit_sync async skip, docstring, inline import warnings), psutil ImportError crash in kernel_npu.py. Added: 11 EventBus tests (32 total), 6 ModelMetrics edge-case tests. Fixed: pytest asyncio fixture_loop_scope deprecation warning in both pytest.ini files. Fixed: GPT-2 weight transposition bug (transpose_weights=False\u2192True for Conv1D in arch_config.py). Fixed: cancel_event not forwarded from SloNetServer.generate() to _generate_sync(). Added: EventBus events for model registration/unregistration in model_registry.py (model.registered, model.unregistered).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "event-bus",
+        "slonet",
+        "tests"
+      ],
+      "created_at": "2026-07-29T23:19:28.213160+00:00",
+      "updated_at": "2026-07-29T23:19:28.213160+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260729_231928_fix-4-failing-server-router-tests",
+      "title": "Fix 4 failing server router tests",
+      "description": "\nFixed 4 failing server router test files:\n\n- **test_auth_router.py**: Mocked `_get_auth_deps` in register test; made `create_token` return a real string (not MagicMock) across all 6 tests\n- **test_datasets_router.py**: Mock return values now include `path` for `DatasetInfo` validation; fixed bad_id test to expect 404 (not 422)\n- **test_vector_router.py**: Rewrote with per-test fixture isolation; removed `@patch` leakage from init test\n- **test_agents_router.py**: Changed `sys.execute.return_value` to `sys.execute = AsyncMock(return_value=...)` for awaitable mock\n\nResult: 324/324 server tests pass (was 24 failing)",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "server",
+        "tests",
+        "fix"
+      ],
+      "created_at": "2026-07-29T23:19:28.211483+00:00",
+      "updated_at": "2026-07-29T23:19:28.211483+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    }
+  ]
+}

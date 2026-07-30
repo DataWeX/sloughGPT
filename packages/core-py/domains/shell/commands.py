@@ -74,7 +74,7 @@ class ShellCommands:
         if isinstance(result, list):
             return result
         if isinstance(result, dict):
-            return result.get("models", result.get("available", []))
+            return result.get("data", result.get("models", result.get("available", [])))
         return []
 
     @staticmethod
@@ -288,3 +288,18 @@ class ShellCommands:
         if isinstance(result, dict):
             return result
         return {}
+
+    @staticmethod
+    def set_precision(mode: str = "auto") -> dict[str, Any]:
+        """Set compute precision (auto/fp32/fp16)."""
+        return _api_post("/models/precision", {"mode": mode})
+
+    @staticmethod
+    def quantize_model(bits: int = 8, mode: str = "symmetric") -> dict[str, Any]:
+        """Quantize the loaded model (bits: 4 or 8, mode: symmetric/asymmetric)."""
+        return _api_post("/models/quantize", {"bits": bits, "mode": mode})
+
+    @staticmethod
+    def dequantize_model() -> dict[str, Any]:
+        """Restore quantized model to float32."""
+        return _api_post("/models/dequantize")

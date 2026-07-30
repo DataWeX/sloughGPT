@@ -19,12 +19,24 @@ Every session must log its work using the `notes` CLI tool:
 notes new "Short title" --tags tag1,tag2 --status wip|done
 ```
 
-The `notes` command is installed globally (from `tools/notes/`). Notes live in `~/.config/dev-notes/`; each note is a `.md` file with YAML frontmatter.
+The `notes` command is installed globally (from `tools/notes/`). Notes are stored in `<repo>/.dev-notes/store/` via MogDB (the project's own document DB).
 
 ### When to create a note
 - **Session start**: Create a note with the session goal, status `wip`
 - **Major milestone**: Note key decisions, architecture changes, root causes
 - **Session end**: Update the session note to `done` with a summary of changes
+
+### Kanban sync
+Every existing note appears as a card on the kanban board (`kanban board`).
+After closing a session note, sync it to the board:
+
+```bash
+sync-notes-to-board
+```
+
+Data lives in the project root (`<repo>/.dev-notes/`, `<repo>/.kanban/board.json`)
+so it's version-controlled alongside the code. Columns map from note status:
+`done` → `done`, `wip` → `in_progress`, `todo` → `todo`, `review` → `review`.
 
 ### Useful commands
 ```bash
@@ -34,6 +46,8 @@ notes list --today                                               # today's work
 notes show <short-id>                                            # view detail
 notes edit <short-id> --status done --body "Completed: ..."       # close out
 notes search "keyword"                                           # find by topic
+kanban board                                                      # show board
+sync-notes-to-board                                               # sync notes → board
 ```
 
 ## Development Principles

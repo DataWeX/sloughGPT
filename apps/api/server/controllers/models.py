@@ -127,6 +127,16 @@ class ModelsController:
             )
             logger.info("SloNet provider registered: %s (quant=%s)",
                         model_id, f"int{cfg.quant_bits}" if cfg.quantize_slonet else "none", extra={"tag": "MODEL"})
+
+            # Auto-select precision on GPU (fp16 benchmark)
+            try:
+                from domains.slolib.gpu import set_accelerator_precision
+                active = set_accelerator_precision("auto")
+                if active == "fp16":
+                    logger.info("GPU precision set to fp16 (auto-selected via benchmark)",
+                                extra={"tag": "MODEL"})
+            except Exception:
+                pass
         except Exception as e:
             logger.error("Failed to register SloNet provider for %s: %s", model_id, e, extra={"tag": "MODEL"})
             raise

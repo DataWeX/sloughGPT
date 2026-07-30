@@ -94,6 +94,23 @@ def reset_accelerator() -> None:
     _BACKEND = None
 
 
+def set_accelerator_precision(mode: str = "auto") -> str:
+    """Switch accelerator precision on-the-fly.
+
+    Args:
+        mode: ``"auto"`` (benchmark), ``"fp32"``, or ``"fp16"``
+
+    Returns:
+        The active precision mode string.
+
+    On GPU backends (Metal, CUDA) fp16 can provide ~2x speedup via
+    tensor-core operations. On CPU this is a no-op — fp16 numpy arrays
+    are promoted to fp32 for ``matmul``.
+    """
+    acc = get_accelerator()
+    return acc.set_precision(mode)
+
+
 def _detect_best_backend() -> "_Accelerator":
     candidates: List[Tuple[str, "_Accelerator", int]] = []
 
@@ -150,6 +167,70 @@ class _Accelerator:
     device_type: str = "cpu"
     compute_tier: str = "lite"
     desc: str = ""
+
+    # Precision control
+    _fp16_mode: bool = False
+    _fp16_available: bool = False  # True if the backend supports hardware fp16
+
+    def set_precision(self, mode: str) -> str:
+        """Switch compute precision on-the-fly.
+
+        Args:
+            mode: ``"auto"`` (benchmark), ``"fp32"``, or ``"fp16"``
+
+        Returns:
+            The active precision mode string (``"fp32"`` or ``"fp16"``).
+        """
+        if mode == "fp16" and self._fp16_available:
+            self._fp16_mode = True
+            return "fp16"
+        if mode == "auto":
+            return self._prec_benchmark()
+        self._fp16_mode = False
+        return "fp32"
+
+    def _prec_benchmark(self) -> str:
+        """Run a quick matmul benchmark to determine faster precision.
+
+        Returns ``"fp16"`` if fp16 is available and at least 10% faster,
+        else ``"fp32"``.
+        """
+        if not self._fp16_available:
+            return "fp32"
+        try:
+            a = np.random.randn(512, 512).astype(np.float32)
+            b = np.random.randn(512, 512).astype(np.float32)
+            # Warmup
+            for _ in range(3):
+                self.matmul(a, b)
+            # Benchmark fp32
+            t0 = time.perf_counter()
+            for _ in range(10):
+                self.matmul(a, b)
+            t_fp32 = (time.perf_counter() - t0) / 10
+            # Benchmark fp16
+            self._fp16_mode = True
+            for _ in range(3):
+                self.matmul(a, b)
+            t0 = time.perf_counter()
+            for _ in range(10):
+                self.matmul(a, b)
+            t_fp16 = (time.perf_counter() - t0) / 10
+            # Restore fp32 default
+            self._fp16_mode = False
+            speedup = t_fp32 / max(t_fp16, 1e-10)
+            choice = "fp16" if speedup > 1.1 else "fp32"
+            logger.info(
+                "Accelerator precision benchmark: fp32=%.2fms, fp16=%.2fms, "
+                "speedup=%.2fx → %s", t_fp32 * 1000, t_fp16 * 1000, speedup, choice,
+                extra={"tag": "GPU"},
+            )
+            if choice == "fp16":
+                self._fp16_mode = True
+            return choice
+        except Exception:
+            self._fp16_mode = False
+            return "fp32"
 
     def is_available(self) -> bool:
         return True
@@ -654,6 +735,7 @@ class _MetalBackend(_Accelerator):
     """
     name = "metal"
     device_type = "gpu"
+    _fp16_available = True
 
     def __init__(self):
         self._torch = None
@@ -673,7 +755,8 @@ class _MetalBackend(_Accelerator):
     def _t(self, a):
         """Convert numpy → MPS tensor; pass through if already a torch tensor."""
         if isinstance(a, np.ndarray):
-            return self._torch.tensor(a, dtype=self._torch.float32, device="mps")
+            dtype = self._torch.float16 if self._fp16_mode else self._torch.float32
+            return self._torch.tensor(a, dtype=dtype, device="mps")
         return a
 
     def _n(self, t):
@@ -687,7 +770,8 @@ class _MetalBackend(_Accelerator):
     def to_device(self, arr):
         if not isinstance(arr, np.ndarray):
             return arr
-        return self._torch.tensor(arr, dtype=self._torch.float32, device="mps")
+        dtype = self._torch.float16 if self._fp16_mode else self._torch.float32
+        return self._torch.tensor(arr, dtype=dtype, device="mps")
 
     def from_device(self, arr):
         """Convert MPS tensor to numpy. Pass through for numpy arrays."""
@@ -819,6 +903,7 @@ class _CUDABackend(_Accelerator):
     """
     name = "cuda"
     device_type = "gpu"
+    _fp16_available = True
 
     def __init__(self):
         self._cp = None
@@ -865,22 +950,30 @@ class _CUDABackend(_Accelerator):
             "recommend_quantization": tier != "full",
         }
 
+    def _dtype(self):
+        return self._cp.float16 if self._fp16_mode else self._cp.float32
+
     def to_device(self, arr: np.ndarray) -> Any:
         if self._cp:
-            return self._cp.asarray(arr.astype(np.float32))
+            return self._cp.asarray(arr, dtype=self._dtype())
         return arr.astype(np.float32)
 
     def from_device(self, arr: Any) -> np.ndarray:
         if self._cp and hasattr(arr, "get"):
-            return arr.get()
+            # Always return fp32 to numpy callers
+            return arr.get().astype(np.float32)
         return np.asarray(arr)
 
     def matmul(self, a: Any, b: Any) -> np.ndarray:
-        if self._cp:
+        if self._cp and not self._fp16_mode:
             return self._cp.asnumpy(self._cp.matmul(
                 self._cp.asarray(a) if not hasattr(a, "device") else a,
                 self._cp.asarray(b) if not hasattr(b, "device") else b
             ))
+        if self._cp:
+            a_arr = self._cp.asarray(a, dtype=self._dtype()) if not hasattr(a, "device") else a
+            b_arr = self._cp.asarray(b, dtype=self._dtype()) if not hasattr(b, "device") else b
+            return self._cp.asnumpy(self._cp.matmul(a_arr, b_arr)).astype(np.float32)
         return np.matmul(np.asarray(a), np.asarray(b))
 
     def scaled_dot_attention(self, q: np.ndarray, k: np.ndarray, v: np.ndarray,

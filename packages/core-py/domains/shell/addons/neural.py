@@ -756,7 +756,7 @@ def __getattr__(name: str):
 
 def _install_facade(kernel: Any) -> None:
     """Attach all neural facade functions and property descriptors to the kernel."""
-    from .neural_facade import (
+    from .neural_bindings import (
         Property,
         engine as _engine_prop,
         tokenizer_device as _tok_prop,
@@ -840,7 +840,7 @@ def setup(kernel: Any) -> None:
     kernel._next_neural_id = 1
 
     def _handle_tokenize(caller: Any, text: str, **kw: Any) -> dict:
-        from .neural_facade import tokenize as _tokenize
+        from .neural_bindings import tokenize as _tokenize
         return {"tokens": _tokenize(kernel, text)}
 
     def _handle_generate(caller: Any, text: str, model_name: str = "", **kw: Any) -> dict:
