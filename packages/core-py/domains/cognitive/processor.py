@@ -233,7 +233,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             # Prepare reasoning context
             reasoning_context = {
                 "memory_context": memory_context,
-                "thought_type": thought.thought_type.value,
+                "thought_type": thought.thought_type.value if hasattr(thought.thought_type, "value") else thought.thought_type,
                 "confidence": thought.confidence,
             }
 
@@ -265,7 +265,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             memory_id = await self.memory_manager.store_memory(
                 {
                     "thought_content": thought.content,
-                    "thought_type": thought.thought_type.value,
+                    "thought_type": thought.thought_type.value if hasattr(thought.thought_type, "value") else thought.thought_type,
                     "reasoning_result": thought.metadata.get("reasoning_result"),
                     "confidence": thought.confidence,
                 },
@@ -293,7 +293,8 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             "intuitive": 0.05,
         }
 
-        type_boost = type_boosts.get(thought.thought_type.value, 0.0)
+        tt = thought.thought_type.value if hasattr(thought.thought_type, "value") else thought.thought_type
+        type_boost = type_boosts.get(tt, 0.0)
 
         # Boost for reasoning results
         reasoning_boost = 0.0
