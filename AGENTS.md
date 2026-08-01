@@ -237,7 +237,7 @@ This codebase replaces most standard ML/DL libraries with custom implementations
 
 ### Key Patterns for Agents
 
-1. **PyTorch is NOT used** — SloNet handles all training and inference. `slonet_compat.py` exists only for loading legacy `.pt` checkpoints into SloNet tensors, not for running torch models.
+1. **PyTorch is NOT used** — SloNet handles all training and inference. The former `slonet_compat.py` torch shim was removed; every domain module imports cleanly without torch. Optional torch is only imported lazily inside torch-specific features (ONNX/TorchScript export, HF fine-tune, MPS detection).
 2. **NumPy is the tensor framework** — `Tensor` in `slonet.py` wraps numpy arrays with autograd. Never call `torch.tensor()` directly.
 3. **No external model downloads at runtime** — SloNet models train from scratch. HuggingFace models are converted to `.slnc` format on first load.
 4. **`safetensors` is optional** — `model_loader.py` reads raw bytes as fallback. `.slnc` is the preferred format.
@@ -251,7 +251,6 @@ This codebase replaces most standard ML/DL libraries with custom implementations
 
 ```
 slonet.py (core) ──────────────── numpy only (training + inference)
-  ├── slonet_compat.py ─────────── torch shim (legacy .pt loading only)
   ├── slolib/gpu/ ──────────────── Metal/CUDA/OpenCL (auto-detected)
   ├── quantization.py ──────────── numpy only
   ├── slnc/ ────────────────────── mmap + struct (stdlib only)
