@@ -29,6 +29,7 @@ from typing import Callable, Dict, List, Optional, Union
 
 from . import downloader, state
 from . import hf_hub
+from . import resume
 from . import verify
 
 logger = logging.getLogger(__name__)
@@ -37,9 +38,14 @@ __all__ = [
     "download",
     "download_hf_model",
     "hf_hub",
+    "resume",
     "state",
     "downloader",
     "verify",
+    "inspect_incomplete",
+    "resume_download",
+    "resume_plan",
+    "resume_model",
 ]
 
 
@@ -156,23 +162,30 @@ def download_hf_model(
     Returns:
         Dict with keys: ``status``, ``cache_dir``, ``elapsed``, ``total_bytes``.
     """
-    if hf_home is None:
-        hf_home = os.environ.get("HF_HOME", "")
+    # Resolve cache directory.  An explicit ``hf_home`` is the hub root
+    # (``<hf_home>/models--<id>``); ``None`` resolves via the HF_HOME env
+    # var with ``/hub`` appended — the standard HF layout that
+    # is_download_complete and the app's safetensors_loader expect.
+    cache_dir = str(hf_hub.get_cache_dir(model_id, hf_home))
 
     st = state.get_state()
 
-    # Quick check — already complete?
+    # Quick check — already complete?  State is a hint only; disk is truth.
     existing = st.get(model_id)
     if existing and existing.status == "complete" and not ignore_cache:
-        logger.info("%s already fully downloaded", model_id)
-        return {
-            "status": "already_cached",
-            "model_id": model_id,
-            "cache_dir": existing.cache_dir,
-        }
+        if hf_hub.is_download_complete(model_id, hf_home=hf_home):
+            logger.info("%s already fully downloaded", model_id)
+            _write_snapshot_ref(cache_dir)
+            return {
+                "status": "already_cached",
+                "model_id": model_id,
+                "cache_dir": existing.cache_dir,
+            }
+        logger.warning(
+            "%s marked complete in state but files missing on disk; redownloading",
+            model_id,
+        )
 
-    # Resolve cache directory
-    cache_dir = str(hf_hub.get_cache_dir(model_id, hf_home))
     files = hf_hub.list_model_files(model_id)
     weight_files = [f for f in files if not f.is_ignored]
 
@@ -194,9 +207,26 @@ def download_hf_model(
         rel_path = hf_file.path
         dest = Path(cache_dir) / "snapshots" / "default" / rel_path
 
+        # Disk truth beats persistent state: a final file at the expected
+        # size is complete even if ~/.downcraft/state.json was lost.
+        if hf_file.size > 0 and dest.is_file() and dest.stat().st_size == hf_file.size:
+            st.update_file_progress(
+                model_id, rel_path, hf_file.download_url,
+                hf_file.size, hf_file.size,
+                checksum=hf_file.checksum, complete=True,
+            )
+            continue
+
         existing_file = st_state.files.get(rel_path)
         if existing_file and existing_file.complete:
             continue
+
+        # Normalize HuggingFace's *.incomplete marker into downcraft's
+        # *.sgpart so the generic downloader resumes it via Range.
+        incomplete = dest.with_suffix(dest.suffix + ".incomplete")
+        sgpart = dest.with_suffix(dest.suffix + ".sgpart")
+        if incomplete.is_file() and not sgpart.exists():
+            os.replace(str(incomplete), str(sgpart))
 
         chunk_cb = _make_hf_chunk_cb(
             st, model_id, rel_path,
@@ -228,6 +258,11 @@ def download_hf_model(
 
     st.set_status(model_id, "complete")
     st.flush()
+
+    # Record the snapshot ref so is_download_complete recognizes the
+    # snapshots/default layout (it resolves refs/main -> snapshot dir).
+    _write_snapshot_ref(cache_dir)
+
     elapsed = time.time() - start
     logger.info(
         "Downloaded %s in %.1fs (%.2f MB/s)",
@@ -242,6 +277,18 @@ def download_hf_model(
         "elapsed": round(elapsed, 1),
         "total_bytes": total_all,
     }
+
+
+def _write_snapshot_ref(cache_dir: str) -> None:
+    """Write ``refs/main -> default`` so the snapshot layout is recognized.
+
+    ``download_hf_model`` writes files to ``snapshots/default``.  Recording
+    the ref lets :func:`downcraft.hf_hub.is_download_complete` resolve the
+    snapshot dir and mark the model complete.
+    """
+    refs = Path(cache_dir) / "refs"
+    refs.mkdir(parents=True, exist_ok=True)
+    (refs / "main").write_text("default")
 
 
 def _make_hf_chunk_cb(

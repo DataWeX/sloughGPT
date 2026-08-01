@@ -8,6 +8,7 @@ import pytest
 
 from downcraft.hf_hub import (
     _matches_ignore,
+    find_cached_model_dir,
     get_cache_dir,
     is_download_complete,
     list_model_files,
@@ -137,6 +138,19 @@ class TestIsDownloadComplete:
             (cache_dir / ".incomplete").write_text("incomplete")
             assert is_download_complete("test-model", hf_home=str(Path(td) / "hub")) is False
 
+    def test_sgpart_temp_file_blocks_snapshot(self):
+        with tempfile.TemporaryDirectory() as td:
+            cache_dir = Path(td) / "hub" / "models--test-model"
+            cache_dir.mkdir(parents=True)
+            refs = cache_dir / "refs"
+            refs.mkdir()
+            (refs / "main").write_text("abc123")
+            snap = cache_dir / "snapshots" / "abc123"
+            snap.mkdir(parents=True)
+            (snap / "model.safetensors").write_bytes(b"x" * 2000)
+            (snap / "model.safetensors.sgpart").write_bytes(b"x" * 500)
+            assert is_download_complete("test-model", hf_home=str(Path(td) / "hub")) is False
+
     def test_lock_file_returns_false(self):
         with tempfile.TemporaryDirectory() as td:
             cache_dir = Path(td) / "hub" / "models--test-model"
@@ -161,6 +175,86 @@ class TestIsDownloadComplete:
             snap.mkdir(parents=True)
             (snap / "model.safetensors").write_bytes(b"x" * 500)  # < 1KB
             assert is_download_complete("test-model", hf_home=str(Path(td) / "hub")) is False
+
+    def test_flat_layout_complete(self):
+        with tempfile.TemporaryDirectory() as td:
+            cache_dir = Path(td) / "hub" / "models--test-model"
+            cache_dir.mkdir(parents=True)
+            (cache_dir / "config.json").write_text("{}")
+            (cache_dir / "model.safetensors").write_bytes(b"x" * 2000)
+            assert is_download_complete("test-model", hf_home=str(Path(td) / "hub")) is True
+
+    def test_flat_layout_with_refs_and_stale_locks(self):
+        with tempfile.TemporaryDirectory() as td:
+            cache_dir = Path(td) / "hub" / "models--test-model"
+            cache_dir.mkdir(parents=True)
+            refs = cache_dir / "refs"
+            refs.mkdir()
+            (refs / "main").write_text("abc123")
+            (cache_dir / "config.json").write_text("{}")
+            (cache_dir / "model.safetensors").write_bytes(b"x" * 2000)
+            dl = cache_dir / ".cache" / "huggingface" / "download"
+            dl.mkdir(parents=True)
+            (dl / "model.safetensors.lock").touch()
+            assert is_download_complete("test-model", hf_home=str(Path(td) / "hub")) is True
+
+    def test_flat_layout_active_lock_blocks(self):
+        with tempfile.TemporaryDirectory() as td:
+            cache_dir = Path(td) / "hub" / "models--test-model"
+            cache_dir.mkdir(parents=True)
+            (cache_dir / "config.json").write_text("{}")
+            (cache_dir / "model.safetensors").write_bytes(b"x" * 2000)
+            dl = cache_dir / ".cache" / "huggingface" / "download"
+            dl.mkdir(parents=True)
+            (dl / "extra.bin.lock").touch()  # target missing -> active download
+            assert is_download_complete("test-model", hf_home=str(Path(td) / "hub")) is False
+
+    def test_flat_layout_missing_config_incomplete(self):
+        with tempfile.TemporaryDirectory() as td:
+            cache_dir = Path(td) / "hub" / "models--test-model"
+            cache_dir.mkdir(parents=True)
+            (cache_dir / "model.safetensors").write_bytes(b"x" * 2000)
+            assert is_download_complete("test-model", hf_home=str(Path(td) / "hub")) is False
+
+    def test_flat_layout_incomplete_marker_blocks(self):
+        with tempfile.TemporaryDirectory() as td:
+            cache_dir = Path(td) / "hub" / "models--test-model"
+            cache_dir.mkdir(parents=True)
+            (cache_dir / "config.json").write_text("{}")
+            (cache_dir / "model.safetensors").write_bytes(b"x" * 2000)
+            (cache_dir / "model.safetensors.incomplete").write_text("partial")
+            assert is_download_complete("test-model", hf_home=str(Path(td) / "hub")) is False
+
+    def test_flat_layout_sgpart_temp_file_blocks(self):
+        with tempfile.TemporaryDirectory() as td:
+            cache_dir = Path(td) / "hub" / "models--test-model"
+            cache_dir.mkdir(parents=True)
+            (cache_dir / "config.json").write_text("{}")
+            (cache_dir / "model.safetensors").write_bytes(b"x" * 2000)
+            (cache_dir / "model.safetensors.sgpart").write_bytes(b"x" * 500)
+            assert is_download_complete("test-model", hf_home=str(Path(td) / "hub")) is False
+
+    def test_flat_layout_no_snapshot_but_refs(self):
+        with tempfile.TemporaryDirectory() as td:
+            cache_dir = Path(td) / "hub" / "models--test-model"
+            cache_dir.mkdir(parents=True)
+            refs = cache_dir / "refs"
+            refs.mkdir()
+            (refs / "main").write_text("abc123")
+            (cache_dir / "config.json").write_text("{}")
+            (cache_dir / "model.safetensors").write_bytes(b"x" * 2000)
+            assert is_download_complete("test-model", hf_home=str(Path(td) / "hub")) is True
+
+
+class TestFindCachedModelDir:
+    def test_returns_standard_dir_when_exists(self, tmp_path):
+        cache_dir = tmp_path / "hub" / "models--org--model"
+        cache_dir.mkdir(parents=True)
+        result = find_cached_model_dir("org/model", hf_home=str(tmp_path / "hub"))
+        assert result == cache_dir
+
+    def test_returns_none_when_absent(self, tmp_path):
+        assert find_cached_model_dir("org/model", hf_home=str(tmp_path / "hub")) is None
 
 
 class TestListModelFiles:

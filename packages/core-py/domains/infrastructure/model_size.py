@@ -26,6 +26,7 @@ try:
     from downcraft.hf_hub import (
         is_download_complete,
         get_cache_dir,
+        find_cached_model_dir,
     )
 except ImportError:
     logger.warning("downcraft not available — cache completeness checks disabled",
@@ -34,6 +35,8 @@ except ImportError:
         return False
     def get_cache_dir(model_id: str) -> str:
         return f"~/.cache/huggingface/hub/models--{model_id.replace('/', '--')}/"
+    def find_cached_model_dir(model_id: str):
+        return None
 
 from .download_manager import _has_weight_files
 
@@ -92,7 +95,8 @@ def compute_model_size_gb(model_id: str) -> Optional[float]:
 
     # 1. Local HF cache — only if download is truly complete
     if is_download_complete(model_id):
-        cache_size = _sum_weight_files(get_cache_dir(model_id))
+        cache_dir = Path(find_cached_model_dir(model_id) or get_cache_dir(model_id))
+        cache_size = _sum_weight_files(cache_dir)
         if cache_size is not None:
             with _size_cache_lock:
                 _size_cache[model_id] = (now, cache_size)

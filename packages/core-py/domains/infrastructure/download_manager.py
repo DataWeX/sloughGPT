@@ -91,7 +91,7 @@ class DownloadProgress:
 
 def _cache_dir(model_id: str) -> Path:
     """Get the HF cache directory path for a model."""
-    return get_cache_dir(model_id)
+    return Path(get_cache_dir(model_id))
 
 
 def _has_weight_files(cache_dir: Path) -> bool:

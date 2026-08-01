@@ -20,11 +20,23 @@ logger = logging.getLogger("slo.infrastructure.safetensors_loader")
 
 
 def _get_model_dir(model_id: str) -> Path:
-    """Resolve HuggingFace cache directory for a model."""
+    """Resolve HuggingFace cache directory for a model.
+
+    Searches the standard HF cache first, then the project-local
+    cache (models/hf-cache/hub/) mirroring MorphTokenizer.from_pretrained.
+    """
     import os
     cache_id = model_id.replace("/", "--")
     hf_home = os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))
-    return Path(hf_home) / "hub" / f"models--{cache_id}"
+    candidates = [
+        Path(hf_home) / "hub" / f"models--{cache_id}",
+        Path(__file__).resolve().parents[4] / "models" / "hf-cache" / "hub" / f"models--{cache_id}",
+        Path("models/hf-cache/hub") / f"models--{cache_id}",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
 
 
 def _find_safetensors(model_dir: Path) -> Optional[Path]:
@@ -179,24 +191,36 @@ def load_model_config(model_id: str) -> Dict[str, Any]:
 
 
 def list_cached_models() -> list:
-    """List all models cached locally with safetensors files."""
+    """List all models cached locally with safetensors files.
+
+    Scans both the standard HF cache (HF_HOME/hub) and the project-local
+    cache (models/hf-cache/hub/), deduplicating by model id.
+    """
     import os
     hf_home = os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))
-    hub = Path(hf_home) / "hub"
+    hub_dirs = [
+        Path(hf_home) / "hub",
+        Path(__file__).resolve().parents[4] / "models" / "hf-cache" / "hub",
+    ]
 
-    models = []
-    for model_dir in hub.glob("models--*"):
-        st = _find_safetensors(model_dir)
-        if st is not None:
-            model_name = model_dir.name.replace("models--", "").replace("--", "/")
-            size_mb = st.stat().st_size / (1024 * 1024)
-            models.append({
-                "id": model_name,
-                "path": str(st),
-                "size_mb": round(size_mb, 1),
-            })
+    models = {}
+    for hub in hub_dirs:
+        if not hub.exists():
+            continue
+        for model_dir in hub.glob("models--*"):
+            st = _find_safetensors(model_dir)
+            if st is not None:
+                model_name = model_dir.name.replace("models--", "").replace("--", "/")
+                if model_name in models:
+                    continue
+                size_mb = st.stat().st_size / (1024 * 1024)
+                models[model_name] = {
+                    "id": model_name,
+                    "path": str(st),
+                    "size_mb": round(size_mb, 1),
+                }
 
-    return sorted(models, key=lambda x: x["id"])
+    return sorted(models.values(), key=lambda x: x["id"])
 
 
 __all__ = [

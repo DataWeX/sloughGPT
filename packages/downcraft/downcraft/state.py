@@ -99,6 +99,14 @@ class PersistentState:
 
     def create(self, model_id: str, cache_dir: str) -> ModelState:
         with self._mutex:
+            existing = self._models.get(model_id)
+            if existing is not None:
+                # Preserve per-file progress across restarts/resumes so a
+                # new download() call continues, not restarts, the model.
+                if cache_dir:
+                    existing.cache_dir = cache_dir
+                self._mark_dirty()
+                return existing
             st = ModelState(
                 model_id=model_id,
                 status="queued",

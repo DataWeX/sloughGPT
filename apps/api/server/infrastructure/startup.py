@@ -613,19 +613,16 @@ def _autoload_model(cfg: ServerConfig):
         logger.info("Autoload ok: %s (%s)", model_id, result.model_type, extra={"tag": "START"})
         return
 
-    # 2) No local file — download from HuggingFace, then load via ModelLoader
+    # 2) No local file — download from HuggingFace via downcraft (resume-aware),
+    #    then load via ModelLoader
     logger.info("No local .slnc/safetensors for %s — downloading from HuggingFace", model_id, extra={"tag": "START"})
     try:
-        from huggingface_hub import snapshot_download
+        from downcraft import download_hf_model
         from domains.infrastructure.safetensors_loader import _get_model_dir
 
         cache_dir = _get_model_dir(model_id)
         logger.info("Downloading %s to %s ...", model_id, cache_dir, extra={"tag": "START"})
-        snapshot_download(
-            model_id,
-            local_dir=str(cache_dir),
-            allow_patterns=["*.safetensors", "*.json", "*.txt", "*.model"],
-        )
+        download_hf_model(model_id)
         logger.info("Download complete: %s", model_id, extra={"tag": "START"})
     except Exception as e:
         logger.warning("HuggingFace download failed: %s", e, extra={"tag": "START"})

@@ -96,13 +96,13 @@ def download_file(
                 continue
 
             mode = "ab" if resume_at > 0 else "wb"
+            # expected_size is the FULL file size; the server's Content-Length
+            # is the remaining bytes on a 206 response, so the resume offset is
+            # added back only when deriving the total from the response header.
             total = expected_size or int(resp.headers.get("Content-Length", 0))
-            # For resuming, the Content-Length is the REMAINING bytes
-            if resume_at > 0 and total > 0:
+            if expected_size <= 0 and resume_at > 0 and total > 0:
                 total += resume_at
             total = total or 0
-
-            hasher = hashlib.sha256() if checksum else None
 
             dest.parent.mkdir(parents=True, exist_ok=True)
             with open(part, mode) as f:
@@ -110,14 +110,18 @@ def download_file(
                     if not chunk:
                         continue
                     f.write(chunk)
-                    if hasher:
-                        hasher.update(chunk)
                     if on_chunk:
                         bytes_done = part.stat().st_size
                         on_chunk(bytes_done, max(bytes_done, total))
 
-            # Verify checksum
-            if checksum and hasher:
+            # Verify checksum over the complete file.  Hashing only the bytes
+            # received in this request would miss bytes written by an earlier
+            # (resumed) attempt, so the whole .sgpart is re-read.
+            if checksum:
+                hasher = hashlib.sha256()
+                with open(part, "rb") as f:
+                    for block in iter(lambda: f.read(CHUNK_SIZE), b""):
+                        hasher.update(block)
                 actual = hasher.hexdigest()
                 if actual != checksum:
                     logger.error(
