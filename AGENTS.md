@@ -19,7 +19,7 @@ Every session must log its work using the `notes` CLI tool:
 notes new "Short title" --tags tag1,tag2 --status wip|done
 ```
 
-The `notes` command is installed globally (from `tools/notes/`). Notes are stored in `<repo>/.dev-notes/store/` via MogDB (the project's own document DB).
+The `notes` command is installed globally (from `packages/planner/`). Notes are stored in `<repo>/.dev-notes/store/` via MogDB (the project's own document DB).
 
 ### When to create a note
 - **Session start**: Create a note with the session goal, status `wip`
