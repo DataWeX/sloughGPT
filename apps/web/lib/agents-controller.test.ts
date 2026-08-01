@@ -75,6 +75,30 @@ describe('agentsController.execute', () => {
   })
 })
 
+describe('agentsController.listRuns', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('GETs /agents/runs', async () => {
+    apiClient.apiGet.mockResolvedValue({
+      runs: [{ id: 'run_1', goal: 'Research', status: 'completed', tasks: [], completed_count: 1, failed_count: 0, logs: [] }],
+      count: 1,
+    })
+
+    const result = await agentsController.listRuns(20)
+    expect(result.count).toBe(1)
+    expect(result.runs[0].id).toBe('run_1')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/agents/runs?limit=20')
+  })
+
+  it('GETs run detail', async () => {
+    apiClient.apiGet.mockResolvedValue({ id: 'run_1', goal: 'Research', status: 'completed', tasks: [], completed_count: 1, failed_count: 0, logs: ['started'] })
+
+    const result = await agentsController.getRun('run_1')
+    expect(result.goal).toBe('Research')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/agents/runs/run_1')
+  })
+})
+
 describe('agentsController.orchestrate', () => {
   beforeEach(() => { vi.clearAllMocks() })
 

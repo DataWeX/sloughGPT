@@ -13,7 +13,7 @@ import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
-import { IconTrash, IconDownload, IconEdit, IconCheck, IconX, IconRefresh } from '@sloughgpt/strui'
+import { IconTrash, IconDownload, IconEdit, IconCheck, IconX, IconRefresh, IconClock } from '@sloughgpt/strui'
 import { datasetController, type Dataset, type DatasetStats } from '@/lib/dataset-controller'
 import { DatasetPreview } from '@/components/DatasetPreview'
 import { formatBytes } from '@/lib/format-bytes'
@@ -32,6 +32,10 @@ export default function DatasetDetailPage() {
   const [renameText, setRenameText] = useState('')
   const [stats, setStats] = useState<DatasetStats | null>(null)
   const [showDelete, setShowDelete] = useState(false)
+  const [versions, setVersions] = useState<string[]>([])
+  const [versionsLoading, setVersionsLoading] = useState(false)
+  const [snapshotting, setSnapshotting] = useState(false)
+  const [restoreTarget, setRestoreTarget] = useState<string | null>(null)
 
   const fetchDataset = useCallback(async () => {
     setLoading(true)
@@ -55,6 +59,46 @@ export default function DatasetDetailPage() {
     }
   }, [datasetId])
 
+  const fetchVersions = useCallback(async () => {
+    if (!datasetId) return
+    setVersionsLoading(true)
+    try {
+      const res = await datasetController.listVersions(datasetId)
+      setVersions(res.versions || [])
+    } catch {
+      setVersions([])
+    } finally {
+      setVersionsLoading(false)
+    }
+  }, [datasetId])
+
+  const handleCreateVersion = async () => {
+    if (!dataset) return
+    setSnapshotting(true)
+    try {
+      await datasetController.createVersion(dataset.id)
+      addToast('Snapshot created', 'success')
+      fetchVersions()
+    } catch {
+      addToast('Snapshot failed', 'error')
+    } finally {
+      setSnapshotting(false)
+    }
+  }
+
+  const handleRestoreVersion = async () => {
+    if (!dataset || !restoreTarget) return
+    try {
+      const res = await datasetController.restoreVersion(dataset.id, restoreTarget)
+      addToast(res.message || 'Version restored', 'success')
+      fetchVersions()
+    } catch {
+      addToast('Restore failed', 'error')
+    } finally {
+      setRestoreTarget(null)
+    }
+  }
+
   useEffect(() => {
     if (!datasetId) { router.push('/datasets'); return }
     fetchDataset()
@@ -63,8 +107,9 @@ export default function DatasetDetailPage() {
   useEffect(() => {
     if (dataset) {
       fetchStats()
+      fetchVersions()
     }
-  }, [dataset, fetchStats])
+  }, [dataset, fetchStats, fetchVersions])
 
   const startRename = () => {
     setRenameText(dataset?.name || '')
@@ -251,9 +296,63 @@ export default function DatasetDetailPage() {
                 <DatasetPreview datasetId={dataset.id} onUseForTraining={() => router.push(`/training?dataset=${dataset.id}&method=distill`)} />
               </CardContent>
             </Card>
+
+            {/* Versions card */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Versions</CardTitle>
+                  <Button size="sm" className="h-7 text-xs" onClick={handleCreateVersion} disabled={snapshotting}>
+                    <IconClock className="h-3 w-3 mr-1" />
+                    {snapshotting ? 'Snapshotting…' : 'Create snapshot'}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {versionsLoading ? (
+                  <Skeleton className="h-16 rounded-lg" />
+                ) : versions.length === 0 ? (
+                  <div className="text-center py-6 text-sm text-muted-foreground">
+                    No snapshots yet. Create one to freeze the current files, then restore them later.
+                  </div>
+                ) : (
+                  <ul className="space-y-2">
+                    {versions.map(v => (
+                      <li key={v} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2">
+                        <div className="flex items-center gap-2 text-sm">
+                          <IconClock className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="font-mono text-xs">{v}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(`${v.slice(0,4)}-${v.slice(4,6)}-${v.slice(6,8)}T${v.slice(8,10)}:${v.slice(10,12)}:${v.slice(12,14)}Z`).toLocaleString()}
+                          </span>
+                        </div>
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setRestoreTarget(v)}>
+                          Restore
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
           </>
         )}
       </div>
+
+      <AlertDialog open={restoreTarget !== null} onOpenChange={(open: boolean) => { if (!open) setRestoreTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restore version</AlertDialogTitle>
+            <AlertDialogDescription>
+              Restore dataset &ldquo;{dataset?.name}&rdquo; to version {restoreTarget ? `"${restoreTarget}"` : ''}? This overwrites the current files.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRestoreVersion}>Restore</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={showDelete} onOpenChange={setShowDelete}>
         <AlertDialogContent>

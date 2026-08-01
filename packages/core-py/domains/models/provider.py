@@ -843,11 +843,35 @@ class SloTransformerProvider:
 # setup_providers — wire up default provider + full processor pipeline
 # =============================================================================
 
+
+def _server_from_provider(provider: Any, process_guard: Any) -> Any:
+    """Build a guard-backed ``SloNetServer`` from a provider's model/tokenizer.
+
+    Delegates to ``SloNetChatProvider.to_server()`` when available. Returns
+    ``None`` if the provider cannot build a server.
+
+    Args:
+        provider: Provider instance with ``to_server()`` (e.g. SloNetChatProvider)
+        process_guard: ``ProcessGuard`` to attach for subprocess delegation
+
+    Returns:
+        SloNetServer bound to the provider, or None.
+    """
+    try:
+        if not hasattr(provider, "to_server"):
+            return None
+        return provider.to_server(process_guard=process_guard)
+    except Exception as e:
+        logger.warning("Failed to build guard-backed server: %s", e, extra={"tag": "MODEL"})
+        return None
+
+
 def setup_providers(
     slonet_hf_id: Optional[str] = None,
     slonet_provider=None,
     slonet_server=None,
     model_registry=None,
+    process_guard=None,
     quantize: bool = False,
     quant_bits: int = 8,
     quant_mode: str = "symmetric",
@@ -861,7 +885,9 @@ def setup_providers(
     - ``"default"``: ProviderRouter with processor chain → text provider
 
     When a ``SloNetServer`` is given via ``slonet_server``, it is attached to
-    the provider for concurrency control, circuit breaker, and warmup.
+    the provider for concurrency control, circuit breaker, and warmup. When a
+    ``ProcessGuard`` is given via ``process_guard`` and no server is provided,
+    a guard-backed ``SloNetServer`` is built from the provider automatically.
 
     Processor chain (in order):
     1. VisionProcessor — caption images
@@ -877,6 +903,8 @@ def setup_providers(
         slonet_provider: Pre-loaded provider (skips re-loading)
         slonet_server: ``SloNetServer`` instance for concurrency/circuit-breaker
         model_registry: Optional ModelRegistry for lifecycle management
+        process_guard: Optional ``ProcessGuard`` — attached to the provider
+            via a guard-backed ``SloNetServer`` when ``slonet_server`` is None
         quantize: Whether to quantize the model
         quant_bits: Quantization bit width
         quant_mode: Quantization mode
@@ -898,7 +926,9 @@ def setup_providers(
         logger.debug("Native C inference not available: %s", e, extra={"tag": "MODEL"})
 
     if slonet_provider is not None:
-        # Attach SloNetServer if provided
+        # Attach SloNetServer if provided, else build one from the guard
+        if slonet_server is None and process_guard is not None:
+            slonet_server = _server_from_provider(slonet_provider, process_guard)
         if slonet_server is not None and hasattr(slonet_provider, 'set_server'):
             slonet_provider.set_server(slonet_server)
             logger.info("Attached SloNetServer to provider: %s",
@@ -924,7 +954,9 @@ def setup_providers(
                 quant_bits=quant_bits,
                 quant_mode=quant_mode,
             )
-            # Attach SloNetServer if provided
+            # Attach SloNetServer if provided, else build one from the guard
+            if slonet_server is None and process_guard is not None:
+                slonet_server = _server_from_provider(slonet_provider, process_guard)
             if slonet_server is not None and hasattr(slonet_provider, 'set_server'):
                 slonet_provider.set_server(slonet_server)
             register_provider("slonet-native", slonet_provider)

@@ -26,6 +26,7 @@ export {
   IconVision,
   IconFile,
   IconChangelog,
+  IconClock,
 } from '@sloughgpt/strui'
 
 import { IconX } from '@sloughgpt/strui'

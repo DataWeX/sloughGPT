@@ -1,18 +1,20 @@
 """Integration contract: downcraft's download layout is consumable by the app loader.
 
-Proves the resume-aware ``downcraft.download_hf_model`` output (``snapshots/
-default/`` + ``refs/main``) is resolvable and loadable by the torch-free
-``safetensors_loader`` used by the server autoload path.  Uses a real local
-HTTP server with ``Range`` support — no network.
+Proves the resume-aware ``domains.infrastructure.hf_hub.download_hf_model``
+output (``snapshots/default/`` + ``refs/main``) is resolvable by the
+torch-free ``safetensors_loader`` used by the server autoload path.  Uses a
+real local HTTP server with ``Range`` support — no network.  The safetensors
+payload is synthesized by hand (no ``safetensors`` dependency).
 """
 
 import hashlib
+import json
+import struct
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import numpy as np
-import safetensors.numpy as st_np
 
 from domains.infrastructure.safetensors_loader import (
     _find_safetensors,
@@ -21,9 +23,38 @@ from domains.infrastructure.safetensors_loader import (
 )
 
 
-def _payload_bytes() -> bytes:
-    weights = {"wte.weight": np.arange(4096, dtype=np.float32).reshape(128, 32)}
-    return st_np.save(weights)
+def _write_safetensors(path: Path, weights: dict) -> int:
+    header = {"__metadata__": {}}
+    offset = 0
+    for name, arr in weights.items():
+        header[name] = {
+            "dtype": "F32",
+            "shape": list(arr.shape),
+            "data_offsets": [offset, offset + arr.nbytes],
+        }
+        offset += arr.nbytes
+    header_bytes = json.dumps(header).encode("utf-8")
+    with open(path, "wb") as f:
+        f.write(struct.pack("<Q", len(header_bytes)))
+        f.write(header_bytes)
+        for arr in weights.values():
+            f.write(np.ascontiguousarray(arr, dtype=np.float32).tobytes())
+    return 8 + len(header_bytes) + offset
+
+
+def _read_safetensors(path: Path) -> dict:
+    with open(path, "rb") as f:
+        n = struct.unpack("<Q", f.read(8))[0]
+        header = json.loads(f.read(n))
+        data = f.read()
+    out = {}
+    for name, meta in header.items():
+        if name == "__metadata__":
+            continue
+        start, end = meta["data_offsets"]
+        arr = np.frombuffer(data[start:end], dtype=np.float32).reshape(meta["shape"])
+        out[name] = arr
+    return out
 
 
 class _RangeHandler(BaseHTTPRequestHandler):
@@ -57,12 +88,19 @@ class _RangeHandler(BaseHTTPRequestHandler):
 
 
 def test_download_hf_model_output_consumable_by_app_loader(tmp_path, monkeypatch):
-    import downcraft.hf_hub as hub_mod
+    import domains.infrastructure.hf_hub as hub_mod
     import downcraft.state as st_mod
-    from downcraft import download_hf_model
-    from downcraft.hf_hub import HFFile, is_download_complete
+    from domains.infrastructure.hf_hub import (
+        HFFile,
+        download_hf_model,
+        is_download_complete,
+    )
 
-    payload = _payload_bytes()
+    weights = {"wte.weight": np.arange(4096, dtype=np.float32).reshape(128, 32)}
+    st_file = tmp_path / "model.safetensors"
+    _write_safetensors(st_file, weights)
+    payload = st_file.read_bytes()
+
     hub = tmp_path / "hub"
     monkeypatch.setenv("HF_HOME", str(hub))
     monkeypatch.setattr(
@@ -105,9 +143,9 @@ def test_download_hf_model_output_consumable_by_app_loader(tmp_path, monkeypatch
 
         assert is_download_complete(model_id) is True
 
-        weights = load_model_weights(model_id)
-        assert "wte.weight" in weights
-        assert weights["wte.weight"].shape == (128, 32)
+        loaded = load_model_weights(model_id)
+        assert "wte.weight" in loaded
+        assert loaded["wte.weight"].shape == (128, 32)
     finally:
         server.shutdown()
         thread.join(timeout=5)

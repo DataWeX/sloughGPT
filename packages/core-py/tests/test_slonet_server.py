@@ -622,4 +622,112 @@ class TestPoolMode:
         assert md["workers"] == 3
 
 
+# ---------------------------------------------------------------------------
+# Process guard delegation
+# ---------------------------------------------------------------------------
+
+class _FakeGuard:
+    """Stands in for ProcessGuard: alive flag + generate/generate_stream/health."""
+
+    def __init__(self, alive: bool = True):
+        self._alive = alive
+        self.crash_cbs = []
+        self.restart_cbs = []
+
+    @property
+    def alive(self) -> bool:
+        return self._alive
+
+    def generate(self, prompt: str, **kwargs):
+        return {"text": f"guarded:{prompt}", "tokens_generated": 3, "elapsed_ms": 1.0}
+
+    def generate_stream(self, prompt: str, **kwargs):
+        yield "guarded"
+        yield "stream"
+
+    def health(self) -> dict:
+        return {"alive": self._alive, "worker_id": "fake", "requests_served": 1}
+
+    def on_crash(self, cb):
+        self.crash_cbs.append(cb)
+
+    def on_restart(self, cb):
+        self.restart_cbs.append(cb)
+
+
+class TestProcessGuardDelegation:
+
+    @pytest.fixture
+    def guard(self):
+        return _FakeGuard(alive=True)
+
+    @pytest.fixture
+    def guarded_server(self, mock_model, mock_tokenizer, guard):
+        return SloNetServer(
+            model=mock_model,
+            tokenizer=mock_tokenizer,
+            model_id="test-guarded",
+            enable_warmup=False,
+            process_guard=guard,
+        )
+
+    async def test_generate_delegates_to_guard_when_alive(self, guarded_server, mock_model, guard):
+        out = await guarded_server.generate("hi", max_new_tokens=10)
+        assert out == "guarded:hi"
+        mock_model.generate_numpy.assert_not_called()
+
+    async def test_generate_falls_back_to_direct_model_when_guard_dead(self, mock_model, mock_tokenizer):
+        dead = _FakeGuard(alive=False)
+        srv = SloNetServer(
+            model=mock_model,
+            tokenizer=mock_tokenizer,
+            model_id="test-guarded",
+            enable_warmup=False,
+            process_guard=dead,
+        )
+        out = await srv.generate("hi")
+        assert out == "hello world"
+        mock_model.generate_numpy.assert_called_once()
+
+    async def test_generate_stream_delegates_to_guard_when_alive(self, guarded_server, mock_model):
+        tokens = [t async for t in guarded_server.generate_stream("hi")]
+        assert tokens == ["guarded", "stream"]
+        mock_model.generate_numpy_stream.assert_not_called()
+
+    async def test_generate_stream_falls_back_when_guard_dead(self, mock_model, mock_tokenizer):
+        dead = _FakeGuard(alive=False)
+        srv = SloNetServer(
+            model=mock_model,
+            tokenizer=mock_tokenizer,
+            model_id="test-guarded",
+            enable_warmup=False,
+            process_guard=dead,
+        )
+        tokens = [t async for t in srv.generate_stream("hi")]
+        assert tokens == ["hello world", "hello world"]
+        mock_model.generate_numpy_stream.assert_called_once()
+
+    def test_metadata_includes_guard_health(self, guarded_server):
+        md = guarded_server.metadata()
+        assert md["process_guard"]["alive"] is True
+        assert md["process_guard"]["worker_id"] == "fake"
+
+    def test_metadata_guard_none_when_no_guard(self, server):
+        md = server.metadata()
+        assert md["process_guard"] is None
+
+    def test_crash_callback_wired_to_circuit_breaker(self, guarded_server, guard):
+        assert len(guard.crash_cbs) == 1
+        cb = guard.crash_cbs[0]
+        cb("fake")
+        cb("fake")
+        cb("fake")
+        assert guarded_server._circuit_breaker.state == CircuitBreakerState.OPEN
+
+    def test_restart_callback_wired_to_circuit_breaker(self, guarded_server, guard):
+        assert len(guard.restart_cbs) == 1
+        guard.restart_cbs[0]("fake")
+        assert guarded_server._circuit_breaker.state == CircuitBreakerState.CLOSED
+
+
 

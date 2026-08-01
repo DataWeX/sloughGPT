@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "downcraft"
 version = "0.2.0"
-description = "HTTP/HTTPS downloader with cross-session resume, integrity verification, and HuggingFace support"
+description = "HTTP/HTTPS downloader with cross-session resume and integrity verification"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
-keywords = ["download", "resume", "http", "range", "huggingface", "models"]
+keywords = ["download", "resume", "http", "range"]
 authors = [
     {name = "downcraft"},
 ]
@@ -29,7 +29,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-hf = ["huggingface-hub>=0.16"]
 dev = ["pytest", "pytest-cov"]
 
 [project.urls]

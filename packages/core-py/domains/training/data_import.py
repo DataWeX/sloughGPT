@@ -634,27 +634,29 @@ class HuggingFaceImporter:
         self._hf_available = self._check_hf()
 
     def _check_hf(self) -> bool:
+        """Whether the ``datasets`` package is installed (needed to download).
+
+        Search uses plain HTTP against the Hub REST API and needs no
+        third-party package, so it always works regardless of this flag.
+        """
         try:
-            from huggingface_hub import HfApi
+            from datasets import load_dataset  # noqa: F401
 
             return True
         except ImportError:
             return False
 
     def search_datasets(self, query: str, limit: int = 10) -> List[Dict]:
-        """Search HuggingFace datasets."""
-        if not self._hf_available:
-            logger.warning("HuggingFace not available. Install: pip install huggingface_hub",
+        """Search HuggingFace datasets via the Hub REST API."""
+        try:
+            from domains.infrastructure.hf_hub import fetch_dataset_search
+        except ImportError:
+            logger.warning("downcraft not available — dataset search disabled",
                 extra={"tag": "TRAIN"},)
             return []
 
-        from huggingface_hub import HfApi
-
-        api = HfApi()
-
         try:
-            datasets = api.list_datasets(search=query, limit=limit)
-            return [{"id": ds.id, "downloads": getattr(ds, "downloads", 0) or 0} for ds in datasets]
+            return fetch_dataset_search(query, limit=limit)
         except Exception as e:
             logger.error(f"Search failed: {e}",
                 extra={"tag": "TRAIN"},)
@@ -675,7 +677,7 @@ class HuggingFaceImporter:
                 files_imported=0,
                 total_chars=0,
                 output_path="",
-                error="HuggingFace not available. Install: pip install huggingface_hub datasets",
+                error="HuggingFace dataset download requires the 'datasets' package. Install: pip install datasets",
             )
 
         try:

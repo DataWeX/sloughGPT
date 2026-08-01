@@ -60,52 +60,45 @@ class _Sib:
         self.rfilename = rfilename
         self.size = size
 
-
-class _ModelInfo:
-    def __init__(self, siblings):
-        self.siblings = siblings
+    def to_dict(self):
+        return {"rfilename": self.rfilename, "size": self.size}
 
 
-class _FakeHfApi:
-    def __init__(self, info):
-        self._info = info
+def _model_info(*siblings):
+    return {"siblings": [s.to_dict() for s in siblings]}
 
-    def model_info(self, model_id):
-        return self._info
+
+def _patch_fetch(monkeypatch, info):
+    import domains.infrastructure.hf_hub as hub
+    monkeypatch.setattr(hub, "fetch_model_info", lambda model_id: info)
 
 
 class TestGetHubFileSize:
     def test_sums_weight_siblings(self, monkeypatch):
-        api = _FakeHfApi(_ModelInfo([
+        _patch_fetch(monkeypatch, _model_info(
             _Sib("model.safetensors", 1000 * 1024 * 1024),
             _Sib("model-00001-of-00002.safetensors", 500 * 1024 * 1024),
             _Sib("config.json", 2048),
             _Sib("tokenizer.bin", 512 * 1024 * 1024),
-        ]))
-        import huggingface_hub
-        monkeypatch.setattr(huggingface_hub, "HfApi", lambda: api)
+        ))
         result = ms._get_hub_file_size_gb("org/model")
         assert result == round((1000 + 500 + 512) * 1024 * 1024 / 1024**3, 2)
 
     def test_ignores_none_size(self, monkeypatch):
-        api = _FakeHfApi(_ModelInfo([_Sib("model.safetensors", None)]))
-        import huggingface_hub
-        monkeypatch.setattr(huggingface_hub, "HfApi", lambda: api)
+        _patch_fetch(monkeypatch, _model_info(_Sib("model.safetensors", None)))
         assert ms._get_hub_file_size_gb("org/model") is None
 
     def test_no_siblings_returns_none(self, monkeypatch):
-        api = _FakeHfApi(_ModelInfo([]))
-        import huggingface_hub
-        monkeypatch.setattr(huggingface_hub, "HfApi", lambda: api)
+        _patch_fetch(monkeypatch, _model_info())
         assert ms._get_hub_file_size_gb("org/model") is None
 
     def test_hub_error_returns_none(self, monkeypatch):
-        import huggingface_hub
+        import domains.infrastructure.hf_hub as hub
 
         def boom(model_id):
             raise RuntimeError("network down")
 
-        monkeypatch.setattr(huggingface_hub, "HfApi", lambda: _FakeHfApi(boom))
+        monkeypatch.setattr(hub, "fetch_model_info", boom)
         assert ms._get_hub_file_size_gb("org/model") is None
 
 

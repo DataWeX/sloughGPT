@@ -425,6 +425,56 @@ class TestSetupProviders:
         # Should not overwrite — type name matches
         assert get_provider("default") is existing
 
+    def test_process_guard_builds_and_attaches_server(self):
+        from domains.infrastructure.slonet_server import SloNetServer
+
+        class Guard:
+            @property
+            def alive(self):
+                return True
+            def health(self):
+                return {"alive": True}
+            def on_crash(self, cb):
+                pass
+            def on_restart(self, cb):
+                pass
+
+        guard = Guard()
+
+        class FakeProvider:
+            def __init__(self):
+                self._server = None
+                self._model_id = "fake-slo"
+            def set_server(self, server):
+                self._server = server
+            def get_server(self):
+                return self._server
+            def to_server(self, process_guard=None, **kwargs):
+                return SloNetServer(
+                    model=MagicMock(),
+                    tokenizer=MagicMock(),
+                    model_id="fake-slo",
+                    enable_warmup=False,
+                    process_guard=process_guard,
+                )
+
+        provider = FakeProvider()
+        setup_providers(slonet_provider=provider, process_guard=guard)
+        server = provider.get_server()
+        assert isinstance(server, SloNetServer)
+        assert server._process_guard is guard
+
+    def test_process_guard_skipped_without_to_server(self):
+        class PlainProvider:
+            def __init__(self):
+                self._server = None
+            def set_server(self, server):
+                self._server = server
+
+        provider = PlainProvider()
+        setup_providers(slonet_provider=provider, process_guard=MagicMock())
+        assert provider._server is None
+
 
 # ---------------------------------------------------------------------------
 # ModelCapabilities

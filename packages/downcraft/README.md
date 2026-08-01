@@ -2,6 +2,8 @@
 
 Generic HTTP/HTTPS downloader with **cross-session resume** via HTTP `Range` headers. Survives power loss, process crashes, and days-long gaps between sessions.
 
+This package is deliberately HuggingFace-agnostic — it downloads any URL. HuggingFace-specific model workflows (Hub metadata, cache layout, model download/resume/verify) live in the application layer (`domains.infrastructure.hf_hub`), composed from the generic primitives here.
+
 ## Quick start
 
 ```bash
@@ -9,9 +11,6 @@ pip install downcraft
 
 # Download any URL
 downcraft url https://example.com/bigfile.iso /tmp/bigfile.iso
-
-# Or a HuggingFace model
-downcraft hf Qwen/Qwen2.5-0.5B-Instruct
 
 # Check status
 downcraft status https://example.com/bigfile.iso
@@ -44,11 +43,10 @@ def on_progress(downloaded, total, speed_bps):
 
 download("https://...", "/tmp/file", on_progress=on_progress)
 
-# HuggingFace model (requires huggingface-hub)
-from downcraft import download_hf_model
-
-result = download_hf_model("gpt2")
-print(result["cache_dir"])  # path to HF cache
+# Lower-level primitives
+from downcraft.downloader import download_file, DownloadError
+from downcraft.state import get_state
+from downcraft.verify import verify_file
 ```
 
 ## CLI
@@ -56,14 +54,11 @@ print(result["cache_dir"])  # path to HF cache
 | Command | Description |
 |---------|-------------|
 | `downcraft url <url> <dest>` | Download any file |
-| `downcraft hf <model_id>` | Download HF model |
 | `downcraft status <key>` | Check download status |
 | `downcraft list` | List all tracked |
-| `downcraft verify <key>` | Verify integrity |
 
 ## Dependencies
 
 - **requests** (required) — HTTP with Range header support
-- **huggingface-hub** (optional) — only needed for HF model commands
 
-Install with HF support: `pip install downcraft[hf]`
+Install: `pip install downcraft`

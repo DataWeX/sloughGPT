@@ -47,3 +47,35 @@ describe('datasetController.list', () => {
     await expect(datasetController.list()).rejects.toThrow('502')
   })
 })
+
+describe('datasetController versioning', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('creates a version via POST /datasets/{id}/versions', async () => {
+    apiClient.apiPost.mockResolvedValue({ timestamp: '20260801120000', message: 'Version created' })
+
+    const res = await datasetController.createVersion('ds1')
+
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/datasets/ds1/versions')
+    expect(res.timestamp).toBe('20260801120000')
+  })
+
+  it('lists versions via GET /datasets/{id}/versions', async () => {
+    apiClient.apiGet.mockResolvedValue({ versions: ['20260801120000', '20260801110000'], count: 2 })
+
+    const res = await datasetController.listVersions('ds1')
+
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/datasets/ds1/versions')
+    expect(res.versions).toHaveLength(2)
+    expect(res.count).toBe(2)
+  })
+
+  it('restores a version via POST /datasets/{id}/versions/{timestamp}', async () => {
+    apiClient.apiPost.mockResolvedValue({ success: true, message: 'Version restored' })
+
+    const res = await datasetController.restoreVersion('ds1', '20260801120000')
+
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/datasets/ds1/versions/20260801120000')
+    expect(res.success).toBe(true)
+  })
+})

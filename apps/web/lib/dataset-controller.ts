@@ -183,6 +183,18 @@ export const datasetController = {
     return apiGet<DatasetStats>(`/datasets/${encodeURIComponent(datasetId)}/stats`)
   },
 
+  async createVersion(datasetId: string): Promise<{ timestamp: string; message: string }> {
+    return apiPost(`/datasets/${encodeURIComponent(datasetId)}/versions`)
+  },
+
+  async listVersions(datasetId: string): Promise<{ versions: string[]; count: number }> {
+    return apiGet(`/datasets/${encodeURIComponent(datasetId)}/versions`)
+  },
+
+  async restoreVersion(datasetId: string, timestamp: string): Promise<{ success: boolean; message: string }> {
+    return apiPost(`/datasets/${encodeURIComponent(datasetId)}/versions/${encodeURIComponent(timestamp)}`)
+  },
+
   async createFromChat(params: {
     messages: Array<{ role: string; content: string }>
     name?: string

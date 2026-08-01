@@ -10,7 +10,7 @@ Usage:
 import os
 import sys
 import argparse
-import subprocess
+import urllib.request
 from pathlib import Path
 
 # Model options (small models suitable for mobile)
@@ -45,21 +45,8 @@ MODELS = {
     },
 }
 
-def ensure_huggingface_hub():
-    """Ensure huggingface_hub is installed."""
-    try:
-        import huggingface_hub
-    except ImportError:
-        print("Installing huggingface_hub...")
-        subprocess.run([sys.executable, '-m', 'pip', 'install', 'huggingface_hub', '-q'])
-        print("Installed!")
-
 def download_model(model_id, output_dir):
-    """Download GGUF model from HuggingFace."""
-    ensure_huggingface_hub()
-
-    from huggingface_hub import hf_hub_download
-
+    """Download GGUF model from HuggingFace via its public CDN."""
     model_info = MODELS.get(model_id, MODELS['smollm3-135m'])
 
     output_dir = Path(output_dir)
@@ -76,12 +63,11 @@ def download_model(model_id, output_dir):
     """)
 
     try:
-        local_path = hf_hub_download(
-            repo_id=model_info['repo'],
-            filename=model_info['filename'],
-            local_dir=output_dir,
-            local_dir_use_symlinks=False,
-        )
+        repo_id = model_info['repo_id']
+        filename = model_info['filename']
+        url = f"https://huggingface.co/{repo_id}/resolve/main/{filename}"
+        local_path = output_dir / filename
+        urllib.request.urlretrieve(url, str(local_path))
 
         print(f"\n✓ Downloaded to: {local_path}")
 

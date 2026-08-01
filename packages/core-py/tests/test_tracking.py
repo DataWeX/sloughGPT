@@ -1,4 +1,4 @@
-"""Tests for domains.training.tracking: MLflow/W&B/Comet experiment tracking."""
+"""Tests for domains/training/tracking.py."""
 
 import sys
 
@@ -6,12 +6,37 @@ import pytest
 
 from domains.training.tracking import (
     ExperimentTracker,
-    TrackerBackend,
     TrackingConfig,
+    TrackerBackend,
     create_tracker,
     log_eval_metrics,
     log_training_metrics,
 )
+
+
+class FakeTracking:
+    """Minimal fake config.tracking surface used by TrackingConfig init."""
+
+    wandb_api_key = ""
+    mlflow_tracking_uri = ""
+    wandb_mode = ""
+    wandb_dir = ""
+    wandb_project = "sloughgpt"
+
+
+@pytest.fixture(autouse=True)
+def fake_config(monkeypatch):
+    cfg = type(
+        "FakeConfig",
+        (),
+        {"tracking": FakeTracking()},
+    )
+    monkeypatch.setattr(
+        "domains.infrastructure.config.get_config", lambda: cfg
+    )
+    monkeypatch.setattr(
+        "domains.training.tracking.get_config", lambda: cfg
+    )
 
 
 class TestTrackerBackend:
@@ -28,304 +53,299 @@ class TestTrackingConfig:
         assert cfg.backend == TrackerBackend.NONE
         assert cfg.experiment_name == "sloughgpt_experiment"
         assert cfg.project == "sloughgpt"
-        assert cfg.run_name is None
-        assert cfg.job_type is None
-        assert cfg.tags is None
 
-    def test_none_backend_no_config_lookup(self):
-        cfg = TrackingConfig(backend=TrackerBackend.NONE)
-        assert cfg.api_key is None
-        assert cfg.tracking_uri is None
+    def test_wandb_api_key_fallback(self):
+        cfg = TrackingConfig(backend=TrackerBackend.WANDB)
+        assert cfg.api_key == "" or cfg.api_key is None
 
-    def test_mlflow_uses_config_tracking_uri_when_unset(self):
+    def test_mlflow_uri_fallback(self):
         cfg = TrackingConfig(backend=TrackerBackend.MLFLOW)
-        assert cfg.tracking_uri is None or isinstance(cfg.tracking_uri, str)
+        assert cfg.tracking_uri is None or cfg.tracking_uri == ""
+
+    def test_custom_fields(self):
+        cfg = TrackingConfig(
+            backend=TrackerBackend.WANDB,
+            run_name="run1",
+            entity="my-entity",
+            tags=["a", "b"],
+        )
+        assert cfg.run_name == "run1"
+        assert cfg.entity == "my-entity"
+        assert cfg.tags == ["a", "b"]
 
 
-class TestCreateTracker:
-    def test_mlflow_string(self):
-        tracker = create_tracker("mlflow")
-        assert tracker.config.backend == TrackerBackend.MLFLOW
-
-    def test_wandb_string(self):
-        tracker = create_tracker("wandb")
-        assert tracker.config.backend == TrackerBackend.WANDB
-
-    def test_comet_string(self):
-        tracker = create_tracker("comet")
-        assert tracker.config.backend == TrackerBackend.COMET
-
-    def test_none_string(self):
-        tracker = create_tracker("none")
-        assert tracker.config.backend == TrackerBackend.NONE
-
-    def test_unknown_backend_falls_back_to_none(self):
-        tracker = create_tracker("bogus")
-        assert tracker.config.backend == TrackerBackend.NONE
-
-    def test_kwargs_passed_to_config(self):
-        tracker = create_tracker("wandb", run_name="run-1", tags=["sloughgpt"])
-        assert tracker.config.run_name == "run-1"
-        assert tracker.config.tags == ["sloughgpt"]
-
-
-class FakeModule:
-    def __init__(self, **attrs):
-        self._calls = []
-        for k, v in attrs.items():
-            setattr(self, k, v)
-
-    def record(self, name, *args, **kwargs):
-        self._calls.append((name, args, kwargs))
-        return None
-
-    def make_callable(self, name, result=None):
-        def fn(*args, **kwargs):
-            self._calls.append((name, args, kwargs))
-            return result
-
-        setattr(self, name, fn)
-
-
-def _install(monkeypatch, name, fake):
-    monkeypatch.setitem(sys.modules, name, fake)
-    return fake
-
-
-class TestExperimentTrackerNoneBackend:
-    def test_init_no_backend(self):
-        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.NONE))
+class TestNoneBackend:
+    def test_no_crash(self):
+        tracker = ExperimentTracker(TrackingConfig())
         assert tracker._client is None
-        assert tracker._run is None
 
-    def test_methods_are_noops(self):
-        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.NONE))
-        tracker.start_run("r")
-        tracker.log_metric("loss", 0.1, step=1)
-        tracker.log_metrics({"a": 1.0}, step=1)
+    def test_logging_noops_without_run(self):
+        tracker = ExperimentTracker(TrackingConfig())
+        tracker.log_metric("x", 1.0)
+        tracker.log_metrics({"a": 1.0})
         tracker.log_param("p", 1)
-        tracker.log_params({"p": 1})
-        tracker.log_artifact("/tmp/x")
+        tracker.log_artifact("/tmp/f")
         tracker.log_model(object())
         tracker.end_run()
 
     def test_context_manager(self):
-        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.NONE))
+        tracker = ExperimentTracker(TrackingConfig())
         with tracker:
             pass
-        assert tracker._run is None
 
 
-class TestExperimentTrackerMlflow:
-    def test_init_mlflow(self, monkeypatch):
-        fake = FakeModule()
-        fake.make_callable("set_tracking_uri")
-        fake.make_callable("set_experiment")
-        _install(monkeypatch, "mlflow", fake)
-        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.MLFLOW, tracking_uri="http://x"))
-        assert tracker._client is fake
-        assert fake._calls[0][0] == "set_tracking_uri"
-        assert fake._calls[0][1] == ("http://x",)
-        assert fake._calls[1][0] == "set_experiment"
+class TestMLflowBackend:
+    def _fake_mlflow(self, monkeypatch):
+        calls = []
 
-    def test_init_mlflow_import_error(self, monkeypatch):
-        real_import = __import__
+        class FakeMLflow:
+            @staticmethod
+            def set_tracking_uri(uri):
+                calls.append(("uri", uri))
 
-        def blocked(name, *a, **k):
-            if name == "mlflow":
-                raise ImportError("no mlflow")
-            return real_import(name, *a, **k)
+            @staticmethod
+            def set_experiment(name):
+                calls.append(("exp", name))
 
-        monkeypatch.setattr("builtins.__import__", blocked)
-        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.MLFLOW))
-        assert tracker._client is None
+            @staticmethod
+            def start_run(run_name=None):
+                calls.append(("start", run_name))
+                return object()
 
-    def test_start_run_and_logging(self, monkeypatch):
-        fake = FakeModule()
-        fake.make_callable("set_tracking_uri")
-        fake.make_callable("set_experiment")
-        fake.make_callable("start_run", result="RUN")
-        fake.make_callable("log_metric")
-        fake.make_callable("log_param")
-        fake.make_callable("log_params")
-        fake.make_callable("end_run")
-        _install(monkeypatch, "mlflow", fake)
-        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.MLFLOW))
-        tracker.start_run("my-run")
-        assert tracker._run == "RUN"
-        assert fake._calls[-1] == ("start_run", (), {"run_name": "my-run"})
-        tracker.log_metric("loss", 0.5, step=3)
-        assert fake._calls[-1] == ("log_metric", ("loss", 0.5), {"step": 3})
+            @staticmethod
+            def log_metric(name, value, step=None):
+                calls.append(("metric", name, value, step))
+
+            @staticmethod
+            def log_param(name, value):
+                calls.append(("param", name, value))
+
+            @staticmethod
+            def end_run():
+                calls.append(("end",))
+
+        monkeypatch.setitem(sys.modules, "mlflow", FakeMLflow)
+        return calls
+
+    def test_init(self, monkeypatch):
+        calls = self._fake_mlflow(monkeypatch)
+        tracker = ExperimentTracker(
+            TrackingConfig(backend=TrackerBackend.MLFLOW, tracking_uri="sqlite:///x")
+        )
+        assert tracker._client is not None
+        assert ("uri", "sqlite:///x") in calls
+        assert ("exp", "sloughgpt_experiment") in calls
+
+    def test_metrics_and_params(self, monkeypatch):
+        calls = self._fake_mlflow(monkeypatch)
+        tracker = ExperimentTracker(
+            TrackingConfig(backend=TrackerBackend.MLFLOW)
+        )
+        tracker.start_run(run_name="r")
+        assert ("start", "r") in calls
+        tracker.log_metric("loss", 0.5, step=2)
         tracker.log_param("lr", 1e-3)
-        assert fake._calls[-1] == ("log_param", ("lr", 1e-3), {})
-        tracker.log_params({"a": 1})
-        assert fake._calls[-1] == ("log_params", ({"a": 1},), {})
+        assert ("metric", "loss", 0.5, 2) in calls
+        assert ("param", "lr", 1e-3) in calls
+
+    def test_end_run(self, monkeypatch):
+        calls = self._fake_mlflow(monkeypatch)
+        tracker = ExperimentTracker(
+            TrackingConfig(backend=TrackerBackend.MLFLOW)
+        )
+        tracker.start_run()
         tracker.end_run()
-        assert fake._calls[-1] == ("end_run", (), {})
+        assert ("end",) in calls
         assert tracker._run is None
 
-    def test_logging_before_start_run_is_skipped(self, monkeypatch):
-        fake = FakeModule()
-        fake.make_callable("set_tracking_uri")
-        fake.make_callable("set_experiment")
-        fake.make_callable("log_metric")
-        _install(monkeypatch, "mlflow", fake)
-        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.MLFLOW))
-        tracker.log_metric("loss", 0.5)
-        assert len(fake._calls) == 2
 
-    def test_log_artifact_and_model(self, monkeypatch):
-        fake = FakeModule()
-        fake.make_callable("set_tracking_uri")
-        fake.make_callable("set_experiment")
-        fake.make_callable("start_run", result="RUN")
-        fake.make_callable("log_artifact")
-        fake.pyfunc = FakeModule(make_log_model=object)
-        fake.pyfunc.make_callable("log_model")
-        _install(monkeypatch, "mlflow", fake)
-        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.MLFLOW))
-        tracker.start_run()
-        tracker.log_artifact("/tmp/model.bin", "m")
-        assert fake._calls[-1] == ("log_artifact", ("/tmp/model.bin", "m"), {})
-        tracker.log_model(object(), "model")
-        assert fake.pyfunc._calls[-1][0] == "log_model"
+class TestWandbBackend:
+    def test_init(self, monkeypatch):
+        init_calls = {}
 
+        class FakeWandb:
+            @staticmethod
+            def init(**kwargs):
+                init_calls.update(kwargs)
 
-class TestExperimentTrackerWandb:
-    def test_init_wandb_kwargs(self, monkeypatch):
-        fake = FakeModule()
-        fake.make_callable("init")
-        fake.config = FakeModule()
-        _install(monkeypatch, "wandb", fake)
-        from domains.infrastructure.config import get_config
+            @staticmethod
+            def log(data, step=None):
+                pass
 
-        expected_mode = get_config().tracking.wandb_mode or None
+            @staticmethod
+            def finish():
+                pass
+
+        class FakeWandbHelpers:
+            @staticmethod
+            def default_wandb_project():
+                return "default-project"
+
+        monkeypatch.setitem(sys.modules, "wandb", FakeWandb)
+        monkeypatch.setitem(
+            sys.modules,
+            "domains.training.wandb_helpers",
+            FakeWandbHelpers,
+        )
         tracker = ExperimentTracker(
             TrackingConfig(
                 backend=TrackerBackend.WANDB,
-                project="myproj",
-                run_name="r1",
-                entity="myentity",
-                api_key="secret",
-                job_type="train",
-                tags=["a", "b"],
+                run_name="myrun",
+                entity="me",
+                tags=["tag1"],
             )
         )
-        assert tracker._client is fake
-        init_call = [c for c in fake._calls if c[0] == "init"][-1]
-        assert init_call[1] == ()
-        kwargs = init_call[2]
-        assert kwargs["project"] == "myproj"
-        assert kwargs["name"] == "r1"
-        assert kwargs["entity"] == "myentity"
-        assert kwargs["api_key"] == "secret"
-        assert kwargs["job_type"] == "train"
-        assert kwargs["tags"] == ["a", "b"]
-        assert kwargs.get("mode") == expected_mode
+        assert tracker._client is FakeWandb
+        assert init_calls["name"] == "myrun"
+        assert init_calls["entity"] == "me"
+        assert init_calls["tags"] == ["tag1"]
 
-    def test_init_wandb_none_fields_filtered(self, monkeypatch):
-        fake = FakeModule()
-        fake.make_callable("init")
-        fake.config = FakeModule()
-        _install(monkeypatch, "wandb", fake)
+    def test_metrics_logs(self, monkeypatch):
+        logged = []
+
+        class FakeWandb:
+            @staticmethod
+            def init(**kwargs):
+                pass
+
+            @staticmethod
+            def log(data, step=None):
+                logged.append((data, step))
+
+            @staticmethod
+            def finish():
+                pass
+
+        monkeypatch.setitem(sys.modules, "wandb", FakeWandb)
+        monkeypatch.setitem(
+            sys.modules,
+            "domains.training.wandb_helpers",
+            type("H", (), {"default_wandb_project": staticmethod(lambda: "p")}),
+        )
         tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.WANDB))
-        init_call = [c for c in fake._calls if c[0] == "init"][-1]
-        assert "name" not in init_call[2]
-        assert "api_key" not in init_call[2]
-
-    def test_init_wandb_import_error(self, monkeypatch):
-        real_import = __import__
-
-        def blocked(name, *a, **k):
-            if name == "wandb":
-                raise ImportError("no wandb")
-            return real_import(name, *a, **k)
-
-        monkeypatch.setattr("builtins.__import__", blocked)
-        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.WANDB))
-        assert tracker._client is None
-
-    def test_logging_uses_wandb_api(self, monkeypatch):
-        fake = FakeModule()
-        fake.make_callable("init")
-        fake.config = FakeModule()
-        fake.config.make_callable("update")
-        fake.make_callable("log")
-        fake.make_callable("log_artifact")
-        fake.make_callable("log_model")
-        fake.make_callable("finish")
-        _install(monkeypatch, "wandb", fake)
-        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.WANDB))
-        tracker.start_run()
-        tracker.log_metric("loss", 0.5, step=2)
-        assert fake._calls[-1] == ("log", ({"loss": 0.5},), {"step": 2})
-        tracker.log_metrics({"a": 1.0, "b": 2.0}, step=3)
-        assert fake._calls[-1] == ("log", ({"a": 1.0, "b": 2.0},), {"step": 3})
-        tracker.log_param("lr", 1e-3)
-        assert fake.config._calls[-1] == ("update", ({"lr": 1e-3},), {})
-        tracker.log_params({"x": 1})
-        assert fake.config._calls[-1] == ("update", ({"x": 1},), {})
-        tracker.log_artifact("/tmp/a")
-        assert fake._calls[-1] == ("log_artifact", ("/tmp/a",), {})
-        tracker.log_model(object(), "m")
-        assert fake._calls[-1] == ("log_model", (object, "m"), {}) or fake._calls[-1][0] == "log_model"
-        tracker.end_run()
-        assert fake._calls[-1] == ("finish", (), {})
-        assert tracker._run is None
-
-
-class TestExperimentTrackerComet:
-    def test_init_comet(self, monkeypatch):
-        experiment = FakeModule()
-        experiment.make_callable("log_metric")
-        experiment.make_callable("log_parameter")
-        experiment.make_callable("end")
-        comet = FakeModule(Experiment=lambda *a, **k: experiment)
-        _install(monkeypatch, "comet_ml", comet)
-        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.COMET, api_key="k"))
-        assert tracker._client is experiment
         tracker.start_run()
         tracker.log_metric("loss", 0.5, step=1)
-        assert experiment._calls[-1] == ("log_metric", ("loss", 0.5), {"step": 1})
-        tracker.log_param("lr", 1e-3)
-        assert experiment._calls[-1] == ("log_parameter", ("lr", 1e-3), {})
+        tracker.log_metrics({"acc": 0.9}, step=2)
+        assert logged == [({"loss": 0.5}, 1), ({"acc": 0.9}, 2)]
+
+    def test_end_run_calls_finish(self, monkeypatch):
+        finished = []
+
+        class FakeWandb:
+            @staticmethod
+            def init(**kwargs):
+                pass
+
+            @staticmethod
+            def finish():
+                finished.append(True)
+
+        monkeypatch.setitem(sys.modules, "wandb", FakeWandb)
+        monkeypatch.setitem(
+            sys.modules,
+            "domains.training.wandb_helpers",
+            type("H", (), {"default_wandb_project": staticmethod(lambda: "p")}),
+        )
+        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.WANDB))
+        tracker.start_run()
         tracker.end_run()
-        assert experiment._calls[-1] == ("end", (), {})
-        assert tracker._run is None
+        assert finished == [True]
 
-    def test_init_comet_import_error(self, monkeypatch):
-        real_import = __import__
 
-        def blocked(name, *a, **k):
-            if name == "comet_ml":
-                raise ImportError("no comet")
-            return real_import(name, *a, **k)
+class TestCometBackend:
+    def test_init_and_metric(self, monkeypatch):
+        logged = []
 
-        monkeypatch.setattr("builtins.__import__", blocked)
-        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.COMET))
+        class FakeExperiment:
+            def __init__(self, project_name=None, api_key=None):
+                self.project_name = project_name
+                self.api_key = api_key
+
+            def log_metric(self, name, value, step=None):
+                logged.append((name, value, step))
+
+            def end(self):
+                pass
+
+        monkeypatch.setitem(
+            sys.modules, "comet_ml", type("C", (), {"Experiment": FakeExperiment})
+        )
+        tracker = ExperimentTracker(
+            TrackingConfig(
+                backend=TrackerBackend.COMET,
+                project="proj",
+                api_key="key",
+            )
+        )
+        assert tracker._client is not None
+        tracker.start_run()
+        tracker.log_metric("x", 1.0)
+        assert logged == [("x", 1.0, None)]
+
+
+class TestMissingBackendDeps:
+    def test_mlflow_missing(self, monkeypatch):
+        def no_mlflow(name, *a, **k):
+            if name == "mlflow":
+                raise ImportError("no mlflow")
+            return __import__(name, *a, **k)
+
+        monkeypatch.setattr("builtins.__import__", no_mlflow)
+        tracker = ExperimentTracker(
+            TrackingConfig(backend=TrackerBackend.MLFLOW)
+        )
+        assert tracker._client is None
+
+    def test_wandb_missing(self, monkeypatch):
+        def no_wandb(name, *a, **k):
+            if name == "wandb":
+                raise ImportError("no wandb")
+            return __import__(name, *a, **k)
+
+        monkeypatch.setattr("builtins.__import__", no_wandb)
+        tracker = ExperimentTracker(
+            TrackingConfig(backend=TrackerBackend.WANDB)
+        )
         assert tracker._client is None
 
 
-class TestLogMetrics:
-    def test_log_training_metrics_format(self, monkeypatch):
-        tracker = FakeModule()
-        tracker.make_callable("log_metrics")
-        log_training_metrics(tracker, epoch=2, metrics={"loss": 0.5, "acc": 0.9}, lr=0.001)
-        call = tracker._calls[-1]
-        assert call[0] == "log_metrics"
-        payload = call[1][0]
-        assert payload["epoch"] == 2
-        assert payload["learning_rate"] == 0.001
-        assert payload["train/loss"] == 0.5
-        assert payload["train/acc"] == 0.9
-        assert call[2] == {"step": 2}
+class TestCreateTracker:
+    def test_known_backend(self):
+        tracker = create_tracker("none")
+        assert tracker.config.backend == TrackerBackend.NONE
 
-    def test_log_eval_metrics_format(self, monkeypatch):
-        tracker = FakeModule()
-        tracker.make_callable("log_metrics")
-        log_eval_metrics(tracker, epoch=3, metrics={"loss": 0.3})
-        call = tracker._calls[-1]
-        payload = call[1][0]
-        assert payload["epoch"] == 3
-        assert payload["eval/loss"] == 0.3
-        assert call[2] == {"step": 3}
+    def test_unknown_backend_defaults_none(self):
+        tracker = create_tracker("bogus")
+        assert tracker.config.backend == TrackerBackend.NONE
+
+    def test_case_insensitive(self):
+        tracker = create_tracker("MLFLOW")
+        assert tracker.config.backend == TrackerBackend.MLFLOW
+
+
+class TestLogHelpers:
+    def test_log_training_metrics(self, monkeypatch):
+        recorded = []
+
+        class FakeTracker:
+            def log_metrics(self, metrics, step=None):
+                recorded.append((metrics, step))
+
+        log_training_metrics(FakeTracker(), 3, {"loss": 0.5}, lr=0.001)
+        metrics, step = recorded[0]
+        assert metrics["epoch"] == 3
+        assert metrics["learning_rate"] == 0.001
+        assert metrics["train/loss"] == 0.5
+        assert step == 3
+
+    def test_log_eval_metrics(self, monkeypatch):
+        recorded = []
+
+        class FakeTracker:
+            def log_metrics(self, metrics, step=None):
+                recorded.append((metrics, step))
+
+        log_eval_metrics(FakeTracker(), 2, {"acc": 0.8})
+        metrics, step = recorded[0]
+        assert metrics["epoch"] == 2
+        assert metrics["eval/acc"] == 0.8

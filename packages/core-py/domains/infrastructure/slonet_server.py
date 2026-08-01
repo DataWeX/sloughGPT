@@ -19,10 +19,13 @@ class SloNetServer:
     Thread-safe ``SloTransformer`` wrapper with concurrency control, circuit
     breaker, warmup, and metrics. Mirrors ``ModelServer`` patterns.
 
-    Two dispatch modes:
+    Three dispatch modes:
     - **Single model** (default): ``model`` param, serialized via ``asyncio.Semaphore(1)``
     - **Multi-worker pool**: ``model_factory`` + ``max_workers`` — each worker gets its
       own model copy for true parallel generation on CPU.
+    - **Process-guarded**: ``process_guard`` param — generation runs in a separate
+      worker subprocess via ``ProcessGuard`` when it is alive, falling back to the
+      in-process model otherwise. Mirrors ``ModelServer`` guard delegation.
 
     Args:
         model: SloTransformer instance (single-model mode)
@@ -34,6 +37,8 @@ class SloNetServer:
         enable_circuit_breaker: If True, failures gate future requests
         enable_warmup: If True, background warmup on init
         warmup_prompt: Short prompt for warmup generation
+        process_guard: Optional ``ProcessGuard`` — when set and alive, generation
+            is delegated to the guarded subprocess with in-process fallback.
     """
 
     def __init__(
@@ -47,6 +52,7 @@ class SloNetServer:
         enable_circuit_breaker: bool = True,
         enable_warmup: bool = True,
         warmup_prompt: str = "Hello",
+        process_guard: Any = None,
     ):
         self._tokenizer = tokenizer
         self._model_id = model_id
@@ -65,6 +71,16 @@ class SloNetServer:
         self._warmup_lock = threading.Lock()
         self._warmup_completed = False
         self._warmup_error: Optional[str] = None
+
+        # Process-guard delegation (crash → circuit breaker open, restart → half-open)
+        self._process_guard = process_guard
+        if process_guard is not None and self._circuit_breaker is not None:
+            process_guard.on_crash(
+                lambda w: self._circuit_breaker.record_failure()
+            )
+            process_guard.on_restart(
+                lambda w: self._circuit_breaker.record_success()
+            )
 
         # Dispatch mode: pool or single-model
         if model_factory is not None:
@@ -167,6 +183,23 @@ class SloNetServer:
     # Sync generation (runs in thread pool)
     # ------------------------------------------------------------------
 
+    def _use_guard(self) -> bool:
+        """True when a process guard is attached and its worker is alive.
+
+        When alive, generation delegates to the guarded subprocess (crash
+        isolation). When dead, falls back to the in-process model.
+        """
+        return self._process_guard is not None and self._process_guard.alive
+
+    def _guard_health(self) -> Optional[dict]:
+        """Guard health snapshot, or None when no guard is attached."""
+        if self._process_guard is None:
+            return None
+        try:
+            return self._process_guard.health()
+        except Exception:
+            return {"alive": False}
+
     def _generate_sync(
         self,
         prompt: str,
@@ -179,6 +212,16 @@ class SloNetServer:
     ) -> str:
         if cancel_event and cancel_event.is_set():
             raise RuntimeError("Generation cancelled before start")
+        if self._use_guard():
+            result = self._process_guard.generate(
+                prompt,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                repetition_penalty=repetition_penalty,
+            )
+            return result.get("text", "")
         model = self._acquire_model()
         try:
             tokens = self._tokenizer.encode(prompt)
@@ -206,6 +249,20 @@ class SloNetServer:
         repetition_penalty: float = 1.0,
         cancel_event: Optional[threading.Event] = None,
     ) -> Iterator[str]:
+        if self._use_guard():
+            for token in self._process_guard.generate_stream(
+                prompt,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                repetition_penalty=repetition_penalty,
+            ):
+                if cancel_event and cancel_event.is_set():
+                    return
+                if token:
+                    yield token
+            return
         model = self._acquire_model()
         try:
             tokens = self._tokenizer.encode(prompt)
@@ -402,6 +459,7 @@ class SloNetServer:
             "circuit_breaker_state": cb_state,
             "dispatch": "pool" if self._pool_mode else "single",
             "workers": self._max_workers if self._pool_mode else 1,
+            "process_guard": self._guard_health(),
         }
 
     def health(self) -> dict:

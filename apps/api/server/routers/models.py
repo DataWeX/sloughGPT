@@ -437,16 +437,19 @@ class ModelsRouter:
     async def verify_download(self, model_id: str) -> Dict[str, Any]:
         """Verify a downloaded model's weight files against Hub SHA-256 checksums.
         Returns verification result and on-disk size."""
-        from downcraft import verify as sg_verify
-        from downcraft.hf_hub import get_cache_dir
+        from domains.infrastructure.hf_hub import (
+            get_cache_dir,
+            verify_model,
+            list_missing_files,
+        )
 
         try:
             cache_dir = get_cache_dir(model_id)
             refs_main = cache_dir / "refs" / "main"
             if not refs_main.exists():
                 return {"status": "not_cached", "model_id": model_id}
-            ok = sg_verify.verify_model(model_id)
-            missing = sg_verify.list_missing_files(model_id)
+            ok = verify_model(model_id)
+            missing = list_missing_files(model_id)
             size_str = format_size_gb(compute_model_size_gb(model_id)) or "—"
             return {
                 "status": "verified" if ok else "corrupt",
@@ -508,8 +511,7 @@ class ModelsRouter:
         Returns the GGUF file as a streaming download.  The mobile app calls this
         to get the model for llama.rn inference.
         """
-        from huggingface_hub import hf_hub_download
-        import shutil
+        from downcraft.downloader import download_file
 
         repo_id = "Qwen/Qwen2.5-0.5B-Instruct-GGUF"
         filename = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
@@ -524,8 +526,8 @@ class ModelsRouter:
 
         logger.info("Downloading Qwen GGUF from HuggingFace Hub (this may take a while)...", extra={"tag": "MODEL"})
         try:
-            downloaded = hf_hub_download(repo_id=repo_id, filename=filename, cache_dir=str(cache_dir))
-            shutil.copy2(downloaded, cached_path)
+            url = f"https://huggingface.co/{repo_id}/resolve/main/{filename}"
+            download_file(url=url, dest=cached_path)
             logger.info("GGUF downloaded and cached: %s", cached_path, extra={"tag": "MODEL"})
             return FileResponse(str(cached_path), media_type="application/octet-stream", filename=filename)
         except Exception as e:

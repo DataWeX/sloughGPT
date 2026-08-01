@@ -64,6 +64,8 @@ class AgentsRouter:
     def _register_routes(self):
         self.router.add_api_route("", self.list_agents, methods=["GET"], response_model=List[AgentOut])
         self.router.add_api_route("", self.create_agent, methods=["POST"], response_model=AgentOut, status_code=201)
+        self.router.add_api_route("/runs", self.list_runs, methods=["GET"])
+        self.router.add_api_route("/runs/{run_id}", self.get_run, methods=["GET"])
         self.router.add_api_route("/{agent_id}", self.get_agent, methods=["GET"], response_model=AgentOut)
         self.router.add_api_route("/{agent_id}", self.update_agent, methods=["PUT"], response_model=AgentOut)
         self.router.add_api_route("/{agent_id}", self.delete_agent, methods=["DELETE"])
@@ -144,15 +146,20 @@ class AgentsRouter:
         Uses async HTTP for non-blocking inference calls.
         """
         from domains.agents.multi import MultiAgentOrchestrator
+        from domains.agents.run_history import get_agent_run_store
+
+        store = get_agent_run_store()
 
         async def event_stream():
+            run_id = None
             try:
                 orch = MultiAgentOrchestrator()
+                run_id = store.start(req.goal, req.context or "")
                 yield sse_event(
                     stream="agent-orchestrate",
                     phase="PLAN",
                     status="working",
-                    data={"goal": req.goal},
+                    data={"goal": req.goal, "run_id": run_id},
                     message="Planning orchestration...",
                 )
 
@@ -162,6 +169,7 @@ class AgentsRouter:
                 # Plan
                 tasks = await orch._async_plan(req.goal, req.context or "")
                 if not tasks:
+                    store.fail(run_id, "Could not plan this goal")
                     yield sse_event(
                         stream="agent-orchestrate",
                         phase="PLAN",
@@ -172,11 +180,12 @@ class AgentsRouter:
                     return
 
                 task_dicts = [t.to_dict() for t in tasks]
+                store.set_tasks(run_id, task_dicts)
                 yield sse_event(
                     stream="agent-orchestrate",
                     phase="PLAN",
                     status="success",
-                    data={"tasks": task_dicts, "task_count": len(tasks)},
+                    data={"tasks": task_dicts, "task_count": len(tasks), "run_id": run_id},
                     message=f"Planned {len(tasks)} subtasks",
                 )
 
@@ -217,6 +226,7 @@ class AgentsRouter:
                             task.result = result
                             task.status = "completed"
                             results_ctx[task.id] = result
+                            store.set_tasks(run_id, [t.to_dict() for t in tasks])
                             return sse_event(
                                 stream="agent-orchestrate",
                                 phase="EXECUTE",
@@ -234,6 +244,7 @@ class AgentsRouter:
                             task.error = error
                             task.status = "failed"
                             results_ctx[task.id] = f"[error: {error}]"
+                            store.set_tasks(run_id, [t.to_dict() for t in tasks])
                             return sse_event(
                                 stream="agent-orchestrate",
                                 phase="EXECUTE",
@@ -267,6 +278,12 @@ class AgentsRouter:
 
                 final = await orch._async_compose(req.goal, tasks)
 
+                store.complete(
+                    run_id,
+                    response=final,
+                    tasks=[t.to_dict() for t in tasks],
+                )
+
                 yield sse_complete(
                     stream="agent-orchestrate",
                     phase="COMPLETE",
@@ -275,12 +292,15 @@ class AgentsRouter:
                         "tasks": [t.to_dict() for t in tasks],
                         "completed": sum(1 for t in tasks if t.status == "completed"),
                         "failed": sum(1 for t in tasks if t.status == "failed"),
+                        "run_id": run_id,
                     },
                     message="Orchestration complete",
                 )
 
             except Exception as e:
                 logger.exception("Orchestration error", extra={"tag": "MODEL"})
+                if run_id:
+                    store.fail(run_id, str(e))
                 yield sse_error(
                     stream="agent-orchestrate",
                     phase="ERROR",
@@ -288,6 +308,24 @@ class AgentsRouter:
                 )
 
         return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+    # ── Run history ─────────────────────────────────────────────────────
+
+    async def list_runs(self, limit: int = 20):
+        """List orchestration run history, newest first."""
+        from domains.agents.run_history import get_agent_run_store
+
+        runs = get_agent_run_store().list_runs(limit=max(1, min(int(limit), 200)))
+        return {"runs": runs, "count": len(runs)}
+
+    async def get_run(self, run_id: str):
+        """Return a single orchestration run record."""
+        from domains.agents.run_history import get_agent_run_store
+
+        record = get_agent_run_store().get(run_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="Run not found")
+        return record
 
 
 router = AgentsRouter().router

@@ -89,21 +89,22 @@ class PermissionsManager:
             ModelSizeEstimate with total bytes and file list, or None on failure.
         """
         try:
-            from huggingface_hub import HfApi
+            from domains.infrastructure.hf_hub import fetch_model_info
 
-            api = HfApi()
-            info = api.model_info(model_id, files_metadata=True)
+            info = fetch_model_info(model_id)
             if info is None:
                 return None
 
             files = []
             total = 0
-            if info.siblings:
-                for sf in info.siblings:
-                    size = getattr(sf, "size", None) or 0
-                    if size > 0:
-                        files.append({"name": sf.rfilename, "size": size})
-                        total += size
+            siblings = info.get("siblings") or []
+            for sf in siblings:
+                if not isinstance(sf, dict):
+                    continue
+                size = sf.get("size") or 0
+                if size > 0:
+                    files.append({"name": sf.get("rfilename", ""), "size": size})
+                    total += size
 
             if total == 0:
                 return None

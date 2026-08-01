@@ -149,7 +149,7 @@ def cmd_dataset_search(args):
             else:
                 printer.info("No results found")
         except ImportError as e:
-            printer.error(f"Install huggingface_hub: {e}")
+            printer.error(f"Could not search HuggingFace: {e}")
         except Exception as e:
             printer.error(str(e))
     else:

@@ -23,7 +23,7 @@ _size_cache: dict[str, tuple[float, Optional[float]]] = {}
 _size_cache_lock = threading.Lock()
 
 try:
-    from downcraft.hf_hub import (
+    from domains.infrastructure.hf_hub import (
         is_download_complete,
         get_cache_dir,
         find_cached_model_dir,
@@ -59,16 +59,17 @@ def _sum_weight_files(cache_dir: Path) -> Optional[float]:
 def _get_hub_file_size_gb(model_id: str) -> Optional[float]:
     """Get total model weight file size from HuggingFace Hub API (siblings listing)."""
     try:
-        from huggingface_hub import HfApi
-        api = HfApi()
-        info = api.model_info(model_id)
-        if not info or not info.siblings:
+        from domains.infrastructure.hf_hub import fetch_model_info
+        info = fetch_model_info(model_id)
+        if not info or not info.get("siblings"):
             return None
         total = 0
-        for sib in info.siblings:
-            name = sib.rfilename
-            if name.endswith((".safetensors", ".bin")) and sib.size:
-                total += sib.size
+        for sib in info.get("siblings") or []:
+            if not isinstance(sib, dict):
+                continue
+            name = sib.get("rfilename", "")
+            if name.endswith((".safetensors", ".bin")) and sib.get("size"):
+                total += sib.get("size")
         if total > 0:
             return round(total / (1024 ** 3), 2)
     except Exception:

@@ -305,6 +305,29 @@ class SloNetChatProvider:
         """Return the attached ``SloNetServer``, or None."""
         return getattr(self, '_server', None)
 
+    def to_server(self, process_guard: Any = None, **kwargs: Any) -> Any:
+        """Build a ``SloNetServer`` wrapping this provider's model and tokenizer.
+
+        Used to attach concurrency control, circuit breaker, and optional
+        ``ProcessGuard`` delegation to an already-loaded provider.
+
+        Args:
+            process_guard: Optional ``ProcessGuard`` — when set and alive,
+                generation delegates to the guarded subprocess.
+            **kwargs: Extra ``SloNetServer`` constructor kwargs.
+
+        Returns:
+            SloNetServer bound to this provider's model/tokenizer.
+        """
+        from domains.infrastructure.slonet_server import SloNetServer
+        return SloNetServer(
+            model=getattr(self, "_model", None),
+            tokenizer=getattr(self, "_tokenizer", None),
+            model_id=getattr(self, "_model_id", "slonet"),
+            process_guard=process_guard,
+            **kwargs,
+        )
+
     @staticmethod
     def _load_safetensors_bf16(path) -> dict:
         """Load safetensors with bfloat16 support via raw byte reading."""

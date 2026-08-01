@@ -24,7 +24,7 @@ vi.mock('@sloughgpt/strui', () => {
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     Skeleton: ({ className }: any) => <div className={className} />,
     IconTrash: iconMock('trash'), IconDownload: iconMock('download'), IconEdit: iconMock('edit'),
-    IconCheck: iconMock('check'), IconX: iconMock('x'), IconRefresh: iconMock('refresh'),
+    IconCheck: iconMock('check'), IconX: iconMock('x'), IconRefresh: iconMock('refresh'), IconClock: iconMock('clock'),
     AlertDialog: ({ open, onOpenChange, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
     AlertDialogContent: ({ children }: any) => <div>{children}</div>,
     AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
@@ -37,14 +37,15 @@ vi.mock('@sloughgpt/strui', () => {
 })
 
 // ── controller & router mocks ──
-const { mockGet, mockUpdate, mockDelete, mockExport, mockGetStats, mockPush, mockAddToast } = vi.hoisted(() => ({
+const { mockGet, mockUpdate, mockDelete, mockExport, mockGetStats, mockPush, mockAddToast, mockListVersions, mockCreateVersion, mockRestoreVersion } = vi.hoisted(() => ({
   mockGet: vi.fn(), mockUpdate: vi.fn(), mockDelete: vi.fn(),
   mockExport: vi.fn(), mockGetStats: vi.fn(), mockPush: vi.fn(), mockAddToast: vi.fn(),
+  mockListVersions: vi.fn(), mockCreateVersion: vi.fn(), mockRestoreVersion: vi.fn(),
 }))
 const stableRouter = { push: mockPush }
 
 vi.mock('next/navigation', () => ({ useRouter: () => stableRouter, useParams: () => ({ id: 'shakespeare' }) }))
-vi.mock('@/lib/dataset-controller', () => ({ datasetController: { get: mockGet, update: mockUpdate, delete: mockDelete, export: mockExport, getStats: mockGetStats } }))
+vi.mock('@/lib/dataset-controller', () => ({ datasetController: { get: mockGet, update: mockUpdate, delete: mockDelete, export: mockExport, getStats: mockGetStats, listVersions: mockListVersions, createVersion: mockCreateVersion, restoreVersion: mockRestoreVersion } }))
 vi.mock('@/lib/toast-store', () => ({ useToastStore: (sel: any) => sel({ addToast: mockAddToast }) }))
 vi.mock('@/components/DatasetPreview', () => ({ DatasetPreview: () => null }))
 vi.stubGlobal('URL', { createObjectURL: vi.fn(), revokeObjectURL: vi.fn() })
@@ -54,6 +55,7 @@ import DatasetDetailPage from './page'
 afterEach(() => { cleanup() })
 beforeEach(() => {
   vi.clearAllMocks()
+  mockListVersions.mockResolvedValue({ versions: [], count: 0 })
   mockGetStats.mockResolvedValue({
     format: 'jsonl',
     samples: 500,
@@ -181,5 +183,46 @@ describe('DatasetDetailPage', () => {
     await waitForName()
     await waitFor(() => { expect(mockGetStats).toHaveBeenCalledWith('shakespeare') })
     expect(screen.queryByText('Stats')).toBeFalsy()
+  })
+
+  it('shows empty versions state', async () => {
+    mockGet.mockResolvedValue(mockDataset)
+    render(<DatasetDetailPage />)
+    await waitForName()
+    await waitFor(() => { expect(screen.getByText('Versions')).toBeTruthy() })
+    expect(mockListVersions).toHaveBeenCalledWith('shakespeare')
+    expect(screen.getByText(/No snapshots yet/)).toBeTruthy()
+  })
+
+  it('lists existing versions', async () => {
+    mockGet.mockResolvedValue(mockDataset)
+    mockListVersions.mockResolvedValue({ versions: ['20260801120000'], count: 1 })
+    render(<DatasetDetailPage />)
+    await waitForName()
+    await waitFor(() => { expect(screen.getByText('20260801120000')).toBeTruthy() })
+  })
+
+  it('creates a snapshot on button click', async () => {
+    mockGet.mockResolvedValue(mockDataset)
+    mockCreateVersion.mockResolvedValue({ timestamp: '20260801120000', message: 'Version created' })
+    render(<DatasetDetailPage />)
+    await waitForName()
+    await act(async () => { screen.getByText('Create snapshot').click() })
+    await waitFor(() => { expect(mockCreateVersion).toHaveBeenCalledWith('shakespeare') })
+  })
+
+  it('restores a version after confirmation', async () => {
+    mockGet.mockResolvedValue(mockDataset)
+    mockRestoreVersion.mockResolvedValue({ success: true, message: 'Version restored' })
+    mockListVersions.mockResolvedValue({ versions: ['20260801120000'], count: 1 })
+    render(<DatasetDetailPage />)
+    await waitForName()
+    await waitFor(() => { expect(screen.getByText('20260801120000')).toBeTruthy() })
+    await act(async () => { screen.getByText('Restore').click() })
+    await waitFor(() => { expect(screen.getByTestId('alert-dialog')).toBeTruthy() })
+    const dialog = screen.getByTestId('alert-dialog')
+    const confirmBtn = dialog.querySelector('button:last-child') as HTMLElement
+    await act(async () => { confirmBtn.click() })
+    await waitFor(() => { expect(mockRestoreVersion).toHaveBeenCalledWith('shakespeare', '20260801120000') })
   })
 })

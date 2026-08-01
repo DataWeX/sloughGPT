@@ -22,7 +22,7 @@ logger = logging.getLogger("slo.infrastructure.download_manager")
 try:
     from downcraft import downloader as sg_downloader
     from downcraft import state as sg_state
-    from downcraft.hf_hub import (
+    from domains.infrastructure.hf_hub import (
         get_cache_dir,
         is_download_complete as hf_is_download_complete,
         list_model_files,
@@ -138,7 +138,7 @@ def _has_complete_snapshot(cache_dir: Path) -> bool:
 def is_download_complete(model_id: str, deep_check: bool = False) -> bool:
     """Check if a model is fully downloaded.
 
-    Delegates to ``downcraft.hf_hub.is_download_complete`` for the
+    Delegates to ``domains.infrastructure.hf_hub.is_download_complete`` for the
     canonical check (respects ``HF_HOME`` env var and uses proper
     cache directory resolution).
 
@@ -343,7 +343,7 @@ class DownloadManager:
             self._notify_callbacks(mid)
 
         def _do_download():
-            from downcraft import download_hf_model
+            from domains.infrastructure.hf_hub import download_hf_model
             download_hf_model(
                 model_id,
                 on_progress=_progress_cb,

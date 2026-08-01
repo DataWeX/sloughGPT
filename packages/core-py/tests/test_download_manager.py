@@ -11,11 +11,11 @@ import pytest
 import domains.infrastructure.download_manager as dm
 
 
-# ── Fake downcraft module for worker tests ───────────────────────────────
+# ── Fake hf_hub module for worker tests ───────────────────────────────────
 
 
 def _make_fake_downcraft():
-    fake = types.ModuleType("downcraft")
+    fake = types.ModuleType("domains.infrastructure.hf_hub")
     calls = {"progress": [], "files": []}
 
     def download_hf_model(model_id, on_progress=None, on_file_complete=None):
@@ -286,7 +286,7 @@ class TestDownloadManager:
 
     def test_worker_updates_progress_and_result(self, monkeypatch):
         fake, calls = _make_fake_downcraft()
-        monkeypatch.setitem(sys.modules, "downcraft", fake)
+        monkeypatch.setitem(sys.modules, "domains.infrastructure.hf_hub", fake)
         monkeypatch.setattr(dm, "_cache_dir", lambda mid: Path("/tmp/cache"))
 
         mgr = dm.DownloadManager()

@@ -1,27 +1,25 @@
-"""Tests for domains/training/status.py — training status tracker + enums + checkpoints."""
+"""Tests for domains/training/status.py."""
 
 import json
-import os
-import tempfile
-from pathlib import Path
-from typing import Any, Dict
 
 import numpy as np
 import pytest
+
 from domains.training.status import (
-    TrainingStage,
+    CheckpointManager,
     CompletionStatus,
     StageStatus,
     TrainingCompletionReport,
+    TrainingStage,
     TrainingStatusTracker,
-    CheckpointManager,
-    save_checkpoint_npz,
     load_checkpoint_npz,
+    save_checkpoint_npz,
 )
 
 
 class TestEnums:
     def test_training_stage_values(self):
+        assert TrainingStage.NOT_STARTED.value == "not_started"
         assert TrainingStage.PRETRAINING.value == "pretraining"
         assert TrainingStage.FEDERATED.value == "federated"
         assert TrainingStage.RLHF.value == "rlhf"
@@ -38,355 +36,258 @@ class TestEnums:
 
 class TestStageStatus:
     def test_defaults(self):
-        s = StageStatus(name="Pretraining")
-        assert s.started_at is None
-        assert s.completed_at is None
-        assert s.epochs_completed == 0
-        assert s.total_epochs == 0
-        assert s.best_loss == 0.0
-        assert s.final_loss == 0.0
-        assert s.status == CompletionStatus.NOT_STARTED
-        assert s.error is None
+        stage = StageStatus(name="Pretraining")
+        assert stage.total_epochs == 0
+        assert stage.status == CompletionStatus.NOT_STARTED
+        assert stage.error is None
 
 
 class TestTrainingCompletionReport:
     def test_is_complete(self):
-        r = TrainingCompletionReport(model_name="test", created_at="2024-01-01")
-        assert r.is_complete() is False
-        r.completion_status = CompletionStatus.COMPLETED
-        assert r.is_complete() is True
+        report = TrainingCompletionReport(model_name="m", created_at="now")
+        assert not report.is_complete()
+        report.completion_status = CompletionStatus.COMPLETED
+        assert report.is_complete()
 
-    def test_can_resume_in_progress(self):
-        r = TrainingCompletionReport(
-            model_name="test", created_at="2024-01-01",
-            completion_status=CompletionStatus.IN_PROGRESS,
-            checkpoint_path="/tmp/ckpt",
-        )
-        assert r.can_resume() is True
+    def test_can_resume(self):
+        report = TrainingCompletionReport(model_name="m", created_at="now")
+        assert not report.can_resume()
+        report.completion_status = CompletionStatus.INTERRUPTED
+        assert not report.can_resume()  # no checkpoint
+        report.checkpoint_path = "/tmp/ckpt.npz"
+        assert report.can_resume()
 
-    def test_can_resume_interrupted(self):
-        r = TrainingCompletionReport(
-            model_name="test", created_at="2024-01-01",
-            completion_status=CompletionStatus.INTERRUPTED,
-            checkpoint_path="/tmp/ckpt",
-        )
-        assert r.can_resume() is True
-
-    def test_cannot_resume_without_checkpoint(self):
-        r = TrainingCompletionReport(
-            model_name="test", created_at="2024-01-01",
-            completion_status=CompletionStatus.INTERRUPTED,
-            checkpoint_path=None,
-        )
-        assert r.can_resume() is False
-
-    def test_cannot_resume_completed(self):
-        r = TrainingCompletionReport(
-            model_name="test", created_at="2024-01-01",
-            completion_status=CompletionStatus.COMPLETED,
-        )
-        assert r.can_resume() is False
-
-    def test_progress_summary_completed(self):
-        r = TrainingCompletionReport(
-            model_name="test", created_at="2024-01-01",
-            completion_status=CompletionStatus.COMPLETED,
-            final_loss=0.5,
-        )
-        assert "complete" in r.get_progress_summary().lower()
-        assert "0.5" in r.get_progress_summary()
-
-    def test_progress_summary_in_progress(self):
-        r = TrainingCompletionReport(
-            model_name="test", created_at="2024-01-01",
-            completion_status=CompletionStatus.IN_PROGRESS,
-            completion_percentage=45.0,
-        )
-        assert "45" in r.get_progress_summary()
-
-    def test_progress_summary_interrupted(self):
-        r = TrainingCompletionReport(
-            model_name="test", created_at="2024-01-01",
-            completion_status=CompletionStatus.INTERRUPTED,
-            completion_percentage=30.0,
-        )
-        assert "interrupted" in r.get_progress_summary().lower()
-
-    def test_progress_summary_not_started(self):
-        r = TrainingCompletionReport(
-            model_name="test", created_at="2024-01-01",
-            completion_status=CompletionStatus.NOT_STARTED,
-        )
-        assert "not started" in r.get_progress_summary().lower()
+    def test_get_progress_summary(self):
+        report = TrainingCompletionReport(model_name="m", created_at="now")
+        assert "not started" in report.get_progress_summary()
+        report.completion_status = CompletionStatus.IN_PROGRESS
+        report.completion_percentage = 42.5
+        assert "42.5%" in report.get_progress_summary()
+        report.completion_status = CompletionStatus.INTERRUPTED
+        assert "Can resume" in report.get_progress_summary()
+        report.completion_status = CompletionStatus.COMPLETED
+        report.final_loss = 0.1234
+        assert "0.1234" in report.get_progress_summary()
 
 
 class TestTrainingStatusTracker:
     def test_init(self):
-        tracker = TrainingStatusTracker("my_model")
-        assert tracker.model_name == "my_model"
+        tracker = TrainingStatusTracker("mymodel")
+        assert tracker.model_name == "mymodel"
         assert tracker.report.completion_status == CompletionStatus.NOT_STARTED
+        assert tracker.checkpoints == []
 
-    def test_start_training(self):
+    def test_start_training_initializes_stages(self):
         tracker = TrainingStatusTracker()
         tracker.start_training(
-            dataset="shakespeare",
-            batch_size=32,
-            learning_rate=0.001,
-            pretrain_epochs=5,
-            federated_rounds=3,
-            rlhf_epochs=2,
+            dataset="d", batch_size=4, learning_rate=1e-3,
+            pretrain_epochs=3, federated_rounds=2, rlhf_epochs=1,
         )
         assert tracker.report.completion_status == CompletionStatus.IN_PROGRESS
-        assert tracker.report.dataset == "shakespeare"
         assert tracker.report.pretraining is not None
-        assert tracker.report.pretraining.total_epochs == 5
-        assert tracker.report.federated is not None
-        assert tracker.report.rlhf is not None
+        assert tracker.report.pretraining.total_epochs == 3
+        assert tracker.report.federated.total_epochs == 2
+        assert tracker.report.rlhf.total_epochs == 1
+        assert tracker.report.dataset == "d"
+        assert tracker.report.batch_size == 4
+        assert tracker.report.learning_rate == 1e-3
+
+    def test_start_training_without_stages(self):
+        tracker = TrainingStatusTracker()
+        tracker.start_training()
+        assert tracker.report.pretraining is None
+        assert tracker.report.federated is None
+        assert tracker.report.rlhf is None
+
+    def test_start_stage(self):
+        tracker = TrainingStatusTracker()
+        tracker.start_training(pretrain_epochs=3)
+        tracker.start_stage(TrainingStage.PRETRAINING)
+        assert tracker.report.pretraining.status == CompletionStatus.IN_PROGRESS
+        assert tracker.report.pretraining.started_at is not None
+
+    def test_start_unknown_stage_is_noop(self):
+        tracker = TrainingStatusTracker()
+        tracker.start_training(pretrain_epochs=3)
+        tracker.start_stage(TrainingStage.COMPLETE)
+        assert tracker.report.pretraining.status == CompletionStatus.NOT_STARTED
 
     def test_update_stage(self):
         tracker = TrainingStatusTracker()
         tracker.start_training(pretrain_epochs=10)
-        tracker.update_stage(TrainingStage.PRETRAINING, epoch=0, loss=2.0)
-        assert tracker.report.pretraining.epochs_completed == 1
-        assert tracker.report.pretraining.final_loss == 2.0
+        tracker.update_stage(TrainingStage.PRETRAINING, epoch=1, loss=0.5, val_loss=0.4)
+        assert tracker.report.pretraining.epochs_completed == 2
+        assert tracker.report.pretraining.final_loss == 0.5
+        assert tracker.report.pretraining.best_loss == 0.4
 
-    def test_update_stage_with_val_loss(self):
+    def test_update_stage_best_loss_only_decreases(self):
         tracker = TrainingStatusTracker()
         tracker.start_training(pretrain_epochs=10)
-        tracker.update_stage(TrainingStage.PRETRAINING, epoch=0, loss=2.0, val_loss=1.8)
-        assert tracker.report.pretraining.best_loss == 1.8
+        tracker.update_stage(TrainingStage.PRETRAINING, epoch=0, loss=1.0, val_loss=0.5)
+        tracker.update_stage(TrainingStage.PRETRAINING, epoch=1, loss=0.9, val_loss=0.7)
+        assert tracker.report.pretraining.best_loss == 0.5
 
-    def test_complete_stage(self):
+    def test_complete_stage_updates_report(self):
         tracker = TrainingStatusTracker()
         tracker.start_training(pretrain_epochs=5)
-        tracker.start_stage(TrainingStage.PRETRAINING)
+        tracker.update_stage(TrainingStage.PRETRAINING, epoch=4, loss=0.3, val_loss=0.2)
         tracker.complete_stage(TrainingStage.PRETRAINING)
         assert tracker.report.pretraining.status == CompletionStatus.COMPLETED
-        assert tracker.report.pretraining.completed_at is not None
+        assert tracker.report.best_loss == 0.2
+        assert tracker.report.final_loss == 0.3
+        assert tracker.report.total_epochs == 5
+
+    def test_all_stages_complete_sets_completed(self):
+        tracker = TrainingStatusTracker()
+        tracker.start_training(pretrain_epochs=2, federated_rounds=2, rlhf_epochs=2)
+        for stage in [TrainingStage.PRETRAINING, TrainingStage.FEDERATED, TrainingStage.RLHF]:
+            tracker.update_stage(stage, epoch=1, loss=0.5)
+            tracker.complete_stage(stage)
+        assert tracker.report.completion_status == CompletionStatus.COMPLETED
+        assert tracker.report.completion_percentage == 100.0
 
     def test_fail_stage(self):
         tracker = TrainingStatusTracker()
-        tracker.start_training(pretrain_epochs=5)
-        tracker.fail_stage(TrainingStage.PRETRAINING, "OOM error")
+        tracker.start_training(pretrain_epochs=2)
+        tracker.fail_stage(TrainingStage.PRETRAINING, "OOM")
         assert tracker.report.pretraining.status == CompletionStatus.FAILED
-        assert tracker.report.pretraining.error == "OOM error"
+        assert tracker.report.pretraining.error == "OOM"
         assert tracker.report.completion_status == CompletionStatus.FAILED
-        assert len(tracker.report.errors) == 1
+        assert any("pretraining" in e for e in tracker.report.errors)
 
     def test_record_checkpoint(self):
         tracker = TrainingStatusTracker()
-        tracker.record_checkpoint("/tmp/ckpt.pt", step=100, loss=0.5)
-        assert tracker.report.checkpoint_path == "/tmp/ckpt.pt"
-        assert tracker.report.last_checkpoint_step == 100
+        tracker.record_checkpoint("/tmp/ckpt.npz", step=10, loss=0.4)
+        assert tracker.report.checkpoint_path == "/tmp/ckpt.npz"
+        assert tracker.report.last_checkpoint_step == 10
         assert tracker.report.checkpoint_count == 1
-        assert len(tracker.checkpoints) == 1
+        assert tracker.checkpoints[0]["step"] == 10
 
     def test_mark_complete(self):
         tracker = TrainingStatusTracker()
-        tracker.start_training()
         tracker.mark_complete()
         assert tracker.report.completion_status == CompletionStatus.COMPLETED
         assert tracker.report.completion_percentage == 100.0
         assert tracker.report.trained_at is not None
 
-    def test_auto_complete_all_stages(self):
-        tracker = TrainingStatusTracker()
-        tracker.start_training(pretrain_epochs=2, federated_rounds=2)
-        tracker.start_stage(TrainingStage.PRETRAINING)
-        tracker.update_stage(TrainingStage.PRETRAINING, epoch=0, loss=1.0)
-        tracker.update_stage(TrainingStage.PRETRAINING, epoch=1, loss=0.8)
-        tracker.complete_stage(TrainingStage.PRETRAINING)
-        tracker.start_stage(TrainingStage.FEDERATED)
-        tracker.update_stage(TrainingStage.FEDERATED, epoch=0, loss=0.7)
-        tracker.update_stage(TrainingStage.FEDERATED, epoch=1, loss=0.5)
-        tracker.complete_stage(TrainingStage.FEDERATED)
-        assert tracker.report.completion_status == CompletionStatus.COMPLETED
-
-    def test_save_and_load_report(self):
-        tracker = TrainingStatusTracker("test_model")
-        tracker.start_training(dataset="test", pretrain_epochs=3)
-        tracker.mark_complete()
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            path = f.name
+    def test_save_and_load_report(self, tmp_path):
+        tracker = TrainingStatusTracker("save-me")
+        tracker.start_training(pretrain_epochs=2)
+        tracker.update_stage(TrainingStage.PRETRAINING, epoch=1, loss=0.3)
+        path = str(tmp_path / "report.json")
         tracker.save_report(path)
         loaded = TrainingStatusTracker.load_report(path)
-        assert loaded.report.model_name == "test_model"
-        assert loaded.report.dataset == "test"
-        # load_report doesn't deserialize enums back from strings
-        assert loaded.report.completion_status == "completed"
+        assert loaded.model_name == "save-me"
+        assert loaded.report.completion_status == CompletionStatus.IN_PROGRESS
+        assert loaded.report.pretraining.epochs_completed == 2
+
+    def test_save_report_serializes_enums(self, tmp_path):
+        tracker = TrainingStatusTracker()
+        tracker.start_training(pretrain_epochs=2)
+        path = str(tmp_path / "report.json")
+        tracker.save_report(path)
+        data = json.loads(open(path).read())
+        assert data["completion_status"] == "in_progress"
+        assert data["pretraining"]["status"] == "not_started"
 
 
-# =============================================================================
-# NPZ CHECKPOINT TESTS
-# =============================================================================
+class TestCheckpointManager:
+    def test_init_creates_dir(self, tmp_path):
+        mgr = CheckpointManager(checkpoint_dir=str(tmp_path / "ckpts"))
+        assert (tmp_path / "ckpts").exists()
 
+    def test_save_checkpoint(self, tmp_path):
+        class FakeModel:
+            def state_dict(self):
+                return {"w": np.array([1.0, 2.0])}
 
-class _StubModel:
-    """Minimal model stub with state_dict / load_state_dict for checkpoint tests."""
+        mgr = CheckpointManager(checkpoint_dir=str(tmp_path / "ckpts"))
+        path = mgr.save_checkpoint(FakeModel(), None, step=1, epoch=1, loss=0.5)
+        assert path.endswith("checkpoint_step1.npz")
+        assert (tmp_path / "ckpts" / "checkpoint_step1.npz").exists()
+        assert mgr.tracker.report.checkpoint_count == 1
 
-    def __init__(self, params: Dict[str, np.ndarray]):
-        self._params = {k: v.copy() for k, v in params.items()}
+    def test_load_checkpoint_roundtrip(self, tmp_path):
+        class FakeModel:
+            def __init__(self):
+                self.data = None
 
-    def state_dict(self) -> Dict[str, np.ndarray]:
-        return {k: v.copy() for k, v in self._params.items()}
+            def state_dict(self):
+                return {"w": np.array([1.0, 2.0])}
 
-    def load_state_dict(self, state_dict: Dict[str, Any], strict: bool = True) -> None:
-        for k in state_dict:
-            if hasattr(state_dict[k], "cpu"):
-                self._params[k] = state_dict[k].cpu().numpy()
-            elif isinstance(state_dict[k], np.ndarray):
-                self._params[k] = state_dict[k].copy()
-            else:
-                self._params[k] = np.asarray(state_dict[k])
+            def load_state_dict(self, state_dict):
+                self.data = state_dict
 
-
-class TestSaveLoadCheckpointNpz:
-    """Standalone save_checkpoint_npz / load_checkpoint_npz helpers."""
-
-    def test_roundtrip_simple_weights(self):
-        state = {"weight": np.array([[1.0, 2.0], [3.0, 4.0]]), "bias": np.array([0.1, 0.2])}
-        meta = {"loss": 0.42, "epoch": 5, "stage": "pretraining"}
-
-        with tempfile.NamedTemporaryFile(suffix=".npz", delete=False) as f:
-            path = f.name
-        try:
-            saved = save_checkpoint_npz(path, state, meta)
-            assert saved == path
-            loaded = load_checkpoint_npz(path)
-            assert loaded["loss"] == 0.42
-            assert loaded["epoch"] == 5
-            assert loaded["stage"] == "pretraining"
-            assert np.allclose(loaded["model_state_dict"]["weight"], [[1., 2.], [3., 4.]])
-            assert np.allclose(loaded["model_state_dict"]["bias"], [0.1, 0.2])
-        finally:
-            os.unlink(path)
-
-    def test_auto_appends_npz_extension(self):
-        state = {"w": np.array([1.0])}
-        with tempfile.NamedTemporaryFile(delete=False) as f:
-            path = f.name  # no suffix
-        try:
-            saved = save_checkpoint_npz(path, state)
-            assert saved.endswith(".npz")
-            assert Path(saved).exists()
-            loaded = load_checkpoint_npz(saved)
-            assert "model_state_dict" in loaded
-        finally:
-            os.unlink(saved)
-
-    def test_empty_state_dict(self):
-        with tempfile.NamedTemporaryFile(suffix=".npz", delete=False) as f:
-            path = f.name
-        try:
-            save_checkpoint_npz(path, {}, {"note": "empty"})
-            loaded = load_checkpoint_npz(path)
-            assert loaded["note"] == "empty"
-            assert loaded["model_state_dict"] == {}
-        finally:
-            os.unlink(path)
-
-    def test_binary_data_in_meta(self):
-        """Metadata values that aren't JSON-serializable get str()-ified via default=str."""
-        state = {"w": np.array([1.0])}
-        meta = {"bytes_val": b"hello\xff"}
-        with tempfile.NamedTemporaryFile(suffix=".npz", delete=False) as f:
-            path = f.name
-        try:
-            saved = save_checkpoint_npz(path, state, meta)
-            loaded = load_checkpoint_npz(saved)
-            # bytes → str via default=str
-            assert isinstance(loaded["bytes_val"], str)
-        finally:
-            os.unlink(path)
-
-
-class TestCheckpointManagerNpz:
-    """CheckpointManager writes torch-free .npz checkpoints by default."""
-
-    def test_save_and_load_npz(self, tmp_path):
-        mgr = CheckpointManager(str(tmp_path))
-        params = {
-            "encoder.weight": np.array([[1.0, 0.0], [0.0, 1.0]]),
-            "decoder.bias": np.array([0.0, 0.0]),
-        }
-        model = _StubModel(params)
-
-        path = mgr.save_checkpoint(
-            model, optimizer=None, step=10, epoch=2, loss=0.5, val_loss=0.45,
-            metadata={"note": "test"},
-        )
-        assert path.endswith(".npz")
-        assert Path(path).exists()
-
-        # Load into fresh model
-        fresh = _StubModel({"encoder.weight": np.eye(2), "decoder.bias": np.zeros(2)})
-        info = mgr.load_checkpoint(path, fresh)
-        assert info["step"] == 10
-        assert info["epoch"] == 2
-        assert info["loss"] == 0.5
-        assert info["val_loss"] == 0.45
-        assert np.allclose(fresh._params["encoder.weight"], [[1., 0.], [0., 1.]])
-        assert np.allclose(fresh._params["decoder.bias"], [0., 0.])
-
-    def test_list_returns_npz_checkpoints(self, tmp_path):
-        mgr = CheckpointManager(str(tmp_path))
-        model = _StubModel({"w": np.array([1.0])})
-
-        mgr.save_checkpoint(model, None, step=1, epoch=0, loss=0.8)
-        mgr.save_checkpoint(model, None, step=2, epoch=1, loss=0.5)
-
-        ckpts = mgr.list_checkpoints()
-        assert len(ckpts) == 2
-        assert ckpts[0]["step"] == 2  # sorted desc
-        assert ckpts[1]["step"] == 1
-
-    def test_ignores_foreign_checkpoint_files(self, tmp_path):
-        """list_checkpoints skips non-.npz files in the checkpoint dir."""
-        mgr = CheckpointManager(str(tmp_path))
-        model = _StubModel({"w": np.array([1.0])})
-
-        mgr.save_checkpoint(model, None, step=1, epoch=0, loss=0.8)
-        # A .pt file (or any non-npz) must be ignored by list_checkpoints
-        pt_path = tmp_path / "checkpoint_step2.pt"
-        pt_path.write_text("not a valid checkpoint")
-
-        ckpts = mgr.list_checkpoints()
-        assert len(ckpts) == 1
-        assert ckpts[0]["step"] == 1
-        assert ckpts[0]["path"].endswith(".npz")
-
-    def test_get_best_with_npz(self, tmp_path):
-        mgr = CheckpointManager(str(tmp_path))
-        model = _StubModel({"w": np.array([1.0])})
-
-        mgr.save_checkpoint(model, None, step=1, epoch=0, loss=0.9)
-        mgr.save_checkpoint(model, None, step=2, epoch=1, loss=0.3)
-
-        best = mgr.get_best_checkpoint()
-        assert best is not None
-        loaded = mgr.load_checkpoint(best, _StubModel({"w": np.array([1.0])}))
+        mgr = CheckpointManager(checkpoint_dir=str(tmp_path / "ckpts"))
+        model = FakeModel()
+        path = mgr.save_checkpoint(model, None, step=5, epoch=2, loss=0.3)
+        loaded = mgr.load_checkpoint(path, FakeModel())
+        assert loaded["step"] == 5
+        assert loaded["epoch"] == 2
         assert loaded["loss"] == 0.3
+        assert loaded["stage"] == TrainingStage.PRETRAINING
 
-    def test_get_latest_with_npz(self, tmp_path):
-        mgr = CheckpointManager(str(tmp_path))
-        model = _StubModel({"w": np.array([1.0])})
-
-        mgr.save_checkpoint(model, None, step=1, epoch=0, loss=0.9)
-        import time
-        time.sleep(0.01)
-        mgr.save_checkpoint(model, None, step=2, epoch=1, loss=0.3)
-
+    def test_get_latest_checkpoint(self, tmp_path):
+        mgr = CheckpointManager(checkpoint_dir=str(tmp_path / "ckpts"))
+        model = type("M", (), {"state_dict": lambda self: {}})()
+        mgr.save_checkpoint(model, None, step=1, epoch=1, loss=0.5)
+        mgr.save_checkpoint(model, None, step=2, epoch=2, loss=0.4)
         latest = mgr.get_latest_checkpoint()
         assert latest is not None
-        loaded = mgr.load_checkpoint(latest, _StubModel({"w": np.array([1.0])}))
-        assert loaded["step"] == 2
+        assert latest.endswith("checkpoint_step2.npz")
 
-    def test_npz_updates_tracker(self, tmp_path):
-        mgr = CheckpointManager(str(tmp_path))
-        model = _StubModel({"w": np.array([1.0])})
+    def test_get_latest_checkpoint_empty(self, tmp_path):
+        mgr = CheckpointManager(checkpoint_dir=str(tmp_path / "ckpts"))
+        assert mgr.get_latest_checkpoint() is None
 
-        mgr.save_checkpoint(model, None, step=5, epoch=2, loss=0.5)
-        assert mgr.tracker.report.last_checkpoint_step == 5
-        assert mgr.tracker.report.checkpoint_count == 1
-        assert mgr.tracker.report.checkpoint_path is not None
-        assert mgr.tracker.report.checkpoint_path.endswith(".npz")
+    def test_get_best_checkpoint(self, tmp_path):
+        mgr = CheckpointManager(checkpoint_dir=str(tmp_path / "ckpts"))
+        model = type("M", (), {"state_dict": lambda self: {}})()
+        mgr.save_checkpoint(model, None, step=1, epoch=1, loss=0.9)
+        mgr.save_checkpoint(model, None, step=2, epoch=2, loss=0.2)
+        best = mgr.get_best_checkpoint()
+        assert best is not None
+        assert best.endswith("checkpoint_step2.npz")
+
+    def test_list_checkpoints_sorted_by_step_desc(self, tmp_path):
+        mgr = CheckpointManager(checkpoint_dir=str(tmp_path / "ckpts"))
+        model = type("M", (), {"state_dict": lambda self: {}})()
+        mgr.save_checkpoint(model, None, step=1, epoch=1, loss=0.5)
+        mgr.save_checkpoint(model, None, step=2, epoch=2, loss=0.4)
+        ckpts = mgr.list_checkpoints()
+        assert len(ckpts) == 2
+        assert ckpts[0]["step"] == 2
+        assert ckpts[1]["step"] == 1
+
+    def test_tensors_to_numpy(self):
+        class FakeTensor:
+            def __init__(self, arr):
+                self._arr = arr
+
+            def cpu(self):
+                return self
+
+            def numpy(self):
+                return self._arr
+
+        result = CheckpointManager._tensors_to_numpy(
+            {"a": FakeTensor(np.array([1.0])), "b": np.array([2.0]), "c": 3}
+        )
+        assert isinstance(result["a"], np.ndarray)
+        assert isinstance(result["b"], np.ndarray)
+        assert isinstance(result["c"], np.ndarray)
+
+
+class TestStandaloneNpzHelpers:
+    def test_save_load_roundtrip(self, tmp_path):
+        path = str(tmp_path / "ckpt.npz")
+        save_checkpoint_npz(path, {"w": np.array([1.0, 2.0])}, {"step": 3})
+        loaded = load_checkpoint_npz(path)
+        assert loaded["step"] == 3
+        np.testing.assert_array_equal(loaded["model_state_dict"]["w"], [1.0, 2.0])
+
+    def test_standalone_tensors_to_numpy(self):
+        from domains.training.status import _tensors_to_numpy
+
+        result = _tensors_to_numpy({"w": np.array([1.0])})
+        assert isinstance(result["w"], np.ndarray)

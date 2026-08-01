@@ -310,6 +310,7 @@ class StartupOrchestrator:
                     slonet_hf_id=server_state.model_type,
                     slonet_provider=preloaded,
                     model_registry=registry,
+                    process_guard=process_guard,
                     quantize=cfg.quantize_slonet,
                     quant_bits=cfg.quant_bits,
                     quant_mode=cfg.quant_mode,
@@ -617,7 +618,7 @@ def _autoload_model(cfg: ServerConfig):
     #    then load via ModelLoader
     logger.info("No local .slnc/safetensors for %s — downloading from HuggingFace", model_id, extra={"tag": "START"})
     try:
-        from downcraft import download_hf_model
+        from domains.infrastructure.hf_hub import download_hf_model
         from domains.infrastructure.safetensors_loader import _get_model_dir
 
         cache_dir = _get_model_dir(model_id)

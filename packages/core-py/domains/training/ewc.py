@@ -437,8 +437,8 @@ class EwcContinualLearner:
         return total_loss, {
             "total_loss": _scalar(total_loss),
             "task_loss": _scalar(task_loss),
-            "ewc_loss": ewc_stats["ewc_loss"],
-            "active_tasks": ewc_stats["active_tasks"],
+            "ewc_loss": ewc_stats.get("ewc_loss", _scalar(ewc_loss)),
+            "active_tasks": ewc_stats.get("active_tasks", 0),
         }
 
     def prune_consolidation(

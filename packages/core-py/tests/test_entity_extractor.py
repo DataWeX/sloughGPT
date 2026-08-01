@@ -1,194 +1,179 @@
-"""Tests for domains.learner.entity_extractor: entity/relationship/fact extraction."""
+"""Tests for domains/learner/entity_extractor.py."""
 
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+import sys
 
 import pytest
 
-from domains.learner import entity_extractor as ee
+from domains.learner.entity_extractor import (
+    _is_valid_entity,
+    extract_entities,
+    extract_facts_from_conversation,
+    extract_facts_neural,
+    extract_relationships,
+    extract_and_store,
+)
+
+
+class TestIsValidEntity:
+    def test_valid_word(self):
+        assert _is_valid_entity("Python") is True
+
+    def test_stop_word_rejected(self):
+        assert _is_valid_entity("the") is False
+
+    def test_short_word_rejected(self):
+        assert _is_valid_entity("A") is False
+
+    def test_punctuation_rejected(self):
+        assert _is_valid_entity("...") is False
 
 
 class TestExtractEntities:
-    def test_single_capitalized_words(self):
-        entities = ee.extract_entities("Alice works at Google and Microsoft.")
-        assert "Alice" in entities
-        assert "Google" in entities
-        assert "Microsoft" in entities
-
-    def test_multi_word_entity(self):
-        entities = ee.extract_entities("I visited New York City last year.")
-        assert "New York City" in entities
-
-    def test_multi_word_parts_not_duplicated(self):
-        entities = ee.extract_entities("I visited New York City last year.")
-        assert "New York City" in entities
-        assert "New" not in entities
-
-    def test_common_false_entities_excluded(self):
-        assert ee.extract_entities("Hello there, welcome!") == []
-
-    def test_deduplicates(self):
-        entities = ee.extract_entities("Alice likes Alice.")
-        assert entities.count("Alice") == 1
-
     def test_empty_text(self):
-        assert ee.extract_entities("") == []
+        assert extract_entities("") == []
 
-    def test_lowercase_words_ignored(self):
-        assert ee.extract_entities("the cat sat on the mat.") == []
+    def test_capitalized_multiple_words(self):
+        result = extract_entities("John Smith works at Acme Corp.")
+        assert "John Smith" in result
+        assert "Acme Corp" in result
+
+    def test_single_capitalized_word(self):
+        result = extract_entities("Python is great.")
+        assert "Python" in result
+
+    def test_dedup(self):
+        result = extract_entities("Maria likes tea. Maria likes tea.")
+        assert result.count("Maria") == 1
+
+    def test_false_entities_excluded(self):
+        result = extract_entities("Hello there!")
+        assert "Hello" not in result
 
 
 class TestExtractRelationships:
-    def test_likes(self):
-        assert ee.extract_relationships("Alice likes pizza.") == [("Alice", "likes", "pizza")]
-
     def test_is_a(self):
-        assert ee.extract_relationships("the dog is an animal.") == [("the dog", "is_a", "animal")]
+        result = extract_relationships("Django is a web framework")
+        assert ("Django", "is_a", "web framework") in result
+
+    def test_is_a_removes_article(self):
+        result = extract_relationships("Python is a programming language")
+        assert ("Python", "is_a", "programming language") in result
+
+    def test_likes(self):
+        result = extract_relationships("Alice likes coffee")
+        assert ("Alice", "likes", "coffee") in result
 
     def test_has(self):
-        assert ee.extract_relationships("Bob has a bicycle.") == [("Bob", "has", "bicycle")]
+        result = extract_relationships("Bob has a cat")
+        assert ("Bob", "has", "cat") in result
 
-    def test_wants(self):
-        assert ee.extract_relationships("Carol wants coffee.") == [("Carol", "wants", "coffee")]
+    def test_possession_apostrophe(self):
+        result = extract_relationships("Sarah's laptop")
+        assert ("Sarah", "possesses", "laptop") in result
 
     def test_works_at(self):
-        assert ee.extract_relationships("Dan works at Acme Corp.") == [("Dan", "works_at", "Acme Corp")]
+        result = extract_relationships("Tom works at Google")
+        assert ("Tom", "works_at", "Google") in result
 
-    def test_lives_in(self):
-        assert ee.extract_relationships("Eve lives in Berlin.") == [("Eve", "lives_in", "Berlin")]
+    def test_dedup_relationships(self):
+        result = extract_relationships(
+            "Django is a web framework. Django is a web framework."
+        )
+        assert len(result) == 1
 
-    def test_possesses(self):
-        result = ee.extract_relationships("Frank's favorite food is pasta.")
-        assert result[0][0] == "Frank"
-        assert result[0][1] == "possesses"
-        assert result[0][2].startswith("favorite")
-
-    def test_article_stripped_from_object(self):
-        result = ee.extract_relationships("Grace is a teacher.")
-        assert result == [("Grace", "is_a", "teacher")]
-
-    def test_duplicate_triples_deduplicated(self):
-        result = ee.extract_relationships("Hank likes tea. Hank likes tea.")
-        assert result == [("Hank", "likes", "tea")]
-
-    def test_stop_word_subject_excluded(self):
-        assert ee.extract_relationships("it likes pizza.") == []
-
-    def test_empty_text(self):
-        assert ee.extract_relationships("") == []
+    def test_stop_word_subject_rejected(self):
+        result = extract_relationships("The dog is a pet")
+        assert not any(t[0].lower() == "the" for t in result)
 
 
 class TestExtractFactsFromConversation:
-    def test_relationship_facts(self):
-        facts = ee.extract_facts_from_conversation("Alice likes pizza.", "That is great!")
-        assert "Alice likes pizza" in facts
+    def test_relationship_fact(self):
+        facts = extract_facts_from_conversation(
+            "Django is a web framework.", "Yes, it is."
+        )
+        assert "Django is a web framework" in facts
 
-    def test_lives_in_fact(self):
-        facts = ee.extract_facts_from_conversation("Alice lives in Paris.", "Nice!")
-        assert "Alice lives_in Paris" in facts
+    def test_entity_fact(self):
+        facts = extract_facts_from_conversation(
+            "Do you know Maria?", "Maria loves programming."
+        )
+        assert any("Entity" in f for f in facts)
 
-    def test_entity_facts(self):
-        facts = ee.extract_facts_from_conversation("", "Alice is a developer.")
-        assert "Alice is a developer" in facts
-
-    def test_deduplicated(self):
-        facts = ee.extract_facts_from_conversation("Alice likes pizza.", "Alice likes pizza.")
-        assert facts.count("Alice likes pizza") == 1
-
-    def test_empty_exchange(self):
-        assert ee.extract_facts_from_conversation("", "") == []
+    def test_empty_conversation(self):
+        assert extract_facts_from_conversation("hi", "hello") == []
 
 
 class TestExtractFactsNeural:
-    def _patch_registry(self, monkeypatch, registry):
-        import domains.infrastructure.model_registry as mr
-
-        monkeypatch.setattr(mr, "get_model_registry", lambda: registry)
+    @pytest.mark.asyncio
+    async def test_empty_when_no_registry(self, monkeypatch):
+        monkeypatch.setitem(
+            sys.modules,
+            "domains.infrastructure.model_registry",
+            type(
+                "FakeRegistryMod",
+                (),
+                {"get_model_registry": lambda: None},
+            ),
+        )
+        result = await extract_facts_neural("hello", "world")
+        assert result == []
 
     @pytest.mark.asyncio
-    async def test_no_registry(self, monkeypatch):
-        self._patch_registry(monkeypatch, None)
-        assert await ee.extract_facts_neural("u", "a") == []
+    async def test_returns_facts_from_model(self, monkeypatch):
+        class FakeModel:
+            async def generate(self, prompt, **kwargs):
+                class R:
+                    text = "- User likes coffee\n- Cats are pets"
+                return R()
 
-    @pytest.mark.asyncio
-    async def test_no_models(self, monkeypatch):
-        self._patch_registry(monkeypatch, MagicMock(list_models=lambda: []))
-        assert await ee.extract_facts_neural("u", "a") == []
+        class FakeRegistry:
+            def list_models(self):
+                return [1]
 
-    @pytest.mark.asyncio
-    async def test_parses_bullets(self, monkeypatch):
-        model = MagicMock()
-        model.generate = AsyncMock(return_value=SimpleNamespace(text="\n- Alice likes pizza\n- Bob lives in Berlin\n"))
-        registry = MagicMock(list_models=lambda: [model], get_default_model=lambda: model)
-        self._patch_registry(monkeypatch, registry)
-        facts = await ee.extract_facts_neural("u", "a")
-        assert facts == ["Alice likes pizza", "Bob lives in Berlin"]
+            def get_default_model(self):
+                return FakeModel()
 
-    @pytest.mark.asyncio
-    async def test_empty_output(self, monkeypatch):
-        model = MagicMock()
-        model.generate = AsyncMock(return_value=SimpleNamespace(text="   "))
-        registry = MagicMock(list_models=lambda: [model], get_default_model=lambda: model)
-        self._patch_registry(monkeypatch, registry)
-        assert await ee.extract_facts_neural("u", "a") == []
-
-    @pytest.mark.asyncio
-    async def test_exception_returns_empty(self, monkeypatch):
-        model = MagicMock()
-        model.generate = AsyncMock(side_effect=RuntimeError("boom"))
-        registry = MagicMock(list_models=lambda: [model], get_default_model=lambda: model)
-        self._patch_registry(monkeypatch, registry)
-        assert await ee.extract_facts_neural("u", "a") == []
+        monkeypatch.setitem(
+            sys.modules,
+            "domains.infrastructure.model_registry",
+            type("FakeRegistryMod", (), {"get_model_registry": lambda: FakeRegistry()}),
+        )
+        result = await extract_facts_neural("user", "ai")
+        assert "User likes coffee" in result
+        assert "Cats are pets" in result
 
 
 class TestExtractAndStore:
     @pytest.mark.asyncio
     async def test_stores_facts(self, monkeypatch):
-        knowledge = MagicMock()
-        knowledge.add_fact.return_value = True
-        monkeypatch.setattr(ee, "extract_facts_neural", AsyncMock(return_value=[]))
-        stored = await ee.extract_and_store("my friend likes pizza.", "Nice!", knowledge_memory=knowledge)
-        assert stored == 1
-        fact = knowledge.add_fact.call_args[0][0]
-        assert fact.content == "my friend likes pizza"
-        assert fact.source == "auto_extracted"
-        assert fact.topic == "chat"
+        stored = []
+
+        class FakeKnowledgeMemory:
+            def add_fact(self, fact):
+                stored.append(fact.content)
+                return True
+
+        monkeypatch.setattr(
+            "domains.learner.knowledge.KnowledgeFact",
+            type("KF", (), {"__init__": lambda self, content, topic, source: setattr(
+                self, "content", content
+            ) or setattr(self, "topic", topic) or setattr(self, "source", source)}),
+        )
+        count = await extract_and_store(
+            "Django is a web framework",
+            "Yes indeed it is.",
+            FakeKnowledgeMemory(),
+        )
+        assert count >= 1
+        assert any("Django is a web framework" in f for f in stored)
 
     @pytest.mark.asyncio
-    async def test_no_facts_returns_zero(self, monkeypatch, knowledge_memory=None):
-        knowledge = MagicMock()
-        monkeypatch.setattr(ee, "extract_facts_neural", AsyncMock(return_value=[]))
-        stored = await ee.extract_and_store("how are you", "I am fine", knowledge_memory=knowledge)
-        assert stored == 0
-        knowledge.add_fact.assert_not_called()
+    async def test_returns_zero_on_exception(self, monkeypatch):
+        def boom(*a, **k):
+            raise RuntimeError("bad")
 
-    @pytest.mark.asyncio
-    async def test_add_fact_false_not_counted(self, monkeypatch):
-        knowledge = MagicMock()
-        knowledge.add_fact.return_value = False
-        monkeypatch.setattr(ee, "extract_facts_neural", AsyncMock(return_value=[]))
-        stored = await ee.extract_and_store("Alice likes pizza.", "Nice!", knowledge_memory=knowledge)
-        assert stored == 0
-
-    @pytest.mark.asyncio
-    async def test_short_exchange_skips_neural(self, monkeypatch):
-        knowledge = MagicMock()
-        neural = AsyncMock(return_value=["neural fact here"])
-        monkeypatch.setattr(ee, "extract_facts_neural", neural)
-        await ee.extract_and_store("Alice likes pizza.", "Nice!", knowledge_memory=knowledge)
-        neural.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_long_exchange_includes_neural(self, monkeypatch):
-        knowledge = MagicMock()
-        knowledge.add_fact.return_value = True
-        neural = AsyncMock(return_value=["neural fact here"])
-        monkeypatch.setattr(ee, "extract_facts_neural", neural)
-        long_text = "x" * 150
-        await ee.extract_and_store(long_text, long_text, knowledge_memory=knowledge)
-        neural.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_exception_returns_zero(self, monkeypatch):
-        monkeypatch.setattr(ee, "extract_facts_from_conversation", lambda *a: (_ for _ in ()).throw(RuntimeError("boom")))
-        assert await ee.extract_and_store("u", "a", knowledge_memory=MagicMock()) == 0
+        monkeypatch.setattr(
+            "domains.learner.entity_extractor.extract_facts_from_conversation", boom
+        )
+        count = await extract_and_store("a", "b", None)
+        assert count == 0

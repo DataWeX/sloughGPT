@@ -115,3 +115,40 @@ class TestExecuteAgent:
         sys.execute = AsyncMock(return_value={"error": "Agent not found"})
         resp = client.post("/agents/nonexistent/execute", json={"request": "hi"})
         assert resp.status_code == 404
+
+
+class TestListRuns:
+    @patch("domains.agents.run_history.get_agent_run_store")
+    def test_lists_runs(self, mock_get_store, client):
+        store = mock_get_store.return_value
+        store.list_runs.return_value = [{"id": "run_1", "goal": "Research", "status": "completed"}]
+        resp = client.get("/agents/runs")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["count"] == 1
+        assert body["runs"][0]["id"] == "run_1"
+
+    @patch("domains.agents.run_history.get_agent_run_store")
+    def test_lists_empty_runs(self, mock_get_store, client):
+        store = mock_get_store.return_value
+        store.list_runs.return_value = []
+        resp = client.get("/agents/runs")
+        assert resp.status_code == 200
+        assert resp.json() == {"runs": [], "count": 0}
+
+
+class TestGetRun:
+    @patch("domains.agents.run_history.get_agent_run_store")
+    def test_returns_run(self, mock_get_store, client):
+        store = mock_get_store.return_value
+        store.get.return_value = {"id": "run_1", "goal": "Research", "status": "completed"}
+        resp = client.get("/agents/runs/run_1")
+        assert resp.status_code == 200
+        assert resp.json()["id"] == "run_1"
+
+    @patch("domains.agents.run_history.get_agent_run_store")
+    def test_returns_404_for_missing(self, mock_get_store, client):
+        store = mock_get_store.return_value
+        store.get.return_value = None
+        resp = client.get("/agents/runs/nonexistent")
+        assert resp.status_code == 404

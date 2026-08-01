@@ -1,19 +1,13 @@
 """Tests for downcraft.__init__ — top-level download API."""
 
-import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
 
-from downcraft import download, download_hf_model
-
-
-def _unique_url(httpserver, path, suffix=""):
-    """Create a unique URL with a random query param to avoid state collisions."""
-    import random
-    return httpserver.url_for(path) + f"?t={random.randint(0, 2**32)}{suffix}"
+from downcraft import download
+from conftest import RangeHandler, _range_url
 
 
 class TestDownload:
@@ -29,19 +23,19 @@ class TestDownload:
                 result = download("https://example.com/file", str(Path(td) / "file.bin"))
                 assert result["status"] == "already_downloaded"
 
-    def test_small_file_download(self, httpserver):
+    def test_small_file_download(self, range_server):
         content = b"test content for download"
-        httpserver.expect_request("/test.bin").respond_with_data(content)
+        RangeHandler.payloads["/test.bin"] = content
 
         with tempfile.TemporaryDirectory() as td:
             dest = str(Path(td) / "test.bin")
-            result = download(_unique_url(httpserver, "/test.bin"), dest)
+            result = download(_range_url(range_server, "/test.bin"), dest)
             assert result["status"] == "complete"
             assert Path(dest).read_bytes() == content
 
-    def test_download_with_progress(self, httpserver):
+    def test_download_with_progress(self, range_server):
         content = b"x" * 50000
-        httpserver.expect_request("/dlprogress.bin").respond_with_data(content)
+        RangeHandler.payloads["/dlprogress.bin"] = content
         progress_values = []
 
         def _cb(done, total, speed):
@@ -49,38 +43,38 @@ class TestDownload:
 
         with tempfile.TemporaryDirectory() as td:
             dest = str(Path(td) / "dlprogress.bin")
-            download(_unique_url(httpserver, "/dlprogress.bin"), dest, on_progress=_cb)
+            download(_range_url(range_server, "/dlprogress.bin"), dest, on_progress=_cb)
             assert len(progress_values) > 0
             assert progress_values[-1][0] > 0
 
-    def test_download_with_checksum(self, httpserver):
+    def test_download_with_checksum(self, range_server):
         import hashlib
         content = b"checksum test data"
         checksum = hashlib.sha256(content).hexdigest()
-        httpserver.expect_request("/checksum.bin").respond_with_data(content)
+        RangeHandler.payloads["/checksum.bin"] = content
 
         with tempfile.TemporaryDirectory() as td:
             dest = str(Path(td) / "checksum.bin")
-            result = download(_unique_url(httpserver, "/checksum.bin"), dest, checksum=checksum)
+            result = download(_range_url(range_server, "/checksum.bin"), dest, checksum=checksum)
             assert result["status"] == "complete"
 
-    def test_download_with_checksum_mismatch(self, httpserver):
+    def test_download_with_checksum_mismatch(self, range_server):
         from downcraft.downloader import DownloadError
         content = b"data"
-        httpserver.expect_request("/badchecksum.bin").respond_with_data(content)
+        RangeHandler.payloads["/badchecksum.bin"] = content
 
         with tempfile.TemporaryDirectory() as td:
             dest = str(Path(td) / "badchecksum.bin")
             with pytest.raises(DownloadError, match="Checksum mismatch"):
-                download(_unique_url(httpserver, "/badchecksum.bin"), dest, checksum="wrong")
+                download(_range_url(range_server, "/badchecksum.bin"), dest, checksum="wrong")
 
-    def test_download_persists_state_on_complete(self, httpserver):
+    def test_download_persists_state_on_complete(self, range_server):
         content = b"state check"
-        httpserver.expect_request("/statecheck.bin").respond_with_data(content)
+        RangeHandler.payloads["/statecheck.bin"] = content
 
         with tempfile.TemporaryDirectory() as td:
             dest = str(Path(td) / "statecheck.bin")
-            result = download(_unique_url(httpserver, "/statecheck.bin"), dest)
+            result = download(_range_url(range_server, "/statecheck.bin"), dest)
             assert result["status"] == "complete"
             assert result["dest"] == dest
             assert result["total_bytes"] == len(content)

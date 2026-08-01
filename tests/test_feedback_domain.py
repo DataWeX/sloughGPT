@@ -758,6 +758,35 @@ class TestPerUserLoRAStore:
             assert "error" in result
             assert result["count"] == 0
 
+    def test_update_adapter_triggers_incremental_auto_aggregate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = PerUserLoRAStore(
+                store_path=tmp,
+                model_dim=64,
+                adapter_rank=4,
+                auto_aggregate_threshold=1,
+                min_feedback_for_aggregation=1,
+                run_eval=False,
+            )
+            store.update_adapter("u1", feedback_signal=1.0)
+            assert store._last_aggregate_count >= 1
+
+    def test_update_adapter_triggers_incremental_auto_prune(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = PerUserLoRAStore(
+                store_path=tmp,
+                model_dim=64,
+                adapter_rank=4,
+                auto_aggregate_threshold=999,
+                auto_prune_threshold=2,
+            )
+            store.create_adapter("u1")
+            store.create_adapter("u2")
+            store.update_adapter("u3", feedback_signal=1.0)
+            assert store._last_prune_count >= 1
+            assert store.get_adapter("u1") is None
+            assert store.get_adapter("u2") is None
+
 
 # =============================================================================
 # FeedbackWorkflowManager Tests
@@ -865,6 +894,50 @@ class TestFeedbackWorkflowManager:
         assert wfm._running is True
         wfm.stop()
         assert wfm._running is False
+
+    def test_start_launches_scheduler_thread(self):
+        wfm = FeedbackWorkflowManager(config=WorkflowConfig(health_check_interval_seconds=0.05))
+        wfm.start()
+        assert wfm._scheduler_thread is not None
+        assert wfm._scheduler_thread.daemon is True
+        wfm.stop()
+
+    def test_health_check_runs_scheduled_tasks(self):
+        wfm = FeedbackWorkflowManager(config=WorkflowConfig())
+        wfm._health_check()
+        assert wfm._stats["workflow_runs"] == 1
+        assert wfm._last_health_check > 0
+
+    def test_health_check_loop_increments_workflow_runs(self):
+        wfm = FeedbackWorkflowManager(config=WorkflowConfig(health_check_interval_seconds=0.05))
+        wfm.start()
+        time.sleep(0.3)
+        wfm.stop()
+        assert wfm._stats["workflow_runs"] >= 1
+
+    def test_record_feedback_triggers_incremental_aggregation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lora_store = PerUserLoRAStore(
+                store_path=str(Path(tmp) / "adapters"),
+                model_dim=64,
+                adapter_rank=4,
+                auto_aggregate_threshold=1,
+                min_feedback_for_aggregation=1,
+                run_eval=False,
+            )
+            wfm = FeedbackWorkflowManager(
+                config=WorkflowConfig(),
+                lora_store=lora_store,
+                lora_updater=OnlineLoRAUpdater(update_interval=999),
+            )
+            wfm.record_feedback(
+                user_message="hello",
+                assistant_response="hi there",
+                rating="thumbs_up",
+                user_id="user1",
+            )
+            assert lora_store._last_aggregate_count >= 1
+            assert wfm._stats["feedback_recorded"] == 1
 
     def test_trigger_aggregate(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -23,6 +23,21 @@ export interface OrchestrateTask {
   depends_on: string[]
 }
 
+export interface AgentRun {
+  id: string
+  goal: string
+  context: string
+  status: 'running' | 'completed' | 'failed'
+  started_at: string | null
+  finished_at: string | null
+  tasks: OrchestrateTask[]
+  completed_count: number
+  failed_count: number
+  response: string
+  error: string
+  logs: string[]
+}
+
 export interface OrchestrateCallbacks {
   onPlan?: (tasks: OrchestrateTask[]) => void
   onTaskStatus?: (taskId: string, status: string, agent: string, description: string, resultPreview?: string) => void
@@ -54,6 +69,14 @@ export const agentsController = {
 
   async execute(id: string, request: string, sessionId?: string): Promise<{ response: string; tools_used: Array<{ tool: string; result: unknown }> }> {
     return apiPost<{ response: string; tools_used: Array<{ tool: string; result: unknown }> }>(`/agents/${encodeURIComponent(id)}/execute`, { request, session_id: sessionId || '' })
+  },
+
+  async listRuns(limit = 20): Promise<{ runs: AgentRun[]; count: number }> {
+    return apiGet<{ runs: AgentRun[]; count: number }>(`/agents/runs?limit=${limit}`)
+  },
+
+  async getRun(runId: string): Promise<AgentRun> {
+    return apiGet<AgentRun>(`/agents/runs/${encodeURIComponent(runId)}`)
   },
 
   async orchestrate(goal: string, context: string, callbacks: OrchestrateCallbacks, signal?: AbortSignal): Promise<void> {

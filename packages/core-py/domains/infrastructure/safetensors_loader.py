@@ -75,8 +75,6 @@ def load_model_weights(
         FileNotFoundError: If model not found in cache
         ValueError: If no safetensors file found
     """
-    from safetensors import safe_open
-
     model_dir = _get_model_dir(model_id)
     if not model_dir.exists():
         raise FileNotFoundError(f"Model {model_id} not found in cache: {model_dir}")
@@ -92,7 +90,14 @@ def load_model_weights(
 
     logger.info("Loading %s from %s", model_id, safetensors_path.name, extra={"tag": "INFRA"})
 
-    weights = {}
+    weights: Dict[str, np.ndarray] = {}
+    try:
+        from safetensors import safe_open
+    except ImportError:
+        logger.info("safetensors package not installed — using built-in raw parser",
+                    extra={"tag": "INFRA"})
+        return _load_weights_raw(safetensors_path, dtype)
+
     with safe_open(str(safetensors_path), framework="numpy") as f:
         for key in f.keys():
             try:
@@ -114,6 +119,49 @@ def load_model_weights(
     # Auto-convert to .slnc for faster future loads
     _try_convert_to_slnc(model_id, safetensors_path, weights)
 
+    return weights
+
+
+def _load_weights_raw(path: Path, dtype: np.dtype) -> Dict[str, np.ndarray]:
+    """Read a .safetensors file with the built-in raw parser.
+
+    Walks the binary format directly (8-byte header length + JSON header +
+    per-tensor data offsets) so no ``safetensors`` package is required.
+    Handles F32/F16/BF16; any other dtype is read as float32.
+
+    Args:
+        path: Path to the .safetensors file.
+        dtype: Target dtype for the returned arrays.
+
+    Returns:
+        Dict mapping parameter names to numpy arrays.
+    """
+    import struct
+
+    weights: Dict[str, np.ndarray] = {}
+    with open(path, "rb") as f:
+        header_len = struct.unpack("<Q", f.read(8))[0]
+        header = json.loads(f.read(header_len))
+        for key, info in header.items():
+            if key.startswith("__"):
+                continue
+            start, end = info["data_offsets"]
+            f.seek(8 + header_len + start)
+            raw = f.read(end - start)
+            shape = info["shape"]
+            dtype_str = info.get("dtype", "F32")
+            if dtype_str == "BF16":
+                u16 = np.frombuffer(raw, dtype=np.uint16)
+                f32 = np.zeros(len(u16), dtype=np.float32)
+                f32.view(np.uint32)[:] = u16.astype(np.uint32) << 16
+                arr = f32.reshape(shape)
+            elif dtype_str == "F16":
+                arr = np.frombuffer(raw, dtype=np.float16).reshape(shape).astype(np.float32)
+            elif dtype_str == "F32":
+                arr = np.frombuffer(raw, dtype=np.float32).reshape(shape)
+            else:
+                arr = np.frombuffer(raw, dtype=np.float32).reshape(shape)
+            weights[key] = arr.astype(dtype)
     return weights
 
 

@@ -306,6 +306,23 @@ class TrainingStatusTracker:
         with open(path, 'r') as f:
             data = json.load(f)
 
+        def _coerce(obj):
+            if isinstance(obj, dict):
+                if {"name", "status"} <= set(obj) and isinstance(
+                    obj.get("name"), str
+                ):
+                    return StageStatus(**{k: _coerce(v) for k, v in obj.items()})
+                return {k: _coerce(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [_coerce(v) for v in obj]
+            if isinstance(obj, str):
+                for enum_cls in (CompletionStatus, TrainingStage):
+                    for member in enum_cls:
+                        if member.value == obj:
+                            return member
+            return obj
+
+        data = _coerce(data)
         tracker = cls(data.get("model_name", "unknown"))
         tracker.report = TrainingCompletionReport(**data)
         return tracker

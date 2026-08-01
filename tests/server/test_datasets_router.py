@@ -71,3 +71,45 @@ class TestSearchDatasets:
         ctrl.search_datasets.return_value = []
         resp = client.get("/datasets/search?q=test")
         assert resp.status_code == 200
+
+
+class TestDatasetVersions:
+    @patch("apps.api.server.routers.datasets.get_datasets_controller")
+    def test_create_version(self, mock_get_ctrl, client):
+        ctrl = mock_get_ctrl.return_value
+        ctrl.create_version_snapshot.return_value = "20260801120000"
+        resp = client.post("/datasets/ds1/versions")
+        assert resp.status_code == 200
+        assert resp.json()["timestamp"] == "20260801120000"
+
+    @patch("apps.api.server.routers.datasets.get_datasets_controller")
+    def test_create_version_404_when_dataset_missing(self, mock_get_ctrl, client):
+        ctrl = mock_get_ctrl.return_value
+        ctrl.create_version_snapshot.return_value = None
+        resp = client.post("/datasets/ds1/versions")
+        assert resp.status_code == 404
+
+    @patch("apps.api.server.routers.datasets.get_datasets_controller")
+    def test_list_versions(self, mock_get_ctrl, client):
+        ctrl = mock_get_ctrl.return_value
+        ctrl.list_versions.return_value = ["20260801120000", "20260801110000"]
+        resp = client.get("/datasets/ds1/versions")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["count"] == 2
+        assert body["versions"][0] == "20260801120000"
+
+    @patch("apps.api.server.routers.datasets.get_datasets_controller")
+    def test_restore_version(self, mock_get_ctrl, client):
+        ctrl = mock_get_ctrl.return_value
+        ctrl.restore_version.return_value = True
+        resp = client.post("/datasets/ds1/versions/20260801120000")
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+
+    @patch("apps.api.server.routers.datasets.get_datasets_controller")
+    def test_restore_version_404_when_version_missing(self, mock_get_ctrl, client):
+        ctrl = mock_get_ctrl.return_value
+        ctrl.restore_version.return_value = False
+        resp = client.post("/datasets/ds1/versions/20260801120000")
+        assert resp.status_code == 404

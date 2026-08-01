@@ -1,23 +1,17 @@
 """
 CLI entry point for downcraft — generic HTTP downloader with
-cross-session resume.  Supports any URL plus HuggingFace model IDs.
+cross-session resume.  Supports any URL that honors HTTP Range headers.
 
 Usage::
 
     # Download any file by URL
     python -m downcraft url https://example.com/bigfile.iso /tmp/bigfile.iso
 
-    # Download a HuggingFace model (sets up all files)
-    python -m downcraft hf Qwen/Qwen2.5-0.5B-Instruct
-
     # Check status
-    python -m downcraft status <url-or-model-id>
+    python -m downcraft status <url>
 
     # List all tracked downloads
     python -m downcraft list
-
-    # Verify integrity
-    python -m downcraft verify <url-or-model-id>
 """
 
 import argparse
@@ -25,7 +19,7 @@ import logging
 import sys
 import time
 
-from . import download, hf_hub, state
+from . import download, state
 
 logging.basicConfig(
     level=logging.INFO,
@@ -90,54 +84,16 @@ def cmd_url(args: argparse.Namespace):
 
 
 # ---------------------------------------------------------------------------
-# HuggingFace model download
-# ---------------------------------------------------------------------------
-
-def cmd_hf(args: argparse.Namespace):
-    """Download a HuggingFace model."""
-    model_id = args.model_id
-
-    if hf_hub.is_download_complete(model_id, args.hf_home):
-        print(f"✓ {model_id} already fully cached")
-        return
-
-    print(f"Downloading {model_id}")
-    print(f"  Resolving files...", end="", flush=True)
-
-    t0 = time.time()
-    try:
-        from . import download_hf_model
-        result = download_hf_model(
-            model_id,
-            hf_home=args.hf_home,
-            on_progress=lambda mid, b, t, s: _progress(mid, b, t, s),
-            on_file_complete=lambda mid, fpath: print(f"\n  ✓ {fpath}"),
-        )
-        elapsed = time.time() - t0
-        mb = (result.get("total_bytes", 0) or 0) / (1024 * 1024)
-        print(f"\n✓ Downloaded {mb:.0f} MB in {elapsed:.0f}s")
-        print(f"  Cache: {result.get('cache_dir', '?')}")
-    except Exception as e:
-        print(f"\n✗ Error: {e}")
-        sys.exit(1)
-
-
-# ---------------------------------------------------------------------------
-# Status / List / Verify
+# Status / List
 # ---------------------------------------------------------------------------
 
 def cmd_status(args: argparse.Namespace):
-    """Show download status for a URL or model ID."""
+    """Show download status for a URL."""
     key = args.key
     st = state.get_state()
     ms = st.get(key)
     if ms is None:
-        # Check if it might be a cached HF model
-        cached = hf_hub.is_download_complete(key, args.hf_home)
-        if cached:
-            print(f"{key}: fully cached (not tracked by downcraft)")
-        else:
-            print(f"{key}: not found in state, not cached")
+        print(f"{key}: not found in state")
         return
 
     mb_dl = ms.bytes_downloaded / (1024 * 1024)
@@ -165,18 +121,6 @@ def cmd_list(args: argparse.Namespace):
         print(f"{key:50s} {ms.status:12s} {mb_dl:8.0f}/{mb_total:.0f} MB ({ms.percentage:5.1f}%)")
 
 
-def cmd_verify(args: argparse.Namespace):
-    """Verify integrity of a downloaded file or model."""
-    key = args.key
-    from . import verify as vmod
-    ok = vmod.verify_model(key, args.hf_home)
-    if ok:
-        print(f"✓ {key} integrity verified")
-    else:
-        print(f"✗ {key} verification FAILED")
-        sys.exit(1)
-
-
 # ---------------------------------------------------------------------------
 # Main dispatcher
 # ---------------------------------------------------------------------------
@@ -185,11 +129,7 @@ def main(argv: list = None):
     parser = argparse.ArgumentParser(
         prog="downcraft",
         description="Generic HTTP downloader with cross-session resume. "
-                    "Supports any URL with Range headers, plus HuggingFace models.",
-    )
-    parser.add_argument(
-        "--hf-home", default=None,
-        help="HF cache directory (only for HF model commands)",
+                    "Supports any URL with Range headers.",
     )
 
     sub = parser.add_subparsers(dest="command", required=True)
@@ -200,24 +140,14 @@ def main(argv: list = None):
     p_url.add_argument("dest", help="Local destination path")
     p_url.set_defaults(func=cmd_url)
 
-    # hf <model_id>
-    p_hf = sub.add_parser("hf", help="Download a HuggingFace model")
-    p_hf.add_argument("model_id", help="HF model ID (e.g. gpt2)")
-    p_hf.set_defaults(func=cmd_hf)
-
     # status <key>
     p_st = sub.add_parser("status", help="Check download status")
-    p_st.add_argument("key", help="URL or model ID")
+    p_st.add_argument("key", help="URL")
     p_st.set_defaults(func=cmd_status)
 
     # list
     p_ls = sub.add_parser("list", help="List all tracked downloads")
     p_ls.set_defaults(func=cmd_list)
-
-    # verify <key>
-    p_ver = sub.add_parser("verify", help="Verify integrity")
-    p_ver.add_argument("key", help="URL or model ID")
-    p_ver.set_defaults(func=cmd_verify)
 
     args = parser.parse_args(argv)
     args.func(args)

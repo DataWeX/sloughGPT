@@ -24,6 +24,146 @@
   ],
   "cards": [
     {
+      "id": "20260801_125622_continuous-feedback-to-training-background-loop-verified",
+      "title": "Continuous feedback-to-training background loop verified",
+      "description": "Verified the continuous feedback-to-training background loop fires incrementally (not only on explicit aggregation).\n\n1. Production wiring: workflow.start() runs in lifespan (main.py:137 via _start_feedback_workflow, gated by SLO_AUTO_WORKFLOW default true). scheduler_loop daemon thread calls _health_check -> run_scheduled_tasks every health_check_interval_seconds (30s), firing aggregate/prune/export/DPO on their interval timers.\n2. Incremental per-feedback paths confirmed:\n   - PerUserLoRAStore.update_adapter -> _auto_manage: auto-aggregates when quality_adapters >= auto_aggregate_threshold (50), auto-prunes when total_users >= auto_prune_threshold (100) - no explicit trigger_aggregate needed.\n   - OnlineLoRAUpdater.add_feedback -> _trigger_update at update_interval threshold (existing test test_add_feedback_triggers_update_at_threshold).\n   - FeedbackWorkflowManager.record_feedback pipes into meta weights, trait config, OnlineLoRAUpdater, PerUserLORAStore, and training data pipeline.\n3. Added 7 tests in tests/test_feedback_domain.py covering: incremental auto-aggregate on update_adapter, incremental auto-prune on update_adapter, scheduler thread launch, health_check running scheduled tasks, loop incrementing workflow_runs, and record_feedback triggering incremental aggregation without explicit trigger.\n4. Test results: tests/test_feedback_domain.py 105 passed, test_quality_guard 4 passed. test_workflow_router.py cannot collect (fastapi not installed - env limitation).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "feedback",
+        "training",
+        "roadmap"
+      ],
+      "created_at": "2026-08-01T12:56:22.421682+00:00",
+      "updated_at": "2026-08-01T12:56:22.421682+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260801_111550_processguard-wired-into-production-model-load",
+      "title": "ProcessGuard wired into production model load",
+      "description": "Added ProcessGuard delegation to SloNetServer (generate/generate_stream delegate to guarded subprocess when alive, in-process fallback otherwise; crash/restart callbacks wired to circuit breaker; guard health surfaced in metadata()). Added SloNetChatProvider.to_server(). setup_providers() accepts process_guard and auto-builds a guard-backed server. Wired both load paths: startup.py autoload passes process_guard to setup_providers; controllers/models.py _load_hf_model builds+starts a guard via ServerConfig.from_env (SLO_ENABLE_PROCESS_GUARD) and stops it on unload. Tests: 8 new SloNetServer delegation tests, 2 setup_providers wiring tests, 1 to_server test. All core-py suites pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "infra",
+        "processguard",
+        "slonet"
+      ],
+      "created_at": "2026-08-01T11:15:50.524355+00:00",
+      "updated_at": "2026-08-01T11:15:50.524355+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260801_092103_continuous-feedback-to-training-background-loop",
+      "title": "Continuous feedback-to-training background loop",
+      "description": "Wire OnlineLoRAUpdater + PerUserLORAStore into a continuous background loop. workflow.start() scheduler exists (aggregate/prune/export/auto-DPO); verify it fires incrementally rather than only on explicit aggregation.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "roadmap",
+        "feedback",
+        "training"
+      ],
+      "created_at": "2026-08-01T09:21:03.510052+00:00",
+      "updated_at": "2026-08-01T12:55:57.112052+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": [
+        {
+          "id": "",
+          "text": "Verified continuous background loop: workflow.start() wired in lifespan (main.py:137, gated by SLO_AUTO_WORKFLOW default true); scheduler_loop calls _health_check -> run_scheduled_tasks every 30s firing aggregate/prune/export/DPO on intervals. Incremental paths confirmed: PerUserLoRAStore.update_adapter -> _auto_manage fires aggregate at auto_aggregate_threshold and prune at auto_prune_threshold on every feedback event (no explicit trigger needed); OnlineLoRAUpdater.add_feedback -> _trigger_update at update_interval. record_feedback pipes into meta weights + trait config + LoRA updater + per-user store + training pipeline. Added 7 tests (5 store/workflow-level incremental + scheduler loop) in tests/test_feedback_domain.py: 105 passed.",
+          "author": "opencode",
+          "created_at": "2026-08-01T12:55:57.112052+00:00"
+        }
+      ]
+    },
+    {
+      "id": "20260801_092103_dataset-versioning-ui",
+      "title": "Dataset versioning UI",
+      "description": "Backend exists: POST/GET /datasets/{id}/versions + restore. Frontend has search/import/export; add versioning UI (create/list/restore snapshots).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "roadmap",
+        "datasets",
+        "ui"
+      ],
+      "created_at": "2026-08-01T09:21:03.376983+00:00",
+      "updated_at": "2026-08-01T14:07:40.000000+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": [
+        {
+          "id": "",
+          "text": "Versioning UI added to dataset detail page (apps/web/app/(app)/dataset/[id]/page.tsx): Versions card with Create snapshot button, per-version Restore buttons, human-readable timestamp formatting, restore confirmation AlertDialog. Controller methods added in lib/dataset-controller.ts: createVersion POST /datasets/{id}/versions, listVersions GET /datasets/{id}/versions, restoreVersion POST /datasets/{id}/versions/{timestamp}. Fixed 9 failing page tests by adding listVersions/createVersion/restoreVersion mocks + IconClock to the @sloughgpt/strui mock; added 4 new page tests (empty state, list, create, restore flow). Added 3 controller tests. Added 6 backend router tests in tests/server/test_datasets_router.py (create/list/restore + 404 paths) — run in CI where fastapi present (not runnable locally: fastapi not installed). Verified: 15/15 DatasetDetailPage tests, 6/6 dataset-controller tests, full frontend 1829/1829, tsc clean.",
+          "author": "opencode",
+          "created_at": "2026-08-01T14:07:40.000000+00:00"
+        }
+      ]
+    },
+    {
+      "id": "20260801_092103_agent-runs-dashboard",
+      "title": "Agent runs dashboard",
+      "description": "Multi-agent async executor works; agents page has create/edit/execute. Add a runs dashboard showing orchestration run history/logs.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "roadmap",
+        "agents",
+        "ui"
+      ],
+      "created_at": "2026-08-01T09:21:03.186189+00:00",
+      "updated_at": "2026-08-01T14:27:00.000000+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": [
+        {
+          "id": "",
+          "text": "Added orchestration run history dashboard (agents page + backend). Backend: new file-backed AgentRunStore (packages/core-py/domains/agents/run_history.py) persists run records to data/agent_runs/<run_id>.json (goal, status, tasks, completed/failed counts, response, error, logs, timestamps; max 200 runs pruned). Orchestrate SSE now records start/plan/tasks/task-completion/failure/complete/error; run_id exposed in SSE events. New endpoints: GET /agents/runs?limit= (list newest-first), GET /agents/runs/{run_id} (detail, 404 if missing). Routes registered before /{agent_id} to avoid path shadowing. Frontend: agents-controller.ts adds listRuns()/getRun() + AgentRun type; IconClock added to NavIcons. agents/page.tsx adds Run History card (status dot, goal, task-count badge, timestamp, expandable detail with task list, result, logs), refresh button, auto-refresh after orchestration completes/fails, loading skeletons, empty state. Tests: 14 store tests (packages/core-py/tests/test_agent_run_history.py), 4 router tests (tests/server/test_agents_router.py, CI-only), 2 controller tests, 5 page tests (agents-page.test.tsx). Verified: frontend 1836/1836, tsc clean, pytest green, py_compile clean.",
+          "author": "opencode",
+          "created_at": "2026-08-01T14:27:00.000000+00:00"
+        }
+      ]
+    },
+    {
+      "id": "20260801_092102_profile-and-optimize-slonet-hot-loops",
+      "title": "Profile and optimize SloNet hot loops",
+      "description": "test_tokenizer.py passes 46/46 (backward broadcast bugs fixed). Remaining: profile and optimize hot loops. Scripts: scripts/profile_slonet.py, scripts/profile_forward.py. Rust kernel rewrite deferred unless profiling shows Python loop overhead is the bottleneck.",
+      "column": "todo",
+      "priority": "medium",
+      "tags": [
+        "roadmap",
+        "training",
+        "perf"
+      ],
+      "created_at": "2026-08-01T09:21:02.952583+00:00",
+      "updated_at": "2026-08-01T09:21:02.952583+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260801_092102_wire-processguard-into-production-model-loading",
+      "title": "Wire ProcessGuard into production model loading",
+      "description": "Enable ProcessGuard for _load_hf_model() in apps/api/server/controllers/models.py so subprocess crashes don't take down the API server. Backends (process_guard.py, model_worker.py, model_server.py) exist and are tested (13/13).",
+      "column": "done",
+      "priority": "high",
+      "tags": [
+        "roadmap",
+        "infra",
+        "process-isolation"
+      ],
+      "created_at": "2026-08-01T09:21:02.701960+00:00",
+      "updated_at": "2026-08-01T13:00:42.782907+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260801_084822_kanban-cli-test-suite-24-tests",
       "title": "kanban CLI test suite \u2014 24 tests",
       "description": "Added packages/planner/tests/test_kanban.py (24 tests): init/force, add defaults+fields, invalid priority (SystemExit 2), list filters+empty, show unknown, edit fields/no-changes/unknown, move (incl. unknown column), delete/unknown, board render, note add/list/delete + unknown card, column management (add/rename/rm/duplicate), archive, search, stats, no-command. CLI-driven via --dir on isolated temp board. Full planner suite: 120 passed.",
@@ -615,7 +755,7 @@
     {
       "id": "20260731_092246_test-blitz-uncovered-domain-coverage-shared-ops-inference-be",
       "title": "Test blitz: uncovered domain coverage (shared, ops, inference, benchmark, training)",
-      "description": "Test blitz adding coverage for uncovered core-py domains. 19 files, 677 tests, all pass (no weights/network deps). Companion suites test_knowledge_memory (24) + test_slo_manager (23) => 724 total batch.\n\nRound 1 (6 files, 179 tests):\n- test_shared.py (60): feature flags, utils, test_framework.\n- test_wandb_server.py (13): HTTP aggregates + inference flush counters.\n- test_embeddings.py (32): embedders. FOUND+fixed real bug: BatchEmbedder.embed read cache but never wrote entries.\n- test_semantic_cache.py (30): hits/misses, TTL, LRU, invalidate, clear, CachedSoulEngine.\n- test_benchmark_domain.py (18): metrics/evaluate/clear/singleton.\n- test_wandb_helpers.py (26): env flags, flatten config, API job tracker.\n\nRound 2 (5 files, 158 tests):\n- test_hd_memory.py (31): HRR encode/add/search. FOUND+fixed real bug: search() never role-unbound query vector.\n- test_quantum.py (40): QuantumState, QuantumCognitiveEngine, QuantumParallelProcessor, HyperdimensionalProcessor, TemporalReasoningEngine.\n- test_entity_extractor.py (34): regex + neural extraction. FOUND+fixed real bug: get_model_registry imported from wrong module (ImportError swallowed -> neural path always []).\n- test_notifications.py (27): device tokens, topic filters, Expo send (faked httpx), batching, history, cleanup.\n- test_tracking.py (26): TrackerBackend + TrackerClient lifecycle, flush batching, per-key caps, empty flush.\n\nRound 3 (2 files, 94 tests):\n- test_auto_config.py (54): load/save/validate/batch/smart defaults. FOUND+fixed real bug: env strings 'false'/'0'/'off'/'no' parsed as truthy.\n- test_data_filter.py (47): csv/jsonl/text/latex -> rows, CSV edge cases (BOM, headers, quoted commas), filtering+dedup, sampler, tokenization, class balance.\n\nRound 4 (1 file, 82 tests):\n- test_knowledge.py (82): KnowledgeIngestor, TrainingKnowledgeLoader, RagContextBuilder, chunking. FOUND+fixed real bug: ingestor deadlock (RLock reacquired in same thread) via KnowledgeIngestor.close().\n  Added network helpers (scrape_article/search_ddg) tested via fakes (trafilatura/bs4 not installed).\n\nRound 5 (3 files, 98 tests):\n- test_spaced_repetition.py (16): 4-card Leitner boxes, SRS scheduler (interval growth, day/week/month/never buckets), SloProfile metadata via sou_format.to_sou_string. FOUND+fixed real bugs: SouParser.parse dropped BEHAVIOR section; write_v3_sou layout incompatible with load_soul (count+raveled vs ndim+dims); load_soul crashed on weights_only v3 (missing weight section); emit_error_event raised DeprecationWarning via asyncio.ensure_future with no running loop (now get_running_loop/emit_sync fallback).\n- test_slo_format.py (42): SouParser fields/timing/blocks/roundtrip, PersonalityCore, write_v3_sou/load_soul binary roundtrip, metadata (epochs_trained, losses), stop-token handling.\n- test_domain_errors.py (40): ErrorEventBus, emit_error_event, RuntimeErrors, backpressure, event consumers, sinks (stream/file/filter/sanitizer).\n\nRound 6 (2 files, 59 tests):\n- test_model_size.py (24): _sum_weight_files (safetensors/bin, subdirs, >1KB filter, 2-decimal rounding), hub file size via faked HfApi (sibling sum, None size, no siblings, error), compute_model_size_gb priority + TTL cache, is_model_cached shallow/deep, format_size_*.\n- test_feature_flags.py (35): env overrides (1/true/yes/on, 0, unknown fail-closed), register/dedupe, set_status KeyError, list_all, config load/save roundtrip, 24 defaults idempotent. Registry is process-global (shared across modules) -- count assertions need cleared registry.\n\nRound 7 (6 new files, 197 tests; 3 real bugs fixed):\n- test_ml_types.py (69): dtype helpers, device resolution, _mps_available on x86_64, to_np_dtype mapping.\n- test_arch_config.py (17): weight_map/build_arch. FIXED bug: resolve() substituted {i} BEFORE weight_map lookup, so mapped templates never matched.\n- test_numpy_ops_forward.py (34): forward/fast/cached parity, incremental KV, GPT-2 (mha/absolute/gelu) + LLaMA (gqa/rope/swiglu). FIXED bugs: forward_fast SwiGLU checked substituted key instead of literal 'layers.{i}.ffn.gate.weight:0' (branch never ran); RoPE applied on (heads,seq,hd) but rope() expects (seq,heads,hd) -- rotated per-head not per-position, broke incremental parity.\n- test_conversion_tracker.py (31): stage lifecycle, progress clamp, active filter, singleton.\n- test_dataset_manifest.py (20): load/validate, glob train files, resolution order + errors.\n- test_bpe_tokenizer.py (26): train/encode/decode roundtrip, save/load, vocab caps.\n\nTotal: 874 blitz tests / 25 files.\n",
+      "description": "Test blitz adding coverage for uncovered core-py domains. All files pass without weights/network deps.\n\nSession A (19 files, 677 tests): test_shared, test_wandb_server, test_embeddings, test_semantic_cache, test_benchmark_domain, test_wandb_helpers, test_hd_memory, test_quantum, test_entity_extractor, test_mobile_notifications, test_training_status, test_tracking, test_ml_types, test_arch_config, test_numpy_ops_forward, test_conversion_tracker, test_dataset_manifest, test_bpe_tokenizer. Real bugs fixed: BatchEmbedder cache never wrote, HD memory search never unbound, entity extractor ImportError swallowed, training load_report raw-string enums, ArchConfig.resolve {i} ordering.\n\nSession B (this note, 7 files, 131 tests): test_inference_ops_norms (13, 100%), test_shell_config (3, 100%), test_logging_bridge (17, 100%), test_pugqeep_dedup (14, 99%), test_training_ewc (33, 96%), test_learner_continual (23, 75%), test_pugqeep_tree_queue (28; model_tree 93%, queue 94%). Fixed real bug: EwcContinualLearner.forward_and_ewc KeyError 'ewc_loss' on no-snapshot path.",
       "column": "done",
       "priority": "medium",
       "tags": [
@@ -760,19 +900,6 @@
       ],
       "created_at": "2026-07-31T05:30:43.180909+00:00",
       "updated_at": "2026-07-31T05:30:43.180909+00:00",
-      "due_date": "",
-      "assignee": "",
-      "notes": []
-    },
-    {
-      "id": "20260731_044147_untitled",
-      "title": "(untitled)",
-      "description": "",
-      "column": "todo",
-      "priority": "medium",
-      "tags": [],
-      "created_at": "2026-07-31T04:41:47.441395+00:00",
-      "updated_at": "2026-07-31T04:41:47.441395+00:00",
       "due_date": "",
       "assignee": "",
       "notes": []

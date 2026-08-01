@@ -7,8 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { EmptyCard, KpiGrid, StatCard, IconRefresh } from '@sloughgpt/strui'
-import { IconPlus, IconTrash } from '@/components/icons/NavIcons'
-import { agentsController, type Agent, type OrchestrateTask } from '@/lib/agents-controller'
+import { IconPlus, IconTrash, IconClock } from '@/components/icons/NavIcons'
+import { agentsController, type Agent, type OrchestrateTask, type AgentRun } from '@/lib/agents-controller'
 import { useToastStore } from '@/lib/toast-store'
 
 const AVAILABLE_TOOLS = ['web_search', 'code_execution', 'file_read', 'knowledge_retrieval', 'image_analysis', 'data_analysis']
@@ -46,6 +46,10 @@ export default function AgentsPage() {
   const [orchResponse, setOrchResponse] = useState<string | null>(null)
   const [orchError, setOrchError] = useState<string | null>(null)
 
+  const [runs, setRuns] = useState<AgentRun[]>([])
+  const [runsLoading, setRunsLoading] = useState(false)
+  const [expandedRun, setExpandedRun] = useState<string | null>(null)
+
   const fetchAgents = useCallback(async () => {
     setLoading(true)
     try {
@@ -58,6 +62,19 @@ export default function AgentsPage() {
   }, [addToast])
 
   useEffect(() => { fetchAgents() }, [fetchAgents])
+
+  const fetchRuns = useCallback(async () => {
+    setRunsLoading(true)
+    try {
+      const res = await agentsController.listRuns(20)
+      setRuns(res.runs || [])
+    } catch {
+      addToast('Failed to load run history', 'error')
+    }
+    setRunsLoading(false)
+  }, [addToast])
+
+  useEffect(() => { fetchRuns() }, [fetchRuns])
 
   const toggleTool = (tool: string, current: string[], setter: (v: string[]) => void) => {
     setter(current.includes(tool) ? current.filter(t => t !== tool) : [...current, tool])
@@ -163,12 +180,14 @@ export default function AgentsPage() {
         setOrchPhase('COMPLETE')
         setOrchRunning(false)
         addToast('Orchestration complete', 'success')
+        fetchRuns()
       },
       onError: (error) => {
         setOrchError(error)
         setOrchPhase('ERROR')
         setOrchRunning(false)
         addToast(error, 'error')
+        fetchRuns()
       },
     })
   }
@@ -424,6 +443,90 @@ export default function AgentsPage() {
               <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
                 {orchError}
               </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Run history */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Run History</CardTitle>
+              <Button size="sm" variant="ghost" onClick={fetchRuns} disabled={runsLoading}>
+                <IconRefresh className="h-4 w-4 mr-1" />
+                Refresh
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {runsLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map(i => <div key={i} className="h-14 animate-pulse rounded-lg bg-muted" />)}
+              </div>
+            ) : runs.length === 0 ? (
+              <EmptyCard message="No runs yet — orchestrate a goal to see history here" action={null} />
+            ) : (
+              runs.map(run => {
+                const expanded = expandedRun === run.id
+                const statusColor = run.status === 'completed' ? 'bg-success' : run.status === 'failed' ? 'bg-destructive' : 'bg-warning animate-pulse'
+                return (
+                  <div key={run.id} className={`rounded-lg border border-border/60 transition-colors ${expanded ? 'border-primary/40' : 'hover:bg-muted/50'}`}>
+                    <button
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left"
+                      onClick={() => setExpandedRun(expanded ? null : run.id)}
+                      aria-expanded={expanded}
+                    >
+                      <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${statusColor}`} />
+                      <span className="flex-1 truncate text-sm">{run.goal}</span>
+                      <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+                        {run.completed_count}/{run.completed_count + run.failed_count} tasks
+                      </span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {run.started_at ? new Date(run.started_at).toLocaleString() : ''}
+                      </span>
+                    </button>
+                    {expanded && (
+                      <div className="border-t border-border/60 px-3 py-2 space-y-3">
+                        {run.error && (
+                          <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                            {run.error}
+                          </div>
+                        )}
+                        {run.tasks.length > 0 && (
+                          <div className="space-y-1.5">
+                            <p className="text-xs font-medium text-muted-foreground">Tasks ({run.tasks.length})</p>
+                            {run.tasks.map(task => (
+                              <div key={task.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                                <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+                                  task.status === 'completed' ? 'bg-success' :
+                                  task.status === 'failed' ? 'bg-destructive' :
+                                  'bg-muted-foreground/30'
+                                }`} />
+                                <span className="font-medium text-xs min-w-[64px] text-muted-foreground">{task.agent}</span>
+                                <span className="flex-1 truncate">{task.description}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {run.response && (
+                          <div className="rounded-lg border bg-muted/30 p-3">
+                            <p className="text-xs font-medium text-muted-foreground mb-1">Result</p>
+                            <p className="text-sm whitespace-pre-wrap line-clamp-4">{run.response}</p>
+                          </div>
+                        )}
+                        {run.logs.length > 0 && (
+                          <div className="rounded-lg bg-muted/50 p-3">
+                            <p className="text-xs font-medium text-muted-foreground mb-1">Logs</p>
+                            <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap max-h-40 overflow-y-auto">
+                              {run.logs.join('\n')}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })
             )}
           </CardContent>
         </Card>

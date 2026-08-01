@@ -94,3 +94,28 @@ def test_universal_converter_llama_style():
         assert f"blocks.{i}.ff.w3.weight" in result  # up
         # No synthesized zeros — these should be real weights
         assert not np.allclose(result[f"blocks.{i}.ff.w3.weight"], 0.0)
+
+
+def test_to_server_builds_guard_backed_server():
+    """to_server() wraps the provider's model/tokenizer in a SloNetServer."""
+    from unittest.mock import MagicMock
+
+    from domains.inference.slonet_provider import SloNetChatProvider
+    from domains.infrastructure.slonet_server import SloNetServer
+
+    provider = SloNetChatProvider.__new__(SloNetChatProvider)
+    provider._model = MagicMock()
+    provider._tokenizer = MagicMock()
+    provider._model_id = "test-slo"
+
+    guard = MagicMock()
+    server = provider.to_server(process_guard=guard)
+
+    assert isinstance(server, SloNetServer)
+    assert server._process_guard is guard
+    assert server._model is provider._model
+    assert server._tokenizer is provider._tokenizer
+    assert server._model_id == "test-slo"
+
+    no_guard = provider.to_server()
+    assert no_guard._process_guard is None

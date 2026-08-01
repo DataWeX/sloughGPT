@@ -7,6 +7,7 @@ from pathlib import Path
 import logging
 import time
 import threading
+import os
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,7 @@ class ModelsController:
         self._model_instance: Optional[Any] = None
         self._hf_model: Optional[Any] = None
         self._tokenizer: Optional[Any] = None
+        self._process_guard: Optional[Any] = None
         self._inference_count: int = 0
         self._total_tokens_generated: int = 0
         self._last_inference_time: Optional[float] = None
@@ -119,8 +121,10 @@ class ModelsController:
             from domains.models.provider import setup_providers
             from domains.infrastructure.config import get_config
             cfg = get_config()
+            process_guard = self._build_process_guard(model_id)
             setup_providers(
                 slonet_hf_id=model_id,
+                process_guard=process_guard,
                 quantize=cfg.quantize_slonet,
                 quant_bits=cfg.quant_bits,
                 quant_mode=cfg.quant_mode,
@@ -148,6 +152,68 @@ class ModelsController:
             "total_parameters": 0,
             "tokenizer_type": "SloNetChatProvider",
         }
+
+    def _build_process_guard(self, model_id: str) -> Optional[Any]:
+        """Build and start a ``ProcessGuard`` for the given model, if enabled.
+
+        Reads ``SLO_ENABLE_PROCESS_GUARD`` via ``ServerConfig``; skips when the
+        model has no compiled ``.slnc`` file. Any existing guard is stopped
+        first to avoid orphan worker subprocesses on reload.
+
+        Args:
+            model_id: HuggingFace model ID to guard
+
+        Returns:
+            Started ``ProcessGuard``, or None when disabled/unavailable.
+        """
+        if self._process_guard is not None:
+            try:
+                self._process_guard.stop()
+            except Exception:
+                pass
+            self._process_guard = None
+
+        try:
+            from config import ServerConfig
+            server_cfg = ServerConfig.from_env()
+        except Exception:
+            server_cfg = None
+        enabled = bool(
+            server_cfg.enable_process_guard
+            if server_cfg is not None
+            else os.getenv("SLO_ENABLE_PROCESS_GUARD", "").lower() in ("1", "true", "yes")
+        )
+        if not enabled:
+            return None
+
+        try:
+            from domains.infrastructure.process_guard import ProcessGuard
+            from domains.infrastructure.safetensors_loader import _get_model_dir
+
+            slnc_path = str(_get_model_dir(model_id) / "model.slnc")
+            if not os.path.exists(slnc_path):
+                logger.info("ProcessGuard skipped: no .slnc file at %s", slnc_path, extra={"tag": "MODEL"})
+                return None
+
+            guard = ProcessGuard(
+                slnc_path=slnc_path,
+                model_id=model_id,
+                worker_id=f"slo-{model_id.split('/')[-1]}",
+                max_restarts=3,
+                restart_delay=2.0,
+                generate_timeout=120.0,
+                quantize=getattr(server_cfg, "quantize_slonet", False),
+                quant_bits=getattr(server_cfg, "quant_bits", 8),
+                quant_mode=getattr(server_cfg, "quant_mode", "symmetric"),
+                quant_clip=getattr(server_cfg, "quant_clip", 0.999),
+            )
+            guard.start()
+            self._process_guard = guard
+            logger.info("ProcessGuard started for %s", model_id, extra={"tag": "MODEL"})
+            return guard
+        except Exception as e:
+            logger.warning("ProcessGuard creation failed: %s", e, extra={"tag": "MODEL"})
+            return None
 
     def _load_gguf_model(self, model_path: str, device: str) -> Dict[str, Any]:
         """Load a GGUF model using llama.cpp"""
@@ -210,6 +276,13 @@ class ModelsController:
 
     def unload_model(self) -> Dict[str, Any]:
         """Unload current model and clean up ModelRegistry entry."""
+        if self._process_guard is not None:
+            try:
+                self._process_guard.stop()
+            except Exception as e:
+                logger.debug("ProcessGuard stop failed: %s", e)
+            self._process_guard = None
+
         if self._model_instance is not None:
             del self._model_instance
             self._model_instance = None
