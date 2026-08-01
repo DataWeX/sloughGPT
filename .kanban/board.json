@@ -24,6 +24,23 @@
   ],
   "cards": [
     {
+      "id": "20260801_084822_kanban-cli-test-suite-24-tests",
+      "title": "kanban CLI test suite \u2014 24 tests",
+      "description": "Added packages/planner/tests/test_kanban.py (24 tests): init/force, add defaults+fields, invalid priority (SystemExit 2), list filters+empty, show unknown, edit fields/no-changes/unknown, move (incl. unknown column), delete/unknown, board render, note add/list/delete + unknown card, column management (add/rename/rm/duplicate), archive, search, stats, no-command. CLI-driven via --dir on isolated temp board. Full planner suite: 120 passed.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "planner",
+        "tests",
+        "kanban"
+      ],
+      "created_at": "2026-08-01T08:48:22.236540+00:00",
+      "updated_at": "2026-08-01T08:48:22.236540+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260801_084447_planner-notes-cli-test-suite-core-fixes-34-tests",
       "title": "planner notes CLI test suite \u2014 core fixes + 34 tests",
       "description": "Added packages/planner/tests/test_core.py (34 tests, file+mogdb backends). Fixed 3 real bugs surfaced: (1) get_note_store now caches by backend so sequential in-process CLI calls share store state (mogdb clients were isolated); (2) NoteStore coerces str notes_dir to Path (mogdb backend crashed on str); (3) Note.from_markdown stripped leading blank line so round-tripped body no longer gains a leading newline. Tests are CLI-driven (create/edit/verify via cli_main). Full planner suite: 96 passed.",
@@ -599,7 +616,7 @@
       "id": "20260731_092246_test-blitz-uncovered-domain-coverage-shared-ops-inference-be",
       "title": "Test blitz: uncovered domain coverage (shared, ops, inference, benchmark, training)",
       "description": "Test blitz adding coverage for uncovered core-py domains. 19 files, 677 tests, all pass (no weights/network deps). Companion suites test_knowledge_memory (24) + test_slo_manager (23) => 724 total batch.\n\nRound 1 (6 files, 179 tests):\n- test_shared.py (60): feature flags, utils, test_framework.\n- test_wandb_server.py (13): HTTP aggregates + inference flush counters.\n- test_embeddings.py (32): embedders. FOUND+fixed real bug: BatchEmbedder.embed read cache but never wrote entries.\n- test_semantic_cache.py (30): hits/misses, TTL, LRU, invalidate, clear, CachedSoulEngine.\n- test_benchmark_domain.py (18): metrics/evaluate/clear/singleton.\n- test_wandb_helpers.py (26): env flags, flatten config, API job tracker.\n\nRound 2 (5 files, 158 tests):\n- test_hd_memory.py (31): HRR encode/add/search. FOUND+fixed real bug: search() never role-unbound query vector.\n- test_quantum.py (40): QuantumState, QuantumCognitiveEngine, QuantumParallelProcessor, HyperdimensionalProcessor, TemporalReasoningEngine.\n- test_entity_extractor.py (34): regex + neural extraction. FOUND+fixed real bug: get_model_registry imported from wrong module (ImportError swallowed -> neural path always []).\n- test_notifications.py (27): device tokens, topic filters, Expo send (faked httpx), batching, history, cleanup.\n- test_tracking.py (26): TrackerBackend + TrackerClient lifecycle, flush batching, per-key caps, empty flush.\n\nRound 3 (2 files, 94 tests):\n- test_auto_config.py (54): load/save/validate/batch/smart defaults. FOUND+fixed real bug: env strings 'false'/'0'/'off'/'no' parsed as truthy.\n- test_data_filter.py (47): csv/jsonl/text/latex -> rows, CSV edge cases (BOM, headers, quoted commas), filtering+dedup, sampler, tokenization, class balance.\n\nRound 4 (1 file, 82 tests):\n- test_knowledge.py (82): KnowledgeIngestor, TrainingKnowledgeLoader, RagContextBuilder, chunking. FOUND+fixed real bug: ingestor deadlock (RLock reacquired in same thread) via KnowledgeIngestor.close().\n  Added network helpers (scrape_article/search_ddg) tested via fakes (trafilatura/bs4 not installed).\n\nRound 5 (3 files, 98 tests):\n- test_spaced_repetition.py (16): 4-card Leitner boxes, SRS scheduler (interval growth, day/week/month/never buckets), SloProfile metadata via sou_format.to_sou_string. FOUND+fixed real bugs: SouParser.parse dropped BEHAVIOR section; write_v3_sou layout incompatible with load_soul (count+raveled vs ndim+dims); load_soul crashed on weights_only v3 (missing weight section); emit_error_event raised DeprecationWarning via asyncio.ensure_future with no running loop (now get_running_loop/emit_sync fallback).\n- test_slo_format.py (42): SouParser fields/timing/blocks/roundtrip, PersonalityCore, write_v3_sou/load_soul binary roundtrip, metadata (epochs_trained, losses), stop-token handling.\n- test_domain_errors.py (40): ErrorEventBus, emit_error_event, RuntimeErrors, backpressure, event consumers, sinks (stream/file/filter/sanitizer).\n\nRound 6 (2 files, 59 tests):\n- test_model_size.py (24): _sum_weight_files (safetensors/bin, subdirs, >1KB filter, 2-decimal rounding), hub file size via faked HfApi (sibling sum, None size, no siblings, error), compute_model_size_gb priority + TTL cache, is_model_cached shallow/deep, format_size_*.\n- test_feature_flags.py (35): env overrides (1/true/yes/on, 0, unknown fail-closed), register/dedupe, set_status KeyError, list_all, config load/save roundtrip, 24 defaults idempotent. Registry is process-global (shared across modules) -- count assertions need cleared registry.\n\nRound 7 (6 new files, 197 tests; 3 real bugs fixed):\n- test_ml_types.py (69): dtype helpers, device resolution, _mps_available on x86_64, to_np_dtype mapping.\n- test_arch_config.py (17): weight_map/build_arch. FIXED bug: resolve() substituted {i} BEFORE weight_map lookup, so mapped templates never matched.\n- test_numpy_ops_forward.py (34): forward/fast/cached parity, incremental KV, GPT-2 (mha/absolute/gelu) + LLaMA (gqa/rope/swiglu). FIXED bugs: forward_fast SwiGLU checked substituted key instead of literal 'layers.{i}.ffn.gate.weight:0' (branch never ran); RoPE applied on (heads,seq,hd) but rope() expects (seq,heads,hd) -- rotated per-head not per-position, broke incremental parity.\n- test_conversion_tracker.py (31): stage lifecycle, progress clamp, active filter, singleton.\n- test_dataset_manifest.py (20): load/validate, glob train files, resolution order + errors.\n- test_bpe_tokenizer.py (26): train/encode/decode roundtrip, save/load, vocab caps.\n\nTotal: 874 blitz tests / 25 files.\n",
-      "column": "in_progress",
+      "column": "done",
       "priority": "medium",
       "tags": [
         "tests",
@@ -607,7 +624,7 @@
         "blitz"
       ],
       "created_at": "2026-07-31T09:22:46.884965+00:00",
-      "updated_at": "2026-07-31T11:17:00.000000+00:00",
+      "updated_at": "2026-08-01T08:46:42.950751+00:00",
       "due_date": "",
       "assignee": "",
       "notes": []
