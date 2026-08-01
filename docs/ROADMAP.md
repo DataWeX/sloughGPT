@@ -5,7 +5,7 @@
 - **Training**: SloNet pure NumPy autograd (full DAG, forward+backward, 25 ops). Distillation pipeline (GPT2 teacher → LSTM student). HuggingFace fine-tuning via `transformers.Trainer` + optional LoRA. Activity classifier (CNN on sensor data).
 - **Core**: ModelServer + ModelRegistry + CircuitBreaker for composable serving. ProcessGuard for process-level isolation (wired but not production default). Context managers (Personality/Memory/Style/Task). Feedback workflow (LoRA + eval + aggregation).
 - **Frontend**: 20 pages, all migrated to `@sloughgpt/strui` components. Controllers migrated from legacy `api.ts` to per-domain controllers. Chat with markdown, streaming, regeneration, feedback. 2113 tests.
-- **CLI**: Python REPL with 40+ commands, pipelines, env, aliases, tab completion, pager (`~/.config/sloughgpt/shell_state.json`).
+- **CLI**: Python REPL with 40+ commands, pipelines, env, aliases, tab completion, pager (`~/.config/sloughgpt/shell_state.json`). Line-mode shell is the default UI; opt-in split-pane curses TUI (`sloughgpt tui`, `shell --tui`, or `MAN_TUI=1`) with console/output panes, status bar, input row, reverse+forward history search (Ctrl+R/S), output-pane content search (`/`, with `n`/`N` repeat-last-match), readline-style line editing (caret, word movement via Alt+F/B and Ctrl+arrows, transpose Ctrl+T, delete word forward Alt+D, Ctrl+W/U/K/A/E/D, kill ring + Ctrl+Y yank), and Ctrl+C command interrupt — all fixes verified under a real PTY.
 - **Mobile**: Not started.
 
 ## Near-term goals

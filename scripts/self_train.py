@@ -7,7 +7,6 @@ GPT-2 generates → that becomes input → generate again → repeat
 import sys
 import os
 import time
-import torch
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent
@@ -39,13 +38,12 @@ def self_train(
     while True:
         # Generate
         inputs = tokenizer(current_text, return_tensors="pt")
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=max_new_tokens,
-                temperature=temperature,
-                do_sample=True,
-            )
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            do_sample=True,
+        )
         generated = tokenizer.decode(outputs[0], skip_special_tokens=True)
 
         # Extract new text

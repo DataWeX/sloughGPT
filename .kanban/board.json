@@ -24,6 +24,489 @@
   ],
   "cards": [
     {
+      "id": "20260731_223301_downcraft-resume-validated-app-autoload-integration",
+      "title": "downcraft resume validated + app autoload integration",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "downcraft",
+        "resume",
+        "infra"
+      ],
+      "created_at": "2026-07-31T22:33:01.738295+00:00",
+      "updated_at": "2026-07-31T22:33:01.738295+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_212936_infra-coverage-weight-dependent-suites-on-cached-qwen25",
+      "title": "Infra coverage: weight-dependent suites on cached Qwen2.5",
+      "description": "Ran weight-dependent suites against locally-cached Qwen/Qwen2.5-0.5B-Instruct (models/hf-cache/hub flat layout, no downloads). Fixed 3 real bugs: (1) numpy_forward.py T() applied transpose_weights backwards (transposed (in,out) weights); broke non-square GQA k/v projections for Qwen-style checkpoints and would break GPT-2 \u2014 inverted to transpose (out,in) at all 3 sites (50/201/369). (2) morph_tokenizer.py:242 + safetensors_loader.py parents[3]->parents[4] (repo-root cache path). (3) list_cached_models() only scanned HF_HOME/hub, missed project-local flat cache \u2014 now scans both, dedupes by id. Tests repointed gpt2/Qwen2-0.5B fixtures to Qwen2.5 with skip-if-uncached gating (numpy_engine, morph_tokenizer, safetensors_loader, point_library); _is_cached uses loader primitives (_get_model_dir + _find_safetensors). Results: numpy_engine 27 passed/7 gpt2-skip (8 gen/stream failures fixed), morph_tokenizer 25+11, safetensors_loader+point_library 66 passed incl. 3 NumpyEngine+ModelTree integration tests. Regression (loggers/shell/model) 189 passed. Note: is_model_cached()/downcraft still require standard HF snapshot layout \u2014 flat cache only recognized via loader primitives.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "infrastructure",
+        "tests",
+        "models"
+      ],
+      "created_at": "2026-07-31T21:29:36.291706+00:00",
+      "updated_at": "2026-07-31T21:29:36.291706+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_212936_flat-hf-cache-recognized-by-healthsize-checks",
+      "title": "Flat HF cache recognized by health/size checks",
+      "description": "is_download_complete now detects HF local-dir/flat layout (top-level files + refs/ + stale .cache locks) across standard ~/.cache/huggingface/hub AND project-local models/hf-cache/hub (walk-up from CWD). Added find_cached_model_dir(); model_size.compute_model_size_gb resolves the existing dir. is_model_cached('Qwen/Qwen2.5-0.5B-Instruct') now True, size 0.92GB. downcraft 38 tests + model_size 26 + download_manager/morph_tokenizer/safetensors_loader/numpy_engine + test_models_router green. Site-packages downcraft synced.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "infra",
+        "downcraft",
+        "cache"
+      ],
+      "created_at": "2026-07-31T21:29:36.284168+00:00",
+      "updated_at": "2026-07-31T21:29:36.284168+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_142320_infra-coverage-round-2b-personality-companion-loggers-vector",
+      "title": "Infra coverage round 2b: personality, companion, loggers, vector stores",
+      "description": "Added 137 tests across 7 previously-untested modules: ai_personality (23), companion (29), console_logger (28), shell_logger (13), web_logger (21), chromadb_store (11), pinecone_store (12). All green. ConsoleLogger/ShellLogger ANSI tested via monkeypatched _Ansi constants (module-level _c() evaluated at import); time-format assertions compute expected via datetime.fromtimestamp (TZ-safe). ChromaDB/Pinecone connect() exercised via sys.modules import mocking; discovered ValueError in pinecone connect is swallowed by generic except Exception -> returns False. Companion clean_response replacement is case-sensitive. Regression gate (prior 5 data-pipeline files + logging/vector_store neighbors) green, exit 0. pycache cleaned.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "infrastructure",
+        "tests"
+      ],
+      "created_at": "2026-07-31T14:23:20.835121+00:00",
+      "updated_at": "2026-07-31T14:23:20.835121+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_135315_infra-coverage-round-2-data-pipeline-modules",
+      "title": "Infra coverage round 2: data-pipeline modules",
+      "description": "Added 134 tests across 5 previously-untested infra modules: auto_ingest (27), download_manager (34), model_catalog (27), pt_loader (13), training_pipeline (33). All green. Torch-free .pt fixtures built via custom Pickler (persistent_id storage refs + _rebuild_tensor_v2 routing through find_class, protocol 2 to match torch legacy GLOBAL opcodes). ModelCatalog tested against real MogDB temp-dir instances. Full core-py suite: only 7 failures, all in concurrent untracked files (test_slnc_compiler.py x6, test_wandb_server.py x1); regression gate (shell+logging subset) green. Note: another agent closed round-2 note with different 6 modules; this note records the data-pipeline set.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "infrastructure",
+        "tests"
+      ],
+      "created_at": "2026-07-31T13:53:15.893429+00:00",
+      "updated_at": "2026-07-31T13:53:15.893429+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_133614_infrastructure-test-coverage-round-3",
+      "title": "Infrastructure test coverage round 3",
+      "description": "",
+      "column": "in_progress",
+      "priority": "medium",
+      "tags": [
+        "infrastructure",
+        "tests"
+      ],
+      "created_at": "2026-07-31T13:36:14.698366+00:00",
+      "updated_at": "2026-07-31T13:36:14.698366+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_125425_infrastructure-test-coverage-round-2",
+      "title": "Infrastructure test coverage round 2",
+      "description": "",
+      "column": "in_progress",
+      "priority": "medium",
+      "tags": [
+        "infrastructure",
+        "tests"
+      ],
+      "created_at": "2026-07-31T12:54:25.712545+00:00",
+      "updated_at": "2026-07-31T12:54:25.712545+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_121623_test-blitz-round-7-shared-ops-inference-backend",
+      "title": "Test blitz round 7: shared ops + inference backend",
+      "description": "Round 7: test_ml_types (69), test_arch_config (17), test_numpy_ops_forward (34), test_conversion_tracker (31), test_dataset_manifest (20), test_bpe_tokenizer (26). Two real bugs fixed: (1) ArchConfig.resolve substituted {i} BEFORE weight_map lookup so mapped templates never matched; (2) forward_fast SwiGLU branch checked substituted key instead of literal layers.{i}.ffn.gate.weight:0, so branch never ran. FOUND+fixed third real bug: RoPE applied on (heads, seq, hd) transposed layout but rope() expects (seq, heads, hd) \u2014 rotated per-head instead of per-position, breaking LLaMA incremental KV parity; fixed all three forward paths. Round 7 batch (8 files): 256 tests collected, exit 0.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "tests",
+        "coverage",
+        "blitz"
+      ],
+      "created_at": "2026-07-31T12:16:23.478958+00:00",
+      "updated_at": "2026-07-31T12:16:23.478958+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_121623_20260731-shellmd-keybindings-documented-pty-verified",
+      "title": "20260731 SHELL.md keybindings documented + PTY-verified",
+      "description": "Rewrote SHELL.md Keyboard Shortcuts section (plain-shell, now default UI): readline Emacs binding groups \u2014 Completion & History (Tab, Up/Down/Ctrl+P/Ctrl+N, Ctrl+R/S), Cursor movement (Ctrl+A/Home, Ctrl+E/End, Alt+B/F), Editing (Backspace, Ctrl+D, Alt+D, Ctrl+W, Ctrl+K, Ctrl+U, Ctrl+T), Kill ring & process control (Ctrl+Y, Ctrl+L, Ctrl+C), plain-line fallback note. PTY probe /tmp/opencode/shell_pty_keys.py verified all 8 steps under a REAL controlling terminal (pty.fork): line mode boots without TUI banner/alt-screen; Tab pw->pwd; Alt+D kill-word (echo alpha beta -> echo  beta); Ctrl+K kill-to-end; Ctrl+Y yank; Ctrl+U kill-line; Ctrl+C aborts 'sleep 30' -> Aborted + post-abort echo ok; Up-arrow history recall. Root causes found: (1) probe step-2 false negative \u2014 readline redraws with backspace/CSI-P sequences, never reprints the edited line; assert on command output. (2) Ctrl+C 'Aborted missing' was a probe artifact \u2014 subprocess.Popen pty has no controlling terminal so ^C never signals; pty.fork (setsid+TIOCSCTTY) delivers real SIGINT. (3) /dev/tty open with mode 'r+' always fails on a non-seekable tty (io.UnsupportedOperation) so ConsoleIO._tty is effectively always None -> read() uses input() -> stdlib readline editing is always active; confirmed Tab+Alt+D work under pty.fork. Regression gate: 10-file shell/logging subset 569 passed, 12 skipped. Stray API server killed; pycache cleaned.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "docs",
+        "readline"
+      ],
+      "created_at": "2026-07-31T12:16:23.471206+00:00",
+      "updated_at": "2026-07-31T12:16:23.471206+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_110032_20260731-shell-is-the-default-ui-tui-is-opt-in",
+      "title": "20260731 Shell is the default UI; TUI is opt-in",
+      "description": "Flipped ShellREPL so line mode is the default interactive shell; the curses TUI is now opt-in. repl.py __init__: use_tui=None resolves to MAN_TUI==1 (was auto-detect via isatty + MAN_NO_TUI). CLI: sloughgpt tui forces the TUI (invokes shell with tui=True); sloughgpt shell gained --tui flag. Docs updated: SHELL.md TUI section (launch via sloughgpt tui / shell --tui / MAN_TUI=1), __init__.py, ROADMAP CLI bullet. 4 new unit tests for default/opt-in selection; shell/logging gate 569 passed, 12 skipped. py_compile + CLI --help + shell -c echo verified.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "cli",
+        "tui"
+      ],
+      "created_at": "2026-07-31T11:00:32.292159+00:00",
+      "updated_at": "2026-07-31T11:00:32.292159+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_104558_20260731-tui-delete-word-forward-altd",
+      "title": "20260731 TUI delete word forward (Alt+D)",
+      "description": "Added readline kill-word (Alt+D) to split-pane TUI. _delete_word_forward() computes whitespace-skip + word range from _input_cursor, deletes it, caret unchanged, pushes killed text via _push_kill(). Escape-prefix branch passes {'f':'fwd','b':'bwd','d':'delword'} and dispatches alt:delword. 5 unit tests (at-start, mid-word, at-whitespace, end no-op, kill-ring push): suite at 97 passed. PTY probe tui_pty_delword.py drives Alt+D x3 (echo foo bar -> lone prompt), no-op on empty/end-of-line, Ctrl+Y yanks killed word \u2014 all steps OK. Regression gate 565 passed, 12 skipped. SHELL.md + ROADMAP.md updated.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "tui",
+        "readline"
+      ],
+      "created_at": "2026-07-31T10:45:58.740126+00:00",
+      "updated_at": "2026-07-31T10:45:58.740126+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_102731_20260731-tui-output-pane-content-search",
+      "title": "20260731 TUI output-pane content search (/)",
+      "description": "Output-pane content search in the split-pane curses TUI (tui_repl.py), the final readline checklist item.\n\n- '/' at an empty prompt opens output search; typing refines the query and jumps the scroll so the matched line lands at the top of the output pane.\n- Case-insensitive substring search over the whole buffer with wrap (forward/backward); Enter accepts (scroll kept at the match), Esc/Ctrl+G/Ctrl+C cancel (scroll restored).\n- No-match shows '(failed output-search)' indicator with the query intact \u2014 'n'/'N' inside a query are literal characters (fixed a bug where they were intercepted as match cycling).\n- After accept, 'n'/'N' at an empty prompt repeat the last search from the current match (wrapping), gated on scrolled-back state (scroll > 0) so command text keeps its n/N.\n- State: _out_searching, _out_search_q, _out_search_last, _out_search_sel, _out_search_save, _out_search_failed; helpers _out_find, _apply_out_search, _repeat_out_search.\n- Tests: test_shell_tui_repl.py 92 passing (13 prior + 5 new _repeat_out_search tests); shell/logging 10-file subset 560 passed, 12 skipped.\n- PTY probe /tmp/opencode/tui_pty_outsearch.py verified all steps: /target_042 jump to pane top, Enter accept, /zzz_no_such literal-n + failed indicator + Esc restore, /search_target_04 n x10 cycle-with-wrap, N x10 reverse wrap, Ctrl+L + literal '/' in echo.\n- docs/SHELL.md keybinding table gains the '/' row; docs/ROADMAP.md CLI bullet mentions output search + n/N repeat.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "tui",
+        "readline"
+      ],
+      "created_at": "2026-07-31T10:27:31.222654+00:00",
+      "updated_at": "2026-07-31T10:27:31.222654+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_095933_20260731-tui-transpose-chars-ctrlt",
+      "title": "20260731 TUI transpose chars (Ctrl+T)",
+      "description": "Added readline transpose-chars (Ctrl+T) to the split-pane curses TUI. _transpose_chars(): with a character on both sides of the caret the pair swaps and the caret advances past them; at the end of the line the last two characters swap and the caret stays at the end; no-op at the start of the line or on a one-character/empty line. Bound to key code 20 in the main loop. Unit tests: 75 TUI tests pass (6 new: mid-word swap + caret advance, at-end swap, at-start no-op, single-char no-op, empty no-op, caret advancement on mid-word). PTY probe /tmp/opencode/tui_pty_transpose.py verified: 'helol' Ctrl+T -> 'hello', again -> 'helol', mid-line Ctrl+T swapped and marker landed at the advanced caret. Docs: docs/SHELL.md keybinding table (Ctrl+T row), docs/ROADMAP.md CLI bullet.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "tui",
+        "readline"
+      ],
+      "created_at": "2026-07-31T09:59:33.793294+00:00",
+      "updated_at": "2026-07-31T09:59:33.793294+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_094501_20260731-tui-word-movement-altfb-ctrlarrows",
+      "title": "20260731 TUI word movement (Alt+F/B, Ctrl+arrows)",
+      "description": "Added readline word movement to the split-pane curses TUI. _move_word_forward() (Alt+F / Ctrl+Right) skips whitespace then advances to the end of the word; _move_word_backward() (Alt+B / Ctrl+Left) skips back to the start of the current/previous word. Word = maximal run of non-whitespace. ESC-prefix decoding via new module-level _read_escape_remainder(): polls the next bytes with a 0ms timeout, decodes Alt+<char> (alt:f/b) and raw ESC [ 1;5C/D sequences (seq:ctrl-right/left), restores the 100ms poll timeout; a lone Esc resolves instantly to no-op (search-cancel path unaffected). ncurses folds Ctrl+arrows into opaque codes (measured 554/569 via a keycodes PTY probe) not exposed by Python curses, so added _KEY_CTRL_LEFT/_KEY_CTRL_RIGHT constants via getattr(curses,...) fallback. Unit tests: 69 TUI tests pass (15 new: 8 word-move edge cases incl. mid-word, whitespace, at-start/end no-ops; 7 ESC-decoder tests incl. lone Esc, double Esc, alt known/unknown, ctrl-left/right, timeout restore). PTY probe /tmp/opencode/tui_pty_wordmove.py verified all four bindings plus lone-Esc no-op by inserting markers at the new caret positions. Docs: docs/SHELL.md keybinding table (word-move rows), docs/ROADMAP.md CLI bullet.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "tui",
+        "readline"
+      ],
+      "created_at": "2026-07-31T09:45:01.499905+00:00",
+      "updated_at": "2026-07-31T09:45:01.499905+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_092634_20260731-tui-kill-ring-yank-ctrly",
+      "title": "20260731 TUI kill ring + yank (Ctrl+Y)",
+      "description": "Added readline-style kill ring to the split-pane curses TUI. Ctrl+K/U/W now push killed text into a capped ring (10 entries); Ctrl+Y yanks the newest kill, repeating cycles to older entries (yank-pop). A push or an edit to the line between yanks resets the cycle. Also added a search-failed indicator: a no-match reverse/forward query shows 'failed reverse-i-search'/'failed forward-i-search' in the status bar. Unit tests: 54 TUI tests pass (10 new: ring push for K/U/W, yank insert, repeat cycle, empty ring noop, fresh-start after edit, ring cap, ring reset on kill, delete-at-caret not in ring, failed flag set/cleared/empty-query). PTY probe /tmp/opencode/tui_pty_yank.py verified: typed line, Ctrl+K killed, Ctrl+Y restored, Ctrl+W deleted word, Ctrl+Y re-yanked it, Ctrl+Y cycled to the older kill. Docs updated: docs/SHELL.md keybinding table (Ctrl+Y row, kill rows note ring), docs/ROADMAP.md CLI bullet.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "tui",
+        "readline"
+      ],
+      "created_at": "2026-07-31T09:26:34.549267+00:00",
+      "updated_at": "2026-07-31T09:26:34.549267+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_092246_test-blitz-uncovered-domain-coverage-shared-ops-inference-be",
+      "title": "Test blitz: uncovered domain coverage (shared, ops, inference, benchmark, training)",
+      "description": "Test blitz adding coverage for uncovered core-py domains. 19 files, 677 tests, all pass (no weights/network deps). Companion suites test_knowledge_memory (24) + test_slo_manager (23) => 724 total batch.\n\nRound 1 (6 files, 179 tests):\n- test_shared.py (60): feature flags, utils, test_framework.\n- test_wandb_server.py (13): HTTP aggregates + inference flush counters.\n- test_embeddings.py (32): embedders. FOUND+fixed real bug: BatchEmbedder.embed read cache but never wrote entries.\n- test_semantic_cache.py (30): hits/misses, TTL, LRU, invalidate, clear, CachedSoulEngine.\n- test_benchmark_domain.py (18): metrics/evaluate/clear/singleton.\n- test_wandb_helpers.py (26): env flags, flatten config, API job tracker.\n\nRound 2 (5 files, 158 tests):\n- test_hd_memory.py (31): HRR encode/add/search. FOUND+fixed real bug: search() never role-unbound query vector.\n- test_quantum.py (40): QuantumState, QuantumCognitiveEngine, QuantumParallelProcessor, HyperdimensionalProcessor, TemporalReasoningEngine.\n- test_entity_extractor.py (34): regex + neural extraction. FOUND+fixed real bug: get_model_registry imported from wrong module (ImportError swallowed -> neural path always []).\n- test_notifications.py (27): device tokens, topic filters, Expo send (faked httpx), batching, history, cleanup.\n- test_tracking.py (26): TrackerBackend + TrackerClient lifecycle, flush batching, per-key caps, empty flush.\n\nRound 3 (2 files, 94 tests):\n- test_auto_config.py (54): load/save/validate/batch/smart defaults. FOUND+fixed real bug: env strings 'false'/'0'/'off'/'no' parsed as truthy.\n- test_data_filter.py (47): csv/jsonl/text/latex -> rows, CSV edge cases (BOM, headers, quoted commas), filtering+dedup, sampler, tokenization, class balance.\n\nRound 4 (1 file, 82 tests):\n- test_knowledge.py (82): KnowledgeIngestor, TrainingKnowledgeLoader, RagContextBuilder, chunking. FOUND+fixed real bug: ingestor deadlock (RLock reacquired in same thread) via KnowledgeIngestor.close().\n  Added network helpers (scrape_article/search_ddg) tested via fakes (trafilatura/bs4 not installed).\n\nRound 5 (3 files, 98 tests):\n- test_spaced_repetition.py (16): 4-card Leitner boxes, SRS scheduler (interval growth, day/week/month/never buckets), SloProfile metadata via sou_format.to_sou_string. FOUND+fixed real bugs: SouParser.parse dropped BEHAVIOR section; write_v3_sou layout incompatible with load_soul (count+raveled vs ndim+dims); load_soul crashed on weights_only v3 (missing weight section); emit_error_event raised DeprecationWarning via asyncio.ensure_future with no running loop (now get_running_loop/emit_sync fallback).\n- test_slo_format.py (42): SouParser fields/timing/blocks/roundtrip, PersonalityCore, write_v3_sou/load_soul binary roundtrip, metadata (epochs_trained, losses), stop-token handling.\n- test_domain_errors.py (40): ErrorEventBus, emit_error_event, RuntimeErrors, backpressure, event consumers, sinks (stream/file/filter/sanitizer).\n\nRound 6 (2 files, 59 tests):\n- test_model_size.py (24): _sum_weight_files (safetensors/bin, subdirs, >1KB filter, 2-decimal rounding), hub file size via faked HfApi (sibling sum, None size, no siblings, error), compute_model_size_gb priority + TTL cache, is_model_cached shallow/deep, format_size_*.\n- test_feature_flags.py (35): env overrides (1/true/yes/on, 0, unknown fail-closed), register/dedupe, set_status KeyError, list_all, config load/save roundtrip, 24 defaults idempotent. Registry is process-global (shared across modules) -- count assertions need cleared registry.\n\nRound 7 (6 new files, 197 tests; 3 real bugs fixed):\n- test_ml_types.py (69): dtype helpers, device resolution, _mps_available on x86_64, to_np_dtype mapping.\n- test_arch_config.py (17): weight_map/build_arch. FIXED bug: resolve() substituted {i} BEFORE weight_map lookup, so mapped templates never matched.\n- test_numpy_ops_forward.py (34): forward/fast/cached parity, incremental KV, GPT-2 (mha/absolute/gelu) + LLaMA (gqa/rope/swiglu). FIXED bugs: forward_fast SwiGLU checked substituted key instead of literal 'layers.{i}.ffn.gate.weight:0' (branch never ran); RoPE applied on (heads,seq,hd) but rope() expects (seq,heads,hd) -- rotated per-head not per-position, broke incremental parity.\n- test_conversion_tracker.py (31): stage lifecycle, progress clamp, active filter, singleton.\n- test_dataset_manifest.py (20): load/validate, glob train files, resolution order + errors.\n- test_bpe_tokenizer.py (26): train/encode/decode roundtrip, save/load, vocab caps.\n\nTotal: 874 blitz tests / 25 files.\n",
+      "column": "in_progress",
+      "priority": "medium",
+      "tags": [
+        "tests",
+        "coverage",
+        "blitz"
+      ],
+      "created_at": "2026-07-31T09:22:46.884965+00:00",
+      "updated_at": "2026-07-31T11:17:00.000000+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_090614_tui-forward-history-search-ctrls",
+      "title": "TUI forward history search (Ctrl+S)",
+      "description": "Ctrl+S enters forward-i-search (Ctrl+R/Ctrl+S switch direction mid-search, Ctrl+F stays as forward alias). _apply_search direction-aware with fresh-query sentinels (-1 fwd / history_pos rev); status bar shows forward-i-search vs reverse-i-search. 6 new tests; 41 TUI + 267 repl = 308, full shell/logging 498 pass. PTY probe: entered forward search, typed 'echo' -> oldest match, Ctrl+S -> newer, Ctrl+R -> reverse, Esc cancel restored buffer.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "tui",
+        "cli"
+      ],
+      "created_at": "2026-07-31T09:06:14.494091+00:00",
+      "updated_at": "2026-07-31T09:06:14.494091+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_085553_tui-ctrlc-interrupts-running-command",
+      "title": "TUI Ctrl+C interrupts running command",
+      "description": "TuiRepl._interrupt_active() raises KeyboardInterrupt in the command thread via PyThreadState_SetAsyncExc (guarded, best-effort). Ctrl+C now interrupts a running command (repl's _dispatch prints 'Aborted'); a second Ctrl+C exits. 4 new tests; 35 TUI + 267 repl + 492 shell/logging pass. PTY probe: watch 0.2 echo tick ran 3 iterations, Ctrl+C -> Stopped, TUI alive, follow-up date ran. SHELL.md + ROADMAP updated.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "tui",
+        "cli"
+      ],
+      "created_at": "2026-07-31T08:55:53.630110+00:00",
+      "updated_at": "2026-07-31T08:55:53.630110+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_083640_tui-line-editing-visual-caret-readline-keys",
+      "title": "TUI line editing + visual caret (readline keys)",
+      "description": "Built readline-style line editing into the split-pane TUI input row (packages/core-py/domains/shell/tui_repl.py):\n\n- _input_view(): pure caret-column computation with horizontal scroll so the caret stays visible on overlong lines; _render_input now parks the curses cursor on the caret via win.move (previously the blinking cursor never tracked the caret).\n- Editing helpers: _move_home/_move_end/_kill_to_start/_kill_to_end/_delete_at_cursor/_delete_word_back (unix-word-rubout semantics).\n- New bindings in _main: Home/End, Ctrl+A, Ctrl+E, Ctrl+U, Ctrl+K, Ctrl+W, Ctrl+D; KEY_DC routed through _delete_at_cursor.\n\nVerification: 18 new curses-free tests in test_shell_tui_repl.py (31 total in file); 208 shell/logging tests + 298 with test_shell_repl.py all pass; py_compile clean; pycache cleared. PTY probe (tui_pty_edit.py) verified Ctrl+W/U/K/D, Ctrl+D no-op, and Home caret movement end-to-end on a real PTY; no terminal leak.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "tui",
+        "feature"
+      ],
+      "created_at": "2026-07-31T08:36:40.037710+00:00",
+      "updated_at": "2026-07-31T08:36:40.037710+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_080943_split-pane-tui-fixes-pty-verified-search-escape-terminal-lea",
+      "title": "Split-pane TUI fixes PTY-verified (search, escape, terminal leak)",
+      "description": "Fixed and PTY-verified three split-pane curses TUI issues in packages/core-py/domains/shell/tui_repl.py and cli_logger.py.\n\n1. Bug #3 CLI-bridge terminal leak: cli_logger.py gained _TERMINAL_ENABLED/set_cli_terminal/_cli_print (14 call sites); TuiRepl.run() toggles set_cli_terminal(False) around curses.wrapper, restored in finally. PTY frames show no raw [info] lines during the session; only legitimate post-TUI shutdown line remains.\n2. Reverse-i-search bug: _search_back rewrote \u2014 clamps start into range when start==len(history), returns -1 on no match, proper fwd/back bounds; _apply_search only applies found>=0. Previously buffer became 'help' instead of matching entry.\n3. Escape delay: curses.set_escdelay(25) after curses.raw() in _main so Esc cancels search immediately.\n\nVerification: /tmp/opencode/tui_pty2.py PTY probe (24x100, TERM=xterm-256color, SLO_AUTOLOAD_MODEL='') boots API server (~1.5s with wait-condition fix), runs date/help/he+Ctrl-R+d/a+Esc/lp+Enter/exit. Frames show: search 'd' matches 'date' (was broken), Esc restores 'he', typing resumes to 'help', no terminal leak frames 0-9. Decoder upgraded to buffer partial escapes and decode UTF-8 incrementally (split-escape and UTF-8 artifacts eliminated; wait-condition fixed to [OUTPUT]+lambda). 115 shell/logging tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "tui",
+        "bugfix"
+      ],
+      "created_at": "2026-07-31T08:09:43.393736+00:00",
+      "updated_at": "2026-07-31T08:09:43.393736+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_080013_legacy-test-suite-fixes-12-failures-0",
+      "title": "Legacy test suite fixes (12 failures -> 0)",
+      "description": "Fixed all 12 legacy tests/ failures so make test-py (packages/core-py/tests + tests) runs clean.\n\n- tests/test_inference_generate.py: fixture builds minimal FastAPI + include_router(inference.router); mock_provider also patches state.model (route guard requires STARTUP_PHASE=ready AND state.model). 6/6 pass.\n- tests/test_api.py: removed 3 tests of deleted domains.inference.engine/quantization (InferenceEngine, QuantizationType, quantize_model).\n- tests/test_config.py: removed TestInferenceConfig (2 tests of deleted GenerationConfig).\n- tests/test_chat_loop_e2e.py: feedback payload updated to current WorkflowFeedbackRequest schema (conversation_id/rating/assistant_response/user_message). 6/6 pass.\n- Previously git rm'd tests/test_agents_router.py (dup of tests/server/) and tests/test_torch_runtime.py (dead module).\n- pytest.ini: 4 ignores remain (morph_tokenizer, safetensors_loader, numpy_engine, point_library) - weight-dependent, bandwidth-gated.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "tests",
+        "legacy"
+      ],
+      "created_at": "2026-07-31T08:00:13.686416+00:00",
+      "updated_at": "2026-07-31T08:00:13.686416+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_063408_test-env-is-venv-system-python-lacks-deps",
+      "title": "Test env is .venv \u2014 system python lacks deps",
+      "description": "The repo .venv (Python 3.12.3) has pydantic 2.13.4, fastapi 0.139.2, psutil 7.2.2, starlette 1.3.1, pytest 9.1.1. System /usr/bin/python3 lacks these, so regression runs must use .venv/bin/python (via PYTHONPATH=packages/core-py). Final regression (124 modules, per-file, venv): 108 PASS / 0 FAIL / 4 ERROR (weight-only: morph_tokenizer, numpy_engine, point_library, safetensors_loader) / 11 slow-module deselections (pytest.ini -m 'not slow'). All source/test bugs fixed; remaining errors need gpt2 weight download (~500MB, bandwidth-gated).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "tests",
+        "environment",
+        "workflow"
+      ],
+      "created_at": "2026-07-31T06:34:08.780839+00:00",
+      "updated_at": "2026-07-31T06:34:08.780839+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_060229_regression-test-fixes-parallel-pool-shell-health-init-boot-n",
+      "title": "Regression test fixes: parallel pool, shell health, init boot, neural kernel",
+      "description": "Fixed 4 stale tests after regression rerun. (1) test_parallel_execution.py::test_default_size_from_cpu_count now asserts InferencePool._max_workers == get_resource_manager().inference_pool_size instead of min(cpu_count,8) \u2014 pool sizing routes through the resource manager (env SLO_INFERENCE_POOL_SIZE). (2) test_shell_repl.py::test_safe_command_not_blocked mocks domains.shell.commands._api_get to return healthy so the health command exits 0 without a live API server. (3) test_init.py::test_boot_runlevel_1 asserts 'boot-critical'/'Boot complete' markers instead of the literal 'Booting'. (4) test_neural_e2e.py::test_boot_creates_neural_kernel asserts plain Kernel + neural addon (NeuralKernel is deprecated). Verified 494 tests pass across all previously-failing modules.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "tests",
+        "regression",
+        "bugfix"
+      ],
+      "created_at": "2026-07-31T06:02:29.701676+00:00",
+      "updated_at": "2026-07-31T06:02:29.701676+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_053043_fix-slonet-mul-backward-broadcast-sensitivity-test",
+      "title": "Fix SloNet mul backward broadcast + sensitivity test",
+      "description": "Fixed pre-existing SloNet failures found during the soul.py regression run.\n\n- slonet.py _mul backward: replaced buggy manual sum loop (only reduced size-1 dims, ignored leading extra dims for lower-ndim inputs, misaligned positions) with _broadcast_back, the same helper _add already uses. Fixes 6 failing test_slonet_broadcast.py tests (e.g. grad shape (3,4) vs (4,) for a=(4,) * b=(3,4)). 13/13 pass.\n- test_slonet_compute_sensitivity.py: np.isfinite(p.grad) -> p.grad.data (contract is .grad is a Tensor; file inconsistent with its own line 115). 9/9 pass.\n- Verified no regressions: 170 slonet-dependent tests pass (distillation, forward_pass, fused_kernels, lora, lr_schedulers, point_weight, pugqeep_checkpoint, quantization_integration, quantized_matmul), plus bidirectional_dag/integration/soul_engine. py_compile OK, pycache cleared.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "slonet",
+        "autograd",
+        "bugfix"
+      ],
+      "created_at": "2026-07-31T05:30:43.180909+00:00",
+      "updated_at": "2026-07-31T05:30:43.180909+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_044147_untitled",
+      "title": "(untitled)",
+      "description": "",
+      "column": "todo",
+      "priority": "medium",
+      "tags": [],
+      "created_at": "2026-07-31T04:41:47.441395+00:00",
+      "updated_at": "2026-07-31T04:41:47.441395+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_044147_shell-subprocess-fallback-singleton-fix",
+      "title": "Shell subprocess fallback + singleton fix",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "repl"
+      ],
+      "created_at": "2026-07-31T04:41:47.436062+00:00",
+      "updated_at": "2026-07-31T04:41:47.436062+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_044147_shell-commands-cognitive-domain-tests",
+      "title": "Shell commands + cognitive domain tests",
+      "description": "Added precision/quantize/dequantize shell commands and ShellCommands methods. 58 cognitive tests (CognitiveCore, KnowledgeGraph, WorkingMemory, FormalLogicEngine). 38 grounding/RAG tests (KnowledgeGrounding, CurriculumLearner, BM25Indexer, CitationTracker). Fixed Predicate.__hash__ bug. 649 tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "cognitive",
+        "testing"
+      ],
+      "created_at": "2026-07-31T04:41:47.431680+00:00",
+      "updated_at": "2026-07-31T04:41:47.431680+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_044147_sloengine-tests-soulpy",
+      "title": "SloEngine tests (soul.py)",
+      "description": "",
+      "column": "in_progress",
+      "priority": "medium",
+      "tags": [
+        "core",
+        "soul",
+        "tests"
+      ],
+      "created_at": "2026-07-31T04:41:47.427938+00:00",
+      "updated_at": "2026-07-31T04:41:47.427938+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260731_044147_split-pane-tui-shell-pane-surface-architecture",
+      "title": "Split-pane TUI shell (pane + surface architecture)",
+      "description": "Built the 3-pane TUI shell per the split-window (NixOS) model: pane.py = pure layout engine (arranger, no curses), surface.py = content surfaces (TextSurface, LogSurface), tui_repl.py rewritten as thin display layer composing them. TUI is now the default interactive shell in run() (TTY detect, MAN_NO_TUI=1 or non-TTY falls back to line mode). 36 new tests (pane+surface). 427 shell/wm/log tests pass, 1 pre-existing API-dependent failure.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "tui",
+        "architecture"
+      ],
+      "created_at": "2026-07-31T04:41:47.421216+00:00",
+      "updated_at": "2026-07-31T04:41:47.421216+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260712_120000_2026-07-12-cross-turn-kv-cache-server-crash-fix-mps-on-intel-mac-watchdog",
       "title": "2026-07-12 \u2014 Cross-Turn KV Cache + Server Crash Fix (MPS on Intel Mac, Watchdog)",
       "description": "### Summary\nAdded cross-turn KV cache for multi-turn conversation speedup. Fixed 3 startup warnings.",

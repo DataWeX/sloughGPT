@@ -2544,13 +2544,12 @@ Fixed `models` shell command (API returns flat list, not `{"models": [...]}`), r
 ### Test Status
 - `test_shell_repl.py`: 148 unit tests — all pass
 - `test_shell_integration.py`: 35 integration tests — all pass (auto-skip if server down)
-- `test_window_manager.py`: 82 tests — rewritten for new Workspace/Pane/LayoutType API (was LayoutNode/_compute_pane_rects)
 - `test_multi_agent.py`: 25 unit tests — all pass
-- **Total**: 148 (repl) + 82 (wm) + 25 (multi-agent) + 35 (integration) = **290 total, all pass** (35 integration skip if server down)
+- **Total**: 148 (repl) + 25 (multi-agent) + 35 (integration) = **208 total, all pass** (35 integration skip if server down)
 - Registered 9 filesystem commands in CMD_MAP: `ls`, `cd`, `pwd`, `mkdir`, `rm`, `cat`, `touch`, `chmod`, `find` — all already implemented but unreachable
 - `_cmd_find`: supports `-name`/`-iname` glob patterns, `shlex` arg parsing, `os.walk` recursive search
 - `_cmd_head`/`_cmd_tail`: accept `-N` format (e.g. `head -3` shows 3 lines, not all) — fixes `int("-3")` → `abs(int(a))` for correct line count
-- **All 293 unit tests pass** (177 repl + 82 wm + 25 multi-agent + 9 non-skipped integration)
+- **All 211 unit tests pass** (177 repl + 25 multi-agent + 9 non-skipped integration)
 
 ### Known Issues
 - Multi-agent on CPU (Qwen 500M) takes ~30-60s per inference call; total 3-4 calls = 3-4 minutes for a full orchestration

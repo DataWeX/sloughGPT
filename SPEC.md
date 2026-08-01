@@ -174,7 +174,7 @@ class ModelInterface(Protocol):
 | Training | `python train_sloughgpt.py` |
 | CLI | `python -m apps.cli` |
 | API Server | `python -m apps.api.server.main` |
-| TUI | `python -m apps.tui` |
+| TUI | `sloughgpt shell` (split-pane curses TUI on a terminal; `sloughgpt tui` alias) |
 
 ## Development
 

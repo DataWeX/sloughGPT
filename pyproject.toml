@@ -75,15 +75,8 @@ all = [
     "mlflow>=2.8.0",
     "wandb>=0.16.0",
 ]
-tui = [
-    "rich>=13.0.0",
-    "httpx>=0.25.0",
-    "readchar>=2.0.0",
-]
-
 [project.scripts]
 sloughgpt = "apps.cli.src.cli:main"
-sloughgpt-tui = "apps.tui:main"
 
 [project.urls]
 Homepage = "https://github.com/iamtowbee/sloughGPT"
@@ -109,7 +102,7 @@ target-version = ["py39", "py310", "py311"]
 
 [tool.ruff]
 # CI lint job uses a smoke subset only (see .github/workflows/reusable-ci-core.yml):
-#   ruff check tests/ apps/cli/ apps/tui/ apps/api/server/ train_sloughgpt.py packages/core-py/domains/training/checkpoint_utils.py --select E9,F63,F7,F82
+#   ruff check tests/ apps/cli/ apps/api/server/ train_sloughgpt.py packages/core-py/domains/training/checkpoint_utils.py --select E9,F63,F7,F82
 line-length = 100
 target-version = "py39"
 
