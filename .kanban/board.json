@@ -24,6 +24,23 @@
   ],
   "cards": [
     {
+      "id": "20260801_084447_planner-notes-cli-test-suite-core-fixes-34-tests",
+      "title": "planner notes CLI test suite \u2014 core fixes + 34 tests",
+      "description": "Added packages/planner/tests/test_core.py (34 tests, file+mogdb backends). Fixed 3 real bugs surfaced: (1) get_note_store now caches by backend so sequential in-process CLI calls share store state (mogdb clients were isolated); (2) NoteStore coerces str notes_dir to Path (mogdb backend crashed on str); (3) Note.from_markdown stripped leading blank line so round-tripped body no longer gains a leading newline. Tests are CLI-driven (create/edit/verify via cli_main). Full planner suite: 96 passed.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "planner",
+        "tests",
+        "core"
+      ],
+      "created_at": "2026-08-01T08:44:47.675305+00:00",
+      "updated_at": "2026-08-01T08:44:47.675305+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260801_083721_planner-gui-port-fallback",
       "title": "planner gui port fallback",
       "description": "planner gui now steps past occupied ports: _bind_server() tries the requested port then port+1..+attempts-1 on EADDRINUSE, prints 'port X in use, moved to Y'. --port 0 keeps ephemeral kernel assignment. Live-verified against occupied 8787 -> served on 8788. Module docstring + README updated. 2 new gui tests (step-past-occupied, ephemeral). 62 planner tests pass.",

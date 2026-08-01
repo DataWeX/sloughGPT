@@ -119,7 +119,7 @@ class Note:
                     meta[key.strip()] = val.strip()
         tags_raw = meta.get("tags", "")
         tags = [t.strip() for t in tags_raw.split(",") if t.strip()] if tags_raw else []
-        body = "\n".join(lines[body_start:]).rstrip()
+        body = "\n".join(lines[body_start:]).strip("\n").rstrip()
         return cls(
             id=note_id,
             title=meta.get("title", ""),
@@ -292,7 +292,8 @@ class NoteStore:
     """Note store with pluggable backends (``file`` or ``mogdb``)."""
 
     def __init__(self, notes_dir: Path | None = None, backend: str = "file"):
-        self._dir = notes_dir or config.default_notes_dir()
+        self._dir = Path(notes_dir) if notes_dir is not None else config.default_notes_dir()
+        self._backend = backend
         if backend == "mogdb":
             self._bk = _MogDBBackend(self._dir)
         else:
@@ -492,7 +493,7 @@ _store: NoteStore | None = None
 
 def get_note_store(backend: str = "file") -> NoteStore:
     global _store
-    if _store is None or backend != "file":
+    if _store is None or _store._backend != backend:
         _store = NoteStore(backend=backend)
     return _store
 
