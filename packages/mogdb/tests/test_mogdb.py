@@ -377,6 +377,83 @@ class TestPersistence:
             assert len(lines) >= 1
             c.drop()
 
+    def test_journal_replay_applies_update(self):
+        """An update op must merge into the inserted doc, not clobber it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            c1 = Collection("replay", path)
+            c1.insert_one({"id": "n1", "title": "original", "status": "open"})
+            c1.update_one(
+                {"id": "n1"},
+                {"$set": {"title": "updated", "status": "done"}},
+            )
+            del c1
+
+            c2 = Collection("replay", path)
+            doc = c2.find_one({"id": "n1"})
+            assert doc is not None
+            assert doc["title"] == "updated"
+            assert doc["status"] == "done"
+            assert "update" not in doc
+            c2.drop()
+
+    def test_journal_replay_applies_unset(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            c1 = Collection("replay2", path)
+            c1.insert_one({"id": "n2", "body": "text", "tags": "keep"})
+            c1.update_one({"id": "n2"}, {"$unset": {"body": ""}})
+            del c1
+
+            c2 = Collection("replay2", path)
+            doc = c2.find_one({"id": "n2"})
+            assert "body" not in doc
+            assert doc["tags"] == "keep"
+            c2.drop()
+
+    def test_journal_replay_applies_delete(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            c1 = Collection("replay3", path)
+            c1.insert_many([{"id": f"n{i}", "v": i} for i in range(5)])
+            c1.delete_one({"id": "n2"})
+            del c1
+
+            c2 = Collection("replay3", path)
+            assert c2.count() == 4
+            assert c2.find_one({"id": "n2"}) is None
+            assert c2.find_one({"id": "n4"}) is not None
+            c2.drop()
+
+    def test_journal_replay_applies_update_many(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            c1 = Collection("replay4", path)
+            c1.insert_many([{"id": f"n{i}", "status": "open"} for i in range(4)])
+            c1.update_many({}, {"$set": {"status": "done"}})
+            del c1
+
+            c2 = Collection("replay4", path)
+            docs = c2.find()
+            assert len(docs) == 4
+            assert all(d["status"] == "done" for d in docs)
+            assert all("update" not in d for d in docs)
+            c2.drop()
+
+    def test_journal_replay_delete_many(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            c1 = Collection("replay5", path)
+            c1.insert_many([{"id": f"n{i}", "v": i} for i in range(6)])
+            c1.delete_many({"v": {"$lt": 3}})
+            del c1
+
+            c2 = Collection("replay5", path)
+            assert c2.count() == 3
+            assert c2.find_one({"id": "n0"}) is None
+            assert c2.find_one({"id": "n5"}) is not None
+            c2.drop()
+
     def test_journal_appends_on_update(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp)

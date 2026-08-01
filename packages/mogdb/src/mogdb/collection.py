@@ -49,11 +49,18 @@ class Collection:
     # ------------------------------------------------------------------
 
     def _load(self) -> None:
-        """Load documents from the most recent snapshot or journal."""
+        """Load documents from the most recent snapshot or journal.
+
+        Compacted snapshots are plain documents written one per line. Journal
+        files are an operation log and are replayed in order so that
+        ``update``/``delete`` entries apply to previously inserted documents
+        instead of overwriting them with the raw op payload.
+        """
         data_path = self._compacted_path if self._compacted_path.exists() else self._journal_path
         if not data_path.exists():
             return
 
+        is_journal = data_path.name.endswith(".journal.jsonl")
         count = 0
         with open(data_path) as f:
             for line in f:
@@ -62,13 +69,45 @@ class Collection:
                     continue
                 try:
                     entry = json.loads(line)
-                    if "data" in entry:
-                        entry = entry["data"]
+                except json.JSONDecodeError:
+                    continue
+                if not is_journal:
                     doc = Document(entry)
                     self._docs[doc.id] = doc
                     count += 1
-                except json.JSONDecodeError:
                     continue
+
+                op = entry.get("op")
+                data = entry.get("data")
+                if not isinstance(data, dict):
+                    continue
+                if op == "insert":
+                    doc = Document(data)
+                    self._docs[doc.id] = doc
+                    count += 1
+                elif op == "update":
+                    doc = self._docs.get(data.get("_id"))
+                    if doc is None:
+                        continue
+                    self._apply_update(doc, data.get("update") or {})
+                    doc["_updated"] = time.time()
+                    count += 1
+                elif op == "update_many":
+                    update = data.get("update") or {}
+                    query = data.get("query") or {}
+                    for doc in self._docs.values():
+                        if match_document(doc, query):
+                            self._apply_update(doc, update)
+                            doc["_updated"] = time.time()
+                            count += 1
+                elif op == "delete":
+                    self._docs.pop(data.get("_id"), None)
+                elif op == "delete_many":
+                    query = data.get("query") or {}
+                    for doc_id in [
+                        d.id for d in self._docs.values() if match_document(d, query)
+                    ]:
+                        self._docs.pop(doc_id, None)
         if count:
             logger.debug("loaded %d docs from %s", count, data_path.name)
 
