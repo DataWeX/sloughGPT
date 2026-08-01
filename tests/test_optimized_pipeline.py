@@ -136,8 +136,7 @@ class TestLoRAWrapper:
 
         # Linear(128, 256) produces 256-dim output
         assert output.shape == torch.Size([2, 256])
-        from domains.training.slonet_compat import torch as slo_torch
-        assert not slo_torch.isnan(output).any()
+        assert not torch.isnan(output).any()
 
     def test_lora_trainable_params(self, dummy_model):
         """Test that only LoRA params are trainable."""

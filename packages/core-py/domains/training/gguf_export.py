@@ -9,10 +9,15 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from domains.training.slonet_compat import torch
-nn = torch.nn
+import numpy as np
 
 logger = logging.getLogger("slo.gguf_export")
+
+# Model-like objects expose ``state_dict()`` returning a dict of arrays.
+# Arrays may be numpy ndarrays or SloNet/Torch tensors; conversion is
+# handled at export time via ``_as_float16``.
+ModelLike = Any
+StateDict = Dict[str, Any]
 
 QUANTIZATION_TYPES = {
     "F32": "32-bit float (full precision)",
@@ -672,7 +677,28 @@ ARCHITECTURE_MAPPINGS.update({
 })
 
 
-def detect_architecture(state_dict: Dict[str, torch.Tensor]) -> Optional[TensorMapping]:
+def _as_float16(tensor) -> Optional[np.ndarray]:
+    """Convert a tensor (numpy / SloNet / torch) to a float16 numpy array.
+
+    Returns None for values that cannot be converted.
+    """
+    if isinstance(tensor, np.ndarray):
+        return tensor.astype(np.float16)
+    data = getattr(tensor, "data", None)  # SloNet Tensor
+    if isinstance(data, np.ndarray):
+        return data.astype(np.float16)
+    if hasattr(tensor, "detach") and hasattr(tensor, "numpy"):  # torch Tensor
+        return tensor.detach().cpu().numpy().astype(np.float16)
+    try:
+        arr = np.asarray(tensor)
+    except Exception:
+        return None
+    if arr.dtype == object:
+        return None
+    return arr.astype(np.float16)
+
+
+def detect_architecture(state_dict: StateDict) -> Optional[TensorMapping]:
     """Auto-detect model architecture from tensor names."""
     keys = list(state_dict.keys())
 
@@ -710,7 +736,7 @@ def register_architecture(name: str, mapping: TensorMapping) -> None:
         extra={"tag": "TRAIN"},)
 
 
-def get_tensor_mapping(model: nn.Module) -> Dict[str, str]:
+def get_tensor_mapping(model: ModelLike) -> Dict[str, str]:
     """Get GGUF tensor name mapping for the model architecture."""
     state_dict = model.state_dict()
     mapping = detect_architecture(state_dict)
@@ -725,7 +751,7 @@ def get_tensor_mapping(model: nn.Module) -> Dict[str, str]:
     return tensor_map
 
 
-def count_layers(state_dict: Dict[str, torch.Tensor], block_prefix: str) -> int:
+def count_layers(state_dict: StateDict, block_prefix: str) -> int:
     """Count the number of transformer blocks."""
     n_layer = 0
     for key in state_dict.keys():
@@ -743,7 +769,7 @@ def count_layers(state_dict: Dict[str, torch.Tensor], block_prefix: str) -> int:
     return n_layer
 
 
-def get_block_mapping(model: nn.Module = None, n_layers: int = 100) -> Dict[str, str]:
+def get_block_mapping(model: ModelLike = None, n_layers: int = 100) -> Dict[str, str]:
     """Get GGUF tensor name mapping for transformer blocks."""
     if model is not None:
         state_dict = model.state_dict()
@@ -757,7 +783,7 @@ def get_block_mapping(model: nn.Module = None, n_layers: int = 100) -> Dict[str,
 
 
 def export_to_gguf(
-    model: nn.Module,
+    model: ModelLike,
     output_path: str,
     tokenizer: Optional[Any] = None,
     config: Optional[GGUFExportConfig] = None,
@@ -853,13 +879,9 @@ def export_to_gguf(
             if key.endswith(suffix):
                 fused_set.add(key)
 
-    import numpy as np
     for key, tensor in state_dict.items():
-        if isinstance(tensor, np.ndarray):
-            tensor_np = tensor.astype(np.float16)
-        elif hasattr(tensor, 'detach') and hasattr(tensor, 'numpy'):
-            tensor_np = tensor.detach().cpu().astype(np.float16).numpy() if hasattr(tensor, 'float16') else tensor.detach().cpu().numpy().astype(np.float16)
-        else:
+        tensor_np = _as_float16(tensor)
+        if tensor_np is None:
             continue
 
         if key in fused_set:
