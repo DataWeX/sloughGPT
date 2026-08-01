@@ -713,6 +713,23 @@ def _reshape(a, s):
     return out
 
 
+def _basic_index(key: tuple) -> bool:
+    """True if a numpy index tuple uses only basic indexing (ints/slices/None/...).
+
+    Advanced indexing (lists, arrays, boolean masks, tuples of integers) requires
+    ``np.add.at`` for gradient scatter; basic indexing can use a fast ``+=``.
+    """
+    for k in key:
+        if k is None or k is Ellipsis:
+            continue
+        if isinstance(k, slice):
+            continue
+        if isinstance(k, (int, np.integer)) and not isinstance(k, (bool, np.bool_)):
+            continue
+        return False
+    return True
+
+
 def _slice(a, key):
     key = key if isinstance(key, tuple) else (key,)
     out = Tensor(a.data[key], requires_grad=a.requires_grad, _children=(a,), _copy=False)
@@ -720,7 +737,10 @@ def _slice(a, key):
     def bk(g):
         if a.requires_grad:
             full = np.zeros(a.shape, dtype=np.float32)
-            np.add.at(full, key, g)
+            if _basic_index(key):
+                full[key] += g
+            else:
+                np.add.at(full, key, g)
             ga = full if a.grad is None else a.grad.data + full
             a.grad = Tensor(ga)
     out._backward_fn = bk
@@ -1471,9 +1491,12 @@ class SloLSTM(SloLayer):
         ed = xd_data.shape[2]
         W_ih_T = self.W_ih.weight.T()
         W_hh_T = self.W_hh.weight.T()
+        # Precompute input-gate contribution for all timesteps in one batched
+        # matmul (input does not depend on hidden state), then slice per step.
+        all_igates = _matmul(xd, W_ih_T)  # (B, T, 4*hd)
         for t in range(seq_len):
-            ce = _reshape(_slice(xd, (slice(None), t, slice(None))), (xd_data.shape[0], ed))
-            gates = _add(_matmul(ce, W_ih_T), _matmul(h, W_hh_T))
+            igates = _slice(all_igates, (slice(None), t, slice(None)))  # (B, 4*hd)
+            gates = _add(igates, _matmul(h, W_hh_T))
             gate_i = sigmoid(_slice(gates, (slice(None), slice(hd))))
             gate_f = sigmoid(_slice(gates, (slice(None), slice(hd, 2*hd))))
             gate_g = tanh(_slice(gates, (slice(None), slice(2*hd, 3*hd))))
@@ -1485,8 +1508,11 @@ class SloLSTM(SloLayer):
             h2 = zeros((1,self.hidden_dim)); c2 = zeros((1,self.hidden_dim))
             W_ih2_T = self.W_ih2.weight.T()
             W_hh2_T = self.W_hh2.weight.T()
+            # h is the layer-1 output — constant across the layer-2 loop, so
+            # its input-gate matmul is loop-invariant.
+            igates2 = _matmul(h, W_ih2_T)  # (B, 4*hd)
             for t in range(seq_len):
-                gates2 = _add(_matmul(h, W_ih2_T), _matmul(h2, W_hh2_T))
+                gates2 = _add(igates2, _matmul(h2, W_hh2_T))
                 gate_i2 = sigmoid(_slice(gates2, (slice(None), slice(hd))))
                 gate_f2 = sigmoid(_slice(gates2, (slice(None), slice(hd, 2*hd))))
                 gate_g2 = tanh(_slice(gates2, (slice(None), slice(2*hd, 3*hd))))
@@ -2013,30 +2039,37 @@ class SloMultiHeadAttention(SloLayer):
             K_exp = Tensor(K_exp_data, requires_grad=K.requires_grad)
             V_exp = Tensor(V_exp_data, requires_grad=V.requires_grad)
 
-        # Forward compute in numpy
+        # Forward compute in numpy (BLAS matmul; einsum-equivalent, faster)
         scale_f = float(scale)
-        scores_np = np.einsum("bnhd,bmhd->bhnm", Q.data, K_exp.data) * scale_f
+        Q_t = Q.data.transpose(0, 2, 1, 3)  # (B,H,N,E)
+        K_t = K_exp.data.transpose(0, 2, 3, 1)  # (B,H,E,M)
+        scores_np = np.matmul(Q_t, K_t) * scale_f
         if mask is not None:
             scores_np = scores_np + mask.data
         scores_max = scores_np.max(axis=-1, keepdims=True)
         attn_np = np.exp(scores_np - scores_max)
         attn_sum = attn_np.sum(axis=-1, keepdims=True)
         attn_np = attn_np / attn_sum
-        out_np = np.einsum("bhnm,bmhd->bnhd", attn_np, V_exp.data)
+        out_np = np.matmul(attn_np, V_exp.data.transpose(0, 2, 1, 3))
+        out_np = out_np.transpose(0, 2, 1, 3)  # (B,N,H,E)
         out_np = out_np.reshape(B, N, H * E)
 
         out_t = Tensor(out_np, requires_grad=True, _children=(Q, K_exp, V_exp))
 
         def bk(g):
             g_4d = g.reshape(B, N, H, E)
-            g_attn = np.einsum("bnhd,bmhd->bhnm", g_4d, V_exp.data)
-            g_V = np.einsum("bhnm,bnhd->bmhd", attn_np, g_4d)
+            g_4d_t = g_4d.transpose(0, 2, 1, 3)  # (B,H,N,E)
+            V_t = V_exp.data.transpose(0, 2, 3, 1)  # (B,H,E,M)
+            g_attn = np.matmul(g_4d_t, V_t)  # (B,H,N,M)
+            g_V = np.matmul(attn_np.transpose(0, 1, 3, 2), g_4d_t).transpose(0, 2, 1, 3)  # (B,M,H,E)
 
             # Softmax backward: dL/dS = attn * (g_attn - sum(attn * g_attn, keepdims))
             g_softmax = attn_np * (g_attn - np.sum(attn_np * g_attn, axis=-1, keepdims=True))
 
-            g_Q_np = np.einsum("bhnm,bmhd->bnhd", g_softmax, K_exp.data) * scale_f
-            g_K_np = np.einsum("bhnm,bnhd->bmhd", g_softmax, Q.data) * scale_f
+            Q_t = Q.data.transpose(0, 2, 1, 3)  # (B,H,N,E)
+            K_me = K_exp.data.transpose(0, 2, 1, 3)  # (B,H,M,E)
+            g_Q_np = np.matmul(g_softmax, K_me).transpose(0, 2, 1, 3) * scale_f  # (B,N,H,E)
+            g_K_np = np.matmul(g_softmax.transpose(0, 1, 3, 2), Q_t).transpose(0, 2, 1, 3) * scale_f  # (B,M,H,E)
 
             if n_rep > 1:
                 # Repeat backward: sum over repeated heads
