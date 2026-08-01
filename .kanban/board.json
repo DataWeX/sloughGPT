@@ -24,6 +24,23 @@
   ],
   "cards": [
     {
+      "id": "20260801_080900_unify-planner-tools-into-one-cli-shared-config",
+      "title": "Unify planner tools into one CLI + shared config",
+      "description": "Unified notes/kanban/gui/sync behind one 'planner' CLI with a shared config module (tools/planner/src/planner/config.py): resolution order CLI flag > env (PLANNER_NOTES_DIR/PLANNER_BOARD_DIR/PLANNER_BACKEND) > project root (.kanban/board.json ancestor) > ~/.config fallback. Backend inferred from notes dir (MogDB journal present -> mogdb). Single STATUS_TO_COLUMN/COLUMN_TO_STATUS maps, STATUS_ICONS in core, shared sync_notes_to_board used by 'planner sync', GUI Sync button, and sync-notes-to-board script. kanban store now honors config defaults. 58 planner tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "planner",
+        "cli",
+        "tools"
+      ],
+      "created_at": "2026-08-01T08:09:00.329479+00:00",
+      "updated_at": "2026-08-01T08:10:11.266281+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260801_072229_downcraft-refactor-move-hf-tests-to-core-py-hf-hub",
       "title": "downcraft refactor: move HF tests to core-py hf_hub",
       "description": "",

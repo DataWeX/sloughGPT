@@ -34,9 +34,10 @@ from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from typing import Any
 
+from . import config
+
 logger = logging.getLogger("planner.kanban")
 
-_KANBAN_DIR = Path.home() / ".config" / "kanban"
 _BOARD_FILE = "board.json"
 _MAX_ID_SLUG = 60
 
@@ -156,7 +157,7 @@ class KanbanStore:
     """Kanban board store — all operations are non-interactive."""
 
     def __init__(self, board_dir: str | Path | None = None):
-        self._dir = Path(board_dir) if board_dir else _KANBAN_DIR
+        self._dir = Path(board_dir) if board_dir else config.default_board_dir()
         self._bk = _JSONBackend(self._dir)
 
     def init_board(self, name: str = "board", force: bool = False) -> Board:
@@ -417,7 +418,7 @@ def cli_main(argv: list[str] | None = None) -> int:
     import argparse
 
     parser = argparse.ArgumentParser(prog="kanban", description="Kanban board with notes")
-    parser.add_argument("--dir", default=None, help="Board directory (default ~/.config/kanban)")
+    parser.add_argument("--dir", default=None, help="Board directory (default: config/env)")
     sub = parser.add_subparsers(dest="cmd")
 
     p_init = sub.add_parser("init", help="Initialize a new board")

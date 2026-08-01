@@ -46,29 +46,15 @@ from urllib.parse import parse_qs, urlparse
 
 import planner.core as core_module
 
-from .kanban import KanbanStore, PRIORITIES
+from . import config
+from .kanban import KanbanStore
+from .sync import sync_notes_to_board
 
 logger = logging.getLogger("planner.gui")
 
-STATUS_TO_COLUMN = {
-    "done": "done",
-    "wip": "in_progress",
-    "todo": "todo",
-    "review": "review",
-    "open": "todo",
-    "blocked": "todo",
-    "": "todo",
-    None: "todo",
-}
-
-COLUMN_TO_STATUS = {
-    "todo": "open",
-    "in_progress": "wip",
-    "review": "review",
-    "done": "done",
-}
-
-STATUSES = ["open", "wip", "done", "blocked", "review"]
+STATUS_TO_COLUMN = config.STATUS_TO_COLUMN
+COLUMN_TO_STATUS = config.COLUMN_TO_STATUS
+STATUSES = config.STATUSES
 
 
 def _note_to_dict(note: Any) -> dict:
@@ -364,24 +350,7 @@ class GuiHandler(BaseHTTPRequestHandler):
 
     def _handle_sync(self) -> None:
         with self.stores.lock:
-            notes = self.stores.note_store.list_notes(limit=9999)
-            board = self.stores.kanban_store.load_board()
-            existing = {c.title for c in board.cards}
-            added = 0
-            for note in notes:
-                col = STATUS_TO_COLUMN.get((note.status or "").lower(), "todo")
-                title = note.title or "(untitled)"
-                if title in existing:
-                    continue
-                self.stores.kanban_store.add_card(
-                    title=title,
-                    column=col,
-                    tags=list(note.tags or []),
-                    description=note.body or "",
-                )
-                existing.add(title)
-                added += 1
-            total = len(self.stores.kanban_store.load_board().cards)
+            added, total = sync_notes_to_board(self.stores.note_store, self.stores.kanban_store)
         self._send(200, {"added": added, "total": total})
 
 
@@ -394,19 +363,20 @@ def main(argv: list[str] | None = None) -> int:
         prog="planner gui",
         description="Local web interface for notes + kanban board.",
     )
-    parser.add_argument("--notes-dir", default=None, help="Notes directory")
-    parser.add_argument("--board-dir", default=None, help="Board directory")
-    parser.add_argument("--backend", default="file", choices=["file", "mogdb"])
+    parser.add_argument("--notes-dir", default=None, help="Notes directory (default: config/env)")
+    parser.add_argument("--board-dir", default=None, help="Board directory (default: config/env)")
+    parser.add_argument("--backend", default=None, choices=config.BACKENDS)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8787)
     parser.add_argument("--no-open", action="store_true", help="Do not open a browser")
     parser.add_argument("--sync", action="store_true", help="Sync notes to board on start")
     args = parser.parse_args(argv)
 
-    notes_dir = Path(args.notes_dir) if args.notes_dir else Path(core_module._NOTES_DIR)
-    board_dir = Path(args.board_dir) if args.board_dir else None
+    notes_dir = Path(args.notes_dir) if args.notes_dir else config.default_notes_dir()
+    board_dir = Path(args.board_dir) if args.board_dir else config.default_board_dir()
 
-    note_store = core_module.NoteStore(notes_dir=notes_dir, backend=args.backend)
+    backend = args.backend or config.default_backend(notes_dir=notes_dir)
+    note_store = core_module.NoteStore(notes_dir=notes_dir, backend=backend)
     kanban_store = KanbanStore(board_dir=board_dir)
 
     handler = GuiHandler
@@ -415,13 +385,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.sync:
         with server.lock:
-            added, total = _sync_notes(server.note_store, server.kanban_store)
+            added, total = sync_notes_to_board(server.note_store, server.kanban_store)
         print(f"Synced notes to board: {added} new, {total} total")
 
     print(f"Planner GUI:  http://{host}:{port}")
     print(f"  notes:  {note_store._dir}")
     print(f"  board:  {kanban_store._dir}")
-    print(f"  backend: {args.backend}   (Ctrl+C to stop)")
+    print(f"  backend: {backend}   (Ctrl+C to stop)")
 
     if not args.no_open:
         threading.Timer(0.3, lambda: _try_open(f"http://{host}:{port}")).start()
@@ -433,25 +403,6 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         server.server_close()
     return 0
-
-
-def _sync_notes(note_store, kanban_store) -> tuple[int, int]:
-    notes = note_store.list_notes(limit=9999)
-    board = kanban_store.load_board()
-    existing = {c.title for c in board.cards}
-    added = 0
-    for note in notes:
-        col = STATUS_TO_COLUMN.get((note.status or "").lower(), "todo")
-        title = note.title or "(untitled)"
-        if title in existing:
-            continue
-        kanban_store.add_card(
-            title=title, column=col, tags=list(note.tags or []), description=note.body or "",
-        )
-        existing.add(title)
-        added += 1
-    total = len(kanban_store.load_board().cards)
-    return added, total
 
 
 def _try_open(url: str) -> None:

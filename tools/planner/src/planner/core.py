@@ -31,10 +31,19 @@ from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from typing import Any
 
+from . import config
+
 logger = logging.getLogger("dev-notes")
 
-_NOTES_DIR = Path.home() / ".config" / "dev-notes"
 _MAX_TITLE_SLUG = 60
+
+STATUS_ICONS = {
+    "open": "\u25cb",
+    "wip": "\u25d0",
+    "done": "\u25cf",
+    "blocked": "\u2715",
+    "review": "\u25c8",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -283,7 +292,7 @@ class NoteStore:
     """Note store with pluggable backends (``file`` or ``mogdb``)."""
 
     def __init__(self, notes_dir: Path | None = None, backend: str = "file"):
-        self._dir = notes_dir or _NOTES_DIR
+        self._dir = notes_dir or config.default_notes_dir()
         if backend == "mogdb":
             self._bk = _MogDBBackend(self._dir)
         else:
@@ -507,24 +516,29 @@ def cli_main(argv: list[str] | None = None) -> int:
     if argv and argv[0] == "gui":
         from .gui import main as gmain
         return gmain(argv[1:])
+    if argv and argv[0] == "sync":
+        from .sync import cli_main as scli
+        return scli(argv[1:])
+    if argv and argv[0] == "notes":
+        argv = argv[1:]
     import argparse
 
     parser = argparse.ArgumentParser(prog="planner")
-    parser.add_argument("--backend", default="file", choices=["file", "mogdb"],
-                        help="Storage backend")
+    parser.add_argument("--backend", default=None, choices=config.BACKENDS,
+                        help="Storage backend (default: config/env)")
     sub = parser.add_subparsers(dest="cmd")
 
     p_new = sub.add_parser("new", help="Create a new note")
     p_new.add_argument("title", help="Note title")
     p_new.add_argument("--tags", default="", help="Comma-separated tags")
-    p_new.add_argument("--status", default="open", choices=["open", "wip", "done", "blocked"])
+    p_new.add_argument("--status", default="open", choices=config.STATUSES)
     p_new.add_argument("--sprint", default="", help="Sprint identifier (e.g. S1, 2026-Q3)")
     p_new.add_argument("--gh", default="", help="GitHub issue reference (e.g. owner/repo#123)")
     p_new.add_argument("--body", default="", help="Body text")
 
     p_list = sub.add_parser("list", help="List notes")
     p_list.add_argument("--tag", default=None, help="Filter by tag")
-    p_list.add_argument("--status", default=None, choices=["open", "wip", "done", "blocked", None])
+    p_list.add_argument("--status", default=None, choices=config.STATUSES + [None])
     p_list.add_argument("--sprint", default=None, help="Filter by sprint")
     p_list.add_argument("--limit", type=int, default=20, help="Max results")
 
@@ -535,7 +549,7 @@ def cli_main(argv: list[str] | None = None) -> int:
     p_edit.add_argument("note_id", help="Note id or prefix")
     p_edit.add_argument("--title", default=None, help="New title")
     p_edit.add_argument("--tags", default=None, help="Comma-separated tags")
-    p_edit.add_argument("--status", default=None, choices=["open", "wip", "done", "blocked"])
+    p_edit.add_argument("--status", default=None, choices=config.STATUSES)
     p_edit.add_argument("--sprint", default=None, help="Sprint identifier")
     p_edit.add_argument("--gh", default=None, help="GitHub issue reference")
     p_edit.add_argument("--body", default=None, help="New body text")
@@ -558,7 +572,7 @@ def cli_main(argv: list[str] | None = None) -> int:
     p_timeline = sub.add_parser("timeline", help="Show notes grouped by day")
     p_timeline.add_argument("--days", type=int, default=7, help="Number of days to show (default 7)")
     p_timeline.add_argument("--tag", default=None, help="Filter by tag")
-    p_timeline.add_argument("--status", default=None, choices=["open", "wip", "done", "blocked"])
+    p_timeline.add_argument("--status", default=None, choices=config.STATUSES)
 
     p_sprint = sub.add_parser("sprint", help="Sprint operations")
     p_sprint.add_argument("sprint_name", help="Sprint identifier (e.g. S1)")
@@ -572,7 +586,7 @@ def cli_main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 1
 
-    store = get_note_store(backend=args.backend)
+    store = get_note_store(backend=args.backend or config.default_backend())
 
     if args.cmd == "new":
         tags = [t.strip() for t in args.tags.split(",") if t.strip()] if args.tags else []
@@ -595,7 +609,7 @@ def cli_main(argv: list[str] | None = None) -> int:
             print(f"\n  {date_str}")
             for n in day_notes:
                 tags_str = f"  [{', '.join(n.tags)}]" if n.tags else ""
-                icons = {"open": "○", "wip": "◐", "done": "●", "blocked": "✕"}
+                icons = STATUS_ICONS
                 icon = icons.get(n.status, "?")
                 print(f"    {icon} {n.short_id}  {n.title}{tags_str}")
         print(f"\n  {len(notes)} note(s)")
@@ -681,7 +695,7 @@ def cli_main(argv: list[str] | None = None) -> int:
                 items = by_status.get(status, [])
                 if not items:
                     continue
-                icons = {"open": "○", "wip": "◐", "done": "●", "blocked": "✕"}
+                icons = STATUS_ICONS
                 icon = icons.get(status, "?")
                 print(f"\n  {icon} {status.upper()} ({len(items)})")
                 for n in items:
@@ -697,7 +711,7 @@ def cli_main(argv: list[str] | None = None) -> int:
             return 0
         for n in notes:
             tags_str = f"  [{', '.join(n.tags)}]" if n.tags else ""
-            icons = {"open": "○", "wip": "◐", "done": "●", "blocked": "✕"}
+            icons = STATUS_ICONS
             icon = icons.get(n.status, "?")
             print(f"    {icon} {n.short_id}  {n.title}{tags_str}")
         print(f"\n  {len(notes)} note(s) today")
@@ -730,7 +744,7 @@ def cli_main(argv: list[str] | None = None) -> int:
         if not status_counts:
             print("No notes.")
             return 0
-        icons = {"open": "○", "wip": "◐", "done": "●", "blocked": "✕"}
+        icons = STATUS_ICONS
         for s in ["open", "wip", "done", "blocked"]:
             count = status_counts.get(s, 0)
             if count:
@@ -744,7 +758,7 @@ def cli_main(argv: list[str] | None = None) -> int:
             print("No notes in the specified range.")
             return 0
         total = 0
-        icons = {"open": "○", "wip": "◐", "done": "●", "blocked": "✕"}
+        icons = STATUS_ICONS
         for date_str, day_notes in groups:
             print(f"\n  ══ {date_str} ══")
             for n in day_notes:

@@ -7,4 +7,7 @@ if len(sys.argv) > 1 and sys.argv[1] == "kanban":
 if len(sys.argv) > 1 and sys.argv[1] == "gui":
     from .gui import main as gui_main
     sys.exit(gui_main(sys.argv[2:]))
+if len(sys.argv) > 1 and sys.argv[1] == "sync":
+    from .sync import cli_main as sync_main
+    sys.exit(sync_main(sys.argv[2:]))
 sys.exit(notes_cli_main(sys.argv[1:] if len(sys.argv) > 1 else None))
