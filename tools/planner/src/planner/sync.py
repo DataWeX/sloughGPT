@@ -15,43 +15,53 @@ from planner import config
 from planner.kanban import KanbanStore
 
 
-def sync_notes_to_board(note_store, kanban_store: KanbanStore) -> tuple[int, int]:
-    """Create a board card for every note without a matching card.
+def sync_notes_to_board(note_store, kanban_store: KanbanStore) -> tuple[int, int, int]:
+    """Create board cards for notes without one and move cards to match status.
 
     A note matches a card when their titles are equal (case-sensitive), the
     same convention used by the original ``sync-notes-to-board`` script.
-    Card column is derived from the note status via ``config.STATUS_TO_COLUMN``.
+    Card column is derived from the note status via ``config.STATUS_TO_COLUMN``;
+    an existing card is moved to that column when it differs, so the board
+    stays in step with note status changes.
 
     Args:
         note_store: planner NoteStore instance.
         kanban_store: planner KanbanStore instance.
 
     Returns:
-        Tuple of ``(added, total)`` where *added* is the number of new cards
-        and *total* the resulting board card count.
+        Tuple of ``(added, updated, total)`` where *added* is the number of new
+        cards, *updated* the number of cards moved to a different column, and
+        *total* the resulting board card count.
 
     Side effects:
         - Writes new cards to the kanban board file.
+        - Moves existing cards whose column no longer matches the note status.
     """
     notes = note_store.list_notes(limit=9999)
     board = kanban_store.load_board()
-    existing = {card.title for card in board.cards}
+    existing = {card.title: card for card in board.cards}
     added = 0
+    updated = 0
     for note in notes:
         col = config.STATUS_TO_COLUMN.get((note.status or "").lower(), "todo")
         title = note.title or "(untitled)"
-        if title in existing:
+        card = existing.get(title)
+        if card is None:
+            kanban_store.add_card(
+                title=title,
+                column=col,
+                tags=list(note.tags or []),
+                description=note.body or "",
+            )
+            existing[title] = None
+            added += 1
             continue
-        kanban_store.add_card(
-            title=title,
-            column=col,
-            tags=list(note.tags or []),
-            description=note.body or "",
-        )
-        existing.add(title)
-        added += 1
+        if card.column != col:
+            kanban_store.move_card(card.id, col)
+            card.column = col
+            updated += 1
     total = len(kanban_store.load_board().cards)
-    return added, total
+    return added, updated, total
 
 
 def cli_main(argv: list[str] | None = None) -> int:
@@ -77,16 +87,16 @@ def cli_main(argv: list[str] | None = None) -> int:
         board_dir=Path(args.board_dir) if args.board_dir else config.default_board_dir(),
     )
 
-    added, total = sync_notes_to_board(note_store, kanban_store)
+    added, updated, total = sync_notes_to_board(note_store, kanban_store)
 
     if not args.quiet:
         board = kanban_store.load_board()
         for card in board.cards:
             icon = "\u2713" if card.column == "done" else "\u25cb"
             print(f"  {icon} [{card.column:12s}] {card.title}")
-        print(f"\n{added} new card(s) added, {total} total")
+        print(f"\n{added} new card(s) added, {updated} moved, {total} total")
     else:
-        print(f"{added} new card(s) added, {total} total")
+        print(f"{added} new card(s) added, {updated} moved, {total} total")
     return 0
 
 

@@ -350,8 +350,8 @@ class GuiHandler(BaseHTTPRequestHandler):
 
     def _handle_sync(self) -> None:
         with self.stores.lock:
-            added, total = sync_notes_to_board(self.stores.note_store, self.stores.kanban_store)
-        self._send(200, {"added": added, "total": total})
+            added, updated, total = sync_notes_to_board(self.stores.note_store, self.stores.kanban_store)
+        self._send(200, {"added": added, "updated": updated, "total": total})
 
 
 # ---------------------------------------------------------------------------
@@ -385,8 +385,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.sync:
         with server.lock:
-            added, total = sync_notes_to_board(server.note_store, server.kanban_store)
-        print(f"Synced notes to board: {added} new, {total} total")
+            added, updated, total = sync_notes_to_board(server.note_store, server.kanban_store)
+        print(f"Synced notes to board: {added} new, {updated} moved, {total} total")
 
     print(f"Planner GUI:  http://{host}:{port}")
     print(f"  notes:  {note_store._dir}")
@@ -889,7 +889,10 @@ $("syncBtn").addEventListener("click", async () => {
   try {
     const r = await api("/api/sync", {method:"POST"});
     await refresh();
-    toast(r.added ? `Synced — ${r.added} card(s) added` : "Board up to date");
+    const parts = [];
+    if (r.added) parts.push(`${r.added} added`);
+    if (r.updated) parts.push(`${r.updated} moved`);
+    toast(parts.length ? `Synced — ${parts.join(", ")}` : "Board up to date");
   } catch (err) { toast(err.message, true); }
   finally { $("syncBtn").disabled = false; }
 });
