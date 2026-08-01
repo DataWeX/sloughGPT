@@ -504,6 +504,9 @@ def cli_main(argv: list[str] | None = None) -> int:
     if argv and argv[0] == "kanban":
         from .kanban import cli_main as kcli
         return kcli(argv[1:])
+    if argv and argv[0] == "gui":
+        from .gui import main as gmain
+        return gmain(argv[1:])
     import argparse
 
     parser = argparse.ArgumentParser(prog="planner")
