@@ -29,6 +29,7 @@ import logging
 import glob
 import threading
 import subprocess
+import logging.handlers
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -37,7 +38,6 @@ from .runtime import DaitRuntime
 from .commands import ShellCommands
 from .console import Console
 from .state import ShellState
-from .window_manager import get_window_manager
 
 _EM = "\u2014"  # em dash
 logger = logging.getLogger("slo.shell.repl")
@@ -197,12 +197,21 @@ class ShellREPL:
     """
 
     def __init__(self, os: DaitRuntime, cmds: ShellCommands | None = None,
-                 io: "ShellIO | None" = None):
+                 io: "ShellIO | None" = None, use_tui: bool | None = None):
         self.os = os
         self.cmds = cmds or ShellCommands()
         self.state = ShellState()
         self._history: list[str] = self.state.history[:]
         self._running = False
+        # Line mode is the default interactive shell; the curses TUI is
+        # opt-in via MAN_TUI=1 or the `tui` command / --tui flag.
+        if use_tui is None:
+            import os as _os
+            try:
+                use_tui = _os.environ.get("MAN_TUI") == "1"
+            except (OSError, ValueError):
+                use_tui = False
+        self._use_tui = use_tui
         self._bg_threads: dict[int, threading.Thread] = {}
         self._next_bg_id = 1
         self._piped_input: str = ""
@@ -227,6 +236,46 @@ class ShellREPL:
         # Structured logger — inherit from domains.logging
         from domains.logging import ShellLogger, LogLevel
         self.log = ShellLogger("slo.shell.repl", level=LogLevel.DEBUG)
+
+        # Log buffer — captures infra + API server logs for the console panel
+        from .log_buffer import get_log_buffer, LogBufferHandler, LogEntry
+        self._log_buffer = get_log_buffer()
+        _wrap_emit = self.log.emit
+        def _buffered_emit(record):
+            _wrap_emit(record)
+            self._log_buffer.append(LogEntry(
+                timestamp=record.timestamp,
+                level=record.level.value.upper(),
+                source=record.logger,
+                message=record.message,
+                context=dict(record.context),
+            ))
+        self.log.emit = _buffered_emit
+        _log_buf_handler = LogBufferHandler(self._log_buffer)
+        _log_buf_handler.setLevel(logging.DEBUG)
+        logging.getLogger("slo").addHandler(_log_buf_handler)
+        # Also attach directly to child loggers that disable propagation during boot
+        for _child_name in ("slo.kernel", "slo.shell.runtime", "slo.shell.init"):
+            _child = logging.getLogger(_child_name)
+            if _log_buf_handler not in _child.handlers:
+                _child.addHandler(_log_buf_handler)
+        _log_dir = _audit_dir = Path.home() / ".config" / "sloughgpt"
+        _log_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            _file_handler = logging.handlers.RotatingFileHandler(
+                str(_log_dir / "shell_infra.log"),
+                maxBytes=10 * 1024 * 1024,
+                backupCount=3,
+            )
+            _file_handler.setFormatter(logging.Formatter(
+                "%(asctime)s %(levelname)-7s %(name)s  %(message)s"
+            ))
+            _file_handler.setLevel(logging.DEBUG)
+            logging.getLogger("slo").addHandler(_file_handler)
+        except Exception:
+            pass
+
+        self._log_buffer_bridge_setup = True
 
         # Audit logger — every command is logged to JSONL
         from .audit import get_shell_audit_logger
@@ -763,14 +812,6 @@ class ShellREPL:
         self.log.info(msg, **ctx)
 
     def _print_header(self) -> None:
-        terminal = shutil.get_terminal_size().columns
-        sep = f"{_C_DIM}{'━' * terminal}{_C_RESET}"
-        lines = self.os.status_summary.split("\n")
-        header = lines[0] if lines else ""
-        self._print(sep)
-        self._print(f"{_C_CYAN}{_C_BOLD}  Dait{_C_RESET}".center(terminal))
-        self._print(f"{_C_DIM}  {header}{_C_RESET}".center(terminal))
-        self._print(sep)
         self._print(f"  Type {_C_YELLOW}`help`{_C_RESET} for commands, {_C_YELLOW}`exit`{_C_RESET} to quit, {_C_YELLOW}`ai <query>`{_C_RESET} for AI mode")
 
     def _format_table(self, rows: list[list[str]], header: list[str] | None = None) -> str:
@@ -1550,7 +1591,7 @@ class ShellREPL:
   api                   API server lifecycle (start/stop/status)
   svc                   Service management
   devices / lsdev       AI device nodes (/dev/llm, /dev/embedding, /dev/knowledge)
-  asm / wm              Virtual machine / window manager
+  asm                   Virtual machine
   remember / recall     Knowledge base
   datasets / tokenizer  Data and tokenizer utilities
   procs / kill / bg / fg  Process management
@@ -1617,6 +1658,8 @@ class ShellREPL:
                 "logname": "  logname  — Print login name",
                 "mktemp": "  mktemp [-d]  — Create a temporary file or directory",
                 "who": "  who  — Show who is logged on",
+                "od": "  od [-x] <file>  — Dump file in octal/hex format",
+                "join": "  join <file1> <file2>  — Join lines on common field",
                 "history": "  history [n]  — Show command history (last n entries, default 20)",
                 "fc": "  fc [-l] [n]  — List history, or re-run command by number (fc 42)",
                 "alias": "  alias [name=cmd]  — List or set aliases",
@@ -1662,7 +1705,6 @@ class ShellREPL:
                 "ai": '  ai <query>  — LLM-powered NL interpretation. E.g. ai "show me running jobs"',
                 "agents": "  agents <goal>  — Multi-agent orchestration. E.g. agents 'research and write about X'",
                 "tutorial": "  tutorial  — Interactive walkthrough of shell features",
-                "wm": "  wm [split-h|split-v|close|layout]  — Open window manager TUI, or manage panes from the shell",
 
                 "remember": "  remember <fact>  — Store a fact in the knowledge base (also piped input)",
                 "recall": "  recall <query>  — Search the knowledge base",
@@ -1683,13 +1725,26 @@ class ShellREPL:
                 "events": "  events [filter] [n]  — Show recent EventBus events",
                 "note": '  note [new|list|show|edit|delete|search|today|export]  — Development journal',
                 "read": "  read [-p prompt] VARNAME  — Read stdin into a variable",
+                "logs": '  logs [-l LEVEL] [-s SOURCE] [-n LINES] [-f] [--stats] [-e FILE] [--explain]  — Show/log panel. --explain: AI analysis of errors',
+                "console": '  logs [-l LEVEL] [-s SOURCE] [-n LINES] [-f] [--stats] [-e FILE] [--explain]  — Same as "logs"',
+                "tui": '  tui  — Launch three-pane TUI (console logs + shell output + input line)',
+                "clear": "  clear  — Clear the terminal screen",
+                "sleep": "  sleep <seconds>  — Sleep for N seconds (default 1)",
+                "date": '  date [-u] [+format]  — Show current date and time',
+                "cal": "  cal [[month] year]  — Show a calendar",
+                "ln": "  ln [-s] <target> <link_name>  — Create hard or symbolic links",
                 "render": "  render [sphere|cube|plane|light|mat|cam|go|neural|clear|preset]  — Path tracer + neural scene",
-                "win": "  win [split-h|split-v|close|layout]  — Window manager (alias for wm)",
+                "tui": '  tui  — Launch split-panel TUI (console + shell + input)',
             }
             if args in cmd_help:
                 self._print(cmd_help[args])
             elif self.COMMANDS.get(args):
-                self._print(f"  {args}  — (built-in command)")
+                fn = self.COMMANDS.get(args)
+                doc = (fn.__doc__ or "").strip()
+                if doc:
+                    self._print(f"  {args}  — {doc.split(chr(10))[0]}")
+                else:
+                    self._print(f"  {args}  — (built-in command)")
             elif args in self._ext_cmds:
                 h = getattr(self._ext_cmds[args], "help", "")
                 if h and args not in h:
@@ -1770,6 +1825,14 @@ Most common commands (help [cmd] for details, help for full list):
   comm <f1> <f2>         Compare two sorted files line by line
   test <expr>            Evaluate conditional expression ($? 0=true 1=false)
   printf <fmt> [args..]  Format and print data (%s %d %f \n \t)
+  expand [file]          Convert tabs to spaces (piped input)
+  unexpand [file]        Convert spaces to tabs (piped input)
+  id                     Print user identity
+  logname                Print login name
+  mktemp [-d]            Create a temporary file or directory
+  who                    Show who is logged on
+  od [-x] <file>         Dump file in octal/hex format
+  join <f1> <f2>         Join lines on a common field
   history [n]             Show command history
   fc [-l] [n]             List history, or re-run command #n (fc 42)
   alias [name=cmd]        List or set aliases
@@ -1873,7 +1936,6 @@ Virtual machine:
   $?                      Exit code of last command
   ai <query>              LLM-powered natural language interpretation
   agents <goal>           Multi-agent orchestration (researcher + writer + critic)
-  wm [subcmd]             Open window manager TUI (:split-h, :split-v, :close, :q)
   $(cmd)                  Command substitution: inline output of cmd
   py <expr>               Evaluate Python expression
   $VAR / ${{VAR}}           Environment variable expansion
@@ -3164,6 +3226,72 @@ Examples:
         self._print(f"  {user}    console  {_time.strftime('%Y-%m-%d %H:%M')}")
         self._last_exit_code = 0
 
+    def _cmd_od(self, args: str = "") -> None:
+        """Dump file in octal/hex format."""
+        if not args:
+            self._print("  Usage: od <file>")
+            self._last_exit_code = 1
+            return
+        parts = args.strip().split()
+        target = None
+        base = "o"
+        for p in parts:
+            if p == "-x":
+                base = "x"
+            elif p == "-o":
+                base = "o"
+            elif p == "-d":
+                base = "d"
+            elif not p.startswith("-"):
+                target = p
+        if not target:
+            self._print("  od: no file specified")
+            self._last_exit_code = 1
+            return
+        try:
+            data = Path(os.path.expanduser(target)).read_bytes()
+        except FileNotFoundError:
+            self._print(f"  od: {target}: No such file or directory")
+            self._last_exit_code = 1
+            return
+        for i in range(0, len(data), 16):
+            chunk = data[i:i + 16]
+            addr = f"{i:07o}" if base == "o" else f"{i:07x}"
+            if base == "o":
+                vals = " ".join(f"{b:03o}" for b in chunk)
+            elif base == "x":
+                vals = " ".join(f"{b:02x}" for b in chunk)
+            else:
+                vals = " ".join(f"{b:3d}" for b in chunk)
+            ascii_repr = "".join(chr(b) if 32 <= b < 127 else "." for b in chunk)
+            self._print(f"  {addr} {vals:<48} {ascii_repr}")
+        self._last_exit_code = 0
+
+    def _cmd_join(self, args: str = "") -> None:
+        """Join lines of two files on a common field."""
+        if not args:
+            self._print("  Usage: join <file1> <file2>")
+            self._last_exit_code = 1
+            return
+        parts = args.strip().split()
+        if len(parts) < 2:
+            self._print("  Usage: join <file1> <file2>")
+            self._last_exit_code = 1
+            return
+        f1, f2 = os.path.expanduser(parts[0]), os.path.expanduser(parts[1])
+        try:
+            lines1 = [l.split(None, 1) for l in Path(f1).read_text().splitlines()]
+            lines2 = [l.split(None, 1) for l in Path(f2).read_text().splitlines()]
+        except FileNotFoundError as e:
+            self._print(f"  join: {e.filename}: No such file or directory")
+            self._last_exit_code = 1
+            return
+        d1 = {l[0]: l[1] if len(l) > 1 else "" for l in lines1}
+        d2 = {l[0]: l[1] if len(l) > 1 else "" for l in lines2}
+        for key in sorted(set(d1) & set(d2)):
+            self._print(f"{key} {d1[key]} {d2[key]}")
+        self._last_exit_code = 0
+
     def _cmd_exit(self, args: str = "") -> None:
         self._running = False
         self._audit.shutdown()
@@ -3550,6 +3678,214 @@ Examples:
             if not k.startswith("_"):
                 self._print(f"  {k}: {v}")
 
+    def _cmd_tui(self, args: str = "") -> None:
+        """Launch the split-panel TUI mode — console panel + shell output + input line."""
+        try:
+            from .tui_repl import TuiRepl
+            tui = TuiRepl(self, self._log_buffer)
+            tui.run()
+        except ImportError as ex:
+            self._print(f"  TUI mode not available: {ex}")
+        except Exception as ex:
+            self._print(f"  TUI error: {ex}")
+            self._last_exit_code = 1
+
+    def _cmd_logs(self, args: str = "") -> None:
+        """Show the console log panel — infrastructure and API server logs.
+        
+        Flags:
+          -l, --level LEVEL   filter by level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+          -s, --source SRC    filter by source substring
+          -n, --lines N       show last N entries (default 30)
+          -f, --follow        follow new entries (Ctrl+C to stop)
+          -c, --clear         clear the buffer
+          -e, --export FILE   save entries to a text file
+              --stats         show log level distribution
+              --explain       AI-powered analysis of recent errors/warnings
+        """
+        argv = args.split()
+        level_filter = None
+        source_filter = None
+        count = 30
+        follow = False
+        export_path = None
+        show_stats = False
+        explain = False
+        i = 0
+        while i < len(argv):
+            a = argv[i]
+            if a in ("-l", "--level") and i + 1 < len(argv):
+                level_filter = argv[i + 1].upper()
+                i += 2
+            elif a in ("-s", "--source") and i + 1 < len(argv):
+                source_filter = argv[i + 1]
+                i += 2
+            elif a in ("-n", "--lines") and i + 1 < len(argv):
+                try:
+                    count = int(argv[i + 1])
+                except ValueError:
+                    pass
+                i += 2
+            elif a in ("-f", "--follow"):
+                follow = True
+                i += 1
+            elif a in ("-c", "--clear"):
+                self._log_buffer.clear()
+                self._print("  Log buffer cleared.")
+                return
+            elif a in ("-e", "--export") and i + 1 < len(argv):
+                export_path = argv[i + 1]
+                i += 2
+            elif a == "--stats":
+                show_stats = True
+                i += 1
+            elif a == "--explain":
+                explain = True
+                i += 1
+            else:
+                i += 1
+
+        if show_stats:
+            all_entries = self._log_buffer.get()
+            if not all_entries:
+                self._print("  No log entries.")
+                return
+            from collections import Counter as _Counter
+            levels = _Counter(e.level for e in all_entries)
+            sources = _Counter(e.source for e in all_entries)
+            total = len(all_entries)
+            sep = f"  {_C_DIM}{'─' * 40}{_C_RESET}"
+            self._print(f"  {_C_BOLD}Log Statistics{_C_RESET}  {_C_DIM}{total} total entries{_C_RESET}")
+            self._print(sep)
+            self._print(f"  {_C_BOLD}By Level:{_C_RESET}")
+            for lvl in ("CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"):
+                n = levels.get(lvl, 0)
+                color = _C_RED if lvl in ("ERROR", "CRITICAL") else \
+                        _C_YELLOW if lvl == "WARNING" else \
+                        _C_GREEN if lvl == "INFO" else _C_CYAN
+                bar = "█" * min(n, 40)
+                self._print(f"    {color}{lvl:<9s}{_C_RESET} {n:>5d}  {_C_DIM}{bar}{_C_RESET}")
+            self._print()
+            self._print(f"  {_C_BOLD}Top Sources:{_C_RESET}")
+            for src, n in sources.most_common(10):
+                self._print(f"    {_C_DIM}{src:<35s}{_C_RESET} {n:>5d}")
+            self._print()
+            self._print(f"  {_C_BOLD}Time Range:{_C_RESET}")
+            if total > 0:
+                from datetime import datetime as _dt
+                t0_raw = all_entries[0].timestamp
+                t1_raw = all_entries[-1].timestamp
+                t0 = _dt.fromtimestamp(t0_raw).strftime("%Y-%m-%d %H:%M:%S")
+                t1 = _dt.fromtimestamp(t1_raw).strftime("%Y-%m-%d %H:%M:%S")
+                span = t1_raw - t0_raw
+                self._print(f"    {t0}  →  {t1}  ({_C_DIM}{span:.0f}s span{_C_RESET})")
+            return
+
+        if explain:
+            err_entries = self._log_buffer.get(level=None, source=None, limit=50)
+            err_entries = [e for e in err_entries if e.level in ("ERROR", "CRITICAL", "WARNING")]
+            if not err_entries:
+                self._print("  No errors or warnings to explain.")
+                return
+            status = self.os.api_status
+            if not status.get("available"):
+                self._print("  API server not available — cannot analyze logs.")
+                return
+            from datetime import datetime as _dt
+            log_text = "\n".join(
+                f"[{_dt.fromtimestamp(e.timestamp).strftime('%H:%M:%S')}] [{e.level}] [{e.source}] {e.message}"
+                for e in err_entries[-20:]
+            )
+            prompt = (
+                "You are a shell log analyzer. Given the following log entries, "
+                "identify the most important issues, explain likely causes, "
+                "and suggest fixes. Be concise (3-5 bullet points).\n\n"
+                f"Logs:\n{log_text}\n\n"
+                "Analysis:"
+            )
+            self._print(f"  {_C_BOLD}Log Analysis{_C_RESET} {_C_DIM}({len(err_entries)} errors/warnings){_C_RESET}")
+            self._print(f"  {_C_DIM}{'─' * 40}{_C_RESET}")
+            result = self._spinner_call("Analyzing", lambda: self.cmds.generate(prompt, max_tokens=200))
+            if isinstance(result, dict) and "text" in result:
+                analysis = result["text"].strip()
+                for line in analysis.split("\n"):
+                    self._print(f"  {line}")
+            else:
+                error = result.get("error", "unknown")
+                self._print(f"  Analysis failed: {error}")
+            return
+
+        if export_path:
+            entries = self._log_buffer.get(level=level_filter, source=source_filter)
+            if not entries:
+                self._print("  No log entries to export.")
+                return
+            try:
+                from datetime import datetime as _dt
+                with open(export_path, "w") as f:
+                    for e in entries:
+                        ts = _dt.fromtimestamp(e.timestamp).strftime("%Y-%m-%d %H:%M:%S")
+                        f.write(f"[{ts}] [{e.level:<7s}] [{e.source}] {e.message}\n")
+                self._print(f"  Exported {len(entries)} entries to {export_path}")
+            except OSError as ex:
+                self._print(f"  Error writing to {export_path}: {ex}")
+            return
+
+        def _render(entries):
+            from datetime import datetime as _dt
+            lines = []
+            for e in entries:
+                ts = _dt.fromtimestamp(e.timestamp).strftime("%H:%M:%S")
+                color = _C_DIM
+                if e.level == "ERROR" or e.level == "CRITICAL":
+                    color = _C_RED
+                elif e.level == "WARNING":
+                    color = _C_YELLOW
+                elif e.level == "INFO":
+                    color = _C_GREEN
+                elif e.level == "DEBUG":
+                    color = _C_CYAN
+                lines.append(f"  {_C_DIM}{ts}{_C_RESET} {color}{e.level:<7s}{_C_RESET} {_C_DIM}{e.source}{_C_RESET}  {e.message}")
+            return lines
+
+        entries = self._log_buffer.get(level=level_filter, source=source_filter, limit=count)
+        if not entries:
+            self._print("  No log entries.")
+            return
+
+        lines = _render(entries)
+        sep = f"  {_C_DIM}{'─' * 40}{_C_RESET}"
+        self._print(
+            f"  {_C_BOLD}Console Logs{_C_RESET} {_C_DIM}({len(self._log_buffer)} buffered)"
+            f"{'  -l ' + level_filter if level_filter else ''}"
+            f"{'  -s ' + source_filter if source_filter else ''}"
+            f"{_C_RESET}"
+        )
+        self._print(sep)
+        for line in lines:
+            self._print(line)
+        self._print(sep)
+
+        if follow:
+            self._print(f"  {_C_DIM}Following — press Ctrl+C to stop{_C_RESET}")
+            from datetime import datetime as _dt
+            try:
+                offset = len(self._log_buffer)
+                while True:
+                    time.sleep(0.5)
+                    new_entries = self._log_buffer.get(
+                        level=level_filter, source=source_filter, offset=offset
+                    )
+                    for e in new_entries:
+                        ts = _dt.fromtimestamp(e.timestamp).strftime("%H:%M:%S")
+                        color = _C_RED if e.level in ("ERROR", "CRITICAL") else \
+                                _C_YELLOW if e.level == "WARNING" else \
+                                _C_GREEN if e.level == "INFO" else _C_CYAN
+                        self._print(f"  {_C_DIM}{ts}{_C_RESET} {color}{e.level:<7s}{_C_RESET} {_C_DIM}{e.source}{_C_RESET}  {e.message}")
+                    offset += len(new_entries)
+            except KeyboardInterrupt:
+                self._print()
+
     def _cmd_protect(self, args: str = "") -> None:
         """Protect a model from accidental deletion: protect <model_id>"""
         model_id = args.strip()
@@ -3838,41 +4174,6 @@ Examples:
 
     # ── LLM-powered NL interpreter ──────────────────────────────────
 
-    def _cmd_wm(self, args: str = "") -> None:
-        """Enter the window manager TUI. Subcommands: split-h, split-v, close, layout."""
-        wm = get_window_manager(parent_shell=self)
-        parts = args.strip().split()
-        verb = parts[0].lower() if parts else ""
-
-        def _layout_str() -> str:
-            ws = wm._workspace
-            return f"  Layout: {ws.layout} | Panes: {len(ws.panes)} | Focus: {ws.focus_idx}"
-
-        if verb == "split-h":
-            wm.split_horizontal()
-            self._print(_layout_str())
-        elif verb == "split-v":
-            wm.split_vertical()
-            self._print(_layout_str())
-        elif verb == "close":
-            title = wm.close_pane()
-            if title:
-                self._print(f"  Closed: {title}")
-        elif verb == "layout":
-            self._print(_layout_str())
-        elif verb == "reset":
-            from .window_manager import reset_window_manager as _rw
-            _rw()
-            self._print("  Window manager state reset.")
-        else:
-            # Enter the curses TUI
-            try:
-                wm.run()
-            except Exception as e:
-                self._print(f"  Window manager error: {e}")
-            finally:
-                self._print("  Exited window manager.")
-
     def _cmd_render(self, args: str = "") -> None:
         """Path tracer + neural scene analysis. Subcommands:
   render                       — show scene info
@@ -4155,11 +4456,34 @@ Examples:
             h = getattr(mod, "help", "")
             available_commands += f"\n  {name} - {h}"
 
+        # Build shell context
+        ctx_parts = [f"  Current directory: {self.os.cwd}"]
+        model = self._get_current_model()
+        soul = self._get_current_soul()
+        if model:
+            ctx_parts.append(f"  Active model: {model}")
+        if soul:
+            ctx_parts.append(f"  Active soul: {soul}")
+        recent = list(self._history)[-5:] if hasattr(self, "_history") else []
+        if recent:
+            ctx_parts.append(f"  Recent commands: {', '.join(recent)}")
+        if self._log_buffer and len(self._log_buffer) > 0:
+            err_entries = self._log_buffer.get(level="ERROR", limit=5)
+            if err_entries:
+                from datetime import datetime as _dt
+                err_lines = []
+                for e in err_entries:
+                    ts = _dt.fromtimestamp(e.timestamp).strftime("%H:%M:%S")
+                    err_lines.append(f"{ts} [{e.source}] {e.message}")
+                ctx_parts.append(f"  Recent errors:\n" + "\n".join(f"    {l}" for l in err_lines))
+        shell_context = "\n".join(ctx_parts)
+
         prompt = (
-            "You are an AI shell assistant. Given the available commands below, "
+            "You are an AI shell assistant. Given the available commands and shell context below, "
             "interpret the user's natural language request and respond with ONLY "
             "the exact shell command to run. Do NOT include any explanation, "
             "backticks, or extra text. Just the command.\n\n"
+            f"Shell context:\n{shell_context}\n\n"
             f"Available commands:\n{available_commands}\n\n"
             f"User request: {args}\n\n"
             "Command:"
@@ -4869,6 +5193,107 @@ nl: db 10
             self._print(f"  vmrun error: {e}")
             self._last_exit_code = 1
 
+    # ── Misc utility commands ────────────────────────────────────────
+
+    def _cmd_clear(self, args: str = "") -> None:
+        """Clear the terminal screen."""
+        self._print("\033[2J\033[H", end="")
+
+    def _cmd_sleep(self, args: str = "") -> None:
+        """Sleep for N seconds: sleep <seconds>"""
+        try:
+            secs = float(args.strip())
+        except ValueError:
+            secs = 1.0
+        import time as _time
+        _time.sleep(secs)
+
+    def _cmd_date(self, args: str = "") -> None:
+        """Show current date and time: date [-u] [+format]
+        -u: UTC time
+        +format: strftime format (default: %a %b %d %H:%M:%S %Z %Y)"""
+        from datetime import datetime as _dt, timezone as _tz
+        argv = args.split()
+        utc = False
+        fmt = "%a %b %d %H:%M:%S %Z %Y"
+        i = 0
+        while i < len(argv):
+            if argv[i] == "-u":
+                utc = True
+                i += 1
+            elif argv[i].startswith("+"):
+                fmt = argv[i][1:]
+                i += 1
+            else:
+                i += 1
+        now = _dt.now(_tz.utc if utc else None)
+        self._print(now.strftime(fmt))
+
+    def _cmd_cal(self, args: str = "") -> None:
+        """Show a calendar: cal [[month] year]"""
+        from datetime import datetime as _dt, timedelta as _td
+        import calendar as _cal
+        argv = args.split()
+        now = _dt.now()
+        if len(argv) == 0:
+            year, month = now.year, now.month
+        elif len(argv) == 1:
+            year = int(argv[0])
+            month = now.month if year == now.year else 1
+        else:
+            month, year = int(argv[0]), int(argv[1])
+        if month < 1 or month > 12 or year < 1 or year > 9999:
+            self._print(f"  cal: invalid date")
+            return
+        header = f"{_cal.month_name[month]} {year}".center(20)
+        self._print(f"  {_C_BOLD}{header}{_C_RESET}")
+        self._print(f"  Mo Tu We Th Fr Sa Su")
+        first_dow = _cal.weekday(year, month, 1)
+        days = _cal.monthrange(year, month)[1]
+        line = "   " * first_dow
+        for d in range(1, days + 1):
+            line += f"{d:>2d} "
+            if (first_dow + d) % 7 == 0:
+                self._print(f"  {line}")
+                line = ""
+        if line.strip():
+            self._print(f"  {line}")
+
+    def _cmd_ln(self, args: str = "") -> None:
+        """Create links: ln [-s] <target> <link_name>"""
+        import shlex as _shlex
+        argv = _shlex.split(args)
+        symlink = False
+        target = None
+        link_name = None
+        i = 0
+        while i < len(argv):
+            a = argv[i]
+            if a in ("-s", "--symbolic"):
+                symlink = True
+                i += 1
+            elif target is None:
+                target = a
+                i += 1
+            elif link_name is None:
+                link_name = a
+                i += 1
+            else:
+                i += 1
+        if not target or not link_name:
+            self._print("  Usage: ln [-s] <target> <link_name>")
+            self._last_exit_code = 1
+            return
+        import os as _os
+        try:
+            if symlink:
+                _os.symlink(target, link_name)
+            else:
+                _os.link(target, link_name)
+        except OSError as ex:
+            self._print(f"  ln: {ex}")
+            self._last_exit_code = 1
+
     # ── Notes (development journal) ────────────────────────────────
 
     def _cmd_note(self, args: str = "") -> None:
@@ -5300,6 +5725,8 @@ nl: db 10
         "logname": _cmd_logname,
         "mktemp": _cmd_mktemp,
         "who": _cmd_who,
+        "od": _cmd_od,
+        "join": _cmd_join,
         "which": _cmd_which,
         "type": _cmd_type,
         "history": _cmd_history,
@@ -5330,8 +5757,6 @@ nl: db 10
         "agents": _cmd_agents,
         "tutorial": _cmd_tutorial,
         "read": _cmd_read,
-        "wm": _cmd_wm,
-        "win": _cmd_wm,
         "render": _cmd_render,
         "protect": _cmd_protect,
         "unprotect": _cmd_unprotect,
@@ -5349,16 +5774,112 @@ nl: db 10
         "confirm": _cmd_confirm,
         "note": _cmd_note,
         "api": _cmd_api,
+        "logs": _cmd_logs,
+        "console": _cmd_logs,
+        "tui": _cmd_tui,
+        "clear": _cmd_clear,
+        "sleep": _cmd_sleep,
+        "date": _cmd_date,
+        "cal": _cmd_cal,
+        "ln": _cmd_ln,
     }
 
     # ── Main loop ───────────────────────────────────────────────────
 
-    def run(self) -> None:
+    def _dispatch(self, line: str) -> None:
+        """Execute one input line with full pipeline/background/redirect semantics.
+
+        Shared by the line-mode run loop and the curses TUI so both dispatch
+        identically (history, state, audit, pipelines, background jobs).
+
+        Args:
+            line: the raw input line to execute.
+
+        Side effects:
+            - appends to history, updates state + audit
+            - runs the command, writes output via self.console / self._print
+            - sets self._last_exit_code / self._aborted
+        """
         import time as _time
+
+        self._cmd_count += 1
+        self._history.append(line)
+        self.state.add_history(line)
+        self.state.save()
+
+        self._aborted = False
+
+        commands, is_bg, should_time = self._parse_pipeline(line)
+
+        try:
+            if is_bg:
+                if len(commands) > 1:
+                    self._execute_background_tuples(commands)
+                else:
+                    self._execute_background(commands[0][0])
+                self._audit.command(line, commands[0][0].split()[0] if commands[0][0] else "", line, 0, is_background=True, is_pipeline=len(commands) > 1)
+                return
+            if len(commands) > 1:
+                self._execute_pipeline(commands, should_time=should_time)
+                self._audit.command(line, "pipeline", line, self._last_exit_code, is_pipeline=True)
+                return
+
+            raw_cmd, op = commands[0]
+            expanded = self._expand_alias(raw_cmd)
+            parts = expanded.split(maxsplit=1)
+            cmd = parts[0].lower()
+            args_str = parts[1] if len(parts) > 1 else ""
+            handler = self.COMMANDS.get(cmd)
+            ext_mod = self._ext_cmds.get(cmd) if handler is None else None
+
+            if handler or ext_mod:
+                if not self._check_permission(cmd, args_str, interactive=True):
+                    self._last_exit_code = 126
+                    self._audit.command(line, cmd, args_str, 126, elapsed_ms=0, expanded=expanded)
+                    return
+                t0 = _time.time() if should_time else None
+                try:
+                    if ext_mod:
+                        from .console import Console as _Console
+                        c = _Console(self.io, has_readline=_HAS_READLINE)
+                        self._last_exit_code = ext_mod.run(
+                            [cmd] + (args_str.split() if args_str else []),
+                            c, self.cmds, self._env,
+                        )
+                    else:
+                        handler(self, args_str)
+                        self._last_exit_code = 0
+                except SystemExit as e:
+                    self._last_exit_code = e.code if isinstance(e.code, int) else 1
+                except Exception as e:
+                    self._print(f"  {_C_RED}Error:{_C_RESET} {e}")
+                    self._last_exit_code = 1
+                    self._audit.error(line, repr(e))
+                elapsed_ms = (_time.time() - t0) * 1000 if t0 else None
+                self._audit.command(line, cmd, args_str, self._last_exit_code, elapsed_ms=elapsed_ms, expanded=expanded)
+                if should_time and elapsed_ms is not None:
+                    self._print(f"{_C_DIM}  [{elapsed_ms/1000:.2f}s]{_C_RESET}")
+            else:
+                suggestion = self._suggest_command(cmd)
+                msg = f"  {_C_RED}Unknown command:{_C_RESET} {cmd}. Type `help`."
+                if suggestion:
+                    msg += f" Did you mean `{_C_YELLOW}{suggestion}{_C_RESET}`?"
+                self._print(msg)
+                self._last_exit_code = 127
+                self._audit.unknown(cmd)
+        except KeyboardInterrupt:
+            self._print(f"  {_C_DIM}Aborted{_C_RESET}")
+            self._aborted = True
+            self._last_exit_code = 0
+        except Exception as e:
+            self._print(f"  {_C_RED}Error:{_C_RESET} {e}")
+            self._audit.error(line, repr(e))
+
+    def run(self) -> None:
         import signal as _signal
         import logging as _logging
 
-        # Suppress all kernel logs during boot so the banner appears first
+        # Suppress kernel logs from stderr during boot (captured by LogBufferHandler)
         _kernel_logger = _logging.getLogger("slo.kernel")
         _prev_propagate = _kernel_logger.propagate
         _kernel_logger.propagate = False
@@ -5377,12 +5898,23 @@ nl: db 10
         _kernel_logger.propagate = _prev_propagate
 
         self._running = True
+        self._status("ok", f"System ready  ({api_status.get('model_id') or 'no model'})" if api_status.get("available") else "API not connected")
+
+        # Split-panel TUI is opt-in: MAN_TUI=1, `sloughgpt shell --tui`, or
+        # the `tui` command. Line mode is the default.
+        if self._use_tui:
+            try:
+                from .tui_repl import TuiRepl
+                TuiRepl(self, self._log_buffer).run()
+            except Exception as e:
+                self._print(f"  {_C_RED}TUI unavailable, falling back to line mode:{_C_RESET} {e}")
+            self._running = False
+            self._audit.shutdown()
+            self.state.save()
+            self.os.shutdown()
+            return
+
         self._print_header()
-        if api_status.get("available"):
-            model = api_status.get("model_id", "unknown") or "unknown"
-            self._status("ok", f"API — {model}")
-        else:
-            self._status("error", "API not connected")
         self._audit.startup()
 
         def _graceful_shutdown(signum, frame):
@@ -5420,75 +5952,7 @@ nl: db 10
             if not line:
                 continue
 
-            self._cmd_count += 1
-            self._history.append(line)
-            self.state.add_history(line)
-            self.state.save()
-
-            self._aborted = False
-
-            commands, is_bg, should_time = self._parse_pipeline(line)
-
-            try:
-                if is_bg:
-                    if len(commands) > 1:
-                        self._execute_background_tuples(commands)
-                    else:
-                        self._execute_background(commands[0][0])
-                    self._audit.command(line, commands[0][0].split()[0] if commands[0][0] else "", line, 0, is_background=True, is_pipeline=len(commands) > 1)
-                elif len(commands) > 1:
-                    self._execute_pipeline(commands, should_time=should_time)
-                    self._audit.command(line, "pipeline", line, self._last_exit_code, is_pipeline=True)
-                else:
-                    raw_cmd, op = commands[0]
-                    expanded = self._expand_alias(raw_cmd)
-                    parts = expanded.split(maxsplit=1)
-                    cmd = parts[0].lower()
-                    args_str = parts[1] if len(parts) > 1 else ""
-                    handler = self.COMMANDS.get(cmd)
-                    ext_mod = self._ext_cmds.get(cmd) if handler is None else None
-                    if handler or ext_mod:
-                        if not self._check_permission(cmd, args_str, interactive=True):
-                            self._last_exit_code = 126
-                            self._audit.command(line, cmd, args_str, 126, elapsed_ms=0, expanded=expanded)
-                            continue
-                        t0 = _time.time() if should_time else None
-                        try:
-                            if ext_mod:
-                                from .console import Console as _Console
-                                c = _Console(self.io, has_readline=_HAS_READLINE)
-                                self._last_exit_code = ext_mod.run(
-                                    [cmd] + (args_str.split() if args_str else []),
-                                    c, self.cmds, self._env,
-                                )
-                            else:
-                                handler(self, args_str)
-                                self._last_exit_code = 0
-                        except SystemExit as e:
-                            self._last_exit_code = e.code if isinstance(e.code, int) else 1
-                        except Exception as e:
-                            self._print(f"  {_C_RED}Error:{_C_RESET} {e}")
-                            self._last_exit_code = 1
-                            self._audit.error(line, repr(e))
-                        elapsed_ms = (_time.time() - t0) * 1000 if t0 else None
-                        self._audit.command(line, cmd, args_str, self._last_exit_code, elapsed_ms=elapsed_ms, expanded=expanded)
-                        if should_time and elapsed_ms is not None:
-                            self._print(f"{_C_DIM}  [{elapsed_ms/1000:.2f}s]{_C_RESET}")
-                    else:
-                        suggestion = self._suggest_command(cmd)
-                        msg = f"  {_C_RED}Unknown command:{_C_RESET} {cmd}. Type `help`."
-                        if suggestion:
-                            msg += f" Did you mean `{_C_YELLOW}{suggestion}{_C_RESET}`?"
-                        self._print(msg)
-                        self._last_exit_code = 127
-                        self._audit.unknown(cmd)
-            except KeyboardInterrupt:
-                self._print(f"  {_C_DIM}Aborted{_C_RESET}")
-                self._aborted = True
-                self._last_exit_code = 0
-            except Exception as e:
-                self._print(f"  {_C_RED}Error:{_C_RESET} {e}")
-                self._audit.error(line, repr(e))
+            self._dispatch(line)
 
         self._audit.shutdown()
         self.state.save()

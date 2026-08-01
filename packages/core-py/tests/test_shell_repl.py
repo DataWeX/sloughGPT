@@ -51,6 +51,40 @@ def isolated_state():
             yield s
 
 
+# ── UI selection (line mode default, TUI opt-in) ────────────────────
+
+def _make_repl(use_tui=None):
+    from domains.shell.runtime import DaitRuntime
+    with tempfile.TemporaryDirectory() as tmp:
+        st = Path(tmp) / "sloughgpt"
+        st.mkdir(parents=True, exist_ok=True)
+        state_file = st / "shell_state.json"
+        with patch("domains.shell.state._STATE_FILE", state_file), \
+             patch("domains.shell.runtime._probe_api", return_value={"available": False, "error": "mock"}), \
+             patch.object(ShellREPL, "_setup_readline"):
+            return ShellREPL(DaitRuntime(), use_tui=use_tui)
+
+
+def test_line_mode_is_default(monkeypatch):
+    monkeypatch.delenv("MAN_TUI", raising=False)
+    assert _make_repl()._use_tui is False
+
+
+def test_man_tui_env_opts_in(monkeypatch):
+    monkeypatch.setenv("MAN_TUI", "1")
+    assert _make_repl()._use_tui is True
+
+
+def test_explicit_use_tui_true(monkeypatch):
+    monkeypatch.delenv("MAN_TUI", raising=False)
+    assert _make_repl(use_tui=True)._use_tui is True
+
+
+def test_explicit_use_tui_false(monkeypatch):
+    monkeypatch.setenv("MAN_TUI", "1")
+    assert _make_repl(use_tui=False)._use_tui is False
+
+
 # ── _CaptureOutput ─────────────────────────────────────────────────
 
 
@@ -1048,7 +1082,9 @@ class TestPermissions:
         assert "--all-dangerous" not in candidates
 
     def test_safe_command_not_blocked(self, repl):
-        output, code = repl.execute("health")
+        with patch("domains.shell.commands._api_get") as mock:
+            mock.return_value = {"status": "healthy", "model_type": "gpt2", "soul_name": "default"}
+            output, code = repl.execute("health")
         assert code == 0
 
 
@@ -1920,3 +1956,252 @@ class TestPipelineBuiltins:
             repl._cmd_type("")
             out = cap.getvalue()
         assert "Usage" in out
+
+    def test_expand_tabs(self, repl):
+        repl._piped_input = "a\tb"
+        with _CaptureOutput() as cap:
+            repl._cmd_expand("")
+            out = cap.getvalue()
+        assert "a       b" in out
+        assert repl._last_exit_code == 0
+        repl._piped_input = ""
+
+    def test_expand_from_file(self, repl):
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("x\ty")
+            t = f.name
+        try:
+            with _CaptureOutput() as cap:
+                repl._cmd_expand(t)
+                out = cap.getvalue()
+            assert "x       y" in out
+        finally:
+            os.unlink(t)
+
+    def test_expand_usage(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = ""
+            repl._cmd_expand("")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_unexpand_spaces(self, repl):
+        repl._piped_input = "        x"
+        with _CaptureOutput() as cap:
+            repl._cmd_unexpand("")
+            out = cap.getvalue()
+        assert "\tx" in out
+        assert repl._last_exit_code == 0
+        repl._piped_input = ""
+
+    def test_unexpand_usage(self, repl):
+        with _CaptureOutput() as cap:
+            repl._piped_input = ""
+            repl._cmd_unexpand("")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_id_prints_identity(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_id("")
+            out = cap.getvalue()
+        assert "uid" in out or "gid" in out
+        assert repl._last_exit_code == 0
+
+    def test_logname_prints_user(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_logname("")
+            out = cap.getvalue()
+        assert len(out.strip()) > 0
+        assert repl._last_exit_code == 0
+
+    def test_mktemp_creates_file(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_mktemp("")
+            out = cap.getvalue()
+        path = out.strip()
+        assert os.path.exists(path)
+        os.unlink(path)
+        assert repl._last_exit_code == 0
+
+    def test_mktemp_creates_dir(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_mktemp("-d")
+            out = cap.getvalue()
+        path = out.strip()
+        assert os.path.isdir(path)
+        os.rmdir(path)
+        assert repl._last_exit_code == 0
+
+    def test_who_prints_user(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_who("")
+            out = cap.getvalue()
+        assert len(out.strip()) > 0
+        assert repl._last_exit_code == 0
+
+    def test_od_octal(self, repl):
+        import tempfile
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            f.write(b"ABC")
+            t = f.name
+        try:
+            with _CaptureOutput() as cap:
+                repl._cmd_od(t)
+                out = cap.getvalue()
+            assert "101" in out or "0101" in out  # 'A' in octal
+            assert repl._last_exit_code == 0
+        finally:
+            os.unlink(t)
+
+    def test_od_hex(self, repl):
+        import tempfile
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            f.write(b"ABC")
+            t = f.name
+        try:
+            with _CaptureOutput() as cap:
+                repl._cmd_od(f"-x {t}")
+                out = cap.getvalue()
+            assert "41" in out  # 'A' in hex
+            assert repl._last_exit_code == 0
+        finally:
+            os.unlink(t)
+
+    def test_od_no_file(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_od("")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+    def test_od_nonexistent(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_od("/nonexistent_od_file")
+            out = cap.getvalue()
+        assert "No such file" in out
+
+    def test_join_two_files(self, repl):
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("a foo\nb bar\n")
+            t1 = f.name
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("a baz\nb qux\n")
+            t2 = f.name
+        try:
+            with _CaptureOutput() as cap:
+                repl._cmd_join(f"{t1} {t2}")
+                out = cap.getvalue()
+            assert "a" in out and "b" in out
+            assert "foo" in out and "baz" in out
+            assert repl._last_exit_code == 0
+        finally:
+            os.unlink(t1)
+            os.unlink(t2)
+
+    def test_join_usage(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_join("")
+            out = cap.getvalue()
+        assert "Usage" in out
+
+
+class TestCmdLogs:
+    def test_logs_empty(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_logs("")
+        out = cap.getvalue()
+        assert "No log entries" in out
+
+    def test_logs_clear_empty(self, repl):
+        with _CaptureOutput() as cap:
+            repl._cmd_logs("-c")
+        out = cap.getvalue()
+        assert "cleared" in out
+
+    def test_logs_clear_with_data(self, repl):
+        from domains.shell.log_buffer import LogEntry
+        repl._log_buffer.append(LogEntry(1.0, "INFO", "test", "msg"))
+        with _CaptureOutput() as cap:
+            repl._cmd_logs("-c")
+        out = cap.getvalue()
+        assert "cleared" in out
+        assert len(repl._log_buffer) == 0
+
+    def test_logs_shows_entries(self, repl):
+        from domains.shell.log_buffer import LogEntry
+        repl._log_buffer.append(LogEntry(1.0, "INFO", "test.src", "hello world"))
+        with _CaptureOutput() as cap:
+            repl._cmd_logs("")
+        out = cap.getvalue()
+        assert "hello world" in out
+        assert "test.src" in out
+        assert "Console Logs" in out
+
+    def test_logs_level_filter(self, repl):
+        from domains.shell.log_buffer import LogEntry
+        repl._log_buffer.append(LogEntry(1.0, "INFO", "src", "info msg"))
+        repl._log_buffer.append(LogEntry(2.0, "ERROR", "src", "err msg"))
+        with _CaptureOutput() as cap:
+            repl._cmd_logs("-l ERROR")
+        out = cap.getvalue()
+        assert "err msg" in out
+        assert "info msg" not in out
+
+    def test_logs_source_filter(self, repl):
+        from domains.shell.log_buffer import LogEntry
+        repl._log_buffer.append(LogEntry(1.0, "INFO", "slo.kernel", "kern"))
+        repl._log_buffer.append(LogEntry(2.0, "INFO", "slo.shell.repl", "shell"))
+        with _CaptureOutput() as cap:
+            repl._cmd_logs("-s kernel")
+        out = cap.getvalue()
+        assert "kern" in out
+        assert "shell" not in out
+
+    def test_logs_limit(self, repl):
+        from domains.shell.log_buffer import LogEntry
+        for i in range(10):
+            repl._log_buffer.append(LogEntry(float(i), "INFO", "src", f"msg{i}"))
+        with _CaptureOutput() as cap:
+            repl._cmd_logs("-n 3")
+        out = cap.getvalue()
+        assert "msg0" not in out
+        assert "msg7" in out
+        assert "msg8" in out
+        assert "msg9" in out
+
+    def test_logs_stats_shows_distribution(self, repl):
+        from domains.shell.log_buffer import LogEntry
+        repl._log_buffer.append(LogEntry(1.0, "ERROR", "a", "err"))
+        repl._log_buffer.append(LogEntry(2.0, "INFO", "b", "inf"))
+        repl._log_buffer.append(LogEntry(3.0, "INFO", "c", "inf2"))
+        with _CaptureOutput() as cap:
+            repl._cmd_logs("--stats")
+        out = cap.getvalue()
+        assert "Log Statistics" in out
+        assert "By Level" in out
+        assert "Top Sources" in out
+        assert "ERROR" in out
+        assert "INFO" in out
+
+    def test_logs_export(self, repl):
+        from domains.shell.log_buffer import LogEntry
+        repl._log_buffer.append(LogEntry(1.0, "INFO", "src", "line1"))
+        repl._log_buffer.append(LogEntry(2.0, "WARNING", "src", "line2"))
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="r", suffix=".log", delete=False) as tf:
+            tmppath = tf.name
+        try:
+            with _CaptureOutput() as cap:
+                repl._cmd_logs(f"-e {tmppath}")
+            out = cap.getvalue()
+            assert "Exported" in out
+            with open(tmppath) as f:
+                content = f.read()
+            assert "INFO" in content
+            assert "line1" in content
+            assert "WARNING" in content
+            assert "line2" in content
+        finally:
+            os.unlink(tmppath)

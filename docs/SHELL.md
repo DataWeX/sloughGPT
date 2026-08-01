@@ -368,6 +368,39 @@ History is saved to `~/.config/sloughgpt/shell_state.json` (max 500 entries).
 
 These use readline's built-in incremental search.
 
+### TUI (split-pane shell)
+
+Launch with `sloughgpt tui`, `sloughgpt shell --tui`, the `tui` REPL command,
+or `MAN_TUI=1 sloughgpt shell`. Line mode is the default. Three panes: console
+logs (top), command output (middle), and a chrome bar + input row at the
+bottom. Commands run on a background thread so output streams live.
+
+| Keybinding | Action |
+|------------|--------|
+| `Tab` | Complete command or path |
+| `Up` / `Down` | Command history (then arrows move caret) |
+| `Left` / `Right` | Move caret |
+| `Alt+F` / `Ctrl+Right` | Move forward to the end of the next word |
+| `Alt+B` / `Ctrl+Left` | Move back to the start of the current or previous word |
+| `Home` / `Ctrl+A` | Jump to start of line |
+| `End` / `Ctrl+E` | Jump to end of line |
+| `Backspace` / `Delete` / `Ctrl+D` | Delete before / at caret |
+| `Ctrl+W` | Delete word before caret (added to kill ring) |
+| `Alt+D` | Delete word after caret (added to kill ring) |
+| `Ctrl+T` | Transpose the characters before and at the caret (last two at end of line) |
+| `Ctrl+U` | Kill to start of line (added to kill ring) |
+| `Ctrl+K` | Kill to end of line (added to kill ring) |
+| `Ctrl+Y` | Yank the most recent kill; press again to cycle to older kills |
+| `Ctrl+R` / `Ctrl+S` | Reverse / forward incremental history search (same key again — or `Ctrl+F` — moves through matches; `Esc` cancels) |
+| `/` | Search the output pane; type a query to jump the scroll so the match lands at the top (`n` / `N` at an empty prompt repeat the last accepted search; `Enter` accepts, `Esc` cancels) |
+| `Ctrl+L` | Clear output pane |
+| `Ctrl+O` | Toggle output/log scrollback focus |
+| `PgUp` / `PgDn` | Scroll focused pane (10 lines) |
+| `Ctrl+C` | Interrupt the running command (press again, or `exit`, to quit) |
+
+The input row scrolls horizontally when the command line exceeds the
+terminal width; the caret always stays visible.
+
 ---
 
 ## Tab Completion
@@ -538,14 +571,52 @@ interleaved with the prompt when they complete.
 
 ## Keyboard Shortcuts
 
+Editing comes from the system `readline` library (Emacs bindings). If
+`readline` is unavailable, input falls back to plain lines without editing.
+
+### Completion & History
+
 | Shortcut | Action |
 |----------|--------|
-| `Tab` | Complete command/argument/path |
-| `Ctrl+R` | Reverse history search |
-| `Ctrl+S` | Forward history search |
-| `Ctrl+C` | Abort current command |
-| `Ctrl+D` | EOF (exit) |
-| `↑` / `↓` | History navigation (readline) |
+| `Tab` | Complete command / argument / path |
+| `↑` / `↓` (`Ctrl+P` / `Ctrl+N`) | Previous / next history entry |
+| `Ctrl+R` | Reverse incremental history search |
+| `Ctrl+S` | Forward incremental history search — subject to terminal flow control; see note below |
+
+`Ctrl+S` is bound to `forward-search-history`, but most terminals reserve it as
+XOFF (pause output) flow control, so it is consumed by the terminal and never
+reaches readline — the same limitation applies to bash. Use `Ctrl+R` (press
+again) to move backward through matches, or disable flow control with
+`stty -ixon` to make forward search reachable.
+
+### Cursor movement
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+A` / `Home` | Move to start of line |
+| `Ctrl+E` / `End` | Move to end of line |
+| `Alt+B` | Back one word |
+| `Alt+F` | Forward one word |
+
+### Editing
+
+| Shortcut | Action |
+|----------|--------|
+| `Backspace` | Delete char before caret |
+| `Ctrl+D` | Delete char at caret (EOF on empty line = exit) |
+| `Alt+D` | Delete word after caret |
+| `Ctrl+W` | Delete word before caret |
+| `Ctrl+K` | Kill to end of line |
+| `Ctrl+U` | Kill to start of line |
+| `Ctrl+T` | Transpose chars around caret |
+
+### Kill ring & process control
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Y` | Yank last killed text |
+| `Ctrl+L` | Clear screen |
+| `Ctrl+C` | Abort the running command, or cancel the current line |
 
 ---
 

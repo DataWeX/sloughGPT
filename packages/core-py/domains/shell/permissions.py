@@ -39,12 +39,14 @@ _SAFE = frozenset({
     "help", "exit", "which",
     "type", "history", "fc", "whoami",
     "tutorial", "status", "metrics", "health", "tokenizer",
-    "devices", "lsdev", "asm", "wm", "win", "uptime",
+    "devices", "lsdev", "asm", "uptime",
+    "logs", "console",
     "pwd", "echo", "cat", "head", "tail", "wc", "less",
     "sort", "uniq", "find", "grep", "ls", "tee", "xargs", "diff", "stat", "du",
     "cut", "tr", "seq", "nl", "fold", "tac", "env", "printenv", "yes", "realpath",
     "dirname", "basename", "nproc", "hostname", "uname", "shuf", "rev", "paste", "comm",
-    "test", "[", "printf",
+    "test", "[", "printf", "expand", "unexpand", "id", "logname", "mktemp", "who",
+    "od", "join",
 })
 
 # Modifies shell state only (aliases, env, history, variables, jobs)

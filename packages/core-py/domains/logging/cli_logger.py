@@ -28,6 +28,23 @@ _Panel = None
 _Syntax = None
 _box = None
 
+# While the shell TUI is active the terminal belongs to curses, so the rich
+# console must not write to it.  Handlers (e.g. the LogBuffer console pane)
+# keep receiving records regardless.
+_TERMINAL_ENABLED = True
+
+
+def set_cli_terminal(enabled: bool) -> None:
+    """Enable or disable rich terminal output (used by the shell TUI)."""
+    global _TERMINAL_ENABLED
+    _TERMINAL_ENABLED = enabled
+
+
+def _cli_print(renderable) -> None:
+    """Print via the rich console unless terminal output is disabled."""
+    if _TERMINAL_ENABLED:
+        _console.print(renderable)
+
 
 def _ensure_rich():
     global _console, _Table, _Panel, _Syntax, _box
@@ -121,7 +138,7 @@ class CLILogger(Logger):
             parts.append(f" — {record.exception}", style="red")
 
         with self._lock:
-            _console.print(parts)
+            _cli_print(parts)
 
     # ── CLI-specific helpers (not on base Logger) ───────────────────────
 
@@ -135,7 +152,7 @@ class CLILogger(Logger):
             ctx_str = " ".join(f"{k}={v}" for k, v in ctx.items())
             parts.append(f" {ctx_str}", style="dim")
         with self._lock:
-            _console.print(parts)
+            _cli_print(parts)
 
     def step(self, msg: str, **ctx: Any) -> None:
         """Log a step/action (cyan arrow)."""
@@ -147,22 +164,22 @@ class CLILogger(Logger):
             ctx_str = " ".join(f"{k}={v}" for k, v in ctx.items())
             parts.append(f" {ctx_str}", style="dim")
         with self._lock:
-            _console.print(parts)
+            _cli_print(parts)
 
     def header(self, title: str, char: str = "=") -> None:
         """Print a bold header with a separator line."""
         width = _console.width
         with self._lock:
-            _console.print(f"[bold]{title}[/]")
-            _console.print(f"[dim]{char * width}[/]")
+            _cli_print(f"[bold]{title}[/]")
+            _cli_print(f"[dim]{char * width}[/]")
 
     def section(self, title: str) -> None:
         """Print a section divider."""
         width = _console.width
         with self._lock:
-            _console.print()
-            _console.print(f"[bold]{title}[/]")
-            _console.print(f"[dim]{'-' * width}[/]")
+            _cli_print()
+            _cli_print(f"[bold]{title}[/]")
+            _cli_print(f"[dim]{'-' * width}[/]")
 
     def table(
         self,
@@ -182,7 +199,7 @@ class CLILogger(Logger):
         for row in rows:
             t.add_row(*row)
         with self._lock:
-            _console.print(t)
+            _cli_print(t)
 
     def json(self, data: Any, indent: int = 2) -> None:
         """Pretty-print JSON with syntax highlighting."""
@@ -190,7 +207,7 @@ class CLILogger(Logger):
         text = _json.dumps(data, indent=indent, default=str)
         syntax = _Syntax(text, "json", theme="monokai", line_numbers=False)
         with self._lock:
-            _console.print(syntax)
+            _cli_print(syntax)
 
     def status(self, label: str, value: str, status: str = "ok") -> None:
         """Print a key-value status line with a colored indicator."""
@@ -199,9 +216,9 @@ class CLILogger(Logger):
         color = colors.get(status, "white")
         icon = icons.get(status, "•")
         with self._lock:
-            _console.print(f"  [[{color}]{icon}[/]] {label}: {value}")
+            _cli_print(f"  [[{color}]{icon}[/]] {label}: {value}")
 
     def divider(self, char: str = "-") -> None:
         """Print a separator line."""
         with self._lock:
-            _console.print(f"[dim]{char * _console.width}[/]")
+            _cli_print(f"[dim]{char * _console.width}[/]")

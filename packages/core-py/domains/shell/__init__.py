@@ -9,7 +9,7 @@ Includes:
   - ShellREPL: interactive shell with 80+ commands, pipelines, backgrounding
   - DaitRuntime: top-level runtime layer (kernel + init system)
   - Kernel: process/resource manager
-  - WindowManager: curses-based multi-pane TUI
+  - TuiRepl: split-pane curses TUI (opt-in via `sloughgpt tui`, `shell --tui`, or MAN_TUI=1)
   - InitSystem: multi-runlevel service manager with boot/shutdown/respawn
 
 Usage:
@@ -40,7 +40,6 @@ from .state import ShellState
 from .io import ShellIO, ConsoleIO, MemoryIO, capture_output
 from .audit import ShellAuditLogger, get_shell_audit_logger
 from .permissions import ShellPermissions, Risk
-from .window_manager import WindowManager, get_window_manager, reset_window_manager
 from .init import InitSystem, ServiceDef, ServiceInstance, ServiceManager, get_init_system, reset_init_system
 from .devices import DeviceManager, AIDevice, create_default_devices
 from .vm import VirtualCPU, VMRunner, ProgramLoader, Instruction, VMFault, Halt, MemFault, InsFault, SysFault
@@ -73,9 +72,6 @@ __all__ = [
     "ShellREPL",
     "ShellCommands",
     "ShellState",
-    "WindowManager",
-    "get_window_manager",
-    "reset_window_manager",
     "get_dait_runtime",
     "InitSystem",
     "ServiceDef",

@@ -306,20 +306,18 @@ Version: {format_version_display()}
 """)
 
 
-@cli.command(help="Launch interactive terminal UI")
+@cli.command(help="Launch interactive terminal UI (split-pane curses)")
 @click.pass_context
 def tui(ctx):
-    from utils.helpers import ensure_server
-    ensure_server(host=ctx.obj["host"], port=ctx.obj["port"])
-    from apps.tui.interactive import main as tui_main
-    args = _ns(host=ctx.obj["host"], port=ctx.obj["port"])
-    tui_main(["--host", args.host, "--port", str(args.port)])
+    """Launch the split-pane curses TUI."""
+    ctx.invoke(shell, command=None, tui=True)
 
 
 @cli.command(help="Launch interactive shell REPL")
 @click.option("--command", "-c", help="Run a single command and exit")
+@click.option("--tui", is_flag=True, help="Boot into the split-pane curses TUI instead of line mode")
 @click.pass_context
-def shell(ctx, command):
+def shell(ctx, command, tui):
     """Launch the SloughGPT interactive shell REPL."""
     from utils.helpers import ensure_server
     ensure_server(host=ctx.obj["host"], port=ctx.obj["port"])
@@ -327,7 +325,7 @@ def shell(ctx, command):
     from domains.shell import DaitRuntime
 
     os = DaitRuntime()
-    repl = ShellREPL(os)
+    repl = ShellREPL(os, use_tui=True if tui else None)
     if command:
         commands, is_bg, should_time = repl._parse_pipeline(command)
         if is_bg:

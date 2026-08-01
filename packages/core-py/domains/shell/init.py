@@ -14,7 +14,6 @@ import os
 import sys
 import time
 import json
-import itertools
 import logging
 import shlex
 import threading
@@ -288,24 +287,8 @@ class InitSystem:
                     logger.warning("Failed to load service %s: %e", f.name, e, extra={"tag": "INFRA"})
 
     def boot(self, target_runlevel: int = 3, shell_run: Callable[[str], str] | None = None) -> str:
-        """
-        Boot through runlevels up to target_runlevel.
-
-        Runlevels:
-          1 — boot-critical (kernel, device init)
-          2 — core services (model server, database)
-          3 — optional services (agent orchestrator, knowledge worker)
-        """
+        """Boot through runlevels up to target_runlevel. Returns boot log."""
         self._boot_time = time.time()
-        header = [
-            "\n" + "╔══════════════════════════════════════╗",
-            "║     Dait — Booting                  ║",
-            "╚══════════════════════════════════════╝",
-            "",
-        ]
-        _p = lambda: (sys.stdout.flush())
-        sys.stdout.write("\n".join(header) + "\n")
-        _p()
 
         rl_names = {1: "boot-critical", 2: "core", 3: "optional"}
         output: list[str] = []
@@ -318,18 +301,12 @@ class InitSystem:
 
             label = rl_names.get(rl, f"runlevel {rl}")
             output.append(f"  ── {label} ──")
-            sys.stdout.write(output[-1] + "\n")
-            _p()
 
-            # Topological sort by dependencies
             ordered = self._resolve_deps(services)
 
             for mgr in ordered:
                 output.append(f"    {mgr.defn.name}...")
-                sys.stdout.write(output[-1] + "\n")
-                _p()
 
-                # Wait for dependencies
                 deps_ok = True
                 for dep_name in mgr.defn.deps:
                     dep = self._managers.get(dep_name)
@@ -337,34 +314,23 @@ class InitSystem:
                         dep_start = dep.start(shell_run)
                         if not dep_start:
                             output[-1] = f"    {mgr.defn.name}... dependency {dep_name} failed"
-                            sys.stdout.write("\033[F\033[K" + output[-1] + "\n")
                             output.append("      └─ ✗ dependency failed")
-                            sys.stdout.write(output[-1] + "\n")
-                            _p()
                             deps_ok = False
                             break
 
                 if not deps_ok:
                     continue
 
-                # Launch process
                 ok = mgr.start(shell_run)
 
-                # Wait for health check with live spinner
                 if ok and mgr.defn.health_check:
-                    spinner = itertools.cycle(["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
                     deadline = time.time() + mgr.defn.timeout
-                    start_ts = time.time()
                     while time.time() < deadline:
                         if mgr.instance.state in ("failed", "crashed"):
                             break
                         if mgr.wait_until_healthy():
                             break
-                        spin = next(spinner)
-                        waited = time.time() - start_ts
-                        sys.stdout.write(f"\r      └─ {spin} waiting ({waited:.0f}s / {mgr.defn.timeout:.0f}s)\033[K")
-                        _p()
-                        time.sleep(1)
+                        time.sleep(0.5)
                     else:
                         with self._lock:
                             mgr.instance.state = "failed"
@@ -374,21 +340,16 @@ class InitSystem:
                 else:
                     result = "      └─ ✗ failed"
                 output.append(result)
-                sys.stdout.write("\r" + result + "\033[K\n")
-                _p()
 
             output.append("")
-            sys.stdout.write("\n")
 
         self._current_runlevel = target_runlevel
         self._boot_complete = True
         elapsed = time.time() - self._boot_time
         final = f"  Boot complete in {elapsed:.1f}s (runlevel {target_runlevel})"
-        sys.stdout.write(final + "\n")
-        _p()
         output.append("")
         output.append(final)
-        return "\n".join(header + output)
+        return "\n".join(output)
 
     def _resolve_deps(self, services: list[ServiceManager]) -> list[ServiceManager]:
         """Simple topological sort by dependency ordering."""

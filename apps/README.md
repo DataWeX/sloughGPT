@@ -4,8 +4,7 @@ Runnable services and application entrypoints.
 
 - `api/` — FastAPI server and routers (`api/server/main.py`; see **`api/README.md`**). HTTP training uses **`SloughGPTTrainer`** **`step_*.pt`** charset semantics — **`docs/policies/CONTRIBUTING.md`** (*Checkpoint vocabulary*).
 - `web/` — Next.js frontend (**`app/(app)/`** routes under **`app/`**). Talks to the API over HTTP only (`NEXT_PUBLIC_API_URL`); no Python in the bundle — see **`web/README.md`** (*UI vs core engine*).
-- `cli/` — CLI (`sloughgpt` entrypoint via `pyproject.toml`; see **`cli/README.md`** for **`cli.py train`** export naming (**`--save-stem`**) and **`cli.py generate`** local `.sou` resolution).
-- `tui/` — Phase 1 Python shell: session + read-only HTTP/local probes (`python3 -m apps.tui`); see **`tui/README.md`**. TypeScript Ink TUI: **`packages/tui-ts/`** (`sloughgpt-tui`). Roadmap: **`docs/plans/tui-cli-port.md`**.
+- `cli/` — CLI (`sloughgpt` entrypoint via `pyproject.toml`; see **`cli/README.md`** for **`cli.py train`** export naming (**`--save-stem`**) and **`cli.py generate`** local `.sou` resolution). `sloughgpt shell` is the interactive TUI (split-pane curses; `sloughgpt tui` is an alias). The TypeScript Ink TUI lives at **`packages/tui-ts/`** (`sloughgpt-tui`).
 
 ### Quick start (repo root)
 
