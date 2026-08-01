@@ -144,8 +144,12 @@ class HDMemoryStore:
             if role_filter and item.role != role_filter:
                 continue
 
+            # Unbind role before comparing (bind was applied at store time)
+            role_vec = self.role_vectors.get(item.role, self.role_vectors.get("user"))
+            candidate = hd.unbind(item.hypervector, role_vec)
+
             # Cosine similarity via HD dot product
-            sim = hd.similarity(query_vec, item.hypervector)
+            sim = hd.similarity(query_vec, candidate)
             scored.append((item.id, item.content, sim))
 
         # Sort by similarity (descending)

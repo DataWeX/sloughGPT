@@ -212,7 +212,7 @@ def _rule_descriptive(text: str) -> tuple:
 
     for start in descriptive_starts:
         if t.startswith(start):
-            scores["descriptive"] = 0.6
+            scores["descriptive"] = 0.3
             reasons["descriptive"] = f"starts with descriptive '{start.strip()}'"
             break
 
@@ -289,8 +289,8 @@ def _rule_conceptual(text: str) -> tuple:
         reasons["conceptual"] = "definition pattern"
         return scores, reasons
 
-    # "X is Y" pattern (simple definition)
-    if re.match(r"^[\w\s]+ is [\w\s]+", t):
+    # "X is Y" pattern (simple definition) — Y must start with an article
+    if re.match(r"^[\w\s]+ is (a|an|the) [\w\s]+", t):
         scores["conceptual"] = 0.5
         reasons["conceptual"] = "X is Y definition pattern"
         return scores, reasons

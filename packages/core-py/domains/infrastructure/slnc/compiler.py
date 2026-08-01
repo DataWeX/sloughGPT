@@ -326,10 +326,12 @@ class SLNCCompiler:
                 key = prefix + tensor_name
                 if key in weights:
                     result.append((key, weights[key]))
-                # Check for corresponding bias (e.g. q_proj.weight → q_proj.bias)
+                # Check for corresponding bias (e.g. q_proj.weight → q_proj.bias).
+                # Only auto-append when the bias is not already in the block
+                # layout (GPT-2 lists biases explicitly; LLaMA does not).
                 if tensor_name.endswith(".weight"):
                     bias_key = prefix + tensor_name[:-len(".weight")] + ".bias"
-                    if bias_key in weights:
+                    if bias_key in weights and bias_key not in (prefix + t for t in block_layout):
                         result.append((bias_key, weights[bias_key]))
 
         # Non-block tensors

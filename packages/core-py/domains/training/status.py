@@ -18,7 +18,8 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from domains.training.slonet_compat import torch
+from domains.training.slonet import load_checkpoint_npz as _load_npz
+from domains.training.slonet import save_checkpoint_npz as _save_npz
 
 logger = logging.getLogger("slo.training.status")
 
@@ -369,23 +370,14 @@ class CheckpointManager:
         meta: Dict[str, Any],
     ) -> None:
         """Save checkpoint as ``.npz`` (numpy arrays + JSON metadata)."""
-        np_state = self._tensors_to_numpy(state_dict) if state_dict else {}
-        arrays = {k: np.asarray(v) for k, v in np_state.items()}
-        arrays["_meta_json"] = np.array(json.dumps(meta, default=str))
-        np.savez_compressed(str(checkpoint_path), **arrays)
+        _save_npz(str(checkpoint_path), state_dict, meta)
 
     def _load_npz(
         self,
         checkpoint_path: Path,
     ) -> Dict[str, Any]:
         """Load checkpoint from ``.npz``."""
-        data = np.load(str(checkpoint_path), allow_pickle=False)
-        meta = json.loads(str(data["_meta_json"]))
-        state_dict = {k: data[k] for k in data.files if k != "_meta_json"}
-        if state_dict:
-            meta["model_state_dict"] = state_dict
-        data.close()
-        return meta
+        return _load_npz(str(checkpoint_path))
 
     def save_checkpoint(
         self,
@@ -397,15 +389,13 @@ class CheckpointManager:
         val_loss: Optional[float] = None,
         stage: TrainingStage = TrainingStage.PRETRAINING,
         metadata: Optional[Dict[str, Any]] = None,
-        use_npz: bool = False,
     ) -> str:
         """Save checkpoint with metadata.
 
-        Args:
-            use_npz: If True, save as ``.npz`` (torch-free). Defaults to ``.pt``.
+        Checkpoints are written as torch-free ``.npz`` (model weights as numpy
+        arrays + JSON metadata).
         """
-        ext = "npz" if use_npz else "pt"
-        checkpoint_path = self.checkpoint_dir / f"checkpoint_step{step}.{ext}"
+        checkpoint_path = self.checkpoint_dir / f"checkpoint_step{step}.npz"
 
         meta = {
             "step": step,
@@ -418,16 +408,8 @@ class CheckpointManager:
             "training_status": asdict(self.tracker.report),
         }
 
-        if use_npz:
-            state_dict = model.state_dict() if hasattr(model, "state_dict") else {}
-            self._save_npz(checkpoint_path, state_dict, meta)
-        else:
-            checkpoint = {
-                "model_state_dict": model.state_dict() if hasattr(model, "state_dict") else None,
-                "optimizer_state_dict": optimizer.state_dict() if optimizer and hasattr(optimizer, "state_dict") else None,
-                **meta,
-            }
-            torch.save(checkpoint, checkpoint_path)
+        state_dict = model.state_dict() if hasattr(model, "state_dict") else {}
+        self._save_npz(checkpoint_path, state_dict, meta)
 
         # Update tracker
         self.tracker.record_checkpoint(str(checkpoint_path), step, loss)
@@ -445,22 +427,12 @@ class CheckpointManager:
         """Load checkpoint with metadata."""
         ckpt_path = Path(checkpoint_path)
 
-        if ckpt_path.suffix == ".npz":
-            checkpoint = self._load_npz(ckpt_path)
-        else:
-            checkpoint = torch.load(checkpoint_path, map_location=device)
+        checkpoint = self._load_npz(ckpt_path)
 
-        # Load model (npz state_dict is already numpy, pt may be torch tensors)
+        # Load model (npz state_dict is already numpy)
         state_dict = checkpoint.get("model_state_dict")
         if state_dict is not None:
             model.load_state_dict(state_dict)
-
-        # Load optimizer (only from .pt — npz doesn't store optimizer state)
-        if optimizer and "optimizer_state_dict" in checkpoint and ckpt_path.suffix != ".npz":
-            try:
-                optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-            except Exception as e:
-                logger.warning("Could not load optimizer state: %s", e, extra={"tag": "TRAIN"})
 
         # Restore training status
         if "training_status" in checkpoint:
@@ -476,19 +448,16 @@ class CheckpointManager:
         }
 
     def _load_meta(self, path: Path) -> Optional[Dict[str, Any]]:
-        """Load metadata from a checkpoint file (``.pt`` or ``.npz``)."""
+        """Load metadata from a checkpoint file (``.npz``)."""
         try:
-            if path.suffix == ".npz":
-                return self._load_npz(path)
-            return torch.load(path, map_location="cpu")
+            return self._load_npz(path)
         except Exception:
             return None
 
     def get_latest_checkpoint(self) -> Optional[str]:
         """Get path to latest checkpoint."""
         checkpoints = sorted(
-            list(self.checkpoint_dir.glob("checkpoint_*.pt"))
-            + list(self.checkpoint_dir.glob("checkpoint_*.npz")),
+            list(self.checkpoint_dir.glob("checkpoint_*.npz")),
             key=lambda p: p.stat().st_mtime,
         )
         if not checkpoints:
@@ -519,10 +488,7 @@ class CheckpointManager:
         """List all checkpoints with metadata."""
         checkpoints = []
 
-        for path in sorted(
-            list(self.checkpoint_dir.glob("checkpoint_*.pt"))
-            + list(self.checkpoint_dir.glob("checkpoint_*.npz")),
-        ):
+        for path in sorted(list(self.checkpoint_dir.glob("checkpoint_*.npz"))):
             ckpt = self._load_meta(path)
             if ckpt is None:
                 continue
@@ -540,7 +506,7 @@ class CheckpointManager:
 
 
 # =============================================================================
-# STANDALONE NPZ CHECKPOINT HELPERS (torch-free)
+# STANDALONE NPZ CHECKPOINT HELPERS (torch-free, native)
 # =============================================================================
 
 
@@ -549,39 +515,9 @@ def _tensors_to_numpy(state_dict: Dict[str, Any]) -> Dict[str, np.ndarray]:
     return CheckpointManager._tensors_to_numpy(state_dict)
 
 
-def save_checkpoint_npz(path: str, state_dict: Dict[str, Any], meta: Optional[Dict[str, Any]] = None) -> str:
-    """Save a model checkpoint as ``.npz`` (torch-free).
-
-    Args:
-        path: Output path (``.npz`` extension added if missing).
-        state_dict: Model weights (torch tensors or numpy arrays).
-        meta: Optional metadata dict (serialised to JSON inside the npz).
-
-    Returns:
-        The path the checkpoint was saved to.
-    """
-    p = Path(path)
-    if p.suffix != ".npz":
-        p = p.with_suffix(".npz")
-    np_state = _tensors_to_numpy(state_dict)
-    arrays = {k: np.asarray(v) for k, v in np_state.items()}
-    arrays["_meta_json"] = np.array(json.dumps(meta or {}, default=str))
-    np.savez_compressed(str(p), **arrays)
-    return str(p)
-
-
-def load_checkpoint_npz(path: str) -> Dict[str, Any]:
-    """Load a checkpoint saved by ``save_checkpoint_npz``.
-
-    Returns:
-        Dict with ``model_state_dict`` (numpy arrays) + metadata keys.
-    """
-    data = np.load(path, allow_pickle=False)
-    meta = json.loads(str(data["_meta_json"]))
-    state_dict = {k: data[k] for k in data.files if k != "_meta_json"}
-    meta["model_state_dict"] = state_dict
-    data.close()
-    return meta
+# Native implementations live in domains.training.slonet.
+save_checkpoint_npz = _save_npz
+load_checkpoint_npz = _load_npz
 
 
 # =============================================================================

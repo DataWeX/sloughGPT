@@ -86,10 +86,8 @@ class ModelLoader:
     """Pluggable model loader - dispatches to the right backend.
 
     Supports:
-    - .slo files (Slo Unit format, native)
-    - .pt/.pth PyTorch checkpoints (converted to numpy on load)
+    - .sou/.soul/.slo files (Slo Unit format, native, pure NumPy)
     - .gguf llama.cpp format
-    - HuggingFace model IDs (optional, requires transformers)
     - External model types registered via ModelLoader.register()
     """
 
@@ -113,16 +111,12 @@ class ModelLoader:
         suffix = p.suffix.lower()
         if suffix in cls._loader_funcs:
             return cls._loader_funcs[suffix](path, device, **kwargs)
-        if suffix == ".slo":
+        if suffix in (".sou", ".soul", ".slo"):
             return cls._load_sou(path, device, **kwargs)
         elif suffix == ".gguf":
             return cls._load_gguf(path, device, **kwargs)
-        elif suffix in (".pt", ".pth"):
-            return cls._load_torch(path, device, **kwargs)
-        elif "/" in path or path.startswith("hf://"):
-            return cls._load_huggingface(path, device, **kwargs)
         else:
-            return cls._load_torch(path, device, **kwargs)
+            return cls._load_sou(path, device, **kwargs)
 
     @classmethod
     def _load_sou(cls, path: str, device: str, **kwargs) -> ModelInterface:
@@ -152,46 +146,6 @@ class ModelLoader:
         return model
 
     @classmethod
-    def _load_torch(cls, path: str, device: str, **kwargs) -> ModelInterface:
-        """Load a PyTorch .pt file, converting weights to numpy arrays."""
-        try:
-            from domains.training.slonet_compat import torch
-        except ImportError:
-            raise ImportError(
-                "PyTorch required to load .pt files. Install: pip install torch"
-            )
-        checkpoint = torch.load(path, map_location="cpu", weights_only=False)
-        if isinstance(checkpoint, dict):
-            state_dict = checkpoint.get("model", checkpoint)
-            config = checkpoint.get("config", {})
-        else:
-            state_dict = checkpoint
-            config = {}
-        model_type = config.get("model_type", "sloughgpt")
-        state_dict_np = {}
-        for k, v in state_dict.items():
-            if isinstance(v, np.ndarray):
-                state_dict_np[k] = v.astype(np.float32)
-            elif hasattr(v, 'numpy'):
-                state_dict_np[k] = v.cpu().numpy().astype(np.float32)
-            else:
-                state_dict_np[k] = np.array(v, dtype=np.float32)
-        if model_type == "sloughgpt":
-            model = SloughGPTModel(
-                vocab_size=config.get("vocab_size", 256),
-                n_embed=config.get("n_embed", 256),
-                n_layer=config.get("n_layer", 6),
-                n_head=config.get("n_head", 8),
-                n_kv_head=config.get("n_kv_head"),
-                block_size=config.get("block_size", 128),
-                max_seq_len=config.get("max_seq_len", 2048),
-            )
-        else:
-            model = cls._load_external_model(model_type, config)
-        model.load_state_dict(state_dict_np, strict=False)
-        return model
-
-    @classmethod
     def _load_gguf(cls, path: str, device: str, **kwargs):
         try:
             from llama_cpp import Llama
@@ -199,22 +153,6 @@ class ModelLoader:
         except ImportError:
             raise NotImplementedError(
                 "GGUF loading requires llama-cpp-python. Install: pip install llama-cpp-python"
-            )
-
-    @classmethod
-    def _load_huggingface(cls, model_id: str, device: str, **kwargs) -> ModelInterface:
-        try:
-            from transformers import AutoModelForCausalLM, AutoConfig
-            logger.info(f"Loading from HuggingFace: {model_id}", extra={"tag": "MODEL"})
-            config = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
-            model = AutoModelForCausalLM.from_pretrained(
-                model_id, config=config, trust_remote_code=True,
-                device_map=device if device != "cpu" else None, **kwargs
-            )
-            return HuggingFaceWrapper(model)
-        except ImportError:
-            raise ImportError(
-                "HuggingFace loading requires transformers. Install: pip install transformers"
             )
 
     @classmethod
@@ -228,79 +166,6 @@ class ModelLoader:
             f"Supported external models: {supported}. "
             f"Register with ModelLoader.register('{model_type}', YourModelClass)"
         )
-
-
-class HuggingFaceWrapper(ModelInterface):
-    """Wrapper for HuggingFace transformers models (optional torch dependency)."""
-
-    def __init__(self, model):
-        self._model = model
-        self._config = getattr(model, "config", {})
-
-    def load(self, path: str, device: str = "cpu", **kwargs) -> "HuggingFaceWrapper":
-        from transformers import AutoModelForCausalLM
-        self._model = AutoModelForCausalLM.from_pretrained(path)
-        from domains.training.slonet_compat import torch
-        self._model = self._model.to(torch.device(device))
-        return self
-
-    def generate(
-        self,
-        input_ids: np.ndarray,
-        max_new_tokens: int,
-        temperature: float = 1.0,
-        top_k: Optional[int] = None,
-        top_p: Optional[float] = None,
-        **kwargs,
-    ) -> np.ndarray:
-        from domains.training.slonet_compat import torch
-        inp = torch.from_numpy(input_ids.astype(np.int64))
-        with torch.no_grad():
-            output = self._model.generate(
-                inp, max_new_tokens=max_new_tokens,
-                temperature=temperature, top_k=top_k, top_p=top_p,
-                do_sample=True, **kwargs
-            )
-        return output.cpu().numpy()
-
-    def forward(
-        self, input_ids: np.ndarray, targets: Optional[np.ndarray] = None, **kwargs
-    ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
-        from domains.training.slonet_compat import torch
-        inp = torch.from_numpy(input_ids.astype(np.int64))
-        tgt = torch.from_numpy(targets.astype(np.int64)) if targets is not None else None
-        outputs = self._model(inp, labels=tgt)
-        logits = outputs.logits.cpu().numpy()
-        loss = getattr(outputs, "loss", None)
-        return logits, loss.cpu().numpy() if loss is not None else None
-
-    def state_dict(self) -> Dict[str, np.ndarray]:
-        sd = self._model.state_dict()
-        return {k: v.cpu().numpy() for k, v in sd.items()}
-
-    def load_state_dict(self, state_dict: Dict[str, np.ndarray], **kwargs) -> None:
-        from domains.training.slonet_compat import torch
-        torch_sd = {k: torch.from_numpy(v) for k, v in state_dict.items()}
-        self._model.load_state_dict(torch_sd, **kwargs)
-
-    def num_parameters(self) -> int:
-        return sum(p.numel() for p in self._model.parameters())
-
-    def config(self) -> Dict[str, Any]:
-        return self._config
-
-    def to(self, device: str) -> "HuggingFaceWrapper":
-        from domains.training.slonet_compat import torch
-        self._model = self._model.to(torch.device(device))
-        return self
-
-    def eval(self) -> "HuggingFaceWrapper":
-        self._model.eval()
-        return self
-
-    def train_mode(self) -> "HuggingFaceWrapper":
-        self._model.train()
-        return self
 
 
 # =============================================================================
@@ -402,9 +267,11 @@ class SloughGPTModel(SloTransformer, ModelInterface):
         return self
 
     def eval(self) -> "SloughGPTModel":
+        super().eval()
         return self
 
     def train_mode(self) -> "SloughGPTModel":
+        super().train(True)
         return self
 
     def clear_kv_cache(self):
@@ -435,7 +302,7 @@ def apply_rotary_pos_emb(q, k, cos, sin):
 
 
 __all__ = [
-    "ModelInterface", "ModelLoader", "HuggingFaceWrapper",
+    "ModelInterface", "ModelLoader",
     "SloughGPTModel", "RMSNorm",
     "SloughGPTAttention", "SloughGPTBlock", "SwiGLU",
     "rotate_half", "apply_rotary_pos_emb",

@@ -114,7 +114,7 @@ def sample_token(logits: np.ndarray, temperature: float = 1.0,
     return int(rng.choice(len(probs), p=probs))
 
 
-class TransformerEngine:
+class NativeEngine:
     def __init__(self):
         self._lib = B.load_lib()
         self._weights = None
@@ -269,21 +269,21 @@ class TransformerEngine:
 
 _engine = None
 
-def get_engine() -> TransformerEngine:
+def get_engine() -> NativeEngine:
     global _engine
     if _engine is None:
-        _engine = TransformerEngine()
+        _engine = NativeEngine()
     return _engine
 
 
 class NativeTransformerProvider:
-    """Async provider wrapping the C-accelerated TransformerEngine.
+    """Async provider wrapping the C-accelerated NativeEngine.
 
     Implements the ModelProvider protocol for integration into the provider chain.
     Uses Apple Accelerate BLAS via the native C forward pass.
     """
 
-    def __init__(self, engine: TransformerEngine, model_id: str = "native-c"):
+    def __init__(self, engine: NativeEngine, model_id: str = "native-c"):
         self._engine = engine
         self._model_id = model_id
 

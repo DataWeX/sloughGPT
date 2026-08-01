@@ -4,7 +4,7 @@ forward_pass.py — Unified forward pass interface for all transformer engines.
 Any model loaded into the NPU must implement ForwardPassable:
   - forward_pass(input_ids) -> ForwardPassResult
 
-Both SloTransformer (numpy) and TransformerEngine (C) implement this.
+Both SloTransformer (numpy) and NativeEngine (C) implement this.
 The NPU calls forward_pass() without knowing which backend is running.
 """
 

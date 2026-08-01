@@ -928,7 +928,7 @@ class KnowledgeIngestor:
         from domains.learner.data_filter import get_data_filter
         self.filter = filter_instance or get_data_filter()
         self._feeds: list[FeedSubscription] = self._load_feeds()
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._running = False
         self._feed_thread: Optional[threading.Thread] = None
 

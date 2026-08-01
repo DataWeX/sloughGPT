@@ -166,81 +166,75 @@ class LoRAEvaluator:
 
         self.eval_prompts = eval_prompts or self.EVAL_PROMPTS
         self.base_model = base_model
-        self._tokenizer = None
         self._model = None
+        self._stoi = None
+        self._itos = None
         self._device = "cpu"
 
     def _load_inference_engine(self):
-        """Lazy-load the inference engine."""
+        """Lazy-load a native SloNet model (torch-free).
+
+        Loads ``base_model`` via the pure-numpy ``ModelLoader`` and extracts the
+        character vocab from the embedded soul metadata. On any failure the
+        evaluator falls back to deterministic simulation.
+        """
         if self._model is not None:
             return
 
+        if not self.base_model or not Path(self.base_model).exists():
+            logger.warning(
+                "No local base model for eval (%r); using simulated generation.",
+                self.base_model,
+                extra={"tag": "INFRA"},
+            )
+            return
+
         try:
-            from domains.training.slonet_compat import torch
-            from transformers import AutoTokenizer, AutoModelForCausalLM
+            from domains.models import ModelLoader
 
-            if self.base_model and Path(self.base_model).exists():
-                self._tokenizer = AutoTokenizer.from_pretrained(self.base_model, local_files_only=True)
-                self._model = AutoModelForCausalLM.from_pretrained(self.base_model, local_files_only=True)
-            else:
-                from transformers import GPT2LMHeadModel, GPT2Tokenizer
-                self._tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-                self._model = GPT2LMHeadModel.from_pretrained("gpt2")
-
-            self._device = "cuda" if torch.cuda.is_available() else "cpu"
-            self._model.to(self._device)
-            self._model.eval()
+            model = ModelLoader.load(str(self.base_model), device="cpu")
+            self._model = model
+            self._stoi = None
+            self._itos = None
+            soul = getattr(model, "_soul", None)
+            meta = getattr(soul, "metadata", None) if soul is not None else None
+            if isinstance(meta, dict):
+                self._stoi = meta.get("stoi") or meta.get("char_to_idx")
+                self._itos = meta.get("itos") or meta.get("idx_to_char") or meta.get("chars")
+                if self._itos is not None and not isinstance(self._itos, dict):
+                    self._itos = {i: c for i, c in enumerate(self._itos)}
+            self._device = "cpu"
+            model.eval()
+            logger.info("Loaded native eval model: %s", self.base_model, extra={"tag": "INFRA"})
         except Exception as e:
-            logger.warning("Could not load model: %s", e, extra={"tag": "INFRA"})
+            logger.warning("Could not load eval model (%s); using simulated generation.", e,
+                extra={"tag": "INFRA"})
             self._model = None
 
     def _generate(self, prompt: str, adapter_path: Optional[str] = None, max_tokens: int = 50) -> Tuple[str, float, float]:
         """Generate response and return (text, latency_sec, tokens_per_sec)."""
         self._load_inference_engine()
 
-        if self._model is None or self._tokenizer is None:
+        if self._model is None or self._stoi is None or self._itos is None:
             # Fallback: simulate generation
             return self._simulate_generation(prompt, adapter_path)
-
-        from domains.training.slonet_compat import torch
-        from transformers import TextIteratorStreamer
-        import threading
-
-        inputs = self._tokenizer(prompt, return_tensors="pt")
-        inputs = {k: v.to(self._device) for k, v in inputs.items()}
 
         # Apply adapter if provided
         if adapter_path:
             try:
                 data = np.load(adapter_path)
-                # Apply LoRA adjustment to embedding (lightweight simulation)
                 scale = float(data.get("alpha", 16) / max(data.get("rank", 8), 1))
-                # Just mark that adapter is applied
+                del scale
             except Exception as e:
-                import logging
-                logging.getLogger("slo.lora_eval").debug("Failed to load adapter %s: %s", adapter_path, e)
+                logger.debug("Failed to load adapter %s: %s", adapter_path, e)
 
-        streamer = TextIteratorStreamer(self._tokenizer, skip_prompt=True, skip_special_tokens=True)
-        gen_kwargs = dict(
-            input_ids=inputs["input_ids"],
-            attention_mask=inputs["attention_mask"],
-            max_new_tokens=max_tokens,
-            temperature=0.8,
-            do_sample=True,
-            pad_token_id=self._tokenizer.eos_token_id,
-            streamer=streamer,
-        )
-
-        thread = threading.Thread(target=self._model.generate, kwargs=gen_kwargs)
-        thread.start()
-
+        ids = np.array([[self._stoi.get(c, 0) for c in prompt]], dtype=np.int64)
         start = time.time()
-        full_text = ""
-        for text in streamer:
-            full_text += text
-        thread.join()
+        out = self._model.generate(ids, max_new_tokens=max_tokens, temperature=0.8)
         latency = time.time() - start
 
+        token_ids = out.data[0].tolist()
+        full_text = "".join([self._itos.get(int(i), "?") for i in token_ids])
         tokens_generated = max(1, len(full_text.split()))
         tps = tokens_generated / latency if latency > 0 else 0
 
@@ -287,33 +281,20 @@ class LoRAEvaluator:
         )
 
     def _compute_perplexity(self, text: str, prompt: str) -> Optional[float]:
-        """Compute perplexity as exp(negative log likelihood)."""
+        """Compute perplexity as exp(negative log likelihood) on the native model."""
         self._load_inference_engine()
 
-        if self._model is None or self._tokenizer is None:
+        if self._model is None or self._stoi is None:
             # Simulate perplexity based on text coherence
             words = text.split()
             unique_ratio = len(set(words)) / max(len(words), 1)
             return 1.0 + (1.0 - unique_ratio) * 30  # Range: 1-31
 
         try:
-            from domains.training.slonet_compat import torch
-
             full_text = prompt + " " + text
-            inputs = self._tokenizer(full_text, return_tensors="pt")
-            input_ids = inputs["input_ids"].to(self._device)
-
-            with torch.no_grad():
-                logits = self._model(input_ids).logits
-
-            # Compute per-token negative log likelihood
-            shift_logits = logits[..., :-1, :].contiguous()
-            shift_labels = input_ids[..., 1:].contiguous()
-
-            loss_fct = torch.nn.CrossEntropyLoss(reduction="mean")
-            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-            perplexity = float(torch.exp(loss).item())
-
+            ids = np.array([self._stoi.get(c, 0) for c in full_text], dtype=np.int64).reshape(1, -1)
+            _, loss = self._model.forward(ids, ids)
+            perplexity = float(np.exp(loss.item()))
             return perplexity
         except Exception:
             return None

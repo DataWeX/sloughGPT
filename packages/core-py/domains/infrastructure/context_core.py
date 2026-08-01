@@ -7,6 +7,9 @@ from typing import Optional, List, Dict, Any, Callable
 from datetime import datetime
 import json
 import hashlib
+import logging
+
+logger = logging.getLogger("slo.infrastructure.context_core")
 
 # Lazy import to avoid heavy deps at module load
 def simple_embed(text: str) -> List[float]:
@@ -500,9 +503,13 @@ def get_context_core() -> ContextCore:
                     kwargs = {"persist_directory": persist_dir}
                 if vs_provider:
                     import asyncio
-                    store = asyncio.get_event_loop().run_until_complete(
-                        create_vector_store(provider=vs_provider, **kwargs)
-                    )
+                    loop = asyncio.new_event_loop()
+                    try:
+                        store = loop.run_until_complete(
+                            create_vector_store(provider=vs_provider, **kwargs)
+                        )
+                    finally:
+                        loop.close()
                     _context_core.set_vector_store(store)
                     logger.info("Vector store auto-configured: %s", vs_provider, extra={"tag": "INFRA"})
             except Exception as e:

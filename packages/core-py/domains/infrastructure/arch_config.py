@@ -44,8 +44,8 @@ class ArchConfig:
 
     def resolve(self, canonical: str, layer_idx: int = 0) -> str:
         """Map canonical name → actual weight tensor name."""
-        key = canonical.replace("{i}", str(layer_idx))
-        return self.weight_map.get(key, key)
+        mapped = self.weight_map.get(canonical, canonical)
+        return mapped.replace("{i}", str(layer_idx))
 
 
 # ── Weight maps (canonical → actual) ─────────────────────────────────────────

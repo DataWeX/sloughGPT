@@ -3,14 +3,12 @@
 SloughGPT Training Pipeline
 
 Unified training with:
-- Mixed precision (FP16/BF16)
 - Gradient accumulation
 - Automatic checkpointing
-- Distributed training (DDP)
 - LoRA support
 - Learning rate scheduling
 
-Full ``step_*.pt`` checkpoints embed ``stoi`` / ``itos`` / ``chars`` for fair
+Full ``step_*.npz`` checkpoints embed ``stoi`` / ``itos`` / ``chars`` for fair
 ``cli.py eval`` / ``lm_eval_char`` (see ``docs/policies/CONTRIBUTING.md``,
 *Checkpoint vocabulary*).
 """
@@ -20,21 +18,10 @@ import os
 import logging
 import threading
 import time
+import numpy as np
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
-try:
-    import torch
-    from torch.utils.data import Dataset, DataLoader
-    from torch.nn.parallel import DistributedDataParallel as DDP
-    _TRAINING_TORCH_AVAILABLE = True
-except ImportError:
-    from domains.training.slonet_compat import torch as _torch_compat
-    torch = _torch_compat
-    Dataset = object
-    DataLoader = None
-    DDP = None
-    _TRAINING_TORCH_AVAILABLE = False
 
 if TYPE_CHECKING:
     from domains.training.tracking import ExperimentTracker
@@ -50,6 +37,7 @@ from domains.training.checkpoint_utils import (
     normalize_raw_checkpoint,
     torch_load_checkpoint,
 )
+from domains.training.slonet import load_checkpoint_npz, save_checkpoint_npz
 from domains.training.lora import apply_lora_to_model, LoRAConfig
 
 logger = logging.getLogger("slo.trainer")
@@ -68,12 +56,12 @@ __all__ = [
 # =============================================================================
 
 
-class TextDataset(Dataset):
-    """Character-level text dataset."""
+class TextDataset:
+    """Character-level text dataset (numpy-backed)."""
 
     def __init__(self, data, block_size):
-        if not isinstance(data, torch.Tensor):
-            data = torch.tensor(data, dtype=torch.long)
+        if not isinstance(data, np.ndarray):
+            data = np.asarray(data, dtype=np.int64)
         self.data = data
         self.block_size = block_size
 
@@ -83,9 +71,6 @@ class TextDataset(Dataset):
     def __getitem__(self, idx):
         x = self.data[idx : idx + self.block_size]
         y = self.data[idx + 1 : idx + self.block_size + 1]
-        if not isinstance(x, torch.Tensor):
-            x = x.clone().to(dtype=torch.long)
-            y = y.clone().to(dtype=torch.long)
         return x, y
 
 
@@ -142,7 +127,7 @@ def prepare_data(data_path, block_size=128):
     chars = sorted(set(text))
     stoi = {c: i for i, c in enumerate(chars)}
     itos = {i: c for i, c in enumerate(chars)}
-    data = torch.tensor([stoi[c] for c in text], dtype=torch.long)
+    data = np.asarray([stoi[c] for c in text], dtype=np.int64)
 
     logger.info("Data: %d tokens, %d chars", len(data), len(chars),
         extra={"tag": "TRAIN"},)
@@ -221,12 +206,7 @@ class TrainerConfig:
 
     def __post_init__(self):
         if self.device == "auto":
-            if torch.cuda.is_available():
-                self.device = "cuda"
-            elif torch.backends.mps.is_available():
-                self.device = "mps"
-            else:
-                self.device = "cpu"
+            self.device = "cpu"
 
 
 # =============================================================================
@@ -235,7 +215,7 @@ class TrainerConfig:
 
 
 def _make_json_safe(obj):
-    """Recursively convert numpy arrays / torch tensors to JSON-safe types."""
+    """Recursively convert numpy arrays to JSON-safe types."""
     import numpy as _np
     if isinstance(obj, _np.ndarray):
         return obj.tolist()
@@ -290,8 +270,8 @@ def _build_training_state_metadata(
     """Build a JSON-serializable dict of training state for embedding in .soul metadata.
 
     Args:
-        optimizer: SloAdam / SloSGD / torch.optim.Optimizer (or None).
-        scheduler: SloLRScheduler / torch LR scheduler (or None).
+        optimizer: SloAdam / SloSGD (or None).
+        scheduler: SloLRScheduler (or None).
         step: Current global training step.
         epoch: Current epoch.
         accumulation_step: Current gradient accumulation step.
@@ -379,8 +359,8 @@ class CheckpointManager:
 
     def save(
         self,
-        model: torch.nn.Module,
-        optimizer: torch.optim.Optimizer,
+        model: Any,
+        optimizer: Optional[Any],
         scheduler: Optional[Any],
         step: int,
         metrics: Dict[str, float],
@@ -449,13 +429,12 @@ class CheckpointManager:
             save_soul(model, str(model_path), soul_profile=soul)
 
         except Exception as exc:
-            # Fallback to .pt if .soul export fails
-            logger.warning("Soul export failed, falling back to .pt: %s", exc,
+            # Fallback to .npz if .soul export fails
+            logger.warning("Soul export failed, falling back to .npz: %s", exc,
                 extra={"tag": "TRAIN"},)
-            model_path = self.checkpoint_dir / f"step_{step}.pt"
+            model_path = self.checkpoint_dir / f"step_{step}.npz"
 
-            save_dict = {
-                "model_state_dict": model.state_dict(),
+            meta = {
                 "step": step,
                 "epoch": epoch,
                 "metrics": metrics,
@@ -471,28 +450,28 @@ class CheckpointManager:
 
             if optimizer is not None:
                 try:
-                    save_dict["optimizer_state_dict"] = optimizer.state_dict()
+                    meta["optimizer_state_dict"] = optimizer.state_dict()
                 except Exception as exc:
                     logger.warning("Could not serialize optimizer state: %s", exc,
                         extra={"tag": "TRAIN"},)
 
             if scheduler is not None:
                 try:
-                    save_dict["scheduler_state_dict"] = scheduler.state_dict()
+                    meta["scheduler_state_dict"] = scheduler.state_dict()
                 except Exception as exc:
                     logger.warning("Could not serialize scheduler state: %s", exc,
                         extra={"tag": "TRAIN"},)
 
             if stoi is not None:
-                save_dict["stoi"] = stoi
+                meta["stoi"] = stoi
             if itos is not None:
-                save_dict["itos"] = itos
+                meta["itos"] = itos
             if chars is not None:
-                save_dict["chars"] = chars
+                meta["chars"] = chars
             elif stoi is not None and itos is not None:
-                save_dict["chars"] = [itos[i] for i in range(len(stoi))]
+                meta["chars"] = [itos[i] for i in range(len(stoi))]
 
-            torch.save(save_dict, model_path)
+            save_checkpoint_npz(str(model_path), model.state_dict(), meta=meta)
 
         self.checkpoints.append({"step": step, "path": str(model_path), "metrics": metrics})
 
@@ -504,7 +483,7 @@ class CheckpointManager:
 
     @staticmethod
     def load_from_path(path: str, map_location: str = "cpu") -> Optional[Dict[str, Any]]:
-        """Load a training checkpoint from an explicit path (.pt or .soul file)."""
+        """Load a training checkpoint from an explicit path (.soul, .npz, or legacy .pt)."""
         p = Path(path).expanduser()
         if not p.is_file():
             logger.warning("Checkpoint file not found: %s", p,
@@ -512,6 +491,8 @@ class CheckpointManager:
             return None
         if p.suffix == ".soul":
             return _load_soul_checkpoint(str(p))
+        if p.suffix == ".npz":
+            return load_checkpoint_npz(str(p))
         return torch_load_checkpoint(str(p), map_location=map_location)
 
     def _cleanup_old_checkpoints(self):
@@ -528,16 +509,16 @@ class CheckpointManager:
                 path.unlink()
 
     def load_latest(self) -> Optional[Dict[str, Any]]:
-        """Load the latest checkpoint (.soul, .pt, or .npz)."""
+        """Load the latest checkpoint (.soul, .npz, or legacy .pt)."""
         candidates = (
             list(self.checkpoint_dir.glob("*.soul"))
-            + list(self.checkpoint_dir.glob("step_*.pt"))
             + list(self.checkpoint_dir.glob("*.npz"))
+            + list(self.checkpoint_dir.glob("step_*.pt"))
         )
         if not candidates:
             return None
         latest = max(candidates, key=lambda p: p.stat().st_mtime)
-        return torch_load_checkpoint(str(latest), map_location="cpu")
+        return CheckpointManager.load_from_path(str(latest), map_location="cpu")
 
     def load_best(self) -> Optional[Dict[str, Any]]:
         """Load the checkpoint with the best metric."""
@@ -546,7 +527,7 @@ class CheckpointManager:
         best = min(self.checkpoints, key=lambda c: c["metrics"].get("eval_loss", float("inf")))
         path = Path(best["path"])
         if path.exists():
-            return torch_load_checkpoint(str(path), map_location="cpu")
+            return CheckpointManager.load_from_path(str(path), map_location="cpu")
         return None
 
 
@@ -562,10 +543,8 @@ class SloughGPTTrainer:
     Satisfies :class:`domains.training.trainer_protocol.TrainerProtocol` structurally (``train()``).
 
     Features:
-    - Mixed precision (FP16/BF16)
     - Gradient accumulation
-    - Automatic checkpointing (``step_*.pt`` includes ``stoi``/``itos``/``chars`` for eval)
-    - Distributed training (DDP)
+    - Automatic checkpointing (``step_*.npz`` includes ``stoi``/``itos``/``chars`` for eval)
     - LoRA fine-tuning
     - Learning rate scheduling
 
@@ -671,18 +650,9 @@ class SloughGPTTrainer:
         self.device = self._setup_device()
         self.config.device = self.device
 
-        # Initialize DDP state
-        self.ddp_model: Optional[DDP] = None
-        self.scaler: Optional[torch.cuda.amp.GradScaler] = None
+        # Distributed state (DDP not supported on the numpy path)
+        self.ddp_model: Optional[Any] = None
         self.accumulation_step = 0
-
-        # Compiled model for faster inference
-        self._compiled_model = None
-
-        # Pre-allocated batch tensors for efficiency
-        self._x_batch: Optional[torch.Tensor] = None
-        self._y_batch: Optional[torch.Tensor] = None
-        self._batch_allocated = False
 
         logger.info("Using device: %s", self.device,
             extra={"tag": "TRAIN"},)
@@ -713,9 +683,6 @@ class SloughGPTTrainer:
         self.optimizer = self._create_optimizer()
         self.scheduler = self._create_scheduler()
 
-        # Setup mixed precision
-        self._setup_mixed_precision()
-
         # Setup checkpointing
         self.checkpoint_manager = CheckpointManager(
             self.config.checkpoint_dir,
@@ -731,18 +698,11 @@ class SloughGPTTrainer:
             extra={"tag": "TRAIN"},)
 
     def _setup_device(self) -> str:
-        """Setup training device."""
-        if self.config.device != "auto":
-            dev = self.config.device
-            if dev == "cuda" and self.config.use_distributed:
-                torch.cuda.set_device(self.config.local_rank)
-            return dev
-        if torch.cuda.is_available():
-            if self.config.use_distributed:
-                torch.cuda.set_device(self.config.local_rank)
-            return "cuda"
-        if torch.backends.mps.is_available():
-            return "mps"
+        """Setup training device.
+
+        SloNet training is pure numpy and always runs on the CPU, regardless
+        of the configured device string.
+        """
         return "cpu"
 
     def _create_model(self):
@@ -756,7 +716,7 @@ class SloughGPTTrainer:
             n_head=self.config.n_head,
             block_size=self.config.block_size,
             dropout=self.config.dropout,
-        ).to(self.device)
+        )
 
         logger.info("Model: SloughGPTModel (RoPE, SwiGLU, RMSNorm, SDPA)",
             extra={"tag": "TRAIN"},)
@@ -778,137 +738,28 @@ class SloughGPTTrainer:
             logger.info("LoRA params: %d (%.1f%%)", lora_params, 100 * lora_params / total,
                 extra={"tag": "TRAIN"},)
 
-        # Apply channels-last memory format for GPU
-        if self.config.use_channels_last and self.device == "cuda":
-            self.model = self.model.to(memory_format=torch.channels_last)
-            logger.info("Using channels_last memory format",
-                extra={"tag": "TRAIN"},)
-
-        # Apply torch.compile for PyTorch 2.0+
-        if self.config.use_compile and hasattr(torch, "compile") and self.device == "cuda":
-            logger.info("Compiling model with mode: %s", self.config.compile_mode,
-                extra={"tag": "TRAIN"},)
-            try:
-                self._compiled_model = torch.compile(
-                    self.model,
-                    mode=self.config.compile_mode,
-                    fullgraph=False,
-                )
-                logger.info("Model compiled successfully",
-                    extra={"tag": "TRAIN"},)
-            except Exception as e:
-                logger.warning("torch.compile failed: %s", e,
-                    extra={"tag": "TRAIN"},)
-                self._compiled_model = None
-
-        # Setup DDP
+        # DDP/FSDP not available on the numpy path
         if self.config.use_distributed:
             self._setup_distributed()
 
     def _setup_distributed(self):
-        """Setup distributed training (DDP or FSDP)."""
-        try:
-            import torch.distributed as dist
-
-            if self.config.use_fsdp and torch.cuda.is_available():
-                self._setup_fsdp()
-            else:
-                self.ddp_model = DDP(
-                    self.model,
-                    device_ids=[self.config.local_rank] if torch.cuda.is_available() else None,
-                    find_unused_parameters=False,
-                )
-                logger.info(f"DDP: rank={self.config.rank}, world_size={self.config.world_size}",
-                    extra={"tag": "TRAIN"},)
-        except Exception as e:
-            logger.error(f"Failed to setup distributed: {e}",
-                extra={"tag": "TRAIN"},)
-            self.config.use_distributed = False
-            self.config.use_fsdp = False
-            self.ddp_model = None
-
-    def _setup_fsdp(self):
-        """Setup Fully Sharded Data Parallel (FSDP)."""
-        try:
-            from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
-            from torch.distributed.fsdp.api import ShardingStrategy
-
-            strategy_map = {
-                "FULL_SHARD": ShardingStrategy.FULL_SHARD,
-                "SHARD_GRAD_OP": ShardingStrategy.SHARD_GRAD_OP,
-                "NO_SHARD": ShardingStrategy.NO_SHARD,
-            }
-            strategy = strategy_map.get(self.config.sharding_strategy, ShardingStrategy.FULL_SHARD)
-
-            self.ddp_model = FSDP(
-                self.model,
-                sharding_strategy=strategy,
-                device_id=self.config.local_rank if torch.cuda.is_available() else None,
-            )
-
-            total_params = sum(p.numel() for p in self.model.parameters())
-            logger.info(
-                f"FSDP: rank={self.config.rank}, world_size={self.config.world_size}, "
-                f"strategy={self.config.sharding_strategy}, params={total_params:,}",
-                extra={"tag": "TRAIN"},
-            )
-        except ImportError:
-            logger.warning("FSDP not available. Requires PyTorch 2.0+ with distributed support.",
-                extra={"tag": "TRAIN"},)
-            logger.warning("Falling back to DDP.",
-                extra={"tag": "TRAIN"},)
-            self.config.use_fsdp = False
-            self._setup_distributed()
-        except Exception as e:
-            logger.error(f"Failed to setup FSDP: {e}",
-                extra={"tag": "TRAIN"},)
-            logger.warning("Falling back to DDP.",
-                extra={"tag": "TRAIN"},)
-            self.config.use_fsdp = False
-            self._setup_distributed()
-
-    def _setup_mixed_precision(self):
-        """Setup mixed precision training."""
-        if not self.config.use_mixed_precision or not torch.cuda.is_available():
-            return
-
-        self.scaler = torch.cuda.amp.GradScaler()
-        self.mixed_precision_dtype = (
-            torch.bfloat16 if self.config.mixed_precision_dtype == "bf16" else torch.float16
+        """Distributed training (DDP/FSDP) is not supported on the numpy path."""
+        logger.warning(
+            "Distributed training (DDP/FSDP) requires PyTorch and is disabled "
+            "on the pure numpy SloNet path; training single-process on CPU.",
+            extra={"tag": "TRAIN"},
         )
-        logger.info("Mixed precision: %s", self.mixed_precision_dtype,
-            extra={"tag": "TRAIN"},)
+        self.config.use_distributed = False
+        self.config.use_fsdp = False
+        self.ddp_model = None
 
     def _create_optimizer(self):
         """Create optimizer with weight decay."""
-        if not _TRAINING_TORCH_AVAILABLE:
-            from domains.training.slonet import SloAdam
-            return SloAdam(
-                lr=self.config.learning_rate,
-                weight_decay=self.config.weight_decay,
-            )
+        from domains.training.slonet import SloAdam
 
-        import torch.nn as nn
-        _to_torch = lambda p: p if isinstance(p, torch.Tensor) else nn.Parameter(torch.from_numpy(p.data))
-
-        decay_params = []
-        no_decay_params = []
-        for n, p in self.model.named_parameters():
-            pt = _to_torch(p)
-            if "bias" in n or "norm" in n:
-                no_decay_params.append(pt)
-            else:
-                decay_params.append(pt)
-
-        param_groups = [
-            {"params": decay_params, "weight_decay": self.config.weight_decay},
-            {"params": no_decay_params, "weight_decay": 0.0},
-        ]
-
-        return torch.optim.AdamW(
-            param_groups,
+        return SloAdam(
             lr=self.config.learning_rate,
-            betas=(0.9, 0.999),
+            weight_decay=self.config.weight_decay,
         )
 
     def _create_scheduler(self):
@@ -932,95 +783,33 @@ class SloughGPTTrainer:
         )
 
     @property
-    def training_model(self) -> torch.nn.Module:
-        """Get the model for training (handles DDP wrapping)."""
+    def training_model(self):
+        """Get the model for training (DDP not supported on the numpy path)."""
         return self.ddp_model if self.ddp_model is not None else self.model
 
     def get_batch(self, split: str = "train") -> tuple:
-        """Get a batch of data with optional pre-allocated tensors."""
+        """Get a batch of data as numpy arrays."""
         data = self.train_data if split == "train" else self.val_data
         batch_size = self.config.batch_size
         block_size = self.config.block_size
 
-        if self.config.use_compile and self.device == "cuda":
-            if not self._batch_allocated or self._x_batch is None:
-                self._x_batch = torch.empty(batch_size, block_size, dtype=torch.long, device="cpu")
-                self._y_batch = torch.empty(batch_size, block_size, dtype=torch.long, device="cpu")
-                self._batch_allocated = True
-
-            idx = torch.randint(0, len(data) - block_size, (batch_size,))
-            for i, start_idx in enumerate(idx.tolist()):
-                self._x_batch[i].copy_(data[start_idx : start_idx + block_size])
-                self._y_batch[i].copy_(data[start_idx + 1 : start_idx + block_size + 1])
-
-            return self._x_batch.to(self.device, non_blocking=True), self._y_batch.to(
-                self.device, non_blocking=True
-            )
-
-        idx = torch.randint(0, len(data) - block_size, (batch_size,))
-        idx_list = [int(i) for i in (idx.tolist() if hasattr(idx, 'tolist') else idx)]
-        x = torch.stack([data[i : i + block_size] for i in idx_list])
-        y = torch.stack([data[i + 1 : i + block_size + 1] for i in idx_list])
-        return x.to(self.device, non_blocking=True), y.to(self.device, non_blocking=True)
+        idx = np.random.randint(0, len(data) - block_size, size=batch_size)
+        idx_list = [int(i) for i in idx]
+        x = np.stack([data[i : i + block_size] for i in idx_list])
+        y = np.stack([data[i + 1 : i + block_size + 1] for i in idx_list])
+        return x, y
 
     def train_step(self) -> Dict[str, float]:
-        """Execute a single training step with optimizations."""
+        """Execute a single training step on the pure numpy SloNet path."""
         model = self.training_model
         model.train()
 
         x, y = self.get_batch("train")
         scale_factor = 1.0 / self.config.gradient_accumulation_steps
 
-        forward_model = self._compiled_model if self._compiled_model else model
-
-        if not _TRAINING_TORCH_AVAILABLE:
-            logits, loss = forward_model(x, y)
-            (loss * scale_factor).backward()
-            self.accumulation_step += 1
-            raw_loss = loss.item() / scale_factor
-            # EMA smoothing: reported loss always trends downward
-            ema = self._ema_alpha * raw_loss + (1 - self._ema_alpha) * (self._ema_loss or raw_loss)
-            if self._ema_loss is None or ema < self._ema_loss:
-                self._ema_loss = ema
-            self._last_train_loss = raw_loss
-            metrics = {"loss": self._ema_loss, "raw_loss": raw_loss}
-            if self.accumulation_step >= self.config.gradient_accumulation_steps:
-                params = [p for p in model.parameters() if p.grad is not None]
-                # Clip gradients for SloNet path (numpy arrays, not torch tensors)
-                if self.config.max_grad_norm > 0 and params:
-                    import numpy as _np
-                    total_norm = 0.0
-                    for p in params:
-                        if p.grad is not None:
-                            g = p.grad.data if hasattr(p.grad, 'data') else p.grad
-                            total_norm += float(_np.sum(g ** 2))
-                    total_norm = total_norm ** 0.5
-                    clip_coef = self.config.max_grad_norm / (total_norm + 1e-6)
-                    if clip_coef < 1.0:
-                        for p in params:
-                            if p.grad is not None:
-                                g = p.grad.data if hasattr(p.grad, 'data') else p.grad
-                                g *= clip_coef
-                self.optimizer.step(params)
-                for p in model.parameters():
-                    p.grad = None
-                if self.scheduler is not None:
-                    self.scheduler.step()
-                self.accumulation_step = 0
-            return metrics
-
-        if self.scaler is not None:
-            with torch.cuda.amp.autocast(dtype=self.mixed_precision_dtype):
-                logits, loss = forward_model(x, y)
-                loss = loss * scale_factor
-
-            self.scaler.scale(loss).backward()
-        else:
-            logits, loss = forward_model(x, y)
-            (loss * scale_factor).backward()
-
+        logits, loss = model(x, y)
+        (loss * scale_factor).backward()
         self.accumulation_step += 1
-
         raw_loss = loss.item() / scale_factor
         # EMA smoothing: reported loss always trends downward
         ema = self._ema_alpha * raw_loss + (1 - self._ema_alpha) * (self._ema_loss or raw_loss)
@@ -1030,51 +819,48 @@ class SloughGPTTrainer:
         metrics = {"loss": self._ema_loss, "raw_loss": raw_loss}
 
         if self.accumulation_step >= self.config.gradient_accumulation_steps:
-            if self.scaler is not None:
-                self.scaler.unscale_(self.optimizer)
-
-            if self.config.max_grad_norm > 0:
-                try:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), self.config.max_grad_norm)
-                except AttributeError:
-                    pass
-
-            if self.scaler is not None:
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-            else:
-                self.optimizer.step()
-
-            self.optimizer.zero_grad(set_to_none=True)
-
+            params = [p for p in model.parameters() if p.grad is not None]
+            if self.config.max_grad_norm > 0 and params:
+                total_norm = 0.0
+                for p in params:
+                    if p.grad is not None:
+                        g = p.grad.data if hasattr(p.grad, 'data') else p.grad
+                        total_norm += float(np.sum(g ** 2))
+                total_norm = total_norm ** 0.5
+                clip_coef = self.config.max_grad_norm / (total_norm + 1e-6)
+                if clip_coef < 1.0:
+                    for p in params:
+                        if p.grad is not None:
+                            g = p.grad.data if hasattr(p.grad, 'data') else p.grad
+                            g *= clip_coef
+            self.optimizer.step(params)
+            for p in model.parameters():
+                p.grad = None
             if self.scheduler is not None:
                 self.scheduler.step()
-
             self.accumulation_step = 0
 
         return metrics
 
     def evaluate(self, num_batches: int = 50) -> Dict[str, float]:
-        """Evaluate the model with optimizations."""
+        """Evaluate the model on the validation split."""
         model = self.training_model
         model.eval()
 
-        eval_model = self._compiled_model if self._compiled_model else model
         total_loss = 0.0
         steps = 0
 
-        with torch.no_grad():
-            for _ in range(num_batches):
-                x, y = self.get_batch("val")
-                _, loss = eval_model(x, y)
-                total_loss += loss.item()
-                steps += 1
+        for _ in range(num_batches):
+            x, y = self.get_batch("val")
+            _, loss = model(x, y)
+            total_loss += loss.item()
+            steps += 1
 
         avg_loss = total_loss / max(steps, 1)
-        return {"eval_loss": avg_loss, "eval_ppl": torch.exp(torch.tensor(avg_loss)).item()}
+        return {"eval_loss": avg_loss, "eval_ppl": float(np.exp(avg_loss))}
 
     def _restore_from_checkpoint_bundle(self, checkpoint: Dict[str, Any]) -> None:
-        """Load weights (required) and best-effort training state from a loaded ``.pt`` dict."""
+        """Load weights (required) and best-effort training state from a loaded checkpoint dict."""
         normalized = normalize_raw_checkpoint(checkpoint)
         state = extract_state_dict(normalized)
         try:
@@ -1107,15 +893,6 @@ class SloughGPTTrainer:
             except Exception as exc:
                 logger.warning("Could not load scheduler_state_dict (fresh LR schedule): %s", exc,
                     extra={"tag": "TRAIN"},)
-
-        if self.scaler is not None:
-            sc = normalized.get("scaler_state_dict")
-            if isinstance(sc, dict) and sc:
-                try:
-                    self.scaler.load_state_dict(sc)
-                except Exception as exc:
-                    logger.warning("Could not load scaler_state_dict: %s", exc,
-                        extra={"tag": "TRAIN"},)
 
         self.global_step = int(normalized.get("step", 0))
         self.current_epoch = int(normalized.get("epoch", 0))
@@ -1151,13 +928,14 @@ class SloughGPTTrainer:
 
         Args:
             resume: If True, load checkpoint from ``resume_path`` or latest in ``checkpoint_dir``.
-            resume_path: Optional ``.pt`` path. Accepts full ``CheckpointManager`` bundles
-                (model + optimizer + scheduler + step/epoch) and **weights-only** bundles
-                (``model_state_dict``, legacy ``model``, or flat tensors) as normalized by
-                :func:`domains.training.checkpoint_utils.normalize_raw_checkpoint`. Optimizer,
-                scheduler, and AMP scaler load are best-effort so checkpoints from
-                ``train_sloughgpt.py`` or exports can still seed weights when training state
-                does not match this trainer's optimizer/scheduler.
+            resume_path: Optional checkpoint path (.soul, .npz, or legacy .pt). Accepts full
+                ``CheckpointManager`` bundles (model + optimizer + scheduler + step/epoch) and
+                **weights-only** bundles (``model_state_dict``, legacy ``model``, or flat
+                tensors) as normalized by
+                :func:`domains.training.checkpoint_utils.normalize_raw_checkpoint`. Optimizer
+                and scheduler load are best-effort so checkpoints from ``train_sloughgpt.py``
+                or exports can still seed weights when training state does not match this
+                trainer's optimizer/scheduler.
             on_progress: Optional callback (main process only) invoked on a throttled schedule
                 with a dict containing at least: ``global_step``, ``epoch`` (1-based),
                 ``epochs``, ``steps_per_epoch``, ``progress_percent`` (0--99 while running),
@@ -1400,7 +1178,6 @@ class SloughGPTTrainer:
             except (KeyError, TypeError):
                 chars_list = None
 
-        # Use .soul format instead of .pt
         checkpoint_dir = Path(self.config.checkpoint_dir if hasattr(self.config, 'checkpoint_dir') else "models/auto-training")
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1487,9 +1264,6 @@ class SloughGPTTrainer:
 
             output_path = path + ".safetensors"
             export_to_safetensors(self.model, output_path, metadata)
-        elif format == "torch":
-            output_path = path + ".pt"
-            torch.save({"model": self.model.state_dict(), **metadata}, output_path)
         else:
             from domains.training.export import export_to_safetensors
 
@@ -1502,12 +1276,10 @@ class SloughGPTTrainer:
     def generate(self, prompt: str, max_tokens: int = 200, temperature: float = 0.8) -> str:
         """Generate text."""
         self.model.eval()
-        idx = torch.tensor([[self.stoi.get(c, 0) for c in prompt]])
+        idx = np.array([[self.stoi.get(c, 0) for c in prompt]], dtype=np.int64)
+        out = self.model.generate(idx, max_new_tokens=max_tokens, temperature=temperature)
 
-        with torch.no_grad():
-            output = self.model.generate(idx, max_new_tokens=max_tokens, temperature=temperature)
-
-        text = "".join([self.itos.get(int(i), "?") for i in output[0]])
+        text = "".join([self.itos.get(int(i), "?") for i in out.data[0]])
         return text
 
 
@@ -1521,7 +1293,7 @@ def main():
     import argparse
 
     _epilog = (
-        "step_*.pt in --checkpoint-dir includes stoi/itos/chars for char-LM eval. "
+        "step_*.npz in --checkpoint-dir includes stoi/itos/chars for char-LM eval. "
         "See docs/policies/CONTRIBUTING.md (Checkpoint vocabulary)."
     )
     parser = argparse.ArgumentParser(
@@ -1540,9 +1312,6 @@ def main():
     parser.add_argument("--max-steps", type=int, default=None)
     parser.add_argument("--gradient-accumulation-steps", type=int, default=1)
     parser.add_argument("--max-grad-norm", type=float, default=1.0)
-    parser.add_argument("--mixed-precision", action="store_true", default=True)
-    parser.add_argument("--no-mixed-precision", dest="mixed_precision", action="store_false")
-    parser.add_argument("--precision", type=str, default="bf16", choices=["fp16", "bf16"])
     parser.add_argument("--checkpoint-dir", type=str, default="checkpoints")
     parser.add_argument("--checkpoint-interval", type=int, default=500)
     parser.add_argument("--save-best-only", action="store_true")
@@ -1551,28 +1320,17 @@ def main():
         "--resume",
         type=str,
         default=None,
-        help="Resume from this .pt (weights-only or full trainer checkpoint)",
+        help="Resume from this checkpoint (.soul, .npz, or legacy .pt)",
     )
     parser.add_argument(
         "--resume-latest",
         action="store_true",
-        help="Resume from newest step_*.pt in --checkpoint-dir",
+        help="Resume from newest checkpoint in --checkpoint-dir",
     )
     parser.add_argument("--lora", action="store_true")
     parser.add_argument("--lora-rank", type=int, default=8)
     parser.add_argument("--lora-alpha", type=float, default=16.0)
     parser.add_argument("--dropout", type=float, default=0.1)
-    parser.add_argument("--compile", action="store_true", help="Use torch.compile (PyTorch 2.0+)")
-    parser.add_argument(
-        "--compile-mode",
-        type=str,
-        default="reduce-overhead",
-        choices=["default", "reduce-overhead", "max-autotune"],
-        help="torch.compile mode",
-    )
-    parser.add_argument(
-        "--no-channels-last", action="store_true", help="Disable channels_last memory format"
-    )
     args = parser.parse_args()
 
     if args.resume and args.resume_latest:
@@ -1591,8 +1349,6 @@ def main():
         max_steps=args.max_steps,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         max_grad_norm=args.max_grad_norm,
-        use_mixed_precision=args.mixed_precision,
-        mixed_precision_dtype=args.precision,
         checkpoint_dir=args.checkpoint_dir,
         checkpoint_interval=args.checkpoint_interval,
         save_best_only=args.save_best_only,
@@ -1600,9 +1356,6 @@ def main():
         use_lora=args.lora,
         lora_rank=args.lora_rank,
         lora_alpha=float(args.lora_alpha),
-        use_compile=args.compile,
-        compile_mode=args.compile_mode,
-        use_channels_last=not args.no_channels_last,
     )
 
     if args.resume_latest:

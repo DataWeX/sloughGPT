@@ -593,14 +593,12 @@ def _mul(a, b):
         if a.requires_grad: a._consumers.append(out)
         if b.requires_grad: b._consumers.append(out)
     def bk(g):
-        ga = g * b.data
-        gb = g * a.data
-        for i, d in enumerate(_a_shape):
-            if d == 1 and i < g.ndim and g.shape[i] > 1: ga = np.sum(ga, axis=i, keepdims=True)
-        for i, d in enumerate(_b_shape):
-            if d == 1 and i < g.ndim and g.shape[i] > 1: gb = np.sum(gb, axis=i, keepdims=True)
-        if a.requires_grad: a.grad = Tensor(ga if a.grad is None else a.grad.data + ga)
-        if b.requires_grad: b.grad = Tensor(gb if b.grad is None else b.grad.data + gb)
+        if a.requires_grad:
+            ga = _broadcast_back(g * b.data, _a_shape)
+            a.grad = Tensor(ga if a.grad is None else a.grad.data + ga)
+        if b.requires_grad:
+            gb = _broadcast_back(g * a.data, _b_shape)
+            b.grad = Tensor(gb if b.grad is None else b.grad.data + gb)
     out._backward_fn = bk
     def fwd(t_a, t_b):
         t_a = np.zeros_like(a.data) if t_a is None else t_a
@@ -3402,6 +3400,67 @@ def souls_from_directory(dir_path) -> List[SloNet]:
         except Exception as exc:
             _log.warning("Failed to load soul %s: %s", p.name, exc, extra={"tag": "TRAIN"})
     return souls
+
+
+# =============================================================================
+# NPZ CHECKPOINT HELPERS (torch-free, native)
+# =============================================================================
+
+
+def _state_dict_to_numpy(state_dict: Dict[str, Any]) -> Dict[str, np.ndarray]:
+    """Recursively convert tensor-like values in a state dict to numpy arrays."""
+    result = {}
+    for k, v in state_dict.items():
+        if hasattr(v, "cpu"):
+            result[k] = np.asarray(v.cpu().numpy())
+        elif hasattr(v, "numpy"):
+            result[k] = np.asarray(v.numpy())
+        elif isinstance(v, np.ndarray):
+            result[k] = v
+        elif isinstance(v, dict):
+            result[k] = _state_dict_to_numpy(v)
+        else:
+            result[k] = np.asarray(v)
+    return result
+
+
+def save_checkpoint_npz(
+    path: str,
+    state_dict: Dict[str, Any],
+    meta: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Save a model checkpoint as ``.npz`` (torch-free).
+
+    Args:
+        path: Output path (``.npz`` extension added if missing).
+        state_dict: Model weights (tensors or numpy arrays).
+        meta: Optional metadata dict (serialised to JSON inside the npz).
+
+    Returns:
+        The path the checkpoint was saved to.
+    """
+    p = Path(path)
+    if p.suffix != ".npz":
+        p = p.with_suffix(".npz")
+    np_state = _state_dict_to_numpy(state_dict)
+    arrays = {k: np.asarray(v) for k, v in np_state.items()}
+    arrays["_meta_json"] = np.array(json.dumps(meta or {}, default=str))
+    np.savez_compressed(str(p), **arrays)
+    return str(p)
+
+
+def load_checkpoint_npz(path: str) -> Dict[str, Any]:
+    """Load a checkpoint saved by ``save_checkpoint_npz``.
+
+    Returns:
+        Dict with ``model_state_dict`` (numpy arrays) + metadata keys.
+    """
+    data = np.load(path, allow_pickle=False)
+    meta = json.loads(str(data["_meta_json"]))
+    state_dict = {k: data[k] for k in data.files if k != "_meta_json"}
+    meta["model_state_dict"] = state_dict
+    data.close()
+    return meta
 
 
 # =============================================================================

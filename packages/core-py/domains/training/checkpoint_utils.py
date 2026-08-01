@@ -15,9 +15,8 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 
-from domains.training.slonet_compat import torch
-from domains.training.status import load_checkpoint_npz as _load_npz
-from domains.training.status import save_checkpoint_npz as _save_npz
+from domains.training.slonet import load_checkpoint_npz as _load_npz
+from domains.training.slonet import save_checkpoint_npz as _save_npz
 
 try:
     from domains.models import SloughGPTModel
@@ -37,13 +36,9 @@ def torch_load_checkpoint(
     path: str,
     map_location: str = "cpu",
 ) -> Dict[str, Any]:
-    """Load a ``.pt`` checkpoint as a dict with numpy arrays."""
-    try:
-        from domains.infrastructure.pt_loader import load_pt_file
-        raw = load_pt_file(path, map_location=map_location)
-    except Exception:
-        from domains.training.slonet_compat import torch
-        raw = torch.load(path, map_location=map_location, weights_only=True)
+    """Load a ``.pt`` checkpoint as a dict with numpy arrays (torch-free)."""
+    from domains.infrastructure.pt_loader import load_pt_file
+    raw = load_pt_file(path, map_location=map_location)
     if not isinstance(raw, dict):
         raise TypeError(f"Expected checkpoint at {path!r} to load to dict, got {type(raw).__name__}")
     return _to_numpy_dict(raw)
@@ -133,7 +128,7 @@ def resolve_sloughgpt_hyperparams(
 def load_sloughgpt_from_checkpoint(
     bundle: Dict[str, Any],
     *,
-    device: Union[str, torch.device],
+    device: str = "cpu",
     strict: bool = True,
     fallback_vocab_size: int = 256,
     fallback_n_embed: int = 256,
@@ -154,7 +149,7 @@ def load_sloughgpt_from_checkpoint(
     if SloughGPTModel is None:
         raise RuntimeError(
             "SloughGPTModel is not available — "
-            "ensure domains.models is importable (torch required)."
+            "ensure domains.models is importable."
         )
     bundle = normalize_raw_checkpoint(bundle)
     hp = resolve_sloughgpt_hyperparams(

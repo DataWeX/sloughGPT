@@ -87,6 +87,7 @@ class SLNCLoader:
         self._block_size = struct.unpack("<I", self._mm.read(4))[0]
         self._non_block_offset = struct.unpack("<I", self._mm.read(4))[0]
         self._non_block_size = struct.unpack("<I", self._mm.read(4))[0]
+        self._tensor_count = struct.unpack("<I", self._mm.read(4))[0]
 
         json_len = struct.unpack("<I", self._mm.read(4))[0]
         self._config = json.loads(self._mm.read(json_len))

@@ -207,10 +207,12 @@ def emit_error_event(error: AppError, source: str = ""):
         bus = get_event_bus()
         import asyncio
         try:
-            asyncio.ensure_future(
-                bus.emit("error.raised", error.to_dict(), source=source)
-            )
-        except Exception:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop is not None and loop.is_running():
+            loop.create_task(bus.emit("error.raised", error.to_dict(), source=source))
+        else:
             bus.emit_sync("error.raised", error.to_dict(), source=source)
     except Exception:
         pass

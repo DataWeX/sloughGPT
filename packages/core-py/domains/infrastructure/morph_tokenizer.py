@@ -239,7 +239,7 @@ class MorphTokenizer:
         search_dirs.append(Path(hf_home) / "hub" / f"models--{model_slug}")
         # Project-local cache (models/hf-cache/hub/)
         for candidate in [
-            Path(__file__).resolve().parents[3] / "models" / "hf-cache" / "hub" / f"models--{model_slug}",
+            Path(__file__).resolve().parents[4] / "models" / "hf-cache" / "hub" / f"models--{model_slug}",
             Path("models/hf-cache/hub") / f"models--{model_slug}",
         ]:
             if candidate.exists() and candidate not in search_dirs:

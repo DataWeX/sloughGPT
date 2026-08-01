@@ -17,6 +17,7 @@ to::
 Everything works identically without PyTorch installed.
 """
 
+import json
 import math
 
 import numpy as np
@@ -370,7 +371,8 @@ class _NNModule:
             self.bias = Tensor(np.zeros(out_channels, dtype=np.float32), requires_grad=True) if bias else None
         def forward(self, x):
             from domains.training.slonet import _conv2d as _do_conv2d
-            return _do_conv2d(x, self.weight, stride=self.stride, padding=self.padding)
+            stride = self.stride[0] if len(set(self.stride)) == 1 else self.stride
+            return _do_conv2d(x, self.weight, self.bias, stride=stride, padding=self.padding)
 
     class BatchNorm1d(_SoulLayer):
         """Drop‑in for ``torch.nn.BatchNorm1d`` — stub."""
@@ -465,8 +467,10 @@ class _NNModule:
                 b, s, d = _data(x).shape
             else:
                 s, b, d = _data(x).shape
-            out = Tensor(np.zeros((s, b, self.hidden_size), dtype=np.float32), requires_grad=False)
-            return out, Tensor(np.zeros((self.num_layers, b, self.hidden_size), dtype=np.float32), requires_grad=False)
+            out = np.zeros((s, b, self.hidden_size), dtype=np.float32)
+            if self.batch_first:
+                out = out.transpose(1, 0, 2)
+            return Tensor(out, requires_grad=False), Tensor(np.zeros((self.num_layers, b, self.hidden_size), dtype=np.float32), requires_grad=False)
 
     class LSTM(_SoulLayer):
         """Drop‑in for ``torch.nn.LSTM`` — stub."""
@@ -490,11 +494,11 @@ class _NNModule:
             self.embed_dim = embed_dim; self.num_heads = num_heads; self.batch_first = batch_first
         def forward(self, query, key, value, key_padding_mask=None, need_weights=True, attn_mask=None, average_attn_weights=True, is_causal=False):
             d = _data(query)
-            if self.batch_first:
-                out = Tensor(d, requires_grad=False)
-            else:
-                out = Tensor(d, requires_grad=False)
+            out = Tensor(d, requires_grad=False)
             return out, None
+
+        def __call__(self, *args, **kwargs):
+            return self.forward(*args, **kwargs)
 
     class PReLU(_SoulLayer):
         """Drop‑in for ``torch.nn.PReLU`` — stub."""
@@ -631,6 +635,8 @@ class _NNModule:
                 self.module = module
             def __getattr__(self, name):
                 return getattr(self.module, name)
+            def __call__(self, *a, **kw):
+                return self.forward(*a, **kw)
             def parameters(self):
                 return self.module.parameters()
             def forward(self, *a, **kw):
@@ -747,7 +753,7 @@ class _Init:
 
 
 def _to_tensor(x):
-    if isinstance(x, Tensor):
+    if isinstance(x, _Tensor):
         return x
     if isinstance(x, np.ndarray):
         return Tensor(x, requires_grad=False)
@@ -868,7 +874,6 @@ def save(obj, f, **kw):
         pass
 
     if has_tensors:
-        import numpy as np
         # Convert SloNet Tensors → numpy arrays for serialization
         obj_clean = _walk_replace(obj, lambda v: v.data if isinstance(v, (Tensor, _Tensor)) else v)
         # Flatten dict of arrays into numpy savez format
@@ -883,9 +888,9 @@ def save(obj, f, **kw):
                 arrays[prefix.rstrip(".")] = np.array(v)
         _flatten(obj_clean)
         arrays["_meta_json"] = np.array(json.dumps({"format": "numpy_flat"}, default=str))
-        np.savez_compressed(str(f), **arrays)
+        with open(str(f), "wb") as fh:
+            np.savez_compressed(fh, **arrays)
     else:
-        import json
         with open(f, 'w') as fh:
             json.dump(obj, fh)
 
@@ -934,7 +939,6 @@ def load(f, **kw):
         pass
 
     # Fallback to JSON
-    import json
     with open(f, 'r') as fh:
         return json.load(fh)
 
@@ -1742,6 +1746,11 @@ class _TorchNamespace:
         if dim is not None:
             return Tensor(np.quantile(d, q, axis=dim, keepdims=keepdim), requires_grad=False)
         return Tensor(np.array(np.quantile(d, q), dtype=np.float32), requires_grad=False)
+
+    @staticmethod
+    def amax(tensor, dim=None, keepdim=False):
+        t = _to_tensor(tensor)
+        return t.amax(dim=dim, keepdim=keepdim)
 
     @staticmethod
     def unique(tensor, sorted=True, return_inverse=False, return_counts=False, dim=None):

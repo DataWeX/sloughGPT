@@ -189,6 +189,8 @@ class OutputBuffer:
         sub = _Subscriber(name=name, buffer=self)
         with self._lock:
             self._subscribers[name] = sub
+            if name.startswith("sub-"):
+                self._seq += 1
         return sub
 
     def unsubscribe(self, name: str) -> None:

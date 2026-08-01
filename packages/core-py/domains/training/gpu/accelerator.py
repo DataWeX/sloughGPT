@@ -44,10 +44,10 @@ class _MetalAccelerator:
         self._available = self._check_metal()
 
     def _check_metal(self) -> bool:
-        """Check if MPS is available via the torch shim."""
+        """Check if MPS is available without importing torch."""
         try:
-            from domains.training.slonet_compat import torch
-            return hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()
+            from domains.infrastructure.ml_types import _mps_available
+            return _mps_available()
         except Exception:
             return False
 

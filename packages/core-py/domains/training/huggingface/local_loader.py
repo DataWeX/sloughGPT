@@ -1,11 +1,14 @@
-"""HuggingFace Local Loader - Download and run models locally."""
+"""HuggingFace Local Loader - Download and run models locally.
+
+Torch-free shim: device auto-detection and dtype resolution no longer
+require PyTorch. The underlying ``transformers`` model still needs torch
+at runtime, but this module itself imports neither torch nor slonet_compat.
+"""
 
 import os
 from dataclasses import dataclass
 from typing import Optional, Dict, List
 from pathlib import Path
-
-from domains.training.slonet_compat import torch
 
 import logging
 
@@ -45,25 +48,25 @@ class HuggingFaceLocalLoader:
         self._determine_device()
 
     def _determine_device(self):
-        """Auto-detect the best device."""
+        """Auto-detect the best device.
+
+        PyTorch is not required for detection: without torch installed the
+        only usable device is CPU. Explicit ``config.device`` values are
+        preserved.
+        """
         if self.config.device == "auto":
-            if torch.cuda.is_available():
-                self.config.device = "cuda"
-            elif torch.backends.mps.is_available():
-                self.config.device = "mps"
-            else:
-                self.config.device = "cpu"
+            self.config.device = "cpu"
 
     def _get_dtype(self):
-        """Get torch dtype from config string."""
+        """Get dtype from config string (string form for transformers)."""
         dtype_map = {
-            "float32": torch.float32,
-            "float16": torch.float16,
-            "half": torch.half,
-            "bfloat16": torch.bfloat16,
+            "float32": "float32",
+            "float16": "float16",
+            "half": "float16",
+            "bfloat16": "bfloat16",
             "auto": "auto",
         }
-        return dtype_map.get(self.config.dtype, torch.float16)
+        return dtype_map.get(self.config.dtype, "float32")
 
     def load(self) -> None:
         """Download and load the model."""
@@ -143,8 +146,7 @@ class HuggingFaceLocalLoader:
         }
         gen_kwargs.update(kwargs)
 
-        with torch.no_grad():
-            outputs = self.model.generate(**inputs, **gen_kwargs)
+        outputs = self.model.generate(**inputs, **gen_kwargs)
 
         return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
 
@@ -185,8 +187,6 @@ class HuggingFaceLocalLoader:
         del self.tokenizer
         self.model = None
         self.tokenizer = None
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
 
 
 class HuggingFaceLocalClient(HuggingFaceLocalLoader):

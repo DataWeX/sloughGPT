@@ -454,6 +454,10 @@ class SouParser:
                         current_block[k] = float(v)
                     except ValueError:
                         current_block[k] = v
+            elif section == "behavior":
+                parts = line.split(maxsplit=1)
+                if len(parts) == 2:
+                    current_block[parts[0]] = parts[1]
             elif section == "adapter":
                 current_block.append(line)
             elif line.startswith("QUANTIZATION "):
@@ -664,7 +668,12 @@ def load_soul(sou_path: str):
         state_dict = {}
         if version >= 3:
             # v3 binary float32 format
-            num_params = struct.unpack("<I", f.read(4))[0]
+            num_params_raw = f.read(4)
+            if len(num_params_raw) < 4:
+                # weights_only files carry no weight section
+                num_params = 0
+            else:
+                num_params = struct.unpack("<I", num_params_raw)[0]
             for _ in range(num_params):
                 name_len = struct.unpack("<I", f.read(4))[0]
                 name = f.read(name_len).decode("utf-8")
@@ -718,8 +727,9 @@ def write_v3_sou(
       For each param i in 0..N-1:
         [4 bytes] name_len (uint32 LE)
         [name_len bytes] key name (UTF-8, e.g. "p0")
-        [4 bytes] count (uint32 LE)
-        [count * 4 bytes] raw float32 data (little-endian)
+        [4 bytes] ndim (uint32 LE)
+        [ndim * 4 bytes] dims (uint32 LE each)
+        [prod(dims) * 4 bytes] raw float32 data (little-endian)
 
     Args:
         outpath: destination file path
@@ -736,7 +746,7 @@ def write_v3_sou(
     import numpy as np
 
     params = {
-        f"p{i}": np.asarray(v, dtype=np.float32).ravel()
+        f"p{i}": np.asarray(v, dtype=np.float32)
         for i, (_, v) in enumerate(state_dict.items())
     }
     meta_bytes = json.dumps(metadata, allow_nan=False, default=str).encode()
@@ -753,8 +763,10 @@ def write_v3_sou(
             name_bytes = key.encode()
             f.write(struct.pack("<I", len(name_bytes)))
             f.write(name_bytes)
-            f.write(struct.pack("<I", len(arr)))
-            f.write(struct.pack(f"<{len(arr)}f", *arr))
+            f.write(struct.pack("<I", arr.ndim))
+            for dim in arr.shape:
+                f.write(struct.pack("<I", dim))
+            f.write(arr.tobytes())
 
     return outpath
 

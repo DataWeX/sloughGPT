@@ -216,7 +216,8 @@ class BatchEmbedder:
                 batch = to_embed[i:i + self.batch_size]
                 embeddings = self.embedder.embed(batch)
 
-                for j, emb in zip(indices[i:i + self.batch_size], embeddings):
+                for j, text, emb in zip(indices[i:i + self.batch_size], batch, embeddings):
+                    self._cache[hashlib.md5(text.encode()).hexdigest()] = emb
                     results.append((j, emb))
 
         results.sort(key=lambda x: x[0])

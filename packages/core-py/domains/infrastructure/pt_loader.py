@@ -140,7 +140,7 @@ def load_pt_checkpoint(
         # Read all raw tensor data files
         data_arrays = {}
         for name in z.namelist():
-            if "/data/" in name and not name.endswith(".pkl"):
+            if name.startswith("data/") and not name.endswith(".pkl"):
                 key = name.split("/")[-1]
                 data_arrays[key] = z.read(name)
 

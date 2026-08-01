@@ -498,7 +498,15 @@ class FeedbackWorkflowManager:
             result = self.lora_store.aggregate_best_adapters()
             self._stats.setdefault("aggregations_performed", 0)
             self._stats["aggregations_performed"] += 1
-            logger.info("[Workflow] Adapter aggregation completed: %s", result, extra={"tag": "INFRA"})
+            summary = {
+                "output_path": result.get("output_path"),
+                "sou_checkpoint": result.get("sou_checkpoint"),
+                "user_count": result.get("user_count"),
+                "total_feedback": result.get("total_feedback"),
+                "weights": {k: str(v.shape) for k, v in (result.get("weights") or {}).items()},
+                "eval_verdict": (result.get("eval") or {}).get("delta", {}).get("verdict"),
+            }
+            logger.info("[Workflow] Adapter aggregation completed: %s", summary, extra={"tag": "INFRA"})
         except Exception as e:
             logger.error("[Workflow] Adapter aggregation failed: %s", e, extra={"tag": "INFRA"})
 

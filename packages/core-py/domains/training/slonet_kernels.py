@@ -734,6 +734,7 @@ def _ensure_fused_norm_residual():
 # ---------------------------------------------------------------------------
 
 _nb_lm_head_argmax = None
+_nb_lm_head_argmax_int8 = None
 _lm_head_built = False
 
 

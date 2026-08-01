@@ -262,6 +262,8 @@ def convert_to_slnc(
         out.write(struct.pack("<I", layout["block_size"]))
         out.write(struct.pack("<I", layout["header_size"] + layout["block_size"] * config["n_layer"]))  # non_block_offset
         out.write(struct.pack("<I", sum(s for _, _, s in layout["non_block_tensors"])))  # non_block_size
+        tensor_count = config["n_layer"] * len(GPT2_BLOCK_TENSORS) + len(layout["non_block_tensors"])
+        out.write(struct.pack("<I", tensor_count))
 
         # Config JSON
         json_bytes = json.dumps(config).encode()

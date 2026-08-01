@@ -162,11 +162,9 @@ class ElasticWeightConsolidation:
 
     def compute_fisher(self, data_loader, num_samples: int = 100):
         """
-        Compute Fisher information matrix.
+        Compute Fisher information matrix using native SloNet autograd.
         Higher Fisher = more important for previous task.
         """
-        from domains.training.slonet_compat import torch
-
         self.model.eval()
         fisher_accum = defaultdict(float)
         num_batches = 0
@@ -177,24 +175,28 @@ class ElasticWeightConsolidation:
 
             self.model.zero_grad()
             output = self.model(batch)
-            loss = output.mean()  # Use log-likelihood
-
+            if isinstance(output, tuple):
+                logits, loss = output
+                loss = loss if loss is not None else logits.mean()
+            else:
+                loss = output.mean()
             loss.backward()
 
             for name, param in self.model.named_parameters():
                 if param.grad is not None:
-                    fisher_accum[name] += param.grad.data ** 2
+                    grad = np.asarray(param.grad, dtype=np.float64)
+                    fisher_accum[name] += grad ** 2
 
             num_batches += 1
 
         # Average Fisher information
         for name in fisher_accum:
-            fisher_accum[name] /= num_batches
-            self.fisher[name] = fisher_accum[name].item()
+            fisher_accum[name] /= max(num_batches, 1)
+            self.fisher[name] = float(np.mean(fisher_accum[name]))
 
         # Store optimal parameters
         for name, param in self.model.named_parameters():
-            self.optimal_params[name] = param.data.clone()
+            self.optimal_params[name] = np.array(param.data, dtype=np.float64, copy=True)
 
     def ewc_loss(self) -> float:
         """
@@ -203,12 +205,11 @@ class ElasticWeightConsolidation:
         """
         loss = 0.0
         for name, param in self.model.named_parameters():
-                if name in self.fisher:
-                    fisher = self.fisher[name]
-                    old_param = self.optimal_params[name]
-                    if hasattr(old_param, "item"):
-                        old_param = old_param.item()
-                    loss += fisher * (param.data.item() - old_param) ** 2
+            if name in self.fisher:
+                fisher = self.fisher[name]
+                old_param = np.asarray(self.optimal_params[name], dtype=np.float64)
+                current = np.asarray(param.data, dtype=np.float64)
+                loss += fisher * np.mean((current - old_param) ** 2)
 
         return self.lambda_ewc * loss
 

@@ -55,42 +55,53 @@ class BrowserSpeechRecognizer:
 
 class ServerSpeechRecognizer:
     """
-    Server-side speech recognition.
+    Server-side speech recognition (torch-free).
 
-    Requires whisper or similar model loaded.
+    Uses an optional pure-Python ASR backend if installed. No model files
+    are downloaded; when no backend is available the recognizer degrades
+    gracefully to an empty transcription.
     """
 
     def __init__(self, model_name: str = "base"):
         self.model_name = model_name
         self._model = None
         self._processor = None
+        self._backend = None
 
     def load_model(self):
-        """Load whisper model."""
+        """Load a torch-free ASR backend if one is installed."""
+        # 1) vosk — offline, pure-Python inference (model loaded from disk)
         try:
-            from transformers import WhisperForConditionalGeneration, WhisperProcessor
-            from domains.training.slonet_compat import torch
+            import vosk  # type: ignore
+            self._backend = "vosk"
+            logger.info("Loaded vosk ASR backend", extra={"tag": "MODEL"})
+            return
+        except ImportError:
+            pass
 
-            self._processor = WhisperProcessor.from_pretrained(f"openai/{self.model_name}")
-            self._model = WhisperForConditionalGeneration.from_pretrained(
-                f"openai/{self.model_name}"
-            )
-            self._model.eval()
-            logger.info(f"Loaded whisper model: {self.model_name}", extra={"tag": "MODEL"})
-        except Exception as e:
-            logger.warning(f"Could not load whisper: {e}", extra={"tag": "MODEL"})
-            self._model = None
+        # 2) speech_recognition — wrapper over system/offline engines
+        try:
+            import speech_recognition as sr  # type: ignore
+            self._backend = "speech_recognition"
+            self._model = sr.Recognizer()
+            logger.info("Loaded speech_recognition backend", extra={"tag": "MODEL"})
+            return
+        except ImportError:
+            pass
+
+        logger.warning(
+            "No torch-free ASR backend available (vosk/speech_recognition). "
+            "Server speech recognition disabled; browser Web Speech API still works.",
+            extra={"tag": "MODEL"},
+        )
+        self._backend = None
 
     def recognize(self, audio_data: bytes, language: str = "en") -> TranscriptionResult:
-        """Recognize speech from audio bytes."""
-        from domains.training.slonet_compat import torch
-        import io
-        from scipy.io import wavfile
-
-        if self._model is None:
+        """Recognize speech from audio bytes using the available backend."""
+        if self._backend is None:
             self.load_model()
 
-        if self._model is None:
+        if self._backend is None:
             return TranscriptionResult(
                 text="",
                 confidence=0.0,
@@ -98,38 +109,47 @@ class ServerSpeechRecognizer:
             )
 
         try:
-            sample_rate, audio = wavfile.read(io.BytesIO(audio_data))
-
-            # Process with whisper
-            input_features = self._processor(
-                audio,
-                sampling_rate=sample_rate,
-                return_tensors="pt"
-            ).input_features
-
-            forced_decoder_ids = self._processor.get_decoder_prompt_ids(
-                language=language
-            )
-
-            predicted_ids = self._model.generate(
-                input_features,
-                forced_decoder_ids=forced_decoder_ids,
-            )
-
-            text = self._processor.batch_decode(predicted_ids)[0]
-
-            return TranscriptionResult(
-                text=text,
-                confidence=0.9,
-                language=language,
-            )
+            if self._backend == "speech_recognition":
+                from speech_recognition import AudioData
+                audio = AudioData(audio_data, sample_rate=16000, sample_width=2)
+                text = self._model.recognize_google(audio, language=language)
+                return TranscriptionResult(text=text, confidence=0.9, language=language)
+            if self._backend == "vosk":
+                text = self._decode_vosk(audio_data)
+                return TranscriptionResult(text=text, confidence=0.9, language=language)
         except Exception as e:
             logger.error(f"Speech recognition error: {e}", extra={"tag": "MODEL"})
-            return TranscriptionResult(
-                text="",
-                confidence=0.0,
-                language=language,
+        return TranscriptionResult(
+            text="",
+            confidence=0.0,
+            language=language,
+        )
+
+    def _decode_vosk(self, audio_data: bytes) -> str:
+        """Decode raw 16-bit PCM audio bytes with vosk."""
+        import json as _json
+        import os
+
+        try:
+            from vosk import Model, KaldiRecognizer
+        except ImportError:
+            return ""
+
+        if not isinstance(self._model, Model):
+            model_path = os.environ.get("VOSK_MODEL_PATH") or (
+                f"/usr/share/vosk-model-small-{self.model_name}"
             )
+            if not os.path.isdir(model_path):
+                logger.warning(
+                    "vosk model not found at %s (set VOSK_MODEL_PATH)", model_path,
+                    extra={"tag": "MODEL"},
+                )
+                return ""
+            self._model = Model(model_path)
+        recognizer = KaldiRecognizer(self._model, 16000)
+        recognizer.AcceptWaveform(audio_data)
+        result = _json.loads(recognizer.FinalResult())
+        return result.get("text", "")
 
 
 def get_speech_recognizer(

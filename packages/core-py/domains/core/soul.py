@@ -679,6 +679,7 @@ class SloEngine:
                 logger.debug(f"HD memory store failed: {e}")
 
         # Semantic Cache: Store response for future similar queries
+        latency_ms = (time.time() - start_time) * 1000
         if (
             self._cache_enabled
             and self._semantic_cache
@@ -703,7 +704,6 @@ class SloEngine:
 
         self._apply_hebbian_learning(prompt.split()[:20], generated_text.split()[:20])
 
-        latency_ms = (time.time() - start_time) * 1000
         self._generation_stats["total_generations"] += 1
         self._generation_stats["total_tokens"] += tokens_generated
 

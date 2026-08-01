@@ -13,7 +13,7 @@ import math
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from domains.training.slonet_compat import torch
+import numpy as np
 
 import logging
 
@@ -102,22 +102,21 @@ def evaluate_sloughgpt_char_lm(
             f"Need at least block_size+1 = {block + 1} known tokens; got {len(ids)}"
         )
 
-    data = torch.tensor(ids, dtype=torch.long, device=device)
+    data = np.array(ids, dtype=np.int64)
     model.eval()
     total_loss = 0.0
     n_pos = 0
 
-    with torch.no_grad():
-        i = 0
-        while i + block + 1 <= len(data):
-            x = data[i : i + block].unsqueeze(0)
-            y = data[i + 1 : i + block + 1].unsqueeze(0)
-            _, loss = model(x, y)
-            if loss is None:
-                raise RuntimeError("Model did not return loss with targets")
-            total_loss += float(loss.item()) * block
-            n_pos += block
-            i += block
+    i = 0
+    while i + block + 1 <= len(data):
+        x = data[i : i + block].reshape(1, -1)
+        y = data[i + 1 : i + block + 1].reshape(1, -1)
+        _, loss = model(x, y)
+        if loss is None:
+            raise RuntimeError("Model did not return loss with targets")
+        total_loss += float(loss.item()) * block
+        n_pos += block
+        i += block
 
     mean_loss = total_loss / max(n_pos, 1)
     perplexity = math.exp(mean_loss) if mean_loss < 100 else float("inf")
@@ -129,7 +128,7 @@ def evaluate_sloughgpt_char_lm(
         "num_chars_skipped": skipped,
         "block_size": block,
         "vocab_size": int(hp["vocab_size"]),
-        "warnings": warnings,
+        "warnings": warnings + trunc_warnings,
     }
 
 

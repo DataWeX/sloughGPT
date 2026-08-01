@@ -47,7 +47,7 @@ def forward(weights: dict, arch: ArchConfig, token_ids: List[int]) -> np.ndarray
         return weights.get(actual)
 
     norm = norm_fn(arch)
-    T = (lambda w: w.T) if arch.transpose_weights else (lambda w: w)  # conditional transpose
+    T = (lambda w: w.T) if not arch.transpose_weights else (lambda w: w)  # transpose (out, in) → (in, out)
 
     # ── Embeddings ────────────────────────────────────────────────────────
     x = w("embed.token")[token_ids]
@@ -84,18 +84,23 @@ def forward(weights: dict, arch: ArchConfig, token_ids: List[int]) -> np.ndarray
                 if bias is not None:
                     locals()[name] = locals()[name] + bias
 
-        # Reshape to (heads, seq, head_dim)
+        # Reshape to (seq, heads, head_dim); RoPE needs this layout
         n_h = arch.n_head
         n_kv = arch.n_kv_head
         hd = arch.head_dim
-        q = q.reshape(seq_len, n_h, hd).transpose(1, 0, 2)
-        k = k.reshape(seq_len, n_kv, hd).transpose(1, 0, 2)
-        v = v.reshape(seq_len, n_kv, hd).transpose(1, 0, 2)
+        q = q.reshape(seq_len, n_h, hd)
+        k = k.reshape(seq_len, n_kv, hd)
+        v = v.reshape(seq_len, n_kv, hd)
 
-        # Positional encoding
+        # Positional encoding (RoPE: rotate per-position, shared across heads)
         if arch.positional == "rope":
             q = rope(q, 0, hd, arch.rope_base)
             k = rope(k, 0, hd, arch.rope_base)
+
+        # Attention math needs (heads, seq, head_dim)
+        q = q.transpose(1, 0, 2)
+        k = k.transpose(1, 0, 2)
+        v = v.transpose(1, 0, 2)
 
         # GQA: repeat KV heads to match Q heads
         n_rep = n_h // n_kv
@@ -193,7 +198,7 @@ def forward_cached(
             return None
 
     norm = norm_fn(arch)
-    T = (lambda w: w.T) if arch.transpose_weights else (lambda w: w)
+    T = (lambda w: w.T) if not arch.transpose_weights else (lambda w: w)
 
     # ── Embeddings ────────────────────────────────────────────────────────
     x = w("embed.token")[token_ids]
@@ -233,18 +238,23 @@ def forward_cached(
                 if bias is not None:
                     locals()[name] = locals()[name] + bias
 
-        # Reshape to (heads, seq, head_dim)
+        # Reshape to (seq, heads, head_dim); RoPE needs this layout
         n_h = arch.n_head
         n_kv = arch.n_kv_head
         hd = arch.head_dim
-        q = q.reshape(seq_len, n_h, hd).transpose(1, 0, 2)
-        k = k.reshape(seq_len, n_kv, hd).transpose(1, 0, 2)
-        v = v.reshape(seq_len, n_kv, hd).transpose(1, 0, 2)
+        q = q.reshape(seq_len, n_h, hd)
+        k = k.reshape(seq_len, n_kv, hd)
+        v = v.reshape(seq_len, n_kv, hd)
 
-        # Positional encoding (RoPE)
+        # Positional encoding (RoPE: rotate per-position, shared across heads)
         if arch.positional == "rope":
             q = rope(q, start_pos, hd, arch.rope_base)
             k = rope(k, start_pos, hd, arch.rope_base)
+
+        # Attention math needs (heads, seq, head_dim)
+        q = q.transpose(1, 0, 2)
+        k = k.transpose(1, 0, 2)
+        v = v.transpose(1, 0, 2)
 
         # KV cache update
         if kv_cache is not None:
@@ -356,7 +366,7 @@ def forward_fast(
         return rw.get(f"{canonical}:{layer}")
 
     norm = norm_fn(arch)
-    T = (lambda w: w.T) if arch.transpose_weights else (lambda w: w)
+    T = (lambda w: w.T) if not arch.transpose_weights else (lambda w: w)
 
     # ── Embeddings ──
     x = rw["embed.token"][token_ids]
@@ -396,18 +406,23 @@ def forward_fast(
                 if bias is not None:
                     locals()[name] = locals()[name] + bias
 
-        # Reshape
+        # Reshape to (seq, heads, head_dim); RoPE needs this layout
         n_h = arch.n_head
         n_kv = arch.n_kv_head
         hd = arch.head_dim
-        q = q.reshape(seq_len, n_h, hd).transpose(1, 0, 2)
-        k = k.reshape(seq_len, n_kv, hd).transpose(1, 0, 2)
-        v = v.reshape(seq_len, n_kv, hd).transpose(1, 0, 2)
+        q = q.reshape(seq_len, n_h, hd)
+        k = k.reshape(seq_len, n_kv, hd)
+        v = v.reshape(seq_len, n_kv, hd)
 
-        # RoPE
+        # RoPE (rotate per-position, shared across heads)
         if arch.positional == "rope":
             q = rope(q, start_pos, hd, arch.rope_base)
             k = rope(k, start_pos, hd, arch.rope_base)
+
+        # Attention math needs (heads, seq, head_dim)
+        q = q.transpose(1, 0, 2)
+        k = k.transpose(1, 0, 2)
+        v = v.transpose(1, 0, 2)
 
         # KV cache
         if kv_cache is not None:
@@ -439,7 +454,7 @@ def forward_fast(
             h = norm(x, w("layers.{i}.ff_norm.weight", i),
                      b if b is not None else np.zeros(arch.n_embed, dtype=x.dtype))
 
-        if arch.activation == "swiglu" and f"layers.{i}.ffn.gate.weight:0" in rw:
+        if arch.activation == "swiglu" and "layers.{i}.ffn.gate.weight:0" in rw:
             gate = h @ T(w("layers.{i}.ffn.gate.weight", i))
             up = h @ T(w("layers.{i}.ffn.up.weight", i))
             x = x + (silu(gate) * up) @ T(w("layers.{i}.ffn.down.weight", i))
