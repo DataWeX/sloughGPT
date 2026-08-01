@@ -14,7 +14,6 @@ sloughGPT/
 │   ├── sdk-ts/           # TypeScript SDK
 │   ├── strui/            # React UI components
 │   ├── standards/         # JSON schemas
-│   └── tui-ts/           # Terminal UI
 ├── apps/
 │   ├── api/server/       # FastAPI server
 │   ├── cli/              # CLI app

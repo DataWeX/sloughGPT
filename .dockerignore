@@ -28,7 +28,6 @@ infra/
 docs/
 scripts/
 tests/
-packages/tui-ts/
 packages/strui/
 apps/web/
 apps/cli/

@@ -8,7 +8,6 @@ Lightweight layout:
 - `packages/core-py/` — domains and shared Python core (`domains/`, `utils/`); see **[packages/core-py/README.md](../packages/core-py/README.md)**
 - `packages/sdk-py/sloughgpt_sdk/` — Python API client SDK (**[README.md](../packages/sdk-py/sloughgpt_sdk/README.md)**)
 - `packages/sdk-ts/typescript-sdk/` — TypeScript SDK (npm root; **[README.md](../packages/sdk-ts/typescript-sdk/README.md)**)
-- `packages/tui-ts/` — Ink terminal UI (`sloughgpt-tui`); depends on built SDK — **[README.md](../packages/tui-ts/README.md)**
 - `packages/standards/` — standards docs and JSON schemas; see **[packages/standards/README.md](../packages/standards/README.md)**
 - `tests/` — pytest suite (root `pyproject.toml` `testpaths`)
 - `infra/docker/` — Dockerfiles and Compose file for local runs
@@ -29,4 +28,4 @@ See `docs/REPO_STRUCTURE_MIGRATION.md` for the full move map.
 
 Contributor and security policies: **[CONTRIBUTING.md](../CONTRIBUTING.md)** and **[SECURITY.md](../SECURITY.md)** at the repo root (symlinks to `docs/policies/`).
 
-CI: **`.github/workflows/reusable-ci-core.yml`** (Python ruff smoke + core pytest), **`ci_cd.yml`** (Python SDK **`sdk-test-py`**, TypeScript SDK **`test-sdk-ts`**, TUI **`test-tui-ts`** (builds SDK then **`packages/tui-ts`**), Next.js **`test-web`**, **`standards-schemas`**, Docker images, benchmarks). Local parity commands are in **CONTRIBUTING.md**.
+CI: **`.github/workflows/reusable-ci-core.yml`** (Python ruff smoke + core pytest), **`ci_cd.yml`** (Python SDK **`sdk-test-py`**, TypeScript SDK **`test-sdk-ts`**, Next.js **`test-web`**, **`standards-schemas`**, Docker images, benchmarks). Local parity commands are in **CONTRIBUTING.md**.

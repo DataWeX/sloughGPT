@@ -29,9 +29,8 @@ build_one() {
 }
 
 build_one "sloughgpt"
-build_one "sloughgpt-tui"
 
 echo "==> All builds complete!"
 echo "    Binaries:"
-ls -lh "$DIST_DIR/sloughgpt" "$DIST_DIR/sloughgpt-tui" 2>/dev/null || \
+ls -lh "$DIST_DIR/sloughgpt" 2>/dev/null || \
 ls -lh "$DIST_DIR/" 2>/dev/null
