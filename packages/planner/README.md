@@ -126,7 +126,7 @@ requested port is taken it steps to the next free port and reports the change;
 
 ```bash
 cd packages/planner
-python3 -m pytest tests/        # 60 tests: config (16), sync (8), gui (36)
+python3 -m pytest tests/        # 127 tests: config (16), sync (8), gui (38), core (34), kanban (31)
 ```
 
 The package is installed editable (`__editable__.planner-*.pth` points at

@@ -266,3 +266,55 @@ def test_stats(board_dir, capsys):
 def test_no_command_returns_1(board_dir, capsys):
     code, _ = _run(board_dir, capsys)
     assert code == 1
+
+
+def test_add_card_invalid_priority_falls_back_to_medium(board_dir):
+    store = KanbanStore(board_dir=board_dir)
+    card = store.add_card("Fallback", priority="uber")
+    assert card.priority == "medium"
+
+
+def test_find_one_ambiguous_prefix_returns_none(board_dir):
+    store = KanbanStore(board_dir=board_dir)
+    store.add_card("Alpha one")
+    store.add_card("Alpha two")
+    assert store.get_card("alpha") is None
+
+
+def test_update_card_ignores_unknown_keys(board_dir):
+    store = KanbanStore(board_dir=board_dir)
+    card = store.add_card("Stable")
+    updated = store.update_card(card.short_id, bogus="x")
+    assert updated is not None
+    assert not hasattr(updated, "bogus")
+    assert store.get_card(card.short_id).title == "Stable"
+
+
+def test_rename_column_migrates_cards(board_dir):
+    store = KanbanStore(board_dir=board_dir)
+    card = store.add_card("Old col", column="in_progress")
+    assert store.rename_column("in_progress", "doing")
+    assert store.get_card(card.short_id).column == "doing"
+    assert [c.name for c in store.list_columns() if c.name == "doing"]
+
+
+def test_remove_column_migrates_cards(board_dir):
+    store = KanbanStore(board_dir=board_dir)
+    card = store.add_card("Drop col", column="in_progress")
+    assert store.remove_column("in_progress", move_to="review")
+    assert store.get_card(card.short_id).column == "review"
+    assert not [c for c in store.list_columns() if c.name == "in_progress"]
+
+
+def test_archive_done_empty(board_dir):
+    store = KanbanStore(board_dir=board_dir)
+    store.add_card("Keep")
+    assert store.archive_done() == 0
+
+
+def test_list_cards_by_assignee(board_dir):
+    store = KanbanStore(board_dir=board_dir)
+    store.add_card("Mine", assignee="mana")
+    store.add_card("Theirs")
+    results = store.list_cards(assignee="mana")
+    assert [c.title for c in results] == ["Mine"]
