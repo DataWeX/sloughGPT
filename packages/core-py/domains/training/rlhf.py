@@ -7,6 +7,8 @@ Includes:
 - Reward Model
 - Reference Model (for KL divergence)
 - Advantage estimation (GAE)
+
+Runs entirely on numpy/SloNet — no PyTorch dependency.
 """
 
 from dataclasses import dataclass
@@ -14,7 +16,8 @@ from typing import Optional, Tuple, Dict
 import logging
 from enum import Enum
 
-from domains.training.slonet_compat import torch, nn, F
+import numpy as np
+from domains.training.slonet import SloLinear, Tensor
 
 logger = logging.getLogger("slo.rlhf")
 
@@ -55,24 +58,40 @@ class RLHFConfig:
     gen_top_p: float = 0.9
 
 
-class RewardModel(nn.Module):
+def _as_array(x) -> np.ndarray:
+    """Coerce a SloNet Tensor (or ndarray) into its underlying numpy buffer."""
+    data = getattr(x, "data", None)
+    if isinstance(data, np.ndarray):
+        return data
+    return np.asarray(x)
+
+
+class RewardModel:
     """
     Reward Model for RLHF.
 
     Takes a prompt-response pair and outputs a scalar reward.
     """
 
-    def __init__(self, base_model: nn.Module, hidden_size: int = 512):
-        super().__init__()
+    def __init__(self, base_model, hidden_size: int = 512):
         self.base_model = base_model
-        self.reward_head = nn.Linear(hidden_size, 1)
+        self.hidden_size = hidden_size
+        self.reward_head = None
+        self._feature_dim = None
 
-    def forward(self, input_ids: torch.Tensor) -> torch.Tensor:
+    def _ensure_head(self, feature_dim: int):
+        """Lazily build the reward projection to match the base model output."""
+        if self._feature_dim == feature_dim and self.reward_head is not None:
+            return
+        self.reward_head = SloLinear(feature_dim, 1)
+        self._feature_dim = feature_dim
+
+    def forward(self, input_ids) -> Tensor:
         """
         Compute reward for input.
 
         Args:
-            input_ids: Input token IDs [batch_size, seq_len]
+            input_ids: Input token IDs [batch_size, seq_len] (numpy or Tensor)
 
         Returns:
             rewards: Scalar rewards [batch_size]
@@ -80,24 +99,31 @@ class RewardModel(nn.Module):
         hidden = self.base_model(input_ids)
         if isinstance(hidden, tuple):
             hidden = hidden[0]  # Get logits only
-        # Use last hidden state
-        last_hidden = hidden[:, -1, :]
+        arr = _as_array(hidden)
+        if arr.ndim < 2:
+            arr = arr.reshape(1, -1)
+        # Use last token's representation
+        last_hidden = arr[:, -1, :]
+        self._ensure_head(last_hidden.shape[-1])
         reward = self.reward_head(last_hidden)
         return reward.squeeze(-1)
 
+    def __call__(self, input_ids):
+        return self.forward(input_ids)
+
 
 def create_rlhf_trainer(
-    policy_model: nn.Module,
-    value_model: Optional[nn.Module] = None,
-    ref_model: Optional[nn.Module] = None,
+    policy_model=None,
+    value_model: Optional[object] = None,
+    ref_model: Optional[object] = None,
     config: Optional[RLHFConfig] = None,
-    device: str = "cuda" if torch.cuda.is_available() else "cpu",
+    device: str = "cpu",
 ):
     """
     Create an RLHF trainer.
 
     Args:
-        policy_model: The model to train
+        policy_model: The model to train (optional)
         value_model: Value function (can be same as policy)
         ref_model: Reference model for KL penalty
         config: RLHF configuration

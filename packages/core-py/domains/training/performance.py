@@ -1,14 +1,15 @@
 """
 Performance Optimization Module for SloughGPT
 
-High-performance training and inference optimizations:
-- CUDA Graphs: capture/replay for minimal kernel launch overhead
-- torch.compile: JIT compilation for PyTorch 2.0+
-- Efficient DataLoader: prefetch, pinned memory, persistent workers
-- Optimized batching: pre-allocated tensors, vectorized operations
+High-performance training and inference optimizations, torch-free:
+- Optimized batching: pre-allocated arrays, vectorized operations
+- Fast sampling: fused top-k/top-p/repetition penalty on numpy
 - KV Cache: efficient cache management for inference
-- Fused operations: optimized kernels for common patterns
 - Memory optimization: channel-last, gradient checkpointing
+
+CUDA-specific accelerations (CUDA graphs, ``torch.compile``) degrade
+gracefully to plain numpy when PyTorch is unavailable — SloNet models
+always train and infer on the numpy stack.
 
 Usage:
     from domains.training.performance import optimize_training, optimize_inference
@@ -22,13 +23,18 @@ from typing import Optional, Dict, Any, List, Callable, Tuple
 from dataclasses import dataclass, field
 import logging
 
-from domains.training.slonet_compat import torch
-DataLoader = torch.utils.data.DataLoader
-Dataset = torch.utils.data.Dataset
-F = torch.F
-nn = torch.nn
+import numpy as np
 
 logger = logging.getLogger("slo.performance")
+
+
+def _torch_or_none():
+    """Return the real torch module if importable, else None (torch-free)."""
+    try:
+        import torch  # type: ignore
+        return torch
+    except ImportError:
+        return None
 
 
 @dataclass
@@ -93,28 +99,36 @@ class PerformanceConfig:
 
 
 def get_optimal_device() -> str:
-    """Auto-detect best available device."""
-    if torch.cuda.is_available():
-        return "cuda"
-    elif hasattr(torch.version, "hip") and torch.version.hip is not None:
-        return "rocm"
-    elif torch.backends.mps.is_available():
-        return "mps"
+    """Auto-detect best available device (torch-free; degrades to CPU)."""
+    torch = _torch_or_none()
+    if torch is not None:
+        if getattr(torch, "cuda", None) and torch.cuda.is_available():
+            return "cuda"
+        if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+            return "mps"
     return "cpu"
 
 
 def get_device_name() -> str:
     """Get human-readable device name."""
-    if torch.cuda.is_available():
-        return torch.cuda.get_device_name(0)
-    elif torch.backends.mps.is_available():
-        return "Apple Silicon (MPS)"
+    torch = _torch_or_none()
+    if torch is not None:
+        if getattr(torch, "cuda", None) and torch.cuda.is_available():
+            return torch.cuda.get_device_name(0)
+        if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+            return "Apple Silicon (MPS)"
     return "CPU"
 
 
 def setup_device_environment():
-    """Setup optimal device environment variables."""
-    if torch.cuda.is_available():
+    """Setup optimal device environment variables.
+
+    PyTorch-specific CUDA knobs are set only when torch is present.
+    """
+    torch = _torch_or_none()
+    if torch is None:
+        return
+    if getattr(torch, "cuda", None) and torch.cuda.is_available():
         torch.backends.cudnn.benchmark = True
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
@@ -125,17 +139,25 @@ def setup_device_environment():
 class CUDAGraphManager:
     """Manages CUDA graphs for kernel capture/replay.
 
-    CUDA graphs eliminate CPU overhead by recording GPU operations
-    and replaying them with minimal kernel launch latency.
+    CUDA graphs require PyTorch + CUDA. Without them this manager is a
+    transparent no-op: ``capture()`` returns False and ``replay()`` falls
+    back to a plain forward pass, keeping callers working on the numpy
+    SloNet stack.
     """
 
-    def __init__(self, model: nn.Module, config: InferenceOptimizations):
+    def __init__(self, model, config: InferenceOptimizations):
         self.model = model
         self.config = config
-        self.graphs: Dict[int, torch.cuda.CUDAGraph] = {}
-        self.static_inputs: Dict[int, torch.Tensor] = {}
-        self.static_outputs: Optional[torch.Tensor] = None
-        self._enabled = config.use_cuda_graphs and torch.cuda.is_available()
+        self.graphs: Dict[int, Any] = {}
+        self.static_inputs: Dict[int, Any] = {}
+        self.static_outputs: Optional[np.ndarray] = None
+        torch = _torch_or_none()
+        self._enabled = (
+            config.use_cuda_graphs
+            and torch is not None
+            and getattr(torch, "cuda", None) is not None
+            and torch.cuda.is_available()
+        )
 
     def capture(
         self,
@@ -146,12 +168,11 @@ class CUDAGraphManager:
         """Capture a CUDA graph for given input shape."""
         if not self._enabled:
             return False
-
         key = (batch_size, seq_len)
         if key in self.graphs:
             return True
-
         try:
+            torch = _torch_or_none()
             torch.cuda.synchronize()
             torch.cuda.reset_peak_memory_stats()
 
@@ -184,7 +205,7 @@ class CUDAGraphManager:
             self._enabled = False
             return False
 
-    def replay(self, input_ids: torch.Tensor) -> torch.Tensor:
+    def replay(self, input_ids) -> Any:
         """Replay captured graph or fall back to normal forward."""
         if not self._enabled:
             return self.model(input_ids)
@@ -201,12 +222,71 @@ class CUDAGraphManager:
             return self.model(input_ids)
 
 
+class _NumpyBatchIterator:
+    """Minimal numpy replacement for ``torch.utils.data.DataLoader``."""
+
+    def __init__(self, dataset, batch_size: int, shuffle: bool = True):
+        self.dataset = list(dataset)
+        self.batch_size = max(1, int(batch_size))
+        self.shuffle = shuffle
+        self._idx = 0
+        self._order = list(range(len(self.dataset)))
+        self._reshuffle()
+
+    def _reshuffle(self):
+        if self.shuffle:
+            rng = np.random.default_rng()
+            self._order = list(rng.permutation(len(self.dataset)))
+        else:
+            self._order = list(range(len(self.dataset)))
+        self._idx = 0
+
+    def __iter__(self):
+        self._reshuffle()
+        return self
+
+    def __next__(self):
+        if self._idx >= len(self.dataset):
+            raise StopIteration
+        end = min(self._idx + self.batch_size, len(self.dataset))
+        batch = [self.dataset[i] for i in self._order[self._idx : end]]
+        self._idx = end
+        return _collate(batch)
+
+    def __len__(self):
+        return max(1, (len(self.dataset) + self.batch_size - 1) // self.batch_size)
+
+
+def _collate(batch: List[Any]) -> Any:
+    """Stack a list of (x, y) pairs or tensors into numpy batches."""
+    if not batch:
+        return None
+    if isinstance(batch[0], (list, tuple)):
+        xs = [np.asarray(b[0]) for b in batch]
+        ys = [np.asarray(b[1]) for b in batch]
+        max_x = max(a.shape[-1] for a in xs)
+        max_y = max(a.shape[-1] for a in ys)
+        x = np.stack([_pad_last(a, max_x) for a in xs])
+        y = np.stack([_pad_last(a, max_y) for a in ys])
+        return x, y
+    arrs = [np.asarray(b) for b in batch]
+    return np.stack(arrs)
+
+
+def _pad_last(a: np.ndarray, n: int) -> np.ndarray:
+    if a.shape[-1] == n:
+        return a
+    pad = [(0, 0)] * a.ndim
+    pad[-1] = (0, n - a.shape[-1])
+    return np.pad(a, pad, mode="constant")
+
+
 class OptimizedDataLoader:
     """High-performance DataLoader with prefetching and memory optimization."""
 
     def __init__(
         self,
-        dataset: Dataset,
+        dataset,
         batch_size: int,
         num_workers: Optional[int] = None,
         prefetch_factor: int = 2,
@@ -220,22 +300,10 @@ class OptimizedDataLoader:
         effective_workers = effective_dataloader_workers(num_workers)
         effective_prefetch = effective_prefetch_factor(effective_workers, prefetch_factor)
 
-        loader_kwargs: Dict[str, Any] = {
-            "dataset": dataset,
-            "batch_size": batch_size,
-            "shuffle": True,
-            "num_workers": effective_workers,
-            "pin_memory": pin_memory and torch.cuda.is_available(),
-            "collate_fn": collate_fn,
-        }
-
-        if effective_workers > 0 and effective_prefetch is not None:
-            loader_kwargs["prefetch_factor"] = effective_prefetch
-            loader_kwargs["persistent_workers"] = persistent_workers
-
-        self.dataloader = DataLoader(**loader_kwargs)
+        self._collate_fn = collate_fn
+        self.dataloader = _NumpyBatchIterator(dataset, batch_size, shuffle=True)
         self._iterator = None
-        self._prefetched_batch: Optional[Dict] = None
+        self._prefetched_batch: Optional[Any] = None
 
     def prefetch(self):
         """Prefetch next batch in background."""
@@ -247,7 +315,7 @@ class OptimizedDataLoader:
             self._iterator = iter(self.dataloader)
             self._prefetched_batch = next(self._iterator)
 
-    def get_batch(self) -> Dict[str, torch.Tensor]:
+    def get_batch(self) -> Any:
         """Get next batch, prefetching in background."""
         if self._prefetched_batch is not None:
             batch = self._prefetched_batch
@@ -259,6 +327,18 @@ class OptimizedDataLoader:
 
         try:
             return next(self._iterator)
+        except StopIteration:
+            self._iterator = iter(self.dataloader)
+            return next(self._iterator)
+
+    def __iter__(self) -> "OptimizedDataLoader":
+        self._iterator = iter(self.dataloader)
+        self._prefetched_batch = None
+        return self
+
+    def __next__(self) -> Any:
+        try:
+            return self.get_batch()
         except StopIteration:
             self._iterator = iter(self.dataloader)
             return next(self._iterator)
@@ -287,11 +367,11 @@ def effective_prefetch_factor(num_workers: int, requested: int) -> Optional[int]
     return max(1, pf)
 
 
-class PreallocatedBatchDataset(Dataset):
+class PreallocatedBatchDataset:
     """Dataset that returns indices for pre-allocated batch tensors."""
 
-    def __init__(self, data: torch.Tensor, block_size: int, batch_size: int):
-        self.data = data
+    def __init__(self, data: np.ndarray, block_size: int, batch_size: int):
+        self.data = np.asarray(data)
         self.block_size = block_size
         self.batch_size = batch_size
         self.seq_len = block_size + 1
@@ -299,7 +379,9 @@ class PreallocatedBatchDataset(Dataset):
     def __len__(self):
         return max(0, len(self.data) - self.seq_len)
 
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx: int) -> Tuple[np.ndarray, np.ndarray]:
+        if idx < 0 or idx >= len(self.data) - self.seq_len:
+            raise IndexError(f"index {idx} out of range for dataset of length {len(self)}")
         x = self.data[idx : idx + self.block_size]
         y = self.data[idx + 1 : idx + self.seq_len]
         return x, y
@@ -308,38 +390,59 @@ class PreallocatedBatchDataset(Dataset):
 class OptimizedBatchCache:
     """Cache for pre-allocated batch tensors to avoid allocations."""
 
-    def __init__(self, device: str, dtype: torch.dtype = torch.long):
+    def __init__(self, device: str, dtype: Any = np.int64):
         self.device = device
         self.dtype = dtype
-        self.x_cache: Optional[torch.Tensor] = None
-        self.y_cache: Optional[torch.Tensor] = None
+        self.x_cache: Optional[np.ndarray] = None
+        self.y_cache: Optional[np.ndarray] = None
         self._batch_size = 0
         self._block_size = 0
 
-    def allocate(self, batch_size: int, block_size: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def allocate(self, batch_size: int, block_size: int) -> Tuple[np.ndarray, np.ndarray]:
         """Allocate or return cached batch tensors."""
         if self.x_cache is None or self._batch_size != batch_size or self._block_size != block_size:
             self._batch_size = batch_size
             self._block_size = block_size
-            self.x_cache = torch.empty(batch_size, block_size, dtype=self.dtype, device=self.device)
-            self.y_cache = torch.empty(batch_size, block_size, dtype=self.dtype, device=self.device)
+            self.x_cache = np.empty((batch_size, block_size), dtype=self.dtype)
+            self.y_cache = np.empty((batch_size, block_size), dtype=self.dtype)
         return self.x_cache, self.y_cache
 
     def fill(
         self,
         batch_size: int,
         block_size: int,
-        data: torch.Tensor,
-        indices: torch.Tensor,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        data: np.ndarray,
+        indices: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """Fill pre-allocated tensors with batch data."""
         x, y = self.allocate(batch_size, block_size)
 
         for i, idx in enumerate(indices):
-            x[i].copy_(data[idx : idx + block_size])
-            y[i].copy_(data[idx + 1 : idx + block_size + 1])
+            x[i] = data[idx : idx + block_size]
+            y[i] = data[idx + 1 : idx + block_size + 1]
 
         return x, y
+
+
+def _as_array(x, dtype=None) -> np.ndarray:
+    """Coerce a SloNet Tensor or numpy array into a numpy ndarray.
+
+    SloNet Tensor wraps a numpy array in ``.data``; plain ``np.asarray`` on a
+    Tensor produces an object array whose elements are row Tensors and cannot
+    be cast. This helper unwraps the underlying numpy buffer first.
+    """
+    data = getattr(x, "data", None)
+    if isinstance(data, np.ndarray):
+        x = data
+    return np.asarray(x, dtype=dtype)
+
+
+def _softmax(logits: np.ndarray, axis: int = -1) -> np.ndarray:
+    """Numerically stable softmax on numpy."""
+    logits = _as_array(logits, dtype=np.float64)
+    shifted = logits - np.max(logits, axis=axis, keepdims=True)
+    exp = np.exp(shifted)
+    return exp / np.sum(exp, axis=axis, keepdims=True)
 
 
 class FastInferenceSampler:
@@ -347,28 +450,31 @@ class FastInferenceSampler:
 
     @staticmethod
     def sample(
-        logits: torch.Tensor,
+        logits,
         temperature: float = 1.0,
         top_k: int = 0,
         top_p: float = 1.0,
         repetition_penalty: float = 1.0,
-        prev_tokens: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
+        prev_tokens=None,
+    ) -> np.ndarray:
         """Fast token sampling with optional repetition penalty.
 
         Optimizations:
         - Vectorized repetition penalty (O(1) instead of O(n))
         - Fused top-k/top-p filtering
-        - In-place operations where possible
+        - Pure numpy operations (no PyTorch)
         """
+        logits = _as_array(logits, dtype=np.float64)
+
         if temperature == 0:
-            return logits.argmax(dim=-1, keepdim=True)
+            return np.argmax(logits, axis=-1, keepdims=True)
 
         logits = logits / temperature
 
-        if repetition_penalty != 1.0 and prev_tokens is not None and prev_tokens.numel() > 0:
+        prev = np.asarray(prev_tokens) if prev_tokens is not None else None
+        if repetition_penalty != 1.0 and prev is not None and prev.size > 0:
             logits = FastInferenceSampler._apply_repetition_penalty_vectorized(
-                logits, prev_tokens, repetition_penalty
+                logits, prev, repetition_penalty
             )
 
         if top_k > 0:
@@ -377,51 +483,80 @@ class FastInferenceSampler:
         if top_p < 1.0:
             logits = FastInferenceSampler._apply_top_p(logits, top_p)
 
-        probs = F.softmax(logits, dim=-1)
-        probs = torch.clamp(probs, min=1e-10)
-        return torch.multinomial(probs, num_samples=1)
+        probs = _softmax(logits, axis=-1)
+        probs = np.clip(probs, 1e-10, None)
+
+        # Normalize after clipping (numpy multinomial needs valid probabilities)
+        probs = probs / probs.sum(axis=-1, keepdims=True)
+
+        batch = logits.shape[:-1]
+        flat_probs = probs.reshape(-1, probs.shape[-1])
+        tokens = np.array([
+            int(np.random.choice(flat_probs.shape[-1], p=row / row.sum()))
+            for row in flat_probs
+        ], dtype=np.int64)
+        return tokens.reshape(*batch, 1)
 
     @staticmethod
     def _apply_repetition_penalty_vectorized(
-        logits: torch.Tensor,
-        prev_tokens: torch.Tensor,
+        logits: np.ndarray,
+        prev_tokens: np.ndarray,
         penalty: float,
-    ) -> torch.Tensor:
+    ) -> np.ndarray:
         """Apply repetition penalty using advanced indexing (O(1) per batch)."""
-        unique_tokens, inverse_indices = torch.unique(prev_tokens, return_inverse=True)
-        token_counts = torch.bincount(inverse_indices, minlength=len(unique_tokens))
+        flat = prev_tokens.reshape(-1)
+        unique_tokens = np.unique(flat)
+        if unique_tokens.size == 0:
+            return logits
 
-        mask = token_counts > 0
-        penalized_indices = unique_tokens[mask]
-        penalties = torch.ones(logits.shape[-1], device=logits.device, dtype=logits.dtype)
-        penalties[penalized_indices] = penalty
+        penalties = np.ones(logits.shape[-1], dtype=np.float64)
+        idx = unique_tokens[unique_tokens < logits.shape[-1]]
+        penalties[idx] = penalty
 
         pos_mask = logits > 0
         neg_mask = ~pos_mask
-
-        logits = torch.where(pos_mask, logits * penalties, logits / penalties)
-        return logits
+        return np.where(pos_mask, logits * penalties, logits / penalties)
 
     @staticmethod
-    def _apply_top_k(logits: torch.Tensor, k: int) -> torch.Tensor:
+    def _apply_top_k(logits: np.ndarray, k: int) -> np.ndarray:
         """Apply top-k filtering efficiently."""
         k = min(k, logits.shape[-1])
-        v, _ = torch.topk(logits, k, dim=-1)
-        threshold = v[:, [-1]]
-        return torch.where(logits < threshold, torch.tensor(float("-inf"), device=logits.device), logits)
+        if k <= 0:
+            return logits
+        if logits.ndim == 1:
+            logits = logits[None, :]
+            flat = True
+        else:
+            flat = False
+        threshold = np.partition(logits, logits.shape[-1] - k, axis=-1)[..., -1:]
+        result = np.where(
+            logits < threshold,
+            np.full_like(logits, float("-inf")),
+            logits,
+        )
+        return result[0] if flat else result
 
     @staticmethod
-    def _apply_top_p(logits: torch.Tensor, p: float) -> torch.Tensor:
+    def _apply_top_p(logits: np.ndarray, p: float) -> np.ndarray:
         """Apply top-p (nucleus) filtering with early exit."""
-        sorted_logits, sorted_indices = torch.sort(logits, dim=-1, descending=True)
-        cumsum = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+        if logits.ndim == 1:
+            logits = logits[None, :]
+            flat = True
+        else:
+            flat = False
+
+        sorted_indices = np.argsort(-logits, axis=-1)
+        sorted_logits = np.take_along_axis(logits, sorted_indices, axis=-1)
+        cumsum = np.cumsum(_softmax(sorted_logits, axis=-1), axis=-1)
 
         mask = cumsum > p
-        mask[:, 1:] = mask[:, :-1].clone()
-        mask[:, 0] = False
+        mask[..., 1:] = mask[..., :-1]
+        mask[..., 0] = False
 
-        indices_to_remove = mask.scatter(1, sorted_indices, mask)
-        return torch.where(indices_to_remove, torch.tensor(float("-inf"), device=logits.device), logits)
+        # Scatter mask back to original positions
+        out = np.full_like(logits, float("-inf"))
+        np.put_along_axis(out, sorted_indices, np.where(mask, float("-inf"), sorted_logits), axis=-1)
+        return out[0] if flat else out
 
 
 class OptimizedInferenceEngine:
@@ -429,7 +564,7 @@ class OptimizedInferenceEngine:
 
     def __init__(
         self,
-        model: nn.Module,
+        model,
         config: Optional[InferenceOptimizations] = None,
         device: str = "auto",
     ):
@@ -437,22 +572,25 @@ class OptimizedInferenceEngine:
         self.config = config or InferenceOptimizations()
         self.device = get_optimal_device() if device == "auto" else device
 
-        if self.device == "cuda" and self.config.use_compile:
-            self._setup_compiled_forward()
-        else:
-            self._compiled_model = None
+        self._compiled_model = None
 
         if self.device == "cuda":
             self.cuda_graph_manager = CUDAGraphManager(model, self.config)
         else:
             self.cuda_graph_manager = None
 
-        self.model.eval()
-        self.model.to(self.device)
+        if hasattr(self.model, "eval"):
+            self.model.eval()
 
     def _setup_compiled_forward(self):
-        """Setup torch.compile for faster forward passes."""
-        if hasattr(torch, "compile") and self.config.use_compile:
+        """Setup torch.compile for faster forward passes (torch/CUDA only)."""
+        torch = _torch_or_none()
+        if (
+            torch is not None
+            and hasattr(torch, "compile")
+            and self.config.use_compile
+            and self.device == "cuda"
+        ):
             try:
                 self._compiled_model = torch.compile(
                     self.model,
@@ -465,27 +603,32 @@ class OptimizedInferenceEngine:
                 logger.warning(f"torch.compile failed: {e}",
                     extra={"tag": "TRAIN"},)
                 self._compiled_model = None
+        else:
+            self._compiled_model = None
 
-    @torch.no_grad()
     def generate(
         self,
-        input_ids: torch.Tensor,
+        input_ids,
         max_new_tokens: int,
         temperature: float = 1.0,
         top_k: int = 0,
         top_p: float = 1.0,
         repetition_penalty: float = 1.0,
-    ) -> torch.Tensor:
+    ) -> np.ndarray:
         """Optimized autoregressive generation."""
         model = self._compiled_model if self._compiled_model else self.model
-        model.eval()
+        if hasattr(model, "eval"):
+            model.eval()
 
-        input_ids = input_ids.to(self.device)
-        current = input_ids
-        prev_tokens = input_ids.clone()
+        current = np.asarray(input_ids, dtype=np.int64)
+        if current.ndim == 1:
+            current = current[None, :]
+        prev_tokens = current.copy()
 
-        for _ in range(max_new_tokens):
-            idx_cond = current[:, -self.model.block_size :]
+        block_size = getattr(model, "block_size", current.shape[-1])
+
+        for _ in range(int(max_new_tokens)):
+            idx_cond = current[:, -block_size:]
 
             if self.cuda_graph_manager:
                 logits = self.cuda_graph_manager.replay(idx_cond)
@@ -495,7 +638,11 @@ class OptimizedInferenceEngine:
             if isinstance(logits, tuple):
                 logits = logits[0]
 
-            logits = logits[:, -1, :]
+            logits = _as_array(logits)
+            if logits.ndim == 3:
+                logits = logits[:, -1, :]
+            elif logits.ndim == 2 and logits.shape[0] == 1:
+                pass
 
             next_token = FastInferenceSampler.sample(
                 logits,
@@ -506,10 +653,10 @@ class OptimizedInferenceEngine:
                 prev_tokens=prev_tokens,
             )
 
-            current = torch.cat([current, next_token], dim=1)
-            prev_tokens = torch.cat([prev_tokens, next_token], dim=1)
+            current = np.concatenate([current, next_token], axis=1)
+            prev_tokens = np.concatenate([prev_tokens, next_token], axis=1)
 
-            if next_token.item() == 0:
+            if int(next_token[0, -1]) == 0:
                 break
 
         return current
@@ -553,70 +700,89 @@ class PerformanceMonitor:
 
 
 def optimize_model_for_inference(
-    model: nn.Module,
+    model,
     device: str = "auto",
     use_compile: bool = True,
     use_channels_last: bool = True,
-) -> nn.Module:
-    """Apply all inference optimizations to a model."""
+):
+    """Apply all inference optimizations to a model.
+
+    Compilation and channel-last layouts require CUDA + PyTorch; on the
+    numpy SloNet stack the model is moved to the target device and set to
+    eval mode, which is the only optimization available.
+    """
     device = get_optimal_device() if device == "auto" else device
-    model = model.to(device)
-    model.eval()
-
-    if use_channels_last and device == "cuda":
-        model = model.to(memory_format=torch.channels_last)
-
-    if use_compile and hasattr(torch, "compile") and device == "cuda":
-        try:
-            model = torch.compile(model, mode="default")
-            logger.info("Model compiled for inference",
-                extra={"tag": "TRAIN"},)
-        except Exception as e:
-            logger.warning(f"compile failed: {e}",
-                extra={"tag": "TRAIN"},)
-
+    if hasattr(model, "to"):
+        model = model.to(device)
+    if hasattr(model, "eval"):
+        model.eval()
     return model
 
 
+def _clip_grad_norm_(model, max_norm: float) -> float:
+    """Clip parameter grads in place (numpy/SloNet), returning the norm."""
+    total_sq = 0.0
+    for p in model.parameters():
+        g = getattr(p, "grad", None)
+        if g is None:
+            continue
+        arr = _as_array(g).reshape(-1)
+        total_sq += float(np.dot(arr, arr))
+    norm = float(np.sqrt(total_sq))
+    if norm > max_norm and norm > 0:
+        scale = max_norm / norm
+        for p in model.parameters():
+            g = getattr(p, "grad", None)
+            if g is None:
+                continue
+            if isinstance(g, np.ndarray):
+                g *= scale
+            else:
+                g.data[:] = _as_array(g) * scale
+    return norm
+
+
 def benchmark_training(
-    model: nn.Module,
+    model,
     batch_size: int = 8,
     seq_len: int = 128,
     num_steps: int = 100,
     device: str = "auto",
 ) -> Dict[str, float]:
-    """Benchmark training performance."""
+    """Benchmark training performance (numpy SloNet stack)."""
     device = get_optimal_device() if device == "auto" else device
-    model = model.to(device)
-    model.train()
+    if hasattr(model, "to"):
+        model = model.to(device)
+    if hasattr(model, "train"):
+        model.train()
 
-    dummy_data = torch.randint(0, 1000, (10000,))
+    rng = np.random.default_rng(0)
+    dummy_data = rng.integers(0, 1000, size=(10000,)).astype(np.int64)
     dataset = PreallocatedBatchDataset(dummy_data, seq_len, batch_size)
 
-    decay_params = [p for n, p in model.named_parameters() if p.requires_grad and "bias" not in n and "norm" not in n]
-    no_decay_params = [p for n, p in model.named_parameters() if p.requires_grad and ("bias" in n or "norm" in n)]
-    optimizer = torch.optim.AdamW(
-        [{"params": decay_params, "weight_decay": 0.01},
-         {"params": no_decay_params, "weight_decay": 0.0}],
-        lr=1e-4,
-    )
+    optimizer = None
+    try:
+        from domains.training.slonet import SloAdam
+        optimizer = SloAdam(
+            lr=1e-4, b1=0.9, b2=0.999, eps=1e-8,
+            weight_decay=0.01, max_grad_norm=1.0,
+        )
+    except Exception as e:
+        logger.warning(f"SloAdam unavailable: {e}", extra={"tag": "TRAIN"})
 
-    x, y = next(iter(DataLoader(dataset, batch_size=batch_size)))
-    x, y = x.to(device), y.to(device)
-
-    if device == "cuda":
-        torch.cuda.synchronize()
+    loader = _NumpyBatchIterator(dataset, batch_size, shuffle=True)
+    x, y = next(iter(loader))
 
     start = time.time()
-    for _ in range(num_steps):
+    for _ in range(int(num_steps)):
         logits, loss = model(x, y)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        optimizer.step()
-        optimizer.zero_grad(set_to_none=True)
-
-    if device == "cuda":
-        torch.cuda.synchronize()
+        _clip_grad_norm_(model, 1.0)
+        if optimizer is not None:
+            params = model.parameters()
+            optimizer.step(params)
+        for p in model.parameters():
+            p.grad = None
 
     elapsed = time.time() - start
     tokens_per_sec = (batch_size * seq_len * num_steps) / elapsed
@@ -630,7 +796,7 @@ def benchmark_training(
 
 
 def benchmark_inference(
-    model: nn.Module,
+    model,
     batch_size: int = 1,
     seq_len: int = 128,
     gen_len: int = 50,
@@ -643,23 +809,19 @@ def benchmark_inference(
     config = InferenceOptimizations(use_compile=False, use_cuda_graphs=False)
     engine = OptimizedInferenceEngine(model, config, device=device)
 
-    input_ids = torch.randint(0, 1000, (batch_size, seq_len), device=device)
-
-    if device == "cuda":
-        torch.cuda.synchronize()
+    rng = np.random.default_rng(0)
+    input_ids = rng.integers(0, 1000, size=(batch_size, seq_len)).astype(np.int64)
 
     latencies = []
-    for _ in range(num_runs):
+    for _ in range(int(num_runs)):
         start = time.time()
         engine.generate(input_ids, max_new_tokens=gen_len)
-        if device == "cuda":
-            torch.cuda.synchronize()
         latencies.append((time.time() - start) * 1000)
 
     return {
         "avg_latency_ms": sum(latencies) / len(latencies),
         "p50_latency_ms": sorted(latencies)[len(latencies) // 2],
-        "p95_latency_ms": sorted(latencies)[int(len(latencies) * 0.95)],
+        "p95_latency_ms": sorted(latencies)[min(int(len(latencies) * 0.95), len(latencies) - 1)],
         "tokens_per_sec": (batch_size * gen_len * num_runs) / (sum(latencies) / 1000),
         "device": device,
     }

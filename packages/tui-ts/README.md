@@ -1,6 +1,6 @@
 # @sloughgpt/tui
 
-Terminal UI for SloughGPT using **[Ink](https://github.com/vadimdemedes/ink)** and the **[TypeScript SDK](../sdk-ts/typescript-sdk)**. Same HTTP contracts as `apps/web` and the Python `apps/tui` probes.
+Terminal UI for SloughGPT using **[Ink](https://github.com/vadimdemedes/ink)** and the **[TypeScript SDK](../sdk-ts/typescript-sdk)**. Same HTTP contracts as `apps/web` and the Python `sloughgpt shell` TUI.
 
 ## Prerequisite
 
@@ -39,4 +39,4 @@ npm start
 
 ## Roadmap
 
-See [docs/plans/tui-cli-port.md](../../docs/plans/tui-cli-port.md) — more screens (train, export) and shared layout.
+More screens (train, export) and shared layout planned.

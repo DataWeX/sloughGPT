@@ -6,9 +6,18 @@ import time
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
+
 from core.printer import printer
 from utils.progress import ProgressBar
 from utils.formatting import format_size, format_time, format_number
+
+
+def _softmax_np(x: np.ndarray) -> np.ndarray:
+    """Numeric-stable softmax over the last axis."""
+    x = x - x.max(axis=-1, keepdims=True)
+    e = np.exp(x)
+    return e / e.sum(axis=-1, keepdims=True)
 
 
 def cmd_train(args):
@@ -857,17 +866,17 @@ def cmd_demo(args):
 def cmd_rlhf(args):
     """Run RLHF demo."""
     import sys
-    import torch
+
     sys.path.insert(0, ".")
 
     printer.header("RLHF Demo")
     from domains.training.rlhf import RLHFConfig
     from domains.models import SloughGPTModel
 
-    device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+    device = "cpu"
     printer.key_value("Device", device)
 
-    model = SloughGPTModel(vocab_size=100, n_embed=64, n_layer=2, n_head=4, block_size=32, dropout=0.0).to(device)
+    model = SloughGPTModel(vocab_size=100, n_embed=64, n_layer=2, n_head=4, block_size=32, dropout=0.0)
     printer.key_value("Parameters", f"{model.num_parameters():,}")
 
     config = RLHFConfig(ppo_epochs=2, clip_epsilon=0.2, entropy_coef=0.01, gamma=1.0, lam=0.95)
@@ -875,16 +884,18 @@ def cmd_rlhf(args):
     printer.key_value("Clip Epsilon", str(config.clip_epsilon))
 
     batch_size, seq_len, vocab_size = 4, 16, 100
+    rng = np.random.default_rng(0)
     printer.step("Running PPO steps...")
     for step in range(min(args.steps, 20)):
-        input_ids = torch.randint(0, vocab_size, (batch_size, seq_len)).to(device)
-        with torch.no_grad():
-            logits, _ = model(input_ids)
-        logits = torch.where(torch.isfinite(logits), logits, torch.zeros_like(logits))
-        probs = torch.nn.functional.softmax(logits[:, -1, :], dim=-1)
-        reward = probs.max(dim=-1).values.mean()
+        input_ids = rng.integers(0, vocab_size, size=(batch_size, seq_len))
+        logits, _ = model(input_ids)
+        arr = logits.data
+        arr = np.where(np.isfinite(arr), arr, np.zeros_like(arr))
+        last = arr[:, -1, :]
+        probs = _softmax_np(last)
+        reward = probs.max(axis=-1).mean()
         if step % 5 == 0 or step == min(args.steps, 20) - 1:
-            printer.key_value(f"Step {step}", f"reward={reward.item():.3f}")
+            printer.key_value(f"Step {step}", f"reward={reward:.3f}")
 
     printer.blank()
     printer.success("RLHF demo complete!")
