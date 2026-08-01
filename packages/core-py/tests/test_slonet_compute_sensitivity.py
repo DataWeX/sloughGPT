@@ -128,7 +128,7 @@ def test_sensitivity_backward_preserved():
 
     loss.backward()
     assert all(p.grad is not None for p in lin.parameters())
-    assert all(np.all(np.isfinite(p.grad)) for p in lin.parameters())
+    assert all(np.all(np.isfinite(p.grad.data)) for p in lin.parameters())
 
 
 def test_sensitivity_training_tracking():

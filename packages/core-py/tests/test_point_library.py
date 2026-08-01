@@ -10,6 +10,13 @@ import pytest
 from domains.infrastructure.point_compressor import (
     Point, PointCompressor, PointLibrary, ModelTree,
 )
+from domains.infrastructure.safetensors_loader import _find_safetensors, _get_model_dir
+
+QWEN2_ID = "Qwen/Qwen2.5-0.5B-Instruct"
+
+
+def _is_cached(model_id: str) -> bool:
+    return _find_safetensors(_get_model_dir(model_id)) is not None
 
 
 # ── Fixtures ──
@@ -451,11 +458,12 @@ class TestNumpyEngineModelTree:
         info = engine.info()
         assert info["compressed"] is True
 
+    @pytest.mark.skipif(not _is_cached(QWEN2_ID), reason=f"{QWEN2_ID} not cached locally")
     def test_numpy_engine_from_pretrained_with_points(self):
         """NumpyEngine.from_pretrained with use_points=True."""
         from domains.infrastructure.numpy_engine import NumpyEngine
 
-        engine = NumpyEngine.from_pretrained("gpt2", use_points=True, n_clusters=8)
+        engine = NumpyEngine.from_pretrained(QWEN2_ID, use_points=True, n_clusters=8)
 
         # ModelTree created
         assert engine._model_tree is not None
@@ -466,16 +474,17 @@ class TestNumpyEngineModelTree:
         assert lib.stats()["total_points"] > 0
 
         # Can get weights
-        w = engine._get_weight("wte.weight")
-        assert w.shape[0] == 50257  # GPT-2 vocab
+        w = engine._get_weight("model.embed_tokens.weight")
+        assert w.shape[0] == 151936  # Qwen2.5 vocab
 
+    @pytest.mark.skipif(not _is_cached(QWEN2_ID), reason=f"{QWEN2_ID} not cached locally")
     def test_numpy_engine_from_pretrained_with_shared_library(self):
         """Two engines share the same PointLibrary via ModelTree."""
         from domains.infrastructure.numpy_engine import NumpyEngine
 
         lib = PointLibrary(name="shared")
-        e1 = NumpyEngine.from_pretrained("gpt2", use_points=True, library=lib)
-        e2 = NumpyEngine.from_pretrained("gpt2", use_points=True, library=lib)
+        e1 = NumpyEngine.from_pretrained(QWEN2_ID, use_points=True, library=lib)
+        e2 = NumpyEngine.from_pretrained(QWEN2_ID, use_points=True, library=lib)
 
         # Both use the same library
         assert e1._model_tree.library is e2._model_tree.library
@@ -484,23 +493,24 @@ class TestNumpyEngineModelTree:
         stats = lib.stats()
         assert stats["total_points"] > 0
 
+    @pytest.mark.skipif(not _is_cached(QWEN2_ID), reason=f"{QWEN2_ID} not cached locally")
     def test_points_persistence(self):
         """Save PointLibrary from NumpyEngine, load and verify."""
         from domains.infrastructure.numpy_engine import NumpyEngine
 
-        engine = NumpyEngine.from_pretrained("gpt2", use_points=True, n_clusters=8)
+        engine = NumpyEngine.from_pretrained(QWEN2_ID, use_points=True, n_clusters=8)
         lib = engine._model_tree.library
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            lib.save(Path(tmpdir) / "gpt2.points.json")
+            lib.save(Path(tmpdir) / "qwen2.points.json")
 
-            loaded_lib = PointLibrary.load(Path(tmpdir) / "gpt2.points.json")
+            loaded_lib = PointLibrary.load(Path(tmpdir) / "qwen2.points.json")
             assert loaded_lib.stats()["total_points"] == lib.stats()["total_points"]
 
             # Verify a weight can be reconstructed
-            original = engine._get_weight("h.0.ln_1.weight")
-            tree2 = ModelTree("gpt2", loaded_lib)
-            recovered = tree2.get_weight("h.0.ln_1.weight")
+            original = engine._get_weight("model.layers.0.input_layernorm.weight")
+            tree2 = ModelTree(QWEN2_ID, loaded_lib)
+            recovered = tree2.get_weight("model.layers.0.input_layernorm.weight")
             assert recovered is not None
             assert recovered.shape == original.shape
 

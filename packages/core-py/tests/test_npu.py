@@ -1344,7 +1344,7 @@ class MockCTransformProvider:
     def metadata(self):
         return {
             "model_id": self._model_id,
-            "architecture": "TransformerEngine",
+            "architecture": "NativeEngine",
             "total_params": 0,
             "n_layer": 2,
             "n_embed": 64,

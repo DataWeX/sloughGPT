@@ -4,23 +4,51 @@ import numpy as np
 import pytest
 from domains.infrastructure.numpy_engine import NumpyEngine, KVCache, _CompressedWeight, _LRUCache
 
+from domains.infrastructure.safetensors_loader import _find_safetensors, _get_model_dir
+
+QWEN_ID = "Qwen/Qwen2.5-0.5B-Instruct"
+
+
+def _is_cached(model_id: str) -> bool:
+    """Whether a model's safetensors are present in the local cache.
+
+    Uses the same resolution the ModelLoader uses (_get_model_dir +
+    _find_safetensors), covering both the standard HF cache layout and
+    the flat project-local models/hf-cache/hub layout.
+    """
+    return _find_safetensors(_get_model_dir(model_id)) is not None
+
 
 @pytest.fixture(scope="session")
 def gpt2():
-    """Load GPT-2 once for entire test session."""
+    """Load GPT-2 once for entire test session (skips if not cached)."""
+    if not _is_cached("gpt2"):
+        pytest.skip("gpt2 not cached locally")
     return NumpyEngine.from_pretrained("gpt2")
 
 
 @pytest.fixture(scope="session")
 def gpt2_uncompressed():
-    """Load GPT-2 without compression for comparison."""
+    """Load GPT-2 without compression for comparison (skips if not cached)."""
+    if not _is_cached("gpt2"):
+        pytest.skip("gpt2 not cached locally")
     return NumpyEngine.from_pretrained("gpt2", compress=False)
 
 
 @pytest.fixture(scope="session")
 def qwen2():
-    """Load Qwen2 once for entire test session."""
-    return NumpyEngine.from_pretrained("Qwen/Qwen2-0.5B-Instruct")
+    """Load Qwen2.5 once for entire test session (from local cache)."""
+    if not _is_cached(QWEN_ID):
+        pytest.skip(f"{QWEN_ID} not cached locally")
+    return NumpyEngine.from_pretrained(QWEN_ID)
+
+
+@pytest.fixture(scope="session")
+def qwen2_uncompressed():
+    """Load Qwen2.5 without compression (from local cache)."""
+    if not _is_cached(QWEN_ID):
+        pytest.skip(f"{QWEN_ID} not cached locally")
+    return NumpyEngine.from_pretrained(QWEN_ID, compress=False)
 
 
 class TestNumpyEngineGPT2:
@@ -60,32 +88,32 @@ class TestNumpyEngineGPT2:
 
 
 class TestNumpyEngineCompression:
-    """Compression tests for NumpyEngine."""
+    """Compression tests for NumpyEngine (runs on locally-cached Qwen2.5)."""
 
-    def test_compression_enabled(self, gpt2):
-        assert gpt2._compress is True
-        assert len(gpt2._compressed_weights) > 0
+    def test_compression_enabled(self, qwen2):
+        assert qwen2._compress is True
+        assert len(qwen2._compressed_weights) > 0
 
-    def test_compression_disabled(self, gpt2_uncompressed):
-        assert gpt2_uncompressed._compress is False
-        assert len(gpt2_uncompressed._raw_weights) > 0
+    def test_compression_disabled(self, qwen2_uncompressed):
+        assert qwen2_uncompressed._compress is False
+        assert len(qwen2_uncompressed._raw_weights) > 0
 
-    def test_compression_ratio(self, gpt2):
-        info = gpt2.info()
+    def test_compression_ratio(self, qwen2):
+        info = qwen2.info()
         assert info["compressed"] is True
         assert info["compression_ratio"] > 1.0  # At least some compression
         assert info["raw_bytes"] > info["compressed_bytes"]
 
-    def test_get_weight_decompresses(self, gpt2):
-        weight_name = list(gpt2._compressed_weights.keys())[0]
-        weight = gpt2._get_weight(weight_name)
+    def test_get_weight_decompresses(self, qwen2):
+        weight_name = list(qwen2._compressed_weights.keys())[0]
+        weight = qwen2._get_weight(weight_name)
         assert isinstance(weight, np.ndarray)
         assert np.issubdtype(weight.dtype, np.floating)
 
-    def test_lru_cache(self, gpt2):
-        weight_name = list(gpt2._compressed_weights.keys())[0]
-        w1 = gpt2._get_weight(weight_name)
-        w2 = gpt2._get_weight(weight_name)
+    def test_lru_cache(self, qwen2):
+        weight_name = list(qwen2._compressed_weights.keys())[0]
+        w1 = qwen2._get_weight(weight_name)
+        w2 = qwen2._get_weight(weight_name)
         assert np.array_equal(w1, w2)
 
     def test_compressed_weight_decompress(self):
@@ -135,20 +163,20 @@ class TestNumpyEngineKVCache:
         assert cache.seq_len == 0
         assert cache.get(0) is None
 
-    def test_generate_with_kv_cache(self, gpt2):
-        result = gpt2.generate("Hello", max_new_tokens=5, use_kv_cache=True)
+    def test_generate_with_kv_cache(self, qwen2):
+        result = qwen2.generate("Hello", max_new_tokens=5, use_kv_cache=True)
         assert isinstance(result, str)
         assert len(result) > 0
 
-    def test_generate_without_kv_cache(self, gpt2):
-        result = gpt2.generate("Hello", max_new_tokens=5, use_kv_cache=False)
+    def test_generate_without_kv_cache(self, qwen2):
+        result = qwen2.generate("Hello", max_new_tokens=5, use_kv_cache=False)
         assert isinstance(result, str)
         assert len(result) > 0
 
-    def test_kv_cache_matches_full_forward(self, gpt2):
+    def test_kv_cache_matches_full_forward(self, qwen2):
         # Both should produce same output for greedy decoding
-        r1 = gpt2.generate("Hello world", max_new_tokens=3, temperature=0.0, use_kv_cache=False)
-        r2 = gpt2.generate("Hello world", max_new_tokens=3, temperature=0.0, use_kv_cache=True)
+        r1 = qwen2.generate("Hello world", max_new_tokens=3, temperature=0.0, use_kv_cache=False)
+        r2 = qwen2.generate("Hello world", max_new_tokens=3, temperature=0.0, use_kv_cache=True)
         # Greedy should be identical (modulo floating-point accumulation)
         assert r1[:20] == r2[:20]  # First 20 chars should match
 
@@ -187,17 +215,17 @@ class TestNumpyEngineStreaming:
     """Streaming generation tests."""
 
     @pytest.mark.asyncio
-    async def test_generate_stream(self, gpt2):
+    async def test_generate_stream(self, qwen2):
         tokens = []
-        async for token in gpt2.generate_stream("Hello", max_new_tokens=5, temperature=0.0):
+        async for token in qwen2.generate_stream("Hello", max_new_tokens=5, temperature=0.0):
             tokens.append(token)
         assert len(tokens) > 0
         assert all(isinstance(t, str) for t in tokens)
 
     @pytest.mark.asyncio
-    async def test_generate_stream_yields_tokens(self, gpt2):
+    async def test_generate_stream_yields_tokens(self, qwen2):
         count = 0
-        async for _ in gpt2.generate_stream("Hello", max_new_tokens=5, temperature=0.0):
+        async for _ in qwen2.generate_stream("Hello", max_new_tokens=5, temperature=0.0):
             count += 1
             if count >= 3:
                 break

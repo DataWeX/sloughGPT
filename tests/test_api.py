@@ -27,10 +27,12 @@ class TestHealthEndpoint:
 
     def test_health_check(self):
         """Test health check can be called."""
-        # Simple test that the function exists
-        from domains.inference.engine import InferenceEngine
+        # Simple test that the server state singleton exists
+        from domains.infrastructure.server_state import get_server_state
 
-        assert InferenceEngine is not None
+        state = get_server_state()
+        assert state is not None
+        assert hasattr(state, "uptime_seconds") or hasattr(state, "uptime")
 
 
 class TestInferenceEndpoints:
@@ -100,13 +102,14 @@ class TestQuantizationEndpoints:
         assert req.quantization_type == "fp16"
 
     def test_quantization_type_validation(self):
-        """Test quantization type enum values."""
-        from domains.inference.quantization import QuantizationType
+        """Test quantization modes and dtypes exposed by QuantEngine."""
+        from domains.infrastructure.quantization import QuantDtype, QuantMode, QuantEngine
 
-        valid_types = [qt.value for qt in QuantizationType]
-        assert "fp16" in valid_types
-        assert "int8" in valid_types
-        assert "int4" in valid_types
+        assert "symmetric" in [m.value for m in QuantMode]
+        assert "asymmetric" in [m.value for m in QuantMode]
+        assert "int8" in [d.value for d in QuantDtype]
+        assert "int4" in [d.value for d in QuantDtype]
+        assert QuantEngine is not None
 
 
 class TestBenchmarkEndpoints:
@@ -212,11 +215,12 @@ class TestAPIIntegration:
 
     def test_endpoints_exist(self):
         """Test that key domain functions exist."""
-        from domains.inference.quantization import quantize_model
-        from domains.inference.engine import InferenceEngine
+        from domains.infrastructure.quantization import quantize_state_dict, quantized_linear
+        from domains.inference.native.engine import NativeEngine
 
-        assert callable(quantize_model)
-        assert callable(InferenceEngine)
+        assert callable(quantize_state_dict)
+        assert callable(quantized_linear)
+        assert NativeEngine is not None
 
     def test_error_handling(self):
         """Test error handling in requests."""

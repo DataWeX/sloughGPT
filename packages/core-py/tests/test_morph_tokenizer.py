@@ -2,6 +2,18 @@
 
 import pytest
 from domains.infrastructure.morph_tokenizer import MorphTokenizer
+from domains.infrastructure.safetensors_loader import _find_safetensors, _get_model_dir
+
+QWEN2_ID = "Qwen/Qwen2.5-0.5B-Instruct"
+
+
+def _is_cached(model_id: str) -> bool:
+    """Whether a model's tokenizer is present in the local cache.
+
+    Uses the same resolution the loader uses (searching both the standard HF
+    cache and the flat project-local models/hf-cache/hub layout).
+    """
+    return (_get_model_dir(model_id) / "tokenizer.json").exists()
 
 
 class TestMorphTokenizerGPT2:
@@ -9,6 +21,8 @@ class TestMorphTokenizerGPT2:
 
     @pytest.fixture
     def tok(self):
+        if not _is_cached("gpt2"):
+            pytest.skip("gpt2 not cached locally")
         return MorphTokenizer.from_pretrained("gpt2")
 
     def test_vocab_size(self, tok):
@@ -64,7 +78,9 @@ class TestMorphTokenizerQwen2:
 
     @pytest.fixture
     def tok(self):
-        return MorphTokenizer.from_pretrained("Qwen/Qwen2-0.5B-Instruct")
+        if not _is_cached(QWEN2_ID):
+            pytest.skip(f"{QWEN2_ID} not cached locally")
+        return MorphTokenizer.from_pretrained(QWEN2_ID)
 
     def test_vocab_size(self, tok):
         assert tok.vocab_size > 100000
@@ -101,7 +117,9 @@ class TestMorphologicalAnalysis:
 
     @pytest.fixture
     def tok(self):
-        return MorphTokenizer.from_pretrained("gpt2")
+        if not _is_cached(QWEN2_ID):
+            pytest.skip(f"{QWEN2_ID} not cached locally")
+        return MorphTokenizer.from_pretrained(QWEN2_ID)
 
     def test_decompose_unhappiness(self, tok):
         assert tok.decompose("unhappiness") == ["un", "happy", "ness"]

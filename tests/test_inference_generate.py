@@ -10,8 +10,12 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def client():
-    from apps.api.server.main import app
-    return TestClient(app)
+    from fastapi import FastAPI
+    from apps.api.server.routers.inference import router
+
+    _app = FastAPI()
+    _app.include_router(router)
+    return TestClient(_app)
 
 
 class AsyncIteratorMock:
@@ -38,7 +42,10 @@ def mock_provider():
     provider.chat = AsyncMock(return_value="Hello! How are you today?")
     provider.chat_stream = MagicMock(return_value=AsyncIteratorMock(["Hello!", " How", " are", " you?"]))
     provider.model_id = "test-model"
-    with patch("domains.models.provider.get_provider", return_value=provider):
+    with (
+        patch("domains.models.provider.get_provider", return_value=provider),
+        patch("state.model", MagicMock()),
+    ):
         yield provider
 
 

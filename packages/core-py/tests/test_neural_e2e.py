@@ -13,7 +13,9 @@ from domains.shell.kernel_process import ProcessState
 def test_boot_creates_neural_kernel():
     rt = DaitRuntime()
     rt.boot()
-    assert isinstance(rt.kernel, NeuralKernel)
+    assert isinstance(rt.kernel, Kernel)
+    assert rt.kernel.has_addon("neural")
+    assert hasattr(rt.kernel, "engine")
     rt.shutdown()
 
 

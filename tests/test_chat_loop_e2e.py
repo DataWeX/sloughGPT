@@ -166,11 +166,10 @@ class TestChatLoopE2E:
         resp = client.post(
             "/feedback/workflow-record",
             json={
-                "session_id": "fb-test-session",
-                "message_id": "msg-1",
-                "user_id": "test-user",
-                "feedback_type": "thumbs_up",
-                "message_text": "Great response!",
+                "conversation_id": "fb-test-session",
+                "rating": "thumbs_up",
+                "assistant_response": "Great response!",
+                "user_message": "Hello",
             },
         )
         assert resp.status_code == 200
@@ -206,10 +205,8 @@ class TestChatLoopE2E:
         resp = client.post(
             "/feedback/workflow-record",
             json={
-                "session_id": session_id,
-                "message_id": "regen-msg-1",
-                "user_id": "test-user",
-                "feedback_type": "thumbs_up",
+                "conversation_id": session_id,
+                "rating": "thumbs_up",
             },
         )
         assert resp.status_code == 200

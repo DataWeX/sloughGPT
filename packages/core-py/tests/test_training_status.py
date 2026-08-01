@@ -301,7 +301,7 @@ class TestSaveLoadCheckpointNpz:
 
 
 class TestCheckpointManagerNpz:
-    """CheckpointManager with use_npz=True."""
+    """CheckpointManager writes torch-free .npz checkpoints by default."""
 
     def test_save_and_load_npz(self, tmp_path):
         mgr = CheckpointManager(str(tmp_path))
@@ -313,7 +313,7 @@ class TestCheckpointManagerNpz:
 
         path = mgr.save_checkpoint(
             model, optimizer=None, step=10, epoch=2, loss=0.5, val_loss=0.45,
-            metadata={"note": "test"}, use_npz=True,
+            metadata={"note": "test"},
         )
         assert path.endswith(".npz")
         assert Path(path).exists()
@@ -332,22 +332,21 @@ class TestCheckpointManagerNpz:
         mgr = CheckpointManager(str(tmp_path))
         model = _StubModel({"w": np.array([1.0])})
 
-        mgr.save_checkpoint(model, None, step=1, epoch=0, loss=0.8, use_npz=True)
-        mgr.save_checkpoint(model, None, step=2, epoch=1, loss=0.5, use_npz=True)
+        mgr.save_checkpoint(model, None, step=1, epoch=0, loss=0.8)
+        mgr.save_checkpoint(model, None, step=2, epoch=1, loss=0.5)
 
         ckpts = mgr.list_checkpoints()
         assert len(ckpts) == 2
         assert ckpts[0]["step"] == 2  # sorted desc
         assert ckpts[1]["step"] == 1
 
-    def test_mixed_pt_and_npz(self, tmp_path):
-        """list_checkpoints gracefully skips unreadable .pt files, returns .npz."""
+    def test_ignores_foreign_checkpoint_files(self, tmp_path):
+        """list_checkpoints skips non-.npz files in the checkpoint dir."""
         mgr = CheckpointManager(str(tmp_path))
         model = _StubModel({"w": np.array([1.0])})
 
-        mgr.save_checkpoint(model, None, step=1, epoch=0, loss=0.8, use_npz=True)
-        # Create a .pt file that can't be read (no torch, not npz format)
-        # _load_meta should catch the exception and return None, skipping it
+        mgr.save_checkpoint(model, None, step=1, epoch=0, loss=0.8)
+        # A .pt file (or any non-npz) must be ignored by list_checkpoints
         pt_path = tmp_path / "checkpoint_step2.pt"
         pt_path.write_text("not a valid checkpoint")
 
@@ -360,8 +359,8 @@ class TestCheckpointManagerNpz:
         mgr = CheckpointManager(str(tmp_path))
         model = _StubModel({"w": np.array([1.0])})
 
-        mgr.save_checkpoint(model, None, step=1, epoch=0, loss=0.9, use_npz=True)
-        mgr.save_checkpoint(model, None, step=2, epoch=1, loss=0.3, use_npz=True)
+        mgr.save_checkpoint(model, None, step=1, epoch=0, loss=0.9)
+        mgr.save_checkpoint(model, None, step=2, epoch=1, loss=0.3)
 
         best = mgr.get_best_checkpoint()
         assert best is not None
@@ -372,10 +371,10 @@ class TestCheckpointManagerNpz:
         mgr = CheckpointManager(str(tmp_path))
         model = _StubModel({"w": np.array([1.0])})
 
-        mgr.save_checkpoint(model, None, step=1, epoch=0, loss=0.9, use_npz=True)
+        mgr.save_checkpoint(model, None, step=1, epoch=0, loss=0.9)
         import time
         time.sleep(0.01)
-        mgr.save_checkpoint(model, None, step=2, epoch=1, loss=0.3, use_npz=True)
+        mgr.save_checkpoint(model, None, step=2, epoch=1, loss=0.3)
 
         latest = mgr.get_latest_checkpoint()
         assert latest is not None
@@ -386,7 +385,7 @@ class TestCheckpointManagerNpz:
         mgr = CheckpointManager(str(tmp_path))
         model = _StubModel({"w": np.array([1.0])})
 
-        mgr.save_checkpoint(model, None, step=5, epoch=2, loss=0.5, use_npz=True)
+        mgr.save_checkpoint(model, None, step=5, epoch=2, loss=0.5)
         assert mgr.tracker.report.last_checkpoint_step == 5
         assert mgr.tracker.report.checkpoint_count == 1
         assert mgr.tracker.report.checkpoint_path is not None

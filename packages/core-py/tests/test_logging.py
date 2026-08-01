@@ -7,6 +7,7 @@ import json
 import logging
 import sys
 import time
+from unittest import mock
 from unittest.mock import MagicMock
 
 import pytest
@@ -190,6 +191,31 @@ class TestConsoleLogger:
         log.info("started", port=8000)
         output = stream.getvalue()
         assert "port=8000" in output
+
+
+class TestCliLoggerTerminalSuppression:
+    def test_emit_suppressed_when_terminal_disabled(self):
+        import domains.logging.cli_logger as cli_mod
+        from domains.logging.cli_logger import CLILogger, set_cli_terminal
+
+        log = CLILogger("slo.test", level=LogLevel.DEBUG)
+        with mock.patch.object(cli_mod, "_console", MagicMock()) as con:
+            set_cli_terminal(False)
+            log.info("hidden")
+            con.print.assert_not_called()
+            set_cli_terminal(True)
+            log.info("visible")
+            con.print.assert_called_once()
+
+    def test_emit_writes_to_console_when_enabled(self):
+        import domains.logging.cli_logger as cli_mod
+        from domains.logging.cli_logger import CLILogger, set_cli_terminal
+
+        log = CLILogger("slo.test", level=LogLevel.DEBUG)
+        with mock.patch.object(cli_mod, "_console", MagicMock()) as con:
+            set_cli_terminal(True)
+            log.info("visible")
+            con.print.assert_called_once()
 
 
 # ══════════════════════════════════════════════════════════════════════

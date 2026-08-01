@@ -212,12 +212,13 @@ class TestInferencePoolDynamic:
     @pytest.mark.asyncio
     async def test_default_size_from_cpu_count(self):
         from apps.api.server.infrastructure.inference_pool import InferencePool
+        from domains.infrastructure.resource_manager import get_resource_manager
 
         InferencePool._instance = None
         pool = await InferencePool.get_instance()
-        import multiprocessing
-        expected = min(multiprocessing.cpu_count(), 8)
+        expected = get_resource_manager().inference_pool_size
         assert pool._max_workers == expected
+        assert pool._max_workers >= 1
         await pool.shutdown()
         InferencePool._instance = None
 

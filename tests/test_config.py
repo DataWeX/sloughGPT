@@ -390,38 +390,3 @@ class TestGetDevice:
         assert get_device(DeviceConfig(type="cpu")) == "cpu"
         assert get_device(DeviceConfig(type="cuda")) == "cuda"
         assert get_device(DeviceConfig(type="mps")) == "mps"
-
-
-class TestInferenceConfig:
-    """Tests for inference configuration."""
-
-    def test_generation_config_defaults(self):
-        """Test GenerationConfig defaults."""
-        from domains.inference.engine import GenerationConfig
-
-        cfg = GenerationConfig()
-
-        assert cfg.max_new_tokens == 100
-        assert cfg.temperature == 0.8
-        assert cfg.top_k == 50
-        assert cfg.top_p == 0.9
-        assert cfg.repetition_penalty == 1.0
-        assert cfg.do_sample is True
-
-    def test_generation_config_custom(self):
-        """Test custom GenerationConfig."""
-        from domains.inference.engine import GenerationConfig
-
-        cfg = GenerationConfig(
-            max_new_tokens=200,
-            temperature=0.5,
-            top_k=20,
-            top_p=0.95,
-            repetition_penalty=1.2,
-        )
-
-        assert cfg.max_new_tokens == 200
-        assert cfg.temperature == 0.5
-        assert cfg.top_k == 20
-        assert cfg.top_p == 0.95
-        assert cfg.repetition_penalty == 1.2

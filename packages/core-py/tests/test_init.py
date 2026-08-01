@@ -150,7 +150,8 @@ class TestInitSystem:
     def test_boot_runlevel_1(self):
         init = InitSystem()
         output = init.boot(target_runlevel=1)
-        assert "Booting" in output
+        assert "boot-critical" in output
+        assert "Boot complete" in output
         assert "kernel" in output
         mgr = init.get_manager("kernel")
         assert mgr.instance.state == "running"
