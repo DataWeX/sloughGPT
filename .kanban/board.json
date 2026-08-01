@@ -24,6 +24,22 @@
   ],
   "cards": [
     {
+      "id": "20260801_083721_planner-gui-port-fallback",
+      "title": "planner gui port fallback",
+      "description": "planner gui now steps past occupied ports: _bind_server() tries the requested port then port+1..+attempts-1 on EADDRINUSE, prints 'port X in use, moved to Y'. --port 0 keeps ephemeral kernel assignment. Live-verified against occupied 8787 -> served on 8788. Module docstring + README updated. 2 new gui tests (step-past-occupied, ephemeral). 62 planner tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "planner",
+        "gui"
+      ],
+      "created_at": "2026-08-01T08:37:21.087478+00:00",
+      "updated_at": "2026-08-01T08:37:21.087478+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260801_083336_planner-package-readme-sync-help-text",
       "title": "planner package README + sync help text",
       "description": "Added packages/planner/README.md (downcraft-style): philosophy, install, quick start, command table, config resolution order, status<->column mapping, sync semantics incl. card moves, storage backends, GUI API, dev/test. Corrected kanban add example to --column. Updated planner.sync argparse description + module docstring to state the bidirectional behavior (create missing cards + move stale columns). 60 planner tests pass.",
@@ -95,7 +111,7 @@
       "id": "20260801_072229_downcraft-refactor-move-hf-tests-to-core-py-hf-hub",
       "title": "downcraft refactor: move HF tests to core-py hf_hub",
       "description": "",
-      "column": "in_progress",
+      "column": "done",
       "priority": "medium",
       "tags": [
         "downcraft",
@@ -103,7 +119,7 @@
         "refactor"
       ],
       "created_at": "2026-08-01T07:22:29.744851+00:00",
-      "updated_at": "2026-08-01T07:22:29.744851+00:00",
+      "updated_at": "2026-08-01T08:34:24.464966+00:00",
       "due_date": "",
       "assignee": "",
       "notes": []

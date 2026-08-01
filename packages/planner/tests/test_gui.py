@@ -13,7 +13,7 @@ import threading
 import httpx
 import pytest
 
-from planner.gui import GuiHandler, GuiServer, GUI_HTML
+from planner.gui import GuiHandler, GuiServer, GUI_HTML, _bind_server
 from planner.core import NoteStore, cli_main
 from planner.kanban import KanbanStore
 
@@ -256,3 +256,31 @@ def test_python_m_dispatch():
     )
     assert proc.returncode == 0
     assert "Local web interface" in proc.stdout
+
+
+def test_bind_server_steps_past_occupied_port(tmp_path):
+    import socket
+    note_store = NoteStore(notes_dir=tmp_path / "notes", backend="file")
+    kanban_store = KanbanStore(board_dir=tmp_path / "kanban")
+    blocker = socket.socket()
+    blocker.bind(("127.0.0.1", 0))
+    blocker.listen(1)
+    taken = blocker.getsockname()[1]
+    try:
+        srv = _bind_server("127.0.0.1", taken, GuiHandler, note_store, kanban_store)
+        try:
+            assert srv.server_address[1] == taken + 1
+        finally:
+            srv.server_close()
+    finally:
+        blocker.close()
+
+
+def test_bind_server_ephemeral_port(tmp_path):
+    note_store = NoteStore(notes_dir=tmp_path / "notes", backend="file")
+    kanban_store = KanbanStore(board_dir=tmp_path / "kanban")
+    srv = _bind_server("127.0.0.1", 0, GuiHandler, note_store, kanban_store)
+    try:
+        assert srv.server_address[1] != 0
+    finally:
+        srv.server_close()

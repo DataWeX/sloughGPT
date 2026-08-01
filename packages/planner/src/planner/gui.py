@@ -10,6 +10,8 @@ Usage::
                 [--host HOST] [--port PORT] [--no-open] [--sync]
 
 Opens ``http://127.0.0.1:8787`` in the default browser (unless ``--no-open``).
+If the requested port is in use, the server steps to the next free port
+(``--port 0`` asks the kernel for an ephemeral port).
 
 The GUI reads and writes the same data as the ``notes`` and ``kanban`` CLI
 commands. Board cards can be dragged between columns; moving a card that
@@ -33,6 +35,7 @@ API (all JSON):
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import logging
 import re
@@ -354,6 +357,30 @@ class GuiHandler(BaseHTTPRequestHandler):
         self._send(200, {"added": added, "updated": updated, "total": total})
 
 
+def _bind_server(host: str, port: int, handler, note_store, kanban_store, attempts: int = 20) -> GuiServer:
+    """Bind a GuiServer, stepping past ports already in use.
+
+    Tries *port*, then ``port + 1`` ... ``port + attempts - 1`` when an
+    ``EADDRINUSE`` error is raised. ``port == 0`` requests an ephemeral
+    kernel-assigned port (never conflicts, so the first try wins). Raises the
+    last ``OSError`` when no candidate binds.
+
+    Side effects:
+        - Binds a listening socket on the first free port.
+    """
+    last: OSError | None = None
+    for offset in range(attempts):
+        target = port + offset if port else 0
+        try:
+            return GuiServer((host, target), handler, note_store, kanban_store)
+        except OSError as exc:
+            last = exc
+            if getattr(exc, "errno", None) == errno.EADDRINUSE and port:
+                continue
+            raise
+    raise last
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -380,7 +407,7 @@ def main(argv: list[str] | None = None) -> int:
     kanban_store = KanbanStore(board_dir=board_dir)
 
     handler = GuiHandler
-    server = GuiServer((args.host, args.port), handler, note_store, kanban_store)
+    server = _bind_server(args.host, args.port, handler, note_store, kanban_store)
     host, port = server.server_address[:2]
 
     if args.sync:
@@ -388,7 +415,10 @@ def main(argv: list[str] | None = None) -> int:
             added, updated, total = sync_notes_to_board(server.note_store, server.kanban_store)
         print(f"Synced notes to board: {added} new, {updated} moved, {total} total")
 
-    print(f"Planner GUI:  http://{host}:{port}")
+    if args.port and port != args.port:
+        print(f"Planner GUI:  http://{host}:{port}   (port {args.port} in use, moved to {port})")
+    else:
+        print(f"Planner GUI:  http://{host}:{port}")
     print(f"  notes:  {note_store._dir}")
     print(f"  board:  {kanban_store._dir}")
     print(f"  backend: {backend}   (Ctrl+C to stop)")

@@ -114,7 +114,9 @@ added, updated, total = sync_notes_to_board(notes, board)
 ## Web GUI
 
 `planner gui` serves a zero-dependency single-page app on `127.0.0.1:8787`
-(`ThreadingHTTPServer` + embedded HTML/CSS/JS, no external assets):
+(`ThreadingHTTPServer` + embedded HTML/CSS/JS, no external assets). If the
+requested port is taken it steps to the next free port and reports the change;
+`--port 0` asks the kernel for an ephemeral port.
 
 - `GET  /api/notes`, `/api/notes/{id}`, `/api/board`, `/api/tags`, `/api/stats`
 - `POST /api/notes`, `/api/board/move`, `/api/sync`
