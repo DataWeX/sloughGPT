@@ -24,6 +24,209 @@
   ],
   "cards": [
     {
+      "id": "20260801_064646_mogdb-journal-replay-bug-fix-updatedelete-ops-clobber-docs-o",
+      "title": "MogDB journal replay bug fix \u2014 update/delete ops clobber docs on load",
+      "description": "Collection._load() replayed every journal line as a standalone document keyed by _id. An update op became a stripped {_id, update} doc that overwrote the real inserted doc, so notes edited after insert vanished from reads (title -> (untitled), note_by_id -> not found). This hid 11 notes from sync-notes-to-board (TUI session note included).\n\nFix: _load() now distinguishes journal ops (insert/update/update_many/delete/delete_many) from compacted plain-doc snapshots (.mogdb) and replays ops in order via _apply_update. Added 5 regression tests (127 total, all pass). Re-running sync-notes-to-board added the 11 missing cards (76 -> 87). Files: packages/mogdb/src/mogdb/collection.py, packages/mogdb/tests/test_mogdb.py. Not committed (awaiting user).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "mogdb",
+        "notes",
+        "storage"
+      ],
+      "created_at": "2026-08-01T06:46:46.094882+00:00",
+      "updated_at": "2026-08-01T06:46:46.094882+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260801_064625_extract-pipe-filters-to-cmds-package",
+      "title": "Extract pipe filters to cmds/ package",
+      "description": "Extracted 8 pipe-filter commands (grep, head, tail, wc, tee, sort, uniq, less) from repl.py into cmds/filters.py. Each filter reads piped input from env['_piped_input'], writes output via io.print(). Removed _cmd_* methods, COMMANDS dict entries, and help text from repl.py. All 200+ shell tests pass. 70 _cmd_* methods remain in repl.py (~30 extracted total so far).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "refactor"
+      ],
+      "created_at": "2026-08-01T06:46:25.837417+00:00",
+      "updated_at": "2026-08-01T06:46:25.837417+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260801_064625_apiserverprocess-singleton-test-hang-fix",
+      "title": "APIServerProcess singleton + test hang fix",
+      "description": "Root cause: ShellREPL.run() calls api.start() which spawns a subprocess and waits up to 120s. Each DaitRuntime creates a fresh APIServerProcess, so no two instances shared a process reference.\n\nFix:\n- runtime.py: Replaced instance-level _proc/_lock/_started_at with module-level _shared_proc/_shared_lock/_shared_started_at. Only the first start() call spawns a process; subsequent calls see _shared_proc is not None and return immediately.\n- test_shell_repl.py: Added patch('...APIServerProcess.start') to the repl fixture so run() never spawns a process in unit tests.\n\nResult: 298 shell tests pass in 2.07s (was hanging at 90s+ timeout).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "runtime",
+        "tests"
+      ],
+      "created_at": "2026-08-01T06:46:25.828438+00:00",
+      "updated_at": "2026-08-01T06:46:25.828438+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260801_064625_shell-commands-precisionquantize-cognitive-domain-tests",
+      "title": "Shell commands (precision/quantize) + cognitive domain tests",
+      "description": "Added precision/quantize/dequantize shell commands with ShellCommands methods and tests. Added 58 cognitive domain tests (CognitiveCore, KnowledgeGraph, WorkingMemory, FormalLogicEngine). Fixed Predicate.__hash__ in FormalLogicEngine. 604 tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "cognitive",
+        "quantize"
+      ],
+      "created_at": "2026-08-01T06:46:25.817350+00:00",
+      "updated_at": "2026-08-01T06:46:25.817350+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260801_064625_logbuffer-bugfix-tests",
+      "title": "LogBuffer bugfix + tests",
+      "description": "Fixed LogBuffer __len__ falsy bug (buffer or get_log_buffer -> identity check). Wrote 17 tests for log_buffer.py. Added handler to child loggers (slo.kernel, slo.shell.runtime, slo.shell.init) that disable propagation during boot. Added --stats (level distribution, top sources, time range) and --export FILE flags to _cmd_logs. Wrote 10 new shell tests for _cmd_logs covering empty, clear, display, level/source filter, limit, stats, export. All 350 shell+wm+log tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "logging",
+        "bugfix"
+      ],
+      "created_at": "2026-08-01T06:46:25.808353+00:00",
+      "updated_at": "2026-08-01T06:46:25.808353+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260801_064625_infrastructure-test-coverage",
+      "title": "Infrastructure test coverage",
+      "description": "Added test coverage for previously untested infrastructure modules in packages/core-py. New suites: test_truth_labeler (27), test_truth_maintainer (19), test_anchor_store (33), test_watchdog (16), test_mps_monitor (25), test_model_protector (25), test_spaced_repetition (21), test_point_compressor (10). All pass; batch of 10 files (incl. pre-existing test_tags, test_meaning_points, test_config) green. Source fixes: truth_labeler descriptive score 0.6->0.3 and X-is-Y now requires article; SloAdam only updates requires_grad params (test-side fix). Known blockers unchanged: psutil/starlette missing deps, HF gpt2/Qwen2-0.5B models not cached (test_numpy_engine, 3 test_point_library cases).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "infrastructure",
+        "tests"
+      ],
+      "created_at": "2026-08-01T06:46:25.800158+00:00",
+      "updated_at": "2026-08-01T06:46:25.800158+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260801_064625_infrastructure-test-coverage-round-4-slnc-compiler",
+      "title": "Infrastructure test coverage round 4: slnc compiler",
+      "description": "Round 4: 26 tests for domains/infrastructure/slnc/compiler.py (last uncovered infra module) in tests/test_slnc_compiler.py. Round-trip compile->SLNCParser for GPT-2 and LLaMA (incl. lm_head weight tying), header metadata, tensor table layout (offsets/entries/crc/ordering), 64-byte data alignment, CRC verify_all + corruption detection, invalid magic rejection, HF safetensors->slnc path via monkeypatched safetensors_loader. Found+fixed real bug: _order_tensors duplicated GPT-2 biases (biases are in GPT2_BLOCK_LAYOUT AND auto-appended by the .weight->.bias check) -> tensor_count 22 vs 16, duplicated bias bytes on disk; auto-append now skips biases already in block layout (LLaMA unaffected). 80/80 slnc tests green (format+loader+compiler). xxhash fallback path verified (module not installed).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "infrastructure",
+        "tests"
+      ],
+      "created_at": "2026-08-01T06:46:25.791316+00:00",
+      "updated_at": "2026-08-01T06:46:25.791316+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260801_064625_infra-coverage-quant-core-wrapper-tests",
+      "title": "Infra coverage: quant_core wrapper tests",
+      "description": "Added tests/test_quant_core.py (14 pass, 5 skipif-native) for quant_core/wrapper.py - last untested infra module with production consumers (quantization.py, routers/models.py import HAS_AVX2/matmul_int8_c/matmul_int4_c). Covers: numpy int8/int4 fallback vs int32 reference, forced-fallback via monkeypatched _load_lib, int4 pack/unpack round trip, _build_one failure modes (missing src / gcc error / gcc absent), _build_all with and without prebuilt libs, _load_lib idempotence. Environment has no gcc -> HAS_AVX2=False, native C paths skipif. Also: deployment/__init__.py confirmed dead code (0 consumers repo-wide, imports OK) - flagged for deletion, not tested (pt_loader precedent). Full slnc (80) + quant_core (14) + quantization suites green; pre-existing test_safetensors_loader env failures unchanged (need real gpt2 + safetensors pkg).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "infrastructure",
+        "tests"
+      ],
+      "created_at": "2026-08-01T06:46:25.783235+00:00",
+      "updated_at": "2026-08-01T06:46:25.783235+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260801_064625_downcraft-resume-refsmain-disk-truth-already-cached",
+      "title": "downcraft resume: refs/main + disk-truth already_cached",
+      "description": "Completed downcraft pause/resume validation.\n\nFixes:\n1. download_hf_model now writes refs/main -> default after completion (and in the already_cached path), so is_download_complete recognizes the snapshots/default layout it produces.\n2. already_cached shortcut now verifies disk truth via is_download_complete; stale state (complete in ~/.downcraft/state.json but files missing on disk) triggers a redownload instead of skipping.\n\nTests: test_resume.py 24 passed (new: refs/main written + completeness recognized end-to-end; stale state redownloads). downcraft core suite 64 passed; core-py regression 74 passed.\n\nLive E2E demo (prajjwal1/bert-tiny, 17.8MB): process SIGKILLed at byte 8388608 of pytorch_model.bin -> inspect_incomplete identifies pytorch_model.bin, resume offset 8388608 of 17756393 -> resume in fresh process completes at exact offset -> is_download_complete=True. PASS.\n\nRemaining integration scope: rewire packages/core-py/domains/infrastructure/download_manager.py to delegate to downcraft (register project cache root models/hf-cache/hub), and replace snapshot_download in apps/api/server/infrastructure/startup.py autoload with downcraft path.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "downcraft",
+        "resume",
+        "infra"
+      ],
+      "created_at": "2026-08-01T06:46:25.774890+00:00",
+      "updated_at": "2026-08-01T06:46:25.774890+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260801_064625_torch-removal-from-export-layer-slonet-compat-deletion",
+      "title": "Torch removal from export layer + slonet_compat deletion",
+      "description": "Completed torch-free migration of the export layer and removed the torch shim.\n\n- gguf_export.py: dropped slonet_compat; numpy-first conversion via _as_float16 (handles numpy/SloNet/torch tensors); annotations use StateDict/ModelLike aliases. Verified: arch detection, 21-key tensor map, 12 quants, optional gguf package guard.\n- onnx_export.py: import-safe without torch; torch mirror classes + export_sloughgpt_to_onnx guarded behind optional import, clear ImportError when torch missing.\n- Deleted slonet_compat.py (1936 lines), hf_dpo.py (378), migrate_torch.py (184). Zero live module-level consumers (all API/test refs lazy or importorskip-gated).\n- test_optimized_pipeline.py:139: slonet_compat alias -> plain torch.\n- pytest.ini/docs/pyproject clean; torch absent from declared deps.\n- Suite: 5535 passed, 16 pre-existing env/algorithm failures (fastapi missing, numpy_forward matmul dim bug, hub/network, task queue, wandb) - none in touched domains.\n- All remaining torch imports repo-wide are lazy/guarded feature imports (ONNX/TorchScript export, HF fine-tune, MPS detection, NPU kernels, CLI commands); module imports stay torch-free.\n- AGENTS.md updated: slonet_compat removed from architecture docs.\n\nCommit: bfebd3b (pushed to origin/main).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "core",
+        "torch",
+        "export",
+        "slonet"
+      ],
+      "created_at": "2026-08-01T06:46:25.767978+00:00",
+      "updated_at": "2026-08-01T06:46:25.767978+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260801_064625_torch-removal-from-export-layer-numpy-forward-test-fix",
+      "title": "Torch removal from export layer + numpy forward test fix",
+      "description": "Torch-free export layer + fixed numpy forward test weight layouts.\n\nMigration (complete):\n- gguf_export.py: numpy-first (_as_float16 handles numpy/SloNet/torch); StateDict/ModelLike annotations.\n- onnx_export.py: import-safe without torch; torch mirror guarded; clear ImportError otherwise.\n- Deleted slonet_compat.py (1936 lines), hf_dpo.py, migrate_torch.py.\n- test_optimized_pipeline.py: slonet_compat alias -> plain torch.\n- All remaining torch imports repo-wide are lazy/guarded feature imports; modules import cleanly without torch.\n- AGENTS.md architecture docs updated.\n\nFollow-up fix:\n- test_numpy_ops_forward.py builders supplied inverted weight layouts (GPT-2 needs (in,out) Conv1D; LLaMA needs (out,in) Linear). Generic numpy forward was correct. 9 matmul failures fixed; all 34 tests pass.\n- Full suite: 5544 passed / 7 failed (5 deterministic env gaps: fastapi+huggingface_hub not installed; 2 flaky order-dependent wandb/watchdog that pass in isolation).\n\nCommits: bfebd3b, f1352af, 841f520 (pushed).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "core",
+        "torch",
+        "export",
+        "slonet",
+        "tests"
+      ],
+      "created_at": "2026-08-01T06:46:25.761903+00:00",
+      "updated_at": "2026-08-01T06:46:25.761903+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260801_064625_unify-to-single-curses-tui-drop-packagestui-ts",
+      "title": "Unify to single curses TUI; drop packages/tui-ts",
+      "description": "Unified the repo to a single TUI and pushed.\n\nDecision: sloughgpt tui and sloughgpt shell --tui both boot the in-core split-pane curses TUI (TuiRepl, packages/core-py/domains/shell/). It runs in-process (no HTTP), shows infra log console + shell output + chat output, and is the only TUI that works without a running API server. The TypeScript Ink TUI (packages/tui-ts) was a thin HTTP client to the FastAPI server (only client.health() wired); it duplicated terminal UI with no in-process value, so it was removed.\n\nChanges (commit f0d2ea0):\n- Deleted packages/tui-ts/ entirely (package.json, src/App.tsx, src/cli.tsx, parseBaseUrl, tests, config).\n- Updated references: apps/README.md, docs/STRUCTURE.md (incl. stale test-tui-ts CI line), .dockerignore, SPEC.md, .agents/skills/SKILL.md, scripts/build.sh (removed sloughgpt-tui build).\n- Kept packages/sdk-ts/typescript-sdk (standalone published TS SDK, independent of tui-ts).\n- Line-mode REPL preserved as default: sloughgpt shell (no --tui). Verified: sloughgpt shell -c 'echo hi' -> 'hi' (offline, exit 0).\n\nVerification: TuiRepl imports cleanly; shell test suites (test_shell_repl, test_shell_tui_repl, test_shell_pane, test_shell_surface, test_shell_log_buffer, test_shell_logger) all pass.\n\nNote: earlier commit b024103 (tui: drop Python apps/tui) accidentally included apps/cli/src/commands/train.py (_softmax_np); content is correct, only the commit grouping is off, and it is already pushed, so left as-is.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "tui",
+        "cli",
+        "shell"
+      ],
+      "created_at": "2026-08-01T06:46:25.682748+00:00",
+      "updated_at": "2026-08-01T06:46:25.682748+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260731_223301_downcraft-resume-validated-app-autoload-integration",
       "title": "downcraft resume validated + app autoload integration",
       "description": "",
