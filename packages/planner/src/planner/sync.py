@@ -1,8 +1,10 @@
 """
-planner sync — create board cards for notes that do not have one yet.
+planner sync — reconcile notes and board cards.
 
-Shared implementation used by the ``planner sync`` command, the GUI Sync
-button (``planner gui``), and the ``sync-notes-to-board`` console script.
+Creates a card for every note without one and moves existing cards to the
+column matching the note's current status. Shared implementation used by the
+``planner sync`` command, the GUI Sync button (``planner gui``), and the
+``sync-notes-to-board`` console script.
 """
 
 from __future__ import annotations
@@ -68,7 +70,7 @@ def cli_main(argv: list[str] | None = None) -> int:
     """CLI entry point for ``planner sync`` / ``sync-notes-to-board``."""
     parser = argparse.ArgumentParser(
         prog="planner sync",
-        description="Create board cards for notes that do not have one yet.",
+        description="Create missing board cards and move cards to match note status.",
     )
     parser.add_argument("--notes-dir", default=None, help="Notes directory")
     parser.add_argument("--board-dir", default=None, help="Board directory")

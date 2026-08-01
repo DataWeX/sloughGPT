@@ -24,6 +24,23 @@
   ],
   "cards": [
     {
+      "id": "20260801_083336_planner-package-readme-sync-help-text",
+      "title": "planner package README + sync help text",
+      "description": "Added packages/planner/README.md (downcraft-style): philosophy, install, quick start, command table, config resolution order, status<->column mapping, sync semantics incl. card moves, storage backends, GUI API, dev/test. Corrected kanban add example to --column. Updated planner.sync argparse description + module docstring to state the bidirectional behavior (create missing cards + move stale columns). 60 planner tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "planner",
+        "docs",
+        "sync"
+      ],
+      "created_at": "2026-08-01T08:33:36.183320+00:00",
+      "updated_at": "2026-08-01T08:33:36.183320+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260801_082907_planner-gui-stdlib-local-web-ui-for-notes-kanban",
       "title": "planner gui \u2014 stdlib local web UI for notes + kanban",
       "description": "Built zero-dependency web GUI: packages/planner/src/planner/gui.py (ThreadingHTTPServer + embedded HTML/CSS/JS SPA, no external assets). REST API: GET /, /api/notes[/{id}], /api/board, /api/tags, /api/stats; POST /api/notes, /api/board/move, /api/sync; PUT/DELETE /api/notes/{id}. Board drag-drop syncs note status (column->status map); Sync button mirrors sync-notes-to-board. Wired 'planner gui' / 'python -m planner gui' subcommand in core.py cli_main + __main__.py; installed editable. Args: --notes-dir, --board-dir, --backend file|mogdb, --host, --port (8787), --no-open, --sync. 36 tests (18 x file+mogdb) in packages/planner/tests/test_gui.py, all pass. Now part of the unified planner CLI under packages/planner.",
