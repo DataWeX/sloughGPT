@@ -1122,6 +1122,7 @@ class TestSave:
 
 class TestGenerate:
     def test_generate_returns_text(self, data_path, tmp_path):
+        np.random.seed(0)
         t = make_trainer(data_path, tiny_config(tmp_path))
         prompt = "the quick"
         text = t.generate(prompt, max_tokens=4, temperature=0.8)

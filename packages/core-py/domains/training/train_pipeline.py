@@ -818,7 +818,10 @@ class SloughGPTTrainer:
         self.accumulation_step += 1
         raw_loss = loss.item() / scale_factor
         # EMA smoothing: reported loss always trends downward
-        ema = self._ema_alpha * raw_loss + (1 - self._ema_alpha) * (self._ema_loss or raw_loss)
+        if self._ema_loss is None:
+            ema = raw_loss
+        else:
+            ema = self._ema_alpha * raw_loss + (1 - self._ema_alpha) * self._ema_loss
         if self._ema_loss is None or ema < self._ema_loss:
             self._ema_loss = ema
         self._last_train_loss = raw_loss
