@@ -26,6 +26,8 @@ from domains.training.slonet import (
     import_from_sou,
     kl_div_loss,
     log_softmax,
+    multinomial,
+    normalize,
     pairwise_distance,
     silu,
     softmax,
@@ -584,3 +586,45 @@ class TestAccelOpDispatch:
         arr = np.array([1.0, 2.0], dtype=np.float32)
         out = _accel_op("silu", arr, lambda d: d * 3, threshold=1)
         assert np.allclose(out, arr * 3)
+
+
+class TestNormalize:
+    def test_numpy_path(self):
+        x = np.array([[1.0, 1.0], [3.0, 4.0]], dtype=np.float32)
+        nd = normalize(x)
+        assert np.allclose(np.linalg.norm(nd, axis=1), np.ones(2), atol=1e-5)
+
+    def test_tensor_path_backward(self):
+        x = Tensor(np.array([[1.0, 2.0]], dtype=np.float32), requires_grad=True)
+        out = normalize(x)
+        assert isinstance(out, Tensor)
+        out.sum().backward()
+        assert x.grad is not None
+        assert np.all(np.isfinite(x.grad.data))
+
+    def test_zero_norm_no_divzero(self):
+        x = Tensor(np.array([[0.0, 0.0]], dtype=np.float32), requires_grad=True)
+        out = normalize(x)
+        assert np.all(np.isfinite(out.data))
+
+
+class TestMultinomial:
+    def test_samples_without_replacement(self):
+        t = Tensor(np.array([0.1, 0.2, 0.7], dtype=np.float32))
+        out = multinomial(t, num_samples=2)
+        assert out.data.shape == (1, 2)
+        assert out.data.size == 2
+
+    def test_zero_total_uniform(self):
+        t = Tensor(np.array([0.0, 0.0, 0.0], dtype=np.float32))
+        out = multinomial(t, num_samples=1)
+        assert out.data.shape == (1, 1)
+
+
+class TestTensorScatter:
+    def test_scatter_tensor_src(self):
+        t = Tensor(np.array([1.0, 2.0, 3.0, 4.0]))
+        idx = Tensor(np.array([0, 2]))
+        t.scatter_(0, idx, np.array([9.0, 8.0]))
+        assert t.data.tolist() == [9.0, 2.0, 8.0, 4.0]
+        assert isinstance(t.scatter_(0, idx, np.array([1.0, 1.0])), Tensor)
