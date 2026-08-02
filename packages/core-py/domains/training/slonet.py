@@ -2531,7 +2531,8 @@ def _conv2d(x: Tensor, weight: Tensor, bias: Tensor, stride: int = 1, padding: i
         t_x_np = np.zeros_like(x.data) if t_x is None else t_x
         t_w_np = np.zeros_like(weight.data) if t_w is None else t_w
         # JVP: conv2d(x, w) = im2col(x) @ w.T → JVP = im2col(t_x) @ w.T + im2col(x) @ t_w.T
-        t_cols = _im2col(np.pad(t_x_np, ((0,0),(0,0),(padding,padding),(padding,padding)), mode='constant'), kh, kw, stride) if (not isinstance(t_x is None)) else 0
+        pad_h, pad_w = (padding[0], padding[1] if len(padding) > 1 else padding[0]) if isinstance(padding, (tuple, list)) else (padding, padding)
+        t_cols = _im2col(np.pad(t_x_np, ((0,0),(0,0),(pad_h,pad_h),(pad_w,pad_w)), mode='constant'), kh, kw, stride) if t_x is not None else 0
         w_col_t = t_w_np.reshape(oc, -1) if not (t_w is None) else 0
         result_t = (np.matmul(t_cols, _w_col.T) + np.matmul(cols, w_col_t.T)).reshape(n, oc, oh, ow)
         if bias is not None:
@@ -2740,13 +2741,6 @@ class SloNet:
         self._sd = sd
         self.layers = []
 
-        # Token embedding
-        if "tok_emb.weight" in sd:
-            vocab, hidden = sd["tok_emb.weight"].shape
-            self.layers.append(SloEmbedding(vocab, hidden, "tok_emb"))
-            # LM head (tied)
-            self.layers.append(SloLinear(hidden, vocab, "lm_head"))
-
         # Count transformer blocks
         block_keys = [k for k in sd if k.startswith("blocks.")]
         num_blocks = len(set(k.split(".")[1] for k in block_keys))
@@ -2938,7 +2932,7 @@ class SloNet:
             h_norm = _layernorm_state_dict(Tensor(h), sd["norm.weight"])
             h = h_norm.data
 
-        logits = h @ sd["lm_head.weight"].T
+        logits = h @ sd.get("lm_head.weight", sd["tok_emb.weight"]).T
         logits = np.clip(logits, -50, 50)
         logits = logits - logits.max(axis=-1, keepdims=True)
         return Tensor(logits.astype(np.float32))
@@ -3636,6 +3630,10 @@ class SloTransformer(SloNet):
                 return l
         return self.layers[-2]
 
+    @property
+    def lm_head(self) -> SloLinear:
+        return self.layers[-1]
+
     def _tie_weights(self):
         """Tie the language model head weights to the token embeddings.
         This mirrors the common practice of weight tying in many transformer
@@ -3643,12 +3641,13 @@ class SloTransformer(SloNet):
         embedding matrix into the lm_head weight and zero the lm_head bias.
         """
         try:
-            if self.tok_emb.weight.shape == self.lm_head.weight.shape:
+            lm_head = self.lm_head
+            if self.tok_emb.weight.shape == lm_head.weight.shape:
                 # Copy the embedding weights directly
-                self.lm_head.weight.data = self.tok_emb.weight.data.copy()
+                lm_head.weight.data = self.tok_emb.weight.data.copy()
                 # Zero bias if present
-                if self.lm_head.bias is not None:
-                    self.lm_head.bias = Tensor(np.zeros_like(self.lm_head.bias.data), requires_grad=False)
+                if lm_head.bias is not None:
+                    lm_head.bias = Tensor(np.zeros_like(lm_head.bias.data), requires_grad=False)
         except Exception as e:
             # Fail silently – tying is optional and should not break loading
             logger.debug("weight tying error: %s", e)
@@ -3721,7 +3720,7 @@ class SloTransformer(SloNet):
         temperature: float = 1.0,
         top_k: Optional[int] = None,
         top_p: Optional[float] = None,
-        eos_token: int = 0,
+        eos_token: Optional[int] = None,
         repetition_penalty: float = 1.0,
         frequency_penalty: float = 0.0,
         presence_penalty: float = 0.0,
@@ -3774,7 +3773,6 @@ class SloTransformer(SloNet):
                 frequency_penalty=frequency_penalty,
                 presence_penalty=presence_penalty,
                 generated_ids=generated,
-                eos_token=eos_token if step < max_gen - 1 else None,
             )
             tokens = np.concatenate([tokens, np.array([[next_id]], dtype=np.int64)], axis=1)
             if next_id == eos_token:
@@ -3790,7 +3788,7 @@ class SloTransformer(SloNet):
         top_k: Optional[int] = None,
         top_p: Optional[float] = None,
         repetition_penalty: float = 1.0,
-        eos_token: int = 0,
+        eos_token: Optional[int] = None,
     ) -> np.ndarray:
         """Fully inlined numpy generation — maximum inference speed.
 
@@ -4139,7 +4137,6 @@ class SloTransformer(SloNet):
                         top_k=top_k, top_p=top_p,
                         repetition_penalty=repetition_penalty,
                         generated_ids=out_buf[:, prompt_len:step + prompt_len].flatten(),
-                        eos_token=eos_token if step < max_gen - 1 else None,
                     )
             out_buf[0, prompt_len + step] = next_id
             if next_id == eos_token:
@@ -4151,7 +4148,7 @@ class SloTransformer(SloNet):
         self,
         input_ids,
         max_new_tokens=50,
-        eos_token=0,
+        eos_token=None,
         temperature: float = 1.0,
         top_k: Optional[int] = None,
         top_p: Optional[float] = None,
@@ -4483,7 +4480,6 @@ class SloTransformer(SloNet):
                         top_k=top_k, top_p=top_p,
                         repetition_penalty=repetition_penalty,
                         generated_ids=out_buf[:, prompt_len:step + prompt_len].flatten(),
-                        eos_token=eos_token if step < max_gen - 1 else None,
                     )
 
             out_buf[0, prompt_len + step] = next_id
@@ -5075,7 +5071,7 @@ class LinearWarmupScheduler(SloLRScheduler):
             factor = self.last_epoch / max(1, self.warmup_steps)
             return [self.base_lr * factor for _ in self.base_lrs]
         elif self.last_epoch < self.warmup_steps + self.hold_steps:
-            return self.base_lrs
+            return [self.base_lr for _ in self.base_lrs]
         else:
             if self.decay_type == "cosine":
                 progress = min(1.0, (self.last_epoch - self.warmup_steps - self.hold_steps) /
@@ -5087,7 +5083,7 @@ class LinearWarmupScheduler(SloLRScheduler):
                                max(1, self.total_steps - self.warmup_steps - self.hold_steps))
                 return [self.base_lr * (1 - progress) + self.min_lr * progress for _ in self.base_lrs]
             else:
-                return self.base_lrs
+                return [self.base_lr for _ in self.base_lrs]
 
 
 class SloConstantLR(SloLRScheduler):

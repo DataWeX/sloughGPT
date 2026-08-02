@@ -24,6 +24,24 @@
   ],
   "cards": [
     {
+      "id": "20260802_080436_fix-test-slonet-generate-84-test-suite-9-failures",
+      "title": "Fix test_slonet_generate 84-test suite (9 failures)",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "slonet",
+        "tests",
+        "schedulers",
+        "eos"
+      ],
+      "created_at": "2026-08-02T08:04:36.251947+00:00",
+      "updated_at": "2026-08-02T08:04:36.251947+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260802_045304_planner-import-path-fix",
       "title": "Planner import path fix",
       "description": "test_kanban.py and test_notes.py referenced stale sys.path tools/planner/src; planner moved to packages/planner/src. Fixed both. Full core-py collection now clean: 6996 tests collected, 0 errors (was 1 collection error).",
