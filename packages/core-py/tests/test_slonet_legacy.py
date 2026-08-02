@@ -783,3 +783,140 @@ class TestTensorScatter:
         t.scatter_(0, idx, np.array([9.0, 8.0]))
         assert t.data.tolist() == [9.0, 2.0, 8.0, 4.0]
         assert isinstance(t.scatter_(0, idx, np.array([1.0, 1.0])), Tensor)
+
+
+class TestFeedForward:
+    def test_forward_numpy_silu_swiglu(self):
+        from domains.training.slonet import SloFeedForward, silu_np
+
+        ff = SloFeedForward(8, 32, name="test_ff", activation="silu")
+        x = np.random.randn(3, 8).astype(np.float32)
+        manual = ff.w2.forward_numpy(
+            silu_np(ff.w1.forward_numpy(x)) * ff.w3.forward_numpy(x)
+        )
+        assert np.allclose(ff.forward_numpy(x), manual)
+
+    def test_forward_numpy_gelu_swiglu(self):
+        from domains.training.slonet import SloFeedForward, gelu_np
+
+        ff = SloFeedForward(8, 32, name="test_ff", activation="gelu")
+        x = np.random.randn(3, 8).astype(np.float32)
+        manual = ff.w2.forward_numpy(
+            gelu_np(ff.w1.forward_numpy(x)) * ff.w3.forward_numpy(x)
+        )
+        assert np.allclose(ff.forward_numpy(x), manual)
+
+    def test_forward_numpy_unknown_activation_defaults_to_gelu(self):
+        from domains.training.slonet import SloFeedForward, gelu_np
+
+        ff = SloFeedForward(8, 32, activation="relu")
+        x = np.random.randn(3, 8).astype(np.float32)
+        manual = ff.w2.forward_numpy(
+            gelu_np(ff.w1.forward_numpy(x)) * ff.w3.forward_numpy(x)
+        )
+        assert np.allclose(ff.forward_numpy(x), manual)
+
+    def test_forward_tensor_grad_flow(self):
+        from domains.training.slonet import SloFeedForward
+
+        ff = SloFeedForward(8, 32, activation="silu")
+        x = Tensor(np.random.randn(3, 8).astype(np.float32), requires_grad=True)
+        out = ff.forward(x)
+        out.backward()
+        assert out.data.shape == (3, 8)
+        assert np.all(np.isfinite(out.data))
+        assert all(np.all(np.isfinite(p.grad.data)) for p in ff.parameters())
+
+    def test_forward_tensor_matches_numpy(self):
+        from domains.training.slonet import SloFeedForward
+
+        ff = SloFeedForward(8, 32, activation="silu")
+        x_np = np.random.randn(2, 8).astype(np.float32)
+        via_tensor = ff.forward(Tensor(x_np, requires_grad=False))
+        assert np.allclose(via_tensor.data, ff.forward_numpy(x_np))
+
+    def test_parameters_three_linears(self):
+        from domains.training.slonet import SloFeedForward
+
+        ff = SloFeedForward(8, 32, name="test_ff")
+        assert len(ff.parameters()) == 6
+        assert [p.data.shape for p in ff.parameters()] == [
+            (32, 8), (32,), (8, 32), (8,), (32, 8), (32,),
+        ]
+
+    def test_default_name(self):
+        from domains.training.slonet import SloFeedForward
+
+        assert SloFeedForward(8, 32).name == "FF8"
+
+
+class _FakeTensor:
+    def __init__(self, arr):
+        self._arr = np.asarray(arr)
+        self.device = "cpu"
+
+    def cpu(self):
+        return self
+
+    def numpy(self):
+        return self._arr
+
+
+class TestCheckpointNpz:
+    def test_state_dict_to_numpy_handles_fake_tensor(self):
+        from domains.training.slonet import _state_dict_to_numpy
+
+        out = _state_dict_to_numpy({"a": _FakeTensor(np.arange(4.0))})
+        assert isinstance(out["a"], np.ndarray)
+        assert out["a"].tolist() == [0.0, 1.0, 2.0, 3.0]
+
+    def test_state_dict_to_numpy_recurses_nested_dict(self):
+        from domains.training.slonet import _state_dict_to_numpy
+
+        out = _state_dict_to_numpy({"mod": {"w": np.array([1, 2])}})
+        assert isinstance(out["mod"], dict)
+        assert out["mod"]["w"].tolist() == [1, 2]
+
+    def test_state_dict_to_numpy_wraps_scalars(self):
+        from domains.training.slonet import _state_dict_to_numpy
+
+        out = _state_dict_to_numpy({"lr": 0.001, "flag": True})
+        assert out["lr"].item() == 0.001
+        assert bool(out["flag"].item()) is True
+
+    def test_round_trip_with_meta(self, tmp_path):
+        from domains.training.slonet import (
+            load_checkpoint_npz,
+            save_checkpoint_npz,
+        )
+
+        path = str(tmp_path / "model")
+        weights = {"w": np.arange(24.0).reshape(4, 6), "b": np.array([1.0, 2.0, 3.0])}
+        meta = {"loss": 1.5, "nested": {"steps": [1, 2, 3]}}
+        saved = save_checkpoint_npz(path, weights, meta=meta)
+        assert saved.endswith(".npz")
+        loaded = load_checkpoint_npz(saved)
+        assert loaded["loss"] == 1.5
+        assert loaded["nested"] == {"steps": [1, 2, 3]}
+        assert np.allclose(loaded["model_state_dict"]["w"], weights["w"])
+        assert np.allclose(loaded["model_state_dict"]["b"], weights["b"])
+
+    def test_round_trip_without_meta(self, tmp_path):
+        from domains.training.slonet import (
+            load_checkpoint_npz,
+            save_checkpoint_npz,
+        )
+
+        saved = save_checkpoint_npz(str(tmp_path / "plain.npz"), {"x": np.array([7.0])})
+        loaded = load_checkpoint_npz(saved)
+        assert loaded["model_state_dict"]["x"].tolist() == [7.0]
+
+    def test_save_accepts_tensor_like_values(self, tmp_path):
+        from domains.training.slonet import (
+            load_checkpoint_npz,
+            save_checkpoint_npz,
+        )
+
+        saved = save_checkpoint_npz(str(tmp_path / "t"), {"w": _FakeTensor(np.arange(6.0))})
+        loaded = load_checkpoint_npz(saved)
+        assert loaded["model_state_dict"]["w"].tolist() == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
