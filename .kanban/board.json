@@ -24,6 +24,23 @@
   ],
   "cards": [
     {
+      "id": "20260802_090040_green-test-slonet-legacy-regression-suite-58-tests-sensitivi",
+      "title": "green test_slonet_legacy regression suite (58 tests) + sensitivity seed",
+      "description": "Concurrent editor added test_slonet_legacy.py (348 lines) plus a seed to test_slonet_compute_sensitivity. Verified and committed (91f5e4c-equivalent batch):\n\n- test_slonet_legacy.py v1 (36 tests): SOU round-trip (export/import, v1 format, bad magic, missing file, sanitize), flat-param rebuild guard rails, demo trainers (char-lstm, soul-transformer), SloDataLoader batching/shuffle/collate/reset/empty, silu numpy path + tensor backward/JVP, Tensor.to dtype/device/meta, GQA n_rep>1 backward. Committed in first batch.\n- Editor appended +238 lines after that commit: TestLossUtils (log_softmax/kl_div/pairwise_distance), TestSoftmaxNumpyPath, TestSloNetFit (fit + on_step), TestUserAdapters (cache/identity/npz/shape-mismatch/apply), TestMHAForwardNumpy (einsum batch>1, single-token fused kernel, multi-token rope+cache), TestLSTMNumbaFallback, TestAccelOpDispatch. Committed as second batch (58 tests total).\n- test_slonet_compute_sensitivity: np.random.seed(0) for deterministic training-tracking assertion. Verified 9/9 (file in pytest.ini ignore list, explicit run).\n\nTransient interference: a 3-test failure (TestMHAForwardNumpy, ValueError slonet.py:2128) appeared during a combined sweep while the concurrent editor was mid-write + running its own coverage-instrumented pytest (left slonet.py,cover artifact). Deleted artifact. After editor quiesced: 3x stable 58/58, full 10-file sweep 427 passed.\n\nNo source fixes were needed -- the legacy suite validates previously-fixed surfaces (import_from_sou, _rebuild_net_from_params, EMA, etc.).\n\nCleanup: removed stray 'domains/training/slonet.py,cover' coverage artifact; pycache cleaned.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "slonet",
+        "legacy",
+        "tests"
+      ],
+      "created_at": "2026-08-02T09:00:40.368409+00:00",
+      "updated_at": "2026-08-02T09:00:40.368409+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260802_082156_fix-conv2d-patch-ordering-for-n1-and-batchnorm-training-mode",
       "title": "fix conv2d patch-ordering for n>1 and batchnorm training-mode gradients; green new test_slonet_cnn suite",
       "description": "Committed 4991f93 (eos/tie/rebuild/warmup fixes; 84 test_slonet_generate green) in prior session.\n\nNew session: a concurrent editor added test_slonet_cnn.py (356-line CNN suite) plus forward-path fixes in _conv2d/_batchnorm2d while I fixed the two real autograd bugs it exposed:\n\n1. conv2d backward misordered output channels for batch>1: dY_flat was reshaped to (n*oh*ow, oc) from channel-major (n,oc,oh,ow); now g.transpose(0,2,3,1).reshape(n*oh*ow, oc) in both dX and dW paths. The forward (oc, n_patches) reshape to (n, oc, oh, ow) had the same latent bug (masked at n=1) -- concurrent forward fix reshape(oc,n,oh,ow).transpose(1,0,2,3) complements it; verified exact vs manual im2col JVP at n=2.\n\n2. batchnorm2d training-mode backward/JVP treated batch mean/var as constants. Corrected:\n   - backward: g_hat/s - sum(g_hat)/(N*s) - x_center*sum(g_hat*x_center)/(N*s^3)\n   - forward_grad: t_mean/t_var/t_norm from tangents\n   Both verified numerically (~1e-6).\n\nAlso fixed test FD helpers: _fd_grad_x casts to float64 (eps=1e-6) and _naive_conv uses np.result_type, removing float32 cancellation noise (residual 0.037 was FD noise, not a source bug; conv backward now 1.2e-6 vs float64 FD).\n\nVerified:\n- test_slonet_cnn.py + test_train_pipeline.py: exit 0\n- 9-file slonet sweep: exit 0\n- multimodal -m slow (59 tests): exit 0\n- 11-suite autograd sweep: exit 0\n- backward vs float64 FD: x.grad 2.6e-6, w.grad 1.05e-5\n\nCommits:\n- 1a26395 fix(slonet): conv2d patch-ordering for n>1 + batchnorm training-mode gradients (slonet.py + test_slonet_cnn.py)\n- 892a219 fix(trainer): EMA first-step uses raw loss; seed generate test (train_pipeline.py + test_train_pipeline.py)\n\nNote: EMA fix guards on explicit None (0 was falsy); test seeds np.random(0). pytest.ini addopts -q -m 'not slow' so multimodal needs explicit -m slow. Known flaky unrelated: test_pugqeep_cache_tasks::TestPGQ::test_submit_training (passes in isolation).",
