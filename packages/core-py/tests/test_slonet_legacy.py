@@ -498,8 +498,19 @@ class TestUserAdapters:
 
 class TestMHAForwardNumpy:
     def test_batch_greater_than_one_einsum(self):
-        mha = SloMultiHeadAttention(d_model=16, n_heads=4, n_kv_head=4)
+        mha = SloMultiHeadAttention(d_model=16, n_heads=4, n_kv_head=2)
         rng = np.random.default_rng(0)
+        q = rng.standard_normal((2, 3, 16)).astype(np.float32)
+        k = rng.standard_normal((2, 3, 16)).astype(np.float32)
+        v = rng.standard_normal((2, 3, 16)).astype(np.float32)
+        out, kv = mha.forward_numpy(q, k, v)
+        assert out.shape == (2, 3, 16)
+        assert np.all(np.isfinite(out))
+        assert kv[0].shape == (2, 3, 4, 4)
+
+    def test_batch_greater_than_one_no_gqa(self):
+        mha = SloMultiHeadAttention(d_model=16, n_heads=4, n_kv_head=4)
+        rng = np.random.default_rng(3)
         q = rng.standard_normal((2, 3, 16)).astype(np.float32)
         k = rng.standard_normal((2, 3, 16)).astype(np.float32)
         v = rng.standard_normal((2, 3, 16)).astype(np.float32)
@@ -677,6 +688,79 @@ class TestSloCyclicLR:
 class TestInvalidateGpuCache:
     def test_runs_with_cpu_backend(self):
         slonet._invalidate_gpu_cache()
+
+
+class TestExportExceptionBranch:
+    def test_rename_failure_cleans_temp_and_reraises(self, monkeypatch, tmp_path):
+        net = _small_transformer()
+        out = tmp_path / "soul.sou"
+
+        def _boom(src, dst):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(slonet.os, "rename", _boom)
+        with pytest.raises(OSError, match="disk full"):
+            export_to_sou(net, str(out))
+        assert list(tmp_path.glob("*.tmp")) == []
+
+
+class TestInt4QuantUnpack:
+    def test_lazy_unpack_int4(self):
+        from domains.infrastructure.quantization import QuantMeta, TensorInfo
+
+        lin = SloLinear(4, 2, "quant")
+        original = np.array([[-8, 2, 3, -4], [5, -6, 7, 1]], dtype=np.int8)
+        flat = original.reshape(-1)
+        packed = np.array([
+            (flat[i] & 0x0F) | ((flat[i + 1] & 0x0F) << 4)
+            for i in range(0, len(flat), 2)
+        ], dtype=np.int8)
+        meta = QuantMeta(
+            scale=1.0, zero_point=0, bits=4, mode="symmetric",
+            dtype_code=0, original_shape=(2, 4), original_dtype="float32",
+        )
+        info = TensorInfo(name="w", array=packed, meta=meta)
+        lin.set_quantized_weight(info)
+        unpacked = lin._get_quant_array()
+        assert unpacked.dtype == np.int8
+        assert unpacked.shape == (2, 4)
+        assert np.array_equal(unpacked, original)
+        assert lin._get_quant_array() is unpacked
+
+    def test_no_quant_returns_none(self):
+        lin = SloLinear(4, 2, "plain")
+        assert lin._get_quant_array() is None
+
+
+class TestImportFromPoints:
+    def test_points_fallback(self, tmp_path):
+        import base64
+
+        import json as _json
+
+        from domains.infrastructure.pugqeep.library import PointLibrary
+        from domains.infrastructure.pugqeep.point import Point
+
+        base = tmp_path / "soul_test.sou"
+        arr = np.arange(256 * 64, dtype=np.float32).reshape(256, 64) / 1000.0
+        lib = PointLibrary(name="soul_test")
+        lib.add(Point(
+            identity="soul_test.tok_emb.weight",
+            function_type="raw",
+            params={
+                "data_b64": base64.b64encode(arr.tobytes()).decode(),
+                "shape": (256, 64),
+                "dtype": "float32",
+            },
+        ))
+        lib.save(base.with_suffix(".points.json"))
+        (base.with_suffix(".meta.json")).write_text(
+            _json.dumps({"metadata": {"weight_shapes": {"tok_emb.weight": [256, 64]}}})
+        )
+        net = import_from_sou(str(base))
+        assert isinstance(net, SloTransformer)
+        loaded = net.state_dict()["tok_emb.weight"]
+        assert np.allclose(loaded, arr)
 
 
 class TestMultinomial:
