@@ -920,3 +920,320 @@ class TestCheckpointNpz:
         saved = save_checkpoint_npz(str(tmp_path / "t"), {"w": _FakeTensor(np.arange(6.0))})
         loaded = load_checkpoint_npz(saved)
         assert loaded["model_state_dict"]["w"].tolist() == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+
+
+class _NamedTensor(Tensor):
+    def __init__(self, data, name="", **kw):
+        super().__init__(data, **kw)
+        self.name = name
+
+
+class TestSloSGD:
+    def test_step_applies_lr(self):
+        w = Tensor(np.array([1.0]), requires_grad=True)
+        sgd = slonet.SloSGD(lr=0.1)
+        w.grad = Tensor(np.array([1.0]))
+        sgd.step([w])
+        assert w.data[0] == pytest.approx(0.9)
+        assert w.grad is None
+
+    def test_momentum_accumulates(self):
+        w = Tensor(np.array([1.0]), requires_grad=True)
+        sgd = slonet.SloSGD(lr=0.1, momentum=0.9)
+        w.grad = Tensor(np.array([1.0]))
+        sgd.step([w])
+        assert w.data[0] == pytest.approx(0.9)
+        w.grad = Tensor(np.array([1.0]))
+        sgd.step([w])
+        assert w.data[0] == pytest.approx(0.71)
+
+    def test_max_grad_norm_clips(self):
+        w = Tensor(np.array([0.0]), requires_grad=True)
+        sgd = slonet.SloSGD(lr=1.0, max_grad_norm=1.0)
+        w.grad = Tensor(np.array([10.0]))
+        sgd.step([w])
+        assert w.data[0] == pytest.approx(-1.0)
+
+    def test_skips_params_without_grad(self):
+        w = Tensor(np.array([1.0]), requires_grad=True)
+        sgd = slonet.SloSGD(lr=0.1)
+        sgd.step([w])
+        assert w.data[0] == pytest.approx(1.0)
+
+    def test_state_dict_round_trip(self):
+        w = _NamedTensor(np.array([1.0]), name="w", requires_grad=True)
+        sgd = slonet.SloSGD(lr=0.1, momentum=0.9)
+        w.grad = Tensor(np.array([1.0]))
+        sgd.step([w])
+        state = sgd.state_dict([w])
+        assert state["hyperparameters"]["lr"] == 0.1
+        assert state["state"]["w"] == [1.0]
+        restored = slonet.SloSGD()
+        restored.load_state_dict(state, [w])
+        assert restored.lr == 0.1 and restored.momentum == 0.9
+        assert np.allclose(restored._v[id(w)], [1.0])
+
+    def test_state_dict_without_params(self):
+        sgd = slonet.SloSGD(lr=0.05)
+        assert sgd.state_dict()["state"] == {}
+
+
+class TestSloAdam:
+    def test_step_lowers_loss_direction(self):
+        w = Tensor(np.array([1.0]), requires_grad=True)
+        adam = slonet.SloAdam(lr=0.1)
+        w.grad = Tensor(np.array([1.0]))
+        adam.step([w])
+        assert w.data[0] == pytest.approx(0.9)
+
+    def test_weight_decay_adds_to_grad(self):
+        w = Tensor(np.array([1.0]), requires_grad=True)
+        adam = slonet.SloAdam(lr=0.1, weight_decay=0.5)
+        w.grad = Tensor(np.array([0.0]))
+        adam.step([w])
+        assert w.data[0] == pytest.approx(0.9)
+
+    def test_max_grad_norm_clips(self):
+        w = Tensor(np.array([0.0]), requires_grad=True)
+        adam = slonet.SloAdam(lr=0.1, max_grad_norm=1.0)
+        w.grad = Tensor(np.array([100.0]))
+        adam.step([w])
+        assert w.data[0] == pytest.approx(-0.1)
+
+    def test_state_dict_round_trip(self):
+        w = _NamedTensor(np.array([1.0]), name="w", requires_grad=True)
+        adam = slonet.SloAdam(lr=0.01, weight_decay=0.1)
+        w.grad = Tensor(np.array([1.0]))
+        adam.step([w])
+        state = adam.state_dict([w])
+        assert state["t"] == 1
+        assert set(state["state"]["w"].keys()) == {"m", "v"}
+        restored = slonet.SloAdam()
+        restored.load_state_dict(state, [w])
+        assert restored._t == 1
+        assert np.allclose(restored._m[id(w)], state["state"]["w"]["m"])
+
+    def test_second_step_uses_bias_correction(self):
+        w = Tensor(np.array([1.0]), requires_grad=True)
+        adam = slonet.SloAdam(lr=0.1)
+        for _ in range(2):
+            w.grad = Tensor(np.array([1.0]))
+            adam.step([w])
+        assert w.data[0] == pytest.approx(0.8, abs=1e-4)
+
+
+class TestClipGradNorm:
+    def test_clips_to_max_norm(self):
+        p = Tensor(np.array([3.0, 4.0]), requires_grad=True)
+        p.grad = Tensor(np.array([6.0, 8.0]))
+        total = slonet.clip_grad_norm_([p], max_norm=5.0)
+        assert total == pytest.approx(10.0)
+        assert np.allclose(p.grad.data, [3.0, 4.0])
+
+    def test_returns_zero_for_no_grads(self):
+        assert slonet.clip_grad_norm_([Tensor(np.array([1.0]))], 1.0) == 0.0
+
+    def test_no_scale_when_below_max_norm(self):
+        p = Tensor(np.array([1.0]), requires_grad=True)
+        p.grad = Tensor(np.array([0.5]))
+        total = slonet.clip_grad_norm_([p], max_norm=5.0)
+        assert total == pytest.approx(0.5)
+        assert p.grad.data[0] == pytest.approx(0.5)
+
+
+class TestLRSchedulers:
+    def test_warmup_linear_then_cosine(self):
+        sched = slonet.WarmupCosineScheduler(
+            slonet.SloAdam(lr=1.0), warmup_steps=10, total_steps=100, last_epoch=-1
+        )
+        sched.step(0)
+        assert sched.get_last_lr()[0] == pytest.approx(0.0)
+        sched.step(10)
+        assert sched.get_last_lr()[0] == pytest.approx(1.0)
+        sched.step(50)
+        mid = sched.get_last_lr()[0]
+        assert 0.0 < mid < 1.0
+
+    def test_warmup_zero_steps_skips_linear_phase(self):
+        sched = slonet.WarmupCosineScheduler(
+            slonet.SloAdam(lr=1.0), warmup_steps=0, total_steps=100, last_epoch=-1
+        )
+        sched.step(50)
+        assert sched.get_last_lr()[0] == pytest.approx(0.5 * (1 + 2 ** -0.5))
+
+    def test_polynomial_decay_floor(self):
+        sched = slonet.PolynomialDecayScheduler(
+            slonet.SloAdam(lr=1.0), total_steps=10, min_lr=0.1, power=2.0, last_epoch=-1
+        )
+        sched.step(10)
+        assert sched.get_last_lr()[0] == pytest.approx(0.1)
+        sched.step(5)
+        assert sched.get_last_lr()[0] == pytest.approx(0.775)
+
+    def test_linear_warmup_hold_decay(self):
+        sched = slonet.LinearWarmupScheduler(
+            slonet.SloAdam(lr=0.1), warmup_steps=5, base_lr=0.1, hold_steps=3,
+            decay_type="linear", min_lr=0.0, total_steps=15, last_epoch=-1,
+        )
+        sched.step(2)
+        assert sched.get_last_lr()[0] == pytest.approx(0.04)
+        sched.step(6)
+        assert sched.get_last_lr()[0] == pytest.approx(0.1)
+        sched.step(10)
+        assert sched.get_last_lr()[0] == pytest.approx(0.1 / 1.4)
+
+    def test_linear_warmup_cosine_decay(self):
+        sched = slonet.LinearWarmupScheduler(
+            slonet.SloAdam(lr=0.1), warmup_steps=5, base_lr=0.1, hold_steps=0,
+            decay_type="cosine", min_lr=0.01, total_steps=15, last_epoch=-1,
+        )
+        sched.step(10)
+        lr = sched.get_last_lr()[0]
+        assert 0.01 <= lr <= 0.1
+
+    def test_linear_warmup_no_decay_holds(self):
+        sched = slonet.LinearWarmupScheduler(
+            slonet.SloAdam(lr=0.1), warmup_steps=5, base_lr=0.1, hold_steps=0,
+            decay_type="none", last_epoch=-1,
+        )
+        sched.step(20)
+        assert sched.get_last_lr()[0] == pytest.approx(0.1)
+
+    def test_constant_lr(self):
+        sched = slonet.SloConstantLR(slonet.SloAdam(lr=0.3), last_epoch=-1)
+        sched.step(5)
+        assert sched.get_last_lr()[0] == pytest.approx(0.3)
+
+    def test_one_cycle_up_phase(self):
+        sched = slonet.SloOneCycleLR(
+            slonet.SloAdam(lr=0.1), max_lr=1.0, total_steps=100,
+            pct_start=0.2, anneal_strategy="cos", last_epoch=-1,
+        )
+        sched.step(10)
+        assert sched.get_last_lr()[0] == pytest.approx(1.25)
+
+    def test_one_cycle_linear_anneal(self):
+        sched = slonet.SloOneCycleLR(
+            slonet.SloAdam(lr=0.1), max_lr=1.0, total_steps=100,
+            pct_start=0.2, anneal_strategy="linear", last_epoch=-1,
+        )
+        sched.step(50)
+        assert sched.get_last_lr()[0] == pytest.approx(1.5625, abs=1e-3)
+
+    def test_step_lr_decay(self):
+        sched = slonet.SloStepLR(slonet.SloAdam(lr=0.1), step_size=3, gamma=0.5, last_epoch=-1)
+        sched.step(6)
+        assert sched.get_last_lr()[0] == pytest.approx(0.025)
+
+    def test_cosine_annealing(self):
+        sched = slonet.SloCosineAnnealingLR(
+            slonet.SloAdam(lr=0.2), T_max=10, eta_min=0.01, last_epoch=-1
+        )
+        sched.step(5)
+        assert sched.get_last_lr()[0] == pytest.approx(0.105)
+        sched.step(11)
+        assert sched.get_last_lr()[0] == pytest.approx(0.01)
+
+    def test_reduce_lr_on_plateau_patience(self):
+        opt = slonet.SloAdam(lr=0.1)
+        rp = slonet.SloReduceLROnPlateau(opt, patience=2, factor=0.5, min_lr=0.001)
+        for _ in range(4):
+            rp.step(1.0)
+        assert opt.lr == pytest.approx(0.05)
+
+    def test_reduce_lr_on_plateau_better_resets(self):
+        opt = slonet.SloAdam(lr=0.1)
+        rp = slonet.SloReduceLROnPlateau(opt, patience=2, factor=0.5, min_lr=0.001)
+        rp.step(1.0)
+        rp.step(0.5)
+        rp.step(0.4)
+        rp.step(0.2)
+        assert opt.lr == pytest.approx(0.1)
+
+    def test_create_scheduler_factory(self):
+        assert isinstance(
+            slonet.create_scheduler(slonet.SloAdam(lr=1.0), "none"), slonet.SloConstantLR
+        )
+        assert isinstance(
+            slonet.create_scheduler(slonet.SloAdam(lr=1.0), "constant"), slonet.SloConstantLR
+        )
+        assert isinstance(
+            slonet.create_scheduler(slonet.SloAdam(lr=1.0), "cosine", total_steps=100),
+            slonet.WarmupCosineScheduler,
+        )
+        assert isinstance(
+            slonet.create_scheduler(slonet.SloAdam(lr=1.0), "warmup", total_steps=100, max_lr=0.5),
+            slonet.LinearWarmupScheduler,
+        )
+
+    def test_base_state_dict_round_trip(self):
+        sched = slonet.SloCosineAnnealingLR(slonet.SloAdam(lr=0.2), T_max=10, last_epoch=-1)
+        sched.step(3)
+        state = sched.state_dict()
+        assert state["last_epoch"] == 3
+        restored = slonet.SloCosineAnnealingLR(slonet.SloAdam(lr=0.2), T_max=10, last_epoch=-1)
+        restored.load_state_dict(state)
+        assert restored.last_epoch == 3
+
+
+class TestTensorUtilOps:
+    def test_argmax_argmin(self):
+        x = Tensor(np.array([[0.5, 0.2], [0.1, 0.9]], dtype=np.float32))
+        assert slonet.argmax(x).data.tolist() == [0.0, 1.0]
+        assert slonet.argmin(x).data.tolist() == [1.0, 0.0]
+        assert slonet.argmax(x).data.dtype == np.float32
+
+    def test_squeeze_tensor_and_ndarray(self):
+        assert slonet.squeeze(Tensor(np.array([[[1.0], [2.0]]]))).data.shape == (2,)
+        assert slonet.squeeze(Tensor(np.array([[1.0], [2.0]])), dim=1).data.shape == (2,)
+        assert slonet.squeeze(np.array([[1.0, 2.0]]), dim=0).shape == (2,)
+        assert slonet.squeeze(np.array([[[1.0, 2.0]]])).shape == (2,)
+
+    def test_unsqueeze_tensor_and_ndarray(self):
+        assert slonet.unsqueeze(Tensor(np.array([1.0, 2.0])), 0).data.shape == (1, 2)
+        assert slonet.unsqueeze(Tensor(np.array([1.0, 2.0])), 1).data.shape == (2, 1)
+        assert slonet.unsqueeze(np.array([1.0, 2.0]), 1).shape == (2, 1)
+
+    def test_cat_and_concatenate(self):
+        a = Tensor(np.array([1.0, 2.0]))
+        b = Tensor(np.array([3.0, 4.0]))
+        assert slonet.cat([a, b]).data.tolist() == [1.0, 2.0, 3.0, 4.0]
+        assert slonet.concatenate([a, b], dim=0).data.tolist() == [1.0, 2.0, 3.0, 4.0]
+
+    def test_eye(self):
+        assert np.array_equal(slonet.eye(3).data, np.eye(3, dtype=np.float32))
+        assert slonet.eye(2, 3).data.shape == (2, 3)
+
+    def test_stack(self):
+        out = slonet.stack([Tensor(np.array([1.0, 2.0])), Tensor(np.array([3.0, 4.0]))])
+        assert out.data.tolist() == [[1.0, 2.0], [3.0, 4.0]]
+
+    def test_exp(self):
+        assert slonet.exp(Tensor(np.array([0.0, np.log(2.0)]))).data.tolist() == pytest.approx([1.0, 2.0])
+
+    def test_where(self):
+        cond = Tensor(np.array([True, False]))
+        a = Tensor(np.array([1.0, 2.0]))
+        b = Tensor(np.array([9.0, 8.0]))
+        assert slonet.where(cond, a, b).data.tolist() == [1.0, 8.0]
+
+    def test_normalize_and_backward(self):
+        a = Tensor(np.array([[3.0, 4.0]]), requires_grad=True)
+        out = normalize(a)
+        assert np.allclose(out.data[0], [0.6, 0.8])
+        out.backward()
+        assert np.allclose(a.grad.data, [0.2, 0.2])
+
+    def test_normalize_zero_vector_safe(self):
+        a = Tensor(np.array([[0.0, 0.0]]))
+        out = normalize(a)
+        assert np.allclose(out.data, [[0.0, 0.0]])
+
+    def test_pairwise_distance_backward(self):
+        a = Tensor(np.array([[0.0, 0.0]]), requires_grad=True)
+        b = Tensor(np.array([[3.0, 4.0]]), requires_grad=True)
+        out = pairwise_distance(a, b)
+        assert out.data[0] == pytest.approx(5.0)
+        out.backward()
+        assert np.allclose(a.grad.data, [[-0.6, -0.8]])
+        assert np.allclose(b.grad.data, [[0.6, 0.8]])
