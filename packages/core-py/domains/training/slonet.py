@@ -2472,11 +2472,11 @@ def _conv2d(x: Tensor, weight: Tensor, bias: Tensor, stride: int = 1, padding: i
     acc = _get_accelerator()
     if acc is not None and acc.name != "cpu":
         try:
-            result = acc.matmul(w_col, cols.T).reshape(n, oc, oh, ow)
+            result = acc.matmul(w_col, cols.T).reshape(oc, n, oh, ow).transpose(1, 0, 2, 3)
         except Exception:
-            result = np.matmul(w_col, cols.T).reshape(n, oc, oh, ow)
+            result = np.matmul(w_col, cols.T).reshape(oc, n, oh, ow).transpose(1, 0, 2, 3)
     else:
-        result = np.matmul(w_col, cols.T).reshape(n, oc, oh, ow)
+        result = np.matmul(w_col, cols.T).reshape(oc, n, oh, ow).transpose(1, 0, 2, 3)
 
     if bias is not None:
         result = result + bias.data[:, None, None]
@@ -2491,7 +2491,7 @@ def _conv2d(x: Tensor, weight: Tensor, bias: Tensor, stride: int = 1, padding: i
     _w_col = w_col
     def bk(g):
         if x.requires_grad:
-            dY_flat = g.reshape(n * oh * ow, oc)
+            dY_flat = g.transpose(0, 2, 3, 1).reshape(n * oh * ow, oc)
             dX_col = dY_flat @ weight.data.reshape(oc, -1)
             n_patches = n * oh * ow
             feat_per_patch = c * kh * kw
@@ -2520,7 +2520,7 @@ def _conv2d(x: Tensor, weight: Tensor, bias: Tensor, stride: int = 1, padding: i
                 grad_in = grad_in[:, :, padding:-padding, padding:-padding]
             x.grad = Tensor(grad_in if x.grad is None else x.grad.data + grad_in)
         if weight.requires_grad:
-            dY_flat = g.reshape(n * oh * ow, oc)
+            dY_flat = g.transpose(0, 2, 3, 1).reshape(n * oh * ow, oc)
             gw = (cols.T @ dY_flat).T.reshape(oc, c, kh, kw)
             weight.grad = Tensor(gw if weight.grad is None else weight.grad.data + gw)
         if bias is not None and bias.requires_grad:
@@ -2534,7 +2534,7 @@ def _conv2d(x: Tensor, weight: Tensor, bias: Tensor, stride: int = 1, padding: i
         pad_h, pad_w = (padding[0], padding[1] if len(padding) > 1 else padding[0]) if isinstance(padding, (tuple, list)) else (padding, padding)
         t_cols = _im2col(np.pad(t_x_np, ((0,0),(0,0),(pad_h,pad_h),(pad_w,pad_w)), mode='constant'), kh, kw, stride) if t_x is not None else 0
         w_col_t = t_w_np.reshape(oc, -1) if not (t_w is None) else 0
-        result_t = (np.matmul(t_cols, _w_col.T) + np.matmul(cols, w_col_t.T)).reshape(n, oc, oh, ow)
+        result_t = (np.matmul(t_cols, _w_col.T) + np.matmul(cols, w_col_t.T)).reshape(n, oh, ow, oc).transpose(0, 3, 1, 2)
         if bias is not None:
             t_b_np = np.zeros_like(bias.data) if t_b is None else t_b
             result_t = result_t + t_b_np[:, None, None]
@@ -2562,7 +2562,17 @@ def _batchnorm2d(x: Tensor, gamma: Tensor, beta: Tensor, running_mean, running_v
 
     def bk(g):
         if x.requires_grad:
-            x_grad = g * gamma.data.reshape(1, c, 1, 1) / np.sqrt(var + eps) / (n * h * w)
+            if training:
+                s = np.sqrt(var + eps)
+                x_center = x.data - mean
+                N = n * h * w
+                ghat = g * gamma.data.reshape(1, c, 1, 1)
+                sum_ghat = ghat.sum(axis=(0, 2, 3), keepdims=True)
+                sum_ghat_xc = (ghat * x_center).sum(axis=(0, 2, 3), keepdims=True)
+                x_grad = ghat / s - sum_ghat / (N * s) - x_center * sum_ghat_xc / (N * s ** 3)
+                x_grad = np.broadcast_to(x_grad, g.shape).copy()
+            else:
+                x_grad = g * gamma.data.reshape(1, c, 1, 1) / np.sqrt(var + eps)
             x.grad = Tensor(x_grad if x.grad is None else x.grad.data + x_grad)
         if gamma.requires_grad:
             g_gamma = (g * norm).sum(axis=(0, 2, 3))
@@ -2575,7 +2585,16 @@ def _batchnorm2d(x: Tensor, gamma: Tensor, beta: Tensor, running_mean, running_v
         t_x = np.zeros_like(x.data) if t_x is None else t_x
         t_g = np.zeros_like(gamma.data) if t_g is None else t_g
         t_b = np.zeros_like(beta.data) if t_b is None else t_b
-        return t_x * gamma.data.reshape(1, c, 1, 1) / np.sqrt(var + eps) + norm * t_g.reshape(1, c, 1, 1) + t_b.reshape(1, c, 1, 1)
+        s = np.sqrt(var + eps)
+        x_center = x.data - mean
+        if training:
+            N = n * h * w
+            t_mean = t_x.mean(axis=(0, 2, 3), keepdims=True)
+            t_var = (2 * (x_center * t_x)).mean(axis=(0, 2, 3), keepdims=True)
+            t_norm = (t_x - t_mean) / s - x_center * t_var / (2 * s ** 3)
+        else:
+            t_norm = t_x / s
+        return t_norm * gamma.data.reshape(1, c, 1, 1) + norm * t_g.reshape(1, c, 1, 1) + t_b.reshape(1, c, 1, 1)
     out._forward_fn = fwd
     return out
 
